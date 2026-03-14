@@ -133,7 +133,7 @@ if [[ -z "$PROTOTYPE_PYTHON_EXECUTABLE_DEFAULT" ]]; then
 fi
 
 log "installing project dependencies"
-"$VENV_PIP" install -e "$ROOT_DIR"
+"$VENV_PIP" install -e "$ROOT_DIR[prototype]"
 
 if [[ "$SKIP_FRONTEND_DEPS" == "true" ]]; then
   log "skipping frontend dependency installation"

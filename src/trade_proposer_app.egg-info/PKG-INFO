@@ -14,6 +14,10 @@ Requires-Dist: python-multipart<1.0.0,>=0.0.20
 Requires-Dist: alembic<2.0.0,>=1.16.0
 Requires-Dist: cryptography<46.0.0,>=45.0.0
 Requires-Dist: httpx<1.0.0,>=0.28.0
+Provides-Extra: prototype
+Requires-Dist: yfinance<2.0.0,>=1.2.0; extra == "prototype"
+Requires-Dist: pandas<4.0.0,>=3.0.0; extra == "prototype"
+Requires-Dist: openai<2.0.0,>=1.100.0; extra == "prototype"
 Provides-Extra: dev
 Requires-Dist: ruff<1.0.0,>=0.12.0; extra == "dev"
 Requires-Dist: mypy<2.0.0,>=1.17.0; extra == "dev"

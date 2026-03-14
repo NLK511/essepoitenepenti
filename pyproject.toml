@@ -18,6 +18,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+prototype = [
+  "yfinance>=1.2.0,<2.0.0",
+  "pandas>=3.0.0,<4.0.0",
+  "openai>=1.100.0,<2.0.0",
+]
 dev = [
   "ruff>=0.12.0,<1.0.0",
   "mypy>=1.17.0,<2.0.0",
