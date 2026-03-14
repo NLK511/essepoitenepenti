@@ -1,0 +1,56 @@
+Metadata-Version: 2.4
+Name: trade-proposer-app
+Version: 0.1.0
+Summary: Deployable product version of the trade proposer application
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi<1.0.0,>=0.116.0
+Requires-Dist: uvicorn[standard]<1.0.0,>=0.35.0
+Requires-Dist: jinja2<4.0.0,>=3.1.6
+Requires-Dist: pydantic<3.0.0,>=2.11.0
+Requires-Dist: pydantic-settings<3.0.0,>=2.10.0
+Requires-Dist: sqlalchemy<3.0.0,>=2.0.43
+Requires-Dist: python-multipart<1.0.0,>=0.0.20
+Requires-Dist: alembic<2.0.0,>=1.16.0
+Requires-Dist: cryptography<46.0.0,>=45.0.0
+Requires-Dist: httpx<1.0.0,>=0.28.0
+Provides-Extra: dev
+Requires-Dist: ruff<1.0.0,>=0.12.0; extra == "dev"
+Requires-Dist: mypy<2.0.0,>=1.17.0; extra == "dev"
+Requires-Dist: pytest<9.0.0,>=8.4.0; extra == "dev"
+
+# Trade Proposer App
+
+Trade Proposer App is a deployable application for systematic trade recommendation workflows. It provides a FastAPI backend, a React/Vite operator UI, and worker-backed execution.
+
+## Core Features
+- **Job Management**: Define scheduled or manual runs for proposal generation, evaluation, or weight optimization.
+- **Traceability**: Full history of runs and recommendations with deep diagnostics and ticker-level drill-down.
+- **Reliability**: Atomic run claiming, duplicate-run prevention, and honest failure reporting.
+- **In-App Docs**: Integrated documentation browser for methodology and technical reference.
+
+## Quick Start
+
+```bash
+./scripts/setup.sh
+./scripts/start-dev.sh
+```
+
+- **Frontend**: `http://localhost:5173/`
+- **API Health**: `http://localhost:8000/api/health`
+
+## Documentation
+
+For detailed information, see the `docs/` directory or browse them in-app at `/docs`:
+- [Getting Started](docs/getting-started.md)
+- [Architecture](docs/architecture.md)
+- [Roadmap](docs/roadmap.md)
+- [Features & Capabilities](docs/features-and-capabilities.md)
+- [Recommendation Methodology](docs/recommendation-methodology.md)
+- [User Journeys](docs/user-journeys.md)
+
+## Tech Stack
+- **Backend**: Python, FastAPI, SQLAlchemy (SQLite/Postgres).
+- **Frontend**: React, TypeScript, Vite.
+- **Background**: Custom worker and scheduler.
+- **Integration**: Integrated with the trade-proposer prototype.

@@ -1,0 +1,449 @@
+import unittest
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from trade_proposer_app.domain.enums import JobType, RecommendationDirection
+from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, RunDiagnostics, RunOutput
+from trade_proposer_app.persistence.models import Base, JobRecord, ProviderCredentialRecord, RunRecord
+from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.repositories.settings import SettingsRepository
+from trade_proposer_app.repositories.watchlists import WatchlistRepository
+from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
+from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.optimizations import WeightOptimizationService
+from trade_proposer_app.services.proposals import ProposalService
+
+
+def create_session() -> Session:
+    engine = create_engine("sqlite:///:memory:", future=True)
+    Base.metadata.create_all(bind=engine)
+    return Session(bind=engine)
+
+
+class FailingProposalService:
+    def generate(self, ticker: str) -> RunOutput:
+        raise RuntimeError(f"boom: {ticker}")
+
+
+class FailOnSecondTickerProposalService:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def generate(self, ticker: str) -> RunOutput:
+        self.calls += 1
+        if self.calls == 2:
+            raise RuntimeError(f"ticker not found: {ticker}")
+        return RunOutput(
+            recommendation=Recommendation(
+                ticker=ticker,
+                direction=RecommendationDirection.LONG,
+                confidence=75.0,
+                entry_price=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                indicator_summary="Above SMA200 · RSI 55.0",
+            ),
+            diagnostics=RunDiagnostics(),
+        )
+
+
+class StubEvaluationExecutionService(EvaluationExecutionService):
+    def __init__(self) -> None:
+        pass
+
+    def execute(self, run=None) -> EvaluationRunResult:
+        return EvaluationRunResult(
+            evaluated_trade_log_entries=12,
+            synced_recommendations=4,
+            pending_recommendations=5,
+            win_recommendations=4,
+            loss_recommendations=3,
+            output="evaluation complete",
+        )
+
+
+class StubOptimizationService(WeightOptimizationService):
+    def __init__(self) -> None:
+        pass
+
+    def execute(self) -> tuple[dict[str, object], dict[str, object]]:
+        return (
+            {
+                "status": "completed",
+                "resolved_trade_count": 88,
+                "minimum_resolved_trades": 50,
+                "weights_changed": True,
+                "stdout": "optimization complete",
+                "stderr": "",
+            },
+            {
+                "weights_path": "/tmp/weights.json",
+                "before": {"exists": True, "sha256": "abc"},
+                "after": {"exists": True, "sha256": "def"},
+            },
+        )
+
+
+class RepositoryTests(unittest.TestCase):
+    def test_watchlist_repository_create_and_list(self) -> None:
+        session = create_session()
+        repository = WatchlistRepository(session)
+        repository.create("Core Tech", ["AAPL", "MSFT"])
+        items = repository.list_all()
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].name, "Core Tech")
+        self.assertEqual(items[0].tickers, ["AAPL", "MSFT"])
+
+    def test_watchlist_repository_rejects_ticker_already_assigned_to_another_watchlist(self) -> None:
+        session = create_session()
+        repository = WatchlistRepository(session)
+        repository.create("Core Tech", ["AAPL", "MSFT"])
+
+        with self.assertRaises(ValueError) as context:
+            repository.create("More Tech", ["NVDA", "AAPL"])
+
+        self.assertIn("ticker already assigned to another watchlist", str(context.exception))
+        self.assertIn("AAPL", str(context.exception))
+
+    def test_job_repository_requires_exactly_one_source_for_proposal_jobs(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        watchlist = WatchlistRepository(session).create("Core Tech", ["AAPL", "MSFT"])
+
+        with self.assertRaises(ValueError):
+            jobs.create("Invalid Empty", [], None)
+
+        with self.assertRaises(ValueError):
+            jobs.create("Invalid Both", ["AAPL"], None, watchlist_id=watchlist.id)
+
+        created = jobs.create("From Watchlist", [], None, watchlist_id=watchlist.id)
+        self.assertEqual(created.watchlist_id, watchlist.id)
+        self.assertEqual(created.job_type, JobType.PROPOSAL_GENERATION)
+        self.assertEqual(jobs.resolve_tickers(created.id or 0), ["AAPL", "MSFT"])
+
+    def test_job_repository_allows_non_proposal_jobs_without_sources_and_rejects_sources(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        watchlist = WatchlistRepository(session).create("Core Tech", ["AAPL", "MSFT"])
+
+        evaluation_job = jobs.create(
+            "Daily Evaluation",
+            [],
+            "0 18 * * *",
+            job_type=JobType.RECOMMENDATION_EVALUATION,
+        )
+        optimization_job = jobs.create(
+            "Weekly Optimization",
+            [],
+            "0 2 * * 0",
+            job_type=JobType.WEIGHT_OPTIMIZATION,
+        )
+
+        self.assertEqual(evaluation_job.job_type, JobType.RECOMMENDATION_EVALUATION)
+        self.assertEqual(optimization_job.job_type, JobType.WEIGHT_OPTIMIZATION)
+
+        with self.assertRaises(ValueError):
+            jobs.create(
+                "Invalid Evaluation Tickers",
+                ["AAPL"],
+                None,
+                job_type=JobType.RECOMMENDATION_EVALUATION,
+            )
+
+        with self.assertRaises(ValueError):
+            jobs.create(
+                "Invalid Optimization Watchlist",
+                [],
+                None,
+                watchlist_id=watchlist.id,
+                job_type=JobType.WEIGHT_OPTIMIZATION,
+            )
+
+    def test_run_repository_persists_job_type_and_run_metadata(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create(
+            "Daily Evaluation",
+            [],
+            "0 18 * * *",
+            job_type=JobType.RECOMMENDATION_EVALUATION,
+        )
+
+        run = runs.enqueue(job.id or 0)
+        runs.set_summary(run.id or 0, {"synced_recommendations": 3, "pending_recommendations": 7})
+        runs.set_artifact(run.id or 0, {"weights_path": "/tmp/weights.json", "changed": False})
+
+        stored_run = runs.get_run(run.id or 0)
+        self.assertEqual(stored_run.job_type, JobType.RECOMMENDATION_EVALUATION)
+        self.assertIn('"synced_recommendations": 3', stored_run.summary_json or "")
+        self.assertIn('"weights_path": "/tmp/weights.json"', stored_run.artifact_json or "")
+
+    def test_run_repository_lists_recommendation_history_for_ticker(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create("Ticker History", ["AAPL", "MSFT"], None)
+        run = runs.enqueue(job.id or 0)
+        claimed = runs.claim_next_queued_run()
+        assert claimed is not None
+        runs.add_recommendation(
+            run.id or 0,
+            Recommendation(
+                ticker="AAPL",
+                direction=RecommendationDirection.LONG,
+                confidence=82.0,
+                entry_price=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                indicator_summary="Above SMA200 · RSI 55.0",
+            ),
+            RunDiagnostics(warnings=["summary timeout"]),
+        )
+        runs.add_recommendation(
+            run.id or 0,
+            Recommendation(
+                ticker="MSFT",
+                direction=RecommendationDirection.SHORT,
+                confidence=67.0,
+                entry_price=300.0,
+                stop_loss=310.0,
+                take_profit=280.0,
+                indicator_summary="Below SMA200 · RSI 42.0",
+            ),
+            RunDiagnostics(),
+        )
+
+        aapl_items = runs.list_recommendation_history_for_ticker("AAPL")
+        msft_items = runs.list_recommendation_history_for_ticker("MSFT")
+
+        self.assertEqual(len(aapl_items), 1)
+        self.assertEqual(aapl_items[0].ticker, "AAPL")
+        self.assertEqual(aapl_items[0].warnings, ["summary timeout"])
+        self.assertEqual(len(msft_items), 1)
+        self.assertEqual(msft_items[0].ticker, "MSFT")
+
+    def test_job_execution_enqueues_and_processes_run(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create("Morning", ["NVDA", "TSLA"], None)
+
+        service = JobExecutionService(jobs=jobs, runs=runs, proposals=ProposalService())
+        queued_run = service.enqueue_job(job.id or 0)
+        self.assertEqual(queued_run.status, "queued")
+
+        duplicate = service.enqueue_job(job.id or 0)
+        self.assertEqual(duplicate.id, queued_run.id)
+
+        processed_run, recommendations = service.process_next_queued_run()
+
+        self.assertIsNotNone(processed_run)
+        self.assertEqual(len(recommendations), 2)
+        latest_runs = runs.list_latest_runs()
+        self.assertEqual(len(latest_runs), 1)
+        self.assertIn(latest_runs[0].status, {"completed", "completed_with_warnings"})
+        self.assertIsNone(latest_runs[0].error_message)
+        self.assertIsNotNone(latest_runs[0].started_at)
+        self.assertIsNotNone(latest_runs[0].completed_at)
+        self.assertIsNotNone(latest_runs[0].duration_seconds)
+        self.assertIsNotNone(latest_runs[0].timing_json)
+        assert latest_runs[0].timing_json is not None
+        self.assertIn('"ticker_generation"', latest_runs[0].timing_json)
+        stored = runs.list_recommendations_for_run(latest_runs[0].id or 0)
+        outputs = runs.list_outputs_for_run(latest_runs[0].id or 0)
+        self.assertEqual(len(stored), 2)
+        self.assertEqual(len(outputs), 2)
+        self.assertTrue(outputs[0].diagnostics.raw_output is not None or outputs[0].diagnostics.warnings)
+        self.assertIsInstance(outputs[0].diagnostics.provider_errors, list)
+        self.assertIsInstance(outputs[0].diagnostics.problems, list)
+        self.assertEqual(stored[0].state.value, "PENDING")
+        refreshed_job = jobs.get(job.id or 0)
+        self.assertIsNotNone(refreshed_job.last_enqueued_at)
+
+    def test_job_execution_processes_evaluation_run_and_persists_summary(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create(
+            "Daily Evaluation",
+            [],
+            "0 18 * * *",
+            job_type=JobType.RECOMMENDATION_EVALUATION,
+        )
+        service = JobExecutionService(
+            jobs=jobs,
+            runs=runs,
+            proposals=ProposalService(),
+            evaluations=StubEvaluationExecutionService(),
+        )
+        queued_run = service.enqueue_job(job.id or 0)
+
+        processed_run, recommendations = service.process_next_queued_run()
+
+        self.assertIsNotNone(processed_run)
+        self.assertEqual(processed_run.job_type, JobType.RECOMMENDATION_EVALUATION)
+        self.assertEqual(processed_run.status, "completed")
+        self.assertEqual(recommendations, [])
+        stored_run = runs.get_run(queued_run.id or 0)
+        self.assertIn('"synced_recommendations": 4', stored_run.summary_json or "")
+        self.assertIn('"output": "evaluation complete"', stored_run.summary_json or "")
+        self.assertIn('"evaluation_seconds"', stored_run.timing_json or "")
+        self.assertEqual(runs.list_recommendations_for_run(stored_run.id or 0), [])
+
+    def test_job_execution_processes_optimization_run_and_persists_summary_and_artifact(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create(
+            "Weekly Optimization",
+            [],
+            "0 2 * * 0",
+            job_type=JobType.WEIGHT_OPTIMIZATION,
+        )
+        service = JobExecutionService(
+            jobs=jobs,
+            runs=runs,
+            proposals=ProposalService(),
+            optimizations=StubOptimizationService(),
+        )
+        queued_run = service.enqueue_job(job.id or 0)
+
+        processed_run, recommendations = service.process_next_queued_run()
+
+        self.assertIsNotNone(processed_run)
+        self.assertEqual(processed_run.job_type, JobType.WEIGHT_OPTIMIZATION)
+        self.assertEqual(processed_run.status, "completed")
+        self.assertEqual(recommendations, [])
+        stored_run = runs.get_run(queued_run.id or 0)
+        self.assertIn('"weights_changed": true', (stored_run.summary_json or "").lower())
+        self.assertIn('"weights_path": "/tmp/weights.json"', stored_run.artifact_json or "")
+        self.assertIn('"optimization_seconds"', stored_run.timing_json or "")
+        self.assertEqual(runs.list_recommendations_for_run(stored_run.id or 0), [])
+
+    def test_job_execution_blocks_second_optimization_enqueue_when_one_is_active(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create(
+            "Weekly Optimization",
+            [],
+            None,
+            job_type=JobType.WEIGHT_OPTIMIZATION,
+        )
+        service = JobExecutionService(jobs=jobs, runs=runs, proposals=ProposalService())
+        first = service.enqueue_job(job.id or 0)
+        second = service.enqueue_job(job.id or 0)
+        self.assertEqual(first.id, second.id)
+
+    def test_job_execution_marks_run_failed_without_storing_dummy_recommendations(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create("Failure Case", ["AAPL"], None)
+        service = JobExecutionService(jobs=jobs, runs=runs, proposals=FailingProposalService())
+        queued_run = service.enqueue_job(job.id or 0)
+
+        with self.assertRaises(RuntimeError):
+            service.process_next_queued_run()
+
+        latest_run = runs.list_latest_runs(limit=1)[0]
+        self.assertEqual(latest_run.status, "failed")
+        self.assertEqual(latest_run.id, queued_run.id)
+        self.assertEqual(latest_run.error_message, "boom: AAPL")
+        self.assertIsNotNone(latest_run.started_at)
+        self.assertIsNotNone(latest_run.completed_at)
+        self.assertIsNotNone(latest_run.duration_seconds)
+        self.assertIsNotNone(latest_run.timing_json)
+        assert latest_run.timing_json is not None
+        self.assertIn('"recommendation_generation_seconds"', latest_run.timing_json)
+        self.assertEqual(runs.list_recommendations_for_run(latest_run.id or 0), [])
+
+    def test_job_execution_stops_immediately_on_multi_ticker_failure_without_partial_persistence(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create("Failure Mid Run", ["AAPL", "MISSING", "MSFT"], None)
+        service = JobExecutionService(jobs=jobs, runs=runs, proposals=FailOnSecondTickerProposalService())
+        queued_run = service.enqueue_job(job.id or 0)
+
+        with self.assertRaises(RuntimeError):
+            service.process_next_queued_run()
+
+        latest_run = runs.get_run(queued_run.id or 0)
+        self.assertEqual(latest_run.status, "failed")
+        self.assertEqual(latest_run.error_message, "ticker not found: MISSING")
+        self.assertEqual(runs.list_recommendations_for_run(latest_run.id or 0), [])
+        self.assertIsNotNone(latest_run.timing_json)
+        assert latest_run.timing_json is not None
+        self.assertIn('"ticker": "AAPL"', latest_run.timing_json)
+        self.assertIn('"status": "completed"', latest_run.timing_json)
+        self.assertIn('"ticker": "MISSING"', latest_run.timing_json)
+        self.assertIn('"status": "failed"', latest_run.timing_json)
+        self.assertNotIn('"ticker": "MSFT"', latest_run.timing_json)
+
+    def test_job_repository_delete_removes_job_runs_and_recommendations_without_nulling_run_job_id(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create("Delete Me", ["AAPL"], None)
+        run = runs.enqueue(job.id or 0)
+        claimed = runs.claim_next_queued_run()
+        assert claimed is not None
+        runs.update_status(run.id or 0, "completed")
+        runs.add_recommendation(
+            run.id or 0,
+            Recommendation(
+                ticker="AAPL",
+                direction=RecommendationDirection.LONG,
+                confidence=80.0,
+                entry_price=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                indicator_summary="Above SMA200 · RSI 55.0",
+            ),
+            RunDiagnostics(),
+        )
+
+        jobs.delete(job.id or 0)
+
+        self.assertIsNone(session.get(JobRecord, job.id or 0))
+        self.assertIsNone(session.get(RunRecord, run.id or 0))
+        self.assertEqual(runs.list_recommendations_for_run(run.id or 0), [])
+
+    def test_settings_repository_defaults_summary_backend_to_pi_agent(self) -> None:
+        session = create_session()
+        repository = SettingsRepository(session)
+        summary_settings = repository.get_summary_settings()
+        self.assertEqual(summary_settings["summary_backend"], "pi_agent")
+        self.assertEqual(summary_settings["summary_pi_command"], "pi")
+        self.assertEqual(summary_settings["summary_timeout_seconds"], "60")
+        self.assertEqual(repository.get_optimization_minimum_resolved_trades(), 50)
+        self.assertIn("price fluctuation", summary_settings["summary_prompt"])
+        self.assertIn("industry context", summary_settings["summary_prompt"])
+        self.assertIn("global macroeconomic stage", summary_settings["summary_prompt"])
+
+    def test_settings_repository_encrypts_provider_credentials_at_rest(self) -> None:
+        session = create_session()
+        repository = SettingsRepository(session)
+        repository.set_setting("confidence_threshold", "60")
+        repository.upsert_provider_credential("openai", "key-123", "secret-456")
+
+        settings_map = repository.get_setting_map()
+        providers = repository.list_provider_credentials()
+        stored_row = session.get(ProviderCredentialRecord, "openai")
+
+        self.assertEqual(settings_map["confidence_threshold"], "60")
+        openai = next(provider for provider in providers if provider.provider == "openai")
+        self.assertEqual(openai.api_key, "key-123")
+        self.assertEqual(openai.api_secret, "secret-456")
+        self.assertIsNotNone(stored_row)
+        assert stored_row is not None
+        self.assertNotEqual(stored_row.api_key, "key-123")
+        self.assertNotEqual(stored_row.api_secret, "secret-456")
+
+
+if __name__ == "__main__":
+    unittest.main()

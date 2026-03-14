@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard · Trade Proposer App{% endblock %}
+
+{% block content %}
+<section class="page-header">
+  <div>
+    <div class="kicker">Primary journey: daily monitoring</div>
+    <h1 class="page-title">Open the app, triage the latest runs, and act fast.</h1>
+    <p class="page-subtitle">The dashboard is optimized for the most likely user flow: check system readiness, scan new recommendations, notice warning states immediately, and jump into investigation only when something is degraded.</p>
+  </div>
+  <div class="cluster">
+    <a href="/jobs" class="button">Create or run jobs</a>
+    <a href="/settings" class="button-secondary">Review system setup</a>
+    <a href="/debugger" class="button-subtle">Open debugger</a>
+  </div>
+</section>
+
+<section class="metrics-grid" style="margin-bottom: 18px;">
+  <article class="metric-card">
+    <div class="metric-label">Successful recommendations</div>
+    <div class="metric-value">{{ recommendations|length }}</div>
+    <div class="helper-text">Visible recommendations from recent completed runs.</div>
+  </article>
+  <article class="metric-card">
+    <div class="metric-label">Configured watchlists</div>
+    <div class="metric-value">{{ watchlists|length }}</div>
+    <div class="helper-text">Reusable ticker groups for repeatable jobs.</div>
+  </article>
+  <article class="metric-card">
+    <div class="metric-label">Configured jobs</div>
+    <div class="metric-value">{{ jobs|length }}</div>
+    <div class="helper-text">Scheduled or manual recommendation pipelines.</div>
+  </article>
+  <article class="metric-card">
+    <div class="metric-label">Recent runs</div>
+    <div class="metric-value">{{ latest_runs|length }}</div>
+    <div class="helper-text">Failures stay visible even when no recommendations were stored.</div>
+  </article>
+</section>
+
+<section class="two-column" style="margin-bottom: 18px;">
+  <article class="hero-card stack">
+    <div>
+      <div class="kicker">First-time setup</div>
+      <h2 class="section-title">Most likely onboarding path</h2>
+      <p class="page-subtitle">A new operator usually goes settings → watchlists → jobs → first run → dashboard review.</p>
+    </div>
+    <ol class="checklist">
+      <li>Configure provider credentials and summary backend from <a href="/settings">Settings</a>.</li>
+      <li>Create reusable ticker groups in <a href="/watchlists">Watchlists</a>.</li>
+      <li>Create a manual or scheduled job in <a href="/jobs">Jobs</a>.</li>
+      <li>Run it, then use the dashboard and debugger to triage warnings.</li>
+    </ol>
+  </article>
+
+  <article class="detail-card stack">
+    <div>
+      <div class="kicker">Run triage</div>
+      <h2 class="section-title">Latest runs</h2>
+      <p class="helper-text">Use this area to identify failures or degraded runs before opening detailed pages.</p>
+    </div>
+    <ul class="list-reset">
+      {% for run in latest_runs %}
+      <li class="list-item">
+        <div>
+          <a href="/runs/{{ run.id }}"><strong>Run #{{ run.id }}</strong></a>
+          <div class="helper-text">Job {{ run.job_id }} · Created {{ run.created_at }}</div>
+          {% if run.duration_seconds is not none %}
+          <div class="helper-text">Duration {{ run.duration_seconds }}s</div>
+          {% endif %}
+          {% if run.error_message %}
+          <div class="warning-text">{{ run.error_message }}</div>
+          {% endif %}
+        </div>
+        <div>
+          {% if run.status == 'failed' %}
+          <span class="status-badge status-danger">failed</span>
+          {% elif run.status == 'completed_with_warnings' %}
+          <span class="status-badge status-warning">completed_with_warnings</span>
+          {% elif run.status == 'completed' %}
+          <span class="status-badge status-ok">completed</span>
+          {% else %}
+          <span class="status-badge status-neutral">{{ run.status }}</span>
+          {% endif %}
+        </div>
+      </li>
+      {% else %}
+      <li class="empty-state">No runs yet. Create a job and enqueue the first run.</li>
+      {% endfor %}
+    </ul>
+  </article>
+</section>
+
+<section class="card-grid" style="margin-bottom: 18px;">
+  <article class="detail-card">
+    <div class="kicker">Configuration</div>
+    <h2 class="section-title">Watchlists</h2>
+    <ul class="list-reset">
+      {% for watchlist in watchlists %}
+      <li class="list-item">
+        <div>
+          <strong>{{ watchlist.name }}</strong>
+          <div class="helper-text">{{ watchlist.tickers | join(', ') }}</div>
+        </div>
+      </li>
+      {% else %}
+      <li class="empty-state">No watchlists yet. Add one to reuse ticker sets across jobs.</li>
+      {% endfor %}
+    </ul>
+  </article>
+
+  <article class="detail-card">
+    <div class="kicker">Automation</div>
+    <h2 class="section-title">Jobs</h2>
+    <ul class="list-reset">
+      {% for job in jobs %}
+      <li class="list-item">
+        <div>
+          <strong>{{ job.name }}</strong>
+          <div class="helper-text">
+            {% if job.watchlist_id %}
+            watchlist: {{ job.watchlist_name or ('#' ~ job.watchlist_id) }}
+            {% else %}
+            {{ job.tickers | join(', ') }}
+            {% endif %}
+          </div>
+          <div class="helper-text">{{ job.cron or 'manual / not set' }}</div>
+        </div>
+        <div>
+          <span class="status-badge {{ 'status-ok' if job.enabled else 'status-neutral' }}">{{ 'enabled' if job.enabled else 'disabled' }}</span>
+        </div>
+      </li>
+      {% else %}
+      <li class="empty-state">No jobs yet. Create a job to start generating recommendations.</li>
+      {% endfor %}
+    </ul>
+  </article>
+</section>
+
+<section class="detail-card stack">
+  <div class="page-header" style="margin-bottom: 0;">
+    <div>
+      <div class="kicker">Daily monitoring</div>
+      <h2 class="section-title">Latest recommendations</h2>
+      <p class="helper-text">The most important output stays first. Warnings are obvious, but details stay collapsed until you need them.</p>
+    </div>
+    <a href="/history" class="button-secondary">Open full history</a>
+  </div>
+
+  <div class="card-grid">
+    {% for item in recommendations %}
+    <article class="recommendation-card stack">
+      <div class="list-item" style="padding: 0; border-bottom: 0;">
+        <div>
+          <div class="kicker">{{ item.ticker }}</div>
+          <h3 class="section-title" style="margin-bottom: 6px;">{{ item.direction }} · {{ item.confidence }}%</h3>
+          <div class="cluster">
+            {% if item.diagnostics.warnings %}
+            <span class="status-badge status-warning">{{ item.diagnostics.warning_count }} warning(s)</span>
+            {% else %}
+            <span class="status-badge status-ok">No warnings</span>
+            {% endif %}
+            {% if item.diagnostics.provider_errors %}<span class="pill">provider</span>{% endif %}
+            {% if item.diagnostics.summary_error or item.diagnostics.llm_error %}<span class="pill">summary/llm</span>{% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-item">
+          <span class="summary-label">Entry</span>
+          <span class="summary-value">{{ item.entry_price }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Stop loss</span>
+          <span class="summary-value">{{ item.stop_loss }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Take profit</span>
+          <span class="summary-value">{{ item.take_profit }}</span>
+        </div>
+      </div>
+
+      {% if item.diagnostics.warnings %}
+      <div class="inline-alert alert-warning">
+        <strong class="warning-text">Needs review.</strong>
+        <span class="helper-text">Open the debugger or run detail if the warning changes whether you trust this recommendation.</span>
+      </div>
+      {% else %}
+      <div class="helper-text">No warnings detected for this recommendation.</div>
+      {% endif %}
+    </article>
+    {% else %}
+    <div class="empty-state">No successful recommendations persisted yet. Failed runs remain visible in the run list and debugger.</div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

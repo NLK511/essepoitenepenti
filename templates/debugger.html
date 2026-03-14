@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Debugger · Trade Proposer App{% endblock %}
+
+{% block content %}
+<section class="page-header">
+  <div>
+    <div class="kicker">Problem investigation journey</div>
+    <h1 class="page-title">Investigate problematic runs without wading through every successful one.</h1>
+    <p class="page-subtitle">The debugger is optimized for the common triage flow: pick a recent run, inspect visible warnings first, and expand raw details only when the high-level diagnosis is not enough.</p>
+  </div>
+</section>
+
+<div class="two-column">
+  <aside class="detail-card stack sidebar-list">
+    <div>
+      <div class="kicker">Recent runs</div>
+      <h2 class="section-title">Choose a run</h2>
+    </div>
+    <ul class="list-reset">
+      {% for run in runs %}
+      <li class="list-item">
+        <div>
+          <a href="/runs/{{ run.id }}"><strong>Run #{{ run.id }}</strong></a>
+          <div class="helper-text">Job {{ run.job_id }}</div>
+        </div>
+        <div>
+          {% if run.status == 'failed' %}
+          <span class="status-badge status-danger">failed</span>
+          {% elif run.status == 'completed_with_warnings' %}
+          <span class="status-badge status-warning">completed_with_warnings</span>
+          {% elif run.status == 'completed' %}
+          <span class="status-badge status-ok">completed</span>
+          {% else %}
+          <span class="status-badge status-neutral">{{ run.status }}</span>
+          {% endif %}
+        </div>
+      </li>
+      {% else %}
+      <li class="empty-state">No runs available.</li>
+      {% endfor %}
+    </ul>
+  </aside>
+
+  <section class="stack">
+    {% if selected_run %}
+    <article class="detail-card stack">
+      <div>
+        <div class="kicker">Selected run</div>
+        <h2 class="section-title">Run #{{ selected_run.id }}</h2>
+      </div>
+      <div class="cluster">
+        <span class="status-badge {{ 'status-danger' if selected_run.status == 'failed' else ('status-warning' if selected_run.status == 'completed_with_warnings' else ('status-ok' if selected_run.status == 'completed' else 'status-neutral')) }}">{{ selected_run.status }}</span>
+        <span class="status-badge status-neutral">Job {{ selected_run.job_id }}</span>
+        {% if selected_run.duration_seconds is not none %}
+        <span class="status-badge status-neutral">{{ selected_run.duration_seconds }}s</span>
+        {% endif %}
+      </div>
+      <div class="helper-text">Created: {{ selected_run.created_at }}</div>
+      {% if selected_run.started_at %}<div class="helper-text">Started: {{ selected_run.started_at }}</div>{% endif %}
+      {% if selected_run.completed_at %}<div class="helper-text">Completed: {{ selected_run.completed_at }}</div>{% endif %}
+      {% if selected_run.error_message %}
+      <div class="alert alert-danger">
+        <strong>Failure</strong>
+        <pre style="margin-top: 12px;">{{ selected_run.error_message }}</pre>
+      </div>
+      {% endif %}
+      {% if selected_run.timing_json %}
+      <details>
+        <summary>Raw details</summary>
+        <h4>Timing breakdown</h4>
+        <pre>{{ selected_run.timing_json }}</pre>
+      </details>
+      {% endif %}
+    </article>
+
+    <article class="detail-card stack">
+      <div>
+        <div class="kicker">Recommendations</div>
+        <h2 class="section-title">Visible diagnostics first</h2>
+      </div>
+      {% for item in selected_recommendations %}
+      <article class="recommendation-card stack">
+        <div class="list-item" style="padding: 0; border-bottom: 0;">
+          <div>
+            <div class="kicker">{{ item.ticker }}</div>
+            <h3 class="section-title" style="margin-bottom: 4px;">{{ item.direction }} · {{ item.confidence }}%</h3>
+          </div>
+          {% if item.diagnostics.warnings or item.diagnostics.problems or item.diagnostics.news_feed_errors or item.diagnostics.summary_error or item.diagnostics.llm_error %}
+          <span class="status-badge status-warning">{{ item.diagnostics.warning_count }} warning(s)</span>
+          {% else %}
+          <span class="status-badge status-ok">No warnings</span>
+          {% endif %}
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-item">
+            <span class="summary-label">Entry</span>
+            <span class="summary-value">{{ item.entry_price }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Stop</span>
+            <span class="summary-value">{{ item.stop_loss }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Take profit</span>
+            <span class="summary-value">{{ item.take_profit }}</span>
+          </div>
+        </div>
+
+        {% if item.diagnostics.warnings or item.diagnostics.problems or item.diagnostics.news_feed_errors or item.diagnostics.summary_error or item.diagnostics.llm_error %}
+        <ul>
+          {% for warning in item.diagnostics.warnings %}
+          <li class="warning-text">{{ warning }}</li>
+          {% endfor %}
+          {% for problem in item.diagnostics.problems %}
+            {% if problem not in item.diagnostics.warnings %}
+            <li class="warning-text">{{ problem }}</li>
+            {% endif %}
+          {% endfor %}
+          {% for provider_error in item.diagnostics.news_feed_errors %}
+            {% if provider_error not in item.diagnostics.warnings and provider_error not in item.diagnostics.problems %}
+            <li class="warning-text">{{ provider_error }}</li>
+            {% endif %}
+          {% endfor %}
+          {% if item.diagnostics.summary_error and item.diagnostics.summary_error not in item.diagnostics.warnings and item.diagnostics.summary_error not in item.diagnostics.problems %}
+          <li class="danger">summary: {{ item.diagnostics.summary_error }}</li>
+          {% endif %}
+          {% if item.diagnostics.llm_error and item.diagnostics.llm_error not in item.diagnostics.warnings and item.diagnostics.llm_error not in item.diagnostics.problems %}
+          <li class="danger">llm: {{ item.diagnostics.llm_error }}</li>
+          {% endif %}
+        </ul>
+        {% else %}
+        <div class="helper-text">No warnings or errors.</div>
+        {% endif %}
+
+        {% if item.diagnostics.analysis_json or item.diagnostics.raw_output %}
+        <details>
+          <summary>Raw details</summary>
+          {% if item.diagnostics.analysis_json %}
+          <h4>Analysis JSON</h4>
+          <pre>{{ item.diagnostics.analysis_json }}</pre>
+          {% endif %}
+          {% if item.diagnostics.raw_output %}
+          <h4>Raw output</h4>
+          <pre>{{ item.diagnostics.raw_output }}</pre>
+          {% endif %}
+        </details>
+        {% endif %}
+      </article>
+      {% else %}
+      <div class="empty-state">No recommendations for the selected run.</div>
+      {% endfor %}
+    </article>
+    {% else %}
+    <article class="detail-card empty-state">No run selected.</article>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

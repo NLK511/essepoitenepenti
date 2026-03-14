@@ -1,0 +1,341 @@
+import unittest
+from datetime import datetime, timezone
+from unittest.mock import patch
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from trade_proposer_app.domain.enums import JobType, RecommendationDirection
+from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, RunDiagnostics, RunOutput
+from trade_proposer_app.persistence.models import Base
+from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.services.runs import enqueue_enabled_jobs
+from trade_proposer_app.workers.tasks import process_once
+
+
+class StubProposalService:
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+
+    def generate(self, ticker: str) -> RunOutput:
+        return RunOutput(
+            recommendation=Recommendation(
+                ticker=ticker,
+                direction=RecommendationDirection.LONG,
+                confidence=72.0,
+                entry_price=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                indicator_summary="Above SMA200 · RSI 55.0",
+            ),
+            diagnostics=RunDiagnostics(
+                warnings=["news degraded"],
+                provider_errors=["feed timeout"],
+                raw_output="raw output",
+                analysis_json='{"problems": ["news degraded"]}',
+            ),
+        )
+
+
+class FailingProposalService:
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+
+    def generate(self, ticker: str) -> RunOutput:
+        raise RuntimeError(f"dependency missing for {ticker}")
+
+
+class StubEvaluationExecutionService:
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+
+    def execute(self, run=None) -> EvaluationRunResult:
+        return EvaluationRunResult(
+            evaluated_trade_log_entries=8,
+            synced_recommendations=3,
+            pending_recommendations=2,
+            win_recommendations=3,
+            loss_recommendations=1,
+            output="scheduled evaluation complete",
+        )
+
+
+class StubOptimizationService:
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+
+    def execute(self) -> tuple[dict[str, object], dict[str, object]]:
+        return (
+            {
+                "status": "completed",
+                "resolved_trade_count": 99,
+                "minimum_resolved_trades": 50,
+                "weights_changed": True,
+                "stdout": "scheduled optimization complete",
+                "stderr": "",
+            },
+            {
+                "weights_path": "/tmp/weights.json",
+                "before": {"exists": True, "sha256": "abc"},
+                "after": {"exists": True, "sha256": "def"},
+            },
+        )
+
+
+class WorkerSchedulerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.engine = create_engine("sqlite:///:memory:", future=True)
+        Base.metadata.create_all(bind=self.engine)
+
+    def create_session(self) -> Session:
+        return Session(bind=self.engine)
+
+    def test_scheduler_enqueues_only_scheduled_jobs_without_duplicate_active_runs(self) -> None:
+        session = self.create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+
+        scheduled = jobs.create("Scheduled", ["AAPL"], "0 * * * *")
+        jobs.create("Manual", ["MSFT"], None)
+        already_active = jobs.create("Already Active", ["NVDA"], "*/5 * * * *")
+        runs.enqueue(already_active.id or 0)
+
+        scheduled_now = datetime(2026, 3, 14, 10, 0, tzinfo=timezone.utc)
+        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
+            "trade_proposer_app.services.runs.ProposalService", StubProposalService
+        ):
+            count = enqueue_enabled_jobs(now=scheduled_now)
+
+        self.assertEqual(count, 1)
+        all_runs = runs.list_latest_runs(limit=10)
+        self.assertEqual(len(all_runs), 2)
+        scheduled_runs = [run for run in all_runs if run.job_id == scheduled.id]
+        active_runs = [run for run in all_runs if run.job_id == already_active.id]
+        self.assertEqual(len(scheduled_runs), 1)
+        self.assertEqual(len(active_runs), 1)
+        self.assertEqual(scheduled_runs[0].scheduled_for, scheduled_now)
+
+    def test_scheduler_does_not_reenqueue_same_schedule_slot(self) -> None:
+        session = self.create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        scheduled = jobs.create("Scheduled", ["AAPL"], "0 * * * *")
+        scheduled_now = datetime(2026, 3, 14, 10, 0, tzinfo=timezone.utc)
+
+        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
+            "trade_proposer_app.services.runs.ProposalService", StubProposalService
+        ):
+            first_count = enqueue_enabled_jobs(now=scheduled_now)
+            second_count = enqueue_enabled_jobs(now=scheduled_now)
+
+        self.assertEqual(first_count, 1)
+        self.assertEqual(second_count, 0)
+        all_runs = [run for run in runs.list_latest_runs(limit=10) if run.job_id == scheduled.id]
+        self.assertEqual(len(all_runs), 1)
+        self.assertEqual(all_runs[0].scheduled_for, scheduled_now)
+
+    def test_scheduler_enqueues_latest_due_slot_when_last_slot_was_missed(self) -> None:
+        session = self.create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        scheduled = jobs.create("Scheduled", ["AAPL"], "0 * * * *")
+        not_due_now = datetime(2026, 3, 14, 10, 17, tzinfo=timezone.utc)
+
+        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
+            "trade_proposer_app.services.runs.ProposalService", StubProposalService
+        ):
+            count = enqueue_enabled_jobs(now=not_due_now)
+
+        self.assertEqual(count, 1)
+        run = [item for item in runs.list_latest_runs(limit=10) if item.job_id == scheduled.id][0]
+        self.assertEqual(run.scheduled_for, datetime(2026, 3, 14, 10, 0, tzinfo=timezone.utc))
+
+    def test_scheduler_enqueues_non_proposal_jobs_with_job_type_metadata(self) -> None:
+        session = self.create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        evaluation = jobs.create(
+            "Scheduled Evaluation",
+            [],
+            "0 18 * * *",
+            job_type=JobType.RECOMMENDATION_EVALUATION,
+        )
+        optimization = jobs.create(
+            "Scheduled Optimization",
+            [],
+            "0 2 * * 0",
+            job_type=JobType.WEIGHT_OPTIMIZATION,
+        )
+        scheduled_now = datetime(2026, 3, 15, 2, 0, tzinfo=timezone.utc)
+
+        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
+            "trade_proposer_app.services.runs.ProposalService", StubProposalService
+        ):
+            count = enqueue_enabled_jobs(now=scheduled_now)
+
+        self.assertEqual(count, 2)
+        latest_runs = runs.list_latest_runs(limit=10)
+        evaluation_run = next(run for run in latest_runs if run.job_id == evaluation.id)
+        optimization_run = next(run for run in latest_runs if run.job_id == optimization.id)
+        self.assertEqual(evaluation_run.job_type, JobType.RECOMMENDATION_EVALUATION)
+        self.assertEqual(optimization_run.job_type, JobType.WEIGHT_OPTIMIZATION)
+        self.assertEqual(evaluation_run.scheduled_for, datetime(2026, 3, 14, 18, 0, tzinfo=timezone.utc))
+        self.assertEqual(optimization_run.scheduled_for, datetime(2026, 3, 15, 2, 0, tzinfo=timezone.utc))
+
+    def test_run_claim_only_succeeds_once(self) -> None:
+        jobs_session = self.create_session()
+        try:
+            job = JobRepository(jobs_session).create("Claim Once", ["TSLA"], None)
+            RunRepository(jobs_session).enqueue(job.id or 0)
+        finally:
+            jobs_session.close()
+
+        first_session = self.create_session()
+        second_session = self.create_session()
+        try:
+            first_claim = RunRepository(first_session).claim_next_queued_run()
+            second_claim = RunRepository(second_session).claim_next_queued_run()
+        finally:
+            first_session.close()
+            second_session.close()
+
+        self.assertIsNotNone(first_claim)
+        self.assertIsNone(second_claim)
+
+    def test_worker_process_once_processes_queued_run(self) -> None:
+        session = self.create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create("Worker Job", ["TSLA"], None)
+        runs.enqueue(job.id or 0)
+
+        with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
+            "trade_proposer_app.workers.tasks.ProposalService", StubProposalService
+        ):
+            processed = process_once()
+
+        self.assertTrue(processed)
+        updated_run = runs.list_latest_runs(limit=1)[0]
+        self.assertEqual(updated_run.status, "completed_with_warnings")
+        self.assertIsNotNone(updated_run.duration_seconds)
+        self.assertIsNotNone(updated_run.timing_json)
+        assert updated_run.timing_json is not None
+        self.assertIn('"ticker_generation"', updated_run.timing_json)
+        recommendations = runs.list_recommendations_for_run(updated_run.id or 0)
+        outputs = runs.list_outputs_for_run(updated_run.id or 0)
+        self.assertEqual(len(recommendations), 1)
+        self.assertEqual(len(outputs), 1)
+        self.assertEqual(outputs[0].diagnostics.provider_errors, ["feed timeout"])
+        self.assertEqual(recommendations[0].state.value, "PENDING")
+
+    def test_worker_process_once_processes_evaluation_run(self) -> None:
+        session = self.create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create(
+            "Evaluation Job",
+            [],
+            None,
+            job_type=JobType.RECOMMENDATION_EVALUATION,
+        )
+        run = runs.enqueue(job.id or 0)
+
+        with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
+            "trade_proposer_app.workers.tasks.ProposalService", StubProposalService
+        ), patch(
+            "trade_proposer_app.workers.tasks.EvaluationExecutionService", StubEvaluationExecutionService
+        ):
+            processed = process_once()
+
+        self.assertTrue(processed)
+        updated_run = runs.get_run(run.id or 0)
+        self.assertEqual(updated_run.status, "completed")
+        self.assertEqual(updated_run.job_type, JobType.RECOMMENDATION_EVALUATION)
+        self.assertIn('"synced_recommendations": 3', updated_run.summary_json or "")
+        self.assertIn('"evaluation_seconds"', updated_run.timing_json or "")
+        self.assertEqual(runs.list_recommendations_for_run(updated_run.id or 0), [])
+
+    def test_worker_process_once_processes_optimization_run(self) -> None:
+        session = self.create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create(
+            "Optimization Job",
+            [],
+            None,
+            job_type=JobType.WEIGHT_OPTIMIZATION,
+        )
+        run = runs.enqueue(job.id or 0)
+
+        with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
+            "trade_proposer_app.workers.tasks.ProposalService", StubProposalService
+        ), patch(
+            "trade_proposer_app.workers.tasks.WeightOptimizationService", StubOptimizationService
+        ):
+            processed = process_once()
+
+        self.assertTrue(processed)
+        updated_run = runs.get_run(run.id or 0)
+        self.assertEqual(updated_run.status, "completed")
+        self.assertEqual(updated_run.job_type, JobType.WEIGHT_OPTIMIZATION)
+        self.assertIn('"weights_changed": true', (updated_run.summary_json or "").lower())
+        self.assertIn('"weights_path": "/tmp/weights.json"', updated_run.artifact_json or "")
+        self.assertIn('"optimization_seconds"', updated_run.timing_json or "")
+        self.assertEqual(runs.list_recommendations_for_run(updated_run.id or 0), [])
+
+    def test_scheduler_skips_second_optimization_job_when_one_is_active(self) -> None:
+        session = self.create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        first = jobs.create("Optimization One", [], "0 2 * * *", job_type=JobType.WEIGHT_OPTIMIZATION)
+        second = jobs.create("Optimization Two", [], "0 2 * * *", job_type=JobType.WEIGHT_OPTIMIZATION)
+        runs.enqueue(first.id or 0)
+        scheduled_now = datetime(2026, 3, 15, 2, 0, tzinfo=timezone.utc)
+
+        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
+            "trade_proposer_app.services.runs.ProposalService", StubProposalService
+        ):
+            count = enqueue_enabled_jobs(now=scheduled_now)
+
+        self.assertEqual(count, 0)
+        optimization_runs = [run for run in runs.list_latest_runs(limit=10) if run.job_type == JobType.WEIGHT_OPTIMIZATION]
+        self.assertEqual(len(optimization_runs), 1)
+        self.assertEqual(optimization_runs[0].job_id, first.id)
+        self.assertNotEqual(first.id, second.id)
+
+    def test_worker_process_once_marks_run_failed_without_crashing_worker(self) -> None:
+        session = self.create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create("Broken Job", ["TSLA"], None)
+        run = runs.enqueue(job.id or 0)
+
+        with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
+            "trade_proposer_app.workers.tasks.ProposalService", FailingProposalService
+        ):
+            processed = process_once()
+
+        self.assertTrue(processed)
+        updated_run = runs.get_run(run.id or 0)
+        self.assertEqual(updated_run.status, "failed")
+        self.assertIn("dependency missing", updated_run.error_message or "")
+        self.assertIsNotNone(updated_run.duration_seconds)
+        self.assertIsNotNone(updated_run.timing_json)
+        assert updated_run.timing_json is not None
+        self.assertIn('"recommendation_generation_seconds"', updated_run.timing_json)
+        self.assertEqual(runs.list_recommendations_for_run(updated_run.id or 0), [])
+
+    def test_worker_process_once_returns_false_when_queue_empty(self) -> None:
+        session = self.create_session()
+
+        with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
+            "trade_proposer_app.workers.tasks.ProposalService", StubProposalService
+        ):
+            processed = process_once()
+
+        self.assertFalse(processed)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,61 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from trade_proposer_app.db import get_db_session
+from trade_proposer_app.domain.models import Recommendation, Run, RunDiagnostics
+from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
+from trade_proposer_app.services.evaluations import RecommendationEvaluationService
+from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.optimizations import WeightOptimizationService
+from trade_proposer_app.services.proposals import ProposalService
+
+router = APIRouter(prefix="/recommendations", tags=["recommendations"])
+
+
+@router.get("")
+async def list_recommendations(session: Session = Depends(get_db_session)) -> list[Recommendation]:
+    return RunRepository(session).list_latest_recommendations(limit=50)
+
+
+@router.get("/{recommendation_id}")
+async def get_recommendation(recommendation_id: int, session: Session = Depends(get_db_session)) -> dict[str, Recommendation | Run | RunDiagnostics]:
+    repository = RunRepository(session)
+    try:
+        recommendation = repository.get_recommendation(recommendation_id)
+        run = repository.get_run(recommendation.run_id or 0)
+        diagnostics = repository.get_recommendation_diagnostics(recommendation_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {
+        "recommendation": recommendation,
+        "run": run,
+        "diagnostics": diagnostics,
+    }
+
+
+def create_evaluation_job_execution_service(session: Session) -> JobExecutionService:
+    return JobExecutionService(
+        jobs=JobRepository(session),
+        runs=RunRepository(session),
+        proposals=ProposalService(summary_settings={}, provider_credentials={}),
+        evaluations=EvaluationExecutionService(RecommendationEvaluationService(session)),
+        optimizations=WeightOptimizationService(),
+    )
+
+
+@router.post("/evaluate")
+async def evaluate_recommendations(session: Session = Depends(get_db_session)) -> Run:
+    try:
+        return create_evaluation_job_execution_service(session).enqueue_manual_evaluation()
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/{recommendation_id}/evaluate")
+async def evaluate_recommendation(recommendation_id: int, session: Session = Depends(get_db_session)) -> Run:
+    try:
+        return create_evaluation_job_execution_service(session).enqueue_manual_evaluation(recommendation_id=recommendation_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

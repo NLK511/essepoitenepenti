@@ -1,0 +1,42 @@
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+
+import { AppLayout } from "./components/layout";
+import { DashboardPage } from "./pages/dashboard-page";
+import { DebuggerPage } from "./pages/debugger-page";
+import { DocsPage } from "./pages/docs-page";
+import { HistoryPage } from "./pages/history-page";
+import { JobsPage } from "./pages/jobs-page";
+import { RecommendationDetailPage } from "./pages/recommendation-detail-page";
+import { RunDetailPage } from "./pages/run-detail-page";
+import { SettingsPage } from "./pages/settings-page";
+import { TickerPage } from "./pages/ticker-page";
+import { WatchlistsPage } from "./pages/watchlists-page";
+
+function NotFoundPage() {
+  return <Navigate to="/" replace />;
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<AppLayout />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="jobs" element={<JobsPage />} />
+          <Route path="jobs/watchlists" element={<WatchlistsPage />} />
+          <Route path="jobs/history" element={<HistoryPage />} />
+          <Route path="jobs/debugger" element={<DebuggerPage />} />
+          <Route path="watchlists" element={<Navigate to="/jobs/watchlists" replace />} />
+          <Route path="history" element={<Navigate to="/jobs/history" replace />} />
+          <Route path="debugger" element={<Navigate to="/jobs/debugger" replace />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="docs" element={<DocsPage />} />
+          <Route path="runs/:runId" element={<RunDetailPage />} />
+          <Route path="recommendations/:recommendationId" element={<RecommendationDetailPage />} />
+          <Route path="tickers/:ticker" element={<TickerPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+}
