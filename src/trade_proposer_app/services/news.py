@@ -109,6 +109,65 @@ NEGATIVE_KEYWORD_WEIGHTS: dict[str, float] = {
     "concerns": 1.0,
 }
 
+GENERAL_POSITIVE_TOKENS: set[str] = {
+    "advance",
+    "advances",
+    "advancing",
+    "boost",
+    "boosts",
+    "boosted",
+    "buy",
+    "buys",
+    "buyback",
+    "buybacks",
+    "invest",
+    "invests",
+    "investment",
+    "investing",
+    "profit",
+    "profits",
+    "gain",
+    "gains",
+    "growth",
+    "growing",
+    "up",
+    "upswing",
+    "resilient",
+    "stabilize",
+    "stabilized",
+}
+
+GENERAL_NEGATIVE_TOKENS: set[str] = {
+    "sell",
+    "sells",
+    "sold",
+    "loss",
+    "losses",
+    "lose",
+    "losing",
+    "cut",
+    "cuts",
+    "layoff",
+    "layoffs",
+    "delay",
+    "delays",
+    "drop",
+    "drops",
+    "plummet",
+    "plummets",
+    "bear",
+    "bears",
+    "bearish",
+    "down",
+    "downturn",
+    "pullback",
+    "risk",
+}
+
+GENERAL_FALLBACK_WEIGHT = 0.55
+GENERAL_AGGREGATION_WEIGHT = 0.65
+
+
 PROVIDER_BUILDERS: dict[str, type["NewsProvider"]] = {}
 
 
@@ -141,6 +200,19 @@ def _tokenize(text: str | None) -> list[str]:
         return []
     return re.findall(r"[a-z0-9]+", text.lower())
 
+
+def _general_token_score(tokens: Iterable[str]) -> float:
+    if not tokens:
+        return 0.0
+    positives = sum(1 for token in tokens if token in GENERAL_POSITIVE_TOKENS)
+    negatives = sum(1 for token in tokens if token in GENERAL_NEGATIVE_TOKENS)
+    total = positives + negatives
+    if total == 0:
+        return 0.0
+    return (positives - negatives) / total
+
+def _clamp_value(value: float) -> float:
+    return max(-1.0, min(1.0, value))
 
 def _sum_keyword_weights(tokens: Iterable[str], weight_map: dict[str, float], boost: float) -> float:
     return sum(weight_map.get(token, 0.0) * boost for token in tokens)
@@ -249,6 +321,7 @@ class NaiveSentimentAnalyzer:
         articles = bundle.articles
         contexts: set[str] = set()
         article_scores: list[float] = []
+        general_scores: list[float] = []
         positives = 0.0
         negatives = 0.0
 
@@ -264,11 +337,16 @@ class NaiveSentimentAnalyzer:
                 _sum_keyword_weights(title_tokens, NEGATIVE_KEYWORD_WEIGHTS, TITLE_KEYWORD_WEIGHT)
                 + _sum_keyword_weights(summary_tokens, NEGATIVE_KEYWORD_WEIGHTS, SUMMARY_KEYWORD_WEIGHT)
             )
+            general_score = _general_token_score(title_tokens + summary_tokens)
+            general_scores.append(general_score)
             positives += article_positive
             negatives += article_negative
             hits = article_positive + article_negative
             if hits == 0:
-                article_score = 0.0
+                if general_score != 0.0:
+                    article_score = _clamp_value(general_score * GENERAL_FALLBACK_WEIGHT)
+                else:
+                    article_score = 0.0
             else:
                 article_score = (article_positive - article_negative) / (hits + ARTICLE_SCORE_SMOOTHING)
             article_score = max(-1.0, min(1.0, article_score))
@@ -277,6 +355,11 @@ class NaiveSentimentAnalyzer:
                 if keyword in text:
                     contexts.add(tag)
         score = sum(article_scores) / len(article_scores) if article_scores else 0.0
+        if score == 0.0 and general_scores:
+            general_avg = sum(general_scores) / len(general_scores)
+            if general_avg != 0.0:
+                score = _clamp_value(general_avg * GENERAL_AGGREGATION_WEIGHT)
+
         score = max(-1.0, min(1.0, score))
         label = "NEUTRAL"
         if score > 0.15:

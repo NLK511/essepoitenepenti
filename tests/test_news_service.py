@@ -14,6 +14,20 @@ class NewsIngestionServiceTests(unittest.TestCase):
         self.assertTrue(bundle.feed_errors)
         self.assertIn("no providers configured", bundle.feed_errors[0])
 
+    def test_naive_sentiment_falls_back_to_general_keywords(self) -> None:
+        analyzer = NaiveSentimentAnalyzer()
+        article = NewsArticle(
+            title="Company announces buyback as demand stabilizes",
+            summary="Management expects the cycle to keep advancing",
+            publisher="Example",
+            link="https://example.com/news",
+            published_at=None,
+        )
+        bundle = NewsBundle(ticker="COMP", articles=[article], feeds_used=["NewsAPI"])
+        result = analyzer.analyze(bundle)
+        self.assertGreater(result["score"], 0.0)
+        self.assertEqual(result["label"], "POSITIVE")
+
     @patch("trade_proposer_app.services.news.httpx.get")
     def test_newsapi_provider_parses_articles(self, mock_get):
         response = MagicMock()
