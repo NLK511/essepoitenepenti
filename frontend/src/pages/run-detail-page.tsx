@@ -7,6 +7,81 @@ import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionT
 import type { RunDetailResponse } from "../types";
 import { diagnosticsMessages, directionTone, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, recommendationStateTone, runTone } from "../utils";
 
+const DOC_BASE = "https://github.com/NLK511/essepoitenepenti/blob/main/docs/recommendation-methodology.md";
+
+const INFO_DESCRIPTIONS = {
+  trading: {
+    description: "Review the entry, stop loss, and take profit structure that defines the proposal",
+    link: `${DOC_BASE}#proposal-structure`,
+  },
+  summary: {
+    description: "See how summary methods and enhanced sentiment characterise the recommendation narrative",
+    link: `${DOC_BASE}#summary-and-sentiment`,
+  },
+  diagnostics: {
+    description: "Dive into structured signals and diagnostic warnings recorded for this recommendation",
+    link: `${DOC_BASE}#structured-diagnostics`,
+  },
+  messages: {
+    description: "Understand warning classification that operators see when data arrives incomplete",
+    link: `${DOC_BASE}#diagnostics`,
+  },
+  raw: {
+    description: "Inspect the raw JSON emitted by the pipeline if you need the un-parsed payload",
+    link: `${DOC_BASE}#raw-output`,
+  },
+  contextFlags: {
+    description: "Context flags flag key conditions that influenced this proposal",
+    link: `${DOC_BASE}#context-flags`,
+  },
+  highlights: {
+    description: "Normalized highlight metrics show how feature vectors compare across runs",
+    link: `${DOC_BASE}#feature-vectors`,
+  },
+  aggregations: {
+    description: "Aggregator totals summarize counts or dollar amounts used in scoring",
+    link: `${DOC_BASE}#aggregations`,
+  },
+  weights: {
+    description: "Confidence weights show how each signal contributed to the final recommendation",
+    link: `${DOC_BASE}#confidence-weights`,
+  },
+  news: {
+    description: "News coverage aggregates headline data and sentiment for this ticker",
+    link: `${DOC_BASE}#news-coverage`,
+  },
+  fieldEntry: {
+    description: "Entry price defines where the system would enter the position",
+    link: `${DOC_BASE}#proposal-structure`,
+  },
+  fieldStop: {
+    description: "Stop loss caps downside risk for this recommendation",
+    link: `${DOC_BASE}#proposal-structure`,
+  },
+  fieldTake: {
+    description: "Take profit outlines the target level for the trade",
+    link: `${DOC_BASE}#proposal-structure`,
+  },
+  summaryMethod: {
+    description: "The summary method tells you which service provided this narrative",
+    link: `${DOC_BASE}#summary-and-sentiment`,
+  },
+};
+
+function InfoBadge({ description, link }: { description: string; link: string }) {
+  return (
+    <a
+      className="info-badge"
+      href={link}
+      target="_blank"
+      rel="noreferrer"
+      title={description}
+    >
+      ?
+    </a>
+  );
+}
+
 export function RunDetailPage() {
   const { runId } = useParams<{ runId: string }>();
   const [detail, setDetail] = useState<RunDetailResponse | null>(null);
@@ -148,21 +223,48 @@ export function RunDetailPage() {
                           </Badge>
                         </div>
                         <section className="recommendation-section">
-                          <div className="section-heading"><strong>Trading parameters</strong></div>
+                          <div className="section-heading">
+                            <strong>Trading parameters</strong>
+                            <InfoBadge {...INFO_DESCRIPTIONS.trading} />
+                          </div>
                           <div className="summary-grid">
-                            <div className="summary-item"><span className="summary-label">Entry</span><span className="summary-value">{item.entry_price}</span></div>
-                            <div className="summary-item"><span className="summary-label">Stop loss</span><span className="summary-value">{item.stop_loss}</span></div>
-                            <div className="summary-item"><span className="summary-label">Take profit</span><span className="summary-value">{item.take_profit}</span></div>
+                            <div className="summary-item">
+                              <span className="summary-label summary-label-with-info">
+                                Entry
+                                <InfoBadge {...INFO_DESCRIPTIONS.fieldEntry} />
+                              </span>
+                              <span className="summary-value">{item.entry_price}</span>
+                            </div>
+                            <div className="summary-item">
+                              <span className="summary-label summary-label-with-info">
+                                Stop loss
+                                <InfoBadge {...INFO_DESCRIPTIONS.fieldStop} />
+                              </span>
+                              <span className="summary-value">{item.stop_loss}</span>
+                            </div>
+                            <div className="summary-item">
+                              <span className="summary-label summary-label-with-info">
+                                Take profit
+                                <InfoBadge {...INFO_DESCRIPTIONS.fieldTake} />
+                              </span>
+                              <span className="summary-value">{item.take_profit}</span>
+                            </div>
                           </div>
                           <div className="helper-text">{item.indicator_summary || "No indicator summary stored for this recommendation."}</div>
                         </section>
                         {summaryText || newsDigest ? (
                           <section className="recommendation-section">
-                            <div className="section-heading"><strong>Summary & sentiment</strong></div>
+                            <div className="section-heading">
+                              <strong>Summary & sentiment</strong>
+                              <InfoBadge {...INFO_DESCRIPTIONS.summary} />
+                            </div>
                             <div className="stack-page top-gap-small">
                               <div className="summary-grid">
                                 <div className="summary-item summary-method-block">
-                                  <span className="summary-label">Summary method</span>
+                                  <span className="summary-label summary-label-with-info">
+                                    Summary method
+                                    <InfoBadge {...INFO_DESCRIPTIONS.summaryMethod} />
+                                  </span>
                                   <span className="summary-method-value">{summaryMethodLabel} ({summaryBackendLabel})</span>
                                 </div>
                               </div>
@@ -178,12 +280,18 @@ export function RunDetailPage() {
                                 <div className="enhanced-sentiment-card">
                                   <div className="summary-grid enhanced-sentiment-grid">
                                     <div className="summary-item">
-                                      <span className="summary-label">Enhanced sentiment</span>
+                                      <span className="summary-label summary-label-with-info">
+                                        Enhanced sentiment
+                                        <InfoBadge {...INFO_DESCRIPTIONS.summary} />
+                                      </span>
                                       <span className="summary-value">{enhancedSentimentScore.toFixed(2)}</span>
                                     </div>
                                     {enhancedSentimentLabel ? (
                                       <div className="summary-item">
-                                        <span className="summary-label">Label</span>
+                                        <span className="summary-label summary-label-with-info">
+                                          Label
+                                          <InfoBadge {...INFO_DESCRIPTIONS.summary} />
+                                        </span>
                                         <span className="summary-value">{enhancedSentimentLabel}</span>
                                       </div>
                                     ) : null}
@@ -201,12 +309,18 @@ export function RunDetailPage() {
                         ) : null}
                         {analysis ? (
                           <section className="recommendation-section">
-                            <div className="section-heading"><strong>Structured diagnostics</strong></div>
+                            <div className="section-heading">
+                              <strong>Structured diagnostics</strong>
+                              <InfoBadge {...INFO_DESCRIPTIONS.diagnostics} />
+                            </div>
                             <details className="top-gap-small structured-diagnostics">
                               <summary>Expand diagnostics</summary>
                               <div className="stack-page top-gap-small">
                                 <section className="diagnostic-subsection">
-                                  <div className="section-heading"><strong>Context flags</strong></div>
+                                  <div className="section-heading">
+                                    <strong>Context flags</strong>
+                                    <InfoBadge {...INFO_DESCRIPTIONS.contextFlags} />
+                                  </div>
                                   {contextFlagEntries.length > 0 ? (
                                     <div className="summary-grid">
                                       {contextFlagEntries.map(([flag, value]) => (
@@ -223,7 +337,10 @@ export function RunDetailPage() {
                                   )}
                                 </section>
                                 <section className="diagnostic-subsection">
-                                  <div className="section-heading"><strong>Normalized highlights</strong></div>
+                                  <div className="section-heading">
+                                    <strong>Normalized highlights</strong>
+                                    <InfoBadge {...INFO_DESCRIPTIONS.highlights} />
+                                  </div>
                                   <div className="summary-grid">
                                     {normalizedHighlights.map((entry) => (
                                       <div key={entry.key} className="summary-item">
@@ -234,7 +351,10 @@ export function RunDetailPage() {
                                   </div>
                                 </section>
                                 <section className="diagnostic-subsection">
-                                  <div className="section-heading"><strong>Aggregations</strong></div>
+                                  <div className="section-heading">
+                                    <strong>Aggregations</strong>
+                                    <InfoBadge {...INFO_DESCRIPTIONS.aggregations} />
+                                  </div>
                                   {aggregatorEntries.length > 0 ? (
                                     <div className="summary-grid">
                                       {aggregatorEntries.slice(0, 6).map(([key, value]) => (
@@ -257,7 +377,10 @@ export function RunDetailPage() {
                                   )}
                                 </section>
                                 <section className="diagnostic-subsection">
-                                  <div className="section-heading"><strong>Confidence weights</strong></div>
+                                  <div className="section-heading">
+                                    <strong>Confidence weights</strong>
+                                    <InfoBadge {...INFO_DESCRIPTIONS.weights} />
+                                  </div>
                                   {confidenceEntries.length > 0 ? (
                                     <div className="summary-grid">
                                       {confidenceEntries.slice(0, 6).map(([key, value]) => (
@@ -280,7 +403,10 @@ export function RunDetailPage() {
                                   )}
                                 </section>
                                 <section className="diagnostic-subsection">
-                                  <div className="section-heading"><strong>News coverage</strong></div>
+                                  <div className="section-heading">
+                                    <strong>News coverage</strong>
+                                    <InfoBadge {...INFO_DESCRIPTIONS.news} />
+                                  </div>
                                   {newsStats.length > 0 ? (
                                     <div className="summary-grid">
                                       {newsStats.map((stat) => (
@@ -340,7 +466,10 @@ export function RunDetailPage() {
                           </section>
                         ) : null}
                         <section className="recommendation-section">
-                          <div className="section-heading"><strong>Diagnostic messages</strong></div>
+                          <div className="section-heading">
+                            <strong>Diagnostic messages</strong>
+                            <InfoBadge {...INFO_DESCRIPTIONS.messages} />
+                          </div>
                           {messages.length > 0 ? (
                             <ul className="warning-text">
                               {messages.map((message) => (
@@ -353,7 +482,10 @@ export function RunDetailPage() {
                         </section>
                         {output.diagnostics.raw_output ? (
                           <section className="recommendation-section">
-                            <div className="section-heading"><strong>Raw details</strong></div>
+                            <div className="section-heading">
+                              <strong>Raw details</strong>
+                              <InfoBadge {...INFO_DESCRIPTIONS.raw} />
+                            </div>
                             <details>
                               <summary>View raw output</summary>
                               <pre>{output.diagnostics.raw_output}</pre>

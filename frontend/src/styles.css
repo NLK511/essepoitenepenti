@@ -416,6 +416,10 @@ html[data-theme="light"] .topbar {
 }
 
 .section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -426,6 +430,31 @@ html[data-theme="light"] .topbar {
 
 .section-heading strong {
   font-weight: 700;
+}
+
+.info-badge {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  text-decoration: none;
+  color: var(--text-subtle);
+  background: var(--bg-soft);
+}
+
+.info-badge:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.summary-label-with-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .summary-method-value {
