@@ -205,8 +205,8 @@ export function RunDetailPage() {
                             <details className="top-gap-small structured-diagnostics">
                               <summary>Expand diagnostics</summary>
                               <div className="stack-page top-gap-small">
-                                <div className="structured-section">
-                                  <div className="structured-section-header">Context flags</div>
+                                <section className="diagnostic-subsection">
+                                  <div className="section-heading"><strong>Context flags</strong></div>
                                   {contextFlagEntries.length > 0 ? (
                                     <div className="summary-grid">
                                       {contextFlagEntries.map(([flag, value]) => (
@@ -221,9 +221,9 @@ export function RunDetailPage() {
                                   ) : (
                                     <div className="helper-text">No active context flags.</div>
                                   )}
-                                </div>
-                                <div className="structured-section">
-                                  <div className="structured-section-header">Normalized highlights</div>
+                                </section>
+                                <section className="diagnostic-subsection">
+                                  <div className="section-heading"><strong>Normalized highlights</strong></div>
                                   <div className="summary-grid">
                                     {normalizedHighlights.map((entry) => (
                                       <div key={entry.key} className="summary-item">
@@ -232,9 +232,9 @@ export function RunDetailPage() {
                                       </div>
                                     ))}
                                   </div>
-                                </div>
-                                <div className="structured-section">
-                                  <div className="structured-section-header">Aggregations</div>
+                                </section>
+                                <section className="diagnostic-subsection">
+                                  <div className="section-heading"><strong>Aggregations</strong></div>
                                   {aggregatorEntries.length > 0 ? (
                                     <div className="summary-grid">
                                       {aggregatorEntries.slice(0, 6).map(([key, value]) => (
@@ -255,9 +255,9 @@ export function RunDetailPage() {
                                   ) : (
                                     <div className="helper-text">Aggregator totals not available.</div>
                                   )}
-                                </div>
-                                <div className="structured-section">
-                                  <div className="structured-section-header">Confidence weights</div>
+                                </section>
+                                <section className="diagnostic-subsection">
+                                  <div className="section-heading"><strong>Confidence weights</strong></div>
                                   {confidenceEntries.length > 0 ? (
                                     <div className="summary-grid">
                                       {confidenceEntries.slice(0, 6).map(([key, value]) => (
@@ -278,9 +278,9 @@ export function RunDetailPage() {
                                   ) : (
                                     <div className="helper-text">Confidence weights are not stored.</div>
                                   )}
-                                </div>
-                                <div className="structured-section">
-                                  <div className="structured-section-header">News coverage</div>
+                                </section>
+                                <section className="diagnostic-subsection">
+                                  <div className="section-heading"><strong>News coverage</strong></div>
                                   {newsStats.length > 0 ? (
                                     <div className="summary-grid">
                                       {newsStats.map((stat) => (
@@ -334,7 +334,7 @@ export function RunDetailPage() {
                                       ))}
                                     </ul>
                                   ) : null}
-                                </div>
+                                </section>
                               </div>
                             </details>
                           </section>

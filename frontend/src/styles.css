@@ -380,28 +380,19 @@ html[data-theme="light"] .topbar {
   align-items: baseline;
 }
 
-.structured-diagnostics .structured-section {
-  padding: 12px 0;
+.diagnostic-subsection {
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
 }
 
-.structured-diagnostics .structured-section:last-child {
+.diagnostic-subsection:last-child {
   border-bottom: none;
+  margin-bottom: 0;
   padding-bottom: 0;
 }
 
-.structured-section-header {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  margin-bottom: 10px;
-  color: var(--text-subtle);
-  display: flex;
-  justify-content: space-between;
-}
-
-.structured-section .summary-grid {
+.structured-diagnostics .summary-grid {
   gap: 12px;
 }
 
