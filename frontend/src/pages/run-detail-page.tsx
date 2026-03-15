@@ -431,34 +431,30 @@ export function RunDetailPage() {
                                     <div className="helper-text">No aggregated news totals.</div>
                                   )}
                                   {newsItemsList.length > 0 ? (
-                                    <div className="stack-page top-gap-small">
-                                      {newsItemsList.slice(0, 3).map((newsItem, index) => {
-                                        const title = typeof newsItem.title === "string" ? newsItem.title : "Untitled article";
-                                        const summaryBody = typeof newsItem.summary === "string" ? newsItem.summary : "";
-                                        const compound = typeof newsItem.compound === "number" ? newsItem.compound.toFixed(2) : "—";
-                                        const publisher = typeof newsItem.publisher === "string" ? newsItem.publisher : "Unknown source";
-                                        const publishedAt = typeof newsItem.published_at === "string" ? formatDate(newsItem.published_at) : "—";
-                                        return (
-                                          <div key={`${title}-${index}`} className="structured-news-item">
-                                            <div className="summary-grid">
-                                              <div className="summary-item">
-                                                <span className="summary-label">Title</span>
-                                                <span className="summary-value">{title}</span>
-                                              </div>
-                                              <div className="summary-item">
-                                                <span className="summary-label">Compound</span>
-                                                <span className="summary-value">{compound}</span>
-                                              </div>
-                                            </div>
-                                            <div className="helper-text">{summaryBody || "No summary available."}</div>
-                                            <div className="helper-text">
-                                              {publisher} · {publishedAt}
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                      {newsItemsList.length > 3 ? (
-                                        <div className="helper-text top-gap-small">+{newsItemsList.length - 3} more articles truncated.</div>
+                                    <div className="news-coverage-card">
+                                      <ul className="news-coverage-list">
+                                        {newsItemsList.slice(0, 5).map((newsItem, index) => {
+                                          const title = typeof newsItem.title === "string" ? newsItem.title : "Untitled article";
+                                          const link = typeof newsItem.link === "string" && newsItem.link ? newsItem.link : null;
+                                          const publishedAt = typeof newsItem.published_at === "string" ? formatDate(newsItem.published_at) : "—";
+                                          return (
+                                            <li key={`${title}-${index}`} className="news-coverage-item">
+                                              {link ? (
+                                                <a className="news-coverage-link" href={link} target="_blank" rel="noreferrer">
+                                                  {title}
+                                                </a>
+                                              ) : (
+                                                <span className="news-coverage-title">{title}</span>
+                                              )}
+                                              <span className="news-coverage-date">{publishedAt}</span>
+                                            </li>
+                                          );
+                                        })}
+                                      </ul>
+                                      {newsItemsList.length > 5 ? (
+                                        <div className="helper-text top-gap-small">
+                                          +{newsItemsList.length - 5} more articles truncated.
+                                        </div>
                                       ) : null}
                                     </div>
                                   ) : (
