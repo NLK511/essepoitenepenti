@@ -8,7 +8,7 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.optimizations import WeightOptimizationError, WeightOptimizationService
-from trade_proposer_app.services.proposals import ProposalService
+from trade_proposer_app.services.proposals import ProposalExecutionError, ProposalService
 
 
 class RunExecutionFailed(Exception):
@@ -86,6 +86,17 @@ class JobExecutionService:
                 ticker_started = perf_counter()
                 try:
                     output = self.proposals.generate(ticker)
+                except ProposalExecutionError as exc:
+                    ticker_generation.append(
+                        {
+                            "ticker": ticker,
+                            "duration_seconds": round(perf_counter() - ticker_started, 6),
+                            "status": "failed",
+                            "error_message": str(exc),
+                        }
+                    )
+                    warnings_found = True
+                    continue
                 except Exception as exc:
                     ticker_generation.append(
                         {
