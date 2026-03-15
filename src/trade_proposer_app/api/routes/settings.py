@@ -9,8 +9,9 @@ from trade_proposer_app.services.optimizations import WeightOptimizationError, W
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
-def create_optimization_service(repository: SettingsRepository) -> WeightOptimizationService:
+def create_optimization_service(session: Session, repository: SettingsRepository) -> WeightOptimizationService:
     return WeightOptimizationService(
+        session=session,
         minimum_resolved_trades=repository.get_optimization_minimum_resolved_trades(),
     )
 
@@ -21,7 +22,7 @@ async def list_settings(session: Session = Depends(get_db_session)) -> dict[str,
     return {
         "settings": repository.list_settings(),
         "providers": repository.list_provider_credentials(),
-        "optimization": create_optimization_service(repository).describe_state(),
+        "optimization": create_optimization_service(session, repository).describe_state(),
     }
 
 
@@ -77,7 +78,7 @@ async def set_optimization_settings(
         raise HTTPException(status_code=400, detail="minimum_resolved_trades must be at least 1")
     repository = SettingsRepository(session)
     repository.set_setting("optimization_minimum_resolved_trades", str(parsed))
-    return {"optimization": create_optimization_service(repository).describe_state()}
+    return {"optimization": create_optimization_service(session, repository).describe_state()}
 
 
 @router.post("/optimization/rollback")
@@ -86,7 +87,7 @@ async def rollback_optimization_weights(
     session: Session = Depends(get_db_session),
 ) -> dict[str, object]:
     repository = SettingsRepository(session)
-    service = create_optimization_service(repository)
+    service = create_optimization_service(session, repository)
     try:
         normalized_backup_path = backup_path.strip()
         rollback = (

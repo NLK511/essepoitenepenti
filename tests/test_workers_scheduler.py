@@ -103,7 +103,7 @@ class WorkerSchedulerTests(unittest.TestCase):
 
         scheduled_now = datetime(2026, 3, 14, 10, 0, tzinfo=timezone.utc)
         with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.services.runs.ProposalService", StubProposalService
+            "trade_proposer_app.services.runs.create_proposal_service", return_value=StubProposalService()
         ):
             count = enqueue_enabled_jobs(now=scheduled_now)
 
@@ -124,7 +124,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         scheduled_now = datetime(2026, 3, 14, 10, 0, tzinfo=timezone.utc)
 
         with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.services.runs.ProposalService", StubProposalService
+            "trade_proposer_app.services.runs.create_proposal_service", return_value=StubProposalService()
         ):
             first_count = enqueue_enabled_jobs(now=scheduled_now)
             second_count = enqueue_enabled_jobs(now=scheduled_now)
@@ -143,7 +143,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         not_due_now = datetime(2026, 3, 14, 10, 17, tzinfo=timezone.utc)
 
         with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.services.runs.ProposalService", StubProposalService
+            "trade_proposer_app.services.runs.create_proposal_service", return_value=StubProposalService()
         ):
             count = enqueue_enabled_jobs(now=not_due_now)
 
@@ -170,7 +170,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         scheduled_now = datetime(2026, 3, 15, 2, 0, tzinfo=timezone.utc)
 
         with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.services.runs.ProposalService", StubProposalService
+            "trade_proposer_app.services.runs.create_proposal_service", return_value=StubProposalService()
         ):
             count = enqueue_enabled_jobs(now=scheduled_now)
 
@@ -211,7 +211,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         runs.enqueue(job.id or 0)
 
         with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.workers.tasks.ProposalService", StubProposalService
+            "trade_proposer_app.workers.tasks.create_proposal_service", return_value=StubProposalService()
         ):
             processed = process_once()
 
@@ -242,7 +242,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         run = runs.enqueue(job.id or 0)
 
         with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.workers.tasks.ProposalService", StubProposalService
+            "trade_proposer_app.workers.tasks.create_proposal_service", return_value=StubProposalService()
         ), patch(
             "trade_proposer_app.workers.tasks.EvaluationExecutionService", StubEvaluationExecutionService
         ):
@@ -269,7 +269,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         run = runs.enqueue(job.id or 0)
 
         with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.workers.tasks.ProposalService", StubProposalService
+            "trade_proposer_app.workers.tasks.create_proposal_service", return_value=StubProposalService()
         ), patch(
             "trade_proposer_app.workers.tasks.WeightOptimizationService", StubOptimizationService
         ):
@@ -294,7 +294,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         scheduled_now = datetime(2026, 3, 15, 2, 0, tzinfo=timezone.utc)
 
         with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.services.runs.ProposalService", StubProposalService
+            "trade_proposer_app.services.runs.create_proposal_service", return_value=StubProposalService()
         ):
             count = enqueue_enabled_jobs(now=scheduled_now)
 
@@ -312,7 +312,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         run = runs.enqueue(job.id or 0)
 
         with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.workers.tasks.ProposalService", FailingProposalService
+            "trade_proposer_app.workers.tasks.create_proposal_service", return_value=FailingProposalService()
         ):
             processed = process_once()
 
@@ -330,7 +330,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         session = self.create_session()
 
         with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.workers.tasks.ProposalService", StubProposalService
+            "trade_proposer_app.workers.tasks.create_proposal_service", return_value=StubProposalService()
         ):
             processed = process_once()
 

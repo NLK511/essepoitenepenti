@@ -39,6 +39,7 @@ def normalize_optional_watchlist_id(value: int | str | None) -> int | None:
 def create_optimization_service(session: Session) -> WeightOptimizationService:
     repository = SettingsRepository(session)
     return WeightOptimizationService(
+        session=session,
         minimum_resolved_trades=repository.get_optimization_minimum_resolved_trades(),
     )
 

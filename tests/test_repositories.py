@@ -12,7 +12,6 @@ from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.job_execution import JobExecutionService
-from trade_proposer_app.services.optimizations import WeightOptimizationService
 from trade_proposer_app.services.proposals import ProposalService
 
 
@@ -64,8 +63,8 @@ class StubEvaluationExecutionService(EvaluationExecutionService):
         )
 
 
-class StubOptimizationService(WeightOptimizationService):
-    def __init__(self) -> None:
+class StubOptimizationService:
+    def __init__(self, *args, **kwargs) -> None:
         pass
 
     def execute(self) -> tuple[dict[str, object], dict[str, object]]:

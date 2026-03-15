@@ -75,11 +75,11 @@ User or operator who wants the strategy to learn from outcomes on a regular cade
 1. User creates or enables a scheduled evaluation workflow.
 2. The app runs evaluation automatically and settles older recommendations when due.
 3. User creates or enables a scheduled optimization workflow.
-4. The app runs optimization automatically when its schedule and guardrails allow it.
+4. The app runs optimization automatically when its schedule and guardrails allow it, using the run history stored in the app to adjust the tracked `weights.json` plus backups.
 5. User reviews evaluation and optimization run history, outputs, failures, and any resulting weight changes.
 
 ### Success outcome
-The self-improvement loop operates inside the product instead of depending on manual shell actions or operator memory.
+The self-improvement loop operates entirely inside the product—no prototype scripts or manual shell actions are required—while providing audit-ready summaries of every optimization batch.
 
 ## Journey 6: System operation
 

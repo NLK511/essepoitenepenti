@@ -8,6 +8,8 @@ Trade Proposer App is now executing its critical workflows entirely inside this 
 - **Feature-rich diagnostics**: Every run emits structured `analysis_json` (metadata/trade/summary/news/sentiment/context/feature vectors/weights/diagnostics), plain JSON versions of the raw/normalized feature vectors, aggregations, and the confidence weights used for scoring.
 - **LLM/context pipeline**: The summary toggle now supports the default headline digest, OpenAI, and a configurable Pi CLI backend (`pi_agent`). The summarizer stores the narrative text, backend/model/runtime metadata, and any `summary_error` or `llm_error` inside `analysis_json.summary`, while news ingestion feeds unified `news_items` with per-item sentiment scores into the diagnostics and the fused `analysis_json.sentiment.enhanced` block.
 
+- **App-native weight optimization**: Scheduled optimization jobs now read resolved recommendations from the app DB, adjust the tracked `weights.json`, and keep backups/artifacts so the maintenance workflow requires no prototype dependencies.
+
 ## Phase 1: Operational hardening (completed)
 The immediate risk-reduction efforts are now in place:
 - **Scheduler correctness**: Cron-like scheduling, atomic job claiming, and clearer crash recovery heuristics went live with the worker/queue implementation.
@@ -18,6 +20,7 @@ The immediate risk-reduction efforts are now in place:
 ## Phase 2: Self-contained intelligence (in progress)
 We continue shrinking the prototype’s surface while rebuilding its signals inside this repo:
 - **App-native scoring**: `ProposalService` now handles history ingestion, feature engineering, normalization, inference, and diagnostics without touching the prototype repo. The pipeline stores `analysis_json` version 2.0 (metadata, trade, summary, news, sentiment, context flags, feature vectors, aggregations, weights, diagnostics) alongside the run so all tooling sees the same structured payload.
+- **App-native weight optimization**: The optimization workflow now uses resolved recommendations from the app database, adjusts the in-repo `weights.json`, and keeps backups/artifacts in-sync so the scheduled job no longer depends on any prototype scripts.
 - **LLM-enhanced sentiment & summaries**: The internal summary service calls either OpenAI or the configured `pi_agent` CLI (respecting the shared `PI_CODING_AGENT_DIR`, CLI args, and workspace) to produce the long-form narrative, persists backend/model/runtime metadata, and records fallback diagnostics whenever the service cannot complete. That narrative merges with the news sentiment and technical indicators to produce `analysis_json.sentiment.enhanced` in addition to the insured headline digest (`analysis_json.news.digest`).
 - **Evaluation truth & diagnostics**: The evaluation workflow now lives entirely inside Trade Proposer App; it downloads the same recent price history that `ProposalService` uses, compares entry/stop/take snapshots against the recorded stops, and persists WIN/LOSS/PENDING states without shelling out to the prototype. This keeps outcome tracking, diagnostics, and audit trails on the app-native code path while prototype logs remain available purely for reference.
 - **Remaining Phase 2 work**:

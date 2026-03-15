@@ -26,6 +26,7 @@ def enqueue_enabled_jobs(now: datetime | None = None) -> int:
             proposals=create_proposal_service(session),
             evaluations=EvaluationExecutionService(RecommendationEvaluationService(session)),
             optimizations=WeightOptimizationService(
+                session=session,
                 minimum_resolved_trades=settings_repository.get_optimization_minimum_resolved_trades(),
             ),
         )

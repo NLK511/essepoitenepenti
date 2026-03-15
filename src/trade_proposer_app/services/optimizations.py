@@ -1,11 +1,15 @@
 import hashlib
+import json
 import shutil
-import sqlite3
-import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
 from trade_proposer_app.config import settings
+from trade_proposer_app.domain.enums import RecommendationState
+from trade_proposer_app.persistence.models import RecommendationRecord
 
 
 class WeightOptimizationError(Exception):
@@ -13,33 +17,23 @@ class WeightOptimizationError(Exception):
 
 
 class WeightOptimizationService:
-    def __init__(self, minimum_resolved_trades: int = 50) -> None:
+    _momentum_adjustment_step = 0.1
+    _risk_adjustment_step = 0.1
+
+    def __init__(self, session: Session, minimum_resolved_trades: int = 50, weights_path: Path | None = None) -> None:
+        self.session = session
         self.minimum_resolved_trades = minimum_resolved_trades
+        self._weights_path = weights_path if weights_path is not None else self._default_weights_path()
+
+    @property
+    def weights_path(self) -> Path:
+        return self._weights_path
+
+    def get_backup_dir(self) -> Path:
+        return self.weights_path.parent / "weight_backups"
 
     @staticmethod
-    def get_prototype_optimization_script_path() -> Path:
-        return (
-            Path(settings.prototype_repo_path)
-            / ".pi"
-            / "skills"
-            / "trade-proposer"
-            / "scripts"
-            / "optimize_weights.py"
-        )
-
-    @staticmethod
-    def get_prototype_trade_log_path() -> Path:
-        return (
-            Path(settings.prototype_repo_path)
-            / ".pi"
-            / "skills"
-            / "trade-proposer"
-            / "data"
-            / "trade_log.db"
-        )
-
-    @staticmethod
-    def get_prototype_weights_path() -> Path:
+    def _prototype_weights_path() -> Path:
         return (
             Path(settings.prototype_repo_path)
             / ".pi"
@@ -49,57 +43,53 @@ class WeightOptimizationService:
             / "weights.json"
         )
 
+    @staticmethod
+    def _app_weights_path() -> Path:
+        return Path(__file__).resolve().parents[1] / "data" / "weights.json"
+
     @classmethod
-    def get_prototype_weights_backup_dir(cls) -> Path:
-        return cls.get_prototype_weights_path().parent / "weight_backups"
+    def _default_weights_path(cls) -> Path:
+        prototype_path = cls._prototype_weights_path()
+        if prototype_path.exists():
+            return prototype_path
+        return cls._app_weights_path()
 
     def execute(self) -> tuple[dict[str, object], dict[str, object]]:
-        script_path = self.get_prototype_optimization_script_path()
-        if not script_path.exists():
-            raise WeightOptimizationError(f"prototype optimization script not found: {script_path}")
-
-        resolved_trade_count = self.count_resolved_trades()
-        if resolved_trade_count < self.minimum_resolved_trades:
+        win_count, loss_count, resolved_count = self.count_resolved_trades()
+        if resolved_count < self.minimum_resolved_trades:
             raise WeightOptimizationError(
                 "weight optimization skipped: only "
-                f"{resolved_trade_count} resolved trades available, minimum is {self.minimum_resolved_trades}"
+                f"{resolved_count} resolved trades available, minimum is {self.minimum_resolved_trades}"
             )
 
-        weights_path = self.get_prototype_weights_path()
+        weights_path = self.weights_path
         before_fingerprint = self._fingerprint_file(weights_path)
         backup_metadata = self.create_backup(weights_path)
-
-        result = subprocess.run(
-            [settings.prototype_python_executable, str(script_path)],
-            capture_output=True,
-            text=True,
-            timeout=300,
-            cwd=settings.prototype_repo_path,
+        weights = self._load_weights(weights_path)
+        adjusted_weights, delta_ratio, momentum_multiplier, risk_multiplier = self._adjust_weights(
+            weights, win_count, loss_count, resolved_count
         )
-        stdout = (result.stdout or "").strip()
-        stderr = (result.stderr or "").strip()
-        combined_output = stdout + (("\n" + stderr) if stderr else "")
-        if result.returncode != 0:
-            restored = None
+
+        try:
+            self._write_weights(adjusted_weights)
+        except Exception as exc:
             if backup_metadata is not None:
-                restored = self.restore_backup(Path(str(backup_metadata["path"])))
-            restore_note = ""
-            if restored is not None:
-                restore_note = f"; weights restored from backup {restored['restored_from']}"
-            raise WeightOptimizationError(
-                (combined_output.strip() or f"prototype optimization exited with code {result.returncode}") + restore_note
-            )
+                self.restore_backup(Path(str(backup_metadata["path"])))
+            raise WeightOptimizationError(f"failed to write updated weights: {exc}") from exc
 
         after_fingerprint = self._fingerprint_file(weights_path)
         weights_changed = before_fingerprint.get("sha256") != after_fingerprint.get("sha256")
 
         summary = {
             "status": "completed",
-            "resolved_trade_count": resolved_trade_count,
+            "resolved_trade_count": resolved_count,
             "minimum_resolved_trades": self.minimum_resolved_trades,
+            "win_recommendations": win_count,
+            "loss_recommendations": loss_count,
+            "delta_ratio": delta_ratio,
+            "momentum_multiplier": momentum_multiplier,
+            "risk_multiplier": risk_multiplier,
             "weights_changed": weights_changed,
-            "stdout": stdout,
-            "stderr": stderr,
         }
         artifact = {
             "weights_path": str(weights_path),
@@ -110,37 +100,41 @@ class WeightOptimizationService:
         }
         return summary, artifact
 
-    def count_resolved_trades(self) -> int:
-        trade_log_path = self.get_prototype_trade_log_path()
-        if not trade_log_path.exists():
-            return 0
-        connection = sqlite3.connect(trade_log_path)
-        try:
-            row = connection.execute(
-                "SELECT COUNT(*) FROM trades WHERE UPPER(COALESCE(status, '')) IN ('WIN', 'LOSS')"
-            ).fetchone()
-            return int(row[0]) if row is not None else 0
-        finally:
-            connection.close()
+    def count_resolved_trades(self) -> tuple[int, int, int]:
+        resolved_states = {RecommendationState.WIN.value, RecommendationState.LOSS.value}
+        query = (
+            select(RecommendationRecord.evaluation_state, func.count())
+            .where(RecommendationRecord.evaluation_state.in_(resolved_states))
+            .group_by(RecommendationRecord.evaluation_state)
+        )
+        results = {state: count for state, count in self.session.execute(query)}
+        win_count = int(results.get(RecommendationState.WIN.value, 0))
+        loss_count = int(results.get(RecommendationState.LOSS.value, 0))
+        return win_count, loss_count, win_count + loss_count
 
     def describe_state(self) -> dict[str, object]:
-        weights_path = self.get_prototype_weights_path()
+        win_count, loss_count, resolved_count = self.count_resolved_trades()
+        delta_ratio = (win_count - loss_count) / resolved_count if resolved_count else 0.0
         backups = self.list_backups(limit=10)
         return {
             "minimum_resolved_trades": self.minimum_resolved_trades,
-            "weights_path": str(weights_path),
-            "weights": self._fingerprint_file(weights_path),
-            "backup_dir": str(self.get_prototype_weights_backup_dir()),
+            "resolved_trade_count": resolved_count,
+            "win_recommendations": win_count,
+            "loss_recommendations": loss_count,
+            "delta_ratio": delta_ratio,
+            "weights_path": str(self.weights_path),
+            "weights": self._fingerprint_file(self.weights_path),
+            "backup_dir": str(self.get_backup_dir()),
             "backup_count": len(self.list_backups()),
             "latest_backup": backups[0] if backups else None,
             "recent_backups": backups,
         }
 
     def create_backup(self, path: Path | None = None) -> dict[str, object] | None:
-        weights_path = path or self.get_prototype_weights_path()
+        weights_path = path or self.weights_path
         if not weights_path.exists():
             return None
-        backup_dir = self.get_prototype_weights_backup_dir()
+        backup_dir = self.get_backup_dir()
         backup_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
         backup_path = backup_dir / f"weights.{timestamp}.json.bak"
@@ -152,7 +146,7 @@ class WeightOptimizationService:
         }
 
     def list_backups(self, limit: int | None = None) -> list[dict[str, object]]:
-        backup_dir = self.get_prototype_weights_backup_dir()
+        backup_dir = self.get_backup_dir()
         if not backup_dir.exists():
             return []
         backups = sorted(
@@ -174,15 +168,14 @@ class WeightOptimizationService:
         backup_path = Path(backup_path)
         if not backup_path.exists():
             raise WeightOptimizationError(f"backup not found: {backup_path}")
-        weights_path = self.get_prototype_weights_path()
-        weights_path.parent.mkdir(parents=True, exist_ok=True)
-        before = self._fingerprint_file(weights_path)
-        shutil.copy2(backup_path, weights_path)
-        after = self._fingerprint_file(weights_path)
+        before = self._fingerprint_file(self.weights_path)
+        self.weights_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(backup_path, self.weights_path)
+        after = self._fingerprint_file(self.weights_path)
         return {
             "status": "rolled_back",
             "restored_from": str(backup_path),
-            "weights_path": str(weights_path),
+            "weights_path": str(self.weights_path),
             "before": before,
             "after": after,
         }
@@ -212,3 +205,76 @@ class WeightOptimizationService:
             "size_bytes": stat.st_size,
             "modified_at": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
         }
+
+    def _load_weights(self, path: Path) -> dict[str, object]:
+        if not path.exists():
+            raise WeightOptimizationError(f"weights file not found: {path}")
+        try:
+            return json.loads(path.read_text())
+        except json.JSONDecodeError as exc:
+            raise WeightOptimizationError(f"unable to parse weights file: {exc}") from exc
+
+    def _write_weights(self, weights: dict[str, object]) -> None:
+        self.weights_path.parent.mkdir(parents=True, exist_ok=True)
+        self.weights_path.write_text(json.dumps(weights, indent=2) + "\n")
+
+    def _adjust_weights(
+        self,
+        weights: dict[str, object],
+        win_count: int,
+        loss_count: int,
+        resolved_count: int,
+    ) -> tuple[dict[str, object], float, float, float]:
+        if resolved_count == 0:
+            return weights, 0.0, 1.0, 1.0
+        delta_ratio = (win_count - loss_count) / resolved_count
+        momentum_multiplier = 1.0 + max(0.0, delta_ratio) * self._momentum_adjustment_step
+        risk_multiplier = 1.0 + max(0.0, -delta_ratio) * self._risk_adjustment_step
+
+        confidence = weights.setdefault("confidence", {})
+        momentum_targets = [
+            "momentum_medium",
+            "news_coverage",
+            "context_coverage",
+            "polarity_trend",
+            "sentiment",
+            "enhanced_sentiment",
+            "price_above_sma50",
+            "price_above_sma200",
+        ]
+        for key in momentum_targets:
+            if key in confidence:
+                confidence[key] = self._scale_value(confidence[key], momentum_multiplier)
+
+        risk_targets = ["atr_penalty", "sentiment_volatility", "rsi_penalty"]
+        for key in risk_targets:
+            if key in confidence:
+                confidence[key] = self._scale_value(confidence[key], risk_multiplier)
+
+        aggregators = weights.setdefault("aggregators", {})
+        direction = aggregators.setdefault("direction", {})
+        risk = aggregators.setdefault("risk", {})
+        entry = aggregators.setdefault("entry", {})
+
+        direction_targets = ["short_momentum", "medium_momentum", "long_momentum", "sentiment_bias"]
+        for key in direction_targets:
+            if key in direction:
+                direction[key] = self._scale_value(direction[key], momentum_multiplier)
+
+        entry_targets = ["short_trend", "medium_trend", "long_trend", "volatility"]
+        for key in entry_targets:
+            if key in entry:
+                entry[key] = self._scale_value(entry[key], momentum_multiplier)
+
+        risk_targets = ["atr", "momentum", "sentiment_volatility"]
+        for key in risk_targets:
+            if key in risk:
+                risk[key] = self._scale_value(risk[key], risk_multiplier)
+
+        return weights, delta_ratio, momentum_multiplier, risk_multiplier
+
+    @staticmethod
+    def _scale_value(value: object, multiplier: float) -> object:
+        if not isinstance(value, (int, float)):
+            return value
+        return float(value) * multiplier

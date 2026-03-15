@@ -96,6 +96,8 @@ Supported external news services ingested directly by the app-native pipeline:
 
 Additional connectors (Yahoo Finance, Alpha Vantage, Alpaca News, Nitter, etc.) remain on the roadmap for future enrichment.
 
+Weight optimization workflows now live entirely inside the app as well: they count resolved recommendations from the database, adjust the checked-in `weights.json`, and keep backups so rollback metadata is always available without shelling out to the prototype workspace.
+
 For raw run and recommendation fields, see `docs/raw-details-reference.md`.
 
 ## Manual startup without helper scripts

@@ -15,7 +15,7 @@ DEFAULT_SUMMARY_PROMPT = (
 DEFAULT_APP_SETTINGS = {
     "confidence_threshold": "60",
     "optimization_minimum_resolved_trades": "50",
-    "summary_backend": "news_digest",
+    "summary_backend": "pi_agent",
     "summary_model": "",
     "summary_timeout_seconds": "60",
     "summary_max_tokens": "220",
