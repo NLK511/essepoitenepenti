@@ -99,7 +99,9 @@ export function RunDetailPage() {
                       ? (analysis.confidence_weights as Record<string, unknown>)
                       : null;
                     const contextFlagEntries = contextFlagsSection
-                      ? Object.entries(contextFlagsSection).filter(([, value]) => typeof value === "number" && value > 0)
+                      ? (Object.entries(contextFlagsSection) as [string, unknown][]).filter((entry): entry is [string, number] =>
+                          typeof entry[1] === "number" && entry[1] > 0
+                        )
                       : [];
                     const highlightKeys = [
                       "sentiment_score",
@@ -192,35 +194,40 @@ export function RunDetailPage() {
                           </div>
                         ) : null}
                         {analysis ? (
-                          <details className="top-gap-small">
+                          <details className="top-gap-small structured-diagnostics">
                             <summary>Structured diagnostics</summary>
                             <div className="stack-page top-gap-small">
-                              {contextFlagEntries.length > 0 ? (
+                              <div className="structured-section">
+                                <div className="structured-section-header">Context flags</div>
+                                {contextFlagEntries.length > 0 ? (
+                                  <div className="summary-grid">
+                                    {contextFlagEntries.map(([flag, value]) => (
+                                      <div key={flag} className="summary-item">
+                                        <span className="summary-label">{flag.replace(/_/g, " ")}</span>
+                                        <span className="summary-value">
+                                          {typeof value === "number" ? value.toFixed(2) : value ?? "—"}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="helper-text">No active context flags.</div>
+                                )}
+                              </div>
+                              <div className="structured-section">
+                                <div className="structured-section-header">Normalized highlights</div>
                                 <div className="summary-grid">
-                                  {contextFlagEntries.map(([flag, value]) => (
-                                    <div key={flag} className="summary-item">
-                                      <span className="summary-label">{flag.replace(/_/g, " ")}</span>
-                                      <span className="summary-value">
-                                        {typeof value === "number" ? value.toFixed(2) : String(value ?? "—")}
-                                      </span>
+                                  {normalizedHighlights.map((entry) => (
+                                    <div key={entry.key} className="summary-item">
+                                      <span className="summary-label">{entry.key.replace(/_/g, " ")}</span>
+                                      <span className="summary-value">{String(entry.display)}</span>
                                     </div>
                                   ))}
                                 </div>
-                              ) : (
-                                <div className="helper-text">No active context flags.</div>
-                              )}
-                              <div className="helper-text top-gap-small">Normalized feature highlights</div>
-                              <div className="summary-grid">
-                                {normalizedHighlights.map((entry) => (
-                                  <div key={entry.key} className="summary-item">
-                                    <span className="summary-label">{entry.key.replace(/_/g, " ")}</span>
-                                    <span className="summary-value">{String(entry.display)}</span>
-                                  </div>
-                                ))}
                               </div>
-                              {aggregatorEntries.length > 0 ? (
-                                <div className="stack-page top-gap-small">
-                                  <div className="helper-text">Aggregations</div>
+                              <div className="structured-section">
+                                <div className="structured-section-header">Aggregations</div>
+                                {aggregatorEntries.length > 0 ? (
                                   <div className="summary-grid">
                                     {aggregatorEntries.slice(0, 6).map(([key, value]) => (
                                       <div key={key} className="summary-item">
@@ -237,13 +244,13 @@ export function RunDetailPage() {
                                       </div>
                                     )}
                                   </div>
-                                </div>
-                              ) : (
-                                <div className="helper-text top-gap-small">Aggregator totals not available.</div>
-                              )}
-                              {confidenceEntries.length > 0 ? (
-                                <div className="stack-page top-gap-small">
-                                  <div className="helper-text">Confidence weights</div>
+                                ) : (
+                                  <div className="helper-text">Aggregator totals not available.</div>
+                                )}
+                              </div>
+                              <div className="structured-section">
+                                <div className="structured-section-header">Confidence weights</div>
+                                {confidenceEntries.length > 0 ? (
                                   <div className="summary-grid">
                                     {confidenceEntries.slice(0, 6).map(([key, value]) => (
                                       <div key={key} className="summary-item">
@@ -260,12 +267,12 @@ export function RunDetailPage() {
                                       </div>
                                     )}
                                   </div>
-                                </div>
-                              ) : (
-                                <div className="helper-text top-gap-small">Confidence weights are not stored.</div>
-                              )}
-                              <div className="stack-page top-gap-small">
-                                <div className="helper-text">News coverage</div>
+                                ) : (
+                                  <div className="helper-text">Confidence weights are not stored.</div>
+                                )}
+                              </div>
+                              <div className="structured-section">
+                                <div className="structured-section-header">News coverage</div>
                                 {newsStats.length > 0 ? (
                                   <div className="summary-grid">
                                     {newsStats.map((stat) => (
