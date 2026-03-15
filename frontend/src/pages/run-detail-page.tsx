@@ -437,15 +437,19 @@ export function RunDetailPage() {
                                           const title = typeof newsItem.title === "string" ? newsItem.title : "Untitled article";
                                           const link = typeof newsItem.link === "string" && newsItem.link ? newsItem.link : null;
                                           const publishedAt = typeof newsItem.published_at === "string" ? formatDate(newsItem.published_at) : "—";
+                                          const compoundScore = typeof newsItem.compound === "number" ? newsItem.compound.toFixed(2) : "—";
                                           return (
                                             <li key={`${title}-${index}`} className="news-coverage-item">
-                                              {link ? (
-                                                <a className="news-coverage-link" href={link} target="_blank" rel="noreferrer">
-                                                  {title}
-                                                </a>
-                                              ) : (
-                                                <span className="news-coverage-title">{title}</span>
-                                              )}
+                                              <div className="news-coverage-title-row">
+                                                {link ? (
+                                                  <a className="news-coverage-link" href={link} target="_blank" rel="noreferrer">
+                                                    {title}
+                                                  </a>
+                                                ) : (
+                                                  <span className="news-coverage-title">{title}</span>
+                                                )}
+                                                <span className="news-coverage-score">{`score ${compoundScore}`}</span>
+                                              </div>
                                               <span className="news-coverage-date">{publishedAt}</span>
                                             </li>
                                           );

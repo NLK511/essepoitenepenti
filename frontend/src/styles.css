@@ -743,9 +743,14 @@ details summary {
 
 .news-coverage-item {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.news-coverage-title-row {
+  display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .news-coverage-title,
@@ -758,6 +763,11 @@ details summary {
 
 .news-coverage-link:hover {
   color: var(--accent);
+}
+
+.news-coverage-score {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .news-coverage-date {
