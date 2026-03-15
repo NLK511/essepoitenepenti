@@ -51,3 +51,44 @@ The app has improved secret handling through encryption at rest, but it still la
 ## Current strengths and next needs
 
 The strongest operator capabilities are straightforward local startup, visible failure handling, persisted recommendation history, ticker-specific review, the structured diagnostics (`analysis_json`, feature vector/aggregation payloads, weights), the new news-digest summary plus the optional LLM narrative, and in-product documentation. Sentiment now contributes by default through a conservative `confidence.sentiment` weight (5.0) so historical data can capture its impact before we tune it aggressively. The most important next steps are stronger scheduler guarantees, expanded credential rotation, broader operational hardening, improved summarization diagnostics, and incremental frontend polish without adding unnecessary client-side complexity.
+
+## Suggested session-aligned watchlists
+
+Each of the following watchlists stays inside a single regional session or thematic window so the associated job can run at a reliable moment of the trading day. All cron expressions assume UTC and weekdays only (`MON-FRI`).
+
+### 1. U.S. Tech Momentum (run ~10:30 ET)
+- **Target window**: Early Nasdaq/Nyse surge.
+- **Tickers**: AAPL, MSFT, NVDA, AMZN, META, GOOG, CRM, ORCL, PYPL, SHOP, SAPH, INTC, AVGO, AMD, NOW.
+- **Cron**: `30 14 * * MON-FRI` (14:30 UTC = 10:30 ET).
+
+### 2. European Midday Reversion (run ~12:30 CET)
+- **Target window**: Mid-CET calm before the U.S. open.
+- **Tickers**: ASML, SAN, BP, SHEL, LVMUY, OR, DAI, ING, UBS, RIO, AIR, SIEGY, BASFY, ENGIY, NOVN.
+- **Cron**: `30 11 * * MON-FRI` (11:30 UTC = 12:30 CET).
+
+### 3. Asia-Pacific Opening Range (run ~09:15 local)
+- **Target window**: HK/Tokyo/Singapore open-range pulse.
+- **Tickers**: 0700.HK, 0005.HK, 9984.T, 7203.T, 6758.T, 9432.T, 2914.T, 8035.T, BHP.AX, RIO.AX, CSL.AX, WES.AX, A2M.AX, 3888.HK, 3690.HK.
+- **Cron**: `15 0 * * MON-FRI` (00:15 UTC ≈ 08:15 HKT/Tokyo, 10:15 AEST).
+
+### 4. Macro News & Rates Pulse (run ~08:30 ET)
+- **Target window**: U.S. macro release and pre-open noise.
+- **Tickers**: SPY, QQQ, TLT, IEF, GLD, USO, VNQ, XLF, XLE, XLK, UUP, TIP, IWM, XLY, XLI.
+- **Cron**: `30 12 * * MON-FRI` (12:30 UTC = 08:30 ET).
+
+### 5. Energy & Commodities Morning Sweep (run ~09:00 CT)
+- **Target window**: NYMEX oil/gas desk’s morning heartbeat.
+- **Tickers**: CVX, COP, OXY, SLB, HAL, KMI, XOM, BKR, EQT, NBL, NOV, TALO, CHK, PE, VLO.
+- **Cron**: `00 15 * * MON-FRI` (15:00 UTC = 10:00 ET / 09:00 CT).
+
+### 6. AI & Automation Leaders (run ~09:45 ET)
+- **Target window**: U.S. catalyst window once the market opens.
+- **Tickers**: LRCX, CDNS, SNPS, AMAT, CRWD, PANW, FTNT, ZS, MDB, OKTA, TEAM, MTTR, SNOW, ADSK, PLTR.
+- **Cron**: `45 13 * * MON-FRI` (13:45 UTC = 09:45 ET).
+
+### 7. Healthcare & Biotech Defensive Shift (run ~13:00 ET)
+- **Target window**: Afternoon defensive rotation before the close.
+- **Tickers**: JNJ, PFE, MRK, LLY, ABBV, BMY, AMGN, GILD, ZTS, UNH, TDOC, HCA, ILMN, MRNA, REGN.
+- **Cron**: `00 17 * * MON-FRI` (17:00 UTC = 13:00 ET).
+
+Run `python scripts/deploy_watchlists.py` to provision these watchlists and their scheduled proposal-generation jobs automatically. The script creates or updates the records to match the UTC cron times listed above and logs every watchlist/job outcome.
