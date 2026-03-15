@@ -108,6 +108,10 @@ Every run builds a headline digest from the freshest news items (up to three tit
 
 The digest and provider metadata now live at `analysis_json.news.digest`, while the resulting narrative, backend info, runtime, and errors appear under `analysis_json.summary`. When the LLM summary succeeds, the pipeline merges its tone with the keyword-based sentiment and the technical context to produce `analysis_json.sentiment.enhanced`, and that fused score replaces the base sentiment signal in the feature vector so the scoring weights can lean on a richer understanding of the ticker context. The `summary_method` field records which path produced the narrative (`news_digest`, `llm_summary`, or `price_only`) so downstream operators can reproduce the behavior when auditing.
 
+### Sentiment coverage {#sentiment-coverage}
+
+`analysis_json.sentiment` now exposes `keyword_hits` and `coverage_insights` so every run documents why its sentiment score may stay at zero. `keyword_hits` counts how many positive or negative keywords were matched in the fetched articles, while `coverage_insights` lists explicit reasons (e.g., no articles fetched, no keyword matches, or provider errors) that explain a neutral output. The run detail page surfaces these insights inside the Sentiment coverage block before the structured diagnostics’ raw JSON view, giving operators quick context when coverage is sparse or missing entirely.
+
 ## App-native independence
 
 Because the pipeline is self-contained, the app no longer depends on any external prototype repository. All inputs, weights, diagnostics, and the new news ingestion flow live inside this repository, and the worker can run the pipeline just by installing `pandas`, `yfinance`, and the other declared dependencies (plus configuring any desired news provider credentials). The NaiveSentiment analyzer now leans on a broader, highly resilient keyword set, and the signal integrity policy ensures that headline-light runs remain neutral when no keywords match instead of quietly defaulting to a synthesized score.

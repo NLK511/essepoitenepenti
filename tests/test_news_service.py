@@ -63,3 +63,17 @@ class NewsIngestionServiceTests(unittest.TestCase):
         self.assertAlmostEqual(result["news_point_count"], 1)
         self.assertEqual(result["sentiment_volatility"], 0.0)
         self.assertTrue(0.0 < result["news_items"][0]["compound"] < 1.0)
+
+    def test_naive_sentiment_analyzer_records_coverage_insights_for_zero_hits(self) -> None:
+        analyzer = NaiveSentimentAnalyzer()
+        article = NewsArticle(
+            title="Neutral update",
+            summary="No material changes were reported today",
+            publisher="Example",
+            link="https://example.com/neutral",
+            published_at=None,
+        )
+        bundle = NewsBundle(ticker="Z", articles=[article], feeds_used=["NewsAPI"])
+        result = analyzer.analyze(bundle)
+        self.assertEqual(result["keyword_hits"], 0)
+        self.assertTrue(any("no sentiment keywords" in insight for insight in result["coverage_insights"]))

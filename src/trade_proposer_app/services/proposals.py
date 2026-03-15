@@ -302,6 +302,8 @@ class ProposalService:
                 "label": context.get("enhanced_sentiment_label"),
                 "components": context.get("enhanced_sentiment_components", {}),
             },
+            "keyword_hits": context.get("sentiment_keyword_hits", 0),
+            "coverage_insights": context.get("sentiment_coverage_insights", []),
         }
         diagnostics_section = {
             "problems": context.get("problems", []),
@@ -704,9 +706,11 @@ class ProposalService:
                 "news_items": news_items,
                 "polarity_trend": sentiment.get("polarity_trend", 0.0),
                 "sentiment_volatility": sentiment.get("sentiment_volatility", 0.0),
+                "sentiment_keyword_hits": sentiment.get("keyword_hits", 0),
                 "sentiment_score": final_score,
                 "sentiment_label": final_label,
                 "sentiment_sources": sentiment.get("sources") or feeds,
+                "sentiment_coverage_insights": sentiment.get("coverage_insights", []),
                 "news_digest": digest,
                 "news_sentiment_score": news_sentiment_score,
                 "summary_text": summary_text or DEFAULT_SUMMARY_TEXT,

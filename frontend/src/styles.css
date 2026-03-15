@@ -714,6 +714,17 @@ details summary {
   color: var(--warning);
 }
 
+.coverage-insights-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.coverage-insights-list li + li {
+  margin-top: 4px;
+}
+
 .strong-link,
 .link-button,
 .badge-link {

@@ -50,6 +50,10 @@ const INFO_DESCRIPTIONS = {
     description: "News coverage aggregates headline data and sentiment for this ticker",
     link: `${DOC_BASE}#news-coverage`,
   },
+  coverage: {
+    description: "Understand why sentiment stayed neutral by reviewing keyword hits and missing coverage",
+    link: `${DOC_BASE}#sentiment-coverage`,
+  },
   fieldEntry: {
     description: "Entry price defines where the system would enter the position",
     link: `${DOC_BASE}#proposal-structure`,
@@ -206,6 +210,13 @@ export function RunDetailPage() {
                     ].filter(Boolean) as { label: string; value: number }[];
                     const newsFeedErrors = Array.isArray(newsSection?.feed_errors)
                       ? (newsSection.feed_errors as unknown[]).filter((value): value is string => typeof value === "string")
+                      : [];
+                    const sentimentKeywordHits =
+                      typeof sentimentSection?.keyword_hits === "number" ? sentimentSection.keyword_hits : null;
+                    const coverageInsights = Array.isArray(sentimentSection?.coverage_insights)
+                      ? (sentimentSection.coverage_insights as unknown[]).filter(
+                          (entry): entry is string => typeof entry === "string"
+                        )
                       : [];
                     return (
                       <article key={item.id ?? `${item.ticker}-${item.created_at}`} className="recommendation-card">
@@ -460,6 +471,29 @@ export function RunDetailPage() {
                                       ))}
                                     </ul>
                                   ) : null}
+                                </section>
+                                <section className="diagnostic-subsection">
+                                  <div className="section-heading">
+                                    <strong>Sentiment coverage</strong>
+                                    <InfoBadge {...INFO_DESCRIPTIONS.coverage} />
+                                  </div>
+                                  {sentimentKeywordHits !== null ? (
+                                    <div className="summary-grid">
+                                      <div className="summary-item">
+                                        <span className="summary-label">Keyword hits</span>
+                                        <span className="summary-value">{sentimentKeywordHits}</span>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {coverageInsights.length > 0 ? (
+                                    <ul className="coverage-insights-list">
+                                      {coverageInsights.map((insight, index) => (
+                                        <li key={`${insight}-${index}`}>{insight}</li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <div className="helper-text">Coverage insights report no detected issues.</div>
+                                  )}
                                 </section>
                               </div>
                             </details>

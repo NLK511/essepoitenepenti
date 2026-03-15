@@ -145,6 +145,10 @@ def _sum_keyword_weights(tokens: Iterable[str], weight_map: dict[str, float], bo
     return sum(weight_map.get(token, 0.0) * boost for token in tokens)
 
 
+def _count_keyword_matches(tokens: Iterable[str], weight_map: dict[str, float]) -> int:
+    return sum(1 for token in tokens if token in weight_map)
+
+
 class NewsFetchError(Exception):
     pass
 
@@ -250,6 +254,7 @@ class NaiveSentimentAnalyzer:
         article_scores: list[float] = []
         positives = 0.0
         negatives = 0.0
+        total_keyword_hits = 0
 
         for article in articles:
             title_tokens = _tokenize(article.title)
@@ -263,6 +268,13 @@ class NaiveSentimentAnalyzer:
                 _sum_keyword_weights(title_tokens, NEGATIVE_KEYWORD_WEIGHTS, TITLE_KEYWORD_WEIGHT)
                 + _sum_keyword_weights(summary_tokens, NEGATIVE_KEYWORD_WEIGHTS, SUMMARY_KEYWORD_WEIGHT)
             )
+            article_keyword_hits = (
+                _count_keyword_matches(title_tokens, POSITIVE_KEYWORD_WEIGHTS)
+                + _count_keyword_matches(summary_tokens, POSITIVE_KEYWORD_WEIGHTS)
+                + _count_keyword_matches(title_tokens, NEGATIVE_KEYWORD_WEIGHTS)
+                + _count_keyword_matches(summary_tokens, NEGATIVE_KEYWORD_WEIGHTS)
+            )
+            total_keyword_hits += article_keyword_hits
             positives += article_positive
             negatives += article_negative
             hits = article_positive + article_negative
@@ -275,6 +287,17 @@ class NaiveSentimentAnalyzer:
             for keyword, tag in CONTINUOUS_CONTEXT_KEYWORDS.items():
                 if keyword in text:
                     contexts.add(tag)
+        coverage_insights: list[str] = []
+        if not articles:
+            coverage_insights.append("news: no articles fetched; providers may be missing or rate limited.")
+        elif total_keyword_hits == 0:
+            coverage_insights.append(
+                "news: articles arrived but no sentiment keywords matched, so the score stays neutral per the signal integrity policy."
+            )
+        if bundle.feed_errors:
+            coverage_insights.append(f"news: provider issues ({'; '.join(bundle.feed_errors)})")
+        coverage_insights = list(dict.fromkeys(coverage_insights))
+
         score = sum(article_scores) / len(article_scores) if article_scores else 0.0
         score = max(-1.0, min(1.0, score))
         label = "NEUTRAL"
@@ -308,6 +331,8 @@ class NaiveSentimentAnalyzer:
             "news_items": news_items,
             "news_points": news_items,
             "news_point_count": len(news_items),
+            "keyword_hits": total_keyword_hits,
+            "coverage_insights": coverage_insights,
             "polarity_trend": polarity,
             "sentiment_volatility": volatility,
             "problems": bundle.feed_errors,

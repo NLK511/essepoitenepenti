@@ -11,6 +11,7 @@ Every contribution that affects recommendation generation must be explicit when 
 - **Self-contained scoring**: `ProposalService` now orchestrates the end-to-end pipeline (price ingestion via `yfinance`, feature construction with `pandas`, normalization, weights application, diagnostics, and the recommendation agreement workflow) all from within this repository.
 - **App-native weight optimization**: The optimization workflow now reads resolved recommendations directly from the app database, adjusts the checked-in `weights.json`, and stores backups/artifacts without invoking the legacy prototype script so the job stays self-contained in this repo.
 - **Rich diagnostics**: Each run persists `analysis_json` (now organized into metadata/trade/summary/news/sentiment/context/feature-vector sections), the raw/normalized feature vectors, aggregations, confidence weights, and RunDiagnostics details so every signal remains auditable without peeking into an external tool.
+- **Sentiment coverage transparency**: `analysis_json.sentiment.coverage_insights` lists zero-score causes, `keyword_hits` counts the matched tokens, and the run detail diagnostics surface those fields in the Sentiment coverage block so neutral outputs always cite a missing data reason.
 - **Structured diagnostics surfaced**: The run detail page and debugger now render those `analysis_json` sections (news items, summaries, context flags, feature vectors, aggregations, and weights) instead of exposing only raw JSON blobs, so operators can inspect the structured payloads directly.
 - **Enhanced sentiment coverage**: `NaiveSentimentAnalyzer` now uses a broader keyword set while still honoring the signal integrity policy, so news-light runs report zero compound scores whenever the dictionaries miss instead of masking upstream gaps.
 - **Configurable summarization**: `SummaryService` invokes the configured OpenAI or `pi_agent` CLI backend, parses the streamed JSON responses, and captures backend/model/runtime metadata plus `llm_error`/`summary_error`. When the summarizer does not run, the headline digest saved under `analysis_json.news.digest` is still available as the fallback narrative.
@@ -27,7 +28,7 @@ We reviewed the Phase 2 doc and identified a few areas that needed clarification
 
 ## Next steps
 
-1. Monitor the enhanced sentiment coverage, document any remaining zero-score cases under the signal integrity policy (which forbids fallback heuristics), and keep refreshing the keywords/weights before assuming the signal is fully complete.
+1. Monitor the enhanced sentiment coverage, document any remaining zero-score cases under the signal integrity policy (which forbids fallback heuristics), keep refreshing the keywords/weights before assuming the signal is fully complete, and leverage the new `coverage_insights`/`keyword_hits` diagnostics so missing coverage stands out in the structured payloads.
 2. Harden the scheduler/worker reliability by refining how the evaluation pass handles multi-ticker runs, partial price-history availability, and overlapping schedules so outcome tracking stays dependable even when data signals are intermittent.
 3. Keep refreshing operator docs (Phase 2, roadmap, raw details reference) whenever the schema or summary/sentiment features change so planning artifacts stay truthful.
 
