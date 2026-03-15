@@ -5,7 +5,7 @@ from sqlalchemy.exc import OperationalError
 
 from trade_proposer_app.config import settings
 
-HEAD_REVISION = "0008_job_types_and_run_metadata"
+HEAD_REVISION = "0009_recommendation_feature_vectors"
 
 
 def get_alembic_config() -> Config:
