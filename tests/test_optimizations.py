@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
+import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -292,9 +293,7 @@ class WeightOptimizationServiceTests(unittest.TestCase):
         try:
             scripts_dir = Path(prototype_root.name) / ".pi" / "skills" / "trade-proposer" / "scripts"
             scripts_dir.mkdir(parents=True, exist_ok=True)
-            evaluation_script_path = scripts_dir / "evaluate_trades.py"
             optimization_script_path = scripts_dir / "optimize_weights.py"
-            evaluation_script_path.write_text("print('evaluate AAPL recommendations')\n")
             optimization_script_path.write_text("print('optimize weights from evaluated AAPL recommendations')\n")
 
             data_dir = Path(prototype_root.name) / ".pi" / "skills" / "trade-proposer" / "data"
@@ -308,6 +307,31 @@ class WeightOptimizationServiceTests(unittest.TestCase):
             runs = RunRepository(session)
             recommendation_ids = self._seed_aapl_recommendations(session, runs, jobs)
 
+            price_history = pd.DataFrame(
+                {
+                    "High": [193.0, 188.0, 180.0, 181.0, 195.0],
+                    "Low": [185.0, 177.0, 169.0, 172.0, 188.0],
+                },
+                index=pd.to_datetime(
+                    [
+                        "2024-01-19T17:00:00Z",
+                        "2024-02-02T17:00:00Z",
+                        "2024-03-14T17:00:00Z",
+                        "2024-04-11T17:00:00Z",
+                        "2024-05-29T17:00:00Z",
+                    ],
+                    utc=True,
+                ),
+            )
+
+            def fake_price_history(ticker, start_date, end_date):
+                if ticker.upper() == "AAPL":
+                    return price_history
+                return pd.DataFrame()
+
+            with patch.object(RecommendationEvaluationService, "_download_price_history", side_effect=fake_price_history):
+                evaluation_result = RecommendationEvaluationService(session).run_evaluation()
+
             def fake_subprocess_run(command, *args, **kwargs):
                 script_name = Path(command[1]).name
                 class Result:
@@ -316,15 +340,10 @@ class WeightOptimizationServiceTests(unittest.TestCase):
                         self.stdout = stdout
                         self.stderr = stderr
 
-                if script_name == "evaluate_trades.py":
-                    return Result(0, "evaluated 5 AAPL historical setups\n")
                 if script_name == "optimize_weights.py":
                     weights_path.write_text(json.dumps({"trend": 1.15, "sentiment": 0.72, "risk": 0.95}))
                     return Result(0, "optimized weights from 4 resolved AAPL trades\n")
                 raise AssertionError(f"unexpected subprocess invocation: {command}")
-
-            with patch("trade_proposer_app.services.evaluations.subprocess.run", side_effect=fake_subprocess_run):
-                evaluation_result = RecommendationEvaluationService(session).run_evaluation()
 
             self.assertEqual(evaluation_result.evaluated_trade_log_entries, 5)
             self.assertEqual(evaluation_result.synced_recommendations, 4)
