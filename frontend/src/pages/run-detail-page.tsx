@@ -5,7 +5,7 @@ import { getJson } from "../api";
 import { WorkflowRunResults } from "../components/workflow-run-results";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
 import type { RunDetailResponse } from "../types";
-import { diagnosticsMessages, directionTone, formatDate, formatDuration, jobTypeLabel, recommendationStateTone, runTone } from "../utils";
+import { diagnosticsMessages, directionTone, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, recommendationStateTone, runTone } from "../utils";
 
 export function RunDetailPage() {
   const { runId } = useParams<{ runId: string }>();
@@ -71,6 +71,23 @@ export function RunDetailPage() {
                   {detail.outputs.map((output) => {
                     const item = output.recommendation;
                     const messages = diagnosticsMessages(output.diagnostics);
+                    const analysis = parseJsonRecord(output.diagnostics.analysis_json);
+                    const summarySection = isRecord(analysis?.summary) ? (analysis?.summary as Record<string, unknown>) : null;
+                    const newsSection = isRecord(analysis?.news) ? (analysis?.news as Record<string, unknown>) : null;
+                    const summaryText = typeof summarySection?.text === "string" && summarySection.text ? summarySection.text : null;
+                    const summaryMethod = typeof summarySection?.method === "string" ? summarySection.method : null;
+                    const summaryBackend = typeof summarySection?.backend === "string" ? summarySection.backend : null;
+                    const newsDigest = (() => {
+                      const digest = typeof newsSection?.digest === "string" ? newsSection.digest : summarySection?.digest;
+                      return typeof digest === "string" && digest ? digest : null;
+                    })();
+                    const sentimentSection = isRecord(analysis?.sentiment) ? (analysis.sentiment as Record<string, unknown>) : null;
+                    const enhancedSentiment = sentimentSection && isRecord(sentimentSection.enhanced) ? (sentimentSection.enhanced as Record<string, unknown>) : null;
+                    const enhancedSentimentScore = enhancedSentiment && typeof enhancedSentiment.score === "number" ? enhancedSentiment.score : null;
+                    const enhancedSentimentLabel = enhancedSentiment && typeof enhancedSentiment.label === "string" ? enhancedSentiment.label : null;
+                    const enhancedComponents = enhancedSentiment && enhancedSentiment.components && isRecord(enhancedSentiment.components) ? (enhancedSentiment.components as Record<string, unknown>) : null;
+                    const summaryMethodLabel = summaryMethod || (newsDigest ? "news_digest" : "price_only");
+                    const summaryBackendLabel = summaryBackend || "news_digest";
                     return (
                       <article key={item.id ?? `${item.ticker}-${item.created_at}`} className="recommendation-card">
                         <div className="card-headline">
@@ -92,8 +109,45 @@ export function RunDetailPage() {
                           <div className="summary-item"><span className="summary-label">Take profit</span><span className="summary-value">{item.take_profit}</span></div>
                         </div>
                         <div className="helper-text">{item.indicator_summary || "No indicator summary stored for this recommendation."}</div>
-                        <div className="helper-text">Evaluated {formatDate(item.evaluated_at)}</div>
-                        <div className="helper-text"><Link to={`/recommendations/${item.id}`}>Open recommendation detail</Link></div>
+                        {summaryText || newsDigest ? (
+                          <div className="stack-page top-gap-small">
+                            <div className="summary-grid">
+                              <div className="summary-item">
+                                <span className="summary-label">Summary method</span>
+                                <span className="summary-value">{summaryMethodLabel} ({summaryBackendLabel})</span>
+                              </div>
+                              {summaryText ? (
+                                <div className="summary-item">
+                                  <span className="summary-label">Summary</span>
+                                  <span className="summary-value">{summaryText}</span>
+                                </div>
+                              ) : null}
+                            </div>
+                            {newsDigest && newsDigest !== summaryText ? (
+                              <div className="helper-text">Headline digest: {newsDigest}</div>
+                            ) : null}
+                            {enhancedSentimentScore !== null ? (
+                              <div className="summary-grid top-gap-small">
+                                <div className="summary-item">
+                                  <span className="summary-label">Enhanced sentiment</span>
+                                  <span className="summary-value">{enhancedSentimentScore.toFixed(2)}</span>
+                                </div>
+                                {enhancedSentimentLabel ? (
+                                  <div className="summary-item">
+                                    <span className="summary-label">Label</span>
+                                    <span className="summary-value">{enhancedSentimentLabel}</span>
+                                  </div>
+                                ) : null}
+                                {enhancedComponents ? (
+                                  <div className="summary-item">
+                                    <span className="summary-label">Components</span>
+                                    <pre>{JSON.stringify(enhancedComponents, null, 2)}</pre>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
                         {messages.length > 0 ? <ul>{messages.map((message) => <li key={message} className="warning-text">{message}</li>)}</ul> : <div className="helper-text">No warnings or errors.</div>}
                         {output.diagnostics.raw_output ? (
                           <details>

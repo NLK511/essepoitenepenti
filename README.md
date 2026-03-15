@@ -1,11 +1,12 @@
 # Trade Proposer App
 
-Trade Proposer App is a deployable application for systematic trade recommendation workflows. It provides a FastAPI backend, a React/Vite operator UI, and worker-backed execution.
+Trade Proposer App is a deployable application for systematic trade recommendation workflows. It provides a FastAPI backend, a React/Vite operator UI, and worker-backed execution. The recommendation pipeline runs entirely inside this repository: it fetches price history via `yfinance`, builds technical feature vectors with `pandas`, applies the bundled weights (`src/trade_proposer_app/data/weights.json`), ingests news via the native `NewsIngestionService`, and emits directional/confidence/price outputs along with a short headline digest.
 
 ## Core Features
 - **Job Management**: Define scheduled or manual runs for proposal generation, evaluation, or weight optimization.
 - **Traceability**: Full history of runs and recommendations with deep diagnostics and ticker-level drill-down.
 - **Reliability**: Atomic run claiming, duplicate-run prevention, and honest failure reporting.
+- **News-aware insights**: Native news ingestion pulls configured articles, derives a sentiment score, and stores the headline digest alongside each recommendation. Operators can optionally route that digest (plus a short technical snapshot) through OpenAI or invoke the `pi` CLI (configured via `/settings`) so richer narratives and enhanced sentiment metadata appear in the detail views.
 - **In-App Docs**: Integrated documentation browser for methodology and technical reference.
 
 ## Quick Start
@@ -49,4 +50,4 @@ For detailed information, see the `docs/` directory or browse them in-app at `/d
 - **Backend**: Python, FastAPI, SQLAlchemy (SQLite/Postgres).
 - **Frontend**: React, TypeScript, Vite.
 - **Background**: Custom worker and scheduler.
-- **Integration**: Integrated with the trade-proposer prototype.
+- **Dependencies**: `pandas`, `yfinance`, and other standard packages for the internal scoring pipeline.

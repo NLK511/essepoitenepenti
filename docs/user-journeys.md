@@ -89,7 +89,7 @@ Operator maintaining the deployment.
 ### Steps
 1. Operator deploys app via Docker Compose.
 2. Operator provides `.env` configuration.
-3. Operator checks API health and prototype preflight endpoints.
+3. Operator checks API health and the internal pipeline preflight endpoint.
 4. Operator monitors worker process status, logs, and queue behavior.
 5. Operator upgrades the app without changing the product model.
 

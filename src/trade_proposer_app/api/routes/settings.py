@@ -42,6 +42,7 @@ async def set_summary_settings(
     max_tokens: str = Form(default="220"),
     pi_command: str = Form(default="pi"),
     pi_agent_dir: str = Form(default=""),
+    pi_cli_args: str = Form(default=""),
     prompt: str = Form(default=""),
     session: Session = Depends(get_db_session),
 ) -> dict[str, object]:
@@ -55,6 +56,7 @@ async def set_summary_settings(
             "summary_max_tokens": max_tokens.strip() or settings_map["summary_max_tokens"],
             "summary_pi_command": pi_command.strip() or settings_map["summary_pi_command"],
             "summary_pi_agent_dir": pi_agent_dir.strip(),
+            "summary_pi_cli_args": pi_cli_args.strip(),
             "summary_prompt": prompt.strip() or settings_map["summary_prompt"],
         }
     )

@@ -14,7 +14,7 @@ from trade_proposer_app.app import app
 from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import JobType, RecommendationDirection, RecommendationState
-from trade_proposer_app.domain.models import EvaluationRunResult, PreflightCheck, PrototypePreflightReport, Recommendation, RunDiagnostics
+from trade_proposer_app.domain.models import AppPreflightReport, EvaluationRunResult, PreflightCheck, Recommendation, RunDiagnostics
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
@@ -22,20 +22,16 @@ from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 
 
-class StubPrototypePreflightService:
-    def run(self) -> PrototypePreflightReport:
-        return PrototypePreflightReport(
+class StubAppPreflightService:
+    def run(self) -> AppPreflightReport:
+        return AppPreflightReport(
             status="ok",
             checked_at=datetime.now(timezone.utc),
-            prototype_repo_path="/tmp/pi-mono",
-            prototype_script_path="/tmp/pi-mono/.pi/skills/trade-proposer/scripts/propose_trade.py",
-            prototype_python_executable="python3",
+            engine="internal_price_pipeline",
             checks=[
-                PreflightCheck(name="prototype_repo_path", status="ok", message="prototype repository found"),
-                PreflightCheck(name="prototype_script", status="ok", message="prototype script found"),
-                PreflightCheck(name="prototype_python", status="ok", message="prototype python resolved: /usr/bin/python3"),
-                PreflightCheck(name="python_imports:required", status="ok", message="required prototype imports available"),
-                PreflightCheck(name="python_imports:optional", status="ok", message="optional prototype imports available"),
+                PreflightCheck(name="module:pandas", status="ok", message="pandas importable"),
+                PreflightCheck(name="module:yfinance", status="ok", message="yfinance importable"),
+                PreflightCheck(name="weights_file", status="ok", message="weights file available"),
             ],
         )
 
@@ -63,8 +59,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
 
         app.dependency_overrides[get_db_session] = override_db_session
         self.health_preflight_patcher = patch(
-            "trade_proposer_app.api.routes.health.PrototypePreflightService",
-            StubPrototypePreflightService,
+            "trade_proposer_app.api.routes.health.AppPreflightService",
+            StubAppPreflightService,
         )
         self.health_preflight_patcher.start()
 
@@ -250,16 +246,27 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             response = await client.get("/api/health")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
-        self.assertEqual(response.json()["prototype"]["status"], "ok")
+        self.assertEqual(response.json()["preflight"]["status"], "ok")
 
-    async def test_prototype_health_endpoint(self) -> None:
+    async def test_preflight_health_endpoint(self) -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/api/health/preflight")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["engine"], "internal_price_pipeline")
+        self.assertTrue(any(check["name"] == "module:pandas" for check in payload["checks"]))
+
+    async def test_legacy_prototype_health_route(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             response = await client.get("/api/health/prototype")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["status"], "ok")
-        self.assertEqual(payload["checks"][3]["name"], "python_imports:required")
+        self.assertEqual(payload["engine"], "internal_price_pipeline")
+        self.assertTrue(any(check["name"] == "weights_file" for check in payload["checks"]))
 
     async def test_spa_shell_routes_render(self) -> None:
         transport = httpx.ASGITransport(app=app)
@@ -267,7 +274,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             for path in ("/", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/runs/1", "/recommendations/1", "/tickers/AAPL"):
                 response = await client.get(path)
                 self.assertEqual(response.status_code, 200)
-                self.assertIn("Trade Proposer App frontend", response.text)
+                self.assertIn("<title>Trade Proposer App</title>", response.text)
 
     async def test_docs_api_lists_markdown_documents(self) -> None:
         transport = httpx.ASGITransport(app=app)
@@ -279,8 +286,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(document["slug"] == "readme" for document in payload["documents"]))
         self.assertTrue(any(document["slug"] == "raw-details-reference" for document in payload["documents"]))
         methodology = next(document for document in payload["documents"] if document["slug"] == "recommendation-methodology")
-        self.assertTrue(any("High-level flow" in section["title"] for section in methodology["sections"]))
-        self.assertTrue(any("Weak points and limitations" in section["title"] for section in methodology["sections"]))
+        self.assertTrue(any("Pipeline overview" in section["title"] for section in methodology["sections"]))
+        self.assertTrue(any("App-native independence" in section["title"] for section in methodology["sections"]))
 
     async def test_create_watchlist_and_list_via_api(self) -> None:
         transport = httpx.ASGITransport(app=app)

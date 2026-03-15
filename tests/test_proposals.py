@@ -1,173 +1,203 @@
-import subprocess
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from trade_proposer_app.domain.models import ProviderCredential
-from trade_proposer_app.services.proposals import ProposalExecutionError, ProposalService
+import numpy as np
+import pandas as pd
+
+from trade_proposer_app.domain.enums import RecommendationDirection
+from trade_proposer_app.domain.models import NewsArticle, NewsBundle
+from trade_proposer_app.services.news import SUMMARY_METHOD_NEWS_DIGEST
+from trade_proposer_app.services.proposals import DEFAULT_SUMMARY_METHOD, ProposalExecutionError, ProposalService
+from trade_proposer_app.services.summary import SummaryResult
+
+
+def make_sample_history(days: int = 260) -> pd.DataFrame:
+    dates = pd.date_range(end=pd.Timestamp.today(), periods=days, freq="B")
+    base = np.linspace(100, 110, len(dates))
+    df = pd.DataFrame(
+        {
+            "Open": base * 0.995,
+            "High": base * 1.01,
+            "Low": base * 0.99,
+            "Close": base,
+            "Volume": np.full(len(dates), 100_0000),
+        },
+        index=dates,
+    )
+    return df
+
+
+class _FakeNewsService:
+    def __init__(self, bundle: NewsBundle) -> None:
+        self._bundle = bundle
+
+    def fetch(self, ticker: str) -> NewsBundle:
+        self._bundle.ticker = ticker
+        return self._bundle
+
+
+class _StubSummaryService:
+    def __init__(self, result: SummaryResult) -> None:
+        self.result = result
+
+    def summarize(self, request: object) -> SummaryResult:
+        return self.result
 
 
 class ProposalServiceTests(unittest.TestCase):
-    def test_extract_analysis_json_handles_pretty_printed_payload(self) -> None:
-        raw_output = """
-header
-ANALYSIS_JSON::
-{
-  "direction": "LONG",
-  "problems": ["summary: timeout"]
-}
-Disclaimer: example
-"""
-        analysis_json = ProposalService._extract_analysis_json(raw_output)
-        self.assertIsNotNone(analysis_json)
-        assert analysis_json is not None
-        self.assertIn('"direction": "LONG"', analysis_json)
-        self.assertIn('"summary: timeout"', analysis_json)
+    def setUp(self) -> None:
+        self.service = ProposalService()
 
-    def test_extract_warnings_collects_problems_and_errors(self) -> None:
-        analysis_json = """
-{
-  "problems": ["summary: timeout"],
-  "news_feed_errors": ["finnhub unavailable"],
-  "summary_error": "summary model unavailable"
-}
-"""
-        warnings = ProposalService._extract_warnings(analysis_json)
-        self.assertIn("summary: timeout", warnings)
-        self.assertIn("finnhub unavailable", warnings)
-        self.assertIn("summary model unavailable", warnings)
+    def test_generate_requires_price_history(self) -> None:
+        with patch.object(ProposalService, "_fetch_price_history", side_effect=ProposalExecutionError("no data")):
+            with self.assertRaises(ProposalExecutionError):
+                self.service.generate("AAPL")
 
-    def test_extract_diagnostics_normalizes_structured_fields(self) -> None:
-        analysis_json = """
-{
-  "problems": ["sentiment degraded"],
-  "news_feed_errors": ["benzinga timeout"],
-  "summary_error": "summary model unavailable",
-  "llm_error": "provider rate limit"
-}
-"""
-        diagnostics = ProposalService._extract_diagnostics(analysis_json, raw_output="raw")
-        self.assertEqual(diagnostics.problems, ["sentiment degraded"])
-        self.assertEqual(diagnostics.news_feed_errors, ["benzinga timeout"])
-        self.assertEqual(diagnostics.provider_errors, ["benzinga timeout"])
-        self.assertEqual(diagnostics.summary_error, "summary model unavailable")
-        self.assertEqual(diagnostics.llm_error, "provider rate limit")
-        self.assertEqual(diagnostics.warning_count, 4)
-        self.assertEqual(diagnostics.raw_output, "raw")
+    def test_generate_outputs_recommendation(self) -> None:
+        history = make_sample_history()
+        with patch.object(ProposalService, "_fetch_price_history", return_value=history):
+            output = self.service.generate("AAPL")
 
-    def test_build_indicator_summary_uses_main_trade_indicators(self) -> None:
-        analysis_json = """
-{
-  "sentiment_label": "Bullish",
-  "summary": "Strong product launch demand.",
-  "feature_vector": {
-    "rsi": 58.4,
-    "atr_pct": 2.12,
-    "price_above_sma200": 1
-  }
-}
-"""
-        summary = ProposalService._build_indicator_summary(analysis_json)
-        self.assertIn("Sentiment Bullish", summary)
-        self.assertIn("RSI 58.4", summary)
-        self.assertIn("ATR 2.12%", summary)
-        self.assertIn("Above SMA200", summary)
+        self.assertEqual(output.recommendation.direction, RecommendationDirection.LONG)
+        self.assertGreater(output.recommendation.confidence, 0)
+        self.assertTrue(output.recommendation.take_profit > output.recommendation.entry_price)
+        self.assertIn("feature_vectors", output.diagnostics.analysis_json)
+        self.assertIn("aggregations", output.diagnostics.analysis_json)
+        self.assertIsNotNone(output.diagnostics.feature_vector_json)
 
-    def test_generate_passes_settings_credentials_and_news_provider_keys_to_prototype_env(self) -> None:
-        result = subprocess.CompletedProcess(
-            args=["python3", "propose_trade.py", "AAPL"],
-            returncode=0,
-            stdout='''=> DIRECTION : LONG\n=> CONFIDENCE: 81\nCurrent Price : 101\nStop Loss : 97\nTake Profit : 111\nANALYSIS_JSON::{"problems": []}''',
-            stderr="",
+    def test_build_news_summary_handles_mixed_inputs(self) -> None:
+        article = NewsArticle(title="Article", summary=None, publisher=None, link=None, published_at=None)
+        summary = self.service._build_news_summary([{"title": "Dict"}, article])
+        self.assertEqual(summary, "Dict | Article")
+
+    def test_apply_news_context_prefers_news_items(self) -> None:
+        bundle = NewsBundle(ticker="", articles=[], feeds_used=["NewsAPI"])
+        service = ProposalService(news_service=_FakeNewsService(bundle))
+        sentiment_payload = {
+            "score": 0.0,
+            "label": "NEUTRAL",
+            "contexts": [],
+            "context_flags": {},
+            "sentiment_volatility": 0.0,
+            "polarity_trend": 0.0,
+            "sources": ["NewsAPI"],
+            "news_items": [{"title": "News Title", "link": "https://example.com", "compound": 0.5}],
+            "problems": [],
+        }
+        service.sentiment_analyzer.analyze = MagicMock(return_value=sentiment_payload)
+        context = service._apply_news_context({}, "AAPL")
+        self.assertEqual(context["summary_text"], "News Title")
+        self.assertEqual(context["summary_method"], SUMMARY_METHOD_NEWS_DIGEST)
+        self.assertEqual(context["news_items"], sentiment_payload["news_items"])
+        self.assertEqual(context["news_point_count"], 1)
+
+    def test_apply_news_context_records_llm_summary(self) -> None:
+        article = NewsArticle(
+            title="LLM News",
+            summary="Positive tone",
+            publisher="Provider",
+            link="https://example.com",
+            published_at=None,
+        )
+        bundle = NewsBundle(ticker="", articles=[article], feeds_used=["NewsAPI"])
+        service = ProposalService(
+            news_service=_FakeNewsService(bundle),
+            summary_service=_StubSummaryService(
+                SummaryResult(
+                    summary="LLM summary notes a strong earnings beat",
+                    method="llm_summary",
+                    backend="openai_api",
+                    model="gpt-4o-mini",
+                    llm_error=None,
+                    metadata={"news_item_count": 1},
+                    duration_seconds=0.4,
+                )
+            ),
+        )
+        sentiment_payload = {
+            "score": 0.0,
+            "label": "NEUTRAL",
+            "contexts": [],
+            "context_flags": {},
+            "sentiment_volatility": 0.0,
+            "polarity_trend": 0.0,
+            "sources": ["NewsAPI"],
+            "news_items": [{"title": "LLM News", "link": "https://example.com", "compound": 0.5}],
+            "problems": [],
+        }
+        service.sentiment_analyzer.analyze = MagicMock(return_value=sentiment_payload)
+        context = service._apply_news_context({}, "AAPL")
+        self.assertEqual(context["summary_text"], "LLM summary notes a strong earnings beat")
+        self.assertEqual(context["summary_method"], "llm_summary")
+        self.assertEqual(context["summary_backend"], "openai_api")
+        self.assertEqual(context["summary_model"], "gpt-4o-mini")
+        self.assertEqual(context["summary_metadata"], {"news_item_count": 1})
+        self.assertEqual(context["news_digest"], "LLM News")
+        self.assertEqual(context["enhanced_sentiment_score"], context["sentiment_score"])
+        self.assertGreater(context["sentiment_score"], 0.0)
+
+    def test_apply_news_context_records_summary_problems(self) -> None:
+        bundle = NewsBundle(
+            ticker="",
+            articles=[],
+            feeds_used=["NewsAPI"],
         )
         service = ProposalService(
-            summary_settings={
-                "summary_backend": "openai_api",
-                "summary_model": "gpt-4o-mini",
-                "summary_timeout_seconds": "77",
-                "summary_max_tokens": "333",
-                "summary_pi_command": "pi",
-                "summary_pi_agent_dir": "/tmp/pi-agent",
-                "summary_prompt": "short summary prompt",
-            },
-            provider_credentials={
-                "openai": ProviderCredential(provider="openai", api_key="sk-test", api_secret=""),
-                "newsapi": ProviderCredential(provider="newsapi", api_key="news-key", api_secret=""),
-                "alpha_vantage": ProviderCredential(provider="alpha_vantage", api_key="alpha-key", api_secret=""),
-                "finnhub": ProviderCredential(provider="finnhub", api_key="finn-key", api_secret=""),
-                "alpaca": ProviderCredential(provider="alpaca", api_key="alpaca-id", api_secret="alpaca-secret"),
-            },
+            news_service=_FakeNewsService(bundle),
+            summary_service=_StubSummaryService(
+                SummaryResult(
+                    summary="Headline digest",
+                    method="news_digest",
+                    backend="openai_api",
+                    model=None,
+                    llm_error="openai api key is not configured",
+                    metadata={"news_item_count": 1},
+                    duration_seconds=None,
+                )
+            ),
         )
+        sentiment_payload = {
+            "score": 0.0,
+            "label": "NEUTRAL",
+            "contexts": [],
+            "context_flags": {},
+            "sentiment_volatility": 0.0,
+            "polarity_trend": 0.0,
+            "sources": ["NewsAPI"],
+            "news_items": [{"title": "Headline", "compound": 0.0}],
+            "problems": [],
+        }
+        service.sentiment_analyzer.analyze = MagicMock(return_value=sentiment_payload)
+        context = service._apply_news_context({}, "AAPL")
+        self.assertIn("openai api key is not configured", context["problems"])
 
-        with patch("pathlib.Path.exists", return_value=True), patch(
-            "trade_proposer_app.services.proposals.subprocess.run", return_value=result
-        ) as run_mock:
-            output = service.generate("AAPL")
-
-        self.assertEqual(output.recommendation.ticker, "AAPL")
-        self.assertEqual(output.recommendation.state.value, "PENDING")
-        call_env = run_mock.call_args.kwargs["env"]
-        self.assertEqual(call_env["NEWS_SUMMARIZER_BACKEND"], "openai_api")
-        self.assertEqual(call_env["NEWS_SUMMARIZER_MODEL"], "gpt-4o-mini")
-        self.assertEqual(call_env["NEWS_SUMMARIZER_TIMEOUT_SECONDS"], "77")
-        self.assertEqual(call_env["NEWS_SUMMARIZER_MAX_TOKENS"], "333")
-        self.assertEqual(call_env["NEWS_SUMMARIZER_PROMPT"], "short summary prompt")
-        self.assertEqual(call_env["OPENAI_API_KEY"], "sk-test")
-        self.assertEqual(call_env["NEWSAPI_KEY"], "news-key")
-        self.assertEqual(call_env["ALPHA_VANTAGE_API_KEY"], "alpha-key")
-        self.assertEqual(call_env["FINNHUB_API_KEY"], "finn-key")
-        self.assertEqual(call_env["APCA_API_KEY_ID"], "alpaca-id")
-        self.assertEqual(call_env["APCA_API_SECRET_KEY"], "alpaca-secret")
-        self.assertEqual(call_env["PI_CODING_AGENT_DIR"], "/tmp/pi-agent")
-
-    def test_generate_raises_when_prototype_dependency_is_missing(self) -> None:
-        result = subprocess.CompletedProcess(
-            args=["python3", "propose_trade.py", "AAPL"],
-            returncode=1,
-            stdout="",
-            stderr="ModuleNotFoundError: No module named 'yfinance'",
+    def test_apply_news_context_falls_back_to_articles(self) -> None:
+        article = NewsArticle(
+            title="Fallback Title",
+            summary="Details",
+            publisher="Provider",
+            link="https://fallback",
+            published_at=None,
         )
-
-        with patch("pathlib.Path.exists", return_value=True), patch(
-            "trade_proposer_app.services.proposals.subprocess.run", return_value=result
-        ):
-            with self.assertRaises(ProposalExecutionError) as context:
-                ProposalService().generate("AAPL")
-
-        self.assertIn("prototype dependency missing", str(context.exception))
-        self.assertIn("yfinance", str(context.exception))
-
-    def test_generate_raises_with_explicit_message_when_ticker_history_is_missing(self) -> None:
-        result = subprocess.CompletedProcess(
-            args=["python3", "propose_trade.py", "NOPE"],
-            returncode=1,
-            stdout="Error: Could not retrieve historical data for 'NOPE'.\n",
-            stderr="",
-        )
-
-        with patch("pathlib.Path.exists", return_value=True), patch(
-            "trade_proposer_app.services.proposals.subprocess.run", return_value=result
-        ):
-            with self.assertRaises(ProposalExecutionError) as context:
-                ProposalService().generate("NOPE")
-
-        self.assertIn("ticker not found or historical data unavailable", str(context.exception))
-        self.assertIn("NOPE", str(context.exception))
-
-    def test_generate_raises_when_required_output_fields_are_missing(self) -> None:
-        result = subprocess.CompletedProcess(
-            args=["python3", "propose_trade.py", "AAPL"],
-            returncode=0,
-            stdout='ANALYSIS_JSON::{"problems": []}',
-            stderr="",
-        )
-
-        with patch("pathlib.Path.exists", return_value=True), patch(
-            "trade_proposer_app.services.proposals.subprocess.run", return_value=result
-        ):
-            with self.assertRaises(ProposalExecutionError) as context:
-                ProposalService().generate("AAPL")
-
-        self.assertIn("missing direction", str(context.exception))
+        bundle = NewsBundle(ticker="", articles=[article], feeds_used=["NewsAPI"])
+        service = ProposalService(news_service=_FakeNewsService(bundle))
+        sentiment_payload = {
+            "score": 0.0,
+            "label": "NEUTRAL",
+            "contexts": [],
+            "context_flags": {},
+            "sentiment_volatility": 0.0,
+            "polarity_trend": 0.0,
+            "sources": ["NewsAPI"],
+            "news_points": [],
+            "problems": [],
+        }
+        service.sentiment_analyzer.analyze = MagicMock(return_value=sentiment_payload)
+        context = service._apply_news_context({}, "AAPL")
+        self.assertEqual(context["summary_text"], "Fallback Title")
+        self.assertEqual(context["summary_method"], SUMMARY_METHOD_NEWS_DIGEST)
+        self.assertEqual(context["news_items"], [])
+        self.assertEqual(context["news_point_count"], 0)
 
 
 if __name__ == "__main__":

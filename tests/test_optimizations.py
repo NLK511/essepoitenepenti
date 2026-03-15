@@ -350,7 +350,7 @@ class WeightOptimizationServiceTests(unittest.TestCase):
             execution = JobExecutionService(
                 jobs=jobs,
                 runs=runs,
-                proposals=ProposalService(summary_settings={}, provider_credentials={}),
+                proposals=ProposalService(),
                 optimizations=WeightOptimizationService(minimum_resolved_trades=4),
             )
             queued_run = execution.enqueue_job(optimization_job.id or 0)

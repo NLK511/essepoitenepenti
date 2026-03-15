@@ -2,14 +2,14 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { getJson, postForm } from "../api";
 import { Badge, Card, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { AppSetting, OptimizationState, PrototypePreflightReport, ProviderCredential, SettingsResponse } from "../types";
+import type { AppSetting, AppPreflightReport, OptimizationState, ProviderCredential, SettingsResponse } from "../types";
 import { toSettingMap } from "../utils";
 
 interface SettingsViewData {
   settings: AppSetting[];
   providers: ProviderCredential[];
   optimization: OptimizationState;
-  preflight: PrototypePreflightReport;
+  preflight: AppPreflightReport;
 }
 
 export function SettingsPage() {
@@ -25,7 +25,7 @@ export function SettingsPage() {
       setError(null);
       const [settingsResponse, preflight] = await Promise.all([
         getJson<SettingsResponse>("/api/settings"),
-        getJson<PrototypePreflightReport>("/api/health/prototype"),
+        getJson<AppPreflightReport>("/api/health/preflight"),
       ]);
       setData({
         settings: settingsResponse.settings,
@@ -73,12 +73,14 @@ export function SettingsPage() {
       setError(null);
       setNotice(null);
       await postForm<{ settings: Record<string, string> }>("/api/settings/summary", {
-        backend: String(formData.get("backend") ?? "pi_agent"),
+        backend: String(formData.get("backend") ?? "news_digest"),
         model: String(formData.get("model") ?? ""),
         timeout_seconds: String(formData.get("timeout_seconds") ?? "60"),
         max_tokens: String(formData.get("max_tokens") ?? "220"),
         pi_command: String(formData.get("pi_command") ?? "pi"),
         pi_agent_dir: String(formData.get("pi_agent_dir") ?? ""),
+        pi_api_url: String(formData.get("pi_api_url") ?? ""),
+        pi_api_key: String(formData.get("pi_api_key") ?? ""),
         prompt: String(formData.get("prompt") ?? ""),
       });
       await loadData();
@@ -149,7 +151,7 @@ export function SettingsPage() {
     <>
       <PageHeader
         kicker="System operation"
-        title="Configure credentials, summary behavior, and prototype health in one place."
+        title="Configure credentials, summary behavior, and internal engine health in one place."
         subtitle="The settings page remains the control point for first-time setup and troubleshooting, but now uses typed client-side forms over the same backend endpoints."
       />
       {error ? <ErrorState message={error} /> : null}
@@ -158,8 +160,8 @@ export function SettingsPage() {
       {data ? (
         <div className="stack-page">
           <section className="metrics-grid">
-            <Card><div className="metric-label">Prototype preflight</div><div className="metric-value">{data.preflight.status}</div></Card>
-            <Card><div className="metric-label">Summary backend</div><div className="metric-value">{settingMap.summary_backend ?? "pi_agent"}</div></Card>
+            <Card><div className="metric-label">Internal pipeline health</div><div className="metric-value">{data.preflight.status}</div></Card>
+            <Card><div className="metric-label">Summary backend</div><div className="metric-value">{settingMap.summary_backend ?? "news_digest"}</div></Card>
             <Card><div className="metric-label">Optimization threshold</div><div className="metric-value">{data.optimization.minimum_resolved_trades}</div></Card>
             <Card><div className="metric-label">Weight backups</div><div className="metric-value">{data.optimization.backup_count}</div></Card>
           </section>
@@ -239,16 +241,18 @@ export function SettingsPage() {
             </Card>
 
             <Card>
-              <SectionTitle kicker="Summary engine" title="LLM-backed news summarization" subtitle="Default mode is pi_agent. The prompt should explicitly tell the summarizer how short and market-relevant the output must be." />
+              <SectionTitle kicker="Summary engine" title="LLM-backed news summarization" subtitle="Choose news_digest for the fallback headline digest, openai_api for OpenAI narratives, or pi_agent to run your Pi CLI locally. The form exposes the `pi` command, working directory, and optional HTTP bridge settings so the pipeline can treat a vanilla Pi tool just like any other LLM provider." />
               <form className="stack-form" onSubmit={saveSummarySettings}>
                 <div className="form-grid">
-                  <label className="form-field"><span>Backend</span><select name="backend" defaultValue={settingMap.summary_backend ?? "pi_agent"}><option value="pi_agent">pi_agent</option><option value="openai_api">openai_api</option></select></label>
-                  <label className="form-field"><span>Model</span><input name="model" defaultValue={settingMap.summary_model ?? ""} placeholder="Leave empty to use pi default model" /></label>
+                  <label className="form-field"><span>Backend</span><select name="backend" defaultValue={settingMap.summary_backend ?? "news_digest"}><option value="news_digest">news_digest (headline digest only)</option><option value="openai_api">openai_api (OpenAI LLM)</option><option value="pi_agent">pi_agent (local Pi LLM)</option></select></label>
+                  <label className="form-field"><span>Model</span><input name="model" defaultValue={settingMap.summary_model ?? ""} placeholder="Leave empty to use the backend defaults" /></label>
                   <label className="form-field"><span>Timeout seconds</span><input name="timeout_seconds" defaultValue={settingMap.summary_timeout_seconds ?? "60"} /></label>
                   <label className="form-field"><span>Max tokens</span><input name="max_tokens" defaultValue={settingMap.summary_max_tokens ?? "220"} /></label>
                   <label className="form-field"><span>pi command</span><input name="pi_command" defaultValue={settingMap.summary_pi_command ?? "pi"} /></label>
                   <label className="form-field"><span>PI_CODING_AGENT_DIR</span><input name="pi_agent_dir" defaultValue={settingMap.summary_pi_agent_dir ?? ""} /></label>
+                  <label className="form-field"><span>pi CLI args</span><input name="pi_cli_args" defaultValue={settingMap.summary_pi_cli_args ?? ""} placeholder="--provider openai --model gpt-4o-mini" /></label>
                 </div>
+                <div className="helper-text">pi_agent now invokes the configured `pi` CLI (command, working directory, and optional arguments) so a vanilla Pi tool can serve as the LLM backend; the native digest remains the safe fallback.</div>
                 <label className="form-field">
                   <span>Summary prompt</span>
                   <textarea
@@ -264,7 +268,7 @@ export function SettingsPage() {
           </section>
 
           <Card>
-            <SectionTitle kicker="Prototype preflight" title="Current prototype readiness" />
+            <SectionTitle kicker="Internal preflight" title="Current pipeline readiness" />
             <div className="cluster">
               <Badge tone={data.preflight.status === "ok" ? "ok" : data.preflight.status === "warning" ? "warning" : "danger"}>
                 {data.preflight.status}

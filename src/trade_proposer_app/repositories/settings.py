@@ -15,12 +15,13 @@ DEFAULT_SUMMARY_PROMPT = (
 DEFAULT_APP_SETTINGS = {
     "confidence_threshold": "60",
     "optimization_minimum_resolved_trades": "50",
-    "summary_backend": "pi_agent",
+    "summary_backend": "news_digest",
     "summary_model": "",
     "summary_timeout_seconds": "60",
     "summary_max_tokens": "220",
     "summary_pi_command": "pi",
     "summary_pi_agent_dir": "",
+    "summary_pi_cli_args": "",
     "summary_prompt": DEFAULT_SUMMARY_PROMPT,
 }
 SUMMARY_SETTING_KEYS = (
@@ -30,6 +31,7 @@ SUMMARY_SETTING_KEYS = (
     "summary_max_tokens",
     "summary_pi_command",
     "summary_pi_agent_dir",
+    "summary_pi_cli_args",
     "summary_prompt",
 )
 

@@ -139,8 +139,8 @@ export function warningCount(item: RecommendationHistoryItem | RunOutput): numbe
   return new Set(messages.filter(Boolean)).size;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function normalizeAnalysisJsonForDisplay(value: string | null): string | null {

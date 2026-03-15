@@ -8,11 +8,11 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
+from trade_proposer_app.services.builders import create_proposal_service
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.evaluations import RecommendationEvaluationService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.optimizations import WeightOptimizationService
-from trade_proposer_app.services.proposals import ProposalService
 from trade_proposer_app.services.scheduling import CronSchedule, ScheduleParseError
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -34,14 +34,6 @@ def normalize_optional_watchlist_id(value: int | str | None) -> int | None:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="watchlist_id must be an integer") from exc
     return value
-
-
-def create_proposal_service(session: Session) -> ProposalService:
-    repository = SettingsRepository(session)
-    return ProposalService(
-        summary_settings=repository.get_summary_settings(),
-        provider_credentials=repository.get_provider_credential_map(),
-    )
 
 
 def create_optimization_service(session: Session) -> WeightOptimizationService:

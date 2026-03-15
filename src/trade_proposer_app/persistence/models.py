@@ -83,6 +83,11 @@ class RecommendationRecord(Base, TimestampMixin):
     llm_error: Mapped[str] = mapped_column(Text, default="")
     analysis_json: Mapped[str] = mapped_column(Text, default="")
     raw_output: Mapped[str] = mapped_column(Text, default="")
+    feature_vector_json: Mapped[str] = mapped_column(Text, default="")
+    normalized_feature_vector_json: Mapped[str] = mapped_column(Text, default="")
+    aggregations_json: Mapped[str] = mapped_column(Text, default="")
+    confidence_weights_json: Mapped[str] = mapped_column(Text, default="")
+    summary_method: Mapped[str] = mapped_column(String(64), default="")
     run: Mapped[RunRecord] = relationship(back_populates="recommendations")
 
 

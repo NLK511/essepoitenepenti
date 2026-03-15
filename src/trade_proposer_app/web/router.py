@@ -7,7 +7,7 @@ router = APIRouter(tags=["web"])
 
 FRONTEND_DIST_DIR = Path(__file__).resolve().parents[3] / "frontend" / "dist"
 FRONTEND_INDEX_FILE = FRONTEND_DIST_DIR / "index.html"
-SPA_ROUTES = {
+SPA_ROUTE_PREFIXES = {
     "",
     "watchlists",
     "jobs",
@@ -70,7 +70,11 @@ async def recommendation_detail_spa(recommendation_id: int) -> HTMLResponse:
 @router.get("/{path:path}", response_class=HTMLResponse)
 async def spa_entry(path: str) -> HTMLResponse:
     normalized_path = path.strip("/")
-    if normalized_path not in SPA_ROUTES:
+    if normalized_path:
+        prefix = normalized_path.split("/", 1)[0]
+    else:
+        prefix = ""
+    if prefix not in SPA_ROUTE_PREFIXES:
         return HTMLResponse("Not Found", status_code=404)
     if not FRONTEND_INDEX_FILE.exists():
         return build_frontend_missing_response()

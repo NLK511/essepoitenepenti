@@ -1,7 +1,8 @@
 import { FormEvent, Fragment, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
+import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
 import type { Job, JobType, Run, Watchlist } from "../types";
 import { jobTypeLabel, tickerTone } from "../utils";
@@ -16,6 +17,8 @@ function isProposalJobType(jobType: JobType | string): boolean {
 }
 
 export function JobsPage() {
+  const { showToast } = useToast();
+  const navigate = useNavigate();
   const [data, setData] = useState<JobsViewData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -95,7 +98,18 @@ export function JobsPage() {
     try {
       setBusyJobId(jobId);
       setError(null);
-      await postForm<Run>(`/api/jobs/${jobId}/execute`, {});
+      const run = await postForm<Run>(`/api/jobs/${jobId}/execute`, {});
+      showToast({
+        message: run?.id ? `Run #${run.id} queued` : "Run queued",
+        tone: "success",
+        actionLabel: run?.id ? "View run" : undefined,
+        action: run?.id
+          ? () => {
+              navigate(`/runs/${run.id}`);
+            }
+          : undefined,
+        duration: 8000,
+      });
       await loadData();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Failed to enqueue job");

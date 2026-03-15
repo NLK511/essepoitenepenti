@@ -6,7 +6,7 @@ FRONTEND_DIR="${ROOT_DIR}/frontend"
 VENV_DIR="${ROOT_DIR}/.venv"
 ENV_FILE="${ROOT_DIR}/.env"
 RUN_SCHEDULER_ONCE="false"
-ALLOW_DEGRADED_PROTOTYPE="false"
+ALLOW_DEGRADED_PREFLIGHT="false"
 START_FRONTEND="true"
 START_PORT="${APP_PORT:-8000}"
 START_HOST="${APP_HOST:-0.0.0.0}"
@@ -35,7 +35,7 @@ Usage: scripts/start-dev.sh [options]
 
 Options:
   --run-scheduler-once        Run the scheduler enqueue pass before starting services
-  --allow-degraded-prototype  Allow startup even if prototype preflight status is failed
+  --allow-degraded-preflight  Allow startup even if the internal pipeline preflight reports failure (alias --allow-degraded-prototype)
   --backend-only              Start only the API and worker, not the Vite frontend dev server
   --host <host>               Host for uvicorn (default: APP_HOST or 0.0.0.0)
   --port <port>               Port for uvicorn (default: APP_PORT or 8000)
@@ -45,7 +45,7 @@ Options:
 What this script does:
   1. Verifies .venv and .env exist
   2. Applies pending database migrations
-  3. Runs prototype preflight checks
+  3. Runs internal pipeline preflight checks
   4. Starts the FastAPI API server
   5. Starts the worker
   6. Starts the React/Vite frontend dev server unless --backend-only is set
@@ -61,8 +61,8 @@ while [[ $# -gt 0 ]]; do
       RUN_SCHEDULER_ONCE="true"
       shift
       ;;
-    --allow-degraded-prototype)
-      ALLOW_DEGRADED_PROTOTYPE="true"
+    --allow-degraded-preflight|--allow-degraded-prototype)
+      ALLOW_DEGRADED_PREFLIGHT="true"
       shift
       ;;
     --backend-only)
@@ -161,12 +161,12 @@ log "applying database migrations"
   "$VENV_PYTHON" -m trade_proposer_app.migrations
 )
 
-log "running prototype preflight"
+log "running internal pipeline preflight"
 PRECHECK_OUTPUT="$(
   cd "$ROOT_DIR"
   "$VENV_PYTHON" - <<'PY'
-from trade_proposer_app.services.preflight import PrototypePreflightService
-report = PrototypePreflightService().run()
+from trade_proposer_app.services.preflight import AppPreflightService
+report = AppPreflightService().run()
 print(report.status)
 for check in report.checks:
     print(f"{check.status}|{check.name}|{check.message}")
@@ -177,11 +177,11 @@ printf '%s\n' "$PRECHECK_OUTPUT" | tail -n +2 | while IFS='|' read -r check_stat
   [[ -n "$check_name" ]] || continue
   log "preflight ${check_status}: ${check_name}: ${check_message}"
 done
-if [[ "$PRECHECK_STATUS" == "failed" && "$ALLOW_DEGRADED_PROTOTYPE" != "true" ]]; then
-  fail "prototype preflight failed; fix the reported issues or rerun with --allow-degraded-prototype"
+if [[ "$PRECHECK_STATUS" == "failed" && "$ALLOW_DEGRADED_PREFLIGHT" != "true" ]]; then
+  fail "internal pipeline preflight failed; fix the reported issues or rerun with --allow-degraded-preflight"
 fi
-if [[ "$PRECHECK_STATUS" == "failed" && "$ALLOW_DEGRADED_PROTOTYPE" == "true" ]]; then
-  log "continuing despite failed prototype preflight because --allow-degraded-prototype was set"
+if [[ "$PRECHECK_STATUS" == "failed" && "$ALLOW_DEGRADED_PREFLIGHT" == "true" ]]; then
+  log "continuing despite failed internal pipeline preflight because --allow-degraded-preflight was set"
 fi
 
 if [[ "$RUN_SCHEDULER_ONCE" == "true" ]]; then
@@ -223,7 +223,8 @@ HOST=${START_HOST}
 PORT=${START_PORT}
 FRONTEND_PORT=${FRONTEND_PORT}
 RUN_SCHEDULER_ONCE=${RUN_SCHEDULER_ONCE}
-ALLOW_DEGRADED_PROTOTYPE=${ALLOW_DEGRADED_PROTOTYPE}
+ALLOW_DEGRADED_PREFLIGHT=${ALLOW_DEGRADED_PREFLIGHT}
+ALLOW_DEGRADED_PROTOTYPE=${ALLOW_DEGRADED_PREFLIGHT}
 START_FRONTEND=${START_FRONTEND}
 API_PID=${API_PID}
 WORKER_PID=${WORKER_PID}

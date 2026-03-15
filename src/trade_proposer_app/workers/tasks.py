@@ -5,11 +5,11 @@ from trade_proposer_app.db import SessionLocal
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
+from trade_proposer_app.services.builders import create_proposal_service
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.evaluations import RecommendationEvaluationService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.optimizations import WeightOptimizationService
-from trade_proposer_app.services.proposals import ProposalService
 
 
 def process_once() -> bool:
@@ -19,10 +19,7 @@ def process_once() -> bool:
         service = JobExecutionService(
             jobs=JobRepository(session),
             runs=RunRepository(session),
-            proposals=ProposalService(
-                summary_settings=settings_repository.get_summary_settings(),
-                provider_credentials=settings_repository.get_provider_credential_map(),
-            ),
+            proposals=create_proposal_service(session),
             evaluations=EvaluationExecutionService(RecommendationEvaluationService(session)),
             optimizations=WeightOptimizationService(
                 minimum_resolved_trades=settings_repository.get_optimization_minimum_resolved_trades(),

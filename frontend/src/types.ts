@@ -162,12 +162,10 @@ export interface PreflightCheck {
   details: string[];
 }
 
-export interface PrototypePreflightReport {
+export interface AppPreflightReport {
   status: string;
   checked_at: string;
-  prototype_repo_path: string;
-  prototype_script_path: string;
-  prototype_python_executable: string;
+  engine: string;
   checks: PreflightCheck[];
 }
 

@@ -14,9 +14,9 @@ Requires-Dist: python-multipart<1.0.0,>=0.0.20
 Requires-Dist: alembic<2.0.0,>=1.16.0
 Requires-Dist: cryptography<46.0.0,>=45.0.0
 Requires-Dist: httpx<1.0.0,>=0.28.0
+Requires-Dist: pandas<4.0.0,>=3.0.0
+Requires-Dist: yfinance<2.0.0,>=1.2.0
 Provides-Extra: prototype
-Requires-Dist: yfinance<2.0.0,>=1.2.0; extra == "prototype"
-Requires-Dist: pandas<4.0.0,>=3.0.0; extra == "prototype"
 Requires-Dist: openai<2.0.0,>=1.100.0; extra == "prototype"
 Provides-Extra: dev
 Requires-Dist: ruff<1.0.0,>=0.12.0; extra == "dev"
@@ -25,7 +25,7 @@ Requires-Dist: pytest<9.0.0,>=8.4.0; extra == "dev"
 
 # Trade Proposer App
 
-Trade Proposer App is a deployable application for systematic trade recommendation workflows. It provides a FastAPI backend, a React/Vite operator UI, and worker-backed execution.
+Trade Proposer App is a deployable application for systematic trade recommendation workflows. It provides a FastAPI backend, a React/Vite operator UI, and worker-backed execution. The recommendation pipeline runs entirely inside this repository: it fetches price history via `yfinance`, builds technical feature vectors with `pandas`, applies the bundled weights (`src/trade_proposer_app/data/weights.json`), and emits directional/confidence/price outputs without going outside the app.
 
 ## Core Features
 - **Job Management**: Define scheduled or manual runs for proposal generation, evaluation, or weight optimization.
@@ -43,6 +43,23 @@ Trade Proposer App is a deployable application for systematic trade recommendati
 - **Frontend**: `http://localhost:5173/`
 - **API Health**: `http://localhost:8000/api/health`
 
+## Production deployment
+
+For production-like launches use `./scripts/start-prod.sh`. The script reads your `.env`, builds the frontend with `npm run build`, runs any pending migrations, and then starts the FastAPI API (which serves the built SPA from `frontend/dist`) and the worker process together. Run it from the repo root after installing dependencies (the same setup process as development) and configuring secrets such as `SECRET_KEY`.
+
+`start-prod.sh` exposes the API and frontend on `APP_HOST:APP_PORT` (defaults to `0.0.0.0:8000`). You can override those values on the command line with `--host` and `--port`, or leave them configured in `.env`. Example:
+
+```bash
+./scripts/start-prod.sh --host 0.0.0.0 --port 8000
+```
+
+If you build the frontend separately (with `npm ci` + `npm run build`) in your deployment pipeline, pass `--skip-frontend-build` so the script uses the existing `frontend/dist` assets instead of rebuilding.
+
+After startup:
+
+- Frontend & SPA routes: `http://<APP_HOST>:<APP_PORT>/`
+- API health:          `http://<APP_HOST>:<APP_PORT>/api/health`
+
 ## Documentation
 
 For detailed information, see the `docs/` directory or browse them in-app at `/docs`:
@@ -57,4 +74,4 @@ For detailed information, see the `docs/` directory or browse them in-app at `/d
 - **Backend**: Python, FastAPI, SQLAlchemy (SQLite/Postgres).
 - **Frontend**: React, TypeScript, Vite.
 - **Background**: Custom worker and scheduler.
-- **Integration**: Integrated with the trade-proposer prototype.
+- **Dependencies**: `pandas`, `yfinance`, and other standard packages for the internal scoring pipeline.

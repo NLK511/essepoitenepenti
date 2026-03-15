@@ -1,14 +1,12 @@
 # Getting Started
 
-Trade Proposer App is a FastAPI backend, a React/Vite frontend, a worker process for queued runs, and a thin adapter around the existing prototype strategy in `pi-mono`. This guide covers the fastest path to a working local install, how to verify that the environment is healthy, and what to check when runs fail.
+Trade Proposer App is a FastAPI backend, a React/Vite frontend, and a worker process for queued runs. The recommendation pipeline now runs entirely within this repository: it uses pandas/yfinance to fetch and transform market data, applies the bundled `weights.json`, and emits recommendations without shelling out to the prototype workspace. This guide covers the fastest path to a working local install, how to verify that the environment is healthy, and what to check when runs fail.
 
-The most important behaviors to keep in mind are simple: creating or executing a job enqueues a run, the worker must be running to process it, recommendation generation depends on a correctly configured prototype environment, startup blocks on known-bad prototype preflight unless you explicitly override it, and failed recommendation runs remain explicit failures rather than silently turning into fallback outputs.
+The most important behaviors to keep in mind are simple: creating or executing a job enqueues a run, the worker must be running to process it, recommendation generation depends on the internal pipeline and its pandas/yfinance/weights dependencies, startup blocks on known-bad internal preflight unless you explicitly override it, and failed recommendation runs remain explicit failures rather than silently turning into fallback outputs.
 
 ## Prerequisites
 
-Install Python 3.11+, `pip`, `venv`, Node.js, `npm`, and Git. You also need access to the prototype repository because the app currently shells out to:
-
-- `/home/aurelio/workspace/pi-mono/.pi/skills/trade-proposer/scripts/propose_trade.py`
+Install Python 3.11+, `pip`, `venv`, Node.js, `npm`, and Git. The app now runs a self-contained pipeline that pulls price history via `yfinance` and computes features with `pandas`, so no prototype repository is required.
 
 ## Fastest first-time setup
 
@@ -19,21 +17,21 @@ Run:
 ./scripts/start-dev.sh
 ```
 
-`setup.sh` creates `.venv`, installs the Python project in editable mode, installs frontend dependencies in `frontend/`, installs prototype requirements into the same environment when available, creates or refreshes `.env`, generates a random `SECRET_KEY`, defaults the app to SQLite for local startup, and runs migrations.
+`setup.sh` creates `.venv`, installs the Python project in editable mode, installs frontend dependencies in `frontend/`, optionally installs prototype requirements into the same environment when available for compatibility, creates or refreshes `.env`, generates a random `SECRET_KEY`, defaults the app to SQLite for local startup, and runs migrations.
 
-`start-dev.sh` runs migrations again for safety, performs prototype preflight, refuses startup if the prototype is already in a failed state unless you pass `--allow-degraded-prototype`, and starts the API, worker, and Vite frontend together.
+`start-dev.sh` runs migrations again for safety, performs the internal pipeline preflight, refuses startup if the preflight fails unless you pass `--allow-degraded-preflight` (alias `--allow-degraded-prototype`), and starts the API, worker, and Vite frontend together.
 
 Useful options:
 
 ```bash
 ./scripts/setup.sh --help
-./scripts/setup.sh --prototype /absolute/path/to/pi-mono
+./scripts/setup.sh --prototype /absolute/path/to/pi-mono  # optional legacy path (not required to run the internal pipeline)
 ./scripts/setup.sh --python python3.12
 ./scripts/setup.sh --force-env
-./scripts/setup.sh --skip-prototype-deps
+./scripts/setup.sh --skip-prototype-deps      # optional legacy flag
 ./scripts/setup.sh --skip-frontend-deps
 
-./scripts/start-dev.sh --allow-degraded-prototype
+./scripts/start-dev.sh --allow-degraded-preflight (alias: --allow-degraded-prototype)
 ./scripts/start-dev.sh --run-scheduler-once
 ./scripts/start-dev.sh --backend-only
 ./scripts/start-dev.sh --frontend-port 4173
@@ -47,11 +45,11 @@ After startup, use:
 - frontend UI: `http://localhost:5173/`
 - docs browser: `http://localhost:5173/docs`
 - API health: `http://localhost:8000/api/health`
-- prototype preflight: `http://localhost:8000/api/health/prototype`
+- internal pipeline preflight: `http://localhost:8000/api/health/preflight`
 
 A good first verification pass is:
 1. open the frontend
-2. open Settings and confirm prototype preflight is healthy
+2. open Settings and confirm the internal pipeline preflight is healthy
 3. review the summary backend, model, and prompt
 4. create a watchlist
 5. create a job
@@ -74,11 +72,7 @@ pip install -e .
 npm --prefix frontend install
 ```
 
-If the prototype repo is present, install its requirements into the same environment:
-
-```bash
-pip install -r /absolute/path/to/pi-mono/.pi/skills/trade-proposer/requirements.txt
-```
+The app no longer requires the prototype repo, so you can keep its workspace separate or omit it entirely. If you do run the prototype for other reasons, install its requirements into whatever environment you use for that project.
 
 A minimal local `.env` using SQLite looks like this:
 
@@ -90,21 +84,17 @@ APP_PORT=8000
 DATABASE_URL=sqlite:///./trade_proposer.db
 REDIS_URL=redis://localhost:6379/0
 SECRET_KEY=replace-this-with-a-long-random-secret
-PROTOTYPE_REPO_PATH=/absolute/path/to/pi-mono
-PROTOTYPE_PYTHON_EXECUTABLE=/absolute/path/to/trade-proposer-app/.venv/bin/python
 ```
 
 ## Summary engine and external services
 
-The summary engine is configured from `/settings`. The default backend is `pi_agent`; `openai_api` is also supported. Operators can set the summary model, timeout, max tokens, and prompt. The default prompt asks the LLM to produce a very short summary focused on the day’s main event or events and the related industry and macro context.
+When providers are configured, the pipeline now assembles a short digest of the latest headlines alongside the sentiment context flags. Operators can leave the summary backend set to `news_digest` for this headline-only output, or switch to `openai_api` (OpenAI) or `pi_agent` (a local Pi CLI) so the same digest and a concise technical snapshot are sent to a supported LLM backend. The `/settings` form exposes the `pi` command, working directory, and optional CLI flags when `pi_agent` is selected, so the app can treat a vanilla Pi tool as any other LLM provider while keeping the summarizer logic inside this repo. The resulting narrative and any summarizer diagnostics are stored in `analysis_json`, while the digest remains available as the fallback text.
 
-Supported external news and social services used by the integrated prototype:
-- Yahoo Finance: https://finance.yahoo.com/
+Supported external news services ingested directly by the app-native pipeline:
 - NewsAPI: https://newsapi.org/
-- Alpha Vantage: https://www.alphavantage.co/
 - Finnhub: https://finnhub.io/
-- Alpaca News: https://alpaca.markets/
-- Nitter instances: https://github.com/zedeus/nitter/wiki/Instances
+
+Additional connectors (Yahoo Finance, Alpha Vantage, Alpaca News, Nitter, etc.) remain on the roadmap for future enrichment.
 
 For raw run and recommendation fields, see `docs/raw-details-reference.md`.
 
@@ -149,8 +139,8 @@ npm --prefix frontend run check
 
 ## Common first-run issues
 
-### `start-dev.sh` refuses to start because prototype preflight failed
-Inspect `/api/health/prototype`, rerun `./scripts/setup.sh`, fix the prototype environment, and use `--allow-degraded-prototype` only when you intentionally want to inspect a broken setup.
+### `start-dev.sh` refuses to start because internal preflight failed
+Inspect `/api/health/preflight`, rerun `./scripts/setup.sh`, fix the transactional dependencies (pandas, yfinance, weights.json), and rerun with `--allow-degraded-preflight` (or the legacy `--allow-degraded-prototype`) only until you confirm the internal pipeline can fetch OHLC history.
 
 ### The frontend does not start
 Rerun `./scripts/setup.sh`, make sure Node.js and `npm` are installed, and confirm that `frontend/node_modules` exists.
@@ -158,5 +148,5 @@ Rerun `./scripts/setup.sh`, make sure Node.js and `npm` are installed, and confi
 ### Runs stay queued
 Make sure the worker is running. The simplest path is to use `./scripts/start-dev.sh`, which starts the API, worker, and frontend together.
 
-### Runs fail immediately with a prototype dependency error
-Verify `PROTOTYPE_REPO_PATH`, verify `PROTOTYPE_PYTHON_EXECUTABLE`, try the prototype script directly with `.venv/bin/python`, confirm the summary backend, model, and prompt in Settings, and then check the relevant provider credentials. If you use `pi_agent`, confirm that `pi` works for the app user. If you use `openai_api`, configure the `openai` credential in Settings.
+### Runs fail immediately with a data dependency error
+Verify that the internal pipeline can import `pandas` and `yfinance` from the activated `.venv`, ensure the machine has network access to the requested ticker, check that `src/trade_proposer_app/data/weights.json` exists and is readable, and confirm that the summary backend and provider credentials (if used later) are configured in Settings.

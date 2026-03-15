@@ -52,6 +52,11 @@ class RunDiagnostics(BaseModel):
     llm_error: str | None = None
     raw_output: str | None = None
     analysis_json: str | None = None
+    feature_vector_json: str | None = None
+    normalized_feature_vector_json: str | None = None
+    aggregations_json: str | None = None
+    confidence_weights_json: str | None = None
+    summary_method: str | None = None
 
     @property
     def warning_count(self) -> int:
@@ -204,10 +209,8 @@ class PreflightCheck(BaseModel):
     details: list[str] = Field(default_factory=list)
 
 
-class PrototypePreflightReport(BaseModel):
+class AppPreflightReport(BaseModel):
     status: str
     checked_at: datetime
-    prototype_repo_path: str
-    prototype_script_path: str
-    prototype_python_executable: str
+    engine: str
     checks: list[PreflightCheck] = Field(default_factory=list)

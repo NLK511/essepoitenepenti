@@ -221,6 +221,11 @@ class RunRepository:
             llm_error=diagnostics.llm_error or "",
             analysis_json=diagnostics.analysis_json or "",
             raw_output=diagnostics.raw_output or "",
+            feature_vector_json=diagnostics.feature_vector_json or "",
+            normalized_feature_vector_json=diagnostics.normalized_feature_vector_json or "",
+            aggregations_json=diagnostics.aggregations_json or "",
+            confidence_weights_json=diagnostics.confidence_weights_json or "",
+            summary_method=diagnostics.summary_method or "",
         )
         self.session.add(record)
         self.session.commit()
@@ -337,6 +342,11 @@ class RunRepository:
             llm_error=record.llm_error or None,
             raw_output=record.raw_output or None,
             analysis_json=record.analysis_json or None,
+            feature_vector_json=record.feature_vector_json or None,
+            normalized_feature_vector_json=record.normalized_feature_vector_json or None,
+            aggregations_json=record.aggregations_json or None,
+            confidence_weights_json=record.confidence_weights_json or None,
+            summary_method=record.summary_method or None,
         )
 
     @classmethod

@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+pip-wheel-metadata/
+.python-version
+.env
+.env.*
+.venv/
+.dev-run/
+trade_proposer.db
+*.sqlite3
+*.log
+*.coverage
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+pnpm-lock.yaml
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.vite/
+
+# Static build artifacts
+static/
+templates/
+
+# Caches / IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.DS_Store
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Coverage reports
+htmlcov/
+coverage.xml
+
+# Misc
+.terraform/
+.envrc
+
+# Pi agent local config
+.pi_agent/

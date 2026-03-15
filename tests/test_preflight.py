@@ -1,43 +1,36 @@
-import json
-import subprocess
 import unittest
 from unittest.mock import patch
 
-from trade_proposer_app.services.preflight import PrototypePreflightService
+from trade_proposer_app.services.preflight import AppPreflightService
 
 
-class PrototypePreflightServiceTests(unittest.TestCase):
-    def test_run_reports_missing_required_imports_as_failed(self) -> None:
-        results = [
-            subprocess.CompletedProcess(args=["python3"], returncode=0, stdout=json.dumps(["yfinance"]), stderr=""),
-            subprocess.CompletedProcess(args=["python3"], returncode=0, stdout=json.dumps([]), stderr=""),
-        ]
+class AppPreflightServiceTests(unittest.TestCase):
+    def test_run_reports_missing_module_as_failed(self) -> None:
+        def fake_find_spec(name: str):
+            return None if name == "pandas" else object()
 
-        with patch("trade_proposer_app.services.preflight.Path.exists", return_value=True), patch(
-            "trade_proposer_app.services.preflight.shutil.which", return_value="/usr/bin/python3"
-        ), patch("trade_proposer_app.services.preflight.subprocess.run", side_effect=results):
-            report = PrototypePreflightService().run()
+        with patch(
+            "trade_proposer_app.services.preflight.importlib.util.find_spec",
+            side_effect=fake_find_spec,
+        ), patch("trade_proposer_app.services.preflight.Path.exists", return_value=True):
+            report = AppPreflightService().run()
 
         self.assertEqual(report.status, "failed")
-        required = next(check for check in report.checks if check.name == "python_imports:required")
-        self.assertEqual(required.status, "failed")
-        self.assertIn("yfinance", required.message)
+        module_check = next(check for check in report.checks if check.name == "module:pandas")
+        self.assertEqual(module_check.status, "failed")
+        self.assertIn("pandas", module_check.message)
 
-    def test_run_reports_missing_optional_imports_as_warning(self) -> None:
-        results = [
-            subprocess.CompletedProcess(args=["python3"], returncode=0, stdout=json.dumps([]), stderr=""),
-            subprocess.CompletedProcess(args=["python3"], returncode=0, stdout=json.dumps(["openai"]), stderr=""),
-        ]
+    def test_run_reports_missing_weights_file_as_failed(self) -> None:
+        with patch(
+            "trade_proposer_app.services.preflight.importlib.util.find_spec",
+            return_value=object(),
+        ), patch("trade_proposer_app.services.preflight.Path.exists", return_value=False):
+            report = AppPreflightService().run()
 
-        with patch("trade_proposer_app.services.preflight.Path.exists", return_value=True), patch(
-            "trade_proposer_app.services.preflight.shutil.which", return_value="/usr/bin/python3"
-        ), patch("trade_proposer_app.services.preflight.subprocess.run", side_effect=results):
-            report = PrototypePreflightService().run()
-
-        self.assertEqual(report.status, "warning")
-        optional = next(check for check in report.checks if check.name == "python_imports:optional")
-        self.assertEqual(optional.status, "warning")
-        self.assertIn("openai", optional.message)
+        self.assertEqual(report.status, "failed")
+        weights_check = next(check for check in report.checks if check.name == "weights_file")
+        self.assertEqual(weights_check.status, "failed")
+        self.assertIn("weights.json", weights_check.message)
 
 
 if __name__ == "__main__":
