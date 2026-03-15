@@ -10,9 +10,17 @@ Successful proposal runs persist recommendation records with direction, confiden
 
 ## Diagnostics, debugging, and documentation
 
+
 Diagnostics are treated as first-class investigation artifacts. Run detail and debugger views surface warning and failure context directly, while richer raw details remain available on demand through the pipeline payloads, timestamps, and timing breakdowns. For optimization workflows, those views include nested backup and fingerprint metadata clearly instead of hiding them inside raw JSON blobs. Recommendation detail pages focus on the trade-ready object first and link back to the source run for traceability. Ticker pages combine app-generated recommendation history with the latest outcome tracking the worker derives from price action.
 
 The in-app docs browser indexes `README.md` and every markdown document under `docs/`, supports full-text search, renders markdown directly, and groups documents into collapsible sections so setup and user-oriented material stays near the top while product and engineering references stay lower in the page. It also includes dedicated reference material for raw-details fields and recommendation methodology.
+
+## Mobile and responsive UI
+
+- The SPA now switches to a dedicated mobile navigation toggle that slides in a theme-aware overlay panel, keeping the desktop menu available on wider screens while the overlay inherits the current color scheme.
+- Navigation labels render both expanded and compact variants so that the desktop nav shows descriptive names while phones receive minimal text (e.g., ‘Jobs’ → ‘Jobs’, ‘Recommendations’ → ‘Recs’).
+- Helper text, subtitles, document paths, and other descriptive copy collapse on narrow devices, and the primary cards/metrics grids stack to avoid horizontal scrolling.
+- Section titles and list headers truncate with ellipsis when necessary so the UI keeps breathing room even on very small widths.
 
 ## Summary engine and analysis pipeline
 
