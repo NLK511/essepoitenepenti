@@ -110,7 +110,7 @@ The digest and provider metadata now live at `analysis_json.news.digest`, while 
 
 ### Sentiment coverage {#sentiment-coverage}
 
-`analysis_json.sentiment` now exposes `keyword_hits` and `coverage_insights` so every run documents why its sentiment score may stay at zero. `keyword_hits` counts how many positive or negative keywords were matched in the fetched articles, while `coverage_insights` lists explicit reasons (e.g., no articles fetched, no keyword matches, or provider errors) that explain a neutral output. The run detail page surfaces these insights inside the Sentiment coverage block before the structured diagnostics’ raw JSON view, giving operators quick context when coverage is sparse or missing entirely.
+`analysis_json.sentiment` now exposes `keyword_hits` and `coverage_insights` so every run documents why its sentiment score may stay at zero. `keyword_hits` counts how many positive or negative keywords were matched in the fetched articles, while `coverage_insights` lists explicit reasons (e.g., no articles fetched, no keyword matches, or provider errors) that explain a neutral output. Each coverage insight string mirrors the `NaiveSentimentAnalyzer` diagnostics (for example, `news: no articles fetched; providers may be missing or rate limited` or `news: articles arrived but no sentiment keywords matched`), so operators instantly know whether the neutrality signals missing data rather than a true market pause. The run detail page surfaces these insights inside the Sentiment coverage block before the structured diagnostics’ raw JSON view, giving operators quick context when coverage is sparse or missing entirely.
 
 ## App-native independence
 

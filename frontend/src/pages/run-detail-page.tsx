@@ -486,11 +486,14 @@ export function RunDetailPage() {
                                     </div>
                                   ) : null}
                                   {coverageInsights.length > 0 ? (
-                                    <ul className="coverage-insights-list">
-                                      {coverageInsights.map((insight, index) => (
-                                        <li key={`${insight}-${index}`}>{insight}</li>
-                                      ))}
-                                    </ul>
+                                    <>
+                                      <div className="helper-text">Each insight describes why the sentiment signal stayed neutral (no articles, no keyword hits, provider failures, etc.).</div>
+                                      <ul className="coverage-insights-list">
+                                        {coverageInsights.map((insight, index) => (
+                                          <li key={`${insight}-${index}`}>{insight}</li>
+                                        ))}
+                                      </ul>
+                                    </>
                                   ) : (
                                     <div className="helper-text">Coverage insights report no detected issues.</div>
                                   )}
