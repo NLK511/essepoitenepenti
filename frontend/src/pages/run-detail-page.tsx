@@ -441,16 +441,18 @@ export function RunDetailPage() {
                                           return (
                                             <li key={`${title}-${index}`} className="news-coverage-item">
                                               <div className="news-coverage-title-row">
-                                                {link ? (
-                                                  <a className="news-coverage-link" href={link} target="_blank" rel="noreferrer">
-                                                    {title}
-                                                  </a>
-                                                ) : (
-                                                  <span className="news-coverage-title">{title}</span>
-                                                )}
-                                                <span className="news-coverage-score">{`score ${compoundScore}`}</span>
+                                                <div className="news-coverage-title-group">
+                                                  {link ? (
+                                                    <a className="news-coverage-link" href={link} target="_blank" rel="noreferrer">
+                                                      {title}
+                                                    </a>
+                                                  ) : (
+                                                    <span className="news-coverage-title">{title}</span>
+                                                  )}
+                                                  <span className="news-coverage-score">{`score ${compoundScore}`}</span>
+                                                </div>
+                                                <span className="news-coverage-date">{publishedAt}</span>
                                               </div>
-                                              <span className="news-coverage-date">{publishedAt}</span>
                                             </li>
                                           );
                                         })}
