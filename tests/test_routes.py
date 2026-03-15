@@ -602,6 +602,39 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail_payload["outputs"][0]["recommendation"]["state"], "PENDING")
         self.assertIn("ticker_generation", detail_payload["run"]["timing_json"])
 
+    async def test_delete_run_via_api(self) -> None:
+        run_id = self.seed_run_with_diagnostics()
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            deleted = await client.delete(f"/api/runs/{run_id}")
+            runs_after_delete = await client.get("/api/runs")
+            history_after_delete = await client.get("/api/history")
+            run_detail = await client.get(f"/api/runs/{run_id}")
+
+        self.assertEqual(deleted.status_code, 200)
+        self.assertTrue(deleted.json()["deleted"])
+        self.assertEqual(runs_after_delete.status_code, 200)
+        self.assertEqual(runs_after_delete.json(), [])
+        self.assertEqual(history_after_delete.status_code, 200)
+        self.assertEqual(history_after_delete.json()["items"], [])
+        self.assertEqual(run_detail.status_code, 404)
+        self.assertEqual(run_detail.json()["detail"], f"Run {run_id} not found")
+
+    async def test_delete_active_run_is_rejected(self) -> None:
+        session = Session(bind=self.engine)
+        try:
+            job = JobRepository(session).create("Queued Job", ["AAPL"], None)
+            run = RunRepository(session).enqueue(job.id or 0)
+            run_id = run.id or 0
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.delete(f"/api/runs/{run_id}")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("queued or running", response.text)
+
     async def test_recommendation_evaluation_endpoint_queues_auditable_run(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:

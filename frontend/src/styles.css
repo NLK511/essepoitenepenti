@@ -199,6 +199,16 @@ html[data-theme="light"] .topbar {
   color: white;
 }
 
+.button-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: white;
+}
+
+.button-danger:hover {
+  filter: brightness(1.08);
+}
+
 .button-secondary {
   background: var(--bg-soft);
 }
