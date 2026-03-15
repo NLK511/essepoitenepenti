@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from trade_proposer_app.domain.enums import JobType, RecommendationState, RunStatus
@@ -294,6 +294,14 @@ class RunRepository:
             .order_by(RecommendationRecord.created_at.desc())
         ).all()
         return [self._to_recommendation_history_item(recommendation_record, run_record) for recommendation_record, run_record in rows]
+
+    def delete_run(self, run_id: int) -> None:
+        record = self.session.get(RunRecord, run_id)
+        if record is None:
+            raise ValueError(f"Run {run_id} not found")
+        self.session.execute(delete(RecommendationRecord).where(RecommendationRecord.run_id == run_id))
+        self.session.delete(record)
+        self.session.commit()
 
     @classmethod
     def _to_run_model(cls, record: RunRecord) -> Run:
