@@ -88,6 +88,48 @@ export function RunDetailPage() {
                     const enhancedComponents = enhancedSentiment && enhancedSentiment.components && isRecord(enhancedSentiment.components) ? (enhancedSentiment.components as Record<string, unknown>) : null;
                     const summaryMethodLabel = summaryMethod || (newsDigest ? "news_digest" : "price_only");
                     const summaryBackendLabel = summaryBackend || "news_digest";
+                    const contextFlagsSection = isRecord(analysis?.context_flags) ? (analysis.context_flags as Record<string, unknown>) : null;
+                    const featureVectorsSection = isRecord(analysis?.feature_vectors) ? (analysis.feature_vectors as Record<string, unknown>) : null;
+                    const normalizedFeatureVectors =
+                      featureVectorsSection && isRecord(featureVectorsSection.normalized)
+                        ? (featureVectorsSection.normalized as Record<string, unknown>)
+                        : null;
+                    const aggregatorSection = isRecord(analysis?.aggregations) ? (analysis.aggregations as Record<string, unknown>) : null;
+                    const confidenceWeightsSection = isRecord(analysis?.confidence_weights)
+                      ? (analysis.confidence_weights as Record<string, unknown>)
+                      : null;
+                    const contextFlagEntries = contextFlagsSection
+                      ? Object.entries(contextFlagsSection).filter(([, value]) => typeof value === "number" && value > 0)
+                      : [];
+                    const highlightKeys = [
+                      "sentiment_score",
+                      "enhanced_sentiment_score",
+                      "news_point_count",
+                      "context_count",
+                      "polarity_trend",
+                    ] as const;
+                    const normalizedHighlights = highlightKeys.map((key) => {
+                      const rawValue = normalizedFeatureVectors?.[key];
+                      return {
+                        key,
+                        display: typeof rawValue === "number" ? rawValue.toFixed(2) : rawValue ?? "—",
+                      };
+                    });
+                    const aggregatorEntries = aggregatorSection ? Object.entries(aggregatorSection) : [];
+                    const confidenceEntries = confidenceWeightsSection ? Object.entries(confidenceWeightsSection) : [];
+                    const newsItemCount = typeof newsSection?.item_count === "number" ? newsSection.item_count : null;
+                    const newsPointCount = typeof newsSection?.point_count === "number" ? newsSection.point_count : null;
+                    const newsSourceCount = typeof newsSection?.source_count === "number" ? newsSection.source_count : null;
+                    const rawNewsItems = Array.isArray(newsSection?.items) ? (newsSection.items as unknown[]) : [];
+                    const newsItemsList = rawNewsItems.filter(isRecord);
+                    const newsStats = [
+                      newsItemCount !== null ? { label: "news items", value: newsItemCount } : null,
+                      newsPointCount !== null ? { label: "news points", value: newsPointCount } : null,
+                      newsSourceCount !== null ? { label: "news sources", value: newsSourceCount } : null,
+                    ].filter(Boolean) as { label: string; value: number }[];
+                    const newsFeedErrors = Array.isArray(newsSection?.feed_errors)
+                      ? (newsSection.feed_errors as unknown[]).filter((value): value is string => typeof value === "string")
+                      : [];
                     return (
                       <article key={item.id ?? `${item.ticker}-${item.created_at}`} className="recommendation-card">
                         <div className="card-headline">
@@ -147,6 +189,138 @@ export function RunDetailPage() {
                               </div>
                             ) : null}
                           </div>
+                        ) : null}
+                        {analysis ? (
+                          <details className="top-gap-small">
+                            <summary>Structured diagnostics</summary>
+                            <div className="stack-page top-gap-small">
+                              {contextFlagEntries.length > 0 ? (
+                                <div className="summary-grid">
+                                  {contextFlagEntries.map(([flag, value]) => (
+                                    <div key={flag} className="summary-item">
+                                      <span className="summary-label">{flag.replace(/_/g, " ")}</span>
+                                      <span className="summary-value">
+                                        {typeof value === "number" ? value.toFixed(2) : String(value ?? "—")}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="helper-text">No active context flags.</div>
+                              )}
+                              <div className="helper-text top-gap-small">Normalized feature highlights</div>
+                              <div className="summary-grid">
+                                {normalizedHighlights.map((entry) => (
+                                  <div key={entry.key} className="summary-item">
+                                    <span className="summary-label">{entry.key.replace(/_/g, " ")}</span>
+                                    <span className="summary-value">{String(entry.display)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              {aggregatorEntries.length > 0 ? (
+                                <div className="stack-page top-gap-small">
+                                  <div className="helper-text">Aggregations</div>
+                                  <div className="summary-grid">
+                                    {aggregatorEntries.slice(0, 6).map(([key, value]) => (
+                                      <div key={key} className="summary-item">
+                                        <span className="summary-label">{key.replace(/_/g, " ")}</span>
+                                        <span className="summary-value">
+                                          {typeof value === "number" ? value.toFixed(2) : String(value ?? "—")}
+                                        </span>
+                                      </div>
+                                    ))}
+                                    {aggregatorEntries.length > 6 && (
+                                      <div className="summary-item">
+                                        <span className="summary-label">+ more aggregators</span>
+                                        <span className="summary-value">+{aggregatorEntries.length - 6} more</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="helper-text top-gap-small">Aggregator totals not available.</div>
+                              )}
+                              {confidenceEntries.length > 0 ? (
+                                <div className="stack-page top-gap-small">
+                                  <div className="helper-text">Confidence weights</div>
+                                  <div className="summary-grid">
+                                    {confidenceEntries.slice(0, 6).map(([key, value]) => (
+                                      <div key={key} className="summary-item">
+                                        <span className="summary-label">{key.replace(/_/g, " ")}</span>
+                                        <span className="summary-value">
+                                          {typeof value === "number" ? value.toFixed(2) : String(value ?? "—")}
+                                        </span>
+                                      </div>
+                                    ))}
+                                    {confidenceEntries.length > 6 && (
+                                      <div className="summary-item">
+                                        <span className="summary-label">+ more weights</span>
+                                        <span className="summary-value">+{confidenceEntries.length - 6} more</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="helper-text top-gap-small">Confidence weights are not stored.</div>
+                              )}
+                              <div className="stack-page top-gap-small">
+                                <div className="helper-text">News coverage</div>
+                                {newsStats.length > 0 ? (
+                                  <div className="summary-grid">
+                                    {newsStats.map((stat) => (
+                                      <div key={stat.label} className="summary-item">
+                                        <span className="summary-label">{stat.label}</span>
+                                        <span className="summary-value">{stat.value}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="helper-text">No aggregated news totals.</div>
+                                )}
+                                {newsItemsList.length > 0 ? (
+                                  <div className="stack-page top-gap-small">
+                                    {newsItemsList.slice(0, 3).map((newsItem, index) => {
+                                      const title = typeof newsItem.title === "string" ? newsItem.title : "Untitled article";
+                                      const summaryBody = typeof newsItem.summary === "string" ? newsItem.summary : "";
+                                      const compound = typeof newsItem.compound === "number" ? newsItem.compound.toFixed(2) : "—";
+                                      const publisher = typeof newsItem.publisher === "string" ? newsItem.publisher : "Unknown source";
+                                      const publishedAt = typeof newsItem.published_at === "string" ? formatDate(newsItem.published_at) : "—";
+                                      return (
+                                        <div key={`${title}-${index}`} className="structured-news-item">
+                                          <div className="summary-grid">
+                                            <div className="summary-item">
+                                              <span className="summary-label">Title</span>
+                                              <span className="summary-value">{title}</span>
+                                            </div>
+                                            <div className="summary-item">
+                                              <span className="summary-label">Compound</span>
+                                              <span className="summary-value">{compound}</span>
+                                            </div>
+                                          </div>
+                                          <div className="helper-text">{summaryBody || "No summary available."}</div>
+                                          <div className="helper-text">
+                                            {publisher} · {publishedAt}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                    {newsItemsList.length > 3 ? (
+                                      <div className="helper-text top-gap-small">+{newsItemsList.length - 3} more articles truncated.</div>
+                                    ) : null}
+                                  </div>
+                                ) : (
+                                  <div className="helper-text">No news items stored for this proposal.</div>
+                                )}
+                                {newsFeedErrors.length > 0 ? (
+                                  <ul className="warning-text">
+                                    {newsFeedErrors.map((error, index) => (
+                                      <li key={`${error}-${index}`}>{error}</li>
+                                    ))}
+                                  </ul>
+                                ) : null}
+                              </div>
+                            </div>
+                          </details>
                         ) : null}
                         {messages.length > 0 ? <ul>{messages.map((message) => <li key={message} className="warning-text">{message}</li>)}</ul> : <div className="helper-text">No warnings or errors.</div>}
                         {output.diagnostics.raw_output ? (
