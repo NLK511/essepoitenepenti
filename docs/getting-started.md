@@ -137,6 +137,11 @@ Frontend:
 npm --prefix frontend run check
 ```
 
+## Repository hygiene
+
+- The repository no longer tracks compiled `__pycache__`/`.pyc` files. If you see stray artifacts after running Python you can safely delete them and rely on the `.gitignore` entry for `__pycache__/`/`*.py[cod]`.
+- Use `git status` or `git clean -fd` when switching branches to stay confident that only source files are staged.
+
 ## Common first-run issues
 
 ### `start-dev.sh` refuses to start because internal preflight failed
