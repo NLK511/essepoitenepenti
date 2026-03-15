@@ -7,6 +7,95 @@ import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionT
 import type { RunDetailResponse } from "../types";
 import { diagnosticsMessages, directionTone, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, recommendationStateTone, runTone } from "../utils";
 
+function scoreColor(value: number, min = -1, max = 1) {
+  if (!Number.isFinite(value) || max <= min) {
+    return undefined;
+  }
+  const clamped = Math.max(min, Math.min(max, value));
+  const ratio = (clamped - min) / (max - min);
+  const hue = ratio * 120;
+  return `hsl(${hue}, 75%, 45%)`;
+}
+
+const DOC_BASE = "https://github.com/NLK511/essepoitenepenti/blob/main/docs/recommendation-methodology.md";
+
+const INFO_DESCRIPTIONS = {
+  trading: {
+    description: "Review the entry, stop loss, and take profit structure that defines the proposal",
+    link: `${DOC_BASE}#proposal-structure`,
+  },
+  summary: {
+    description: "See how summary methods and enhanced sentiment characterise the recommendation narrative",
+    link: `${DOC_BASE}#summary-and-sentiment`,
+  },
+  diagnostics: {
+    description: "Dive into structured signals and diagnostic warnings recorded for this recommendation",
+    link: `${DOC_BASE}#structured-diagnostics`,
+  },
+  messages: {
+    description: "Understand warning classification that operators see when data arrives incomplete",
+    link: `${DOC_BASE}#diagnostics`,
+  },
+  raw: {
+    description: "Inspect the raw JSON emitted by the pipeline if you need the un-parsed payload",
+    link: `${DOC_BASE}#raw-output`,
+  },
+  contextFlags: {
+    description: "Context flags flag key conditions that influenced this proposal",
+    link: `${DOC_BASE}#context-flags`,
+  },
+  highlights: {
+    description: "Normalized highlight metrics show how feature vectors compare across runs",
+    link: `${DOC_BASE}#feature-vectors`,
+  },
+  aggregations: {
+    description: "Aggregator totals summarize counts or dollar amounts used in scoring",
+    link: `${DOC_BASE}#aggregations`,
+  },
+  weights: {
+    description: "Confidence weights show how each signal contributed to the final recommendation",
+    link: `${DOC_BASE}#confidence-weights`,
+  },
+  news: {
+    description: "News coverage aggregates headline data and sentiment for this ticker",
+    link: `${DOC_BASE}#news-coverage`,
+  },
+  coverage: {
+    description: "Understand why sentiment stayed neutral by reviewing keyword hits and missing coverage",
+    link: `${DOC_BASE}#sentiment-coverage`,
+  },
+  fieldEntry: {
+    description: "Entry price defines where the system would enter the position",
+    link: `${DOC_BASE}#proposal-structure`,
+  },
+  fieldStop: {
+    description: "Stop loss caps downside risk for this recommendation",
+    link: `${DOC_BASE}#proposal-structure`,
+  },
+  fieldTake: {
+    description: "Take profit outlines the target level for the trade",
+    link: `${DOC_BASE}#proposal-structure`,
+  },
+  summaryMethod: {
+    description: "The summary method tells you which service provided this narrative",
+    link: `${DOC_BASE}#summary-and-sentiment`,
+  },
+};
+
+function InfoBadge({ description, link }: { description: string; link: string }) {
+  return (
+    <a
+      className="info-badge"
+      href={link}
+      target="_blank"
+      rel="noreferrer"
+      title={description}
+    >
+      ?
+    </a>
+  );
+}
+
 export function RunDetailPage() {
   const { runId } = useParams<{ runId: string }>();
   const [detail, setDetail] = useState<RunDetailResponse | null>(null);
@@ -88,6 +177,58 @@ export function RunDetailPage() {
                     const enhancedComponents = enhancedSentiment && enhancedSentiment.components && isRecord(enhancedSentiment.components) ? (enhancedSentiment.components as Record<string, unknown>) : null;
                     const summaryMethodLabel = summaryMethod || (newsDigest ? "news_digest" : "price_only");
                     const summaryBackendLabel = summaryBackend || "news_digest";
+                    const contextFlagsSection = isRecord(analysis?.context_flags) ? (analysis.context_flags as Record<string, unknown>) : null;
+                    const featureVectorsSection = isRecord(analysis?.feature_vectors) ? (analysis.feature_vectors as Record<string, unknown>) : null;
+                    const normalizedFeatureVectors =
+                      featureVectorsSection && isRecord(featureVectorsSection.normalized)
+                        ? (featureVectorsSection.normalized as Record<string, unknown>)
+                        : null;
+                    const aggregatorSection = isRecord(analysis?.aggregations) ? (analysis.aggregations as Record<string, unknown>) : null;
+                    const confidenceWeightsSection = isRecord(analysis?.confidence_weights)
+                      ? (analysis.confidence_weights as Record<string, unknown>)
+                      : null;
+                    const contextFlagEntries = contextFlagsSection
+                      ? (Object.entries(contextFlagsSection) as [string, unknown][]).filter((entry): entry is [string, number] =>
+                          typeof entry[1] === "number" && entry[1] > 0
+                        )
+                      : [];
+                    const highlightKeys = [
+                      "sentiment_score",
+                      "enhanced_sentiment_score",
+                      "news_point_count",
+                      "context_count",
+                      "polarity_trend",
+                    ] as const;
+                    const normalizedHighlights = highlightKeys.map((key) => {
+                      const rawValue = normalizedFeatureVectors?.[key];
+                      return {
+                        key,
+                        rawValue: typeof rawValue === "number" ? rawValue : null,
+                        display: typeof rawValue === "number" ? rawValue.toFixed(2) : rawValue ?? "—",
+                      };
+                    });
+                    const aggregatorEntries = aggregatorSection ? Object.entries(aggregatorSection) : [];
+                    const confidenceEntries = confidenceWeightsSection ? Object.entries(confidenceWeightsSection) : [];
+                    const newsItemCount = typeof newsSection?.item_count === "number" ? newsSection.item_count : null;
+                    const newsPointCount = typeof newsSection?.point_count === "number" ? newsSection.point_count : null;
+                    const newsSourceCount = typeof newsSection?.source_count === "number" ? newsSection.source_count : null;
+                    const rawNewsItems = Array.isArray(newsSection?.items) ? (newsSection.items as unknown[]) : [];
+                    const newsItemsList = rawNewsItems.filter(isRecord);
+                    const newsStats = [
+                      newsItemCount !== null ? { label: "news items", value: newsItemCount } : null,
+                      newsPointCount !== null ? { label: "news points", value: newsPointCount } : null,
+                      newsSourceCount !== null ? { label: "news sources", value: newsSourceCount } : null,
+                    ].filter(Boolean) as { label: string; value: number }[];
+                    const newsFeedErrors = Array.isArray(newsSection?.feed_errors)
+                      ? (newsSection.feed_errors as unknown[]).filter((value): value is string => typeof value === "string")
+                      : [];
+                    const sentimentKeywordHits =
+                      typeof sentimentSection?.keyword_hits === "number" ? sentimentSection.keyword_hits : null;
+                    const coverageInsights = Array.isArray(sentimentSection?.coverage_insights)
+                      ? (sentimentSection.coverage_insights as unknown[]).filter(
+                          (entry): entry is string => typeof entry === "string"
+                        )
+                      : [];
                     return (
                       <article key={item.id ?? `${item.ticker}-${item.created_at}`} className="recommendation-card">
                         <div className="card-headline">
@@ -97,63 +238,318 @@ export function RunDetailPage() {
                               <Badge tone={directionTone(item.direction)}>{item.direction}</Badge>
                               <Badge tone={recommendationStateTone(item.state)}>{item.state}</Badge>
                             </div>
-                            <h3 className="subsection-title">{item.confidence}% confidence</h3>
+                            <h3 className="subsection-title">
+                              <span style={{ color: scoreColor(item.confidence, 0, 100) }}>{item.confidence}%</span>
+                              {' '}confidence
+                            </h3>
                           </div>
                           <Badge tone={messages.length > 0 ? "warning" : "ok"}>
                             {messages.length > 0 ? `${messages.length} warning(s)` : "No warnings"}
                           </Badge>
                         </div>
-                        <div className="summary-grid">
-                          <div className="summary-item"><span className="summary-label">Entry</span><span className="summary-value">{item.entry_price}</span></div>
-                          <div className="summary-item"><span className="summary-label">Stop loss</span><span className="summary-value">{item.stop_loss}</span></div>
-                          <div className="summary-item"><span className="summary-label">Take profit</span><span className="summary-value">{item.take_profit}</span></div>
-                        </div>
-                        <div className="helper-text">{item.indicator_summary || "No indicator summary stored for this recommendation."}</div>
+                        <section className="recommendation-section">
+                          <div className="section-heading">
+                            <strong>Trading parameters</strong>
+                            <InfoBadge {...INFO_DESCRIPTIONS.trading} />
+                          </div>
+                          <div className="summary-grid">
+                            <div className="summary-item">
+                              <span className="summary-label summary-label-with-info">
+                                Entry
+                                <InfoBadge {...INFO_DESCRIPTIONS.fieldEntry} />
+                              </span>
+                              <span className="summary-value">{item.entry_price}</span>
+                            </div>
+                            <div className="summary-item">
+                              <span className="summary-label summary-label-with-info">
+                                Stop loss
+                                <InfoBadge {...INFO_DESCRIPTIONS.fieldStop} />
+                              </span>
+                              <span className="summary-value">{item.stop_loss}</span>
+                            </div>
+                            <div className="summary-item">
+                              <span className="summary-label summary-label-with-info">
+                                Take profit
+                                <InfoBadge {...INFO_DESCRIPTIONS.fieldTake} />
+                              </span>
+                              <span className="summary-value">{item.take_profit}</span>
+                            </div>
+                          </div>
+                          <div className="helper-text">{item.indicator_summary || "No indicator summary stored for this recommendation."}</div>
+                        </section>
                         {summaryText || newsDigest ? (
-                          <div className="stack-page top-gap-small">
-                            <div className="summary-grid">
-                              <div className="summary-item">
-                                <span className="summary-label">Summary method</span>
-                                <span className="summary-value">{summaryMethodLabel} ({summaryBackendLabel})</span>
+                          <section className="recommendation-section">
+                            <div className="section-heading">
+                              <strong>Summary & sentiment</strong>
+                              <InfoBadge {...INFO_DESCRIPTIONS.summary} />
+                            </div>
+                            <div className="stack-page top-gap-small">
+                              <div className="summary-grid">
+                                <div className="summary-item summary-method-block">
+                                  <span className="summary-label summary-label-with-info">
+                                    Summary method
+                                    <InfoBadge {...INFO_DESCRIPTIONS.summaryMethod} />
+                                  </span>
+                                  <span className="summary-method-value">{summaryMethodLabel} ({summaryBackendLabel})</span>
+                                </div>
                               </div>
                               {summaryText ? (
-                                <div className="summary-item">
-                                  <span className="summary-label">Summary</span>
-                                  <span className="summary-value">{summaryText}</span>
+                                <div className="summary-text-block">
+                                  <p>{summaryText}</p>
+                                </div>
+                              ) : null}
+                              {newsDigest && newsDigest !== summaryText ? (
+                                <div className="helper-text">Headline digest: {newsDigest}</div>
+                              ) : null}
+                              {enhancedSentimentScore !== null ? (
+                                <div className="enhanced-sentiment-card">
+                                  <div className="summary-grid enhanced-sentiment-grid">
+                                    <div className="summary-item">
+                                      <span className="summary-label summary-label-with-info">
+                                        Enhanced sentiment
+                                        <InfoBadge {...INFO_DESCRIPTIONS.summary} />
+                                      </span>
+                                      <span className="summary-value" style={{ color: scoreColor(enhancedSentimentScore) }}>{enhancedSentimentScore.toFixed(2)}</span>
+                                    </div>
+                                    {enhancedSentimentLabel ? (
+                                      <div className="summary-item">
+                                        <span className="summary-label summary-label-with-info">
+                                          Label
+                                          <InfoBadge {...INFO_DESCRIPTIONS.summary} />
+                                        </span>
+                                        <span className="summary-value">{enhancedSentimentLabel}</span>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                  {enhancedComponents ? (
+                                    <div className="summary-item">
+                                      <span className="summary-label">Components</span>
+                                      <pre>{JSON.stringify(enhancedComponents, null, 2)}</pre>
+                                    </div>
+                                  ) : null}
                                 </div>
                               ) : null}
                             </div>
-                            {newsDigest && newsDigest !== summaryText ? (
-                              <div className="helper-text">Headline digest: {newsDigest}</div>
-                            ) : null}
-                            {enhancedSentimentScore !== null ? (
-                              <div className="summary-grid top-gap-small">
-                                <div className="summary-item">
-                                  <span className="summary-label">Enhanced sentiment</span>
-                                  <span className="summary-value">{enhancedSentimentScore.toFixed(2)}</span>
-                                </div>
-                                {enhancedSentimentLabel ? (
-                                  <div className="summary-item">
-                                    <span className="summary-label">Label</span>
-                                    <span className="summary-value">{enhancedSentimentLabel}</span>
-                                  </div>
-                                ) : null}
-                                {enhancedComponents ? (
-                                  <div className="summary-item">
-                                    <span className="summary-label">Components</span>
-                                    <pre>{JSON.stringify(enhancedComponents, null, 2)}</pre>
-                                  </div>
-                                ) : null}
-                              </div>
-                            ) : null}
-                          </div>
+                          </section>
                         ) : null}
-                        {messages.length > 0 ? <ul>{messages.map((message) => <li key={message} className="warning-text">{message}</li>)}</ul> : <div className="helper-text">No warnings or errors.</div>}
+                        {analysis ? (
+                          <section className="recommendation-section">
+                            <div className="section-heading">
+                              <strong>Structured diagnostics</strong>
+                              <InfoBadge {...INFO_DESCRIPTIONS.diagnostics} />
+                            </div>
+                            <details className="top-gap-small structured-diagnostics">
+                              <summary>Expand diagnostics</summary>
+                              <div className="stack-page top-gap-small">
+                                <section className="diagnostic-subsection">
+                                  <div className="section-heading">
+                                    <strong>Context flags</strong>
+                                    <InfoBadge {...INFO_DESCRIPTIONS.contextFlags} />
+                                  </div>
+                                  {contextFlagEntries.length > 0 ? (
+                                    <div className="summary-grid">
+                                      {contextFlagEntries.map(([flag, value]) => (
+                                        <div key={flag} className="summary-item">
+                                          <span className="summary-label">{flag.replace(/_/g, " ")}</span>
+                                          <span className="summary-value">
+                                            {typeof value === "number" ? value.toFixed(2) : value ?? "—"}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="helper-text">No active context flags.</div>
+                                  )}
+                                </section>
+                                <section className="diagnostic-subsection">
+                                  <div className="section-heading">
+                                    <strong>Normalized highlights</strong>
+                                    <InfoBadge {...INFO_DESCRIPTIONS.highlights} />
+                                  </div>
+                                  <div className="summary-grid">
+                                    {normalizedHighlights.map((entry) => (
+                                      <div key={entry.key} className="summary-item">
+                                        <span className="summary-label">{entry.key.replace(/_/g, " ")}</span>
+                                        <span
+                                          className="summary-value"
+                                          style={entry.rawValue !== null ? { color: scoreColor(entry.rawValue, 0, 1) } : undefined}
+                                        >
+                                          {String(entry.display)}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </section>
+                                <section className="diagnostic-subsection">
+                                  <div className="section-heading">
+                                    <strong>Aggregations</strong>
+                                    <InfoBadge {...INFO_DESCRIPTIONS.aggregations} />
+                                  </div>
+                                  {aggregatorEntries.length > 0 ? (
+                                    <div className="summary-grid">
+                                      {aggregatorEntries.slice(0, 6).map(([key, value]) => (
+                                        <div key={key} className="summary-item">
+                                          <span className="summary-label">{key.replace(/_/g, " ")}</span>
+                                          <span className="summary-value">
+                                            {typeof value === "number" ? value.toFixed(2) : String(value ?? "—")}
+                                          </span>
+                                        </div>
+                                      ))}
+                                      {aggregatorEntries.length > 6 && (
+                                        <div className="summary-item">
+                                          <span className="summary-label">+ more aggregators</span>
+                                          <span className="summary-value">+{aggregatorEntries.length - 6} more</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="helper-text">Aggregator totals not available.</div>
+                                  )}
+                                </section>
+                                <section className="diagnostic-subsection">
+                                  <div className="section-heading">
+                                    <strong>Confidence weights</strong>
+                                    <InfoBadge {...INFO_DESCRIPTIONS.weights} />
+                                  </div>
+                                  {confidenceEntries.length > 0 ? (
+                                    <div className="summary-grid">
+                                      {confidenceEntries.slice(0, 6).map(([key, value]) => (
+                                        <div key={key} className="summary-item">
+                                          <span className="summary-label">{key.replace(/_/g, " ")}</span>
+                                          <span className="summary-value">
+                                            {typeof value === "number" ? value.toFixed(2) : String(value ?? "—")}
+                                          </span>
+                                        </div>
+                                      ))}
+                                      {confidenceEntries.length > 6 && (
+                                        <div className="summary-item">
+                                          <span className="summary-label">+ more weights</span>
+                                          <span className="summary-value">+{confidenceEntries.length - 6} more</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="helper-text">Confidence weights are not stored.</div>
+                                  )}
+                                </section>
+                                <section className="diagnostic-subsection">
+                                  <div className="section-heading">
+                                    <strong>News coverage</strong>
+                                    <InfoBadge {...INFO_DESCRIPTIONS.news} />
+                                  </div>
+                                  {newsStats.length > 0 ? (
+                                    <div className="summary-grid">
+                                      {newsStats.map((stat) => (
+                                        <div key={stat.label} className="summary-item">
+                                          <span className="summary-label">{stat.label}</span>
+                                          <span className="summary-value">{stat.value}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="helper-text">No aggregated news totals.</div>
+                                  )}
+                                  {newsItemsList.length > 0 ? (
+                                    <div className="news-coverage-card">
+                                      <ul className="news-coverage-list">
+                                        {newsItemsList.slice(0, 5).map((newsItem, index) => {
+                                          const title = typeof newsItem.title === "string" ? newsItem.title : "Untitled article";
+                                          const link = typeof newsItem.link === "string" && newsItem.link ? newsItem.link : null;
+                                          const publishedAt = typeof newsItem.published_at === "string" ? formatDate(newsItem.published_at) : "—";
+                                          const compoundScore = typeof newsItem.compound === "number" ? newsItem.compound.toFixed(2) : "—";
+                                          const scoreStyle = typeof newsItem.compound === "number" ? { color: scoreColor(newsItem.compound, -1, 1) } : undefined;
+                                          return (
+                                            <li key={`${title}-${index}`} className="news-coverage-item">
+                                              <div className="news-coverage-title-row">
+                                                <div className="news-coverage-title-group">
+                                                  {link ? (
+                                                    <a className="news-coverage-link" href={link} target="_blank" rel="noreferrer">
+                                                      {title}
+                                                    </a>
+                                                  ) : (
+                                                    <span className="news-coverage-title">{title}</span>
+                                                  )}
+                                                  <span className="news-coverage-score" style={scoreStyle}>{`score ${compoundScore}`}</span>
+                                                </div>
+                                                <span className="news-coverage-date">{publishedAt}</span>
+                                              </div>
+                                            </li>
+                                          );
+                                        })}
+                                      </ul>
+                                      {newsItemsList.length > 5 ? (
+                                        <div className="helper-text top-gap-small">
+                                          +{newsItemsList.length - 5} more articles truncated.
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  ) : (
+                                    <div className="helper-text">No news items stored for this proposal.</div>
+                                  )}
+                                  {newsFeedErrors.length > 0 ? (
+                                    <ul className="warning-text">
+                                      {newsFeedErrors.map((error, index) => (
+                                        <li key={`${error}-${index}`}>{error}</li>
+                                      ))}
+                                    </ul>
+                                  ) : null}
+                                </section>
+                                <section className="diagnostic-subsection">
+                                  <div className="section-heading">
+                                    <strong>Sentiment coverage</strong>
+                                    <InfoBadge {...INFO_DESCRIPTIONS.coverage} />
+                                  </div>
+                                  {sentimentKeywordHits !== null ? (
+                                    <div className="summary-grid">
+                                      <div className="summary-item">
+                                        <span className="summary-label">Keyword hits</span>
+                                        <span className="summary-value">{sentimentKeywordHits}</span>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {coverageInsights.length > 0 ? (
+                                    <>
+                                      <div className="helper-text">Each insight describes why the sentiment signal stayed neutral (no articles, no keyword hits, provider failures, etc.).</div>
+                                      <ul className="coverage-insights-list">
+                                        {coverageInsights.map((insight, index) => (
+                                          <li key={`${insight}-${index}`}>{insight}</li>
+                                        ))}
+                                      </ul>
+                                    </>
+                                  ) : (
+                                    <div className="helper-text">Coverage insights report no detected issues.</div>
+                                  )}
+                                </section>
+                              </div>
+                            </details>
+                          </section>
+                        ) : null}
+                        <section className="recommendation-section">
+                          <div className="section-heading">
+                            <strong>Diagnostic messages</strong>
+                            <InfoBadge {...INFO_DESCRIPTIONS.messages} />
+                          </div>
+                          {messages.length > 0 ? (
+                            <ul className="warning-text">
+                              {messages.map((message) => (
+                                <li key={message}>{message}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div className="helper-text">No warnings or errors.</div>
+                          )}
+                        </section>
                         {output.diagnostics.raw_output ? (
-                          <details>
-                            <summary>Raw details</summary>
-                            <pre>{output.diagnostics.raw_output}</pre>
-                          </details>
+                          <section className="recommendation-section">
+                            <div className="section-heading">
+                              <strong>Raw details</strong>
+                              <InfoBadge {...INFO_DESCRIPTIONS.raw} />
+                            </div>
+                            <details>
+                              <summary>View raw output</summary>
+                              <pre>{output.diagnostics.raw_output}</pre>
+                            </details>
+                          </section>
                         ) : null}
                       </article>
                     );

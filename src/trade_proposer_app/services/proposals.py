@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections import OrderedDict
 from datetime import datetime, timezone
@@ -137,6 +138,17 @@ WEIGHTS_PATH = Path(__file__).resolve().parent.parent / "data" / "weights.json"
 
 class ProposalExecutionError(Exception):
     pass
+
+
+def _sanitize_for_json(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _sanitize_for_json(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_for_json(item) for item in value]
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            return None
+    return value
 
 
 class ProposalService:
@@ -290,6 +302,8 @@ class ProposalService:
                 "label": context.get("enhanced_sentiment_label"),
                 "components": context.get("enhanced_sentiment_components", {}),
             },
+            "keyword_hits": context.get("sentiment_keyword_hits", 0),
+            "coverage_insights": context.get("sentiment_coverage_insights", []),
         }
         diagnostics_section = {
             "problems": context.get("problems", []),
@@ -297,7 +311,7 @@ class ProposalService:
             "summary_error": summary_error,
             "llm_error": context.get("llm_error"),
         }
-        return {
+        payload = {
             "metadata": {
                 "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
                 "analysis_version": "2.0",
@@ -323,6 +337,7 @@ class ProposalService:
             "aggregation_weights": self.weights.get("aggregators", {}),
             "diagnostics": diagnostics_section,
         }
+        return _sanitize_for_json(payload)
 
     def _build_diagnostics(
         self,
@@ -332,6 +347,10 @@ class ProposalService:
         aggregations: dict[str, float],
         context: dict[str, Any],
     ) -> RunDiagnostics:
+        safe_feature_vector = _sanitize_for_json(feature_vector)
+        safe_normalized_vector = _sanitize_for_json(normalized_vector)
+        safe_aggregations = _sanitize_for_json(aggregations)
+        safe_confidence_weights = _sanitize_for_json(self.weights.get("confidence", {}))
         diagnostics = RunDiagnostics(
             warnings=list(dict.fromkeys(context.get("problems", []))),
             provider_errors=[],
@@ -341,10 +360,10 @@ class ProposalService:
             llm_error=context.get("llm_error"),
             raw_output=analysis_json,
             analysis_json=analysis_json,
-            feature_vector_json=json.dumps(feature_vector, indent=2, sort_keys=True),
-            normalized_feature_vector_json=json.dumps(normalized_vector, indent=2, sort_keys=True),
-            aggregations_json=json.dumps(aggregations, indent=2, sort_keys=True),
-            confidence_weights_json=json.dumps(self.weights.get("confidence", {}), indent=2, sort_keys=True),
+            feature_vector_json=json.dumps(safe_feature_vector, indent=2, sort_keys=True),
+            normalized_feature_vector_json=json.dumps(safe_normalized_vector, indent=2, sort_keys=True),
+            aggregations_json=json.dumps(safe_aggregations, indent=2, sort_keys=True),
+            confidence_weights_json=json.dumps(safe_confidence_weights, indent=2, sort_keys=True),
             summary_method=context.get("summary_method", DEFAULT_SUMMARY_METHOD),
         )
         return diagnostics
@@ -687,9 +706,11 @@ class ProposalService:
                 "news_items": news_items,
                 "polarity_trend": sentiment.get("polarity_trend", 0.0),
                 "sentiment_volatility": sentiment.get("sentiment_volatility", 0.0),
+                "sentiment_keyword_hits": sentiment.get("keyword_hits", 0),
                 "sentiment_score": final_score,
                 "sentiment_label": final_label,
                 "sentiment_sources": sentiment.get("sources") or feeds,
+                "sentiment_coverage_insights": sentiment.get("coverage_insights", []),
                 "news_digest": digest,
                 "news_sentiment_score": news_sentiment_score,
                 "summary_text": summary_text or DEFAULT_SUMMARY_TEXT,
