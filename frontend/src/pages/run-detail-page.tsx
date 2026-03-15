@@ -7,6 +7,17 @@ import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionT
 import type { RunDetailResponse } from "../types";
 import { diagnosticsMessages, directionTone, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, recommendationStateTone, runTone } from "../utils";
 
+function scoreColor(score: number) {
+  const clamped = Math.max(-1, Math.min(1, score));
+  const ratio = (clamped + 1) / 2;
+  if (ratio <= 0.5) {
+    const hue = 20 + ratio * 80;
+    return `hsl(${hue}, 80%, 40%)`;
+  }
+  const hue = 120 * ratio;
+  return `hsl(${hue}, 70%, 42%)`;
+}
+
 const DOC_BASE = "https://github.com/NLK511/essepoitenepenti/blob/main/docs/recommendation-methodology.md";
 
 const INFO_DESCRIPTIONS = {
@@ -438,6 +449,7 @@ export function RunDetailPage() {
                                           const link = typeof newsItem.link === "string" && newsItem.link ? newsItem.link : null;
                                           const publishedAt = typeof newsItem.published_at === "string" ? formatDate(newsItem.published_at) : "—";
                                           const compoundScore = typeof newsItem.compound === "number" ? newsItem.compound.toFixed(2) : "—";
+                                          const scoreStyle = typeof newsItem.compound === "number" ? { color: scoreColor(newsItem.compound) } : undefined;
                                           return (
                                             <li key={`${title}-${index}`} className="news-coverage-item">
                                               <div className="news-coverage-title-row">
@@ -449,7 +461,7 @@ export function RunDetailPage() {
                                                   ) : (
                                                     <span className="news-coverage-title">{title}</span>
                                                   )}
-                                                  <span className="news-coverage-score">{`score ${compoundScore}`}</span>
+                                                  <span className="news-coverage-score" style={scoreStyle}>{`score ${compoundScore}`}</span>
                                                 </div>
                                                 <span className="news-coverage-date">{publishedAt}</span>
                                               </div>
