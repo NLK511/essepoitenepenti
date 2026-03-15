@@ -147,195 +147,218 @@ export function RunDetailPage() {
                             {messages.length > 0 ? `${messages.length} warning(s)` : "No warnings"}
                           </Badge>
                         </div>
-                        <div className="summary-grid">
-                          <div className="summary-item"><span className="summary-label">Entry</span><span className="summary-value">{item.entry_price}</span></div>
-                          <div className="summary-item"><span className="summary-label">Stop loss</span><span className="summary-value">{item.stop_loss}</span></div>
-                          <div className="summary-item"><span className="summary-label">Take profit</span><span className="summary-value">{item.take_profit}</span></div>
-                        </div>
-                        <div className="helper-text">{item.indicator_summary || "No indicator summary stored for this recommendation."}</div>
+                        <section className="recommendation-section">
+                          <div className="section-heading"><strong>Trading parameters</strong></div>
+                          <div className="summary-grid">
+                            <div className="summary-item"><span className="summary-label">Entry</span><span className="summary-value">{item.entry_price}</span></div>
+                            <div className="summary-item"><span className="summary-label">Stop loss</span><span className="summary-value">{item.stop_loss}</span></div>
+                            <div className="summary-item"><span className="summary-label">Take profit</span><span className="summary-value">{item.take_profit}</span></div>
+                          </div>
+                          <div className="helper-text">{item.indicator_summary || "No indicator summary stored for this recommendation."}</div>
+                        </section>
                         {summaryText || newsDigest ? (
-                          <div className="stack-page top-gap-small">
-                            <div className="summary-grid">
-                              <div className="summary-item summary-method-block">
-                                <span className="summary-label">Summary method</span>
-                                <span className="summary-method-value">{summaryMethodLabel} ({summaryBackendLabel})</span>
+                          <section className="recommendation-section">
+                            <div className="section-heading"><strong>Summary & sentiment</strong></div>
+                            <div className="stack-page top-gap-small">
+                              <div className="summary-grid">
+                                <div className="summary-item summary-method-block">
+                                  <span className="summary-label">Summary method</span>
+                                  <span className="summary-method-value">{summaryMethodLabel} ({summaryBackendLabel})</span>
+                                </div>
                               </div>
-                            </div>
-                            {summaryText ? (
-                              <div className="summary-text-block">
-                                <p>{summaryText}</p>
-                              </div>
-                            ) : null}
-                            {newsDigest && newsDigest !== summaryText ? (
-                              <div className="helper-text">Headline digest: {newsDigest}</div>
-                            ) : null}
-                            {enhancedSentimentScore !== null ? (
-                              <div className="enhanced-sentiment-card">
-                                <div className="summary-grid enhanced-sentiment-grid">
-                                  <div className="summary-item">
-                                    <span className="summary-label">Enhanced sentiment</span>
-                                    <span className="summary-value">{enhancedSentimentScore.toFixed(2)}</span>
-                                  </div>
-                                  {enhancedSentimentLabel ? (
+                              {summaryText ? (
+                                <div className="summary-text-block">
+                                  <p>{summaryText}</p>
+                                </div>
+                              ) : null}
+                              {newsDigest && newsDigest !== summaryText ? (
+                                <div className="helper-text">Headline digest: {newsDigest}</div>
+                              ) : null}
+                              {enhancedSentimentScore !== null ? (
+                                <div className="enhanced-sentiment-card">
+                                  <div className="summary-grid enhanced-sentiment-grid">
                                     <div className="summary-item">
-                                      <span className="summary-label">Label</span>
-                                      <span className="summary-value">{enhancedSentimentLabel}</span>
+                                      <span className="summary-label">Enhanced sentiment</span>
+                                      <span className="summary-value">{enhancedSentimentScore.toFixed(2)}</span>
+                                    </div>
+                                    {enhancedSentimentLabel ? (
+                                      <div className="summary-item">
+                                        <span className="summary-label">Label</span>
+                                        <span className="summary-value">{enhancedSentimentLabel}</span>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                  {enhancedComponents ? (
+                                    <div className="summary-item">
+                                      <span className="summary-label">Components</span>
+                                      <pre>{JSON.stringify(enhancedComponents, null, 2)}</pre>
                                     </div>
                                   ) : null}
                                 </div>
-                                {enhancedComponents ? (
-                                  <div className="summary-item">
-                                    <span className="summary-label">Components</span>
-                                    <pre>{JSON.stringify(enhancedComponents, null, 2)}</pre>
-                                  </div>
-                                ) : null}
-                              </div>
-                            ) : null}
-                          </div>
+                              ) : null}
+                            </div>
+                          </section>
                         ) : null}
                         {analysis ? (
-                          <details className="top-gap-small structured-diagnostics">
-                            <summary>Structured diagnostics</summary>
-                            <div className="stack-page top-gap-small">
-                              <div className="structured-section">
-                                <div className="structured-section-header">Context flags</div>
-                                {contextFlagEntries.length > 0 ? (
+                          <section className="recommendation-section">
+                            <div className="section-heading"><strong>Structured diagnostics</strong></div>
+                            <details className="top-gap-small structured-diagnostics">
+                              <summary>Expand diagnostics</summary>
+                              <div className="stack-page top-gap-small">
+                                <div className="structured-section">
+                                  <div className="structured-section-header">Context flags</div>
+                                  {contextFlagEntries.length > 0 ? (
+                                    <div className="summary-grid">
+                                      {contextFlagEntries.map(([flag, value]) => (
+                                        <div key={flag} className="summary-item">
+                                          <span className="summary-label">{flag.replace(/_/g, " ")}</span>
+                                          <span className="summary-value">
+                                            {typeof value === "number" ? value.toFixed(2) : value ?? "—"}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="helper-text">No active context flags.</div>
+                                  )}
+                                </div>
+                                <div className="structured-section">
+                                  <div className="structured-section-header">Normalized highlights</div>
                                   <div className="summary-grid">
-                                    {contextFlagEntries.map(([flag, value]) => (
-                                      <div key={flag} className="summary-item">
-                                        <span className="summary-label">{flag.replace(/_/g, " ")}</span>
-                                        <span className="summary-value">
-                                          {typeof value === "number" ? value.toFixed(2) : value ?? "—"}
-                                        </span>
+                                    {normalizedHighlights.map((entry) => (
+                                      <div key={entry.key} className="summary-item">
+                                        <span className="summary-label">{entry.key.replace(/_/g, " ")}</span>
+                                        <span className="summary-value">{String(entry.display)}</span>
                                       </div>
                                     ))}
                                   </div>
-                                ) : (
-                                  <div className="helper-text">No active context flags.</div>
-                                )}
-                              </div>
-                              <div className="structured-section">
-                                <div className="structured-section-header">Normalized highlights</div>
-                                <div className="summary-grid">
-                                  {normalizedHighlights.map((entry) => (
-                                    <div key={entry.key} className="summary-item">
-                                      <span className="summary-label">{entry.key.replace(/_/g, " ")}</span>
-                                      <span className="summary-value">{String(entry.display)}</span>
+                                </div>
+                                <div className="structured-section">
+                                  <div className="structured-section-header">Aggregations</div>
+                                  {aggregatorEntries.length > 0 ? (
+                                    <div className="summary-grid">
+                                      {aggregatorEntries.slice(0, 6).map(([key, value]) => (
+                                        <div key={key} className="summary-item">
+                                          <span className="summary-label">{key.replace(/_/g, " ")}</span>
+                                          <span className="summary-value">
+                                            {typeof value === "number" ? value.toFixed(2) : String(value ?? "—")}
+                                          </span>
+                                        </div>
+                                      ))}
+                                      {aggregatorEntries.length > 6 && (
+                                        <div className="summary-item">
+                                          <span className="summary-label">+ more aggregators</span>
+                                          <span className="summary-value">+{aggregatorEntries.length - 6} more</span>
+                                        </div>
+                                      )}
                                     </div>
-                                  ))}
+                                  ) : (
+                                    <div className="helper-text">Aggregator totals not available.</div>
+                                  )}
+                                </div>
+                                <div className="structured-section">
+                                  <div className="structured-section-header">Confidence weights</div>
+                                  {confidenceEntries.length > 0 ? (
+                                    <div className="summary-grid">
+                                      {confidenceEntries.slice(0, 6).map(([key, value]) => (
+                                        <div key={key} className="summary-item">
+                                          <span className="summary-label">{key.replace(/_/g, " ")}</span>
+                                          <span className="summary-value">
+                                            {typeof value === "number" ? value.toFixed(2) : String(value ?? "—")}
+                                          </span>
+                                        </div>
+                                      ))}
+                                      {confidenceEntries.length > 6 && (
+                                        <div className="summary-item">
+                                          <span className="summary-label">+ more weights</span>
+                                          <span className="summary-value">+{confidenceEntries.length - 6} more</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="helper-text">Confidence weights are not stored.</div>
+                                  )}
+                                </div>
+                                <div className="structured-section">
+                                  <div className="structured-section-header">News coverage</div>
+                                  {newsStats.length > 0 ? (
+                                    <div className="summary-grid">
+                                      {newsStats.map((stat) => (
+                                        <div key={stat.label} className="summary-item">
+                                          <span className="summary-label">{stat.label}</span>
+                                          <span className="summary-value">{stat.value}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="helper-text">No aggregated news totals.</div>
+                                  )}
+                                  {newsItemsList.length > 0 ? (
+                                    <div className="stack-page top-gap-small">
+                                      {newsItemsList.slice(0, 3).map((newsItem, index) => {
+                                        const title = typeof newsItem.title === "string" ? newsItem.title : "Untitled article";
+                                        const summaryBody = typeof newsItem.summary === "string" ? newsItem.summary : "";
+                                        const compound = typeof newsItem.compound === "number" ? newsItem.compound.toFixed(2) : "—";
+                                        const publisher = typeof newsItem.publisher === "string" ? newsItem.publisher : "Unknown source";
+                                        const publishedAt = typeof newsItem.published_at === "string" ? formatDate(newsItem.published_at) : "—";
+                                        return (
+                                          <div key={`${title}-${index}`} className="structured-news-item">
+                                            <div className="summary-grid">
+                                              <div className="summary-item">
+                                                <span className="summary-label">Title</span>
+                                                <span className="summary-value">{title}</span>
+                                              </div>
+                                              <div className="summary-item">
+                                                <span className="summary-label">Compound</span>
+                                                <span className="summary-value">{compound}</span>
+                                              </div>
+                                            </div>
+                                            <div className="helper-text">{summaryBody || "No summary available."}</div>
+                                            <div className="helper-text">
+                                              {publisher} · {publishedAt}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                      {newsItemsList.length > 3 ? (
+                                        <div className="helper-text top-gap-small">+{newsItemsList.length - 3} more articles truncated.</div>
+                                      ) : null}
+                                    </div>
+                                  ) : (
+                                    <div className="helper-text">No news items stored for this proposal.</div>
+                                  )}
+                                  {newsFeedErrors.length > 0 ? (
+                                    <ul className="warning-text">
+                                      {newsFeedErrors.map((error, index) => (
+                                        <li key={`${error}-${index}`}>{error}</li>
+                                      ))}
+                                    </ul>
+                                  ) : null}
                                 </div>
                               </div>
-                              <div className="structured-section">
-                                <div className="structured-section-header">Aggregations</div>
-                                {aggregatorEntries.length > 0 ? (
-                                  <div className="summary-grid">
-                                    {aggregatorEntries.slice(0, 6).map(([key, value]) => (
-                                      <div key={key} className="summary-item">
-                                        <span className="summary-label">{key.replace(/_/g, " ")}</span>
-                                        <span className="summary-value">
-                                          {typeof value === "number" ? value.toFixed(2) : String(value ?? "—")}
-                                        </span>
-                                      </div>
-                                    ))}
-                                    {aggregatorEntries.length > 6 && (
-                                      <div className="summary-item">
-                                        <span className="summary-label">+ more aggregators</span>
-                                        <span className="summary-value">+{aggregatorEntries.length - 6} more</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div className="helper-text">Aggregator totals not available.</div>
-                                )}
-                              </div>
-                              <div className="structured-section">
-                                <div className="structured-section-header">Confidence weights</div>
-                                {confidenceEntries.length > 0 ? (
-                                  <div className="summary-grid">
-                                    {confidenceEntries.slice(0, 6).map(([key, value]) => (
-                                      <div key={key} className="summary-item">
-                                        <span className="summary-label">{key.replace(/_/g, " ")}</span>
-                                        <span className="summary-value">
-                                          {typeof value === "number" ? value.toFixed(2) : String(value ?? "—")}
-                                        </span>
-                                      </div>
-                                    ))}
-                                    {confidenceEntries.length > 6 && (
-                                      <div className="summary-item">
-                                        <span className="summary-label">+ more weights</span>
-                                        <span className="summary-value">+{confidenceEntries.length - 6} more</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div className="helper-text">Confidence weights are not stored.</div>
-                                )}
-                              </div>
-                              <div className="structured-section">
-                                <div className="structured-section-header">News coverage</div>
-                                {newsStats.length > 0 ? (
-                                  <div className="summary-grid">
-                                    {newsStats.map((stat) => (
-                                      <div key={stat.label} className="summary-item">
-                                        <span className="summary-label">{stat.label}</span>
-                                        <span className="summary-value">{stat.value}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="helper-text">No aggregated news totals.</div>
-                                )}
-                                {newsItemsList.length > 0 ? (
-                                  <div className="stack-page top-gap-small">
-                                    {newsItemsList.slice(0, 3).map((newsItem, index) => {
-                                      const title = typeof newsItem.title === "string" ? newsItem.title : "Untitled article";
-                                      const summaryBody = typeof newsItem.summary === "string" ? newsItem.summary : "";
-                                      const compound = typeof newsItem.compound === "number" ? newsItem.compound.toFixed(2) : "—";
-                                      const publisher = typeof newsItem.publisher === "string" ? newsItem.publisher : "Unknown source";
-                                      const publishedAt = typeof newsItem.published_at === "string" ? formatDate(newsItem.published_at) : "—";
-                                      return (
-                                        <div key={`${title}-${index}`} className="structured-news-item">
-                                          <div className="summary-grid">
-                                            <div className="summary-item">
-                                              <span className="summary-label">Title</span>
-                                              <span className="summary-value">{title}</span>
-                                            </div>
-                                            <div className="summary-item">
-                                              <span className="summary-label">Compound</span>
-                                              <span className="summary-value">{compound}</span>
-                                            </div>
-                                          </div>
-                                          <div className="helper-text">{summaryBody || "No summary available."}</div>
-                                          <div className="helper-text">
-                                            {publisher} · {publishedAt}
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                    {newsItemsList.length > 3 ? (
-                                      <div className="helper-text top-gap-small">+{newsItemsList.length - 3} more articles truncated.</div>
-                                    ) : null}
-                                  </div>
-                                ) : (
-                                  <div className="helper-text">No news items stored for this proposal.</div>
-                                )}
-                                {newsFeedErrors.length > 0 ? (
-                                  <ul className="warning-text">
-                                    {newsFeedErrors.map((error, index) => (
-                                      <li key={`${error}-${index}`}>{error}</li>
-                                    ))}
-                                  </ul>
-                                ) : null}
-                              </div>
-                            </div>
-                          </details>
+                            </details>
+                          </section>
                         ) : null}
-                        {messages.length > 0 ? <ul>{messages.map((message) => <li key={message} className="warning-text">{message}</li>)}</ul> : <div className="helper-text">No warnings or errors.</div>}
+                        <section className="recommendation-section">
+                          <div className="section-heading"><strong>Diagnostic messages</strong></div>
+                          {messages.length > 0 ? (
+                            <ul className="warning-text">
+                              {messages.map((message) => (
+                                <li key={message}>{message}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div className="helper-text">No warnings or errors.</div>
+                          )}
+                        </section>
                         {output.diagnostics.raw_output ? (
-                          <details>
-                            <summary>Raw details</summary>
-                            <pre>{output.diagnostics.raw_output}</pre>
-                          </details>
+                          <section className="recommendation-section">
+                            <div className="section-heading"><strong>Raw details</strong></div>
+                            <details>
+                              <summary>View raw output</summary>
+                              <pre>{output.diagnostics.raw_output}</pre>
+                            </details>
+                          </section>
                         ) : null}
                       </article>
                     );
