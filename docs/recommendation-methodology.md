@@ -74,6 +74,6 @@ Every run still builds a headline digest from the freshest news items (up to thr
 
 ## App-native independence
 
-Because the pipeline is self-contained, the app no longer depends on any external prototype repository. All inputs, weights, diagnostics, and the new news ingestion flow live inside this repository, and the worker can run the pipeline just by installing `pandas`, `yfinance`, and the other declared dependencies (plus configuring any desired news provider credentials). The NaiveSentiment analyzer now leans on a broader, highly resilient keyword/fallback heuristic set so runs with very few headline hits still surface a calibrated compound score instead of silently defaulting to zero.
+Because the pipeline is self-contained, the app no longer depends on any external prototype repository. All inputs, weights, diagnostics, and the new news ingestion flow live inside this repository, and the worker can run the pipeline just by installing `pandas`, `yfinance`, and the other declared dependencies (plus configuring any desired news provider credentials). The NaiveSentiment analyzer now leans on a broader, highly resilient keyword set, and the signal integrity policy ensures that headline-light runs remain neutral when no keywords match instead of quietly defaulting to a synthesized score.
 
 Scheduled weight optimization now shares that same footprint: it counts resolved recommendations from the app database, mutates the tracked `weights.json`, and stores a backup/rollback artifact so the job remains reproducible without touching the legacy scripts.

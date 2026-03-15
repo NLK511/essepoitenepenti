@@ -2,12 +2,16 @@
 
 This document captures the ongoing transition that makes Trade Proposer App fully self-contained. Phase 2 today means operating and improving the internal scoring pipeline without ever shelling out to a separate prototype repository, reintroducing the missing diagnostics/summary signals natively, and documenting the dependencies or fallbacks operators need to trust the outputs.
 
+## Signal integrity policy
+
+Every contribution that affects recommendation generation must be explicit when data is missing. The pipeline never invents a directional signal when its raw inputs are absent: missing keyword coverage, provider failures, or aggregator gaps must either emit `NEUTRAL`/zero outputs or surface a digestible warning/error before a new score is published. This policy (which already governs NaiveSentimentAnalyzer) extends to every feature, summary, or weight adjustment so future sessions—LLM-assisted or otherwise—cannot accidentally add the kind of “dummy” fallback heuristics that mask upstream problems.
+
 ## Progress recap
 
 - **Self-contained scoring**: `ProposalService` now orchestrates the end-to-end pipeline (price ingestion via `yfinance`, feature construction with `pandas`, normalization, weights application, diagnostics, and the recommendation agreement workflow) all from within this repository.
 - **App-native weight optimization**: The optimization workflow now reads resolved recommendations directly from the app database, adjusts the checked-in `weights.json`, and stores backups/artifacts without invoking the legacy prototype script so the job stays self-contained in this repo.
 - **Rich diagnostics**: Each run persists
-- **Enhanced sentiment coverage**: `NaiveSentimentAnalyzer` now uses a broader keyword set and fallback heuristics derived from headline/summary tokens so news-light runs still report a meaningful compound score without masking upstream failures.
+- **Enhanced sentiment coverage**: `NaiveSentimentAnalyzer` now uses a broader keyword set while still honoring the signal integrity policy, so news-light runs report zero compound scores whenever the dictionaries miss instead of masking upstream gaps.
  `analysis_json` (now organized into metadata/trade/summary/news/sentiment/context/feature-vector sections), the raw/normalized feature vectors, aggregations, confidence weights, and RunDiagnostics details so every signal remains auditable without peeking into an external tool.
 - **Configurable summarization**: `SummaryService` invokes the configured OpenAI or `pi_agent` CLI backend, parses the streamed JSON responses, and captures backend/model/runtime metadata plus `llm_error`/`summary_error`. When the summarizer does not run, the headline digest saved under `analysis_json.news.digest` is still available as the fallback narrative.
 - **In-app news, sentiment, and Pi CLI coverage**: News ingestion, NaiveSentiment analysis, and the Pi CLI references now live in-app: `NewsIngestionService` produces unified `news_items` (title, summary, publisher, link, published_at, compound score), `analysis_json.news` exposed feed diagnostics, and the Pi CLI invocation reuses the configured directory/skill set via `PI_CODING_AGENT_DIR` and `pi_cli_args`.
@@ -19,11 +23,11 @@ We reviewed the Phase 2 doc and identified a few areas that needed clarification
 
 - The old summary plan still looked forward to the LLM pipeline even though it already existed; this document now states that the summarizer is implemented and highlights the fallback digest path for reliability.
 - The doc previously described `analysis_json` as a flat bag of fields, which made it hard to trace which diagnostics were new; the new schema is explicit about where metadata, trade outputs, summary text, news items, sentiment scores, context flags, and weights live.
-- The NaiveSentiment analyzer still returns pure zeros for tickers with no keyword coverage, so we are actively exploring keyword set enrichment/weighting and adding upstream fallback indicators before we declare that signal mature.
+- The NaiveSentiment analyzer still returns pure zeros for tickers with no keyword coverage because the signal integrity policy forbids inventing fallback heuristics; we are instead concentrating on enriching the keyword sets, weighting headline versus summary hits, and documenting every zero-case so operators know when coverage is incomplete.
 
 ## Next steps
 
-1. Monitor the enhanced sentiment coverage so the heuristics keep emitting meaningful scores, document any remaining zero-score cases, and refresh the keywords/weights before assuming the signal is fully complete.
+1. Monitor the enhanced sentiment coverage, document any remaining zero-score cases under the signal integrity policy (which forbids fallback heuristics), and keep refreshing the keywords/weights before assuming the signal is fully complete.
 2. Surface more diagnostics (feature vectors, aggregations, weights, news items) in the UI debugger/run detail so operators can compare the new structured payloads without decoding raw JSON.
 3. Harden the scheduler/worker reliability by refining how the evaluation pass handles multi-ticker runs, partial price-history availability, and overlapping schedules so outcome tracking stays dependable even when data signals are intermittent.
 4. Keep refreshing operator docs (Phase 2, roadmap, raw details reference) whenever the schema or summary/sentiment features change so planning artifacts stay truthful.
