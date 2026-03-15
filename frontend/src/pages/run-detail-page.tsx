@@ -7,15 +7,14 @@ import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionT
 import type { RunDetailResponse } from "../types";
 import { diagnosticsMessages, directionTone, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, recommendationStateTone, runTone } from "../utils";
 
-function scoreColor(score: number) {
-  const clamped = Math.max(-1, Math.min(1, score));
-  const ratio = (clamped + 1) / 2;
-  if (ratio <= 0.5) {
-    const hue = 20 + ratio * 80;
-    return `hsl(${hue}, 80%, 40%)`;
+function scoreColor(value: number, min = -1, max = 1) {
+  if (!Number.isFinite(value) || max <= min) {
+    return undefined;
   }
-  const hue = 120 * ratio;
-  return `hsl(${hue}, 70%, 42%)`;
+  const clamped = Math.max(min, Math.min(max, value));
+  const ratio = (clamped - min) / (max - min);
+  const hue = ratio * 120;
+  return `hsl(${hue}, 75%, 45%)`;
 }
 
 const DOC_BASE = "https://github.com/NLK511/essepoitenepenti/blob/main/docs/recommendation-methodology.md";
@@ -204,6 +203,7 @@ export function RunDetailPage() {
                       const rawValue = normalizedFeatureVectors?.[key];
                       return {
                         key,
+                        rawValue: typeof rawValue === "number" ? rawValue : null,
                         display: typeof rawValue === "number" ? rawValue.toFixed(2) : rawValue ?? "—",
                       };
                     });
@@ -238,7 +238,10 @@ export function RunDetailPage() {
                               <Badge tone={directionTone(item.direction)}>{item.direction}</Badge>
                               <Badge tone={recommendationStateTone(item.state)}>{item.state}</Badge>
                             </div>
-                            <h3 className="subsection-title">{item.confidence}% confidence</h3>
+                            <h3 className="subsection-title">
+                              <span style={{ color: scoreColor(item.confidence, 0, 100) }}>{item.confidence}%</span>
+                              {' '}confidence
+                            </h3>
                           </div>
                           <Badge tone={messages.length > 0 ? "warning" : "ok"}>
                             {messages.length > 0 ? `${messages.length} warning(s)` : "No warnings"}
@@ -306,7 +309,7 @@ export function RunDetailPage() {
                                         Enhanced sentiment
                                         <InfoBadge {...INFO_DESCRIPTIONS.summary} />
                                       </span>
-                                      <span className="summary-value">{enhancedSentimentScore.toFixed(2)}</span>
+                                      <span className="summary-value" style={{ color: scoreColor(enhancedSentimentScore) }}>{enhancedSentimentScore.toFixed(2)}</span>
                                     </div>
                                     {enhancedSentimentLabel ? (
                                       <div className="summary-item">
@@ -367,7 +370,12 @@ export function RunDetailPage() {
                                     {normalizedHighlights.map((entry) => (
                                       <div key={entry.key} className="summary-item">
                                         <span className="summary-label">{entry.key.replace(/_/g, " ")}</span>
-                                        <span className="summary-value">{String(entry.display)}</span>
+                                        <span
+                                          className="summary-value"
+                                          style={entry.rawValue !== null ? { color: scoreColor(entry.rawValue, 0, 1) } : undefined}
+                                        >
+                                          {String(entry.display)}
+                                        </span>
                                       </div>
                                     ))}
                                   </div>
@@ -449,7 +457,7 @@ export function RunDetailPage() {
                                           const link = typeof newsItem.link === "string" && newsItem.link ? newsItem.link : null;
                                           const publishedAt = typeof newsItem.published_at === "string" ? formatDate(newsItem.published_at) : "—";
                                           const compoundScore = typeof newsItem.compound === "number" ? newsItem.compound.toFixed(2) : "—";
-                                          const scoreStyle = typeof newsItem.compound === "number" ? { color: scoreColor(newsItem.compound) } : undefined;
+                                          const scoreStyle = typeof newsItem.compound === "number" ? { color: scoreColor(newsItem.compound, -1, 1) } : undefined;
                                           return (
                                             <li key={`${title}-${index}`} className="news-coverage-item">
                                               <div className="news-coverage-title-row">
