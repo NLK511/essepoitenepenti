@@ -25,6 +25,7 @@ We reviewed the Phase 2 doc and identified a few areas that needed clarification
 - The old summary plan still looked forward to the LLM pipeline even though it already existed; this document now states that the summarizer is implemented and highlights the fallback digest path for reliability.
 - The doc previously described `analysis_json` as a flat bag of fields, which made it hard to trace which diagnostics were new; the new schema is explicit about where metadata, trade outputs, summary text, news items, sentiment scores, context flags, and weights live.
 - The NaiveSentiment analyzer still returns pure zeros for tickers with no keyword coverage because the signal integrity policy forbids inventing fallback heuristics; we are instead concentrating on enriching the keyword sets, weighting headline versus summary hits, and documenting every zero-case so operators know when coverage is incomplete.
+- Multi-ticker runs now log per-ticker entries in `timing_json["ticker_generation"]` when price history cannot be retrieved. Instead of failing the whole job, the worker records the failure, flags the run as completed with warnings, and continues generating proposals for the remaining symbols so only the missing tickers are skipped.
 
 ## Next steps
 
