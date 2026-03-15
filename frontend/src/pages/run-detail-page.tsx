@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { getJson } from "../api";
+import { deleteJson, getJson } from "../api";
 import { WorkflowRunResults } from "../components/workflow-run-results";
+import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
 import type { RunDetailResponse } from "../types";
 import { diagnosticsMessages, directionTone, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, recommendationStateTone, runTone } from "../utils";
@@ -98,8 +99,12 @@ function InfoBadge({ description, link }: { description: string; link: string })
 
 export function RunDetailPage() {
   const { runId } = useParams<{ runId: string }>();
+  const navigate = useNavigate();
+  const { showToast } = useToast();
   const [detail, setDetail] = useState<RunDetailResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -117,6 +122,30 @@ export function RunDetailPage() {
     void load();
   }, [runId]);
 
+  async function handleDelete() {
+    if (!detail?.run.id) {
+      return;
+    }
+    if (
+      !window.confirm(
+        `Delete run #${detail.run.id}? This will permanently remove the run and its associated recommendations and diagnostics.`,
+      )
+    ) {
+      return;
+    }
+    setDeleteError(null);
+    setIsDeleting(true);
+    try {
+      await deleteJson<{ deleted: boolean; run_id: number }>(`/api/runs/${detail.run.id}`);
+      showToast({ message: `Run #${detail.run.id} deleted`, tone: "success" });
+      navigate("/jobs/debugger");
+    } catch (deleteErr) {
+      setDeleteError(deleteErr instanceof Error ? deleteErr.message : "Failed to delete run");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -127,9 +156,20 @@ export function RunDetailPage() {
           <>
             <Link to="/jobs/debugger" className="button-secondary">Back to debugger</Link>
             <Link to="/jobs/history" className="button-subtle">Open history</Link>
+            {detail ? (
+              <button
+                type="button"
+                className="button button-danger"
+                disabled={isDeleting}
+                onClick={handleDelete}
+              >
+                {isDeleting ? "Deleting…" : "Delete run"}
+              </button>
+            ) : null}
           </>
         }
       />
+      {deleteError ? <ErrorState message={deleteError} /> : null}
       {error ? <ErrorState message={error} /> : null}
       {!detail && !error ? <LoadingState message="Loading run detail…" /> : null}
       {detail ? (

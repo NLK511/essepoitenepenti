@@ -59,6 +59,10 @@ export async function getJson<T>(path: string): Promise<T> {
   return request<T>(path, { method: "GET" });
 }
 
+export async function deleteJson<T>(path: string): Promise<T> {
+  return request<T>(path, { method: "DELETE" });
+}
+
 export async function postForm<T>(path: string, values: Record<string, FormValue>): Promise<T> {
   const formData = new FormData();
   for (const [key, value] of Object.entries(values)) {
