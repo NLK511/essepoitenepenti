@@ -154,32 +154,33 @@ export function RunDetailPage() {
                         {summaryText || newsDigest ? (
                           <div className="stack-page top-gap-small">
                             <div className="summary-grid">
-                              <div className="summary-item">
+                              <div className="summary-item summary-method-block">
                                 <span className="summary-label">Summary method</span>
-                                <span className="summary-value">{summaryMethodLabel} ({summaryBackendLabel})</span>
+                                <span className="summary-method-value">{summaryMethodLabel} ({summaryBackendLabel})</span>
                               </div>
-                              {summaryText ? (
-                                <div className="summary-item">
-                                  <span className="summary-label">Summary</span>
-                                  <span className="summary-value">{summaryText}</span>
-                                </div>
-                              ) : null}
                             </div>
+                            {summaryText ? (
+                              <div className="summary-text-block">
+                                <p>{summaryText}</p>
+                              </div>
+                            ) : null}
                             {newsDigest && newsDigest !== summaryText ? (
                               <div className="helper-text">Headline digest: {newsDigest}</div>
                             ) : null}
                             {enhancedSentimentScore !== null ? (
-                              <div className="summary-grid top-gap-small">
-                                <div className="summary-item">
-                                  <span className="summary-label">Enhanced sentiment</span>
-                                  <span className="summary-value">{enhancedSentimentScore.toFixed(2)}</span>
-                                </div>
-                                {enhancedSentimentLabel ? (
+                              <div className="enhanced-sentiment-card">
+                                <div className="summary-grid enhanced-sentiment-grid">
                                   <div className="summary-item">
-                                    <span className="summary-label">Label</span>
-                                    <span className="summary-value">{enhancedSentimentLabel}</span>
+                                    <span className="summary-label">Enhanced sentiment</span>
+                                    <span className="summary-value">{enhancedSentimentScore.toFixed(2)}</span>
                                   </div>
-                                ) : null}
+                                  {enhancedSentimentLabel ? (
+                                    <div className="summary-item">
+                                      <span className="summary-label">Label</span>
+                                      <span className="summary-value">{enhancedSentimentLabel}</span>
+                                    </div>
+                                  ) : null}
+                                </div>
                                 {enhancedComponents ? (
                                   <div className="summary-item">
                                     <span className="summary-label">Components</span>
