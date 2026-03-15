@@ -88,7 +88,7 @@ Each run stores:
 
 ### Structured diagnostics {#structured-diagnostics}
 
-Structured diagnostics group the notable sections of `analysis_json` (feature vectors, aggregations, confidence weights, context flags, and news coverage) so operators can inspect the signals without parsing raw JSON. The run detail UI mirrors this layout and surfaces the same data in labeled blocks with section descriptions.
+Structured diagnostics group the notable sections of `analysis_json` (feature vectors, aggregations, confidence weights, context flags, and news coverage) so operators can inspect the signals without parsing raw JSON. The run detail UI mirrors this layout and surfaces the same data in labeled blocks with section descriptions. Numeric fields such as normalized highlights, enhanced sentiment, and inline article scores now receive hue-based accent colors so operators can instantly spot positive, neutral, or negative readings without reading raw values.
 
 ### Context flags {#context-flags}
 
