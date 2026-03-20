@@ -38,6 +38,11 @@ class StubAppPreflightService:
 
 class RouteTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
+        self._previous_single_user_auth_enabled = settings.single_user_auth_enabled
+        self._previous_single_user_auth_token = settings.single_user_auth_token
+        self._previous_single_user_auth_allowlist_paths = settings.single_user_auth_allowlist_paths
+        settings.single_user_auth_enabled = False
+
         self.engine = create_engine(
             "sqlite://",
             future=True,
@@ -68,6 +73,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.health_preflight_patcher.stop()
         app.dependency_overrides.clear()
         settings.prototype_repo_path = self.original_prototype_repo_path
+        settings.single_user_auth_enabled = self._previous_single_user_auth_enabled
+        settings.single_user_auth_token = self._previous_single_user_auth_token
+        settings.single_user_auth_allowlist_paths = self._previous_single_user_auth_allowlist_paths
         self.prototype_root.cleanup()
 
     def seed_run_with_diagnostics(self) -> int:
@@ -855,6 +863,32 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         payload = response.json()
         self.assertEqual(payload["rollback"]["restored_from"], str(older_backup))
         self.assertEqual(weights_path.read_text(), '{"alpha": 1}')
+
+    async def test_single_user_auth_guarding(self) -> None:
+        prev_enabled = settings.single_user_auth_enabled
+        prev_token = settings.single_user_auth_token
+        prev_allowlist = settings.single_user_auth_allowlist_paths
+        settings.single_user_auth_enabled = True
+        settings.single_user_auth_token = "test-token"
+        settings.single_user_auth_allowlist_paths = None
+        try:
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                response = await client.get("/api/watchlists")
+                self.assertEqual(response.status_code, 401)
+
+                auth_response = await client.get(
+                    "/api/watchlists",
+                    headers={"Authorization": "Bearer test-token"},
+                )
+                self.assertEqual(auth_response.status_code, 200)
+
+                health = await client.get("/api/health")
+                self.assertEqual(health.status_code, 200)
+        finally:
+            settings.single_user_auth_enabled = prev_enabled
+            settings.single_user_auth_token = prev_token
+            settings.single_user_auth_allowlist_paths = prev_allowlist
 
 
 if __name__ == "__main__":

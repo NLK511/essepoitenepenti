@@ -11,6 +11,9 @@ class AppSettings(BaseSettings):
     secret_key: str = "change-me"
     prototype_repo_path: str = "/home/aurelio/workspace/pi-mono"
     prototype_python_executable: str = "python3"
+    single_user_auth_enabled: bool = True
+    single_user_auth_token: str = "change-me"
+    single_user_auth_allowlist_paths: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

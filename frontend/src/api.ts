@@ -1,6 +1,8 @@
 type JsonObject = Record<string, unknown>;
 type FormValue = string | number | boolean | null | undefined;
 
+const API_AUTH_TOKEN = (import.meta.env.VITE_API_AUTH_TOKEN ?? "").trim();
+
 export class ApiError extends Error {
   status: number;
 
@@ -32,9 +34,15 @@ function extractErrorMessage(value: unknown): string | null {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const defaultHeaders: Record<string, string> = {
+    Accept: "application/json",
+  };
+  if (API_AUTH_TOKEN) {
+    defaultHeaders.Authorization = `Bearer ${API_AUTH_TOKEN}`;
+  }
   const response = await fetch(path, {
     headers: {
-      Accept: "application/json",
+      ...defaultHeaders,
       ...(init?.headers ?? {}),
     },
     ...init,
