@@ -42,6 +42,8 @@ def enqueue_enabled_jobs(now: datetime | None = None) -> int:
                 continue
             if scheduled_for is None:
                 continue
+            if scheduled_for != normalized_now:
+                continue
             if runs_repository.get_run_for_job_and_scheduled_for(job.id or 0, scheduled_for) is not None:
                 continue
             if job.job_type == JobType.WEIGHT_OPTIMIZATION and runs_repository.get_active_run_for_job_type(JobType.WEIGHT_OPTIMIZATION) is not None:

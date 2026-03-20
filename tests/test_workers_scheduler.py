@@ -135,11 +135,11 @@ class WorkerSchedulerTests(unittest.TestCase):
         self.assertEqual(len(all_runs), 1)
         self.assertEqual(all_runs[0].scheduled_for, scheduled_now)
 
-    def test_scheduler_enqueues_latest_due_slot_when_last_slot_was_missed(self) -> None:
+    def test_scheduler_skips_jobs_not_due_at_current_slot(self) -> None:
         session = self.create_session()
         jobs = JobRepository(session)
         runs = RunRepository(session)
-        scheduled = jobs.create("Scheduled", ["AAPL"], "0 * * * *")
+        jobs.create("Scheduled", ["AAPL"], "0 * * * *")
         not_due_now = datetime(2026, 3, 14, 10, 17, tzinfo=timezone.utc)
 
         with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
@@ -147,9 +147,9 @@ class WorkerSchedulerTests(unittest.TestCase):
         ):
             count = enqueue_enabled_jobs(now=not_due_now)
 
-        self.assertEqual(count, 1)
-        run = [item for item in runs.list_latest_runs(limit=10) if item.job_id == scheduled.id][0]
-        self.assertEqual(run.scheduled_for, datetime(2026, 3, 14, 10, 0, tzinfo=timezone.utc))
+        self.assertEqual(count, 0)
+        scheduled_runs = [item for item in runs.list_latest_runs(limit=10) if item.job_id is not None and item.scheduled_for is not None]
+        self.assertEqual(len(scheduled_runs), 0)
 
     def test_scheduler_enqueues_non_proposal_jobs_with_job_type_metadata(self) -> None:
         session = self.create_session()
@@ -167,21 +167,23 @@ class WorkerSchedulerTests(unittest.TestCase):
             "0 2 * * 0",
             job_type=JobType.WEIGHT_OPTIMIZATION,
         )
-        scheduled_now = datetime(2026, 3, 15, 2, 0, tzinfo=timezone.utc)
+        scheduled_eval = datetime(2026, 3, 14, 18, 0, tzinfo=timezone.utc)
+        scheduled_opt = datetime(2026, 3, 15, 2, 0, tzinfo=timezone.utc)
 
         with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
             "trade_proposer_app.services.runs.create_proposal_service", return_value=StubProposalService()
         ):
-            count = enqueue_enabled_jobs(now=scheduled_now)
+            eval_count = enqueue_enabled_jobs(now=scheduled_eval)
+            opt_count = enqueue_enabled_jobs(now=scheduled_opt)
 
-        self.assertEqual(count, 2)
-        latest_runs = runs.list_latest_runs(limit=10)
-        evaluation_run = next(run for run in latest_runs if run.job_id == evaluation.id)
-        optimization_run = next(run for run in latest_runs if run.job_id == optimization.id)
+        self.assertEqual(eval_count, 1)
+        self.assertEqual(opt_count, 1)
+        evaluation_run = next(run for run in runs.list_latest_runs(limit=10) if run.job_id == evaluation.id)
+        optimization_run = next(run for run in runs.list_latest_runs(limit=10) if run.job_id == optimization.id)
         self.assertEqual(evaluation_run.job_type, JobType.RECOMMENDATION_EVALUATION)
         self.assertEqual(optimization_run.job_type, JobType.WEIGHT_OPTIMIZATION)
-        self.assertEqual(evaluation_run.scheduled_for, datetime(2026, 3, 14, 18, 0, tzinfo=timezone.utc))
-        self.assertEqual(optimization_run.scheduled_for, datetime(2026, 3, 15, 2, 0, tzinfo=timezone.utc))
+        self.assertEqual(evaluation_run.scheduled_for, scheduled_eval)
+        self.assertEqual(optimization_run.scheduled_for, scheduled_opt)
 
     def test_run_claim_only_succeeds_once(self) -> None:
         jobs_session = self.create_session()
