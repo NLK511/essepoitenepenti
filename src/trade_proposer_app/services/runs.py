@@ -37,7 +37,8 @@ def enqueue_enabled_jobs(now: datetime | None = None) -> int:
                 continue
             try:
                 scheduled_for = latest_due_at(job.cron, normalized_now)
-            except ScheduleParseError:
+            except ScheduleParseError as exc:
+                print(f"scheduler: skipping job {job.id} ({job.name}) due to invalid schedule '{job.cron}': {exc}")
                 continue
             if scheduled_for is None:
                 continue

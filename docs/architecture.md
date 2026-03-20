@@ -157,6 +157,8 @@ Responsibilities:
 - enqueue due runs
 - avoid duplicate scheduling
 
+A new scheduler daemon (`trade_proposer_app.scheduler`) now runs alongside the API and worker; both `scripts/start-dev.sh` and `scripts/start-prod.sh` launch it so scheduled proposals, evaluations, and optimizations get enqueued automatically without manual intervention.
+
 Current state:
 - now persists a `scheduled_for` slot identity on scheduled runs
 - prevents duplicate enqueues for the same job and schedule slot

@@ -939,7 +939,7 @@ class ProposalService:
         entry_adjustment = aggregations.get("entry_adjustment", price)
 
         stop_distance = self._compute_stop_distance(price, atr, risk_stop_offset)
-        take_profit_distance = self._compute_take_profit_distance(stop_distance, risk_take_profit_offset)
+        take_profit_distance = self._compute_take_profit_distance(price, stop_distance, risk_take_profit_offset)
 
         entry_price = round(float(entry_adjustment or price), 4)
         if direction == RecommendationDirection.LONG:
@@ -952,13 +952,15 @@ class ProposalService:
 
     @staticmethod
     def _compute_stop_distance(price: float, atr: float, risk_offset: float) -> float:
-        base_stop_distance = atr * 1.5 if atr > 0 else max(price * 0.01, 0.01)
+        base_stop_distance = atr if atr > 0 else max(price * 0.008, 0.01)
         adjusted_distance = base_stop_distance + risk_offset
-        min_distance = max(base_stop_distance * 0.5, 0.01)
-        return max(min_distance, adjusted_distance)
+        min_distance = max(price * 0.005, base_stop_distance * 0.5, 0.01)
+        max_distance = max(price * 0.03, min_distance)
+        return min(max_distance, max(min_distance, adjusted_distance))
 
     @staticmethod
-    def _compute_take_profit_distance(stop_distance: float, risk_offset: float) -> float:
-        raw_distance = stop_distance * 2.0 + risk_offset
-        min_distance = stop_distance
-        return max(min_distance, raw_distance)
+    def _compute_take_profit_distance(price: float, stop_distance: float, risk_offset: float) -> float:
+        raw_distance = stop_distance * 1.5 + (risk_offset * 0.5)
+        min_distance = max(stop_distance * 1.1, price * 0.0075, 0.01)
+        max_distance = max(price * 0.045, min_distance)
+        return min(max_distance, max(min_distance, raw_distance))

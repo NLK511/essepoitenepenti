@@ -8,6 +8,7 @@ ENV_FILE="${ROOT_DIR}/.env"
 STATE_DIR="${ROOT_DIR}/.prod-run"
 API_PID_FILE="${STATE_DIR}/api.pid"
 WORKER_PID_FILE="${STATE_DIR}/worker.pid"
+SCHEDULER_PID_FILE="${STATE_DIR}/scheduler.pid"
 META_FILE="${STATE_DIR}/meta.env"
 
 SKIP_FRONTEND_BUILD="false"
@@ -129,10 +130,11 @@ log "applying database migrations"
 )
 
 mkdir -p "$STATE_DIR"
-rm -f "$API_PID_FILE" "$WORKER_PID_FILE" "$META_FILE"
+rm -f "$API_PID_FILE" "$WORKER_PID_FILE" "$SCHEDULER_PID_FILE" "$META_FILE"
 
 API_PID=""
 WORKER_PID=""
+SCHEDULER_PID=""
 
 cleanup() {
   local exit_code=$?
@@ -142,12 +144,17 @@ cleanup() {
     kill "$WORKER_PID" 2>/dev/null || true
     wait "$WORKER_PID" 2>/dev/null || true
   fi
+  if [[ -n "$SCHEDULER_PID" ]] && kill -0 "$SCHEDULER_PID" 2>/dev/null; then
+    log "stopping scheduler (pid ${SCHEDULER_PID})"
+    kill "$SCHEDULER_PID" 2>/dev/null || true
+    wait "$SCHEDULER_PID" 2>/dev/null || true
+  fi
   if [[ -n "$API_PID" ]] && kill -0 "$API_PID" 2>/dev/null; then
     log "stopping api (pid ${API_PID})"
     kill "$API_PID" 2>/dev/null || true
     wait "$API_PID" 2>/dev/null || true
   fi
-  rm -f "$API_PID_FILE" "$WORKER_PID_FILE" "$META_FILE"
+  rm -f "$API_PID_FILE" "$WORKER_PID_FILE" "$SCHEDULER_PID_FILE" "$META_FILE"
   exit "$exit_code"
 }
 
@@ -169,11 +176,20 @@ log "starting worker"
 WORKER_PID=$!
 echo "$WORKER_PID" > "$WORKER_PID_FILE"
 
+log "starting scheduler"
+(
+  cd "$ROOT_DIR"
+  exec "$VENV_PYTHON" -m trade_proposer_app.scheduler
+) &
+SCHEDULER_PID=$!
+echo "$SCHEDULER_PID" > "$SCHEDULER_PID_FILE"
+
 log "services started"
 printf '\n'
 printf 'API:     http://%s:%s/api/health\n' "$START_HOST" "$START_PORT"
 printf 'Frontend: served from the API at http://%s:%s/ (assets under frontend/dist)\n' "$START_HOST" "$START_PORT"
-printf 'Worker:  running in background (pid %s)\n' "$WORKER_PID"
+printf 'Worker:   running in background (pid %s)\n' "$WORKER_PID"
+printf 'Scheduler: running in background (pid %s)\n' "$SCHEDULER_PID"
 printf 'State dir: %s\n' "$STATE_DIR"
 printf '\n'
 printf 'Press Ctrl+C to stop both processes.\n'
@@ -184,6 +200,9 @@ while true; do
   fi
   if ! kill -0 "$WORKER_PID" 2>/dev/null; then
     fail "worker process exited"
+  fi
+  if ! kill -0 "$SCHEDULER_PID" 2>/dev/null; then
+    fail "scheduler process exited"
   fi
   sleep 1
 done
