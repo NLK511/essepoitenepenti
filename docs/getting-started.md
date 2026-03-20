@@ -4,6 +4,8 @@ Trade Proposer App is a FastAPI backend, a React/Vite frontend, and a worker pro
 
 The most important behaviors to keep in mind are simple: creating or executing a job enqueues a run, the worker must be running to process it, recommendation generation depends on the internal pipeline and its pandas/yfinance/weights dependencies, startup blocks on known-bad internal preflight unless you explicitly override it, and failed recommendation runs remain explicit failures rather than silently turning into fallback outputs.
 
+When you start the app via `./scripts/start-dev.sh` or `./scripts/start-prod.sh`, those scripts now launch all three runtime daemons—API, worker, and scheduler—so scheduled jobs stay enqueued automatically. You no longer need to call the enqueue pass manually unless you want to force a one-off run (`./scripts/start-dev.sh --run-scheduler-once`).
+
 ## Prerequisites
 
 Install Python 3.11+, `pip`, `venv`, Node.js, `npm`, and Git. The app now runs a self-contained pipeline that pulls price history via `yfinance` and computes features with `pandas`, so no prototype repository is required.

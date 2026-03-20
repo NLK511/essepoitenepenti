@@ -14,10 +14,12 @@ FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 STATE_DIR="${ROOT_DIR}/.dev-run"
 API_PID_FILE="${STATE_DIR}/api.pid"
 WORKER_PID_FILE="${STATE_DIR}/worker.pid"
+SCHEDULER_PID_FILE="${STATE_DIR}/scheduler.pid"
 FRONTEND_PID_FILE="${STATE_DIR}/frontend.pid"
 META_FILE="${STATE_DIR}/meta.env"
 API_PID=""
 WORKER_PID=""
+SCHEDULER_PID=""
 FRONTEND_PID=""
 
 log() {
@@ -48,10 +50,11 @@ What this script does:
   3. Runs internal pipeline preflight checks
   4. Starts the FastAPI API server
   5. Starts the worker
-  6. Starts the React/Vite frontend dev server unless --backend-only is set
-  7. Writes PID files under .dev-run/
-  8. Waits until one process exits or you press Ctrl+C
-  9. Shuts all started processes down cleanly
+  6. Starts the scheduler poller
+  7. Starts the React/Vite frontend dev server unless --backend-only is set
+  8. Writes PID files under .dev-run/
+  9. Waits until one process exits or you press Ctrl+C
+  10. Shuts all started processes down cleanly
 EOF
 }
 
@@ -124,12 +127,13 @@ is_running_pid() {
 
 existing_api_pid="$(read_pid_file "$API_PID_FILE")"
 existing_worker_pid="$(read_pid_file "$WORKER_PID_FILE")"
+existing_scheduler_pid="$(read_pid_file "$SCHEDULER_PID_FILE")"
 existing_frontend_pid="$(read_pid_file "$FRONTEND_PID_FILE")"
-if is_running_pid "$existing_api_pid" || is_running_pid "$existing_worker_pid" || is_running_pid "$existing_frontend_pid"; then
+if is_running_pid "$existing_api_pid" || is_running_pid "$existing_worker_pid" || is_running_pid "$existing_scheduler_pid" || is_running_pid "$existing_frontend_pid"; then
   fail "services already appear to be running; use ./scripts/stop-dev.sh first"
 fi
 
-rm -f "$API_PID_FILE" "$WORKER_PID_FILE" "$FRONTEND_PID_FILE" "$META_FILE"
+rm -f "$API_PID_FILE" "$WORKER_PID_FILE" "$SCHEDULER_PID_FILE" "$FRONTEND_PID_FILE" "$META_FILE"
 
 cleanup() {
   local exit_code=$?
@@ -149,7 +153,12 @@ cleanup() {
     kill "$WORKER_PID" 2>/dev/null || true
     wait "$WORKER_PID" 2>/dev/null || true
   fi
-  rm -f "$API_PID_FILE" "$WORKER_PID_FILE" "$FRONTEND_PID_FILE" "$META_FILE"
+  if [[ -n "$SCHEDULER_PID" ]] && kill -0 "$SCHEDULER_PID" 2>/dev/null; then
+    log "stopping scheduler (pid ${SCHEDULER_PID})"
+    kill "$SCHEDULER_PID" 2>/dev/null || true
+    wait "$SCHEDULER_PID" 2>/dev/null || true
+  fi
+  rm -f "$API_PID_FILE" "$WORKER_PID_FILE" "$SCHEDULER_PID_FILE" "$FRONTEND_PID_FILE" "$META_FILE"
   exit "$exit_code"
 }
 
@@ -208,6 +217,14 @@ log "starting worker"
 WORKER_PID=$!
 printf '%s\n' "$WORKER_PID" > "$WORKER_PID_FILE"
 
+log "starting scheduler"
+(
+  cd "$ROOT_DIR"
+  exec "$VENV_PYTHON" -m trade_proposer_app.scheduler
+) &
+SCHEDULER_PID=$!
+printf '%s\n' "$SCHEDULER_PID" > "$SCHEDULER_PID_FILE"
+
 if [[ "$START_FRONTEND" == "true" ]]; then
   log "starting frontend dev server on ${FRONTEND_PORT}"
   (
@@ -228,6 +245,7 @@ ALLOW_DEGRADED_PROTOTYPE=${ALLOW_DEGRADED_PREFLIGHT}
 START_FRONTEND=${START_FRONTEND}
 API_PID=${API_PID}
 WORKER_PID=${WORKER_PID}
+SCHEDULER_PID=${SCHEDULER_PID}
 FRONTEND_PID=${FRONTEND_PID}
 EOF
 
@@ -235,6 +253,7 @@ printf '\n'
 printf 'Services started:\n'
 printf '  api:      pid %s\n' "$API_PID"
 printf '  worker:   pid %s\n' "$WORKER_PID"
+printf '  scheduler: pid %s\n' "$SCHEDULER_PID"
 if [[ "$START_FRONTEND" == "true" ]]; then
   printf '  frontend: pid %s\n' "$FRONTEND_PID"
 fi
@@ -256,6 +275,9 @@ while true; do
   fi
   if ! kill -0 "$WORKER_PID" 2>/dev/null; then
     fail "worker process exited"
+  fi
+  if ! kill -0 "$SCHEDULER_PID" 2>/dev/null; then
+    fail "scheduler process exited"
   fi
   if [[ "$START_FRONTEND" == "true" ]] && ! kill -0 "$FRONTEND_PID" 2>/dev/null; then
     fail "frontend process exited"

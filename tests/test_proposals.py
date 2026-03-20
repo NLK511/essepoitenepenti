@@ -58,9 +58,14 @@ class ProposalServiceTests(unittest.TestCase):
         with patch.object(ProposalService, "_fetch_price_history", return_value=history):
             output = self.service.generate("AAPL")
 
+        stop_pct = ((output.recommendation.entry_price - output.recommendation.stop_loss) / output.recommendation.entry_price) * 100
+        take_pct = ((output.recommendation.take_profit - output.recommendation.entry_price) / output.recommendation.entry_price) * 100
+
         self.assertEqual(output.recommendation.direction, RecommendationDirection.LONG)
         self.assertGreater(output.recommendation.confidence, 0)
         self.assertTrue(output.recommendation.take_profit > output.recommendation.entry_price)
+        self.assertLessEqual(stop_pct, 3.0)
+        self.assertLessEqual(take_pct, 4.5)
         self.assertIn("feature_vectors", output.diagnostics.analysis_json)
         self.assertIn("aggregations", output.diagnostics.analysis_json)
         self.assertIsNotNone(output.diagnostics.feature_vector_json)

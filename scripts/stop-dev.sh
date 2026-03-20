@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STATE_DIR="${ROOT_DIR}/.dev-run"
 API_PID_FILE="${STATE_DIR}/api.pid"
 WORKER_PID_FILE="${STATE_DIR}/worker.pid"
+SCHEDULER_PID_FILE="${STATE_DIR}/scheduler.pid"
 FRONTEND_PID_FILE="${STATE_DIR}/frontend.pid"
 META_FILE="${STATE_DIR}/meta.env"
 
@@ -16,7 +17,7 @@ usage() {
   cat <<EOF
 Usage: scripts/stop-dev.sh
 
-Stops the API, worker, and optional frontend dev server started by scripts/start-dev.sh using PID files under .dev-run/.
+Stops the API, worker, scheduler, and optional frontend dev server started by scripts/start-dev.sh using PID files under .dev-run/.
 EOF
 }
 
@@ -59,9 +60,10 @@ stop_pid() {
 
 API_PID="$(read_pid_file "$API_PID_FILE")"
 WORKER_PID="$(read_pid_file "$WORKER_PID_FILE")"
+SCHEDULER_PID="$(read_pid_file "$SCHEDULER_PID_FILE")"
 FRONTEND_PID="$(read_pid_file "$FRONTEND_PID_FILE")"
 
-if [[ -z "$API_PID" && -z "$WORKER_PID" && -z "$FRONTEND_PID" ]]; then
+if [[ -z "$API_PID" && -z "$WORKER_PID" && -z "$SCHEDULER_PID" && -z "$FRONTEND_PID" ]]; then
   log "no PID files found in ${STATE_DIR}; nothing to stop"
   exit 0
 fi
@@ -69,8 +71,9 @@ fi
 stop_pid "frontend" "$FRONTEND_PID"
 stop_pid "api" "$API_PID"
 stop_pid "worker" "$WORKER_PID"
+stop_pid "scheduler" "$SCHEDULER_PID"
 
-rm -f "$API_PID_FILE" "$WORKER_PID_FILE" "$FRONTEND_PID_FILE" "$META_FILE"
+rm -f "$API_PID_FILE" "$WORKER_PID_FILE" "$SCHEDULER_PID_FILE" "$FRONTEND_PID_FILE" "$META_FILE"
 rmdir "$STATE_DIR" 2>/dev/null || true
 
 log "done"
