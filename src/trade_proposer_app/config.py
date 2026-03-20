@@ -14,6 +14,8 @@ class AppSettings(BaseSettings):
     single_user_auth_enabled: bool = True
     single_user_auth_token: str = "change-me"
     single_user_auth_allowlist_paths: str | None = None
+    single_user_auth_username: str = "admin"
+    single_user_auth_password: str = "change-me"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

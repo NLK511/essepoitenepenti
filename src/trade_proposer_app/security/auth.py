@@ -13,6 +13,7 @@ _DEFAULT_ALLOWLIST_PATHS = (
     "/api/health",
     "/api/health/preflight",
     "/api/health/prototype",
+    "/api/login",
 )
 
 _UNSET = object()

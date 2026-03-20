@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from trade_proposer_app.api.routes.auth import router as auth_router
 from trade_proposer_app.api.routes.dashboard import router as dashboard_router
 from trade_proposer_app.api.routes.docs import router as docs_router
 from trade_proposer_app.api.routes.health import router as health_router
@@ -13,6 +14,7 @@ from trade_proposer_app.api.routes.watchlists import router as watchlists_router
 
 router = APIRouter(prefix="/api")
 router.include_router(health_router)
+router.include_router(auth_router)
 router.include_router(dashboard_router)
 router.include_router(history_router)
 router.include_router(docs_router)

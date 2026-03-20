@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
+import { useAuth } from "../auth";
+
 const jobsSectionLinks = [
   { to: "/jobs", label: "Jobs overview", shortLabel: "Jobs", end: true },
   { to: "/jobs/watchlists", label: "Watchlists", shortLabel: "WL" },
@@ -38,6 +40,7 @@ export function AppLayout() {
   const [theme, setTheme] = useState<Theme>(() => readInitialTheme());
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
+  const { logout } = useAuth();
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -117,6 +120,9 @@ export function AppLayout() {
               <ResponsiveLabel full="Health" short="Health" />
             </a>
           </nav>
+          <button type="button" className="button-subtle" onClick={logout}>
+            Log out
+          </button>
           <button
             type="button"
             className="theme-toggle"

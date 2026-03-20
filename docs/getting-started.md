@@ -84,14 +84,18 @@ APP_PORT=8000
 DATABASE_URL=sqlite:///./trade_proposer.db
 REDIS_URL=redis://localhost:6379/0
 SECRET_KEY=replace-this-with-a-long-random-secret
-SINGLE_USER_AUTH_ENABLED=false
+SINGLE_USER_AUTH_ENABLED=true
 SINGLE_USER_AUTH_TOKEN=
 SINGLE_USER_AUTH_ALLOWLIST_PATHS=/api/health,/api/health/preflight,/api/health/prototype
+SINGLE_USER_AUTH_USERNAME=admin
+SINGLE_USER_AUTH_PASSWORD=change-me
 ```
 
 ## Single-user authentication (optional)
 
-Authentication is enabled by default (`SINGLE_USER_AUTH_ENABLED=true`), so you should update `SINGLE_USER_AUTH_TOKEN` in `.env` (or via exported env vars) to a strong secret before running the app. Every `/api` request must then carry `Authorization: Bearer <token>`. The app automatically whitelists `/api/health`, `/api/health/preflight`, and `/api/health/prototype`; list additional paths (wildcards allowed using `*`) via `SINGLE_USER_AUTH_ALLOWLIST_PATHS`.
+Authentication is enabled by default (`SINGLE_USER_AUTH_ENABLED=true`), so you should update `SINGLE_USER_AUTH_TOKEN` in `.env` (or via exported env vars) to a strong secret before running the app. Every `/api` request must then carry `Authorization: Bearer <token>`. The app automatically whitelists `/api/health`, `/api/health/preflight`, `/api/health/prototype`, and `/api/login`; list additional paths (wildcards allowed using `*`) via `SINGLE_USER_AUTH_ALLOWLIST_PATHS`.
+
+The React UI now routes unauthenticated visitors to `/login`, where you can submit the username and password configured via `SINGLE_USER_AUTH_USERNAME`/`SINGLE_USER_AUTH_PASSWORD` (defaults: `admin`/`change-me`). The backend responds with the same bearer token that the login page stores in `localStorage`, so authenticated API requests succeed without manually copying the header.
 
 During development `./scripts/start-dev.sh` propagates `SINGLE_USER_AUTH_TOKEN` into the Vite dev server so the React UI includes the matching `Authorization` header. When building for production, make sure `VITE_API_AUTH_TOKEN` is set to the same secret before `npm run build` so the compiled frontend can continue authenticating. `./scripts/start-prod.sh` already exports the value, so no extra step is needed when you build via the helper script. If you run Vite manually (for dev or build), export `VITE_API_AUTH_TOKEN` or place it in `frontend/.env` so the browser continues to send the header.
 
