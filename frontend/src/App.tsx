@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { AppLayout } from "./components/layout";
+import { LoginPage } from "./pages/login-page";
 import { DashboardPage } from "./pages/dashboard-page";
 import { DebuggerPage } from "./pages/debugger-page";
 import { DocsPage } from "./pages/docs-page";
@@ -11,6 +12,7 @@ import { RunDetailPage } from "./pages/run-detail-page";
 import { SettingsPage } from "./pages/settings-page";
 import { TickerPage } from "./pages/ticker-page";
 import { WatchlistsPage } from "./pages/watchlists-page";
+import { RequireAuth } from "./auth";
 
 function NotFoundPage() {
   return <Navigate to="/" replace />;
@@ -20,7 +22,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<AppLayout />}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<RequireAuth><AppLayout /></RequireAuth>}>
           <Route index element={<DashboardPage />} />
           <Route path="jobs" element={<JobsPage />} />
           <Route path="jobs/watchlists" element={<WatchlistsPage />} />

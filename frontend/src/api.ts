@@ -1,5 +1,9 @@
+import { readStoredToken } from "./token-storage";
+
 type JsonObject = Record<string, unknown>;
 type FormValue = string | number | boolean | null | undefined;
+
+const ENV_API_AUTH_TOKEN = (import.meta.env.VITE_API_AUTH_TOKEN ?? "").trim();
 
 export class ApiError extends Error {
   status: number;
@@ -9,6 +13,14 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = status;
   }
+}
+
+function getAuthToken(): string {
+  const stored = readStoredToken();
+  if (stored) {
+    return stored;
+  }
+  return ENV_API_AUTH_TOKEN;
 }
 
 function isJsonObject(value: unknown): value is JsonObject {
@@ -32,9 +44,16 @@ function extractErrorMessage(value: unknown): string | null {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const defaultHeaders: Record<string, string> = {
+    Accept: "application/json",
+  };
+  const token = getAuthToken();
+  if (token) {
+    defaultHeaders.Authorization = `Bearer ${token}`;
+  }
   const response = await fetch(path, {
     headers: {
-      Accept: "application/json",
+      ...defaultHeaders,
       ...(init?.headers ?? {}),
     },
     ...init,

@@ -103,8 +103,30 @@ done
 [[ -d "$VENV_DIR" ]] || fail "missing ${VENV_DIR}; run ./scripts/setup.sh first"
 [[ -f "$ENV_FILE" ]] || fail "missing ${ENV_FILE}; run ./scripts/setup.sh first"
 
+read_env_value() {
+  python - "$1" "$2" <<'PY'
+import sys
+from pathlib import Path
+
+if len(sys.argv) < 3:
+    sys.exit(0)
+key = sys.argv[1]
+path = Path(sys.argv[2])
+if not path.exists():
+    sys.exit(0)
+value = ""
+for line in path.read_text().splitlines():
+    if line.startswith(f"{key}="):
+        value = line.split("=", 1)[1]
+        break
+sys.stdout.write(value)
+PY
+}
+
 VENV_PYTHON="${VENV_DIR}/bin/python"
 [[ -x "$VENV_PYTHON" ]] || fail "missing ${VENV_PYTHON}; run ./scripts/setup.sh first"
+FILE_AUTH_TOKEN="$(read_env_value SINGLE_USER_AUTH_TOKEN "$ENV_FILE")"
+FRONTEND_AUTH_TOKEN="${VITE_API_AUTH_TOKEN:-${SINGLE_USER_AUTH_TOKEN:-$FILE_AUTH_TOKEN}}"
 
 if [[ "$START_FRONTEND" == "true" ]]; then
   command -v npm >/dev/null 2>&1 || fail "npm is required to start the frontend dev server"
@@ -229,7 +251,7 @@ if [[ "$START_FRONTEND" == "true" ]]; then
   log "starting frontend dev server on ${FRONTEND_PORT}"
   (
     cd "$FRONTEND_DIR"
-    exec npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT"
+    VITE_API_AUTH_TOKEN="${FRONTEND_AUTH_TOKEN}" exec npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT"
   ) &
   FRONTEND_PID=$!
   printf '%s\n' "$FRONTEND_PID" > "$FRONTEND_PID_FILE"

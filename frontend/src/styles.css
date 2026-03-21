@@ -698,6 +698,24 @@ details summary {
   border: 1px solid var(--border);
 }
 
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  background: var(--bg);
+}
+
+.login-panel {
+  width: min(420px, 100%);
+  padding: 32px;
+  border-radius: 28px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow);
+}
+
 .summary-label {
   display: block;
   margin-bottom: 6px;

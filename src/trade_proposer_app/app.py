@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from trade_proposer_app.api.router import router as api_router
 from trade_proposer_app.config import settings
+from trade_proposer_app.security.auth import SingleUserAuthMiddleware
 from trade_proposer_app.web.router import FRONTEND_DIST_DIR, router as web_router
 
 
@@ -21,6 +22,11 @@ app = FastAPI(
     redoc_url=None,
 )
 frontend_assets_dir = FRONTEND_DIST_DIR / "assets"
+
+app.add_middleware(
+    SingleUserAuthMiddleware,
+    settings=settings,
+)
 
 if frontend_assets_dir.exists():
     app.mount("/assets", StaticFiles(directory=frontend_assets_dir), name="assets")
