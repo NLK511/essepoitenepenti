@@ -64,6 +64,22 @@ class NewsIngestionServiceTests(unittest.TestCase):
         self.assertEqual(result["sentiment_volatility"], 0.0)
         self.assertTrue(0.0 < result["news_items"][0]["compound"] < 1.0)
 
+    def test_naive_sentiment_analyzer_weights_summary_keywords(self) -> None:
+        analyzer = NaiveSentimentAnalyzer()
+        article = NewsArticle(
+            title="Quiet update",
+            summary="Guidance now exceeds forecasts and resilient demand keeps momentum rolling",
+            publisher="Example",
+            link="https://example.com/summary",
+            published_at=None,
+        )
+        bundle = NewsBundle(ticker="IME", articles=[article], feeds_used=["NewsAPI"])
+        result = analyzer.analyze(bundle)
+        self.assertGreater(result["score"], 0.0)
+        self.assertEqual(result["label"], "POSITIVE")
+        self.assertGreater(result["keyword_hits"], 0)
+        self.assertGreater(result["news_items"][0]["compound"], 0.0)
+
     def test_naive_sentiment_analyzer_records_coverage_insights_for_zero_hits(self) -> None:
         analyzer = NaiveSentimentAnalyzer()
         article = NewsArticle(
