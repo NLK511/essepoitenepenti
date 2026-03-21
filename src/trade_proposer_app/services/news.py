@@ -31,9 +31,9 @@ CONTINUOUS_CONTEXT_KEYWORDS: dict[str, str] = {
     "general": "context_tag_general",
 }
 
-TITLE_KEYWORD_WEIGHT = 1.5
-SUMMARY_KEYWORD_WEIGHT = 1.0
-ARTICLE_SCORE_SMOOTHING = 0.5
+TITLE_KEYWORD_WEIGHT = 1.7
+SUMMARY_KEYWORD_WEIGHT = 1.2
+ARTICLE_SCORE_SMOOTHING = 0.25
 
 POSITIVE_KEYWORD_WEIGHTS: dict[str, float] = {
     "beat": 1.3,
@@ -62,7 +62,7 @@ POSITIVE_KEYWORD_WEIGHTS: dict[str, float] = {
     "positive": 1.0,
     "gain": 1.1,
     "gains": 1.1,
-    "momentum": 0.9,
+    "momentum": 1.0,
     "accelerate": 1.1,
     "accelerates": 1.1,
     "accelerated": 1.1,
@@ -70,6 +70,24 @@ POSITIVE_KEYWORD_WEIGHTS: dict[str, float] = {
     "rally": 1.1,
     "soar": 1.2,
     "soars": 1.2,
+    "surpass": 1.2,
+    "surpasses": 1.2,
+    "surpassed": 1.2,
+    "exceed": 1.2,
+    "exceeds": 1.2,
+    "exceeded": 1.2,
+    "resilient": 1.1,
+    "resilience": 1.1,
+    "robust": 1.1,
+    "guidance": 1.0,
+    "outlook": 1.0,
+    "innovation": 1.0,
+    "innovations": 1.0,
+    "demand": 0.9,
+    "tailwind": 0.9,
+    "tailwinds": 0.9,
+    "win": 0.9,
+    "wins": 0.9,
 }
 
 NEGATIVE_KEYWORD_WEIGHTS: dict[str, float] = {
@@ -107,6 +125,30 @@ NEGATIVE_KEYWORD_WEIGHTS: dict[str, float] = {
     "volatile": 1.0,
     "declining": 1.1,
     "concerns": 1.0,
+    "delay": 1.2,
+    "delays": 1.2,
+    "delayed": 1.2,
+    "slowdown": 1.2,
+    "slowdowns": 1.2,
+    "shortfall": 1.3,
+    "shortfalls": 1.3,
+    "shortage": 1.2,
+    "shortages": 1.2,
+    "uncertain": 1.1,
+    "uncertainty": 1.2,
+    "drag": 1.0,
+    "drags": 1.0,
+    "dragging": 1.0,
+    "struggle": 1.0,
+    "struggles": 1.0,
+    "struggled": 1.0,
+    "slump": 1.2,
+    "slumps": 1.2,
+    "slumping": 1.2,
+    "trouble": 1.0,
+    "troubles": 1.0,
+    "downturn": 1.2,
+    "downturns": 1.2,
 }
 
 PROVIDER_BUILDERS: dict[str, type["NewsProvider"]] = {}
