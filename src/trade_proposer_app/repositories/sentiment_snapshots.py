@@ -53,6 +53,12 @@ class SentimentSnapshotRepository:
         self.session.refresh(record)
         return self._to_model(record)
 
+    def get_snapshot(self, snapshot_id: int) -> SentimentSnapshot | None:
+        record = self.session.get(SentimentSnapshotRecord, snapshot_id)
+        if record is None:
+            return None
+        return self._to_model(record)
+
     def get_latest_snapshot(self, scope: str, subject_key: str) -> SentimentSnapshot | None:
         record = self.session.scalars(
             select(SentimentSnapshotRecord)

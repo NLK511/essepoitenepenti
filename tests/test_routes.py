@@ -18,6 +18,7 @@ from trade_proposer_app.domain.models import AppPreflightReport, EvaluationRunRe
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 
@@ -152,6 +153,44 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                 },
             )
             return run.id or 0
+        finally:
+            session.close()
+
+    def seed_sentiment_snapshots(self) -> list[int]:
+        session = Session(bind=self.engine)
+        try:
+            repository = SentimentSnapshotRepository(session)
+            macro = repository.create_snapshot(
+                scope="macro",
+                subject_key="global_macro",
+                subject_label="Global Macro",
+                score=-0.18,
+                label="NEGATIVE",
+                computed_at=datetime(2026, 3, 22, 6, 0, tzinfo=timezone.utc),
+                expires_at=datetime(2026, 3, 22, 12, 0, tzinfo=timezone.utc),
+                coverage={"social_count": 4},
+                source_breakdown={"social": {"score": -0.18, "item_count": 4}},
+                drivers=["rates rising"],
+                diagnostics={"warnings": ["snapshot fresh"]},
+                job_id=1,
+                run_id=2,
+            )
+            industry = repository.create_snapshot(
+                scope="industry",
+                subject_key="consumer_electronics",
+                subject_label="Consumer Electronics",
+                score=0.27,
+                label="POSITIVE",
+                computed_at=datetime(2026, 3, 22, 7, 0, tzinfo=timezone.utc),
+                expires_at=datetime(2026, 3, 22, 15, 0, tzinfo=timezone.utc),
+                coverage={"social_count": 6},
+                source_breakdown={"social": {"score": 0.27, "item_count": 6}},
+                drivers=["iphone demand stable"],
+                diagnostics={"warnings": []},
+                job_id=3,
+                run_id=4,
+            )
+            return [macro.id or 0, industry.id or 0]
         finally:
             session.close()
 
@@ -823,6 +862,42 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["providers"][0]["api_key"], "sk-test")
         self.assertEqual(payload["optimization"]["minimum_resolved_trades"], 80)
         self.assertEqual(payload["optimization"]["weights_path"], str(weights_path))
+
+    async def test_sentiment_snapshot_routes_list_and_detail(self) -> None:
+        snapshot_ids = self.seed_sentiment_snapshots()
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            listed = await client.get("/api/sentiment-snapshots")
+            macro = await client.get("/api/sentiment-snapshots/macro")
+            industry = await client.get("/api/sentiment-snapshots/industry")
+            detail = await client.get(f"/api/sentiment-snapshots/{snapshot_ids[1]}")
+
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(macro.status_code, 200)
+        self.assertEqual(industry.status_code, 200)
+        self.assertEqual(detail.status_code, 200)
+        listed_payload = listed.json()
+        macro_payload = macro.json()
+        industry_payload = industry.json()
+        detail_payload = detail.json()
+        self.assertEqual(len(listed_payload["snapshots"]), 2)
+        self.assertEqual(macro_payload["scope"], "macro")
+        self.assertEqual(len(macro_payload["snapshots"]), 1)
+        self.assertEqual(macro_payload["snapshots"][0]["subject_key"], "global_macro")
+        self.assertEqual(industry_payload["scope"], "industry")
+        self.assertEqual(len(industry_payload["snapshots"]), 1)
+        self.assertEqual(detail_payload["id"], snapshot_ids[1])
+        self.assertEqual(detail_payload["subject_key"], "consumer_electronics")
+        self.assertEqual(detail_payload["coverage"]["social_count"], 6)
+        self.assertEqual(detail_payload["drivers"], ["iphone demand stable"])
+
+    async def test_sentiment_snapshot_detail_returns_404_for_missing_snapshot(self) -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/api/sentiment-snapshots/9999")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("not found", response.text.lower())
 
     async def test_settings_rollback_restores_latest_weights_backup(self) -> None:
         data_dir = Path(self.prototype_root.name) / ".pi" / "skills" / "trade-proposer" / "data"
