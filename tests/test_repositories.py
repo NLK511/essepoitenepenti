@@ -1,13 +1,15 @@
 import unittest
+from datetime import datetime, timezone
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import JobType, RecommendationDirection
-from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, RunDiagnostics, RunOutput
+from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, RunDiagnostics, RunOutput, SentimentSnapshot
 from trade_proposer_app.persistence.models import Base, JobRecord, ProviderCredentialRecord, RunRecord
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
@@ -83,6 +85,33 @@ class StubOptimizationService:
                 "after": {"exists": True, "sha256": "def"},
             },
         )
+
+
+class StubMacroSentimentService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[int | None, int | None]] = []
+
+    def refresh(self, *, job_id: int | None = None, run_id: int | None = None) -> dict[str, object]:
+        self.calls.append((job_id, run_id))
+        snapshot = SentimentSnapshot(
+            id=7,
+            scope="macro",
+            subject_key="global_macro",
+            subject_label="Global Macro",
+            score=0.2,
+            label="POSITIVE",
+        )
+        return {
+            "snapshot": snapshot,
+            "summary": {
+                "scope": "macro",
+                "subject_key": "global_macro",
+                "subject_label": "Global Macro",
+                "score": 0.2,
+                "label": "POSITIVE",
+                "expires_at": "2026-03-22T06:00:00+00:00",
+            },
+        }
 
 
 class RepositoryTests(unittest.TestCase):
@@ -179,6 +208,63 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(stored_run.job_type, JobType.RECOMMENDATION_EVALUATION)
         self.assertIn('"synced_recommendations": 3', stored_run.summary_json or "")
         self.assertIn('"weights_path": "/tmp/weights.json"', stored_run.artifact_json or "")
+
+    def test_sentiment_snapshot_repository_returns_latest_valid_snapshot(self) -> None:
+        session = create_session()
+        repository = SentimentSnapshotRepository(session)
+        now = datetime(2026, 3, 22, 12, 0, tzinfo=timezone.utc)
+
+        repository.create_snapshot(
+            scope="macro",
+            subject_key="global_macro",
+            subject_label="Global Macro",
+            score=-0.1,
+            label="NEGATIVE",
+            computed_at=now,
+            expires_at=now,
+            coverage={"social_count": 2},
+        )
+        latest = repository.create_snapshot(
+            scope="macro",
+            subject_key="global_macro",
+            subject_label="Global Macro",
+            score=0.25,
+            label="POSITIVE",
+            computed_at=now.replace(hour=13),
+            expires_at=now.replace(hour=19),
+            coverage={"social_count": 5},
+            drivers=["inflation cooled"],
+        )
+
+        resolved = repository.get_latest_valid_snapshot("macro", "global_macro", now=now.replace(hour=14))
+
+        self.assertIsNotNone(resolved)
+        assert resolved is not None
+        self.assertEqual(resolved.id, latest.id)
+        self.assertEqual(resolved.label, "POSITIVE")
+        self.assertIn('"social_count": 5', resolved.coverage_json or "")
+
+    def test_sentiment_snapshot_repository_ignores_expired_snapshot(self) -> None:
+        session = create_session()
+        repository = SentimentSnapshotRepository(session)
+        snapshot = repository.create_snapshot(
+            scope="macro",
+            subject_key="global_macro",
+            subject_label="Global Macro",
+            score=0.05,
+            label="NEUTRAL",
+            computed_at=datetime(2026, 3, 22, 6, 0, tzinfo=timezone.utc),
+            expires_at=datetime(2026, 3, 22, 8, 0, tzinfo=timezone.utc),
+        )
+
+        resolved = repository.get_latest_valid_snapshot(
+            "macro",
+            "global_macro",
+            now=datetime(2026, 3, 22, 9, 0, tzinfo=timezone.utc),
+        )
+
+        self.assertIsNone(resolved)
+        self.assertIsNotNone(snapshot.id)
 
     def test_run_repository_lists_recommendation_history_for_ticker(self) -> None:
         session = create_session()
@@ -320,6 +406,40 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn('"weights_changed": true', (stored_run.summary_json or "").lower())
         self.assertIn('"weights_path": "/tmp/weights.json"', stored_run.artifact_json or "")
         self.assertIn('"optimization_seconds"', stored_run.timing_json or "")
+        self.assertEqual(runs.list_recommendations_for_run(stored_run.id or 0), [])
+
+    def test_job_execution_processes_macro_sentiment_refresh_and_persists_snapshot_metadata(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create(
+            "Macro Refresh",
+            [],
+            "0 */6 * * *",
+            job_type=JobType.MACRO_SENTIMENT_REFRESH,
+        )
+        macro_service = StubMacroSentimentService()
+        service = JobExecutionService(
+            jobs=jobs,
+            runs=runs,
+            proposals=ProposalService(),
+            macro_sentiment=macro_service,
+        )
+        queued_run = service.enqueue_job(job.id or 0)
+
+        processed_run, recommendations = service.process_next_queued_run()
+
+        self.assertIsNotNone(processed_run)
+        self.assertEqual(processed_run.job_type, JobType.MACRO_SENTIMENT_REFRESH)
+        self.assertEqual(processed_run.status, "completed")
+        self.assertEqual(recommendations, [])
+        self.assertEqual(len(macro_service.calls), 1)
+        self.assertEqual(macro_service.calls[0][0], job.id)
+        self.assertEqual(macro_service.calls[0][1], queued_run.id)
+        stored_run = runs.get_run(queued_run.id or 0)
+        self.assertIn('"scope": "macro"', stored_run.summary_json or "")
+        self.assertIn('"snapshot_id": 7', stored_run.artifact_json or "")
+        self.assertIn('"macro_refresh_seconds"', stored_run.timing_json or "")
         self.assertEqual(runs.list_recommendations_for_run(stored_run.id or 0), [])
 
     def test_job_execution_blocks_second_optimization_enqueue_when_one_is_active(self) -> None:

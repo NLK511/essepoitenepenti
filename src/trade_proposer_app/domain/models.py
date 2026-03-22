@@ -232,6 +232,25 @@ class AppSetting(BaseModel):
     value: str
 
 
+class SentimentSnapshot(BaseModel):
+    id: int | None = None
+    scope: str
+    subject_key: str
+    subject_label: str
+    status: str = "completed"
+    score: float = 0.0
+    label: str = "NEUTRAL"
+    computed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: datetime | None = None
+    coverage_json: str | None = None
+    source_breakdown_json: str | None = None
+    drivers_json: str | None = None
+    signals_json: str | None = None
+    diagnostics_json: str | None = None
+    job_id: int | None = None
+    run_id: int | None = None
+
+
 class ProviderCredential(BaseModel):
     provider: str
     api_key: str = ""

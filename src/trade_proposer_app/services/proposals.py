@@ -24,6 +24,7 @@ from trade_proposer_app.services.news import (
     SUMMARY_METHOD_NEWS_DIGEST,
 )
 from trade_proposer_app.services.signals import SignalIngestionService
+from trade_proposer_app.services.snapshot_resolver import SentimentSnapshotResolver
 from trade_proposer_app.services.social import SocialIngestionService
 from trade_proposer_app.services.summary import SummaryRequest, SummaryService
 
@@ -169,6 +170,7 @@ class ProposalService:
         news_service: NewsIngestionService | None = None,
         social_service: SocialIngestionService | None = None,
         signal_service: SignalIngestionService | None = None,
+        snapshot_resolver: SentimentSnapshotResolver | None = None,
         sentiment_analyzer: NaiveSentimentAnalyzer | None = None,
         summary_service: SummaryService | None = None,
     ) -> None:
@@ -177,6 +179,7 @@ class ProposalService:
         self.news_service = news_service
         self.social_service = social_service
         self.signal_service = signal_service
+        self.snapshot_resolver = snapshot_resolver
         self.sentiment_analyzer = sentiment_analyzer or NaiveSentimentAnalyzer()
         self.summary_service = summary_service or SummaryService()
 
@@ -320,15 +323,22 @@ class ProposalService:
                 "components": context.get("enhanced_sentiment_components", {}),
             },
             "macro": {
+                "source": context.get("macro_snapshot_source", "computed"),
+                "snapshot_id": context.get("macro_snapshot_id"),
+                "subject_key": context.get("macro_snapshot_subject_key", "global_macro"),
+                "subject_label": context.get("macro_snapshot_subject_label", "Global Macro"),
                 "score": context.get("macro_sentiment_score", 0.0),
                 "label": context.get("macro_sentiment_label", "NEUTRAL"),
                 "coverage_insights": context.get("macro_coverage_insights", []),
-                "source_breakdown": {
+                "coverage": context.get("macro_snapshot_coverage", {}),
+                "drivers": context.get("macro_snapshot_drivers", []),
+                "source_breakdown": context.get("macro_snapshot_source_breakdown", {
                     "news": {"score": context.get("macro_news_sentiment_score", 0.0), "item_count": context.get("macro_news_item_count", 0)},
                     "social": {"score": context.get("macro_social_sentiment_score", 0.0), "item_count": context.get("macro_social_item_count", 0)},
-                },
+                }),
             },
             "industry": {
+                "source": "computed",
                 "score": context.get("industry_sentiment_score", 0.0),
                 "label": context.get("industry_sentiment_label", "NEUTRAL"),
                 "coverage_insights": context.get("industry_coverage_insights", []),
@@ -339,6 +349,7 @@ class ProposalService:
                 },
             },
             "ticker": {
+                "source": "live",
                 "score": context.get("ticker_sentiment_score", context.get("sentiment_score")),
                 "label": context.get("ticker_sentiment_label", context.get("sentiment_label")),
                 "coverage_insights": context.get("social_coverage_insights", []),
@@ -967,6 +978,27 @@ class ProposalService:
             social_breakdown=social_scope_breakdown,
             context_flags=sentiment.get("context_flags", {}),
         )
+        macro_snapshot = self.snapshot_resolver.resolve_macro_snapshot() if self.snapshot_resolver is not None else None
+        if macro_snapshot is not None:
+            hierarchical.update(
+                {
+                    "macro_sentiment_score": float(macro_snapshot.get("score", 0.0) or 0.0),
+                    "macro_sentiment_label": macro_snapshot.get("label", "NEUTRAL"),
+                    "macro_snapshot_id": macro_snapshot.get("snapshot_id"),
+                    "macro_snapshot_subject_key": macro_snapshot.get("subject_key"),
+                    "macro_snapshot_subject_label": macro_snapshot.get("subject_label"),
+                    "macro_snapshot_source": macro_snapshot.get("source", "snapshot"),
+                    "macro_snapshot_coverage": macro_snapshot.get("coverage", {}),
+                    "macro_snapshot_source_breakdown": macro_snapshot.get("source_breakdown", {}),
+                    "macro_snapshot_drivers": macro_snapshot.get("drivers", []),
+                    "macro_coverage_insights": list(
+                        dict.fromkeys(
+                            hierarchical.get("macro_coverage_insights", [])
+                            + list((macro_snapshot.get("diagnostics", {}) or {}).get("warnings", []))
+                        )
+                    ),
+                }
+            )
         ticker_sentiment_score = float(hierarchical.get("ticker_sentiment_score", 0.0) or 0.0)
         ticker_sentiment_label = hierarchical.get("ticker_sentiment_label")
         overall_base_score = self._clamp_value(

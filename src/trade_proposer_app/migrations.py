@@ -5,7 +5,7 @@ from sqlalchemy.exc import OperationalError
 
 from trade_proposer_app.config import settings
 
-HEAD_REVISION = "0009_recommendation_feature_vectors"
+HEAD_REVISION = "0010_sentiment_snapshots"
 
 
 def get_alembic_config() -> Config:

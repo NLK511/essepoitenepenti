@@ -5,7 +5,7 @@ from trade_proposer_app.db import SessionLocal
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.services.builders import create_proposal_service
+from trade_proposer_app.services.builders import create_macro_sentiment_service, create_proposal_service
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.evaluations import RecommendationEvaluationService
 from trade_proposer_app.services.job_execution import JobExecutionService
@@ -25,6 +25,7 @@ def process_once() -> bool:
                 session=session,
                 minimum_resolved_trades=settings_repository.get_optimization_minimum_resolved_trades(),
             ),
+            macro_sentiment=create_macro_sentiment_service(session),
         )
         try:
             run, _recommendations = service.process_next_queued_run()

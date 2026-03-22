@@ -50,6 +50,9 @@ class SocialProvider:
     def fetch(self, ticker: str) -> SignalBundle:
         raise NotImplementedError
 
+    def fetch_subject(self, subject_key: str, queries: list[str], *, scope_tag: str) -> SignalBundle:
+        raise NotImplementedError
+
 
 class NitterProvider(SocialProvider):
     name: ClassVar[str] = "Nitter"
@@ -74,10 +77,42 @@ class NitterProvider(SocialProvider):
     def fetch(self, ticker: str) -> SignalBundle:
         query_profile = self.taxonomy_service.build_query_profile(ticker)
         ticker_queries = query_profile.get("ticker_queries", [])[:3]
+        return self._fetch_queries(
+            subject_key=ticker,
+            queries=ticker_queries,
+            scope_tag="ticker",
+            ticker=ticker,
+            query_profile=query_profile,
+        )
+
+    def fetch_subject(self, subject_key: str, queries: list[str], *, scope_tag: str) -> SignalBundle:
+        query_profile = {
+            "ticker_queries": queries if scope_tag == "ticker" else [],
+            "industry_queries": queries if scope_tag == "industry" else [],
+            "macro_queries": queries if scope_tag == "macro" else [],
+            "exclude_keywords": [],
+        }
+        return self._fetch_queries(
+            subject_key=subject_key,
+            queries=queries[:3],
+            scope_tag=scope_tag,
+            ticker=subject_key,
+            query_profile=query_profile,
+        )
+
+    def _fetch_queries(
+        self,
+        *,
+        subject_key: str,
+        queries: list[str],
+        scope_tag: str,
+        ticker: str,
+        query_profile: dict[str, list[str]],
+    ) -> SignalBundle:
         fetched_items: list[SignalItem] = []
         executed_queries: list[str] = []
         cutoff = datetime.now(timezone.utc) - timedelta(hours=self.query_window_hours)
-        for query in ticker_queries:
+        for query in queries:
             url = f"{self.base_url}{NITTER_SEARCH_PATH}?f=tweets&q={quote(query)}"
             try:
                 response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
@@ -92,10 +127,14 @@ class NitterProvider(SocialProvider):
                 if (item.published_at is None or item.published_at >= cutoff)
                 and not any(term in item.body.lower() for term in query_profile.get("exclude_keywords", []))
             ]
+            if scope_tag:
+                for item in filtered_items:
+                    if scope_tag not in item.scope_tags:
+                        item.scope_tags = list(dict.fromkeys(item.scope_tags + [scope_tag]))
             fetched_items.extend(filtered_items)
             executed_queries.append(query)
         return SignalBundle(
-            ticker=ticker,
+            ticker=subject_key,
             items=fetched_items[: self.max_items_per_query],
             feeds_used=[self.name] if fetched_items else [],
             feed_errors=[],
@@ -104,7 +143,7 @@ class NitterProvider(SocialProvider):
                 "query_window_hours": self.query_window_hours,
             },
             query_diagnostics={
-                "ticker_queries": executed_queries,
+                f"{scope_tag}_queries": executed_queries,
                 "industry_queries": query_profile.get("industry_queries", []),
                 "macro_queries": query_profile.get("macro_queries", []),
                 "base_url": self.base_url,
@@ -412,6 +451,32 @@ class SocialIngestionService:
             "bundle": bundle,
             "sentiment": sentiment,
             "profile": profile,
+        }
+
+    def analyze_subject(self, subject_key: str, subject_label: str, queries: list[str], *, scope_tag: str) -> dict[str, Any]:
+        bundle = SignalBundle(ticker=subject_key)
+        if not self.providers:
+            bundle.feed_errors.append("social: no providers configured")
+            sentiment = self.sentiment_analyzer.analyze(bundle)
+            return {"bundle": bundle, "sentiment": sentiment, "profile": {"subject_label": subject_label}}
+        for provider in self.providers:
+            try:
+                provider_bundle = provider.fetch_subject(subject_key, queries, scope_tag=scope_tag)
+            except Exception as exc:  # noqa: BLE001
+                bundle.feed_errors.append(f"{provider.name}: {exc}")
+                continue
+            bundle.items.extend(provider_bundle.items)
+            bundle.feeds_used.extend(provider_bundle.feeds_used)
+            bundle.feed_errors.extend(provider_bundle.feed_errors)
+            bundle.coverage.update(provider_bundle.coverage)
+            bundle.query_diagnostics.update(provider_bundle.query_diagnostics)
+        bundle.feeds_used = list(dict.fromkeys(bundle.feeds_used))
+        bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
+        sentiment = self.sentiment_analyzer.analyze(bundle)
+        return {
+            "bundle": bundle,
+            "sentiment": sentiment,
+            "profile": {"subject_label": subject_label, "scope_tag": scope_tag},
         }
 
 
