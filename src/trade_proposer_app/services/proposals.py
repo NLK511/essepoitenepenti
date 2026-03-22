@@ -338,15 +338,20 @@ class ProposalService:
                 }),
             },
             "industry": {
-                "source": "computed",
+                "source": context.get("industry_snapshot_source", "computed"),
+                "snapshot_id": context.get("industry_snapshot_id"),
+                "subject_key": context.get("industry_snapshot_subject_key"),
+                "subject_label": context.get("industry_snapshot_subject_label", context.get("ticker_profile", {}).get("industry", "")),
                 "score": context.get("industry_sentiment_score", 0.0),
                 "label": context.get("industry_sentiment_label", "NEUTRAL"),
                 "coverage_insights": context.get("industry_coverage_insights", []),
+                "coverage": context.get("industry_snapshot_coverage", {}),
+                "drivers": context.get("industry_snapshot_drivers", []),
                 "industry": context.get("ticker_profile", {}).get("industry", ""),
-                "source_breakdown": {
+                "source_breakdown": context.get("industry_snapshot_source_breakdown", {
                     "news": {"score": context.get("industry_news_sentiment_score", 0.0), "item_count": context.get("industry_news_item_count", 0)},
                     "social": {"score": context.get("industry_social_sentiment_score", 0.0), "item_count": context.get("industry_social_item_count", 0)},
-                },
+                }),
             },
             "ticker": {
                 "source": "live",
@@ -995,6 +1000,27 @@ class ProposalService:
                         dict.fromkeys(
                             hierarchical.get("macro_coverage_insights", [])
                             + list((macro_snapshot.get("diagnostics", {}) or {}).get("warnings", []))
+                        )
+                    ),
+                }
+            )
+        industry_snapshot = self.snapshot_resolver.resolve_industry_snapshot(ticker) if self.snapshot_resolver is not None else None
+        if industry_snapshot is not None:
+            hierarchical.update(
+                {
+                    "industry_sentiment_score": float(industry_snapshot.get("score", 0.0) or 0.0),
+                    "industry_sentiment_label": industry_snapshot.get("label", "NEUTRAL"),
+                    "industry_snapshot_id": industry_snapshot.get("snapshot_id"),
+                    "industry_snapshot_subject_key": industry_snapshot.get("subject_key"),
+                    "industry_snapshot_subject_label": industry_snapshot.get("subject_label"),
+                    "industry_snapshot_source": industry_snapshot.get("source", "snapshot"),
+                    "industry_snapshot_coverage": industry_snapshot.get("coverage", {}),
+                    "industry_snapshot_source_breakdown": industry_snapshot.get("source_breakdown", {}),
+                    "industry_snapshot_drivers": industry_snapshot.get("drivers", []),
+                    "industry_coverage_insights": list(
+                        dict.fromkeys(
+                            hierarchical.get("industry_coverage_insights", [])
+                            + list((industry_snapshot.get("diagnostics", {}) or {}).get("warnings", []))
                         )
                     ),
                 }

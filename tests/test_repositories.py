@@ -114,6 +114,39 @@ class StubMacroSentimentService:
         }
 
 
+class StubIndustrySentimentService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[int | None, int | None]] = []
+
+    def refresh_all(self, *, job_id: int | None = None, run_id: int | None = None) -> dict[str, object]:
+        self.calls.append((job_id, run_id))
+        snapshots = [
+            SentimentSnapshot(
+                id=12,
+                scope="industry",
+                subject_key="consumer_electronics",
+                subject_label="Consumer Electronics",
+                score=0.15,
+                label="POSITIVE",
+            )
+        ]
+        return {
+            "snapshots": snapshots,
+            "summary": {
+                "scope": "industry",
+                "snapshot_count": 1,
+                "industries": [
+                    {
+                        "subject_key": "consumer_electronics",
+                        "subject_label": "Consumer Electronics",
+                        "score": 0.15,
+                        "label": "POSITIVE",
+                    }
+                ],
+            },
+        }
+
+
 class RepositoryTests(unittest.TestCase):
     def test_watchlist_repository_create_and_list(self) -> None:
         session = create_session()
@@ -440,6 +473,40 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn('"scope": "macro"', stored_run.summary_json or "")
         self.assertIn('"snapshot_id": 7', stored_run.artifact_json or "")
         self.assertIn('"macro_refresh_seconds"', stored_run.timing_json or "")
+        self.assertEqual(runs.list_recommendations_for_run(stored_run.id or 0), [])
+
+    def test_job_execution_processes_industry_sentiment_refresh_and_persists_snapshot_metadata(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create(
+            "Industry Refresh",
+            [],
+            "0 */8 * * *",
+            job_type=JobType.INDUSTRY_SENTIMENT_REFRESH,
+        )
+        industry_service = StubIndustrySentimentService()
+        service = JobExecutionService(
+            jobs=jobs,
+            runs=runs,
+            proposals=ProposalService(),
+            industry_sentiment=industry_service,
+        )
+        queued_run = service.enqueue_job(job.id or 0)
+
+        processed_run, recommendations = service.process_next_queued_run()
+
+        self.assertIsNotNone(processed_run)
+        self.assertEqual(processed_run.job_type, JobType.INDUSTRY_SENTIMENT_REFRESH)
+        self.assertEqual(processed_run.status, "completed")
+        self.assertEqual(recommendations, [])
+        self.assertEqual(len(industry_service.calls), 1)
+        self.assertEqual(industry_service.calls[0][0], job.id)
+        self.assertEqual(industry_service.calls[0][1], queued_run.id)
+        stored_run = runs.get_run(queued_run.id or 0)
+        self.assertIn('"scope": "industry"', stored_run.summary_json or "")
+        self.assertIn('"snapshot_count": 1', stored_run.artifact_json or "")
+        self.assertIn('"industry_refresh_seconds"', stored_run.timing_json or "")
         self.assertEqual(runs.list_recommendations_for_run(stored_run.id or 0), [])
 
     def test_job_execution_blocks_second_optimization_enqueue_when_one_is_active(self) -> None:

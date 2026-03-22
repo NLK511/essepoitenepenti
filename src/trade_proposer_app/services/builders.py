@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
+from trade_proposer_app.services.industry_sentiment import IndustrySentimentService
 from trade_proposer_app.services.macro_sentiment import MacroSentimentService
 from trade_proposer_app.services.news import NewsIngestionService
 from trade_proposer_app.services.proposals import ProposalService
@@ -9,6 +10,7 @@ from trade_proposer_app.services.signals import SignalIngestionService
 from trade_proposer_app.services.snapshot_resolver import SentimentSnapshotResolver
 from trade_proposer_app.services.social import SocialIngestionService
 from trade_proposer_app.services.summary import SummaryService
+from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
 def create_proposal_service(session: Session) -> ProposalService:
@@ -22,7 +24,11 @@ def create_proposal_service(session: Session) -> ProposalService:
         summary_settings=repository.get_summary_settings(),
         provider_credentials=credentials,
     )
-    snapshot_resolver = SentimentSnapshotResolver(SentimentSnapshotRepository(session))
+    taxonomy_service = TickerTaxonomyService()
+    snapshot_resolver = SentimentSnapshotResolver(
+        SentimentSnapshotRepository(session),
+        taxonomy_service=taxonomy_service,
+    )
     return ProposalService(
         news_service=news_service,
         social_service=social_service,
@@ -39,3 +45,15 @@ def create_macro_sentiment_service(session: Session) -> MacroSentimentService:
     social_service = SocialIngestionService.from_settings(repository.get_social_settings())
     snapshot_repository = SentimentSnapshotRepository(session)
     return MacroSentimentService(snapshot_repository, social_service=social_service, news_service=news_service)
+
+
+def create_industry_sentiment_service(session: Session) -> IndustrySentimentService:
+    repository = SettingsRepository(session)
+    social_service = SocialIngestionService.from_settings(repository.get_social_settings())
+    snapshot_repository = SentimentSnapshotRepository(session)
+    taxonomy_service = TickerTaxonomyService()
+    return IndustrySentimentService(
+        snapshot_repository,
+        social_service=social_service,
+        taxonomy_service=taxonomy_service,
+    )

@@ -7,6 +7,7 @@ from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
+from trade_proposer_app.services.industry_sentiment import IndustrySentimentService
 from trade_proposer_app.services.macro_sentiment import MacroSentimentService
 from trade_proposer_app.services.optimizations import WeightOptimizationError, WeightOptimizationService
 from trade_proposer_app.services.proposals import ProposalExecutionError, ProposalService
@@ -28,6 +29,7 @@ class JobExecutionService:
         evaluations: EvaluationExecutionService | None = None,
         optimizations: WeightOptimizationService | None = None,
         macro_sentiment: MacroSentimentService | None = None,
+        industry_sentiment: IndustrySentimentService | None = None,
     ) -> None:
         self.jobs = jobs
         self.runs = runs
@@ -35,6 +37,7 @@ class JobExecutionService:
         self.evaluations = evaluations
         self.optimizations = optimizations
         self.macro_sentiment = macro_sentiment
+        self.industry_sentiment = industry_sentiment
 
     def enqueue_job(self, job_id: int, scheduled_for: datetime | None = None) -> Run:
         job = self.jobs.get(job_id)
@@ -64,7 +67,7 @@ class JobExecutionService:
         if run.job_type == JobType.MACRO_SENTIMENT_REFRESH:
             return self._execute_macro_sentiment_run(run)
         if run.job_type == JobType.INDUSTRY_SENTIMENT_REFRESH:
-            raise RuntimeError("industry sentiment refresh execution is not configured yet")
+            return self._execute_industry_sentiment_run(run)
         raise RuntimeError(f"unsupported job_type execution: {run.job_type.value}")
 
     def _execute_proposal_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
@@ -245,6 +248,43 @@ class JobExecutionService:
             "scope": "macro",
             "subject_key": getattr(snapshot, "subject_key", None),
             "subject_label": getattr(snapshot, "subject_label", None),
+        }
+        self.runs.set_artifact(run.id or 0, artifact)
+        timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
+
+        self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
+        return [], timing
+
+    def _execute_industry_sentiment_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
+        if self.industry_sentiment is None:
+            raise RuntimeError("industry sentiment execution service is not configured")
+
+        execution_started = perf_counter()
+        timing: dict[str, object] = {
+            "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
+            "industry_refresh_seconds": 0.0,
+            "persistence_seconds": 0.0,
+            "finalize_seconds": 0.0,
+            "total_execution_seconds": 0.0,
+        }
+
+        refresh_started = perf_counter()
+        try:
+            result = self.industry_sentiment.refresh_all(job_id=run.job_id, run_id=run.id)
+            timing["industry_refresh_seconds"] = round(perf_counter() - refresh_started, 6)
+        except Exception as exc:
+            timing["industry_refresh_seconds"] = round(perf_counter() - refresh_started, 6)
+            timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
+            raise RunExecutionFailed(exc, timing) from exc
+
+        persistence_started = perf_counter()
+        self.runs.set_summary(run.id or 0, result.get("summary", {}))
+        snapshots = result.get("snapshots") or []
+        artifact = {
+            "scope": "industry",
+            "snapshot_count": len(snapshots),
+            "snapshot_ids": [getattr(snapshot, "id", None) for snapshot in snapshots],
+            "subject_keys": [getattr(snapshot, "subject_key", None) for snapshot in snapshots],
         }
         self.runs.set_artifact(run.id or 0, artifact)
         timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)

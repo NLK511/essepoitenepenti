@@ -101,6 +101,28 @@ class StubMacroSentimentService:
         }
 
 
+class StubIndustrySentimentService:
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+
+    def refresh_all(self, *, job_id: int | None = None, run_id: int | None = None) -> dict[str, object]:
+        return {
+            "snapshots": [type("Snapshot", (), {"id": 21, "subject_key": "consumer_electronics", "subject_label": "Consumer Electronics"})()],
+            "summary": {
+                "scope": "industry",
+                "snapshot_count": 1,
+                "industries": [
+                    {
+                        "subject_key": "consumer_electronics",
+                        "subject_label": "Consumer Electronics",
+                        "score": 0.12,
+                        "label": "POSITIVE",
+                    }
+                ],
+            },
+        }
+
+
 class WorkerSchedulerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.engine = create_engine("sqlite:///:memory:", future=True)
@@ -320,6 +342,8 @@ class WorkerSchedulerTests(unittest.TestCase):
             "trade_proposer_app.workers.tasks.create_proposal_service", return_value=StubProposalService()
         ), patch(
             "trade_proposer_app.workers.tasks.create_macro_sentiment_service", return_value=StubMacroSentimentService()
+        ), patch(
+            "trade_proposer_app.workers.tasks.create_industry_sentiment_service", return_value=StubIndustrySentimentService()
         ):
             processed = process_once()
 
@@ -330,6 +354,36 @@ class WorkerSchedulerTests(unittest.TestCase):
         self.assertIn('"scope": "macro"', updated_run.summary_json or "")
         self.assertIn('"snapshot_id": 11', updated_run.artifact_json or "")
         self.assertIn('"macro_refresh_seconds"', updated_run.timing_json or "")
+        self.assertEqual(runs.list_recommendations_for_run(updated_run.id or 0), [])
+
+    def test_worker_process_once_processes_industry_sentiment_refresh_run(self) -> None:
+        session = self.create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create(
+            "Industry Refresh Job",
+            [],
+            None,
+            job_type=JobType.INDUSTRY_SENTIMENT_REFRESH,
+        )
+        run = runs.enqueue(job.id or 0)
+
+        with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
+            "trade_proposer_app.workers.tasks.create_proposal_service", return_value=StubProposalService()
+        ), patch(
+            "trade_proposer_app.workers.tasks.create_macro_sentiment_service", return_value=StubMacroSentimentService()
+        ), patch(
+            "trade_proposer_app.workers.tasks.create_industry_sentiment_service", return_value=StubIndustrySentimentService()
+        ):
+            processed = process_once()
+
+        self.assertTrue(processed)
+        updated_run = runs.get_run(run.id or 0)
+        self.assertEqual(updated_run.status, "completed")
+        self.assertEqual(updated_run.job_type, JobType.INDUSTRY_SENTIMENT_REFRESH)
+        self.assertIn('"scope": "industry"', updated_run.summary_json or "")
+        self.assertIn('"snapshot_count": 1', updated_run.artifact_json or "")
+        self.assertIn('"industry_refresh_seconds"', updated_run.timing_json or "")
         self.assertEqual(runs.list_recommendations_for_run(updated_run.id or 0), [])
 
     def test_scheduler_skips_second_optimization_job_when_one_is_active(self) -> None:

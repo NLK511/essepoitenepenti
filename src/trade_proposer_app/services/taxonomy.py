@@ -50,3 +50,44 @@ class TickerTaxonomyService:
             "macro_queries": list(dict.fromkeys(macro_queries)),
             "exclude_keywords": [str(value).strip().lower() for value in profile.get("exclude_keywords", []) if str(value).strip()],
         }
+
+    def get_industry_profile(self, ticker: str) -> dict[str, Any]:
+        ticker_profile = self.get_ticker_profile(ticker)
+        industry = str(ticker_profile.get("industry", "")).strip()
+        sector = str(ticker_profile.get("sector", "")).strip()
+        themes = [str(value).strip() for value in ticker_profile.get("themes", []) if str(value).strip()]
+        industry_keywords = [str(value).strip() for value in ticker_profile.get("industry_keywords", []) if str(value).strip()]
+        subject_key = self._normalize_subject_key(industry or sector or ticker_profile.get("ticker", ticker))
+        subject_label = industry or sector or str(ticker_profile.get("ticker", ticker)).upper()
+        queries = list(dict.fromkeys(industry_keywords + themes + ([industry] if industry else []) + ([sector] if sector else [])))
+        return {
+            "subject_key": subject_key,
+            "subject_label": subject_label,
+            "industry": industry,
+            "sector": sector,
+            "queries": queries,
+            "ticker": ticker_profile.get("ticker", ticker).upper(),
+        }
+
+    def list_industry_profiles(self) -> list[dict[str, Any]]:
+        profiles: dict[str, dict[str, Any]] = {}
+        for ticker in sorted(self._taxonomy):
+            industry_profile = self.get_industry_profile(ticker)
+            subject_key = industry_profile["subject_key"]
+            existing = profiles.get(subject_key)
+            if existing is None:
+                profiles[subject_key] = {
+                    **industry_profile,
+                    "tickers": [industry_profile["ticker"]],
+                }
+                continue
+            existing["queries"] = list(dict.fromkeys(existing.get("queries", []) + industry_profile.get("queries", [])))
+            existing["tickers"] = list(dict.fromkeys(existing.get("tickers", []) + [industry_profile["ticker"]]))
+        return list(profiles.values())
+
+    @staticmethod
+    def _normalize_subject_key(value: object) -> str:
+        text = str(value or "").strip().lower()
+        if not text:
+            return "unknown"
+        return "_".join(token for token in text.replace("/", " ").replace("-", " ").split() if token)

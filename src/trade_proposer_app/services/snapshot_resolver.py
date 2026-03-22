@@ -5,11 +5,17 @@ from datetime import datetime, timezone
 from typing import Any
 
 from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
+from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
 class SentimentSnapshotResolver:
-    def __init__(self, repository: SentimentSnapshotRepository) -> None:
+    def __init__(
+        self,
+        repository: SentimentSnapshotRepository,
+        taxonomy_service: TickerTaxonomyService | None = None,
+    ) -> None:
         self.repository = repository
+        self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
     def resolve_macro_snapshot(self) -> dict[str, Any]:
         snapshot = self.repository.get_latest_valid_snapshot("macro", "global_macro", now=datetime.now(timezone.utc))
@@ -26,6 +32,35 @@ class SentimentSnapshotResolver:
                 "drivers": [],
                 "diagnostics": {"warnings": ["macro snapshot unavailable; using neutral fallback"]},
             }
+        return self._snapshot_payload(snapshot)
+
+    def resolve_industry_snapshot(self, ticker: str) -> dict[str, Any]:
+        industry_profile = self.taxonomy_service.get_industry_profile(ticker)
+        snapshot = self.repository.get_latest_valid_snapshot(
+            "industry",
+            industry_profile["subject_key"],
+            now=datetime.now(timezone.utc),
+        )
+        if snapshot is None:
+            return {
+                "score": 0.0,
+                "label": "NEUTRAL",
+                "source": "snapshot",
+                "snapshot_id": None,
+                "subject_key": industry_profile["subject_key"],
+                "subject_label": industry_profile["subject_label"],
+                "coverage": {},
+                "source_breakdown": {},
+                "drivers": [],
+                "diagnostics": {
+                    "warnings": [
+                        f"industry snapshot unavailable for {industry_profile['subject_label']}; using neutral fallback"
+                    ]
+                },
+            }
+        return self._snapshot_payload(snapshot)
+
+    def _snapshot_payload(self, snapshot: Any) -> dict[str, Any]:
         return {
             "score": snapshot.score,
             "label": snapshot.label,
