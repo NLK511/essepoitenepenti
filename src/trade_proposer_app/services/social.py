@@ -233,6 +233,11 @@ class SocialSentimentAnalyzer:
         keyword_hits = 0
         weighted_sum = 0.0
         weight_total = 0.0
+        scope_totals: dict[str, dict[str, float]] = {
+            "macro": {"weighted_sum": 0.0, "weight_total": 0.0, "item_count": 0.0},
+            "industry": {"weighted_sum": 0.0, "weight_total": 0.0, "item_count": 0.0},
+            "ticker": {"weighted_sum": 0.0, "weight_total": 0.0, "item_count": 0.0},
+        }
         for item in bundle.items:
             text = f"{item.title} {item.body}".strip().lower()
             title_tokens = _tokenize(item.title)
@@ -263,6 +268,12 @@ class SocialSentimentAnalyzer:
             scores.append(score)
             weighted_sum += score * weight
             weight_total += weight
+            for scope in item.scope_tags:
+                if scope not in scope_totals:
+                    continue
+                scope_totals[scope]["weighted_sum"] += score * weight
+                scope_totals[scope]["weight_total"] += weight
+                scope_totals[scope]["item_count"] += 1.0
         final_score = weighted_sum / weight_total if weight_total else 0.0
         final_score = max(-1.0, min(1.0, final_score))
         label = "NEUTRAL"
@@ -292,6 +303,14 @@ class SocialSentimentAnalyzer:
             }
             for item in bundle.items
         ]
+        scope_breakdown = {
+            scope: {
+                "score": (values["weighted_sum"] / values["weight_total"]) if values["weight_total"] else 0.0,
+                "label": self._label_score((values["weighted_sum"] / values["weight_total"]) if values["weight_total"] else 0.0),
+                "item_count": int(values["item_count"]),
+            }
+            for scope, values in scope_totals.items()
+        }
         return {
             "score": final_score,
             "label": label,
@@ -301,7 +320,16 @@ class SocialSentimentAnalyzer:
             "item_count": len(bundle.items),
             "sources": bundle.feeds_used,
             "items": social_items,
+            "scope_breakdown": scope_breakdown,
         }
+
+    @staticmethod
+    def _label_score(score: float) -> str:
+        if score > 0.15:
+            return "POSITIVE"
+        if score < -0.15:
+            return "NEGATIVE"
+        return "NEUTRAL"
 
     def _item_weight(self, item: SignalItem) -> float:
         engagement = item.engagement.likes + (item.engagement.retweets * 2) + item.engagement.replies

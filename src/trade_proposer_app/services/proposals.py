@@ -95,7 +95,13 @@ MANUAL_FEATURE_RANGES: dict[str, tuple[float, float]] = {
     "enhanced_sentiment_score": (-1.0, 1.0),
     "news_sentiment_score": (-1.0, 1.0),
     "social_sentiment_score": (-1.0, 1.0),
+    "macro_sentiment_score": (-1.0, 1.0),
+    "industry_sentiment_score": (-1.0, 1.0),
+    "ticker_sentiment_score": (-1.0, 1.0),
     "social_item_count": (0.0, 50.0),
+    "macro_item_count": (0.0, 50.0),
+    "industry_item_count": (0.0, 50.0),
+    "ticker_item_count": (0.0, 50.0),
     "source_count": (0.0, 30.0),
     "context_count": (0.0, 5.0),
     "context_tag_earnings": (0.0, 1.0),
@@ -191,6 +197,9 @@ class ProposalService:
             direction,
             context["sentiment_score"],
             context.get("enhanced_sentiment_score", context["sentiment_score"]),
+            context.get("macro_sentiment_score", 0.0),
+            context.get("industry_sentiment_score", 0.0),
+            context.get("ticker_sentiment_score", 0.0),
             context["rsi"],
             context["price_above_sma50"],
             context["price_above_sma200"],
@@ -311,14 +320,23 @@ class ProposalService:
                 "components": context.get("enhanced_sentiment_components", {}),
             },
             "macro": {
-                "score": 0.0,
-                "label": "NEUTRAL",
-                "coverage_insights": ["macro fusion not implemented yet; placeholder emitted for upcoming multi-scope sentiment work."],
+                "score": context.get("macro_sentiment_score", 0.0),
+                "label": context.get("macro_sentiment_label", "NEUTRAL"),
+                "coverage_insights": context.get("macro_coverage_insights", []),
+                "source_breakdown": {
+                    "news": {"score": context.get("macro_news_sentiment_score", 0.0), "item_count": context.get("macro_news_item_count", 0)},
+                    "social": {"score": context.get("macro_social_sentiment_score", 0.0), "item_count": context.get("macro_social_item_count", 0)},
+                },
             },
             "industry": {
-                "score": 0.0,
-                "label": "NEUTRAL",
-                "coverage_insights": ["industry fusion not implemented yet; placeholder emitted for upcoming multi-scope sentiment work."],
+                "score": context.get("industry_sentiment_score", 0.0),
+                "label": context.get("industry_sentiment_label", "NEUTRAL"),
+                "coverage_insights": context.get("industry_coverage_insights", []),
+                "industry": context.get("ticker_profile", {}).get("industry", ""),
+                "source_breakdown": {
+                    "news": {"score": context.get("industry_news_sentiment_score", 0.0), "item_count": context.get("industry_news_item_count", 0)},
+                    "social": {"score": context.get("industry_social_sentiment_score", 0.0), "item_count": context.get("industry_social_item_count", 0)},
+                },
             },
             "ticker": {
                 "score": context.get("ticker_sentiment_score", context.get("sentiment_score")),
@@ -332,7 +350,7 @@ class ProposalService:
             "overall": {
                 "score": context.get("enhanced_sentiment_score", context.get("sentiment_score")),
                 "label": context.get("enhanced_sentiment_label", context.get("sentiment_label")),
-                "weights": {"news": 0.55, "social_max": 0.45},
+                "weights": {"macro": 0.2, "industry": 0.3, "ticker": 0.5, "news": 0.55, "social_max": 0.45},
                 "divergence_signals": self._build_sentiment_divergence_signals(context),
             },
             "keyword_hits": context.get("sentiment_keyword_hits", 0),
@@ -360,6 +378,14 @@ class ProposalService:
             "summary_error": summary_error,
             "llm_error": context.get("llm_error"),
         }
+        entities_section = {
+            "ticker": ticker,
+            "company_aliases": context.get("ticker_profile", {}).get("aliases", []),
+            "sector": context.get("ticker_profile", {}).get("sector", ""),
+            "industry": context.get("ticker_profile", {}).get("industry", ""),
+            "themes": context.get("ticker_profile", {}).get("themes", []),
+            "matched_keywords": context.get("signal_query_diagnostics", {}),
+        }
         payload = {
             "metadata": {
                 "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
@@ -377,6 +403,7 @@ class ProposalService:
             "news": news_section,
             "signals": signals_section,
             "social": social_section,
+            "entities": entities_section,
             "sentiment": sentiment_section,
             "context_flags": context_flags,
             "feature_vectors": {
@@ -640,8 +667,18 @@ class ProposalService:
             "social_keyword_hits": 0,
             "social_coverage_insights": [],
             "social_item_count": 0,
+            "macro_sentiment_score": 0.0,
+            "macro_sentiment_label": "NEUTRAL",
+            "macro_coverage_insights": [],
+            "macro_item_count": 0,
+            "industry_sentiment_score": 0.0,
+            "industry_sentiment_label": "NEUTRAL",
+            "industry_coverage_insights": [],
+            "industry_item_count": 0,
             "ticker_sentiment_score": 0.0,
             "ticker_sentiment_label": None,
+            "ticker_item_count": 0,
+            "ticker_profile": {},
         }
         base_context.update(dict(DEFAULT_CONTEXT_FLAGS))
         return base_context
@@ -686,11 +723,15 @@ class ProposalService:
         news_score = float(context.get("news_sentiment_score", 0.0) or 0.0)
         social_score = float(context.get("social_sentiment_score", 0.0) or 0.0)
         social_count = int(context.get("social_item_count", 0) or 0)
+        macro_score = float(context.get("macro_sentiment_score", 0.0) or 0.0)
+        ticker_score = float(context.get("ticker_sentiment_score", 0.0) or 0.0)
         signals: list[str] = []
         if social_count > 0 and abs(news_score - social_score) >= 0.45:
             signals.append("news and social sentiment are materially divergent for this ticker")
         if social_count == 0:
             signals.append("social sentiment unavailable; ticker score relies on news-only sentiment")
+        if abs(macro_score - ticker_score) >= 0.45:
+            signals.append("macro and ticker sentiment are materially divergent")
         return signals
 
     def _blend_ticker_sentiment(
@@ -705,6 +746,105 @@ class ProposalService:
         social_weight = min(0.45, 0.15 + (min(social_item_count, 10) / 10.0) * 0.3)
         news_weight = 1.0 - social_weight
         return self._clamp_value((news_sentiment_score * news_weight) + (social_sentiment_score * social_weight))
+
+    def _fuse_scope_sentiment(
+        self,
+        *,
+        news_score: float,
+        news_item_count: int,
+        social_score: float,
+        social_item_count: int,
+        base_news_weight: float,
+        max_social_weight: float,
+    ) -> float:
+        if social_item_count <= 0:
+            return self._clamp_value(news_score)
+        social_weight = min(max_social_weight, 0.1 + (min(social_item_count, 10) / 10.0) * max_social_weight)
+        news_weight = max(base_news_weight, 1.0 - social_weight)
+        total_weight = news_weight + social_weight
+        return self._clamp_value(((news_score * news_weight) + (social_score * social_weight)) / max(total_weight, 1e-9))
+
+    def _derive_news_scope_scores(
+        self,
+        *,
+        news_sentiment_score: float,
+        context_flags: dict[str, float],
+        news_item_count: int,
+    ) -> dict[str, float | int | list[str]]:
+        macro_item_count = news_item_count if context_flags.get("context_tag_geopolitical") or context_flags.get("context_tag_general") else 0
+        industry_item_count = news_item_count if context_flags.get("context_tag_industry") else 0
+        macro_score = news_sentiment_score * (0.7 if macro_item_count else 0.0)
+        industry_score = news_sentiment_score * (0.8 if industry_item_count else 0.0)
+        macro_coverage_insights = [] if macro_item_count else ["macro: no explicit macro-tagged news detected; relying on social or neutral fallback."]
+        industry_coverage_insights = [] if industry_item_count else ["industry: no explicit industry-tagged news detected; relying on social or neutral fallback."]
+        return {
+            "macro_news_sentiment_score": self._clamp_value(macro_score),
+            "macro_news_item_count": macro_item_count,
+            "industry_news_sentiment_score": self._clamp_value(industry_score),
+            "industry_news_item_count": industry_item_count,
+            "macro_news_coverage_insights": macro_coverage_insights,
+            "industry_news_coverage_insights": industry_coverage_insights,
+        }
+
+    def _compute_hierarchical_sentiment(
+        self,
+        *,
+        news_sentiment_score: float,
+        news_item_count: int,
+        social_breakdown: dict[str, Any],
+        context_flags: dict[str, float],
+    ) -> dict[str, Any]:
+        news_scopes = self._derive_news_scope_scores(
+            news_sentiment_score=news_sentiment_score,
+            context_flags=context_flags,
+            news_item_count=news_item_count,
+        )
+        macro_social_score = float((social_breakdown.get("macro") or {}).get("score", 0.0) or 0.0)
+        macro_social_count = int((social_breakdown.get("macro") or {}).get("item_count", 0) or 0)
+        industry_social_score = float((social_breakdown.get("industry") or {}).get("score", 0.0) or 0.0)
+        industry_social_count = int((social_breakdown.get("industry") or {}).get("item_count", 0) or 0)
+        ticker_social_score = float((social_breakdown.get("ticker") or {}).get("score", 0.0) or 0.0)
+        ticker_social_count = int((social_breakdown.get("ticker") or {}).get("item_count", 0) or 0)
+
+        macro_score = self._fuse_scope_sentiment(
+            news_score=float(news_scopes["macro_news_sentiment_score"]),
+            news_item_count=int(news_scopes["macro_news_item_count"]),
+            social_score=macro_social_score,
+            social_item_count=macro_social_count,
+            base_news_weight=0.7,
+            max_social_weight=0.3,
+        )
+        industry_score = self._fuse_scope_sentiment(
+            news_score=float(news_scopes["industry_news_sentiment_score"]),
+            news_item_count=int(news_scopes["industry_news_item_count"]),
+            social_score=industry_social_score,
+            social_item_count=industry_social_count,
+            base_news_weight=0.6,
+            max_social_weight=0.4,
+        )
+        ticker_score = self._blend_ticker_sentiment(
+            news_sentiment_score=news_sentiment_score,
+            social_sentiment_score=ticker_social_score,
+            social_item_count=ticker_social_count,
+        )
+        return {
+            **news_scopes,
+            "macro_social_sentiment_score": macro_social_score,
+            "macro_social_item_count": macro_social_count,
+            "industry_social_sentiment_score": industry_social_score,
+            "industry_social_item_count": industry_social_count,
+            "macro_sentiment_score": macro_score,
+            "macro_sentiment_label": self._label_sentiment(macro_score),
+            "macro_item_count": int(news_scopes["macro_news_item_count"]) + macro_social_count,
+            "macro_coverage_insights": list(dict.fromkeys(list(news_scopes["macro_news_coverage_insights"]) + (["macro: no social macro items matched."] if macro_social_count == 0 else []))),
+            "industry_sentiment_score": industry_score,
+            "industry_sentiment_label": self._label_sentiment(industry_score),
+            "industry_item_count": int(news_scopes["industry_news_item_count"]) + industry_social_count,
+            "industry_coverage_insights": list(dict.fromkeys(list(news_scopes["industry_news_coverage_insights"]) + (["industry: no social industry items matched."] if industry_social_count == 0 else []))),
+            "ticker_sentiment_score": ticker_score,
+            "ticker_sentiment_label": self._label_sentiment(ticker_score),
+            "ticker_item_count": news_item_count + ticker_social_count,
+        }
 
     @staticmethod
     def _label_sentiment(score: float | None) -> str | None:
@@ -779,11 +919,14 @@ class ProposalService:
                 }
             )
         social_sentiment: dict[str, Any] = {}
+        social_scope_breakdown: dict[str, Any] = {}
         if self.social_service is not None:
             social_result = self.social_service.analyze(ticker)
             social_sentiment = social_result.get("sentiment", {})
+            social_scope_breakdown = social_sentiment.get("scope_breakdown", {})
             context.update(
                 {
+                    "ticker_profile": social_result.get("profile", {}),
                     "social_sentiment_score": social_sentiment.get("score", 0.0),
                     "social_sentiment_label": social_sentiment.get("label"),
                     "social_sentiment_volatility": social_sentiment.get("sentiment_volatility", 0.0),
@@ -791,6 +934,7 @@ class ProposalService:
                     "social_coverage_insights": social_sentiment.get("coverage_insights", []),
                     "social_item_count": social_sentiment.get("item_count", len(context.get("social_items", []))),
                     "social_items": social_sentiment.get("items", context.get("social_items", [])),
+                    "social_scope_breakdown": social_scope_breakdown,
                 }
             )
         if self.news_service is None:
@@ -817,22 +961,27 @@ class ProposalService:
             summary_text = digest or ""
             summary_method = SUMMARY_METHOD_NEWS_DIGEST if digest else DEFAULT_SUMMARY_METHOD
         news_sentiment_score = sentiment.get("score", 0.0)
-        social_sentiment_score = float(context.get("social_sentiment_score", 0.0) or 0.0)
-        social_item_count = int(context.get("social_item_count", 0) or 0)
-        ticker_sentiment_score = self._blend_ticker_sentiment(
+        hierarchical = self._compute_hierarchical_sentiment(
             news_sentiment_score=news_sentiment_score,
-            social_sentiment_score=social_sentiment_score,
-            social_item_count=social_item_count,
+            news_item_count=len(news_items),
+            social_breakdown=social_scope_breakdown,
+            context_flags=sentiment.get("context_flags", {}),
         )
-        ticker_sentiment_label = self._label_sentiment(ticker_sentiment_score)
+        ticker_sentiment_score = float(hierarchical.get("ticker_sentiment_score", 0.0) or 0.0)
+        ticker_sentiment_label = hierarchical.get("ticker_sentiment_label")
+        overall_base_score = self._clamp_value(
+            (float(hierarchical.get("macro_sentiment_score", 0.0)) * 0.2)
+            + (float(hierarchical.get("industry_sentiment_score", 0.0)) * 0.3)
+            + (ticker_sentiment_score * 0.5)
+        )
         enhanced = self._compute_enhanced_sentiment(
-            base_score=ticker_sentiment_score,
+            base_score=overall_base_score,
             summary_text=summary_text,
             snapshot=technical_snapshot,
         )
         use_enhanced = summary_method.startswith("llm_summary") and summary_result.llm_error is None and bool(summary_result.summary)
-        final_score = enhanced["score"] if use_enhanced else ticker_sentiment_score
-        final_label = enhanced["label"] if use_enhanced else ticker_sentiment_label
+        final_score = enhanced["score"] if use_enhanced else overall_base_score
+        final_label = enhanced["label"] if use_enhanced else self._label_sentiment(overall_base_score)
         context.update(
             {
                 "news_feeds_used": feeds,
@@ -848,11 +997,9 @@ class ProposalService:
                 "sentiment_score": final_score,
                 "sentiment_label": final_label,
                 "sentiment_sources": sentiment.get("sources") or feeds,
-                "sentiment_coverage_insights": sentiment.get("coverage_insights", []),
+                "sentiment_coverage_insights": list(dict.fromkeys(sentiment.get("coverage_insights", []) + context.get("social_coverage_insights", []))),
                 "news_digest": digest,
                 "news_sentiment_score": news_sentiment_score,
-                "ticker_sentiment_score": ticker_sentiment_score,
-                "ticker_sentiment_label": ticker_sentiment_label,
                 "summary_text": summary_text or DEFAULT_SUMMARY_TEXT,
                 "summary_method": summary_method,
                 "summary_backend": summary_result.backend,
@@ -864,6 +1011,7 @@ class ProposalService:
                 "enhanced_sentiment_score": enhanced["score"],
                 "enhanced_sentiment_label": enhanced["label"],
                 "enhanced_sentiment_components": enhanced["components"],
+                **hierarchical,
             }
         )
         context_flags = sentiment.get("context_flags", {})
@@ -946,7 +1094,13 @@ class ProposalService:
             "enhanced_sentiment_score",
             "news_sentiment_score",
             "social_sentiment_score",
+            "macro_sentiment_score",
+            "industry_sentiment_score",
+            "ticker_sentiment_score",
             "social_item_count",
+            "macro_item_count",
+            "industry_item_count",
+            "ticker_item_count",
             "source_count",
             "context_count",
             "news_point_count",
@@ -1026,6 +1180,9 @@ class ProposalService:
         direction: RecommendationDirection,
         sentiment_score: float,
         enhanced_sentiment_score: float,
+        macro_sentiment_score: float,
+        industry_sentiment_score: float,
+        ticker_sentiment_score: float,
         rsi: float,
         price_above_sma50: int,
         price_above_sma200: int,
@@ -1041,6 +1198,9 @@ class ProposalService:
         total = base
         sentiment_weight = weights.get("sentiment", 0.0)
         enhanced_weight = weights.get("enhanced_sentiment", 0.0)
+        macro_weight = weights.get("macro_sentiment", 1.0)
+        industry_weight = weights.get("industry_sentiment", 1.5)
+        ticker_weight = weights.get("ticker_sentiment", 2.0)
         momentum_weight = weights.get("momentum_medium", 0.0)
         news_coverage_weight = weights.get("news_coverage", 0.0)
         context_coverage_weight = weights.get("context_coverage", 0.0)
@@ -1053,6 +1213,9 @@ class ProposalService:
 
         sent_f = sentiment_score if direction == RecommendationDirection.LONG else -sentiment_score
         enhanced_f = enhanced_sentiment_score if direction == RecommendationDirection.LONG else -enhanced_sentiment_score
+        macro_f = macro_sentiment_score if direction == RecommendationDirection.LONG else -macro_sentiment_score
+        industry_f = industry_sentiment_score if direction == RecommendationDirection.LONG else -industry_sentiment_score
+        ticker_f = ticker_sentiment_score if direction == RecommendationDirection.LONG else -ticker_sentiment_score
         momentum_f = momentum_medium if direction == RecommendationDirection.LONG else -momentum_medium
         sma50_f = price_above_sma50 if direction == RecommendationDirection.LONG else 1.0 - price_above_sma50
         sma200_f = price_above_sma200 if direction == RecommendationDirection.LONG else 1.0 - price_above_sma200
@@ -1064,6 +1227,9 @@ class ProposalService:
 
         total += sent_f * sentiment_weight
         total += enhanced_f * enhanced_weight
+        total += macro_f * macro_weight
+        total += industry_f * industry_weight
+        total += ticker_f * ticker_weight
         total += momentum_f * momentum_weight
         total += news_coverage * news_coverage_weight
         total += context_coverage * context_coverage_weight
