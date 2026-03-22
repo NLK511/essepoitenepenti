@@ -2,13 +2,12 @@
 
 ## Architecture choice
 
-Use a modular monolith first, with explicit module boundaries and a later path to worker-based execution and selective service extraction.
+Trade Proposer App uses a modular monolith with explicit internal boundaries. That remains the right choice because the product still benefits more from local simplicity and shared schemas than from early service extraction.
 
-This remains the right choice because it provides:
-- low operational complexity
-- clear code ownership boundaries
-- easy local startup
-- a future path to microservices without forcing them too early
+This choice is effective when it preserves three principles:
+- keep business logic on the backend
+- keep runtime topology easy to start and debug locally
+- make future extraction possible without designing for it prematurely
 
 ## Current runtime reality
 
@@ -18,6 +17,8 @@ This remains the right choice because it provides:
 - SQLite as the default local persistence engine
 - worker and scheduler entrypoints
 - repository-based persistence access
+- app-native proposal, evaluation, optimization, and sentiment-refresh workflows
+- shared sentiment snapshot storage and snapshot-aware health/preflight reporting
 
 ### Target deployment runtime
 - API process
@@ -25,7 +26,7 @@ This remains the right choice because it provides:
 - scheduler process
 - frontend assets served by the API or reverse proxy
 - Postgres
-- Redis
+- Redis or another queue/coordination layer if concurrency pressure justifies it
 
 ## System diagram
 
@@ -34,42 +35,42 @@ flowchart LR
     User[Operator / Trader]
 
     subgraph Frontend[Frontend]
-        SPA[React + Vite SPA\nPages: Dashboard, Jobs, History, Debugger, Settings, Docs]
+        SPA[React + Vite SPA\nPages: Dashboard, Jobs, History, Debugger, Settings, Docs, Sentiment]
         DocsUI[In-app docs browser\nfull-text search over app docs]
     end
 
     subgraph Backend[Backend API / Web]
         FastAPI[FastAPI app\n/api routes + SPA entry serving]
-        APIRoutes[API routes\ndashboard, jobs, runs, history, settings, docs, health]
+        APIRoutes[API routes\ndashboard, jobs, runs, history, settings, docs, health, sentiment snapshots]
         WebEntry[SPA entry / built asset serving]
     end
 
     subgraph Core[Backend core modules]
         Domain[domain\ntyped models and enums]
         Repositories[repositories\nDB translation and queries]
-        Services[services\njob execution, proposals, preflight, scheduler]
+        Services[services\njob execution, proposals, preflight, scheduler, sentiment refresh]
         Workers[worker\nqueued run processor]
         Scheduler[scheduler\nenqueue pass for scheduled jobs]
     end
 
     subgraph Storage[Persistence]
         DB[(SQLite local dev\nPostgres target)]
+        Snapshots[(shared sentiment snapshots)]
     end
 
     subgraph Pipeline[App-native analysis pipeline]
-        ProposalService[ProposalService
-fetches data, builds features, applies weights]
-        NewsIngestionService[NewsIngestionService
-fetches news + sentiment signals]
-        FeatureEngine[Feature engineering &
-normalization]
-        Weights[weights.json
-internal scoring weights]
+        ProposalService[ProposalService\nfetches data, builds features, applies weights]
+        SnapshotResolver[SentimentSnapshotResolver\nloads latest macro + industry snapshots]
+        NewsIngestionService[NewsIngestionService\nfetches news + sentiment signals]
+        FeatureEngine[Feature engineering &\nnormalization]
+        Weights[weights.json\ninternal scoring weights]
+        RefreshServices[MacroSentimentService +\nIndustrySentimentService]
     end
 
-    subgraph External[External news services]
+    subgraph External[External services]
         NewsAPI[NewsAPI]
         Finnhub[Finnhub]
+        OptionalLLM[OpenAI / Pi CLI]
     end
 
     User --> SPA
@@ -86,47 +87,50 @@ internal scoring weights]
     Scheduler --> Services
     Services --> Repositories
     Repositories --> DB
+    Repositories --> Snapshots
 
     Services --> ProposalService
+    Services --> RefreshServices
+    ProposalService --> SnapshotResolver
     ProposalService --> FeatureEngine
     ProposalService --> NewsIngestionService
     FeatureEngine --> Weights
+    RefreshServices --> NewsIngestionService
+    RefreshServices --> Snapshots
+    SnapshotResolver --> Snapshots
 
     NewsIngestionService --> NewsAPI
     NewsIngestionService --> Finnhub
+    ProposalService --> OptionalLLM
 
-    ProposalService -->|normalized recommendation + diagnostics| Services
+    ProposalService -->|recommendations + diagnostics| Services
     Services --> Repositories
-    Repositories --> DB
-
 ```
 
-## Diagram notes
+## Most important runtime flow today
 
-How to read the diagram:
-- the operator interacts only with the React frontend
-- the frontend talks to the FastAPI backend over `/api`
-- the backend owns domain logic, persistence, orchestration, and health/preflight behavior
-- recommendation generation is handled by the app-native proposal pipeline
-- the proposal pipeline pulls price data, computes technical features, and ingests news via `NewsIngestionService` before combining everything with the stored weights
-- summaries are built from the headline digest generated by `NewsIngestionService`
-- the app stores both normalized recommendation data and richer raw diagnostics for debugger/history use
-
-Most important runtime flow today:
-1. user creates or executes a job from the frontend
+### Proposal generation
+1. user creates or executes a proposal job from the frontend
 2. backend enqueues a run in the database
-3. worker claims the queued run
-4. `JobExecutionService` resolves tickers and calls `ProposalService`
-5. `ProposalService` fetches market data, runs feature engineering, and applies the stored weights
-6. the proposal pipeline emits direction, confidence, entry/stop/take-profit, and diagnostic payloads
-7. backend normalizes and persists the recommendation, diagnostics, and run timing
-8. frontend reads the resulting run/recommendation state back via `/api`
+3. worker claims the queued run atomically
+4. `JobExecutionService` calls `ProposalService`
+5. `ProposalService` fetches price history, computes technical features, loads the latest valid macro and industry snapshots, and computes live ticker sentiment
+6. the pipeline emits direction, confidence, entry/stop/take-profit, and diagnostic payloads
+7. backend persists the recommendation, diagnostics, run summary, and timing data
+8. frontend reads run and recommendation state back via `/api`
+
+### Shared sentiment refresh
+1. scheduler or operator triggers macro/industry refresh
+2. backend enqueues a refresh run
+3. worker claims the run, or the operator uses the `run-now` endpoint for immediate execution
+4. refresh services compute shared sentiment and persist `SentimentSnapshot` records
+5. health/preflight reports whether those snapshots are fresh enough for proposal generation
 
 ## Runtime components
 
 ### 1. API process
 Responsibilities:
-- expose JSON endpoints for dashboard, runs, jobs, watchlists, history, settings, docs, and health
+- expose JSON endpoints for dashboard, runs, jobs, watchlists, history, settings, docs, health, and sentiment snapshots
 - validate user input
 - create jobs and runs
 - read and write database state
@@ -134,7 +138,7 @@ Responsibilities:
 
 ### 2. Frontend
 Responsibilities:
-- present operator workflows for setup, monitoring, debugging, history review, and docs browsing
+- present operator workflows for setup, monitoring, debugging, history review, docs browsing, and sentiment inspection
 - consume the API using typed fetch helpers
 - keep UI logic client-side while leaving domain logic on the backend
 
@@ -146,10 +150,9 @@ Implementation constraints:
 
 ### 3. Worker process
 Responsibilities:
-- execute recommendation pipelines asynchronously
-- call the app-native proposal service
+- execute recommendation, evaluation, optimization, and sentiment-refresh workflows asynchronously
 - persist run results
-- mark warnings and failures
+- mark warnings and failures explicitly
 
 ### 4. Scheduler process
 Responsibilities:
@@ -157,14 +160,11 @@ Responsibilities:
 - enqueue due runs
 - avoid duplicate scheduling
 
-A new scheduler daemon (`trade_proposer_app.scheduler`) now runs alongside the API and worker; both `scripts/start-dev.sh` and `scripts/start-prod.sh` launch it so scheduled proposals, evaluations, and optimizations get enqueued automatically without manual intervention.
-
 Current state:
-- now persists a `scheduled_for` slot identity on scheduled runs
+- persists a `scheduled_for` slot identity on scheduled runs
 - prevents duplicate enqueues for the same job and schedule slot
-- currently uses a UTC-normalized 5-field cron subset with support for `*`, `*/n`, exact values, and comma-separated exact values
-- does not yet support the full cron feature surface, such as ranges
-- still needs more hardening around broader concurrency and production-grade schedule semantics
+- supports a constrained cron surface suitable for the product's built-in scheduling needs
+- still needs more hardening around overlapping jobs, crash recovery, and production-grade coordination
 
 ### 5. Persistence
 Current default:
@@ -178,6 +178,7 @@ Stored entities today:
 - jobs
 - runs
 - recommendations
+- sentiment snapshots
 - app settings
 - provider credentials
 
@@ -190,36 +191,26 @@ Owns core models and typed contracts.
 Owns persistence translation between SQLAlchemy records and domain models.
 
 ### `services`
-Owns proposal generation, job execution, scheduling, and preflight logic.
+Owns proposal generation, sentiment refresh, job execution, scheduling, and preflight logic.
 
 ### `api`
-Owns machine-facing routes.
-The React frontend should use these routes instead of duplicating backend logic.
+Owns machine-facing routes. The React frontend should use these routes instead of duplicating backend logic.
 
 ### `web`
-Owns SPA entry serving for browser routes.
-This layer is now intentionally thin.
+Owns SPA entry serving. This layer is intentionally thin.
 
 ### `frontend`
 Owns the React/Vite application.
-Suggested internal boundaries:
-- pages
-- shared components
-- typed API helpers
-- minimal formatting utilities
 
-## Why this split stays minimal
+## Architectural assessment
 
-Because the added frontend complexity is constrained by:
-- keeping business logic on the backend
-- keeping client state shallow and page-local
-- using fetch directly instead of adding a data library
-- avoiding a separate frontend package workspace
-- serving built assets from the existing backend when needed
+The architecture is internally consistent in one important way: execution, diagnostics, persistence, and the UI all now share the same backend-owned contract. That reduces drift.
+
+Its weakest point is not the module split; it is the growing amount of operational behavior carried by one process family without yet having production-grade coordination. The codebase is still coherent, but scheduler reliability, auth/credential lifecycle, and observability are now more urgent than additional feature breadth.
 
 ## Immediate next architectural moves
 
-1. extend preflight to validate configured news providers and their connectivity
-2. continue hardening scheduler behavior
-3. support credential rotation
-4. keep frontend and API contracts documented and intentionally small
+1. harden scheduler and worker coordination for overlapping and recovering workloads
+2. improve production observability (structured logs, run correlation, health signals)
+3. complete credential lifecycle work instead of adding more provider surface area
+4. keep API payloads and diagnostic schemas small, explicit, and versioned when they change materially

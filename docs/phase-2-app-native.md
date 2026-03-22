@@ -1,52 +1,54 @@
 # Phase 2: App-native Outcomes
 
-This document captures the ongoing transition that makes Trade Proposer App fully self-contained. Phase 2 today means operating and improving the internal scoring pipeline without ever shelling out to a separate prototype repository, reintroducing the missing diagnostics/summary signals natively, and documenting the dependencies or fallbacks operators need to trust the outputs.
+This document tracks the part of the roadmap concerned with keeping Trade Proposer App self-contained. Phase 2 is no longer about proving that app-native execution is possible; it is about making the internal pipeline trustworthy, inspectable, and operationally reliable.
 
-## Signal integrity policy
+## Governing principle: signal integrity
 
-Every contribution that affects recommendation generation must be explicit when data is missing. The pipeline never invents a directional signal when its raw inputs are absent: missing keyword coverage, provider failures, or aggregator gaps must either emit `NEUTRAL`/zero outputs or surface a digestible warning/error before a new score is published. This policy (which already governs NaiveSentimentAnalyzer) extends to every feature, summary, or weight adjustment so future sessions—LLM-assisted or otherwise—cannot accidentally add the kind of “dummy” fallback heuristics that mask upstream problems.
+Every contribution that affects recommendation generation must be explicit when data is missing. The pipeline never invents a directional signal when its raw inputs are absent: missing keyword coverage, provider failures, stale snapshots, or aggregator gaps must either emit `NEUTRAL`/zero outputs or surface a digestible warning before a new score is published.
 
-## Progress recap
+This principle remains the correct constraint for Phase 2 because it prevents invisible quality regressions disguised as graceful fallbacks.
 
-- **Self-contained scoring**: `ProposalService` now orchestrates the end-to-end pipeline (price ingestion via `yfinance`, feature construction with `pandas`, normalization, weights application, diagnostics, and the recommendation agreement workflow) all from within this repository.
-- **App-native weight optimization**: The optimization workflow now reads resolved recommendations directly from the app database, adjusts the checked-in `weights.json`, and stores backups/artifacts without invoking the legacy prototype script so the job stays self-contained in this repo.
-- **Rich diagnostics**: Each run persists `analysis_json` (now organized into metadata/trade/summary/news/sentiment/context/feature-vector sections), the raw/normalized feature vectors, aggregations, confidence weights, and RunDiagnostics details so every signal remains auditable without peeking into an external tool.
-- **Sentiment coverage transparency**: `analysis_json.sentiment.coverage_insights` lists zero-score causes, `keyword_hits` counts the matched tokens, and the run detail diagnostics surface those fields in the Sentiment coverage block so neutral outputs always cite a missing data reason.
-- **Structured diagnostics surfaced**: The run detail page and debugger now render those `analysis_json` sections (news items, summaries, context flags, feature vectors, aggregations, and weights) instead of exposing only raw JSON blobs, so operators can inspect the structured payloads directly.
-- **Enhanced sentiment coverage**: `NaiveSentimentAnalyzer` now uses a broader keyword set (including hits like `guidance`, `exceed`, or `resilient demand`) and matches multi-word cues such as `beats expectations` or `misses guidance`, while still honoring the signal integrity policy; headlines receive a stronger boost (1.7 vs 1.2) and the lighter smoothing factor (0.25) makes even single keyword matches nudge the compound score away from strict neutrality, while the `coverage_insights` list continues to explain every remaining zero.
-- **Configurable summarization**: `SummaryService` invokes the configured OpenAI or `pi_agent` CLI backend, parses the streamed JSON responses, and captures backend/model/runtime metadata plus `llm_error`/`summary_error`. When the summarizer does not run, the headline digest saved under `analysis_json.news.digest` is still available as the fallback narrative.
-- **In-app news, sentiment, and Pi CLI coverage**: News ingestion, NaiveSentiment analysis, and the Pi CLI references now live in-app: `NewsIngestionService` produces unified `news_items` (title, summary, publisher, link, published_at, compound score), `analysis_json.news` exposed feed diagnostics, and the Pi CLI invocation reuses the configured directory/skill set via `PI_CODING_AGENT_DIR` and `pi_cli_args`.
-- **App-native evaluation**: The evaluation service now downloads the same `yfinance` price history that drives proposals, inspects stop-loss and take-profit crossings for each recommendation, and updates the stored run/recommendation state entirely within this repository instead of invoking any prototype scripts.
+## What Phase 2 has already delivered
 
-## Gaps and truth checks
+- **Self-contained scoring**: `ProposalService` orchestrates price ingestion, feature construction, normalization, weighting, and diagnostics entirely inside this repository.
+- **App-native evaluation**: the evaluation workflow uses the same `yfinance`-derived price history as proposal generation and persists outcomes in the app.
+- **App-native optimization**: the optimization workflow reads resolved recommendations from the app database, adjusts the tracked `weights.json`, and stores backup metadata without depending on a prototype repo.
+- **Structured diagnostics**: each run persists `analysis_json`, feature vectors, aggregations, confidence weights, and run diagnostics in a stable backend-owned shape.
+- **UI inspection**: run and recommendation detail pages render structured diagnostics directly instead of exposing only raw JSON.
+- **Configurable summarization**: the summary service supports digest-only output, OpenAI, and `pi_agent`, while preserving backend/model/runtime metadata and explicit errors.
+- **Shared sentiment snapshots**: macro and industry sentiment are now refreshed as first-class workflows, stored as `SentimentSnapshot` records, reused during proposal generation, linked from detail pages, and checked by health/preflight for freshness.
+- **Coverage transparency**: neutral outputs still explain themselves through `coverage_insights`, `keyword_hits`, provider errors, and snapshot freshness warnings.
 
-We reviewed the Phase 2 doc and identified a few areas that needed clarification or completion:
+## Where Phase 2 is effective
 
-- The old summary plan still looked forward to the LLM pipeline even though it already existed; this document now states that the summarizer is implemented and highlights the fallback digest path for reliability.
-- The doc previously described `analysis_json` as a flat bag of fields, which made it hard to trace which diagnostics were new; the new schema is explicit about where metadata, trade outputs, summary text, news items, sentiment scores, context flags, and weights live.
-- The NaiveSentiment analyzer still returns pure zeros for tickers with no keyword coverage because the signal integrity policy forbids inventing fallback heuristics; we are instead concentrating on enriching the keyword sets, weighting headline versus summary hits, and documenting every zero-case so operators know when coverage is incomplete.
-- Multi-ticker runs now log per-ticker entries in `timing_json["ticker_generation"]` when price history cannot be retrieved. Instead of failing the whole job, the worker records the failure, flags the run as completed with warnings, and continues generating proposals for the remaining symbols so only the missing tickers are skipped.
-- The scheduler now accepts textual month/day-of-week tokens (e.g., `MON-FRI`) and ranges when parsing cron expressions, so the default suggested jobs actually enter the queue on weekdays before we tackle the remaining robustness work.
+Phase 2 is working best where it has removed cross-system ambiguity:
+- one repo owns scoring, evaluation, optimization, and diagnostics
+- one run system records the operational history
+- one UI exposes both the trade outputs and the reasons behind them
+- one signal-integrity rule governs missing or degraded inputs
+
+That is a strong foundation. It means future changes can be judged against a shared contract instead of against prototype behavior.
+
+## Where Phase 2 is still weak
+
+The remaining weaknesses are mostly about operational confidence, not missing features:
+- scheduler/worker behavior still needs stronger guarantees for overlap handling and crash recovery
+- production observability is not yet strong enough for a workflow system with multiple background processes
+- the sentiment stack is more inspectable than it is validated; quality measurement still lags behind feature delivery
+- provider and credential lifecycle work is still behind the app's runtime ambitions
+
+## What should not happen next
+
+Phase 2 should not expand by piling on new sentiment sources or new heuristics without a measurement loop. The app now has enough sentiment structure that indiscriminate feature growth would increase complexity faster than it increases trust.
+
+Specifically, avoid:
+- adding new providers before credential lifecycle and observability improve
+- introducing fallback heuristics that blur missing coverage
+- duplicating the same future plan across roadmap, feature docs, and implementation notes
 
 ## Next steps
 
-1. Monitor the enhanced sentiment coverage, document any remaining zero-score cases under the signal integrity policy (which forbids fallback heuristics), keep refreshing the keywords/weights before assuming the signal is fully complete, and leverage the new `coverage_insights`/`keyword_hits` diagnostics so missing coverage stands out in the structured payloads.
-2. Harden the scheduler/worker reliability by refining how the evaluation pass handles multi-ticker runs, partial price-history availability, and overlapping schedules so outcome tracking stays dependable even when data signals are intermittent.
-3. Keep refreshing operator docs (Phase 2, roadmap, raw details reference) whenever the schema or summary/sentiment features change so planning artifacts stay truthful.
-
-## LLM-enhanced summaries and sentiment
-
-### Delivered
-
-- A summarizer now consumes the unified `news_items` payload and a compact technical snapshot (price, ATR, RSI, SMA deltas) and sends it to the selected backend (OpenAI or `pi_agent`). The configured Pi CLI command, working directory, and optional `pi_cli_args` reuse the same skills/config the interactive Pi instance uses via `PI_CODING_AGENT_DIR`.
-- The pipeline records the returned narrative under `analysis_json.summary.text` with metadata (`method`, `backend`, `model`, `runtime_seconds`, `metadata`) and exposes any `summary_error` or `llm_error` so failures are obvious in the UI.
-- The summary toggle in `/settings` now covers the digest-only option plus the LLM backends, including Pi-specific helpers; the run detail page renders the LLM narrative when available and still shows the digest fallback.
-- `analysis_json.sentiment.enhanced` captures the fused score, label, and component contributions (news sentiment, LLM tone, technical indicators) so the scoring weights can optionally use the richer signal while diagnostics still expose the raw keyword-based components.
-
-### Remaining work
-
-1. Continue enriching the keyword dictionaries and weighting so `NaiveSentimentAnalyzer` produces non-zero compound ratings more frequently, especially when feed coverage is sparse.
-2. Monitor the new `analysis_json` sections and ensure any future provider adds items to `news_items` and `news.sentiment.sources` so diagnostics remain complete.
-3. Keep the UI/RunDiagnostics surfaces aligned with the schema changes (summary section, news section, sentiment block, context flags) and document any further schema refinements in the live docs.
-
-Once these deliverables land, the prototype’s long-form narratives, sentiment rationale, evaluation truth, instrumentation, and diagnostics will all live inside Trade Proposer App, leaving the legacy repository purely as a historical reference rather than a runtime dependency.
+1. harden scheduler and worker reliability for overlapping and recovering workloads
+2. improve observability around run execution, refresh workflows, and provider failures
+3. measure whether shared snapshots and enhanced sentiment improve recommendation outcomes before broadening the provider surface
+4. keep docs aligned with the live schema and remove planning language once a feature is already shipped
