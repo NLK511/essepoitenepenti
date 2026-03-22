@@ -2,14 +2,28 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from html import unescape
-from typing import ClassVar
+from statistics import pstdev
+from typing import Any, ClassVar
 from urllib.parse import quote, urljoin
 
 import httpx
 
 from trade_proposer_app.domain.models import SignalBundle, SignalEngagement, SignalItem
+from trade_proposer_app.services.news import (
+    NEGATIVE_KEYWORD_WEIGHTS,
+    NEGATIVE_PHRASE_WEIGHTS,
+    POSITIVE_KEYWORD_WEIGHTS,
+    POSITIVE_PHRASE_WEIGHTS,
+    SUMMARY_KEYWORD_WEIGHT,
+    TITLE_KEYWORD_WEIGHT,
+    _count_keyword_matches,
+    _phrase_score_and_hits,
+    _sum_keyword_weights,
+    _tokenize,
+)
+from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 NITTER_SEARCH_PATH = "/search"
 TIMELINE_ITEM_PATTERN = re.compile(r'<div class="timeline-item(?P<body>.*?)<div class="timeline-footer">', re.DOTALL)
@@ -44,6 +58,7 @@ class NitterProvider(SocialProvider):
         self,
         *,
         base_url: str,
+        taxonomy_service: TickerTaxonomyService | None = None,
         timeout: float = 6.0,
         max_items_per_query: int = 12,
         query_window_hours: int = 12,
@@ -51,37 +66,53 @@ class NitterProvider(SocialProvider):
     ) -> None:
         super().__init__(timeout=timeout)
         self.base_url = base_url.rstrip("/")
+        self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
         self.max_items_per_query = max(1, max_items_per_query)
         self.query_window_hours = max(1, query_window_hours)
         self.include_replies = include_replies
 
     def fetch(self, ticker: str) -> SignalBundle:
-        query = f'"${ticker}" OR "{ticker}"'
-        url = f"{self.base_url}{NITTER_SEARCH_PATH}?f=tweets&q={quote(query)}"
-        try:
-            response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
-        except Exception as exc:  # noqa: BLE001
-            raise SocialFetchError(f"request failed: {exc}") from exc
-        if response.status_code != 200:
-            raise SocialFetchError(f"unexpected status {response.status_code}")
-        items = self._parse_search_html(response.text)
+        query_profile = self.taxonomy_service.build_query_profile(ticker)
+        ticker_queries = query_profile.get("ticker_queries", [])[:3]
+        fetched_items: list[SignalItem] = []
+        executed_queries: list[str] = []
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=self.query_window_hours)
+        for query in ticker_queries:
+            url = f"{self.base_url}{NITTER_SEARCH_PATH}?f=tweets&q={quote(query)}"
+            try:
+                response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+            except Exception as exc:  # noqa: BLE001
+                raise SocialFetchError(f"request failed for query '{query}': {exc}") from exc
+            if response.status_code != 200:
+                raise SocialFetchError(f"unexpected status {response.status_code} for query '{query}'")
+            items = self._parse_search_html(response.text, ticker=ticker, query_profile=query_profile)
+            filtered_items = [
+                item
+                for item in items
+                if (item.published_at is None or item.published_at >= cutoff)
+                and not any(term in item.body.lower() for term in query_profile.get("exclude_keywords", []))
+            ]
+            fetched_items.extend(filtered_items)
+            executed_queries.append(query)
         return SignalBundle(
             ticker=ticker,
-            items=items[: self.max_items_per_query],
-            feeds_used=[self.name] if items else [],
+            items=fetched_items[: self.max_items_per_query],
+            feeds_used=[self.name] if fetched_items else [],
             feed_errors=[],
             coverage={
-                "social_count": len(items[: self.max_items_per_query]),
+                "social_count": len(fetched_items[: self.max_items_per_query]),
                 "query_window_hours": self.query_window_hours,
             },
             query_diagnostics={
-                "ticker_queries": [query],
+                "ticker_queries": executed_queries,
+                "industry_queries": query_profile.get("industry_queries", []),
+                "macro_queries": query_profile.get("macro_queries", []),
                 "base_url": self.base_url,
                 "include_replies": self.include_replies,
             },
         )
 
-    def _parse_search_html(self, html: str) -> list[SignalItem]:
+    def _parse_search_html(self, html: str, *, ticker: str, query_profile: dict[str, list[str]]) -> list[SignalItem]:
         items: list[SignalItem] = []
         for match in TIMELINE_ITEM_PATTERN.finditer(html):
             body = match.group("body")
@@ -106,6 +137,10 @@ class NitterProvider(SocialProvider):
                 quotes=0,
             )
             published_at = self._extract_datetime(body)
+            lower_content = content.lower()
+            scope_tags = self._infer_scope_tags(lower_content, query_profile)
+            if not scope_tags:
+                scope_tags = ["ticker"]
             items.append(
                 SignalItem(
                     source_type="social",
@@ -120,10 +155,10 @@ class NitterProvider(SocialProvider):
                     published_at=published_at,
                     engagement=engagement,
                     raw_metadata={"status_id": status_id},
-                    matched_entities={"ticker": []},
-                    scope_tags=["ticker"],
-                    quality_score=0.5,
-                    credibility_score=0.4,
+                    matched_entities={"ticker": [ticker.upper()]},
+                    scope_tags=scope_tags,
+                    quality_score=self._estimate_quality_score(content, engagement),
+                    credibility_score=self._estimate_credibility_score(handle, engagement),
                     dedupe_key=status_link or status_id or content[:80],
                 )
             )
@@ -163,26 +198,151 @@ class NitterProvider(SocialProvider):
         text = TAG_RE.sub(" ", unescape(value or ""))
         return WHITESPACE_RE.sub(" ", text).strip()
 
+    @staticmethod
+    def _infer_scope_tags(text: str, query_profile: dict[str, list[str]]) -> list[str]:
+        scopes: list[str] = []
+        if any(term.lower() in text for term in query_profile.get("macro_queries", [])):
+            scopes.append("macro")
+        if any(term.lower() in text for term in query_profile.get("industry_queries", [])):
+            scopes.append("industry")
+        if any(term.lower() in text for term in query_profile.get("ticker_queries", [])):
+            scopes.append("ticker")
+        return scopes
+
+    @staticmethod
+    def _estimate_quality_score(content: str, engagement: SignalEngagement) -> float:
+        content_factor = min(len(content.split()) / 20.0, 1.0)
+        engagement_factor = min((engagement.likes + engagement.retweets + engagement.replies) / 100.0, 1.0)
+        return round(min(1.0, (content_factor * 0.7) + (engagement_factor * 0.3)), 3)
+
+    @staticmethod
+    def _estimate_credibility_score(handle: str | None, engagement: SignalEngagement) -> float:
+        base = 0.35 if not handle else 0.45
+        if handle and any(token in handle.lower() for token in ("news", "markets", "finance", "journal")):
+            base += 0.2
+        if engagement.retweets > 25:
+            base += 0.1
+        if engagement.likes > 100:
+            base += 0.1
+        return round(min(1.0, base), 3)
+
+
+class SocialSentimentAnalyzer:
+    def analyze(self, bundle: SignalBundle) -> dict[str, Any]:
+        scores: list[float] = []
+        keyword_hits = 0
+        weighted_sum = 0.0
+        weight_total = 0.0
+        for item in bundle.items:
+            text = f"{item.title} {item.body}".strip().lower()
+            title_tokens = _tokenize(item.title)
+            body_tokens = _tokenize(item.body)
+            positive = (
+                _sum_keyword_weights(title_tokens, POSITIVE_KEYWORD_WEIGHTS, TITLE_KEYWORD_WEIGHT)
+                + _sum_keyword_weights(body_tokens, POSITIVE_KEYWORD_WEIGHTS, SUMMARY_KEYWORD_WEIGHT)
+            )
+            negative = (
+                _sum_keyword_weights(title_tokens, NEGATIVE_KEYWORD_WEIGHTS, TITLE_KEYWORD_WEIGHT)
+                + _sum_keyword_weights(body_tokens, NEGATIVE_KEYWORD_WEIGHTS, SUMMARY_KEYWORD_WEIGHT)
+            )
+            phrase_positive, positive_hits = _phrase_score_and_hits(text, POSITIVE_PHRASE_WEIGHTS)
+            phrase_negative, negative_hits = _phrase_score_and_hits(text, NEGATIVE_PHRASE_WEIGHTS)
+            positive += phrase_positive
+            negative += phrase_negative
+            keyword_hits += (
+                _count_keyword_matches(title_tokens, POSITIVE_KEYWORD_WEIGHTS)
+                + _count_keyword_matches(body_tokens, POSITIVE_KEYWORD_WEIGHTS)
+                + _count_keyword_matches(title_tokens, NEGATIVE_KEYWORD_WEIGHTS)
+                + _count_keyword_matches(body_tokens, NEGATIVE_KEYWORD_WEIGHTS)
+                + positive_hits
+                + negative_hits
+            )
+            gross = positive + negative
+            score = 0.0 if gross == 0 else max(-1.0, min(1.0, (positive - negative) / (gross + 0.35)))
+            weight = self._item_weight(item)
+            scores.append(score)
+            weighted_sum += score * weight
+            weight_total += weight
+        final_score = weighted_sum / weight_total if weight_total else 0.0
+        final_score = max(-1.0, min(1.0, final_score))
+        label = "NEUTRAL"
+        if final_score > 0.15:
+            label = "POSITIVE"
+        elif final_score < -0.15:
+            label = "NEGATIVE"
+        coverage_insights: list[str] = []
+        if not bundle.items:
+            coverage_insights.append("social: no items fetched from Nitter for the current ticker query profile.")
+        elif keyword_hits == 0:
+            coverage_insights.append("social: posts arrived but no sentiment keywords matched, so the score stays neutral per the signal integrity policy.")
+        if bundle.feed_errors:
+            coverage_insights.append(f"social: provider issues ({'; '.join(bundle.feed_errors)})")
+        social_items = [
+            {
+                "title": item.title,
+                "body": item.body,
+                "author": item.author,
+                "author_handle": item.author_handle,
+                "link": item.link,
+                "published_at": item.published_at.isoformat() if item.published_at else None,
+                "scope_tags": item.scope_tags,
+                "quality_score": item.quality_score,
+                "credibility_score": item.credibility_score,
+                "engagement": item.engagement.model_dump(),
+            }
+            for item in bundle.items
+        ]
+        return {
+            "score": final_score,
+            "label": label,
+            "keyword_hits": keyword_hits,
+            "coverage_insights": coverage_insights,
+            "sentiment_volatility": pstdev(scores) if len(scores) > 1 else 0.0,
+            "item_count": len(bundle.items),
+            "sources": bundle.feeds_used,
+            "items": social_items,
+        }
+
+    def _item_weight(self, item: SignalItem) -> float:
+        engagement = item.engagement.likes + (item.engagement.retweets * 2) + item.engagement.replies
+        engagement_weight = 1.0 + min(engagement / 200.0, 0.3)
+        recency_weight = 1.0
+        if item.published_at is not None:
+            age_hours = max((datetime.now(timezone.utc) - item.published_at).total_seconds() / 3600.0, 0.0)
+            recency_weight = max(0.35, 1.0 - min(age_hours / 24.0, 0.65))
+        credibility_weight = max(0.35, float(item.credibility_score or 0.0))
+        quality_weight = max(0.35, float(item.quality_score or 0.0))
+        return engagement_weight * recency_weight * credibility_weight * quality_weight
+
 
 class SocialIngestionService:
-    def __init__(self, providers: list[SocialProvider] | None = None) -> None:
+    def __init__(
+        self,
+        providers: list[SocialProvider] | None = None,
+        *,
+        taxonomy_service: TickerTaxonomyService | None = None,
+    ) -> None:
         self.providers = list(providers or [])
+        self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
+        self.sentiment_analyzer = SocialSentimentAnalyzer()
 
     @classmethod
     def from_settings(cls, social_settings: dict[str, str] | None = None) -> "SocialIngestionService":
         values = social_settings or {}
+        taxonomy_service = TickerTaxonomyService()
         enabled = (values.get("social_sentiment_enabled") or "false").strip().lower() == "true"
         nitter_enabled = (values.get("social_nitter_enabled") or "false").strip().lower() == "true"
         if not enabled or not nitter_enabled:
-            return cls([])
+            return cls([], taxonomy_service=taxonomy_service)
         provider = NitterProvider(
             base_url=(values.get("social_nitter_base_url") or "http://127.0.0.1:8080").strip(),
+            taxonomy_service=taxonomy_service,
             timeout=_parse_float(values.get("social_nitter_timeout_seconds"), 6.0),
             max_items_per_query=_parse_int(values.get("social_nitter_max_items_per_query"), 12),
             query_window_hours=_parse_int(values.get("social_nitter_query_window_hours"), 12),
             include_replies=(values.get("social_nitter_include_replies") or "false").strip().lower() == "true",
         )
-        return cls([provider])
+        return cls([provider], taxonomy_service=taxonomy_service)
 
     def fetch(self, ticker: str) -> SignalBundle:
         bundle = SignalBundle(ticker=ticker)
@@ -215,6 +375,16 @@ class SocialIngestionService:
         bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
         bundle.coverage.setdefault("social_count", len(bundle.items))
         return bundle
+
+    def analyze(self, ticker: str) -> dict[str, Any]:
+        bundle = self.fetch(ticker)
+        sentiment = self.sentiment_analyzer.analyze(bundle)
+        profile = self.taxonomy_service.get_ticker_profile(ticker)
+        return {
+            "bundle": bundle,
+            "sentiment": sentiment,
+            "profile": profile,
+        }
 
 
 def _parse_float(value: str | None, default: float) -> float:

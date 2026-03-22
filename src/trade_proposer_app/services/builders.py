@@ -19,4 +19,9 @@ def create_proposal_service(session: Session) -> ProposalService:
         summary_settings=repository.get_summary_settings(),
         provider_credentials=credentials,
     )
-    return ProposalService(news_service=news_service, signal_service=signal_service, summary_service=summary_service)
+    return ProposalService(
+        news_service=news_service,
+        social_service=social_service,
+        signal_service=signal_service,
+        summary_service=summary_service,
+    )
