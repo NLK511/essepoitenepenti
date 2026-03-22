@@ -9,7 +9,9 @@ export type RunStatus =
 export type JobType =
   | "proposal_generation"
   | "recommendation_evaluation"
-  | "weight_optimization";
+  | "weight_optimization"
+  | "macro_sentiment_refresh"
+  | "industry_sentiment_refresh";
 
 export type RecommendationDirection = "LONG" | "SHORT" | "NEUTRAL";
 export type RecommendationState = "PENDING" | "WIN" | "LOSS";
@@ -174,6 +176,32 @@ export interface DashboardResponse {
   jobs: Job[];
   latest_runs: Run[];
   recommendations: Recommendation[];
+}
+
+export interface SentimentSnapshot {
+  id: number | null;
+  scope: "macro" | "industry" | string;
+  subject_key: string;
+  subject_label: string;
+  status: string;
+  score: number;
+  label: string;
+  computed_at: string;
+  expires_at: string | null;
+  is_expired: boolean;
+  coverage: Record<string, unknown>;
+  source_breakdown: Record<string, unknown>;
+  drivers: string[];
+  signals: Record<string, unknown>;
+  diagnostics: Record<string, unknown>;
+  job_id: number | null;
+  run_id: number | null;
+}
+
+export interface SentimentSnapshotListResponse {
+  snapshots: SentimentSnapshot[];
+  scope: string | null;
+  limit: number;
 }
 
 export interface RunDetailResponse {

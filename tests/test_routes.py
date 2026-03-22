@@ -322,7 +322,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
     async def test_spa_shell_routes_render(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            for path in ("/", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/runs/1", "/recommendations/1", "/tickers/AAPL"):
+            for path in ("/", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/sentiment", "/runs/1", "/recommendations/1", "/tickers/AAPL"):
                 response = await client.get(path)
                 self.assertEqual(response.status_code, 200)
                 self.assertIn("<title>Trade Proposer App</title>", response.text)
@@ -898,6 +898,21 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertIn("not found", response.text.lower())
+
+    async def test_sentiment_snapshot_manual_refresh_routes_queue_runs(self) -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            macro = await client.post("/api/sentiment-snapshots/refresh/macro", data={})
+            industry = await client.post("/api/sentiment-snapshots/refresh/industry", data={})
+            runs = await client.get("/api/runs")
+
+        self.assertEqual(macro.status_code, 200)
+        self.assertEqual(industry.status_code, 200)
+        self.assertEqual(macro.json()["job_type"], JobType.MACRO_SENTIMENT_REFRESH.value)
+        self.assertEqual(industry.json()["job_type"], JobType.INDUSTRY_SENTIMENT_REFRESH.value)
+        run_job_types = [item["job_type"] for item in runs.json()]
+        self.assertIn(JobType.MACRO_SENTIMENT_REFRESH.value, run_job_types)
+        self.assertIn(JobType.INDUSTRY_SENTIMENT_REFRESH.value, run_job_types)
 
     async def test_settings_rollback_restores_latest_weights_backup(self) -> None:
         data_dir = Path(self.prototype_root.name) / ".pi" / "skills" / "trade-proposer" / "data"

@@ -15,6 +15,7 @@ SPA_ROUTE_PREFIXES = {
     "debugger",
     "settings",
     "docs",
+    "sentiment",
 }
 
 

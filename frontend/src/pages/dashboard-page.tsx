@@ -3,18 +3,35 @@ import { Link } from "react-router-dom";
 
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { DashboardResponse } from "../types";
+import type { DashboardResponse, SentimentSnapshotListResponse } from "../types";
 import { directionTone, formatDate, formatDuration, jobTypeLabel, recommendationStateTone, runTone, tickerTone } from "../utils";
 
 export function DashboardPage() {
   const [data, setData] = useState<DashboardResponse | null>(null);
+  const [latestMacroLabel, setLatestMacroLabel] = useState<string>("—");
+  const [latestIndustryLabel, setLatestIndustryLabel] = useState<string>("—");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
         setError(null);
-        setData(await getJson<DashboardResponse>("/api/dashboard"));
+        const [dashboard, macroSnapshots, industrySnapshots] = await Promise.all([
+          getJson<DashboardResponse>("/api/dashboard"),
+          getJson<SentimentSnapshotListResponse>("/api/sentiment-snapshots/macro?limit=1"),
+          getJson<SentimentSnapshotListResponse>("/api/sentiment-snapshots/industry?limit=1"),
+        ]);
+        setData(dashboard);
+        setLatestMacroLabel(
+          macroSnapshots.snapshots[0]
+            ? `${macroSnapshots.snapshots[0].label.toLowerCase()} · ${formatDate(macroSnapshots.snapshots[0].computed_at)}`
+            : "no snapshot"
+        );
+        setLatestIndustryLabel(
+          industrySnapshots.snapshots[0]
+            ? `${industrySnapshots.snapshots[0].subject_label} · ${industrySnapshots.snapshots[0].label.toLowerCase()}`
+            : "no snapshot"
+        );
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
       }
@@ -33,7 +50,10 @@ export function DashboardPage() {
             <Link to="/jobs" className="button">
               Create or run jobs
             </Link>
-            <Link to="/settings" className="button-secondary">
+            <Link to="/sentiment" className="button-secondary">
+              Inspect snapshots
+            </Link>
+            <Link to="/settings" className="button-subtle">
               Review setup
             </Link>
           </>
@@ -61,6 +81,16 @@ export function DashboardPage() {
             <Card>
               <div className="metric-label">Recent runs</div>
               <div className="metric-value">{data.latest_runs.length}</div>
+            </Card>
+            <Card>
+              <div className="metric-label">Latest macro snapshot</div>
+              <div className="metric-value">{latestMacroLabel.split(" · ")[0]}</div>
+              <div className="helper-text">{latestMacroLabel}</div>
+            </Card>
+            <Card>
+              <div className="metric-label">Latest industry snapshot</div>
+              <div className="metric-value">{latestIndustryLabel.split(" · ")[0]}</div>
+              <div className="helper-text">{latestIndustryLabel}</div>
             </Card>
           </section>
 

@@ -110,6 +110,9 @@ export function AppLayout() {
                 ))}
               </div>
             </div>
+            <NavLink to="/sentiment" className={({ isActive }) => `nav-link${isActive ? " is-active" : ""}`}>
+              <ResponsiveLabel full="Sentiment" short="Sent" />
+            </NavLink>
             <NavLink to="/settings" className={({ isActive }) => `nav-link${isActive ? " is-active" : ""}`}>
               <ResponsiveLabel full="Settings" short="Set" />
             </NavLink>
@@ -158,6 +161,13 @@ export function AppLayout() {
               </NavLink>
             ))}
           </div>
+          <NavLink
+            to="/sentiment"
+            className={({ isActive }) => `nav-link mobile-nav-link${isActive ? " is-active" : ""}`}
+            onClick={() => setMobileNavOpen(false)}
+          >
+            <ResponsiveLabel full="Sentiment" short="Sent" />
+          </NavLink>
           <NavLink
             to="/settings"
             className={({ isActive }) => `nav-link mobile-nav-link${isActive ? " is-active" : ""}`}

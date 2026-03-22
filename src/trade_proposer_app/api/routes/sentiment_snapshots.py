@@ -6,10 +6,39 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.domain.models import SentimentSnapshot
+from trade_proposer_app.domain.enums import JobType
+from trade_proposer_app.domain.models import Run, SentimentSnapshot
+from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
+from trade_proposer_app.services.builders import (
+    create_industry_sentiment_service,
+    create_macro_sentiment_service,
+    create_proposal_service,
+)
+from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
+from trade_proposer_app.services.evaluations import RecommendationEvaluationService
+from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.optimizations import WeightOptimizationService
+from trade_proposer_app.repositories.settings import SettingsRepository
 
 router = APIRouter(prefix="/sentiment-snapshots", tags=["sentiment-snapshots"])
+
+
+def _create_job_execution_service(session: Session) -> JobExecutionService:
+    settings_repository = SettingsRepository(session)
+    return JobExecutionService(
+        jobs=JobRepository(session),
+        runs=RunRepository(session),
+        proposals=create_proposal_service(session),
+        evaluations=EvaluationExecutionService(RecommendationEvaluationService(session)),
+        optimizations=WeightOptimizationService(
+            session=session,
+            minimum_resolved_trades=settings_repository.get_optimization_minimum_resolved_trades(),
+        ),
+        macro_sentiment=create_macro_sentiment_service(session),
+        industry_sentiment=create_industry_sentiment_service(session),
+    )
 
 
 @router.get("")
@@ -51,6 +80,20 @@ async def list_industry_snapshots(limit: int = 20, session: Session = Depends(ge
         "scope": "industry",
         "limit": normalized_limit,
     }
+
+
+@router.post("/refresh/macro")
+async def enqueue_macro_snapshot_refresh(session: Session = Depends(get_db_session)) -> Run:
+    service = _create_job_execution_service(session)
+    job = JobRepository(session).get_or_create_system_job("manual macro sentiment refresh", JobType.MACRO_SENTIMENT_REFRESH)
+    return service.enqueue_job(job.id or 0)
+
+
+@router.post("/refresh/industry")
+async def enqueue_industry_snapshot_refresh(session: Session = Depends(get_db_session)) -> Run:
+    service = _create_job_execution_service(session)
+    job = JobRepository(session).get_or_create_system_job("manual industry sentiment refresh", JobType.INDUSTRY_SENTIMENT_REFRESH)
+    return service.enqueue_job(job.id or 0)
 
 
 @router.get("/{snapshot_id}")

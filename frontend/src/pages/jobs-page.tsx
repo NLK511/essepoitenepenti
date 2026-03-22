@@ -175,6 +175,8 @@ export function JobsPage() {
                   <option value="proposal_generation">Proposal generation</option>
                   <option value="recommendation_evaluation">Recommendation evaluation</option>
                   <option value="weight_optimization">Weight optimization</option>
+                  <option value="macro_sentiment_refresh">Macro sentiment refresh</option>
+                  <option value="industry_sentiment_refresh">Industry sentiment refresh</option>
                 </select>
               </label>
             </div>
@@ -312,6 +314,8 @@ export function JobsPage() {
                                     <option value="proposal_generation">Proposal generation</option>
                                     <option value="recommendation_evaluation">Recommendation evaluation</option>
                                     <option value="weight_optimization">Weight optimization</option>
+                                    <option value="macro_sentiment_refresh">Macro sentiment refresh</option>
+                                    <option value="industry_sentiment_refresh">Industry sentiment refresh</option>
                                   </select>
                                 </label>
                               </div>

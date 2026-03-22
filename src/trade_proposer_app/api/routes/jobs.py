@@ -8,7 +8,11 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
-from trade_proposer_app.services.builders import create_proposal_service
+from trade_proposer_app.services.builders import (
+    create_industry_sentiment_service,
+    create_macro_sentiment_service,
+    create_proposal_service,
+)
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.evaluations import RecommendationEvaluationService
 from trade_proposer_app.services.job_execution import JobExecutionService
@@ -52,8 +56,8 @@ def normalize_job_type(job_type: str | None) -> JobType:
         raise HTTPException(
             status_code=400,
             detail=(
-                "invalid job_type: use proposal_generation, "
-                "recommendation_evaluation, or weight_optimization"
+                "invalid job_type: use proposal_generation, recommendation_evaluation, "
+                "weight_optimization, macro_sentiment_refresh, or industry_sentiment_refresh"
             ),
         ) from exc
 
@@ -148,6 +152,8 @@ async def execute_job(job_id: int, session: Session = Depends(get_db_session)) -
         proposals=create_proposal_service(session),
         evaluations=EvaluationExecutionService(RecommendationEvaluationService(session)),
         optimizations=create_optimization_service(session),
+        macro_sentiment=create_macro_sentiment_service(session),
+        industry_sentiment=create_industry_sentiment_service(session),
     )
     return service.enqueue_job(job_id)
 
