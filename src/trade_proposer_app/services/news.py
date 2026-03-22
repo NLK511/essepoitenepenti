@@ -151,7 +151,31 @@ NEGATIVE_KEYWORD_WEIGHTS: dict[str, float] = {
     "downturns": 1.2,
 }
 
+POSITIVE_PHRASE_WEIGHTS: dict[str, float] = {
+    "beats expectations": 1.4,
+    "beats forecasts": 1.3,
+    "exceeds expectations": 1.3,
+    "strong guidance": 1.2,
+    "upside surprise": 1.2,
+    "outlook improves": 1.1,
+    "record demand": 1.1,
+    "guidance raised": 1.1,
+}
+
+NEGATIVE_PHRASE_WEIGHTS: dict[str, float] = {
+    "misses guidance": 1.4,
+    "misses expectations": 1.3,
+    "fails to meet": 1.3,
+    "downgrade outlook": 1.2,
+    "cut guidance": 1.2,
+    "weak demand": 1.1,
+    "slows growth": 1.1,
+    "margin pressure": 1.2,
+    "downturn continues": 1.2,
+}
+
 PROVIDER_BUILDERS: dict[str, type["NewsProvider"]] = {}
+
 
 
 def _normalize_timestamp(value: str | int | float | None) -> datetime | None:
@@ -189,6 +213,19 @@ def _sum_keyword_weights(tokens: Iterable[str], weight_map: dict[str, float], bo
 
 def _count_keyword_matches(tokens: Iterable[str], weight_map: dict[str, float]) -> int:
     return sum(1 for token in tokens if token in weight_map)
+
+
+def _phrase_score_and_hits(text: str, weight_map: dict[str, float]) -> tuple[float, int]:
+    if not text:
+        return 0.0, 0
+    total_score = 0.0
+    total_hits = 0
+    for phrase, score in weight_map.items():
+        pattern = rf"\b{re.escape(phrase)}\b"
+        matches = len(re.findall(pattern, text))
+        total_score += score * matches
+        total_hits += matches
+    return total_score, total_hits
 
 
 class NewsFetchError(Exception):
@@ -316,6 +353,11 @@ class NaiveSentimentAnalyzer:
                 + _count_keyword_matches(title_tokens, NEGATIVE_KEYWORD_WEIGHTS)
                 + _count_keyword_matches(summary_tokens, NEGATIVE_KEYWORD_WEIGHTS)
             )
+            phrase_positive, phrase_positive_hits = _phrase_score_and_hits(text, POSITIVE_PHRASE_WEIGHTS)
+            phrase_negative, phrase_negative_hits = _phrase_score_and_hits(text, NEGATIVE_PHRASE_WEIGHTS)
+            article_positive += phrase_positive
+            article_negative += phrase_negative
+            article_keyword_hits += phrase_positive_hits + phrase_negative_hits
             total_keyword_hits += article_keyword_hits
             positives += article_positive
             negatives += article_negative
