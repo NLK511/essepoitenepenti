@@ -1,0 +1,14 @@
+{
+  "_comment": "Initial placeholder taxonomy file for upcoming macro/industry/ticker sentiment fusion.",
+  "AAPL": {
+    "company_name": "Apple Inc.",
+    "aliases": ["Apple", "Apple Inc", "iPhone maker"],
+    "sector": "Technology",
+    "industry": "Consumer Electronics",
+    "themes": ["consumer electronics", "mobile", "services"],
+    "macro_sensitivity": ["consumer spending", "rates", "nasdaq"],
+    "industry_keywords": ["smartphone demand", "consumer electronics", "app store"],
+    "ticker_keywords": ["AAPL", "$AAPL", "Apple", "iPhone", "Apple earnings"],
+    "exclude_keywords": ["apple fruit", "apple pie"]
+  }
+}

@@ -23,6 +23,21 @@ DEFAULT_APP_SETTINGS = {
     "summary_pi_agent_dir": "",
     "summary_pi_cli_args": "",
     "summary_prompt": DEFAULT_SUMMARY_PROMPT,
+    "social_sentiment_enabled": "false",
+    "social_nitter_enabled": "false",
+    "social_nitter_base_url": "http://127.0.0.1:8080",
+    "social_nitter_timeout_seconds": "6",
+    "social_nitter_max_items_per_query": "12",
+    "social_nitter_query_window_hours": "12",
+    "social_nitter_include_replies": "false",
+    "social_weight_news": "1.0",
+    "social_weight_social": "0.6",
+    "social_weight_macro": "0.2",
+    "social_weight_industry": "0.3",
+    "social_weight_ticker": "0.5",
+    "social_enable_author_weighting": "true",
+    "social_enable_engagement_weighting": "true",
+    "social_enable_duplicate_suppression": "true",
 }
 SUMMARY_SETTING_KEYS = (
     "summary_backend",
@@ -33,6 +48,23 @@ SUMMARY_SETTING_KEYS = (
     "summary_pi_agent_dir",
     "summary_pi_cli_args",
     "summary_prompt",
+)
+SOCIAL_SETTING_KEYS = (
+    "social_sentiment_enabled",
+    "social_nitter_enabled",
+    "social_nitter_base_url",
+    "social_nitter_timeout_seconds",
+    "social_nitter_max_items_per_query",
+    "social_nitter_query_window_hours",
+    "social_nitter_include_replies",
+    "social_weight_news",
+    "social_weight_social",
+    "social_weight_macro",
+    "social_weight_industry",
+    "social_weight_ticker",
+    "social_enable_author_weighting",
+    "social_enable_engagement_weighting",
+    "social_enable_duplicate_suppression",
 )
 
 
@@ -69,6 +101,10 @@ class SettingsRepository:
     def get_summary_settings(self) -> dict[str, str]:
         setting_map = self.get_setting_map()
         return {key: setting_map.get(key, DEFAULT_APP_SETTINGS.get(key, "")) for key in SUMMARY_SETTING_KEYS}
+
+    def get_social_settings(self) -> dict[str, str]:
+        setting_map = self.get_setting_map()
+        return {key: setting_map.get(key, DEFAULT_APP_SETTINGS.get(key, "")) for key in SOCIAL_SETTING_KEYS}
 
     def get_optimization_minimum_resolved_trades(self) -> int:
         setting_map = self.get_setting_map()

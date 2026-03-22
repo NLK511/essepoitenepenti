@@ -20,6 +20,42 @@ class NewsBundle(BaseModel):
     feed_errors: list[str] = Field(default_factory=list)
 
 
+class SignalEngagement(BaseModel):
+    likes: int = 0
+    replies: int = 0
+    retweets: int = 0
+    quotes: int = 0
+
+
+class SignalItem(BaseModel):
+    source_type: str
+    provider: str
+    item_id: str | None = None
+    title: str = ""
+    body: str = ""
+    author: str | None = None
+    author_handle: str | None = None
+    publisher: str | None = None
+    link: str | None = None
+    published_at: datetime | None = None
+    engagement: SignalEngagement = Field(default_factory=SignalEngagement)
+    raw_metadata: dict[str, object] = Field(default_factory=dict)
+    matched_entities: dict[str, object] = Field(default_factory=dict)
+    scope_tags: list[str] = Field(default_factory=list)
+    quality_score: float = 0.0
+    credibility_score: float = 0.0
+    dedupe_key: str | None = None
+
+
+class SignalBundle(BaseModel):
+    ticker: str
+    items: list[SignalItem] = Field(default_factory=list)
+    feeds_used: list[str] = Field(default_factory=list)
+    feed_errors: list[str] = Field(default_factory=list)
+    coverage: dict[str, object] = Field(default_factory=dict)
+    query_diagnostics: dict[str, object] = Field(default_factory=dict)
+
+
 class SentimentAnalysis(BaseModel):
     score: float
     label: str

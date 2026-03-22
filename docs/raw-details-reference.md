@@ -11,7 +11,9 @@ The app-native pipeline emits a structured JSON object for each ticker it scores
   - `trade`: direction confidence plus the derived entry, stop-loss, and take-profit values that form the actionable decision.
   - `summary`: the digest or LLM narrative text (`text`), how it was generated (`method`/`backend`/`model`), runtime metadata, the fallback digest, and any `error`/`llm_error` details.
   - `news`: the unified `items` array (title, summary, publisher, link, published_at, compound score, etc.), feed usage (`feeds_used`/`feed_errors`), item counts, and the keyword sentiment diagnostics (base `score`, `volatility`, `polarity_trend`, and `sources`).
-  - `sentiment`: the final score/label stored in the feature vector plus the `enhanced` block that fuses summary tone, keyword sentiment, and technical context.
+  - `signals`: the first-pass unified signal payload that combines normalized news/social items, cross-provider feed diagnostics, and social query metadata.
+  - `social`: Nitter-focused diagnostics such as fetched social items and query metadata. In this first pass those fields are primarily diagnostic and preparatory rather than direct scoring inputs.
+  - `sentiment`: the final score/label stored in the feature vector plus the `enhanced` block that fuses summary tone, keyword sentiment, and technical context. It now also contains placeholder `macro`, `industry`, and ticker source-breakdown sections to support the next social-fusion phase.
   - `context_flags`: the boolean keyword tags (`earnings`, `geopolitical`, `industry`, `general`) that the sentiment analyzer emits.
   - `feature_vectors`: nested `raw` and `normalized` payloads so auditors can inspect inputs before and after scaling.
   - `aggregations`, `confidence_weights`, and `aggregation_weights`: the weighted breakdowns and weight maps used to compute direction and confidence.

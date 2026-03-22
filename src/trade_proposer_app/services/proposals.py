@@ -23,6 +23,7 @@ from trade_proposer_app.services.news import (
     SUMMARY_KEYWORD_WEIGHT,
     SUMMARY_METHOD_NEWS_DIGEST,
 )
+from trade_proposer_app.services.signals import SignalIngestionService
 from trade_proposer_app.services.summary import SummaryRequest, SummaryService
 
 
@@ -157,12 +158,14 @@ class ProposalService:
         weights_path: Path | None = None,
         *,
         news_service: NewsIngestionService | None = None,
+        signal_service: SignalIngestionService | None = None,
         sentiment_analyzer: NaiveSentimentAnalyzer | None = None,
         summary_service: SummaryService | None = None,
     ) -> None:
         self.weights_path = weights_path or WEIGHTS_PATH
         self.weights = self._load_weights()
         self.news_service = news_service
+        self.signal_service = signal_service
         self.sentiment_analyzer = sentiment_analyzer or NaiveSentimentAnalyzer()
         self.summary_service = summary_service or SummaryService()
 
@@ -302,12 +305,52 @@ class ProposalService:
                 "label": context.get("enhanced_sentiment_label"),
                 "components": context.get("enhanced_sentiment_components", {}),
             },
+            "macro": {
+                "score": 0.0,
+                "label": "NEUTRAL",
+                "coverage_insights": ["macro fusion not implemented yet; placeholder emitted for upcoming multi-scope sentiment work."],
+            },
+            "industry": {
+                "score": 0.0,
+                "label": "NEUTRAL",
+                "coverage_insights": ["industry fusion not implemented yet; placeholder emitted for upcoming multi-scope sentiment work."],
+            },
+            "ticker": {
+                "score": context.get("sentiment_score"),
+                "label": context.get("sentiment_label"),
+                "source_breakdown": {
+                    "news": {"score": context.get("news_sentiment_score", 0.0), "item_count": context.get("news_item_count", 0)},
+                    "social": {"score": 0.0, "item_count": len(context.get("social_items", []))},
+                },
+            },
+            "overall": {
+                "score": context.get("enhanced_sentiment_score", context.get("sentiment_score")),
+                "label": context.get("enhanced_sentiment_label", context.get("sentiment_label")),
+                "weights": {},
+                "divergence_signals": [],
+            },
             "keyword_hits": context.get("sentiment_keyword_hits", 0),
             "coverage_insights": context.get("sentiment_coverage_insights", []),
+        }
+        signals_section = {
+            "version": "0.1",
+            "items": context.get("signal_items", []),
+            "feeds_used": context.get("signal_feeds_used", []),
+            "feed_errors": context.get("signal_feed_errors", []),
+            "coverage": context.get("signal_coverage", {}),
+            "query_diagnostics": context.get("signal_query_diagnostics", {}),
+        }
+        social_section = {
+            "provider": "nitter",
+            "enabled": bool(context.get("social_items") or context.get("signal_query_diagnostics")),
+            "items_fetched": len(context.get("social_items", [])),
+            "top_items": context.get("social_items", [])[:5],
+            "query_diagnostics": context.get("signal_query_diagnostics", {}),
         }
         diagnostics_section = {
             "problems": context.get("problems", []),
             "news_feed_errors": context.get("news_feed_errors", []),
+            "signal_feed_errors": context.get("signal_feed_errors", []),
             "summary_error": summary_error,
             "llm_error": context.get("llm_error"),
         }
@@ -326,6 +369,8 @@ class ProposalService:
             },
             "summary": summary_section,
             "news": news_section,
+            "signals": signals_section,
+            "social": social_section,
             "sentiment": sentiment_section,
             "context_flags": context_flags,
             "feature_vectors": {
@@ -577,6 +622,12 @@ class ProposalService:
             "enhanced_sentiment_score": 0.0,
             "enhanced_sentiment_label": None,
             "enhanced_sentiment_components": {},
+            "signal_items": [],
+            "signal_feeds_used": [],
+            "signal_feed_errors": [],
+            "signal_coverage": {"news_count": 0, "social_count": 0, "total_count": 0},
+            "signal_query_diagnostics": {},
+            "social_items": [],
         }
         base_context.update(dict(DEFAULT_CONTEXT_FLAGS))
         return base_context
@@ -665,7 +716,23 @@ class ProposalService:
 
     def _apply_news_context(self, context: dict[str, Any], ticker: str) -> dict[str, Any]:
         context.update(self._build_news_context_base())
+        signal_bundle = self.signal_service.fetch(ticker) if self.signal_service is not None else None
+        if signal_bundle is not None:
+            signal_items = [item.model_dump(mode="json") for item in signal_bundle.items]
+            social_items = [item for item in signal_items if item.get("source_type") == "social"]
+            context.update(
+                {
+                    "signal_items": signal_items,
+                    "signal_feeds_used": signal_bundle.feeds_used,
+                    "signal_feed_errors": signal_bundle.feed_errors,
+                    "signal_coverage": signal_bundle.coverage,
+                    "signal_query_diagnostics": signal_bundle.query_diagnostics,
+                    "social_items": social_items,
+                }
+            )
         if self.news_service is None:
+            merged_problems = list(dict.fromkeys(context.get("problems", []) + context.get("signal_feed_errors", [])))
+            context["problems"] = merged_problems
             return context
         bundle = self.news_service.fetch(ticker)
         sentiment = self.sentiment_analyzer.analyze(bundle)
@@ -729,7 +796,13 @@ class ProposalService:
         context_flags = sentiment.get("context_flags", {})
         for tag, value in context_flags.items():
             context[tag] = value
-        merged_problems = list(dict.fromkeys(context.get("problems", []) + sentiment.get("problems", [])))
+        merged_problems = list(
+            dict.fromkeys(
+                context.get("problems", [])
+                + sentiment.get("problems", [])
+                + context.get("signal_feed_errors", [])
+            )
+        )
         summary_problem = summary_result.llm_error
         if summary_problem:
             merged_problems.append(summary_problem)
