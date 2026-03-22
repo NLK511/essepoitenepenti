@@ -47,6 +47,7 @@ For detailed information, see the `docs/` directory or browse them in-app at `/d
 - [Features & Capabilities](docs/features-and-capabilities.md)
 - [Recommendation Methodology](docs/recommendation-methodology.md)
 - [User Journeys](docs/user-journeys.md)
+- [Product Thesis](docs/product-thesis.md)
 - [Phase 2: App-native Outcomes](docs/phase-2-app-native.md)
 - [Raw Details Reference](docs/raw-details-reference.md)
 
