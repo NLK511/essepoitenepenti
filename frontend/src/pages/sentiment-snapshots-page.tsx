@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
@@ -25,7 +26,7 @@ export function SentimentSnapshotsPage() {
   const [industry, setIndustry] = useState<SentimentSnapshot[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busyAction, setBusyAction] = useState<"macro" | "industry" | null>(null);
+  const [busyAction, setBusyAction] = useState<"macro" | "industry" | "macro-now" | "industry-now" | null>(null);
 
   async function load() {
     try {
@@ -64,6 +65,28 @@ export function SentimentSnapshotsPage() {
     }
   }
 
+  async function runRefreshNow(scope: "macro" | "industry") {
+    try {
+      setBusyAction(scope === "macro" ? "macro-now" : "industry-now");
+      setError(null);
+      const response = await postForm<{ run: Run; executed: boolean; reason?: string; artifact?: Record<string, unknown> }>(
+        `/api/sentiment-snapshots/refresh/${scope}/run-now`,
+        {},
+      );
+      showToast({
+        message: response.executed
+          ? `${scope === "macro" ? "Macro" : "Industry"} refresh finished in run #${response.run.id}`
+          : `${scope === "macro" ? "Macro" : "Industry"} refresh reused existing run #${response.run.id}`,
+        tone: response.executed ? "success" : "warning",
+      });
+      await load();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : `Failed to run ${scope} refresh now`);
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   const latestMacro = macro[0] ?? null;
   const latestIndustry = industry[0] ?? null;
 
@@ -76,10 +99,16 @@ export function SentimentSnapshotsPage() {
         actions={
           <>
             <button type="button" className="button" onClick={() => void enqueueRefresh("macro")} disabled={busyAction !== null}>
-              {busyAction === "macro" ? "Queueing macro refresh…" : "Refresh macro"}
+              {busyAction === "macro" ? "Queueing macro refresh…" : "Queue macro refresh"}
             </button>
-            <button type="button" className="button-secondary" onClick={() => void enqueueRefresh("industry")} disabled={busyAction !== null}>
-              {busyAction === "industry" ? "Queueing industry refresh…" : "Refresh industries"}
+            <button type="button" className="button-secondary" onClick={() => void runRefreshNow("macro")} disabled={busyAction !== null}>
+              {busyAction === "macro-now" ? "Running macro refresh…" : "Run macro now"}
+            </button>
+            <button type="button" className="button" onClick={() => void enqueueRefresh("industry")} disabled={busyAction !== null}>
+              {busyAction === "industry" ? "Queueing industry refresh…" : "Queue industries refresh"}
+            </button>
+            <button type="button" className="button-secondary" onClick={() => void runRefreshNow("industry")} disabled={busyAction !== null}>
+              {busyAction === "industry-now" ? "Running industry refresh…" : "Run industries now"}
             </button>
             <button type="button" className="button-subtle" onClick={() => void load()} disabled={loading}>
               Reload
@@ -158,7 +187,7 @@ function SnapshotList({ snapshots }: { snapshots: SentimentSnapshot[] }) {
               <div className="helper-text">Score {snapshot.score.toFixed(2)} · computed {formatDate(snapshot.computed_at)}</div>
               {snapshot.expires_at ? <div className="helper-text">Expires {formatDate(snapshot.expires_at)}</div> : null}
             </div>
-            <Badge tone="neutral">#{snapshot.id}</Badge>
+            {snapshot.id ? <Link to={`/sentiment/${snapshot.id}`} className="button-subtle">Open</Link> : null}
           </div>
         </li>
       ))}
@@ -196,6 +225,7 @@ function SnapshotSummary({ snapshot }: { snapshot: SentimentSnapshot }) {
         </div>
       ) : null}
       <div className="helper-text">Run {snapshot.run_id ?? "—"} · Job {snapshot.job_id ?? "—"} · {jobTypeLabel(snapshot.scope === "macro" ? "macro_sentiment_refresh" : "industry_sentiment_refresh")}</div>
+      {snapshot.id ? <Link to={`/sentiment/${snapshot.id}`} className="button-subtle">Open snapshot detail</Link> : null}
       <pre className="markdown-code-block">{JSON.stringify(snapshot.diagnostics, null, 2)}</pre>
     </div>
   );

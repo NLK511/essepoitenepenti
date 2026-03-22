@@ -14,7 +14,7 @@ from trade_proposer_app.app import app
 from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import JobType, RecommendationDirection, RecommendationState
-from trade_proposer_app.domain.models import AppPreflightReport, EvaluationRunResult, PreflightCheck, Recommendation, RunDiagnostics
+from trade_proposer_app.domain.models import AppPreflightReport, EvaluationRunResult, PreflightCheck, Recommendation, Run, RunDiagnostics
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
@@ -296,8 +296,11 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             response = await client.get("/api/health")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["status"], "ok")
-        self.assertEqual(response.json()["preflight"]["status"], "ok")
+        payload = response.json()
+        self.assertEqual(payload["status"], "degraded")
+        self.assertEqual(payload["preflight"]["status"], "warning")
+        self.assertEqual(payload["sentiment_snapshots"]["macro"]["status"], "warning")
+        self.assertEqual(payload["sentiment_snapshots"]["industry"]["status"], "warning")
 
     async def test_preflight_health_endpoint(self) -> None:
         transport = httpx.ASGITransport(app=app)
@@ -305,9 +308,10 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             response = await client.get("/api/health/preflight")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["status"], "warning")
         self.assertEqual(payload["engine"], "internal_price_pipeline")
         self.assertTrue(any(check["name"] == "module:pandas" for check in payload["checks"]))
+        self.assertTrue(any(check["name"] == "sentiment_snapshot:macro" for check in payload["checks"]))
 
     async def test_legacy_prototype_health_route(self) -> None:
         transport = httpx.ASGITransport(app=app)
@@ -315,14 +319,14 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             response = await client.get("/api/health/prototype")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["status"], "warning")
         self.assertEqual(payload["engine"], "internal_price_pipeline")
         self.assertTrue(any(check["name"] == "weights_file" for check in payload["checks"]))
 
     async def test_spa_shell_routes_render(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            for path in ("/", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/sentiment", "/runs/1", "/recommendations/1", "/tickers/AAPL"):
+            for path in ("/", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/sentiment", "/sentiment/1", "/runs/1", "/recommendations/1", "/tickers/AAPL"):
                 response = await client.get(path)
                 self.assertEqual(response.status_code, 200)
                 self.assertIn("<title>Trade Proposer App</title>", response.text)
@@ -913,6 +917,40 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         run_job_types = [item["job_type"] for item in runs.json()]
         self.assertIn(JobType.MACRO_SENTIMENT_REFRESH.value, run_job_types)
         self.assertIn(JobType.INDUSTRY_SENTIMENT_REFRESH.value, run_job_types)
+
+    async def test_sentiment_snapshot_run_now_routes_execute_synchronously(self) -> None:
+        class StubSnapshotExecutionService:
+            def __init__(self, session: Session) -> None:
+                self.jobs = JobRepository(session)
+                self.runs = RunRepository(session)
+
+            def enqueue_job(self, job_id: int, scheduled_for=None) -> Run:
+                return self.runs.enqueue(job_id, scheduled_for=scheduled_for, job_type=self.jobs.get(job_id).job_type)
+
+            def execute_claimed_run(self, run: Run) -> tuple[Run, list[Recommendation]]:
+                artifact = {"snapshot_id": 99, "scope": "macro", "subject_key": "global_macro"}
+                summary = {"status": "completed", "snapshot_count": 1}
+                self.runs.set_artifact(run.id or 0, artifact)
+                self.runs.set_summary(run.id or 0, summary)
+                self.runs.update_status(run.id or 0, "completed")
+                return self.runs.get_run(run.id or 0), []
+
+        transport = httpx.ASGITransport(app=app)
+        with patch(
+            "trade_proposer_app.api.routes.sentiment_snapshots._create_job_execution_service",
+            side_effect=lambda session: StubSnapshotExecutionService(session),
+        ):
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                macro = await client.post("/api/sentiment-snapshots/refresh/macro/run-now", data={})
+                industry = await client.post("/api/sentiment-snapshots/refresh/industry/run-now", data={})
+
+        self.assertEqual(macro.status_code, 200)
+        self.assertEqual(industry.status_code, 200)
+        self.assertTrue(macro.json()["executed"])
+        self.assertTrue(industry.json()["executed"])
+        self.assertEqual(macro.json()["run"]["status"], "completed")
+        self.assertEqual(industry.json()["run"]["status"], "completed")
+        self.assertEqual(macro.json()["artifact"]["snapshot_id"], 99)
 
     async def test_settings_rollback_restores_latest_weights_backup(self) -> None:
         data_dir = Path(self.prototype_root.name) / ".pi" / "skills" / "trade-proposer" / "data"

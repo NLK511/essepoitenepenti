@@ -6,7 +6,7 @@ import { WorkflowRunResults } from "../components/workflow-run-results";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
 import type { RunDetailResponse } from "../types";
-import { diagnosticsMessages, directionTone, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, recommendationStateTone, runTone } from "../utils";
+import { diagnosticsMessages, directionTone, extractSentimentSnapshotReferences, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, recommendationStateTone, runTone } from "../utils";
 
 function scoreColor(value: number, min = -1, max = 1) {
   if (!Number.isFinite(value) || max <= min) {
@@ -146,6 +146,12 @@ export function RunDetailPage() {
     }
   }
 
+  const runArtifact = parseJsonRecord(detail?.run.artifact_json ?? null);
+  const artifactSnapshotIds = Array.isArray(runArtifact?.snapshot_ids)
+    ? runArtifact.snapshot_ids.filter((value): value is number => typeof value === "number")
+    : [];
+  const artifactSnapshotId = typeof runArtifact?.snapshot_id === "number" ? runArtifact.snapshot_id : null;
+
   return (
     <>
       <PageHeader
@@ -188,6 +194,18 @@ export function RunDetailPage() {
             {detail.run.error_message ? <div className="alert alert-danger top-gap-small">{detail.run.error_message}</div> : null}
             {detail.run.timing_json ? (
               <div className="helper-text top-gap-small">Timing data is available but hidden on this page to keep the view focused on the trade proposal.</div>
+            ) : null}
+            {artifactSnapshotId ? (
+              <div className="top-gap-small">
+                <Link to={`/sentiment/${artifactSnapshotId}`} className="button-subtle">Open created snapshot</Link>
+              </div>
+            ) : null}
+            {artifactSnapshotIds.length > 0 ? (
+              <div className="top-gap-small cluster">
+                {artifactSnapshotIds.map((snapshotId) => (
+                  <Link key={snapshotId} to={`/sentiment/${snapshotId}`} className="button-subtle">Snapshot #{snapshotId}</Link>
+                ))}
+              </div>
             ) : null}
           </Card>
 
@@ -269,6 +287,7 @@ export function RunDetailPage() {
                           (entry): entry is string => typeof entry === "string"
                         )
                       : [];
+                    const snapshotReferences = extractSentimentSnapshotReferences(output.diagnostics.analysis_json);
                     return (
                       <article key={item.id ?? `${item.ticker}-${item.created_at}`} className="recommendation-card">
                         <div className="card-headline">
@@ -370,6 +389,31 @@ export function RunDetailPage() {
                                 </div>
                               ) : null}
                             </div>
+                          </section>
+                        ) : null}
+                        {snapshotReferences.length > 0 ? (
+                          <section className="recommendation-section">
+                            <div className="section-heading">
+                              <strong>Shared snapshot lineage</strong>
+                              <InfoBadge {...INFO_DESCRIPTIONS.diagnostics} />
+                            </div>
+                            <ul className="list-reset">
+                              {snapshotReferences.map((reference) => (
+                                <li key={`${reference.scope}-${reference.snapshotId}`} className="list-item compact-item">
+                                  <div className="card-headline">
+                                    <div>
+                                      <div className="cluster">
+                                        <Badge tone="info">{reference.scope}</Badge>
+                                        {reference.label ? <Badge>{reference.label}</Badge> : null}
+                                        <Badge>#{reference.snapshotId}</Badge>
+                                      </div>
+                                      <div className="helper-text">{reference.subjectLabel ?? reference.subjectKey ?? "Snapshot reference"}</div>
+                                    </div>
+                                    <Link to={`/sentiment/${reference.snapshotId}`} className="button-subtle">Open snapshot</Link>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
                           </section>
                         ) : null}
                         {analysis ? (

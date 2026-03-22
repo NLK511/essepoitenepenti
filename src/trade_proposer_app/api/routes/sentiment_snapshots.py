@@ -89,11 +89,21 @@ async def enqueue_macro_snapshot_refresh(session: Session = Depends(get_db_sessi
     return service.enqueue_job(job.id or 0)
 
 
+@router.post("/refresh/macro/run-now")
+async def run_macro_snapshot_refresh_now(session: Session = Depends(get_db_session)) -> dict[str, object]:
+    return _run_snapshot_refresh_now(session, "manual macro sentiment refresh", JobType.MACRO_SENTIMENT_REFRESH)
+
+
 @router.post("/refresh/industry")
 async def enqueue_industry_snapshot_refresh(session: Session = Depends(get_db_session)) -> Run:
     service = _create_job_execution_service(session)
     job = JobRepository(session).get_or_create_system_job("manual industry sentiment refresh", JobType.INDUSTRY_SENTIMENT_REFRESH)
     return service.enqueue_job(job.id or 0)
+
+
+@router.post("/refresh/industry/run-now")
+async def run_industry_snapshot_refresh_now(session: Session = Depends(get_db_session)) -> dict[str, object]:
+    return _run_snapshot_refresh_now(session, "manual industry sentiment refresh", JobType.INDUSTRY_SENTIMENT_REFRESH)
 
 
 @router.get("/{snapshot_id}")
@@ -103,6 +113,32 @@ async def get_sentiment_snapshot(snapshot_id: int, session: Session = Depends(ge
     if snapshot is None:
         raise HTTPException(status_code=404, detail=f"Sentiment snapshot {snapshot_id} not found")
     return _serialize_snapshot(snapshot)
+
+
+def _run_snapshot_refresh_now(session: Session, job_name: str, job_type: JobType) -> dict[str, object]:
+    jobs = JobRepository(session)
+    runs = RunRepository(session)
+    service = _create_job_execution_service(session)
+    job = jobs.get_or_create_system_job(job_name, job_type)
+    run = service.enqueue_job(job.id or 0)
+    claimed = runs.claim_queued_run(run.id or 0)
+    if claimed is None:
+        latest_run = runs.get_run(run.id or 0)
+        return {
+            "run": latest_run,
+            "executed": False,
+            "reason": f"run {latest_run.id} is already {latest_run.status}",
+        }
+    completed_run, _recommendations = service.execute_claimed_run(claimed)
+    payload: dict[str, object] = {
+        "run": completed_run,
+        "executed": True,
+    }
+    if completed_run.artifact_json:
+        payload["artifact"] = _parse_json(completed_run.artifact_json, {})
+    if completed_run.summary_json:
+        payload["summary"] = _parse_json(completed_run.summary_json, {})
+    return payload
 
 
 def _serialize_snapshot(snapshot: SentimentSnapshot) -> dict[str, Any]:

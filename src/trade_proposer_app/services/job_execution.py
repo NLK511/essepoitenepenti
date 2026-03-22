@@ -296,6 +296,9 @@ class JobExecutionService:
         run = self.runs.claim_next_queued_run()
         if run is None:
             return None, []
+        return self.execute_claimed_run(run)
+
+    def execute_claimed_run(self, run: Run) -> tuple[Run, list[Recommendation]]:
         try:
             recommendations, _timing = self.execute_run(run.id or 0)
             return self.runs.get_run(run.id or 0), recommendations

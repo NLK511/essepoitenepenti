@@ -9,6 +9,7 @@ import { HistoryPage } from "./pages/history-page";
 import { JobsPage } from "./pages/jobs-page";
 import { RecommendationDetailPage } from "./pages/recommendation-detail-page";
 import { RunDetailPage } from "./pages/run-detail-page";
+import { SentimentSnapshotDetailPage } from "./pages/sentiment-snapshot-detail-page";
 import { SentimentSnapshotsPage } from "./pages/sentiment-snapshots-page";
 import { SettingsPage } from "./pages/settings-page";
 import { TickerPage } from "./pages/ticker-page";
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="history" element={<Navigate to="/jobs/history" replace />} />
           <Route path="debugger" element={<Navigate to="/jobs/debugger" replace />} />
           <Route path="sentiment" element={<SentimentSnapshotsPage />} />
+          <Route path="sentiment/:snapshotId" element={<SentimentSnapshotDetailPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="docs" element={<DocsPage />} />
           <Route path="runs/:runId" element={<RunDetailPage />} />

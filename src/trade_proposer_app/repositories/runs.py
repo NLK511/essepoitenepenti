@@ -112,25 +112,31 @@ class RunRepository:
             if candidate_id is None:
                 return None
 
-            started_at = datetime.now(timezone.utc)
-            result = self.session.execute(
-                update(RunRecord)
-                .where(RunRecord.id == candidate_id)
-                .where(RunRecord.status == RunStatus.QUEUED.value)
-                .values(
-                    status=RunStatus.RUNNING.value,
-                    error_message="",
-                    started_at=started_at,
-                    completed_at=None,
-                    duration_seconds=None,
-                )
+            claimed = self.claim_queued_run(candidate_id)
+            if claimed is not None:
+                return claimed
+
+    def claim_queued_run(self, run_id: int) -> Run | None:
+        started_at = datetime.now(timezone.utc)
+        result = self.session.execute(
+            update(RunRecord)
+            .where(RunRecord.id == run_id)
+            .where(RunRecord.status == RunStatus.QUEUED.value)
+            .values(
+                status=RunStatus.RUNNING.value,
+                error_message="",
+                started_at=started_at,
+                completed_at=None,
+                duration_seconds=None,
             )
-            self.session.commit()
-            if result.rowcount == 1:
-                record = self.session.get(RunRecord, candidate_id)
-                if record is None:
-                    return None
-                return self._to_run_model(record)
+        )
+        self.session.commit()
+        if result.rowcount != 1:
+            return None
+        record = self.session.get(RunRecord, run_id)
+        if record is None:
+            return None
+        return self._to_run_model(record)
 
     def update_status(
         self,

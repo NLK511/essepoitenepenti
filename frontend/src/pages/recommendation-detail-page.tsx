@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
 import type { RecommendationDetailResponse, Run } from "../types";
-import { diagnosticsMessages, directionTone, formatDate, recommendationStateTone, runTone } from "../utils";
+import { diagnosticsMessages, directionTone, extractSentimentSnapshotReferences, formatDate, recommendationStateTone, runTone } from "../utils";
 
 export function RecommendationDetailPage() {
   const { recommendationId } = useParams<{ recommendationId: string }>();
@@ -46,6 +46,8 @@ export function RecommendationDetailPage() {
       setEvaluating(false);
     }
   }
+
+  const snapshotReferences = extractSentimentSnapshotReferences(detail?.diagnostics.analysis_json ?? null);
 
   return (
     <>
@@ -94,6 +96,31 @@ export function RecommendationDetailPage() {
             <div className="helper-text">Started {formatDate(detail.run.started_at)}</div>
             <div className="helper-text">Completed {formatDate(detail.run.completed_at)}</div>
             {detail.run.error_message ? <div className="alert alert-danger top-gap-small">{detail.run.error_message}</div> : null}
+          </Card>
+
+          <Card>
+            <SectionTitle kicker="Snapshot lineage" title="Shared snapshots used by this recommendation" />
+            {snapshotReferences.length === 0 ? (
+              <EmptyState message="No shared macro or industry snapshot references were stored for this recommendation." />
+            ) : (
+              <ul className="list-reset">
+                {snapshotReferences.map((reference) => (
+                  <li key={`${reference.scope}-${reference.snapshotId}`} className="list-item">
+                    <div className="card-headline">
+                      <div>
+                        <div className="cluster">
+                          <Badge tone="info">{reference.scope}</Badge>
+                          {reference.label ? <Badge>{reference.label}</Badge> : null}
+                          <Badge>#{reference.snapshotId}</Badge>
+                        </div>
+                        <div className="helper-text">{reference.subjectLabel ?? reference.subjectKey ?? "Snapshot"}</div>
+                      </div>
+                      <Link to={`/sentiment/${reference.snapshotId}`} className="button-subtle">Open snapshot</Link>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
 
           <Card>
