@@ -41,6 +41,7 @@ After startup:
 ## Documentation
 
 For detailed information, see the `docs/` directory or browse them in-app at `/docs`:
+- [Documentation Index](docs/docs-index.md)
 - [Getting Started](docs/getting-started.md)
 - [Architecture](docs/architecture.md)
 - [Roadmap](docs/roadmap.md)
