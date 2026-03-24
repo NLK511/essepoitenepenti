@@ -64,9 +64,11 @@ class MacroSentimentService:
         drivers = []
         if social_count == 0:
             drivers.append("macro refresh completed without social macro matches; snapshot is neutral unless other providers are added")
+        bundle = social_result.get("bundle")
         diagnostics = {
             "warnings": social_sentiment.get("coverage_insights", []),
-            "providers": (social_result.get("bundle").feeds_used if social_result.get("bundle") is not None else []),
+            "providers": (getattr(bundle, "feeds_used", []) if bundle is not None else []),
+            "query_diagnostics": (getattr(bundle, "query_diagnostics", {}) if bundle is not None else {}),
         }
         computed_at = datetime.now(timezone.utc)
         expires_at = computed_at + timedelta(hours=MACRO_TTL_HOURS)

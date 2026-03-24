@@ -84,9 +84,11 @@ class IndustrySentimentService:
         drivers: list[str] = []
         if social_count == 0:
             drivers.append(f"industry refresh completed without social matches for {subject_label}; snapshot remains neutral")
+        bundle = social_result.get("bundle")
         diagnostics = {
             "warnings": social_sentiment.get("coverage_insights", []),
-            "providers": (social_result.get("bundle").feeds_used if social_result.get("bundle") is not None else []),
+            "providers": (getattr(bundle, "feeds_used", []) if bundle is not None else []),
+            "query_diagnostics": (getattr(bundle, "query_diagnostics", {}) if bundle is not None else {}),
             "queries": queries or [subject_label],
         }
         computed_at = datetime.now(timezone.utc)

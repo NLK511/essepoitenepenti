@@ -121,6 +121,7 @@ class NitterProvider(SocialProvider):
     ) -> SignalBundle:
         fetched_items: list[SignalItem] = []
         executed_queries: list[str] = []
+        query_stats: list[dict[str, object]] = []
         cutoff = datetime.now(timezone.utc) - timedelta(hours=self.query_window_hours)
         for query in queries:
             url = f"{self.base_url}{NITTER_SEARCH_PATH}?f=tweets&q={quote(query)}"
@@ -130,6 +131,7 @@ class NitterProvider(SocialProvider):
                 raise SocialFetchError(f"request failed for query '{query}': {exc}") from exc
             if response.status_code != 200:
                 raise SocialFetchError(f"unexpected status {response.status_code} for query '{query}'")
+            raw_item_count = len(list(TIMELINE_ITEM_PATTERN.finditer(response.text)))
             items = self._parse_search_html(response.text, ticker=ticker, query_profile=query_profile)
             filtered_items = [
                 item
@@ -137,6 +139,14 @@ class NitterProvider(SocialProvider):
                 if (item.published_at is None or item.published_at >= cutoff)
                 and not any(term in item.body.lower() for term in query_profile.get("exclude_keywords", []))
             ]
+            query_stats.append(
+                {
+                    "query": query,
+                    "raw_item_count": raw_item_count,
+                    "parsed_item_count": len(items),
+                    "filtered_item_count": len(filtered_items),
+                }
+            )
             if scope_tag:
                 for item in filtered_items:
                     if scope_tag not in item.scope_tags:
@@ -154,6 +164,7 @@ class NitterProvider(SocialProvider):
             },
             query_diagnostics={
                 f"{scope_tag}_queries": executed_queries,
+                f"{scope_tag}_query_stats": query_stats,
                 "industry_queries": query_profile.get("industry_queries", []),
                 "macro_queries": query_profile.get("macro_queries", []),
                 "base_url": self.base_url,
