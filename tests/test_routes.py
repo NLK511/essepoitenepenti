@@ -845,6 +845,19 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     "prompt": "very short custom summary prompt",
                 },
             )
+            social_response = await client.post(
+                "/api/settings/social",
+                data={
+                    "sentiment_enabled": "true",
+                    "nitter_enabled": "true",
+                    "nitter_base_url": "http://127.0.0.1:8080",
+                    "nitter_timeout_seconds": "7",
+                    "nitter_max_items_per_query": "14",
+                    "nitter_query_window_hours": "18",
+                    "nitter_include_replies": "true",
+                    "nitter_enable_ticker": "true",
+                },
+            )
             provider_response = await client.post(
                 "/api/settings/providers",
                 data={"provider": "openai", "api_key": "sk-test", "api_secret": ""},
@@ -854,6 +867,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(app_setting.status_code, 200)
         self.assertEqual(optimization_response.status_code, 200)
         self.assertEqual(summary_response.status_code, 200)
+        self.assertEqual(social_response.status_code, 200)
         self.assertEqual(provider_response.status_code, 200)
         self.assertEqual(listed.status_code, 200)
         payload = listed.json()
@@ -862,6 +876,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(setting_map["optimization_minimum_resolved_trades"], "80")
         self.assertEqual(setting_map["summary_model"], "anthropic/claude-sonnet-4-5")
         self.assertEqual(setting_map["summary_prompt"], "very short custom summary prompt")
+        self.assertEqual(setting_map["social_nitter_enable_ticker"], "true")
         self.assertEqual(payload["providers"][0]["provider"], "openai")
         self.assertEqual(payload["providers"][0]["api_key"], "sk-test")
         self.assertEqual(payload["optimization"]["minimum_resolved_trades"], 80)

@@ -30,6 +30,7 @@ This principle is consistently applied in the best parts of the product. It is a
 - Surface snapshot freshness in `/api/health` and `/api/health/preflight` so stale shared context shows up before operators trust new proposals.
 - Macro refresh themes currently include U.S. rates/inflation, European monetary policy, and geopolitical risk topics such as war or military tensions.
 - Nitter results are ranked by a relevance scorer so the strongest, most informative posts are kept first; see `docs/nitter-social-relevance-scoring.md`.
+- A settings toggle can restrict Nitter to macro and industry sentiment only, leaving ticker sentiment to other sources.
 
 > **Enable the Nitter source**
 >

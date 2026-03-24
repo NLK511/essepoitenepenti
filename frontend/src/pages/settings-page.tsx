@@ -320,6 +320,16 @@ export function SettingsPage() {
                     <span>Include replies</span>
                     <input type="checkbox" name="nitter_include_replies" value="true" defaultChecked={settingMap.social_nitter_include_replies === "true"} />
                   </label>
+                  <label className="checkbox-field">
+                    <span>Use Nitter for ticker sentiment</span>
+                    <input type="checkbox" name="nitter_enable_ticker" value="true" defaultChecked={settingMap.social_nitter_enable_ticker === "true"} />
+                  </label>
+                 </div>
+-                <div className="helper-text">Enable the social sentiment stack plus the Nitter source, then adjust the timeout, window, and item limits so the refresh jobs can reach your instance reliably.</div>
++                <div className="helper-text">Enable the social sentiment stack plus the Nitter source, then adjust the timeout, window, and item limits so the refresh jobs can reach your instance reliably. Use the ticker toggle to keep Nitter restricted to macro and industry sentiment when you do not want it influencing individual ticker sentiment.</div>
+                 <button className="button" type="submit" disabled={saving === "social"}>{saving === "social" ? "Saving…" : "Save social settings"}</button>
+               </form>
+             </Card>
                 </div>
                 <div className="helper-text">Enable the social sentiment stack plus the Nitter source, then adjust the timeout, window, and item limits so the refresh jobs can reach your instance reliably.</div>
                 <button className="button" type="submit" disabled={saving === "social"}>{saving === "social" ? "Saving…" : "Save social settings"}</button>

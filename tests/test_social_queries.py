@@ -2,8 +2,8 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-from trade_proposer_app.domain.models import SignalEngagement, SignalItem
-from trade_proposer_app.services.social import NitterProvider
+from trade_proposer_app.domain.models import SignalBundle, SignalEngagement, SignalItem
+from trade_proposer_app.services.social import NitterProvider, SocialIngestionService
 
 
 class NitterProviderQueryTests(unittest.TestCase):
@@ -98,6 +98,23 @@ class NitterProviderQueryTests(unittest.TestCase):
         self.assertEqual(stats["parsed_item_count"], 3)
         self.assertEqual(stats["filtered_item_count"], 1)
         self.assertEqual(bundle.coverage["social_count"], 1)
+
+    def test_social_ingestion_skips_ticker_fetch_when_nitter_ticker_scope_disabled(self) -> None:
+        class DummyProvider:
+            name = "Nitter"
+            supports_ticker = False
+
+            def fetch(self, ticker: str) -> SignalBundle:
+                raise AssertionError("ticker fetch should be skipped")
+
+            def fetch_subject(self, subject_key: str, queries: list[str], *, scope_tag: str) -> SignalBundle:
+                return SignalBundle(ticker=subject_key, items=[], feeds_used=["Nitter"])
+
+        service = SocialIngestionService(providers=[DummyProvider()])
+        bundle = service.fetch("AAPL")
+        self.assertEqual(bundle.items, [])
+        self.assertEqual(bundle.coverage["social_count"], 0)
+        self.assertEqual(bundle.feeds_used, [])
 
     @patch("trade_proposer_app.services.social.httpx.get")
     def test_fetch_subject_ranks_more_relevant_items_first(self, mock_get) -> None:

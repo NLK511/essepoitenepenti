@@ -82,6 +82,7 @@ class NitterProvider(SocialProvider):
         max_items_per_query: int = 12,
         query_window_hours: int = 12,
         include_replies: bool = False,
+        enable_ticker_scope: bool = True,
         max_queries_per_subject: int | None = None,
     ) -> None:
         super().__init__(timeout=timeout)
@@ -90,6 +91,7 @@ class NitterProvider(SocialProvider):
         self.max_items_per_query = max(1, max_items_per_query)
         self.query_window_hours = max(1, query_window_hours)
         self.include_replies = include_replies
+        self.supports_ticker = enable_ticker_scope
         self.max_queries_per_subject = None if max_queries_per_subject is None or max_queries_per_subject < 1 else max_queries_per_subject
 
     def fetch(self, ticker: str) -> SignalBundle:
@@ -539,6 +541,7 @@ class SocialIngestionService:
             max_items_per_query=_parse_int(values.get("social_nitter_max_items_per_query"), 12),
             query_window_hours=_parse_int(values.get("social_nitter_query_window_hours"), 12),
             include_replies=(values.get("social_nitter_include_replies") or "false").strip().lower() == "true",
+            enable_ticker_scope=(values.get("social_nitter_enable_ticker") or "false").strip().lower() == "true",
         )
         return cls([provider], taxonomy_service=taxonomy_service)
 
@@ -549,6 +552,8 @@ class SocialIngestionService:
             bundle.coverage = {"social_count": 0}
             return bundle
         for provider in self.providers:
+            if not getattr(provider, "supports_ticker", True):
+                continue
             try:
                 provider_bundle = provider.fetch(ticker)
             except Exception as exc:  # noqa: BLE001
