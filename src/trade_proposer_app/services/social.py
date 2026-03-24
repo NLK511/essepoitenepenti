@@ -38,6 +38,19 @@ DATE_PATTERN = re.compile(r'title="(?P<value>[^\"]+)"')
 STAT_PATTERN_TEMPLATE = r'<span class="icon-{name}"></span>\s*(?P<value>[\d,]+)'
 TAG_RE = re.compile(r"<[^>]+>")
 WHITESPACE_RE = re.compile(r"\s+")
+GENERIC_NOISE_PHRASES = (
+    "great",
+    "interesting",
+    "wow",
+    "agreed",
+    "agree",
+    "nice",
+    "lol",
+    "lmao",
+    "watch this",
+    "just saying",
+    "thoughts",
+)
 
 
 class SocialFetchError(Exception):
@@ -110,6 +123,95 @@ class NitterProvider(SocialProvider):
             return queries
         return queries[: self.max_queries_per_subject]
 
+    def _rank_items(
+        self,
+        items: list[SignalItem],
+        *,
+        query_profile: dict[str, list[str]],
+        scope_tag: str,
+        reference_now: datetime,
+    ) -> list[SignalItem]:
+        deduped: list[SignalItem] = []
+        seen: set[str] = set()
+        for item in items:
+            key = item.dedupe_key or item.link or item.item_id or item.body
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(item)
+        scored_items = [
+            (self._relevance_score(item, query_profile=query_profile, scope_tag=scope_tag, reference_now=reference_now), item)
+            for item in deduped
+        ]
+        scored_items.sort(
+            key=lambda pair: (
+                pair[0],
+                pair[1].published_at or datetime.min.replace(tzinfo=timezone.utc),
+                pair[1].engagement.retweets,
+                pair[1].engagement.likes,
+            ),
+            reverse=True,
+        )
+        ranked_items = []
+        for score, item in scored_items:
+            item.raw_metadata = dict(item.raw_metadata, relevance_score=round(score, 3))
+            ranked_items.append(item)
+        return ranked_items
+
+    def _relevance_score(
+        self,
+        item: SignalItem,
+        *,
+        query_profile: dict[str, list[str]],
+        scope_tag: str,
+        reference_now: datetime,
+    ) -> float:
+        text = f"{item.title} {item.body}".strip().lower()
+        title_text = item.title.lower()
+        query_terms = self._subject_terms(query_profile, scope_tag)
+        exact_hits = sum(1 for term in query_terms if term and term in text)
+        title_hits = sum(1 for term in query_terms if term and term in title_text)
+        phrase_hits = sum(1 for term in query_terms if " " in term and term in text)
+        word_count = len(text.split())
+        if item.published_at is None:
+            recency_score = 0.55
+        else:
+            age_hours = max((reference_now - item.published_at).total_seconds() / 3600.0, 0.0)
+            recency_score = max(0.35, 1.0 - min(age_hours / self.query_window_hours, 1.0) * 0.65)
+        engagement = item.engagement.likes + (item.engagement.retweets * 2) + item.engagement.replies
+        engagement_score = 1.0 + min(engagement / 250.0, 0.25)
+        quality_score = max(0.35, float(item.quality_score or 0.0))
+        credibility_score = max(0.35, float(item.credibility_score or 0.0))
+        length_score = min(word_count / 18.0, 1.0)
+        noise_penalty = 0.0
+        if word_count < 7:
+            noise_penalty += 0.35
+        if any(phrase in text for phrase in GENERIC_NOISE_PHRASES):
+            noise_penalty += 0.25
+        if scope_tag == "macro" and "?" in item.body:
+            noise_penalty += 0.1
+        return (
+            (exact_hits * 2.2)
+            + (title_hits * 0.8)
+            + (phrase_hits * 1.4)
+            + (recency_score * 1.1)
+            + (engagement_score * 0.5)
+            + (quality_score * 0.7)
+            + (credibility_score * 0.8)
+            + (length_score * 0.6)
+            - noise_penalty
+        )
+
+    @staticmethod
+    def _subject_terms(query_profile: dict[str, list[str]], scope_tag: str) -> list[str]:
+        terms: list[str] = []
+        for key in (f"{scope_tag}_queries", "macro_queries", "industry_queries", "ticker_queries"):
+            for term in query_profile.get(key, []):
+                normalized = term.strip().lower()
+                if normalized and normalized not in terms:
+                    terms.append(normalized)
+        return terms
+
     def _fetch_queries(
         self,
         *,
@@ -122,7 +224,8 @@ class NitterProvider(SocialProvider):
         fetched_items: list[SignalItem] = []
         executed_queries: list[str] = []
         query_stats: list[dict[str, object]] = []
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=self.query_window_hours)
+        reference_now = datetime.now(timezone.utc)
+        cutoff = reference_now - timedelta(hours=self.query_window_hours)
         for query in queries:
             url = f"{self.base_url}{NITTER_SEARCH_PATH}?f=tweets&q={quote(query)}"
             try:
@@ -153,18 +256,25 @@ class NitterProvider(SocialProvider):
                         item.scope_tags = list(dict.fromkeys(item.scope_tags + [scope_tag]))
             fetched_items.extend(filtered_items)
             executed_queries.append(query)
+        ranked_items = self._rank_items(
+            fetched_items,
+            query_profile=query_profile,
+            scope_tag=scope_tag,
+            reference_now=reference_now,
+        )
         return SignalBundle(
             ticker=subject_key,
-            items=fetched_items[: self.max_items_per_query],
-            feeds_used=[self.name] if fetched_items else [],
+            items=ranked_items[: self.max_items_per_query],
+            feeds_used=[self.name] if ranked_items else [],
             feed_errors=[],
             coverage={
-                "social_count": len(fetched_items[: self.max_items_per_query]),
+                "social_count": len(ranked_items[: self.max_items_per_query]),
                 "query_window_hours": self.query_window_hours,
             },
             query_diagnostics={
                 f"{scope_tag}_queries": executed_queries,
                 f"{scope_tag}_query_stats": query_stats,
+                "ranked_item_count": len(ranked_items),
                 "industry_queries": query_profile.get("industry_queries", []),
                 "macro_queries": query_profile.get("macro_queries", []),
                 "base_url": self.base_url,

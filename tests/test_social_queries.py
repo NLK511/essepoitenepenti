@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
+from trade_proposer_app.domain.models import SignalEngagement, SignalItem
 from trade_proposer_app.services.social import NitterProvider
 
 
@@ -97,3 +98,41 @@ class NitterProviderQueryTests(unittest.TestCase):
         self.assertEqual(stats["parsed_item_count"], 3)
         self.assertEqual(stats["filtered_item_count"], 1)
         self.assertEqual(bundle.coverage["social_count"], 1)
+
+    @patch("trade_proposer_app.services.social.httpx.get")
+    def test_fetch_subject_ranks_more_relevant_items_first(self, mock_get) -> None:
+        response = MagicMock()
+        response.status_code = 200
+        response.text = "<html></html>"
+        mock_get.return_value = response
+
+        provider = NitterProvider(base_url="http://nitter.example", timeout=1.0, max_items_per_query=10, query_window_hours=12)
+        now = datetime.now(timezone.utc)
+        relevant = SignalItem(
+            source_type="social",
+            provider="nitter",
+            title="ECB signals a shift in European monetary policy",
+            body="The European Central Bank is discussing rates and inflation.",
+            published_at=now,
+            engagement=SignalEngagement(likes=40, retweets=10, replies=2),
+            quality_score=0.9,
+            credibility_score=0.8,
+            dedupe_key="relevant",
+        )
+        noisy = SignalItem(
+            source_type="social",
+            provider="nitter",
+            title="Wow",
+            body="Wow",
+            published_at=now,
+            engagement=SignalEngagement(likes=1, retweets=0, replies=0),
+            quality_score=0.3,
+            credibility_score=0.35,
+            dedupe_key="noisy",
+        )
+
+        with patch.object(provider, "_parse_search_html", return_value=[noisy, relevant]):
+            bundle = provider.fetch_subject("global_macro", ["ecb", "european central bank"], scope_tag="macro")
+
+        self.assertEqual(bundle.items[0].dedupe_key, "relevant")
+        self.assertGreater(bundle.items[0].raw_metadata["relevance_score"], bundle.items[1].raw_metadata["relevance_score"])
