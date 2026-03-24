@@ -143,6 +143,7 @@ export function SettingsPage() {
         nitter_max_items_per_query: String(formData.get("nitter_max_items_per_query") ?? settingMap.social_nitter_max_items_per_query ?? "12"),
         nitter_query_window_hours: String(formData.get("nitter_query_window_hours") ?? settingMap.social_nitter_query_window_hours ?? "12"),
         nitter_include_replies: formData.get("nitter_include_replies") ? "true" : "false",
+        nitter_enable_ticker: formData.get("nitter_enable_ticker") ? "true" : "false",
         weight_news: settingMap.social_weight_news ?? "1.0",
         weight_social: settingMap.social_weight_social ?? "0.6",
         weight_macro: settingMap.social_weight_macro ?? "0.2",
@@ -324,14 +325,8 @@ export function SettingsPage() {
                     <span>Use Nitter for ticker sentiment</span>
                     <input type="checkbox" name="nitter_enable_ticker" value="true" defaultChecked={settingMap.social_nitter_enable_ticker === "true"} />
                   </label>
-                 </div>
--                <div className="helper-text">Enable the social sentiment stack plus the Nitter source, then adjust the timeout, window, and item limits so the refresh jobs can reach your instance reliably.</div>
-+                <div className="helper-text">Enable the social sentiment stack plus the Nitter source, then adjust the timeout, window, and item limits so the refresh jobs can reach your instance reliably. Use the ticker toggle to keep Nitter restricted to macro and industry sentiment when you do not want it influencing individual ticker sentiment.</div>
-                 <button className="button" type="submit" disabled={saving === "social"}>{saving === "social" ? "Saving…" : "Save social settings"}</button>
-               </form>
-             </Card>
                 </div>
-                <div className="helper-text">Enable the social sentiment stack plus the Nitter source, then adjust the timeout, window, and item limits so the refresh jobs can reach your instance reliably.</div>
+                <div className="helper-text">Enable the social sentiment stack plus the Nitter source, then adjust the timeout, window, and item limits so the refresh jobs can reach your instance reliably. Use the ticker toggle to keep Nitter restricted to macro and industry sentiment when you do not want it influencing individual ticker sentiment.</div>
                 <button className="button" type="submit" disabled={saving === "social"}>{saving === "social" ? "Saving…" : "Save social settings"}</button>
               </form>
             </Card>
