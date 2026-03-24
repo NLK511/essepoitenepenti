@@ -243,18 +243,27 @@ class NewsProvider:
     def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
         raise NotImplementedError
 
+    def fetch_topic(self, topic: str, limit: int) -> list[NewsArticle]:
+        raise NewsFetchError(f"{self.name} does not support topic queries")
+
 
 class NewsAPIProvider(NewsProvider):
     name: ClassVar[str] = "NewsAPI"
     provider_key: ClassVar[str] = "newsapi"
 
     def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
+        return self._fetch_query(f"{ticker} stock", limit)
+
+    def fetch_topic(self, topic: str, limit: int) -> list[NewsArticle]:
+        return self._fetch_query(topic, limit)
+
+    def _fetch_query(self, query: str, limit: int) -> list[NewsArticle]:
         api_key = (self.credential.api_key or "").strip()
         if not api_key:
             raise NewsFetchError("missing NewsAPI api key")
         params = {
             "apiKey": api_key,
-            "q": f"{ticker} stock",
+            "q": query,
             "language": "en",
             "sortBy": "publishedAt",
             "pageSize": min(limit, MAX_ARTICLES_PER_PROVIDER),
@@ -449,17 +458,69 @@ class NewsIngestionService:
             except Exception as exc:  # noqa: BLE001
                 bundle.feed_errors.append(f"{provider.name}: {exc}")
                 continue
-            unique_articles = []
-            for article in articles:
-                link = article.link or ""
-                if link and link in seen_links:
-                    continue
-                if link:
-                    seen_links.add(link)
-                unique_articles.append(article)
-            if unique_articles:
-                bundle.articles.extend(unique_articles)
-            bundle.feeds_used.append(provider.name)
+            self._merge_articles(bundle, articles, seen_links)
+            if articles:
+                bundle.feeds_used.append(provider.name)
+        bundle.articles = bundle.articles[: self.max_articles]
+        return bundle
+
+    def fetch_topic(self, topic: str, *, limit: int | None = None) -> NewsBundle:
+        bundle = NewsBundle(ticker=topic)
+        if not self.providers:
+            bundle.feed_errors.append("news: no providers configured")
+            return bundle
+        seen_links: set[str] = set()
+        fetch_limit = min(limit or self.max_articles, self.max_articles)
+        for provider in self.providers:
+            try:
+                articles = provider.fetch_topic(topic, fetch_limit)
+            except Exception as exc:  # noqa: BLE001
+                bundle.feed_errors.append(f"{provider.name}: {exc}")
+                continue
+            self._merge_articles(bundle, articles, seen_links)
+            if articles:
+                bundle.feeds_used.append(provider.name)
+        bundle.articles = bundle.articles[:fetch_limit]
+        return bundle
+
+    def fetch_topics(self, subject: str, queries: list[str], *, per_query_limit: int = 4) -> NewsBundle:
+        bundle = NewsBundle(ticker=subject)
+        if not self.providers:
+            bundle.feed_errors.append("news: no providers configured")
+            return bundle
+        seen_links: set[str] = set()
+        normalized_queries = [query.strip() for query in queries if isinstance(query, str) and query.strip()]
+        if not normalized_queries:
+            normalized_queries = [subject]
+        for query in normalized_queries[:5]:
+            query_bundle = self.fetch_topic(query, limit=per_query_limit)
+            self._merge_articles(bundle, query_bundle.articles, seen_links)
+            bundle.feeds_used.extend(query_bundle.feeds_used)
+            bundle.feed_errors.extend(query_bundle.feed_errors)
+            if len(bundle.articles) >= self.max_articles:
+                break
+        bundle.feeds_used = list(dict.fromkeys(bundle.feeds_used))
+        bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
+        bundle.articles = bundle.articles[: self.max_articles]
+        return bundle
+
+    def fetch_many(self, symbols: list[str], *, per_symbol_limit: int = 3) -> NewsBundle:
+        subject = ", ".join(symbols[:4]) if symbols else "news"
+        bundle = NewsBundle(ticker=subject)
+        if not self.providers:
+            bundle.feed_errors.append("news: no providers configured")
+            return bundle
+        seen_links: set[str] = set()
+        normalized_symbols = [symbol.strip().upper() for symbol in symbols if isinstance(symbol, str) and symbol.strip()]
+        for symbol in list(dict.fromkeys(normalized_symbols))[:6]:
+            symbol_bundle = self.fetch(symbol)
+            self._merge_articles(bundle, symbol_bundle.articles[:per_symbol_limit], seen_links)
+            bundle.feeds_used.extend(symbol_bundle.feeds_used)
+            bundle.feed_errors.extend(symbol_bundle.feed_errors)
+            if len(bundle.articles) >= self.max_articles:
+                break
+        bundle.feeds_used = list(dict.fromkeys(bundle.feeds_used))
+        bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
         bundle.articles = bundle.articles[: self.max_articles]
         return bundle
 
@@ -467,3 +528,19 @@ class NewsIngestionService:
         bundle = self.fetch(ticker)
         sentiment = self._sentiment_analyzer.analyze(bundle)
         return {"bundle": bundle, "sentiment": sentiment}
+
+    def analyze_bundle(self, bundle: NewsBundle) -> dict[str, object]:
+        return {"bundle": bundle, "sentiment": self._sentiment_analyzer.analyze(bundle)}
+
+    @staticmethod
+    def _merge_articles(bundle: NewsBundle, articles: list[NewsArticle], seen_links: set[str]) -> None:
+        unique_articles = []
+        for article in articles:
+            link = article.link or ""
+            if link and link in seen_links:
+                continue
+            if link:
+                seen_links.add(link)
+            unique_articles.append(article)
+        if unique_articles:
+            bundle.articles.extend(unique_articles)

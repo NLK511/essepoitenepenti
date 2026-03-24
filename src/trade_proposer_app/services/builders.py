@@ -72,7 +72,10 @@ def create_macro_sentiment_service(session: Session) -> MacroSentimentService:
 
 
 def create_macro_context_service(session: Session) -> MacroContextService:
-    return MacroContextService(ContextSnapshotRepository(session))
+    repository = SettingsRepository(session)
+    credentials = repository.get_provider_credential_map()
+    news_service = NewsIngestionService.from_provider_credentials(credentials)
+    return MacroContextService(ContextSnapshotRepository(session), news_service=news_service)
 
 
 def create_industry_sentiment_service(session: Session) -> IndustrySentimentService:
@@ -88,4 +91,7 @@ def create_industry_sentiment_service(session: Session) -> IndustrySentimentServ
 
 
 def create_industry_context_service(session: Session) -> IndustryContextService:
-    return IndustryContextService(ContextSnapshotRepository(session))
+    repository = SettingsRepository(session)
+    credentials = repository.get_provider_credential_map()
+    news_service = NewsIngestionService.from_provider_credentials(credentials)
+    return IndustryContextService(ContextSnapshotRepository(session), news_service=news_service)
