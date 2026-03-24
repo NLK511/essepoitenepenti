@@ -47,9 +47,18 @@ export interface RunOutput {
   diagnostics: RunDiagnostics;
 }
 
+export type StrategyHorizon = "1d" | "1w" | "1m";
+
 export interface Watchlist {
   id: number | null;
   name: string;
+  description: string;
+  region: string;
+  exchange: string;
+  timezone: string;
+  default_horizon: StrategyHorizon;
+  allow_shorts: boolean;
+  optimize_evaluation_timing: boolean;
   tickers: string[];
 }
 

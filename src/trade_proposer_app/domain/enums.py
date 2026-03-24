@@ -28,3 +28,9 @@ class RecommendationState(StrEnum):
     PENDING = "PENDING"
     WIN = "WIN"
     LOSS = "LOSS"
+
+
+class StrategyHorizon(StrEnum):
+    ONE_DAY = "1d"
+    ONE_WEEK = "1w"
+    ONE_MONTH = "1m"

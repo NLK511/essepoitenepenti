@@ -33,6 +33,22 @@ This principle is consistently applied in the best parts of the product. It is a
 - Nitter results are ranked by a relevance scorer so the strongest, most informative posts are kept first; see `docs/nitter-social-relevance-scoring.md`.
 - A settings toggle can restrict Nitter to macro and industry sentiment only, leaving ticker sentiment to other sources.
 
+### Redesign groundwork now present
+- Persist watchlists with richer trading and scheduling metadata: `description`, `region`, `exchange`, `timezone`, `default_horizon`, `allow_shorts`, and `optimize_evaluation_timing`.
+- Inspect derived watchlist timing and warnings through `GET /api/watchlists/{watchlist_id}/policy`.
+- Persist redesign-domain objects for:
+  - macro context snapshots
+  - industry context snapshots
+  - ticker signal snapshots
+  - recommendation plans
+- Query those new objects through read APIs:
+  - `GET /api/context/macro`
+  - `GET /api/context/industry`
+  - `GET /api/context/ticker-signals`
+  - `GET /api/recommendation-plans`
+
+These redesign objects are currently **foundational storage and inspection surfaces**, not yet the main production write path.
+
 > **Enable the Nitter source**
 >
 > Toggle `social_sentiment_enabled` and `social_nitter_enabled` to `true` through the Settings screen (or POST `/api/settings/social`).
@@ -82,6 +98,11 @@ The weakest areas are operational rather than analytical:
 - optimization thresholds and tuning controls are still not sufficiently operator-configurable
 - auth, RBAC, tenancy, and broader deployment observability remain incomplete
 - credential lifecycle work is behind the product's growing provider surface
+
+The biggest product-level gap is now the **execution-path migration**:
+- the app has a redesigned persistence foundation, but not yet a redesigned write/orchestration path
+- macro and industry are still primarily exposed as sentiment snapshots rather than first-class saliency/context outputs
+- the new ticker-signal and recommendation-plan models are present, but not yet fed by a real end-to-end engine
 
 The sentiment stack is also now coherent enough that the biggest remaining question is not feature completeness but measured effectiveness. More sentiment sources and heuristics should not be added faster than the team can evaluate whether they improve recommendation quality.
 

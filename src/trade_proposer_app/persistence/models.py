@@ -22,6 +22,13 @@ class WatchlistRecord(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    region: Mapped[str] = mapped_column(String(64), default="")
+    exchange: Mapped[str] = mapped_column(String(64), default="")
+    timezone: Mapped[str] = mapped_column(String(64), default="")
+    default_horizon: Mapped[str] = mapped_column(String(8), default="1w")
+    allow_shorts: Mapped[bool] = mapped_column(Boolean, default=True)
+    optimize_evaluation_timing: Mapped[bool] = mapped_column(Boolean, default=False)
     tickers_csv: Mapped[str] = mapped_column(Text)
     jobs: Mapped[list["JobRecord"]] = relationship(back_populates="watchlist")
 
@@ -130,5 +137,103 @@ class SentimentSnapshotRecord(Base, TimestampMixin):
     signals_json: Mapped[str] = mapped_column(Text, default="")
     diagnostics_json: Mapped[str] = mapped_column(Text, default="")
     summary_text: Mapped[str] = mapped_column(Text, default="")
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+
+
+class MacroContextSnapshotRecord(Base, TimestampMixin):
+    __tablename__ = "macro_context_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    computed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="ok", index=True)
+    summary_text: Mapped[str] = mapped_column(Text, default="")
+    saliency_score: Mapped[float] = mapped_column(Float, default=0.0)
+    confidence_percent: Mapped[float] = mapped_column(Float, default=0.0)
+    active_themes_json: Mapped[str] = mapped_column(Text, default="")
+    regime_tags_json: Mapped[str] = mapped_column(Text, default="")
+    warnings_json: Mapped[str] = mapped_column(Text, default="")
+    missing_inputs_json: Mapped[str] = mapped_column(Text, default="")
+    source_breakdown_json: Mapped[str] = mapped_column(Text, default="")
+    metadata_json: Mapped[str] = mapped_column(Text, default="")
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+
+
+class IndustryContextSnapshotRecord(Base, TimestampMixin):
+    __tablename__ = "industry_context_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    industry_key: Mapped[str] = mapped_column(String(120), index=True)
+    industry_label: Mapped[str] = mapped_column(String(120), default="")
+    computed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="ok", index=True)
+    summary_text: Mapped[str] = mapped_column(Text, default="")
+    direction: Mapped[str] = mapped_column(String(32), default="neutral")
+    saliency_score: Mapped[float] = mapped_column(Float, default=0.0)
+    confidence_percent: Mapped[float] = mapped_column(Float, default=0.0)
+    active_drivers_json: Mapped[str] = mapped_column(Text, default="")
+    linked_macro_themes_json: Mapped[str] = mapped_column(Text, default="")
+    linked_industry_themes_json: Mapped[str] = mapped_column(Text, default="")
+    warnings_json: Mapped[str] = mapped_column(Text, default="")
+    missing_inputs_json: Mapped[str] = mapped_column(Text, default="")
+    source_breakdown_json: Mapped[str] = mapped_column(Text, default="")
+    metadata_json: Mapped[str] = mapped_column(Text, default="")
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+
+
+class TickerSignalSnapshotRecord(Base, TimestampMixin):
+    __tablename__ = "ticker_signal_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(32), index=True)
+    horizon: Mapped[str] = mapped_column(String(8), default="1w", index=True)
+    computed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="ok", index=True)
+    direction: Mapped[str] = mapped_column(String(32), default="neutral")
+    swing_probability_percent: Mapped[float] = mapped_column(Float, default=0.0)
+    confidence_percent: Mapped[float] = mapped_column(Float, default=0.0)
+    attention_score: Mapped[float] = mapped_column(Float, default=0.0)
+    macro_exposure_score: Mapped[float] = mapped_column(Float, default=0.0)
+    industry_alignment_score: Mapped[float] = mapped_column(Float, default=0.0)
+    ticker_sentiment_score: Mapped[float] = mapped_column(Float, default=0.0)
+    technical_setup_score: Mapped[float] = mapped_column(Float, default=0.0)
+    catalyst_score: Mapped[float] = mapped_column(Float, default=0.0)
+    expected_move_score: Mapped[float] = mapped_column(Float, default=0.0)
+    execution_quality_score: Mapped[float] = mapped_column(Float, default=0.0)
+    warnings_json: Mapped[str] = mapped_column(Text, default="")
+    missing_inputs_json: Mapped[str] = mapped_column(Text, default="")
+    source_breakdown_json: Mapped[str] = mapped_column(Text, default="")
+    diagnostics_json: Mapped[str] = mapped_column(Text, default="")
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+
+
+class RecommendationPlanRecord(Base, TimestampMixin):
+    __tablename__ = "recommendation_plans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(32), index=True)
+    horizon: Mapped[str] = mapped_column(String(8), default="1w", index=True)
+    action: Mapped[str] = mapped_column(String(32), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="ok", index=True)
+    confidence_percent: Mapped[float] = mapped_column(Float, default=0.0)
+    entry_price_low: Mapped[float | None] = mapped_column(Float, nullable=True)
+    entry_price_high: Mapped[float | None] = mapped_column(Float, nullable=True)
+    stop_loss: Mapped[float | None] = mapped_column(Float, nullable=True)
+    take_profit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    holding_period_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    risk_reward_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+    thesis_summary: Mapped[str] = mapped_column(Text, default="")
+    rationale_summary: Mapped[str] = mapped_column(Text, default="")
+    risks_json: Mapped[str] = mapped_column(Text, default="")
+    warnings_json: Mapped[str] = mapped_column(Text, default="")
+    missing_inputs_json: Mapped[str] = mapped_column(Text, default="")
+    evidence_summary_json: Mapped[str] = mapped_column(Text, default="")
+    signal_breakdown_json: Mapped[str] = mapped_column(Text, default="")
+    computed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    watchlist_id: Mapped[int | None] = mapped_column(ForeignKey("watchlists.id"), nullable=True, index=True)
+    ticker_signal_snapshot_id: Mapped[int | None] = mapped_column(ForeignKey("ticker_signal_snapshots.id"), nullable=True, index=True)
     job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
     run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)

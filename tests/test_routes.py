@@ -14,9 +14,22 @@ from trade_proposer_app.app import app
 from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import JobType, RecommendationDirection, RecommendationState
-from trade_proposer_app.domain.models import AppPreflightReport, EvaluationRunResult, PreflightCheck, Recommendation, Run, RunDiagnostics
+from trade_proposer_app.domain.models import (
+    AppPreflightReport,
+    EvaluationRunResult,
+    IndustryContextSnapshot,
+    MacroContextSnapshot,
+    PreflightCheck,
+    Recommendation,
+    RecommendationPlan,
+    Run,
+    RunDiagnostics,
+    TickerSignalSnapshot,
+)
 from trade_proposer_app.persistence.models import Base
+from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
@@ -153,6 +166,61 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                 },
             )
             return run.id or 0
+        finally:
+            session.close()
+
+    def seed_context_and_recommendation_plan_data(self) -> None:
+        session = Session(bind=self.engine)
+        try:
+            context_repository = ContextSnapshotRepository(session)
+            ticker_signal = context_repository.create_ticker_signal_snapshot(
+                TickerSignalSnapshot(
+                    ticker="AAPL",
+                    horizon="1w",
+                    direction="long",
+                    swing_probability_percent=66.0,
+                    confidence_percent=71.0,
+                    attention_score=83.0,
+                    diagnostics={"mode": "deep_analysis"},
+                )
+            )
+            context_repository.create_macro_context_snapshot(
+                MacroContextSnapshot(
+                    summary_text="Fed and yields remain the dominant macro themes.",
+                    saliency_score=0.81,
+                    confidence_percent=75.0,
+                    active_themes=[{"key": "fed_policy"}],
+                    regime_tags=["rates_sensitive"],
+                )
+            )
+            context_repository.create_industry_context_snapshot(
+                IndustryContextSnapshot(
+                    industry_key="consumer_electronics",
+                    industry_label="Consumer Electronics",
+                    summary_text="AI device enthusiasm supports the group.",
+                    direction="positive",
+                    saliency_score=0.73,
+                    confidence_percent=69.0,
+                )
+            )
+            RecommendationPlanRepository(session).create_plan(
+                RecommendationPlan(
+                    ticker="AAPL",
+                    horizon="1w",
+                    action="long",
+                    confidence_percent=71.0,
+                    entry_price_low=201.0,
+                    entry_price_high=203.0,
+                    stop_loss=196.5,
+                    take_profit=210.0,
+                    holding_period_days=5,
+                    risk_reward_ratio=1.6,
+                    thesis_summary="Macro and industry conditions remain supportive.",
+                    rationale_summary="Signal stack aligns bullish.",
+                    ticker_signal_snapshot_id=ticker_signal.id,
+                    signal_breakdown={"technical_setup": 0.77},
+                )
+            )
         finally:
             session.close()
 
@@ -349,11 +417,32 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
     async def test_create_watchlist_and_list_via_api(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            created = await client.post("/api/watchlists", data={"name": "Core Tech", "tickers": "AAPL,MSFT"})
+            created = await client.post(
+                "/api/watchlists",
+                data={
+                    "name": "Core Tech",
+                    "tickers": "AAPL,MSFT,AAPL",
+                    "description": "US tech swing basket",
+                    "region": "US",
+                    "exchange": "NASDAQ",
+                    "timezone": "America/New_York",
+                    "default_horizon": "1d",
+                    "allow_shorts": "false",
+                    "optimize_evaluation_timing": "true",
+                },
+            )
             listed = await client.get("/api/watchlists")
 
         self.assertEqual(created.status_code, 200)
-        self.assertEqual(created.json()["name"], "Core Tech")
+        created_payload = created.json()
+        self.assertEqual(created_payload["name"], "Core Tech")
+        self.assertEqual(created_payload["description"], "US tech swing basket")
+        self.assertEqual(created_payload["region"], "US")
+        self.assertEqual(created_payload["exchange"], "NASDAQ")
+        self.assertEqual(created_payload["timezone"], "America/New_York")
+        self.assertEqual(created_payload["default_horizon"], "1d")
+        self.assertFalse(created_payload["allow_shorts"])
+        self.assertTrue(created_payload["optimize_evaluation_timing"])
         self.assertEqual(listed.status_code, 200)
         self.assertEqual(listed.json()[0]["tickers"], ["AAPL", "MSFT"])
 
@@ -367,6 +456,42 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(duplicate.status_code, 400)
         self.assertIn("ticker already assigned to another watchlist", duplicate.text)
         self.assertIn("AAPL", duplicate.text)
+
+    async def test_create_watchlist_rejects_invalid_default_horizon(self) -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/api/watchlists",
+                data={"name": "Core Tech", "tickers": "AAPL,MSFT", "default_horizon": "3d"},
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("default_horizon must be one of: 1d, 1w, 1m", response.text)
+
+    async def test_get_watchlist_policy_via_api(self) -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            created = await client.post(
+                "/api/watchlists",
+                data={
+                    "name": "US Swing",
+                    "tickers": "AAPL,MSFT",
+                    "timezone": "America/New_York",
+                    "default_horizon": "1d",
+                    "optimize_evaluation_timing": "true",
+                },
+            )
+            self.assertEqual(created.status_code, 200)
+            watchlist_id = created.json()["id"]
+            policy = await client.get(f"/api/watchlists/{watchlist_id}/policy")
+
+        self.assertEqual(policy.status_code, 200)
+        payload = policy.json()
+        self.assertEqual(payload["schedule_source"], "watchlist_optimized")
+        self.assertEqual(payload["schedule_timezone"], "America/New_York")
+        self.assertEqual(payload["primary_cron"], "20 9 * * MON-FRI")
+        self.assertEqual(payload["shortlist_strategy"], "cheap_scan_then_deep_analysis")
+        self.assertEqual(payload["warnings"], [])
 
     async def test_create_job_and_enqueue_run_via_api(self) -> None:
         transport = httpx.ASGITransport(app=app)
@@ -913,6 +1038,26 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail_payload["drivers"], ["iphone demand stable"])
         self.assertIn("summary_text", detail_payload)
         self.assertTrue(detail_payload["summary_text"])
+
+    async def test_context_and_recommendation_plan_routes_list_new_redesign_models(self) -> None:
+        self.seed_context_and_recommendation_plan_data()
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            macro = await client.get("/api/context/macro")
+            industry = await client.get("/api/context/industry", params={"industry_key": "consumer_electronics"})
+            ticker_signals = await client.get("/api/context/ticker-signals", params={"ticker": "AAPL"})
+            plans = await client.get("/api/recommendation-plans", params={"ticker": "AAPL", "action": "long"})
+
+        self.assertEqual(macro.status_code, 200)
+        self.assertEqual(industry.status_code, 200)
+        self.assertEqual(ticker_signals.status_code, 200)
+        self.assertEqual(plans.status_code, 200)
+        self.assertEqual(macro.json()[0]["active_themes"][0]["key"], "fed_policy")
+        self.assertEqual(industry.json()[0]["industry_key"], "consumer_electronics")
+        self.assertEqual(ticker_signals.json()[0]["ticker"], "AAPL")
+        self.assertEqual(ticker_signals.json()[0]["diagnostics"]["mode"], "deep_analysis")
+        self.assertEqual(plans.json()[0]["action"], "long")
+        self.assertEqual(plans.json()[0]["signal_breakdown"]["technical_setup"], 0.77)
 
     async def test_sentiment_snapshot_detail_returns_404_for_missing_snapshot(self) -> None:
         transport = httpx.ASGITransport(app=app)

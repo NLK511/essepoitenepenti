@@ -5,11 +5,12 @@ from unittest.mock import patch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.enums import JobType, RecommendationDirection
+from trade_proposer_app.domain.enums import JobType, RecommendationDirection, StrategyHorizon
 from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, RunDiagnostics, RunOutput
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.runs import enqueue_enabled_jobs
 from trade_proposer_app.workers.tasks import process_once
 
@@ -224,6 +225,54 @@ class WorkerSchedulerTests(unittest.TestCase):
         self.assertEqual(optimization_run.job_type, JobType.WEIGHT_OPTIMIZATION)
         self.assertEqual(evaluation_run.scheduled_for, scheduled_eval)
         self.assertEqual(optimization_run.scheduled_for, scheduled_opt)
+
+    def test_scheduler_uses_watchlist_optimized_timing_when_job_has_no_manual_schedule(self) -> None:
+        session = self.create_session()
+        watchlists = WatchlistRepository(session)
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        watchlist = watchlists.create(
+            "US Swing",
+            ["AAPL", "MSFT"],
+            timezone="America/New_York",
+            default_horizon=StrategyHorizon.ONE_DAY,
+            optimize_evaluation_timing=True,
+        )
+        scheduled = jobs.create("Optimized US Swing", [], None, watchlist_id=watchlist.id)
+        scheduled_now = datetime(2026, 3, 16, 13, 20, tzinfo=timezone.utc)
+
+        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
+            "trade_proposer_app.services.runs.create_proposal_service", return_value=StubProposalService()
+        ):
+            count = enqueue_enabled_jobs(now=scheduled_now)
+
+        self.assertEqual(count, 1)
+        scheduled_runs = [run for run in runs.list_latest_runs(limit=10) if run.job_id == scheduled.id]
+        self.assertEqual(len(scheduled_runs), 1)
+        self.assertEqual(scheduled_runs[0].scheduled_for, scheduled_now)
+
+    def test_scheduler_skips_watchlist_optimized_job_when_timezone_is_missing(self) -> None:
+        session = self.create_session()
+        watchlists = WatchlistRepository(session)
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        watchlist = watchlists.create(
+            "Broken Optimized",
+            ["AAPL"],
+            timezone="",
+            default_horizon=StrategyHorizon.ONE_DAY,
+            optimize_evaluation_timing=True,
+        )
+        jobs.create("Broken Job", [], None, watchlist_id=watchlist.id)
+        scheduled_now = datetime(2026, 3, 16, 13, 20, tzinfo=timezone.utc)
+
+        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
+            "trade_proposer_app.services.runs.create_proposal_service", return_value=StubProposalService()
+        ):
+            count = enqueue_enabled_jobs(now=scheduled_now)
+
+        self.assertEqual(count, 0)
+        self.assertEqual(runs.list_latest_runs(limit=10), [])
 
     def test_run_claim_only_succeeds_once(self) -> None:
         jobs_session = self.create_session()

@@ -4,11 +4,23 @@ from datetime import datetime, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.enums import JobType, RecommendationDirection
-from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, RunDiagnostics, RunOutput, SentimentSnapshot
+from trade_proposer_app.domain.enums import JobType, RecommendationDirection, StrategyHorizon
+from trade_proposer_app.domain.models import (
+    EvaluationRunResult,
+    IndustryContextSnapshot,
+    MacroContextSnapshot,
+    Recommendation,
+    RecommendationPlan,
+    RunDiagnostics,
+    RunOutput,
+    SentimentSnapshot,
+    TickerSignalSnapshot,
+)
 from trade_proposer_app.persistence.models import Base, JobRecord, ProviderCredentialRecord, RunRecord
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
@@ -151,10 +163,27 @@ class RepositoryTests(unittest.TestCase):
     def test_watchlist_repository_create_and_list(self) -> None:
         session = create_session()
         repository = WatchlistRepository(session)
-        repository.create("Core Tech", ["AAPL", "MSFT"])
+        repository.create(
+            "Core Tech",
+            ["aapl", "MSFT", "AAPL"],
+            description="US tech swing basket",
+            region="US",
+            exchange="NASDAQ",
+            timezone="America/New_York",
+            default_horizon=StrategyHorizon.ONE_DAY,
+            allow_shorts=False,
+            optimize_evaluation_timing=True,
+        )
         items = repository.list_all()
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0].name, "Core Tech")
+        self.assertEqual(items[0].description, "US tech swing basket")
+        self.assertEqual(items[0].region, "US")
+        self.assertEqual(items[0].exchange, "NASDAQ")
+        self.assertEqual(items[0].timezone, "America/New_York")
+        self.assertEqual(items[0].default_horizon, StrategyHorizon.ONE_DAY)
+        self.assertFalse(items[0].allow_shorts)
+        self.assertTrue(items[0].optimize_evaluation_timing)
         self.assertEqual(items[0].tickers, ["AAPL", "MSFT"])
 
     def test_watchlist_repository_rejects_ticker_already_assigned_to_another_watchlist(self) -> None:
@@ -298,6 +327,79 @@ class RepositoryTests(unittest.TestCase):
 
         self.assertIsNone(resolved)
         self.assertIsNotNone(snapshot.id)
+
+    def test_context_and_recommendation_plan_repositories_persist_new_redesign_models(self) -> None:
+        session = create_session()
+        context_repository = ContextSnapshotRepository(session)
+        plan_repository = RecommendationPlanRepository(session)
+
+        macro = context_repository.create_macro_context_snapshot(
+            MacroContextSnapshot(
+                summary_text="Oil shock risk remains salient.",
+                saliency_score=0.88,
+                confidence_percent=72.0,
+                active_themes=[{"key": "oil_supply_shock_risk"}],
+                regime_tags=["risk_off"],
+                warnings=["headline_only_evidence"],
+            )
+        )
+        industry = context_repository.create_industry_context_snapshot(
+            IndustryContextSnapshot(
+                industry_key="airlines",
+                industry_label="Airlines",
+                summary_text="Fuel-cost pressure is rising.",
+                direction="negative",
+                saliency_score=0.74,
+                confidence_percent=68.0,
+                linked_macro_themes=["oil_supply_shock_risk"],
+            )
+        )
+        ticker_signal = context_repository.create_ticker_signal_snapshot(
+            TickerSignalSnapshot(
+                ticker="DAL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                direction="short",
+                swing_probability_percent=61.0,
+                confidence_percent=64.0,
+                attention_score=79.0,
+                diagnostics={"stage": "cheap_scan_then_deep_analysis"},
+            )
+        )
+        plan = plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="DAL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="short",
+                status="ok",
+                confidence_percent=64.0,
+                entry_price_low=43.2,
+                entry_price_high=43.8,
+                stop_loss=45.1,
+                take_profit=40.2,
+                holding_period_days=5,
+                risk_reward_ratio=1.7,
+                thesis_summary="Oil-sensitive airlines face renewed cost pressure.",
+                rationale_summary="Macro and industry context align bearish.",
+                risks=["oil reversal"],
+                signal_breakdown={"macro_exposure": 0.8},
+                ticker_signal_snapshot_id=ticker_signal.id,
+            )
+        )
+
+        macro_items = context_repository.list_macro_context_snapshots()
+        industry_items = context_repository.list_industry_context_snapshots("airlines")
+        ticker_items = context_repository.list_ticker_signal_snapshots("DAL")
+        plans = plan_repository.list_plans(ticker="DAL", action="short")
+
+        self.assertEqual(macro.id, macro_items[0].id)
+        self.assertEqual(industry.id, industry_items[0].id)
+        self.assertEqual(ticker_signal.id, ticker_items[0].id)
+        self.assertEqual(plan.id, plans[0].id)
+        self.assertEqual(macro_items[0].warnings, ["headline_only_evidence"])
+        self.assertEqual(industry_items[0].linked_macro_themes, ["oil_supply_shock_risk"])
+        self.assertEqual(ticker_items[0].diagnostics["stage"], "cheap_scan_then_deep_analysis")
+        self.assertEqual(plans[0].action, "short")
+        self.assertEqual(plans[0].signal_breakdown["macro_exposure"], 0.8)
 
     def test_run_repository_lists_recommendation_history_for_ticker(self) -> None:
         session = create_session()

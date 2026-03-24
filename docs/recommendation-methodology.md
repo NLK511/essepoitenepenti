@@ -15,9 +15,10 @@ That principle matters more than any individual indicator choice.
 
 ## Pipeline overview
 
+### Current production pipeline
 `ProposalService` orchestrates recommendation generation for one or more tickers in a run.
 
-For each ticker, the pipeline:
+For each ticker, the current production pipeline:
 1. fetches recent OHLC history through `yfinance`
 2. computes technical indicators with `pandas`
 3. builds raw and normalized feature vectors
@@ -29,6 +30,15 @@ For each ticker, the pipeline:
 9. persists the full result and structured analysis payloads
 
 If an input is unavailable, the system does not invent substitute confidence. It emits warnings or neutral values and stores why.
+
+### Redesign groundwork now implemented
+The app now also has persisted redesign-domain objects for:
+- `MacroContextSnapshot`
+- `IndustryContextSnapshot`
+- `TickerSignalSnapshot`
+- `RecommendationPlan`
+
+These exist as database models, repositories, migrations, and read APIs, but they are **not yet** the main execution path described above.
 
 ## App-native independence
 
@@ -149,6 +159,15 @@ The methodology still has important limits:
 - sentiment is inspectable, but not yet fully validated as a source of measurable edge
 - scheduler and workflow reliability still matter because good methodology is less useful if operations are unreliable
 - more signal sources should not be added faster than their effectiveness can be measured
+- the redesign target architecture now has storage primitives, but not yet a full writer/orchestration pipeline
+
+## Best next steps
+Given the work already completed, the next best implementation steps are:
+1. implement the cheap-scan → shortlist → deep-analysis orchestration layer behind watchlist policy
+2. make that orchestration write `TickerSignalSnapshot` objects first, because they are the natural bridge between broad context and actionable recommendations
+3. introduce real macro/industry context writers that populate the new context snapshot tables from saliency-first evidence
+4. make the recommendation engine emit `RecommendationPlan` outputs from ticker signals and watchlist trading constraints
+5. only then decide how quickly to retire or adapt the current sentiment-snapshot-first path
 
 ## Practical reading guide
 

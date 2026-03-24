@@ -9,6 +9,7 @@ Trade Proposer App now executes its critical workflows entirely inside this repo
 - **Feature-rich diagnostics**: every run emits structured `analysis_json`, feature vectors, aggregations, confidence weights, warnings, and workflow summaries.
 - **Shared sentiment context**: macro and industry refresh workflows persist reusable snapshots, proposal generation links back to those snapshots, and health/preflight now reports snapshot freshness.
 - **Signal integrity policy**: missing data becomes explicit neutral/warning output rather than an invented fallback.
+- **Redesign groundwork**: watchlist policy/scheduling metadata and the first persisted redesign objects now exist for macro context, industry context, ticker signals, and recommendation plans.
 
 ## Phase 1: Operational hardening (partially complete)
 
@@ -49,7 +50,28 @@ Highest-value remaining non-analytical work:
 - **Authentication baseline**: strengthen the single-user auth path and define the minimum acceptable operator model before adding RBAC/tenancy
 - **Observability**: structured logging, run-level correlation IDs, worker/scheduler heartbeats, and deployment-facing health reporting
 
-## Phase 4: Expansion (only after the above)
+## Phase 4: Redesign execution path
+
+This is now the highest-value analytical/product phase once operational hardening remains under control.
+
+Delivered groundwork:
+- first-class watchlist metadata aligned with trading horizons and exchange-aware scheduling
+- watchlist policy inspection endpoint
+- persisted redesign-domain models for:
+  - macro context snapshots
+  - industry context snapshots
+  - ticker signal snapshots
+  - recommendation plans
+- repository and read API support for those new persisted objects
+
+Next required work in this phase:
+- implement cheap-scan → shortlist → deep-analysis orchestration
+- add real writers for macro context, industry context, ticker signals, and recommendation plans
+- shift macro/industry analysis from polarity-first sentiment summaries to saliency-first context summaries
+- define how the new recommendation-plan path coexists with or replaces the current recommendation object path
+- add outcome tracking for the new recommendation-plan objects so backtesting and improvement stay first-class
+
+## Phase 5: Expansion (only after the above)
 
 Lower-priority growth items:
 - additional provider integrations where they demonstrably improve signal quality
@@ -64,7 +86,7 @@ A useful roadmap should separate three things clearly:
 - what is incomplete but necessary
 - what is merely possible later
 
-The project had started to blur those categories in a few docs. This roadmap keeps them separate so the near-term priority stays clear: improve reliability, security, observability, and evidence of model quality before broadening feature scope.
+The project had started to blur those categories in a few docs. This roadmap keeps them separate so the near-term priority stays clear: finish reliability/security/observability hardening, then wire the redesign onto a real execution path before broadening feature scope.
 
 ## Related docs
 - `architecture.md`: system design and component boundaries

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
 
-from trade_proposer_app.domain.enums import JobType, RecommendationDirection, RecommendationState, RunStatus
+from trade_proposer_app.domain.enums import JobType, RecommendationDirection, RecommendationState, RunStatus, StrategyHorizon
 
 
 class NewsArticle(BaseModel):
@@ -195,7 +195,27 @@ class EvaluationRunResult(BaseModel):
 class Watchlist(BaseModel):
     id: int | None = None
     name: str
+    description: str = ""
+    region: str = ""
+    exchange: str = ""
+    timezone: str = ""
+    default_horizon: StrategyHorizon = StrategyHorizon.ONE_WEEK
+    allow_shorts: bool = True
+    optimize_evaluation_timing: bool = False
     tickers: list[str] = Field(default_factory=list)
+
+
+class WatchlistEvaluationPolicy(BaseModel):
+    watchlist_id: int | None = None
+    watchlist_name: str
+    default_horizon: StrategyHorizon
+    schedule_source: str
+    schedule_timezone: str
+    primary_cron: str | None = None
+    primary_window_label: str = ""
+    secondary_window_label: str = ""
+    shortlist_strategy: str = "cheap_scan_then_deep_analysis"
+    warnings: list[str] = Field(default_factory=list)
 
 
 class Job(BaseModel):
@@ -250,6 +270,96 @@ class SentimentSnapshot(BaseModel):
     summary_text: str = ""
     job_id: int | None = None
     run_id: int | None = None
+
+
+class MacroContextSnapshot(BaseModel):
+    id: int | None = None
+    computed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    status: str = "ok"
+    summary_text: str = ""
+    saliency_score: float = 0.0
+    confidence_percent: float = 0.0
+    active_themes: list[dict[str, object]] = Field(default_factory=list)
+    regime_tags: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    missing_inputs: list[str] = Field(default_factory=list)
+    source_breakdown: dict[str, object] = Field(default_factory=dict)
+    metadata: dict[str, object] = Field(default_factory=dict)
+    run_id: int | None = None
+    job_id: int | None = None
+
+
+class IndustryContextSnapshot(BaseModel):
+    id: int | None = None
+    industry_key: str
+    industry_label: str = ""
+    computed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    status: str = "ok"
+    summary_text: str = ""
+    direction: str = "neutral"
+    saliency_score: float = 0.0
+    confidence_percent: float = 0.0
+    active_drivers: list[dict[str, object]] = Field(default_factory=list)
+    linked_macro_themes: list[str] = Field(default_factory=list)
+    linked_industry_themes: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    missing_inputs: list[str] = Field(default_factory=list)
+    source_breakdown: dict[str, object] = Field(default_factory=dict)
+    metadata: dict[str, object] = Field(default_factory=dict)
+    run_id: int | None = None
+    job_id: int | None = None
+
+
+class TickerSignalSnapshot(BaseModel):
+    id: int | None = None
+    ticker: str
+    horizon: StrategyHorizon = StrategyHorizon.ONE_WEEK
+    computed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    status: str = "ok"
+    direction: str = "neutral"
+    swing_probability_percent: float = 0.0
+    confidence_percent: float = 0.0
+    attention_score: float = 0.0
+    macro_exposure_score: float = 0.0
+    industry_alignment_score: float = 0.0
+    ticker_sentiment_score: float = 0.0
+    technical_setup_score: float = 0.0
+    catalyst_score: float = 0.0
+    expected_move_score: float = 0.0
+    execution_quality_score: float = 0.0
+    warnings: list[str] = Field(default_factory=list)
+    missing_inputs: list[str] = Field(default_factory=list)
+    source_breakdown: dict[str, object] = Field(default_factory=dict)
+    diagnostics: dict[str, object] = Field(default_factory=dict)
+    run_id: int | None = None
+    job_id: int | None = None
+
+
+class RecommendationPlan(BaseModel):
+    id: int | None = None
+    ticker: str
+    horizon: StrategyHorizon = StrategyHorizon.ONE_WEEK
+    action: str
+    status: str = "ok"
+    confidence_percent: float = 0.0
+    entry_price_low: float | None = None
+    entry_price_high: float | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
+    holding_period_days: int | None = None
+    risk_reward_ratio: float | None = None
+    thesis_summary: str = ""
+    rationale_summary: str = ""
+    risks: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    missing_inputs: list[str] = Field(default_factory=list)
+    evidence_summary: dict[str, object] = Field(default_factory=dict)
+    signal_breakdown: dict[str, object] = Field(default_factory=dict)
+    computed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    run_id: int | None = None
+    job_id: int | None = None
+    watchlist_id: int | None = None
+    ticker_signal_snapshot_id: int | None = None
 
 
 class ProviderCredential(BaseModel):

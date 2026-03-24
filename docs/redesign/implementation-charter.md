@@ -262,6 +262,24 @@ This includes:
 - recommendations
 - recommendation outcomes
 
+### Implemented groundwork
+The redesign now has an initial persisted target surface in the app schema.
+
+Implemented models and tables:
+- `MacroContextSnapshot` → `macro_context_snapshots`
+- `IndustryContextSnapshot` → `industry_context_snapshots`
+- `TickerSignalSnapshot` → `ticker_signal_snapshots`
+- `RecommendationPlan` → `recommendation_plans`
+
+Implemented support around them:
+- Alembic migration `0013_context_and_recommendation_models`
+- repository layer for creating and listing the new objects
+- read-only API routes for inspecting them
+
+Current limitation:
+- these tables are **not yet the primary write path** for the production analysis pipeline
+- they are the persistence foundation for the next stage of the redesign
+
 ## 13. Observability rules
 Observability remains a hard rule.
 
@@ -304,6 +322,26 @@ The next implementation work should assume:
 - recommendations are practical only when a directional edge is present
 - `no_action` produces no trade levels
 - every evaluation is stored for learning and backtesting
+
+## 16. Current redesign status
+Completed in the redesign track so far:
+- watchlists now carry trading and scheduling metadata (`description`, `region`, `exchange`, `timezone`, `default_horizon`, `allow_shorts`, `optimize_evaluation_timing`)
+- watchlist evaluation policy and timezone-aware scheduling are implemented
+- the new persistence-layer foundations for context snapshots, ticker signals, and recommendation plans are in place
+
+Not yet complete:
+- cheap-scan to shortlist to deep-analysis orchestration
+- real event extraction and saliency ranking
+- macro-context writers
+- industry-context writers
+- ticker-signal writers
+- recommendation-plan writers fed by the new engine
+- outcome tracking for the new recommendation-plan path
+
+Practical meaning:
+- the redesign is now past the purely conceptual stage
+- but the app still primarily operates through the legacy proposal/sentiment execution path
+- next work should focus on wiring real writers and orchestration into the new persisted model surface rather than adding more redesign-only schemas
 
 ## Open items not yet numerically fixed
 The following still require later tuning rather than immediate architectural decisions:
