@@ -21,3 +21,31 @@ class NitterProviderQueryTests(unittest.TestCase):
         self.assertEqual(mock_get.call_count, len(queries))
         self.assertEqual(bundle.query_diagnostics["macro_queries"], queries)
         self.assertEqual(bundle.coverage["social_count"], 0)
+
+    def test_parse_search_html_extracts_items_without_timeline_footer(self) -> None:
+        provider = NitterProvider(base_url="http://nitter.example")
+        html = (
+            '<div class="timeline-item">'
+            '<a class="fullname">Macro News</a>'
+            '<a class="username">@macro_news</a>'
+            '<a href="/macro_news/status/1234567890">status</a>'
+            '<span class="tweet-date"><a title="Mar 23, 2026 · 12:30 PM UTC">Mar 23</a></span>'
+            '<div class="tweet-content media-body">The ECB signals a shift in European monetary policy.</div>'
+            '<span class="icon-heart"></span> 12'
+            '<span class="icon-retweet"></span> 3'
+            '<span class="icon-reply"></span> 1'
+            '</div>'
+        )
+
+        items = provider._parse_search_html(
+            html,
+            ticker="global_macro",
+            query_profile={"macro_queries": ["ecb"], "industry_queries": [], "ticker_queries": [], "exclude_keywords": []},
+        )
+
+        self.assertEqual(len(items), 1)
+        item = items[0]
+        self.assertEqual(item.body, "The ECB signals a shift in European monetary policy.")
+        self.assertIn("macro", item.scope_tags)
+        self.assertEqual(item.author_handle, "macro_news")
+        self.assertEqual(item.item_id, "1234567890")

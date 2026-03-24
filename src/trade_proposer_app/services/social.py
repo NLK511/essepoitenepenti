@@ -26,7 +26,10 @@ from trade_proposer_app.services.news import (
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 NITTER_SEARCH_PATH = "/search"
-TIMELINE_ITEM_PATTERN = re.compile(r'<div class="timeline-item(?P<body>.*?)<div class="timeline-footer">', re.DOTALL)
+TIMELINE_ITEM_PATTERN = re.compile(
+    r'<div class="timeline-item\b(?P<body>.*?)(?=<div class="timeline-item\b|<div class="show-more|</main>|$)',
+    re.DOTALL,
+)
 STATUS_LINK_PATTERN = re.compile(r'href="(?P<link>/[^\"]+/status/(?P<status_id>\d+)[^\"]*)"')
 CONTENT_PATTERN = re.compile(r'<div class="tweet-content[^\"]*"[^>]*>(?P<content>.*?)</div>', re.DOTALL)
 FULLNAME_PATTERN = re.compile(r'<a[^>]*class="fullname"[^>]*>(?P<value>.*?)</a>', re.DOTALL)
