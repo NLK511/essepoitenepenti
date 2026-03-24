@@ -31,14 +31,26 @@ For each ticker, the current production pipeline:
 
 If an input is unavailable, the system does not invent substitute confidence. It emits warnings or neutral values and stores why.
 
-### Redesign groundwork now implemented
+### Redesign path now partially implemented
 The app now also has persisted redesign-domain objects for:
 - `MacroContextSnapshot`
 - `IndustryContextSnapshot`
 - `TickerSignalSnapshot`
 - `RecommendationPlan`
 
-These exist as database models, repositories, migrations, and read APIs, but they are **not yet** the main execution path described above.
+These exist as database models, repositories, migrations, read APIs, and run-detail/UI inspection surfaces.
+
+In addition, watchlist-backed proposal jobs now use a real staged orchestration path:
+1. cheap scan over all watchlist tickers
+2. shortlist selection using the dedicated cheap-scan signal model
+3. deep analysis only for shortlisted names
+4. persistence of `TickerSignalSnapshot` and `RecommendationPlan` for every scanned ticker
+5. creation of legacy `Recommendation` rows only for actionable deep-analysis outputs
+
+Current limitation:
+- manual ticker proposal jobs still use the legacy per-ticker production path
+- deep analysis still depends on the legacy `ProposalService`
+- macro and industry context writers are not yet the main saliency-first production path
 
 ## App-native independence
 
@@ -163,11 +175,11 @@ The methodology still has important limits:
 
 ## Best next steps
 Given the work already completed, the next best implementation steps are:
-1. implement the cheap-scan → shortlist → deep-analysis orchestration layer behind watchlist policy
-2. make that orchestration write `TickerSignalSnapshot` objects first, because they are the natural bridge between broad context and actionable recommendations
-3. introduce real macro/industry context writers that populate the new context snapshot tables from saliency-first evidence
-4. make the recommendation engine emit `RecommendationPlan` outputs from ticker signals and watchlist trading constraints
-5. only then decide how quickly to retire or adapt the current sentiment-snapshot-first path
+1. introduce real macro/industry context writers that populate the new context snapshot tables from saliency-first evidence
+2. extract a dedicated ticker deep-analysis service so watchlist orchestration no longer depends on the legacy `ProposalService`
+3. define and implement `RecommendationPlan` outcome tracking, evaluation, and backtesting
+4. expose shortlist policy, thresholds, and reasons more directly in operator workflows rather than leaving them mostly in JSON payloads
+5. only then decide how quickly to retire, absorb, or narrow the remaining sentiment-snapshot-first and legacy recommendation paths
 
 ## Practical reading guide
 

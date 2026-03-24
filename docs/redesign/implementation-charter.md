@@ -262,7 +262,7 @@ This includes:
 - recommendations
 - recommendation outcomes
 
-### Implemented groundwork
+### Implemented groundwork and first write path
 The redesign now has an initial persisted target surface in the app schema.
 
 Implemented models and tables:
@@ -275,10 +275,18 @@ Implemented support around them:
 - Alembic migration `0013_context_and_recommendation_models`
 - repository layer for creating and listing the new objects
 - read-only API routes for inspecting them
+- run-scoped API/UI visibility for redesign objects
+- standalone browse pages for ticker signals and recommendation plans
+
+Implemented write-path migration so far:
+- watchlist-backed proposal jobs now use cheap-scan → shortlist → deep-analysis orchestration
+- every scanned watchlist ticker now gets a persisted `TickerSignalSnapshot` and `RecommendationPlan`
+- only actionable deep-analysis outputs still create legacy `Recommendation` rows for compatibility
 
 Current limitation:
-- these tables are **not yet the primary write path** for the production analysis pipeline
-- they are the persistence foundation for the next stage of the redesign
+- manual ticker proposal jobs still use the legacy path
+- macro and industry context objects are not yet written by a real saliency-first production pipeline
+- watchlist deep analysis still depends on the legacy proposal engine
 
 ## 13. Observability rules
 Observability remains a hard rule.
@@ -327,21 +335,24 @@ The next implementation work should assume:
 Completed in the redesign track so far:
 - watchlists now carry trading and scheduling metadata (`description`, `region`, `exchange`, `timezone`, `default_horizon`, `allow_shorts`, `optimize_evaluation_timing`)
 - watchlist evaluation policy and timezone-aware scheduling are implemented
+- watchlist-backed proposal jobs now run through cheap-scan to shortlist to deep-analysis orchestration
+- a dedicated cheap-scan signal model now drives shortlist selection
 - the new persistence-layer foundations for context snapshots, ticker signals, and recommendation plans are in place
+- ticker signals and recommendation plans are browseable through run detail, run-scoped APIs, and dedicated pages
+- run artifacts now record shortlist rules, rejection counts, and per-ticker shortlist decisions
 
 Not yet complete:
-- cheap-scan to shortlist to deep-analysis orchestration
 - real event extraction and saliency ranking
 - macro-context writers
 - industry-context writers
-- ticker-signal writers
-- recommendation-plan writers fed by the new engine
+- dedicated ticker deep-analysis and recommendation-engine modules independent of the legacy proposal engine
 - outcome tracking for the new recommendation-plan path
+- migration or retirement strategy for the remaining legacy recommendation and sentiment-snapshot paths
 
 Practical meaning:
-- the redesign is now past the purely conceptual stage
-- but the app still primarily operates through the legacy proposal/sentiment execution path
-- next work should focus on wiring real writers and orchestration into the new persisted model surface rather than adding more redesign-only schemas
+- the redesign is now well past the purely conceptual stage
+- watchlist-backed proposal runs already exercise the first real redesign write path
+- the next best work is no longer more persistence scaffolding; it is context writers, dedicated ticker deep analysis, and evaluation of recommendation-plan outcomes
 
 ## Open items not yet numerically fixed
 The following still require later tuning rather than immediate architectural decisions:

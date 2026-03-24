@@ -54,7 +54,7 @@ Highest-value remaining non-analytical work:
 
 This is now the highest-value analytical/product phase once operational hardening remains under control.
 
-Delivered groundwork:
+Delivered in this phase so far:
 - first-class watchlist metadata aligned with trading horizons and exchange-aware scheduling
 - watchlist policy inspection endpoint
 - persisted redesign-domain models for:
@@ -63,13 +63,19 @@ Delivered groundwork:
   - ticker signal snapshots
   - recommendation plans
 - repository and read API support for those new persisted objects
+- real watchlist-backed cheap-scan → shortlist → deep-analysis orchestration
+- dedicated cheap-scan signal model instead of recycled proposal confidence
+- persistence of `TickerSignalSnapshot` and `RecommendationPlan` for every scanned watchlist ticker
+- run-scoped API/UI visibility for redesign objects, including standalone browse pages for ticker signals and recommendation plans
+- richer run artifacts that now record shortlist rules, rejection counts, and per-ticker shortlist decisions
 
 Next required work in this phase:
-- implement cheap-scan → shortlist → deep-analysis orchestration
-- add real writers for macro context, industry context, ticker signals, and recommendation plans
-- shift macro/industry analysis from polarity-first sentiment summaries to saliency-first context summaries
+- add real saliency-first writers for macro context and industry context
+- replace deep-analysis dependence on the legacy `ProposalService` with a dedicated ticker-signal / recommendation-engine path
 - define how the new recommendation-plan path coexists with or replaces the current recommendation object path
 - add outcome tracking for the new recommendation-plan objects so backtesting and improvement stay first-class
+- expose watchlist policy, shortlist thresholds, and shortlist reasons more directly in the main operator workflows
+- continue shifting macro/industry analysis from polarity-first sentiment summaries to saliency-first context summaries backed by primary news and official evidence
 
 ## Phase 5: Expansion (only after the above)
 

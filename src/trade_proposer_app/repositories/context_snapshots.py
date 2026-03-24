@@ -38,11 +38,12 @@ class ContextSnapshotRepository:
         self.session.refresh(record)
         return self._to_macro_model(record)
 
-    def list_macro_context_snapshots(self, limit: int = 20) -> list[MacroContextSnapshot]:
+    def list_macro_context_snapshots(self, limit: int = 20, run_id: int | None = None) -> list[MacroContextSnapshot]:
+        query = select(MacroContextSnapshotRecord)
+        if run_id is not None:
+            query = query.where(MacroContextSnapshotRecord.run_id == run_id)
         rows = self.session.scalars(
-            select(MacroContextSnapshotRecord)
-            .order_by(MacroContextSnapshotRecord.computed_at.desc())
-            .limit(limit)
+            query.order_by(MacroContextSnapshotRecord.computed_at.desc()).limit(limit)
         ).all()
         return [self._to_macro_model(row) for row in rows]
 
@@ -71,10 +72,17 @@ class ContextSnapshotRepository:
         self.session.refresh(record)
         return self._to_industry_model(record)
 
-    def list_industry_context_snapshots(self, industry_key: str | None = None, limit: int = 50) -> list[IndustryContextSnapshot]:
+    def list_industry_context_snapshots(
+        self,
+        industry_key: str | None = None,
+        limit: int = 50,
+        run_id: int | None = None,
+    ) -> list[IndustryContextSnapshot]:
         query = select(IndustryContextSnapshotRecord)
         if industry_key:
             query = query.where(IndustryContextSnapshotRecord.industry_key == industry_key)
+        if run_id is not None:
+            query = query.where(IndustryContextSnapshotRecord.run_id == run_id)
         rows = self.session.scalars(query.order_by(IndustryContextSnapshotRecord.computed_at.desc()).limit(limit)).all()
         return [self._to_industry_model(row) for row in rows]
 
@@ -107,10 +115,17 @@ class ContextSnapshotRepository:
         self.session.refresh(record)
         return self._to_ticker_signal_model(record)
 
-    def list_ticker_signal_snapshots(self, ticker: str | None = None, limit: int = 50) -> list[TickerSignalSnapshot]:
+    def list_ticker_signal_snapshots(
+        self,
+        ticker: str | None = None,
+        limit: int = 50,
+        run_id: int | None = None,
+    ) -> list[TickerSignalSnapshot]:
         query = select(TickerSignalSnapshotRecord)
         if ticker:
             query = query.where(TickerSignalSnapshotRecord.ticker == ticker.upper())
+        if run_id is not None:
+            query = query.where(TickerSignalSnapshotRecord.run_id == run_id)
         rows = self.session.scalars(query.order_by(TickerSignalSnapshotRecord.computed_at.desc()).limit(limit)).all()
         return [self._to_ticker_signal_model(row) for row in rows]
 

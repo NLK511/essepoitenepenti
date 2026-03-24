@@ -1,5 +1,7 @@
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.industry_sentiment import IndustrySentimentService
@@ -11,6 +13,8 @@ from trade_proposer_app.services.snapshot_resolver import SentimentSnapshotResol
 from trade_proposer_app.services.social import SocialIngestionService
 from trade_proposer_app.services.summary import SummaryService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
+from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignalService
+from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
 
 
 def create_proposal_service(session: Session) -> ProposalService:
@@ -35,6 +39,24 @@ def create_proposal_service(session: Session) -> ProposalService:
         signal_service=signal_service,
         summary_service=summary_service,
         snapshot_resolver=snapshot_resolver,
+    )
+
+
+def create_watchlist_orchestration_service(session: Session) -> WatchlistOrchestrationService:
+    settings_repository = SettingsRepository(session)
+    setting_map = settings_repository.get_setting_map()
+    raw_threshold = setting_map.get("confidence_threshold", "60")
+    try:
+        confidence_threshold = float((raw_threshold or "").strip())
+    except (TypeError, ValueError):
+        confidence_threshold = 60.0
+
+    return WatchlistOrchestrationService(
+        context_snapshots=ContextSnapshotRepository(session),
+        recommendation_plans=RecommendationPlanRepository(session),
+        cheap_scan_service=CheapScanSignalService(),
+        deep_analysis_proposals=create_proposal_service(session),
+        confidence_threshold=confidence_threshold,
     )
 
 

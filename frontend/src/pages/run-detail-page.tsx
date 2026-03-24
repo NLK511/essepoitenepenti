@@ -209,6 +209,156 @@ export function RunDetailPage() {
             ) : null}
           </Card>
 
+          {detail.ticker_signal_snapshots.length > 0 || detail.recommendation_plans.length > 0 || detail.macro_context_snapshots.length > 0 || detail.industry_context_snapshots.length > 0 ? (
+            <Card>
+              <SectionTitle
+                kicker="Redesign orchestration"
+                title="Cheap scan, shortlist, deep analysis, and plan outputs"
+                subtitle="These persisted redesign objects show what the orchestration layer scanned, shortlisted, and converted into actionable or no-action plans."
+                actions={
+                  <>
+                    <Link to={detail.run.id ? `/jobs/ticker-signals?run_id=${detail.run.id}` : "/jobs/ticker-signals"} className="button-subtle">Browse ticker signals</Link>
+                    <Link to={detail.run.id ? `/jobs/recommendation-plans?run_id=${detail.run.id}` : "/jobs/recommendation-plans"} className="button-subtle">Browse recommendation plans</Link>
+                  </>
+                }
+              />
+              <div className="stack-page">
+                {detail.ticker_signal_snapshots.length > 0 ? (
+                  <section>
+                    <div className="section-heading">
+                      <strong>Ticker signal snapshots</strong>
+                    </div>
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Ticker</th>
+                            <th>Mode</th>
+                            <th>Direction</th>
+                            <th>Confidence</th>
+                            <th>Attention</th>
+                            <th>Cheap-scan components</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detail.ticker_signal_snapshots.map((item) => {
+                            const mode = typeof item.diagnostics.mode === "string" ? item.diagnostics.mode : "unknown";
+                            const shortlisted = item.diagnostics.shortlisted === true;
+                            const componentScores = item.diagnostics.cheap_scan_component_scores;
+                            const componentRecord = componentScores && typeof componentScores === "object" && !Array.isArray(componentScores)
+                              ? (componentScores as Record<string, unknown>)
+                              : null;
+                            const trendScore = typeof componentRecord?.trend_score === "number" ? componentRecord.trend_score : null;
+                            const momentumScore = typeof componentRecord?.momentum_score === "number" ? componentRecord.momentum_score : null;
+                            const breakoutScore = typeof componentRecord?.breakout_score === "number" ? componentRecord.breakout_score : null;
+                            const volatilityScore = typeof componentRecord?.volatility_score === "number" ? componentRecord.volatility_score : null;
+                            const liquidityScore = typeof componentRecord?.liquidity_score === "number" ? componentRecord.liquidity_score : null;
+                            const directionalScore = typeof item.diagnostics.cheap_scan_directional_score === "number"
+                              ? item.diagnostics.cheap_scan_directional_score
+                              : null;
+                            return (
+                              <tr key={item.id ?? `${item.ticker}-${item.computed_at}`}>
+                                <td>
+                                  <div className="cluster">
+                                    <Link to={`/tickers/${item.ticker}`} className="badge badge-info badge-link">{item.ticker}</Link>
+                                    {shortlisted ? <Badge tone="info">shortlisted</Badge> : <Badge tone="neutral">not shortlisted</Badge>}
+                                  </div>
+                                </td>
+                                <td>{mode}</td>
+                                <td><Badge tone={item.direction === "long" ? "ok" : item.direction === "short" ? "warning" : "neutral"}>{item.direction}</Badge></td>
+                                <td>
+                                  <span style={{ color: scoreColor(item.confidence_percent, 0, 100) }}>{item.confidence_percent.toFixed(1)}%</span>
+                                </td>
+                                <td>{item.attention_score.toFixed(1)}</td>
+                                <td>
+                                  <div className="helper-text">trend {trendScore !== null ? trendScore.toFixed(0) : "—"}</div>
+                                  <div className="helper-text">momentum {momentumScore !== null ? momentumScore.toFixed(0) : "—"}</div>
+                                  <div className="helper-text">breakout {breakoutScore !== null ? breakoutScore.toFixed(0) : "—"}</div>
+                                  <div className="helper-text">volatility {volatilityScore !== null ? volatilityScore.toFixed(0) : "—"}</div>
+                                  <div className="helper-text">liquidity {liquidityScore !== null ? liquidityScore.toFixed(0) : "—"}</div>
+                                  <div className="helper-text">directional {directionalScore !== null ? directionalScore.toFixed(2) : "—"}</div>
+                                </td>
+                                <td><Badge tone={item.warnings.length > 0 ? "warning" : "ok"}>{item.status}</Badge></td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                ) : null}
+
+                {detail.recommendation_plans.length > 0 ? (
+                  <section>
+                    <div className="section-heading">
+                      <strong>Recommendation plans</strong>
+                    </div>
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Ticker</th>
+                            <th>Action</th>
+                            <th>Confidence</th>
+                            <th>Entry</th>
+                            <th>Stop</th>
+                            <th>Take profit</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detail.recommendation_plans.map((plan) => (
+                            <tr key={plan.id ?? `${plan.ticker}-${plan.computed_at}`}>
+                              <td>
+                                <div>
+                                  <Link to={`/tickers/${plan.ticker}`} className="badge badge-info badge-link">{plan.ticker}</Link>
+                                  <div className="helper-text top-gap-small">{plan.thesis_summary || plan.rationale_summary || "No thesis stored."}</div>
+                                </div>
+                              </td>
+                              <td><Badge tone={plan.action === "long" ? "ok" : plan.action === "short" ? "warning" : "neutral"}>{plan.action}</Badge></td>
+                              <td>
+                                <span style={{ color: scoreColor(plan.confidence_percent, 0, 100) }}>{plan.confidence_percent.toFixed(1)}%</span>
+                              </td>
+                              <td>
+                                {plan.entry_price_low !== null && plan.entry_price_high !== null
+                                  ? plan.entry_price_low === plan.entry_price_high
+                                    ? plan.entry_price_low
+                                    : `${plan.entry_price_low} – ${plan.entry_price_high}`
+                                  : "—"}
+                              </td>
+                              <td>{plan.stop_loss ?? "—"}</td>
+                              <td>{plan.take_profit ?? "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                ) : null}
+
+                {detail.macro_context_snapshots.length > 0 || detail.industry_context_snapshots.length > 0 ? (
+                  <section>
+                    <div className="section-heading">
+                      <strong>Context objects written by this run</strong>
+                    </div>
+                    {detail.macro_context_snapshots.map((item) => (
+                      <div key={item.id ?? item.computed_at} className="top-gap-small">
+                        <Badge tone={item.warnings.length > 0 ? "warning" : "ok"}>macro context</Badge>
+                        <span className="helper-text"> {item.summary_text || "No macro summary stored."}</span>
+                      </div>
+                    ))}
+                    {detail.industry_context_snapshots.map((item) => (
+                      <div key={item.id ?? `${item.industry_key}-${item.computed_at}`} className="top-gap-small">
+                        <Badge tone={item.warnings.length > 0 ? "warning" : "ok"}>{item.industry_label || item.industry_key}</Badge>
+                        <span className="helper-text"> {item.summary_text || "No industry summary stored."}</span>
+                      </div>
+                    ))}
+                  </section>
+                ) : null}
+              </div>
+            </Card>
+          ) : null}
+
           <Card>
             <SectionTitle kicker="Produced output" title={detail.run.job_type === "proposal_generation" ? "Recommendations created by this run" : "Workflow result stored on the run"} />
             {detail.run.job_type === "proposal_generation" ? (

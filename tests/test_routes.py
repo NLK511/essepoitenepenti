@@ -169,7 +169,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         finally:
             session.close()
 
-    def seed_context_and_recommendation_plan_data(self) -> None:
+    def seed_context_and_recommendation_plan_data(self, *, run_id: int | None = None) -> None:
         session = Session(bind=self.engine)
         try:
             context_repository = ContextSnapshotRepository(session)
@@ -182,6 +182,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     confidence_percent=71.0,
                     attention_score=83.0,
                     diagnostics={"mode": "deep_analysis"},
+                    run_id=run_id,
                 )
             )
             context_repository.create_macro_context_snapshot(
@@ -191,6 +192,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     confidence_percent=75.0,
                     active_themes=[{"key": "fed_policy"}],
                     regime_tags=["rates_sensitive"],
+                    run_id=run_id,
                 )
             )
             context_repository.create_industry_context_snapshot(
@@ -201,6 +203,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     direction="positive",
                     saliency_score=0.73,
                     confidence_percent=69.0,
+                    run_id=run_id,
                 )
             )
             RecommendationPlanRepository(session).create_plan(
@@ -219,6 +222,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     rationale_summary="Signal stack aligns bullish.",
                     ticker_signal_snapshot_id=ticker_signal.id,
                     signal_breakdown={"technical_setup": 0.77},
+                    run_id=run_id,
                 )
             )
         finally:
@@ -783,6 +787,10 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail_payload["outputs"][0]["diagnostics"]["provider_errors"], ["feed timeout"])
         self.assertEqual(detail_payload["outputs"][0]["recommendation"]["state"], "PENDING")
         self.assertIn("ticker_generation", detail_payload["run"]["timing_json"])
+        self.assertEqual(detail_payload["macro_context_snapshots"], [])
+        self.assertEqual(detail_payload["industry_context_snapshots"], [])
+        self.assertEqual(detail_payload["ticker_signal_snapshots"], [])
+        self.assertEqual(detail_payload["recommendation_plans"], [])
 
     async def test_delete_run_via_api(self) -> None:
         run_id = self.seed_run_with_diagnostics()
@@ -1058,6 +1066,34 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ticker_signals.json()[0]["diagnostics"]["mode"], "deep_analysis")
         self.assertEqual(plans.json()[0]["action"], "long")
         self.assertEqual(plans.json()[0]["signal_breakdown"]["technical_setup"], 0.77)
+
+    async def test_run_detail_and_filtered_redesign_routes_expose_orchestration_results(self) -> None:
+        run_id = self.seed_run_with_diagnostics()
+        self.seed_context_and_recommendation_plan_data(run_id=run_id)
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            run_detail = await client.get(f"/api/runs/{run_id}")
+            macro = await client.get("/api/context/macro", params={"run_id": run_id})
+            industry = await client.get("/api/context/industry", params={"run_id": run_id})
+            ticker_signals = await client.get("/api/context/ticker-signals", params={"run_id": run_id})
+            plans = await client.get("/api/recommendation-plans", params={"run_id": run_id})
+
+        self.assertEqual(run_detail.status_code, 200)
+        detail_payload = run_detail.json()
+        self.assertEqual(len(detail_payload["macro_context_snapshots"]), 1)
+        self.assertEqual(len(detail_payload["industry_context_snapshots"]), 1)
+        self.assertEqual(len(detail_payload["ticker_signal_snapshots"]), 1)
+        self.assertEqual(len(detail_payload["recommendation_plans"]), 1)
+        self.assertEqual(detail_payload["ticker_signal_snapshots"][0]["diagnostics"]["mode"], "deep_analysis")
+        self.assertEqual(detail_payload["recommendation_plans"][0]["action"], "long")
+        self.assertEqual(macro.status_code, 200)
+        self.assertEqual(industry.status_code, 200)
+        self.assertEqual(ticker_signals.status_code, 200)
+        self.assertEqual(plans.status_code, 200)
+        self.assertEqual(len(macro.json()), 1)
+        self.assertEqual(len(industry.json()), 1)
+        self.assertEqual(len(ticker_signals.json()), 1)
+        self.assertEqual(len(plans.json()), 1)
 
     async def test_sentiment_snapshot_detail_returns_404_for_missing_snapshot(self) -> None:
         transport = httpx.ASGITransport(app=app)

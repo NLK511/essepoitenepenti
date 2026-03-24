@@ -214,9 +214,103 @@ export interface SentimentSnapshotListResponse {
   limit: number;
 }
 
+export interface MacroContextSnapshot {
+  id: number | null;
+  computed_at: string;
+  status: string;
+  summary_text: string;
+  saliency_score: number;
+  confidence_percent: number;
+  active_themes: Array<Record<string, unknown>>;
+  regime_tags: string[];
+  warnings: string[];
+  missing_inputs: string[];
+  source_breakdown: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  run_id: number | null;
+  job_id: number | null;
+}
+
+export interface IndustryContextSnapshot {
+  id: number | null;
+  industry_key: string;
+  industry_label: string;
+  computed_at: string;
+  status: string;
+  summary_text: string;
+  direction: string;
+  saliency_score: number;
+  confidence_percent: number;
+  active_drivers: Array<Record<string, unknown>>;
+  linked_macro_themes: string[];
+  linked_industry_themes: string[];
+  warnings: string[];
+  missing_inputs: string[];
+  source_breakdown: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  run_id: number | null;
+  job_id: number | null;
+}
+
+export interface TickerSignalSnapshot {
+  id: number | null;
+  ticker: string;
+  horizon: StrategyHorizon;
+  computed_at: string;
+  status: string;
+  direction: string;
+  swing_probability_percent: number;
+  confidence_percent: number;
+  attention_score: number;
+  macro_exposure_score: number;
+  industry_alignment_score: number;
+  ticker_sentiment_score: number;
+  technical_setup_score: number;
+  catalyst_score: number;
+  expected_move_score: number;
+  execution_quality_score: number;
+  warnings: string[];
+  missing_inputs: string[];
+  source_breakdown: Record<string, unknown>;
+  diagnostics: Record<string, unknown>;
+  run_id: number | null;
+  job_id: number | null;
+}
+
+export interface RecommendationPlan {
+  id: number | null;
+  ticker: string;
+  horizon: StrategyHorizon;
+  action: string;
+  status: string;
+  confidence_percent: number;
+  entry_price_low: number | null;
+  entry_price_high: number | null;
+  stop_loss: number | null;
+  take_profit: number | null;
+  holding_period_days: number | null;
+  risk_reward_ratio: number | null;
+  thesis_summary: string;
+  rationale_summary: string;
+  risks: string[];
+  warnings: string[];
+  missing_inputs: string[];
+  evidence_summary: Record<string, unknown>;
+  signal_breakdown: Record<string, unknown>;
+  computed_at: string;
+  run_id: number | null;
+  job_id: number | null;
+  watchlist_id: number | null;
+  ticker_signal_snapshot_id: number | null;
+}
+
 export interface RunDetailResponse {
   run: Run;
   outputs: RunOutput[];
+  macro_context_snapshots: MacroContextSnapshot[];
+  industry_context_snapshots: IndustryContextSnapshot[];
+  ticker_signal_snapshots: TickerSignalSnapshot[];
+  recommendation_plans: RecommendationPlan[];
 }
 
 export interface RecommendationDetailResponse {

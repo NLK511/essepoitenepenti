@@ -9,6 +9,7 @@ from trade_proposer_app.services.builders import (
     create_industry_sentiment_service,
     create_macro_sentiment_service,
     create_proposal_service,
+    create_watchlist_orchestration_service,
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.evaluations import RecommendationEvaluationService
@@ -31,6 +32,7 @@ def process_once() -> bool:
             ),
             macro_sentiment=create_macro_sentiment_service(session),
             industry_sentiment=create_industry_sentiment_service(session),
+            watchlist_orchestration=create_watchlist_orchestration_service(session),
         )
         try:
             run, _recommendations = service.process_next_queued_run()

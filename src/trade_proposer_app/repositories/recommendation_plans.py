@@ -44,12 +44,20 @@ class RecommendationPlanRepository:
         self.session.refresh(record)
         return self._to_model(record)
 
-    def list_plans(self, ticker: str | None = None, action: str | None = None, limit: int = 50) -> list[RecommendationPlan]:
+    def list_plans(
+        self,
+        ticker: str | None = None,
+        action: str | None = None,
+        limit: int = 50,
+        run_id: int | None = None,
+    ) -> list[RecommendationPlan]:
         query = select(RecommendationPlanRecord)
         if ticker:
             query = query.where(RecommendationPlanRecord.ticker == ticker.upper())
         if action:
             query = query.where(RecommendationPlanRecord.action == action)
+        if run_id is not None:
+            query = query.where(RecommendationPlanRecord.run_id == run_id)
         rows = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc()).limit(limit)).all()
         return [self._to_model(row) for row in rows]
 

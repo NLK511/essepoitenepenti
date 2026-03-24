@@ -225,6 +225,13 @@ class Job(BaseModel):
     tickers: list[str] = Field(default_factory=list)
     watchlist_id: int | None = None
     watchlist_name: str | None = None
+    watchlist_description: str = ""
+    watchlist_region: str = ""
+    watchlist_exchange: str = ""
+    watchlist_timezone: str = ""
+    watchlist_default_horizon: StrategyHorizon | None = None
+    watchlist_allow_shorts: bool = True
+    watchlist_optimize_evaluation_timing: bool = False
     enabled: bool = True
     cron: str | None = None
     last_enqueued_at: datetime | None = None

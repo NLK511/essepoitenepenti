@@ -33,9 +33,14 @@ This principle is consistently applied in the best parts of the product. It is a
 - Nitter results are ranked by a relevance scorer so the strongest, most informative posts are kept first; see `docs/nitter-social-relevance-scoring.md`.
 - A settings toggle can restrict Nitter to macro and industry sentiment only, leaving ticker sentiment to other sources.
 
-### Redesign groundwork now present
+### Redesign execution path now present
 - Persist watchlists with richer trading and scheduling metadata: `description`, `region`, `exchange`, `timezone`, `default_horizon`, `allow_shorts`, and `optimize_evaluation_timing`.
 - Inspect derived watchlist timing and warnings through `GET /api/watchlists/{watchlist_id}/policy`.
+- Watchlist-backed proposal jobs now run through a real staged orchestration flow:
+  1. cheap scan across all watchlist tickers
+  2. shortlist selection using a dedicated cheap-scan signal model
+  3. deep analysis only for shortlisted names
+  4. persistence of redesign outputs for every scanned ticker
 - Persist redesign-domain objects for:
   - macro context snapshots
   - industry context snapshots
@@ -46,8 +51,13 @@ This principle is consistently applied in the best parts of the product. It is a
   - `GET /api/context/industry`
   - `GET /api/context/ticker-signals`
   - `GET /api/recommendation-plans`
+- Filter redesign objects by `run_id` and inspect them directly from run detail.
+- Browse ticker signals and recommendation plans outside individual runs through dedicated UI pages.
+- Inspect cheap-scan diagnostics, component scores, shortlist rules, rejection counts, and per-ticker shortlist decisions in persisted run payloads and redesign objects.
 
-These redesign objects are currently **foundational storage and inspection surfaces**, not yet the main production write path.
+Current limitation:
+- manual ticker proposal jobs still use the legacy per-ticker proposal path
+- macro and industry redesign objects exist, but real saliency-first writers for them are not yet the primary production path
 
 > **Enable the Nitter source**
 >
@@ -99,10 +109,11 @@ The weakest areas are operational rather than analytical:
 - auth, RBAC, tenancy, and broader deployment observability remain incomplete
 - credential lifecycle work is behind the product's growing provider surface
 
-The biggest product-level gap is now the **execution-path migration**:
-- the app has a redesigned persistence foundation, but not yet a redesigned write/orchestration path
+The biggest product-level gap is now the **remaining redesign migration**:
+- watchlist-backed proposal jobs do have a redesigned write/orchestration path, but manual ticker proposal jobs still run through the legacy path
 - macro and industry are still primarily exposed as sentiment snapshots rather than first-class saliency/context outputs
-- the new ticker-signal and recommendation-plan models are present, but not yet fed by a real end-to-end engine
+- ticker signals and recommendation plans are now produced by a real watchlist orchestration path, but deep analysis still depends on the legacy proposal engine
+- outcome tracking and backtesting for `RecommendationPlan` objects are not yet first-class
 
 The sentiment stack is also now coherent enough that the biggest remaining question is not feature completeness but measured effectiveness. More sentiment sources and heuristics should not be added faster than the team can evaluate whether they improve recommendation quality.
 

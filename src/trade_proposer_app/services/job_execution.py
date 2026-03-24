@@ -3,7 +3,7 @@ from datetime import datetime
 from time import perf_counter
 
 from trade_proposer_app.domain.enums import JobType, RunStatus
-from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, Run, RunOutput
+from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, Run, RunOutput, Watchlist
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
@@ -30,6 +30,7 @@ class JobExecutionService:
         optimizations: WeightOptimizationService | None = None,
         macro_sentiment: MacroSentimentService | None = None,
         industry_sentiment: IndustrySentimentService | None = None,
+        watchlist_orchestration=None,
     ) -> None:
         self.jobs = jobs
         self.runs = runs
@@ -38,6 +39,7 @@ class JobExecutionService:
         self.optimizations = optimizations
         self.macro_sentiment = macro_sentiment
         self.industry_sentiment = industry_sentiment
+        self.watchlist_orchestration = watchlist_orchestration
 
     def enqueue_job(self, job_id: int, scheduled_for: datetime | None = None) -> Run:
         job = self.jobs.get(job_id)
@@ -83,7 +85,9 @@ class JobExecutionService:
         }
 
         resolve_started = perf_counter()
+        job = self.jobs.get(run.job_id)
         tickers = self.jobs.resolve_tickers(run.job_id)
+        watchlist = self._extract_watchlist(job)
         timing["resolve_tickers_seconds"] = round(perf_counter() - resolve_started, 6)
 
         generated: list[RunOutput] = []
@@ -92,42 +96,62 @@ class JobExecutionService:
 
         try:
             ticker_generation = self._get_ticker_generation_list(timing)
-            for ticker in tickers:
-                ticker_started = perf_counter()
-                try:
-                    output = self.proposals.generate(ticker)
-                except ProposalExecutionError as exc:
-                    ticker_generation.append(
-                        {
-                            "ticker": ticker,
-                            "duration_seconds": round(perf_counter() - ticker_started, 6),
-                            "status": "failed",
-                            "error_message": str(exc),
-                        }
-                    )
-                    warnings_found = True
-                    continue
-                except Exception as exc:
-                    ticker_generation.append(
-                        {
-                            "ticker": ticker,
-                            "duration_seconds": round(perf_counter() - ticker_started, 6),
-                            "status": "failed",
-                            "error_message": str(exc),
-                        }
-                    )
-                    raise
-                ticker_duration = round(perf_counter() - ticker_started, 6)
-                ticker_generation.append(
-                    {
-                        "ticker": ticker,
-                        "duration_seconds": ticker_duration,
-                        "status": "completed",
-                    }
+            if watchlist is not None and self.watchlist_orchestration is not None:
+                orchestration = self.watchlist_orchestration.execute(
+                    watchlist,
+                    tickers,
+                    job_id=run.job_id,
+                    run_id=run.id,
                 )
-                if output.diagnostics.warnings:
-                    warnings_found = True
-                generated.append(output)
+                ticker_generation.extend(orchestration.get("ticker_generation", []))
+                warnings_found = bool(orchestration.get("warnings_found"))
+                generated = [
+                    output
+                    for output in self._convert_legacy_recommendations_to_outputs(orchestration.get("legacy_recommendations", []))
+                ]
+                summary = orchestration.get("summary")
+                artifact = orchestration.get("artifact")
+                if isinstance(summary, dict):
+                    self.runs.set_summary(run.id or 0, summary)
+                if isinstance(artifact, dict):
+                    self.runs.set_artifact(run.id or 0, artifact)
+            else:
+                for ticker in tickers:
+                    ticker_started = perf_counter()
+                    try:
+                        output = self.proposals.generate(ticker)
+                    except ProposalExecutionError as exc:
+                        ticker_generation.append(
+                            {
+                                "ticker": ticker,
+                                "duration_seconds": round(perf_counter() - ticker_started, 6),
+                                "status": "failed",
+                                "error_message": str(exc),
+                            }
+                        )
+                        warnings_found = True
+                        continue
+                    except Exception as exc:
+                        ticker_generation.append(
+                            {
+                                "ticker": ticker,
+                                "duration_seconds": round(perf_counter() - ticker_started, 6),
+                                "status": "failed",
+                                "error_message": str(exc),
+                            }
+                        )
+                        raise
+                    ticker_duration = round(perf_counter() - ticker_started, 6)
+                    ticker_generation.append(
+                        {
+                            "ticker": ticker,
+                            "duration_seconds": ticker_duration,
+                            "status": "completed",
+                        }
+                    )
+                    if output.diagnostics.warnings:
+                        warnings_found = True
+                    generated.append(output)
             timing["recommendation_generation_seconds"] = round(perf_counter() - generation_started, 6)
         except Exception as exc:
             timing["recommendation_generation_seconds"] = round(perf_counter() - generation_started, 6)
@@ -395,3 +419,36 @@ class JobExecutionService:
         normalized: list[dict[str, object]] = []
         timing["ticker_generation"] = normalized
         return normalized
+
+    @staticmethod
+    def _convert_legacy_recommendations_to_outputs(recommendations: list[Recommendation] | object) -> list[RunOutput]:
+        if not isinstance(recommendations, list):
+            return []
+        outputs: list[RunOutput] = []
+        for recommendation in recommendations:
+            if isinstance(recommendation, Recommendation):
+                outputs.append(RunOutput(recommendation=recommendation))
+        return outputs
+
+    @staticmethod
+    def _extract_watchlist(job) -> Watchlist | None:
+        watchlist_name = getattr(job, "watchlist_name", None)
+        watchlist_id = getattr(job, "watchlist_id", None)
+        if watchlist_id is None or not watchlist_name:
+            return None
+        tickers = getattr(job, "tickers", [])
+        default_horizon = getattr(job, "watchlist_default_horizon", None)
+        if default_horizon is None:
+            return None
+        return Watchlist(
+            id=watchlist_id,
+            name=watchlist_name,
+            tickers=tickers,
+            description=getattr(job, "watchlist_description", ""),
+            region=getattr(job, "watchlist_region", ""),
+            exchange=getattr(job, "watchlist_exchange", ""),
+            timezone=getattr(job, "watchlist_timezone", ""),
+            default_horizon=default_horizon,
+            allow_shorts=getattr(job, "watchlist_allow_shorts", True),
+            optimize_evaluation_timing=getattr(job, "watchlist_optimize_evaluation_timing", False),
+        )

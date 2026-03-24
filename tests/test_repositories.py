@@ -1,3 +1,4 @@
+import json
 import unittest
 from datetime import datetime, timezone
 
@@ -27,6 +28,7 @@ from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.proposals import ProposalService
+from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
 
 
 def create_session() -> Session:
@@ -74,6 +76,63 @@ class StubEvaluationExecutionService(EvaluationExecutionService):
             win_recommendations=4,
             loss_recommendations=3,
             output="evaluation complete",
+        )
+
+
+class CheapScanProposalService:
+    def score(self, ticker: str, horizon: StrategyHorizon):
+        from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal
+
+        confidence_map = {"AAPL": 84.0, "MSFT": 67.0, "TSLA": 41.0}
+        direction_map = {
+            "AAPL": "long",
+            "MSFT": "short",
+            "TSLA": "long",
+        }
+        return CheapScanSignal(
+            ticker=ticker,
+            horizon=horizon,
+            directional_bias=direction_map[ticker],
+            directional_score={"AAPL": 0.62, "MSFT": -0.38, "TSLA": 0.08}[ticker],
+            confidence_percent=confidence_map[ticker],
+            attention_score={"AAPL": 82.0, "MSFT": 71.0, "TSLA": 35.0}[ticker],
+            trend_score={"AAPL": 80.0, "MSFT": 35.0, "TSLA": 52.0}[ticker],
+            momentum_score={"AAPL": 78.0, "MSFT": 30.0, "TSLA": 48.0}[ticker],
+            breakout_score={"AAPL": 74.0, "MSFT": 28.0, "TSLA": 45.0}[ticker],
+            volatility_score=55.0,
+            liquidity_score=72.0,
+            diagnostics={"model": "cheap_scan_test"},
+            indicator_summary=f"cheap scan {ticker}",
+        )
+
+
+class DeepAnalysisProposalService:
+    def generate(self, ticker: str) -> RunOutput:
+        direction_map = {
+            "AAPL": RecommendationDirection.LONG,
+            "MSFT": RecommendationDirection.SHORT,
+        }
+        confidence_map = {"AAPL": 78.0, "MSFT": 74.0}
+        analysis = {
+            "summary": {"text": f"deep analysis for {ticker}"},
+            "sentiment": {
+                "macro": {"score": 0.3},
+                "industry": {"score": 0.2},
+                "ticker": {"score": 0.4},
+            },
+            "news": {"item_count": 3},
+        }
+        return RunOutput(
+            recommendation=Recommendation(
+                ticker=ticker,
+                direction=direction_map[ticker],
+                confidence=confidence_map[ticker],
+                entry_price=100.0,
+                stop_loss=96.0,
+                take_profit=108.0,
+                indicator_summary=f"deep analysis {ticker}",
+            ),
+            diagnostics=RunDiagnostics(analysis_json=json.dumps(analysis)),
         )
 
 
@@ -482,6 +541,86 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(stored[0].state.value, "PENDING")
         refreshed_job = jobs.get(job.id or 0)
         self.assertIsNotNone(refreshed_job.last_enqueued_at)
+
+    def test_job_execution_processes_watchlist_cheap_scan_shortlist_and_deep_analysis(self) -> None:
+        session = create_session()
+        watchlists = WatchlistRepository(session)
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        watchlist = watchlists.create(
+            "Core Tech",
+            ["AAPL", "MSFT", "TSLA"],
+            default_horizon=StrategyHorizon.ONE_WEEK,
+            allow_shorts=False,
+        )
+        job = jobs.create("Core Tech Run", [], None, watchlist_id=watchlist.id)
+        queued_run = runs.enqueue(job.id or 0)
+        orchestration = WatchlistOrchestrationService(
+            context_snapshots=ContextSnapshotRepository(session),
+            recommendation_plans=RecommendationPlanRepository(session),
+            cheap_scan_service=CheapScanProposalService(),
+            deep_analysis_proposals=DeepAnalysisProposalService(),
+            confidence_threshold=60.0,
+        )
+        service = JobExecutionService(
+            jobs=jobs,
+            runs=runs,
+            proposals=ProposalService(),
+            watchlist_orchestration=orchestration,
+        )
+
+        processed_run, recommendations = service.process_next_queued_run()
+
+        self.assertIsNotNone(processed_run)
+        self.assertEqual(processed_run.status, "completed")
+        self.assertEqual([item.ticker for item in recommendations], ["AAPL"])
+        stored_run = runs.get_run(queued_run.id or 0)
+        self.assertIn('"mode": "watchlist_orchestration"', stored_run.summary_json or "")
+        self.assertIn('"shortlist_count": 1', stored_run.summary_json or "")
+        self.assertIn('"legacy_recommendation_count": 1', stored_run.summary_json or "")
+        self.assertIn('"shortlist_rules": {', stored_run.summary_json or "")
+        self.assertIn('"shortlist_rejections": {', stored_run.summary_json or "")
+        self.assertIn('"shortlist": [', stored_run.artifact_json or "")
+        self.assertIn('"shortlist_decisions": [', stored_run.artifact_json or "")
+        summary_payload = json.loads(stored_run.summary_json or "{}")
+        artifact_payload = json.loads(stored_run.artifact_json or "{}")
+        self.assertEqual(summary_payload["shortlist_rules"]["minimum_confidence_percent"], 48.0)
+        self.assertEqual(summary_payload["shortlist_rules"]["minimum_attention_score"], 45.0)
+        self.assertEqual(summary_payload["shortlist_rejections"]["shorts_disabled"], 1)
+        self.assertEqual(summary_payload["shortlist_rejections"]["below_confidence_threshold"], 1)
+        decisions = {item["ticker"]: item for item in artifact_payload["shortlist_decisions"]}
+        self.assertEqual(decisions["AAPL"]["shortlisted"], True)
+        self.assertEqual(decisions["AAPL"]["shortlist_rank"], 1)
+        self.assertEqual(decisions["MSFT"]["reasons"], ["shorts_disabled"])
+        self.assertEqual(decisions["TSLA"]["reasons"], ["below_confidence_threshold", "below_attention_threshold"])
+        ticker_signals = ContextSnapshotRepository(session).list_ticker_signal_snapshots(limit=10)
+        plans = RecommendationPlanRepository(session).list_plans(limit=10)
+        self.assertEqual(len(ticker_signals), 3)
+        self.assertEqual(len(plans), 3)
+        action_map = {plan.ticker: plan.action for plan in plans}
+        self.assertEqual(action_map["AAPL"], "long")
+        self.assertEqual(action_map["MSFT"], "no_action")
+        self.assertEqual(action_map["TSLA"], "no_action")
+        diagnostics_map = {item.ticker: item.diagnostics for item in ticker_signals}
+        self.assertEqual(diagnostics_map["AAPL"]["mode"], "deep_analysis")
+        self.assertEqual(diagnostics_map["TSLA"]["mode"], "cheap_scan_only")
+
+    def test_watchlist_orchestration_shortlist_thresholds_vary_by_horizon_and_size(self) -> None:
+        session = create_session()
+        orchestration = WatchlistOrchestrationService(
+            context_snapshots=ContextSnapshotRepository(session),
+            recommendation_plans=RecommendationPlanRepository(session),
+            cheap_scan_service=CheapScanProposalService(),
+            deep_analysis_proposals=DeepAnalysisProposalService(),
+            confidence_threshold=60.0,
+        )
+
+        self.assertEqual(orchestration._shortlist_limit(StrategyHorizon.ONE_DAY, 4), 3)
+        self.assertEqual(orchestration._shortlist_limit(StrategyHorizon.ONE_WEEK, 12), 3)
+        self.assertEqual(orchestration._shortlist_limit(StrategyHorizon.ONE_MONTH, 24), 4)
+        self.assertEqual(orchestration._minimum_shortlist_confidence(StrategyHorizon.ONE_DAY, 4), 52.0)
+        self.assertEqual(orchestration._minimum_shortlist_confidence(StrategyHorizon.ONE_WEEK, 12), 53.0)
+        self.assertEqual(orchestration._minimum_shortlist_attention(StrategyHorizon.ONE_MONTH, 24), 52.0)
 
     def test_job_execution_processes_evaluation_run_and_persists_summary(self) -> None:
         session = create_session()

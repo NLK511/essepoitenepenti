@@ -6,7 +6,7 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
-from trade_proposer_app.services.builders import create_proposal_service
+from trade_proposer_app.services.builders import create_proposal_service, create_watchlist_orchestration_service
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.evaluations import RecommendationEvaluationService
 from trade_proposer_app.services.job_execution import JobExecutionService
@@ -38,6 +38,7 @@ def enqueue_enabled_jobs(now: datetime | None = None) -> int:
                 session=session,
                 minimum_resolved_trades=settings_repository.get_optimization_minimum_resolved_trades(),
             ),
+            watchlist_orchestration=create_watchlist_orchestration_service(session),
         )
         normalized_now = normalize_schedule_time(now or datetime.now(timezone.utc))
         count = 0
