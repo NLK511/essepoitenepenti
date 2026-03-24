@@ -285,8 +285,8 @@ Implemented write-path migration so far:
 
 Current limitation:
 - manual ticker proposal jobs still use the legacy path
-- macro and industry context objects are now written during refresh runs, but the current writers are still transitional and mostly based on existing social/sentiment evidence rather than a mature news-first production pipeline
-- watchlist deep analysis still depends on the legacy proposal engine
+- macro and industry context objects are now written during refresh runs through news-first transitional writers, but those writers are still heuristic and not yet backed by mature event extraction / source ranking
+- watchlist deep analysis now has a dedicated service boundary, but its underlying analysis still depends on the legacy proposal engine
 
 ## 13. Observability rules
 Observability remains a hard rule.
@@ -340,20 +340,22 @@ Completed in the redesign track so far:
 - the new persistence-layer foundations for context snapshots, ticker signals, and recommendation plans are in place
 - ticker signals and recommendation plans are browseable through run detail, run-scoped APIs, and dedicated pages
 - run artifacts now record shortlist rules, rejection counts, and per-ticker shortlist decisions
+- shortlist reasoning is surfaced directly in run detail and ticker-signal operator views
 - macro and industry refresh runs now also write first-generation context snapshots into the redesign tables
+- those context writers now prefer primary news evidence, with social evidence used as secondary support
+- watchlist deep analysis now runs through a dedicated `TickerDeepAnalysisService` boundary
 
 Not yet complete:
 - real event extraction and saliency ranking
-- news-first / official-evidence-first macro-context writers
-- news-first / trade-press-first industry-context writers
-- dedicated ticker deep-analysis and recommendation-engine modules independent of the legacy proposal engine
+- stronger official-source / trade-source ranking inside the news-first macro and industry context writers
+- redesign-native ticker deep-analysis and recommendation-engine logic independent of the legacy proposal engine internals
 - outcome tracking for the new recommendation-plan path
 - migration or retirement strategy for the remaining legacy recommendation and sentiment-snapshot paths
 
 Practical meaning:
 - the redesign is now well past the purely conceptual stage
-- watchlist-backed proposal runs already exercise the first real redesign write path, and refresh runs now populate context tables too
-- the next best work is no longer more persistence scaffolding; it is stronger evidence-first context writers, dedicated ticker deep analysis, and evaluation of recommendation-plan outcomes
+- watchlist-backed proposal runs already exercise the first real redesign write path, refresh runs populate context tables, and shortlist reasoning is operator-visible without JSON spelunking
+- the next best work is no longer more persistence scaffolding; it is stronger evidence extraction, redesign-native ticker analysis, and evaluation of recommendation-plan outcomes
 
 ## Open items not yet numerically fixed
 The following still require later tuning rather than immediate architectural decisions:

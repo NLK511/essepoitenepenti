@@ -87,6 +87,7 @@ export function TickerSignalsPage() {
                   <th>Direction</th>
                   <th>Confidence</th>
                   <th>Attention</th>
+                  <th>Shortlist</th>
                   <th>Components</th>
                   <th>Run</th>
                 </tr>
@@ -95,6 +96,11 @@ export function TickerSignalsPage() {
                 {signals.map((signal) => {
                   const mode = typeof signal.diagnostics.mode === "string" ? signal.diagnostics.mode : "unknown";
                   const components = signal.diagnostics.cheap_scan_component_scores as Record<string, unknown> | undefined;
+                  const shortlisted = signal.diagnostics.shortlisted === true;
+                  const shortlistRank = typeof signal.diagnostics.shortlist_rank === "number" ? signal.diagnostics.shortlist_rank : null;
+                  const shortlistReasons = Array.isArray(signal.diagnostics.shortlist_reasons)
+                    ? signal.diagnostics.shortlist_reasons.filter((value): value is string => typeof value === "string")
+                    : [];
                   return (
                     <tr key={signal.id ?? `${signal.ticker}-${signal.computed_at}`}>
                       <td>{formatDate(signal.computed_at)}</td>
@@ -112,6 +118,10 @@ export function TickerSignalsPage() {
                       <td><Badge tone={directionTone(signal.direction)}>{signal.direction}</Badge></td>
                       <td>{signal.confidence_percent.toFixed(1)}%</td>
                       <td>{signal.attention_score.toFixed(1)}</td>
+                      <td>
+                        <Badge tone={shortlisted ? "info" : "neutral"}>{shortlisted ? `shortlisted${shortlistRank !== null ? ` #${shortlistRank}` : ""}` : "not shortlisted"}</Badge>
+                        <div className="helper-text top-gap-small">{shortlistReasons.length > 0 ? shortlistReasons.join(" · ") : "eligible"}</div>
+                      </td>
                       <td>
                         <div className="helper-text">trend {typeof components?.trend_score === "number" ? components.trend_score.toFixed(0) : "—"}</div>
                         <div className="helper-text">momentum {typeof components?.momentum_score === "number" ? components.momentum_score.toFixed(0) : "—"}</div>

@@ -32,13 +32,13 @@ class WatchlistOrchestrationService:
         context_snapshots: ContextSnapshotRepository,
         recommendation_plans: RecommendationPlanRepository,
         cheap_scan_service: CheapScanSignalService,
-        deep_analysis_proposals,
+        deep_analysis_service,
         confidence_threshold: float = 60.0,
     ) -> None:
         self.context_snapshots = context_snapshots
         self.recommendation_plans = recommendation_plans
         self.cheap_scan_service = cheap_scan_service
-        self.deep_analysis_proposals = deep_analysis_proposals
+        self.deep_analysis_service = deep_analysis_service
         self.confidence_threshold = confidence_threshold
 
     def execute(
@@ -67,6 +67,7 @@ class WatchlistOrchestrationService:
         for candidate in candidates:
             shortlist_rank = shortlist_map.get(candidate.ticker)
             if shortlist_rank is None:
+                decision = self._shortlist_decision_for_ticker(shortlist_evaluation, candidate.ticker)
                 signal = self._build_signal_snapshot(
                     watchlist,
                     candidate,
@@ -75,6 +76,7 @@ class WatchlistOrchestrationService:
                     run_id=run_id,
                     shortlisted=False,
                     shortlist_rank=None,
+                    shortlist_decision=decision,
                 )
                 stored_signal = self.context_snapshots.create_ticker_signal_snapshot(signal)
                 stored_signals.append(stored_signal)
@@ -87,7 +89,6 @@ class WatchlistOrchestrationService:
                     reason="Ticker did not make the deep-analysis shortlist.",
                 )
                 stored_plans.append(self.recommendation_plans.create_plan(plan))
-                decision = self._shortlist_decision_for_ticker(shortlist_evaluation, candidate.ticker)
                 ticker_generation.append(
                     {
                         "ticker": candidate.ticker,
@@ -101,7 +102,8 @@ class WatchlistOrchestrationService:
                     warnings_found = True
                 continue
 
-            deep_output, deep_error = self._run_deep_analysis(candidate.ticker)
+            deep_output, deep_error = self._run_deep_analysis(candidate.ticker, watchlist.default_horizon)
+            decision = self._shortlist_decision_for_ticker(shortlist_evaluation, candidate.ticker)
             signal = self._build_signal_snapshot(
                 watchlist,
                 candidate,
@@ -110,6 +112,7 @@ class WatchlistOrchestrationService:
                 run_id=run_id,
                 shortlisted=True,
                 shortlist_rank=shortlist_rank,
+                shortlist_decision=decision,
                 deep_error=deep_error,
             )
             stored_signal = self.context_snapshots.create_ticker_signal_snapshot(signal)
@@ -125,7 +128,6 @@ class WatchlistOrchestrationService:
             )
             stored_plan = self.recommendation_plans.create_plan(plan)
             stored_plans.append(stored_plan)
-            decision = self._shortlist_decision_for_ticker(shortlist_evaluation, candidate.ticker)
             ticker_generation.append(
                 {
                     "ticker": candidate.ticker,
@@ -203,9 +205,11 @@ class WatchlistOrchestrationService:
             raw_output=None,
         )
 
-    def _run_deep_analysis(self, ticker: str) -> tuple[RunOutput | None, str | None]:
+    def _run_deep_analysis(self, ticker: str, horizon: StrategyHorizon) -> tuple[RunOutput | None, str | None]:
         try:
-            return self.deep_analysis_proposals.generate(ticker), None
+            if hasattr(self.deep_analysis_service, "analyze"):
+                return self.deep_analysis_service.analyze(ticker, horizon=horizon), None
+            return self.deep_analysis_service.generate(ticker), None
         except Exception as exc:
             return None, str(exc)
 
@@ -315,6 +319,7 @@ class WatchlistOrchestrationService:
         run_id: int | None,
         shortlisted: bool,
         shortlist_rank: int | None,
+        shortlist_decision: dict[str, object] | None = None,
         deep_error: str | None = None,
     ) -> TickerSignalSnapshot:
         analysis = self._analysis_payload(deep_output or candidate.raw_output)
@@ -360,12 +365,15 @@ class WatchlistOrchestrationService:
                 "cheap_scan_summary": candidate.indicator_summary,
                 "cheap_scan_model": candidate.cheap_scan_signal.diagnostics.get("model") if candidate.cheap_scan_signal is not None else None,
                 "deep_analysis_available": deep_output is not None,
+                "deep_analysis_model": self._pluck(analysis, "ticker_deep_analysis", "model"),
                 "summary_method": getattr(deep_output.diagnostics, "summary_method", None) if deep_output is not None else None,
             },
             diagnostics={
                 "mode": "deep_analysis" if shortlisted else "cheap_scan_only",
                 "shortlisted": shortlisted,
                 "shortlist_rank": shortlist_rank,
+                "shortlist_reasons": list(shortlist_decision.get("reasons", [])) if isinstance(shortlist_decision, dict) and isinstance(shortlist_decision.get("reasons"), list) else [],
+                "shortlist_eligible": bool(shortlist_decision.get("eligible")) if isinstance(shortlist_decision, dict) and shortlist_decision.get("eligible") is not None else shortlisted,
                 "cheap_scan_confidence_percent": candidate.confidence_percent,
                 "cheap_scan_directional_score": candidate.cheap_scan_signal.directional_score if candidate.cheap_scan_signal is not None else None,
                 "cheap_scan_component_scores": {

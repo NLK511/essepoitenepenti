@@ -146,11 +146,17 @@ export function RunDetailPage() {
     }
   }
 
+  const runSummary = parseJsonRecord(detail?.run.summary_json ?? null);
   const runArtifact = parseJsonRecord(detail?.run.artifact_json ?? null);
   const artifactSnapshotIds = Array.isArray(runArtifact?.snapshot_ids)
     ? runArtifact.snapshot_ids.filter((value): value is number => typeof value === "number")
     : [];
   const artifactSnapshotId = typeof runArtifact?.snapshot_id === "number" ? runArtifact.snapshot_id : null;
+  const shortlistRules = isRecord(runSummary?.shortlist_rules) ? runSummary.shortlist_rules : null;
+  const shortlistRejections = isRecord(runSummary?.shortlist_rejections) ? runSummary.shortlist_rejections : null;
+  const shortlistDecisions = Array.isArray(runArtifact?.shortlist_decisions)
+    ? runArtifact.shortlist_decisions.filter((item): item is Record<string, unknown> => isRecord(item))
+    : [];
 
   return (
     <>
@@ -223,6 +229,60 @@ export function RunDetailPage() {
                 }
               />
               <div className="stack-page">
+                {shortlistRules || shortlistDecisions.length > 0 ? (
+                  <section>
+                    <div className="section-heading">
+                      <strong>Shortlist reasoning</strong>
+                    </div>
+                    {shortlistRules ? (
+                      <div className="cluster top-gap-small">
+                        <Badge tone="info">limit {typeof shortlistRules.limit === "number" ? shortlistRules.limit : "—"}</Badge>
+                        <Badge tone="info">min confidence {typeof shortlistRules.minimum_confidence_percent === "number" ? `${shortlistRules.minimum_confidence_percent}%` : "—"}</Badge>
+                        <Badge tone="info">min attention {typeof shortlistRules.minimum_attention_score === "number" ? shortlistRules.minimum_attention_score : "—"}</Badge>
+                        <Badge tone={shortlistRules.allow_shorts === true ? "warning" : "neutral"}>{shortlistRules.allow_shorts === true ? "shorts allowed" : "shorts disabled"}</Badge>
+                      </div>
+                    ) : null}
+                    {shortlistRejections ? (
+                      <div className="top-gap-small helper-text">
+                        Rejections: {Object.entries(shortlistRejections).map(([reason, count]) => `${reason} ${count}`).join(" · ") || "none"}
+                      </div>
+                    ) : null}
+                    {shortlistDecisions.length > 0 ? (
+                      <div className="table-wrap top-gap-small">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Ticker</th>
+                              <th>Outcome</th>
+                              <th>Rank</th>
+                              <th>Confidence</th>
+                              <th>Attention</th>
+                              <th>Reasons</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {shortlistDecisions.map((decision, index) => {
+                              const ticker = typeof decision.ticker === "string" ? decision.ticker : `ticker-${index}`;
+                              const shortlisted = decision.shortlisted === true;
+                              const reasons = Array.isArray(decision.reasons) ? decision.reasons.filter((value): value is string => typeof value === "string") : [];
+                              return (
+                                <tr key={`${ticker}-${index}`}>
+                                  <td><Link to={`/tickers/${ticker}`} className="badge badge-info badge-link">{ticker}</Link></td>
+                                  <td><Badge tone={shortlisted ? "info" : "neutral"}>{shortlisted ? `shortlisted #${typeof decision.shortlist_rank === "number" ? decision.shortlist_rank : "—"}` : "rejected"}</Badge></td>
+                                  <td>{typeof decision.rank === "number" ? decision.rank : "—"}</td>
+                                  <td>{typeof decision.confidence_percent === "number" ? `${decision.confidence_percent.toFixed(1)}%` : "—"}</td>
+                                  <td>{typeof decision.attention_score === "number" ? decision.attention_score.toFixed(1) : "—"}</td>
+                                  <td>{reasons.length > 0 ? reasons.join(" · ") : "eligible"}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
+                  </section>
+                ) : null}
+
                 {detail.ticker_signal_snapshots.length > 0 ? (
                   <section>
                     <div className="section-heading">
@@ -237,6 +297,7 @@ export function RunDetailPage() {
                             <th>Direction</th>
                             <th>Confidence</th>
                             <th>Attention</th>
+                            <th>Shortlist</th>
                             <th>Cheap-scan components</th>
                             <th>Status</th>
                           </tr>
@@ -257,6 +318,9 @@ export function RunDetailPage() {
                             const directionalScore = typeof item.diagnostics.cheap_scan_directional_score === "number"
                               ? item.diagnostics.cheap_scan_directional_score
                               : null;
+                            const shortlistReasons = Array.isArray(item.diagnostics.shortlist_reasons)
+                              ? item.diagnostics.shortlist_reasons.filter((value): value is string => typeof value === "string")
+                              : [];
                             return (
                               <tr key={item.id ?? `${item.ticker}-${item.computed_at}`}>
                                 <td>
@@ -271,6 +335,10 @@ export function RunDetailPage() {
                                   <span style={{ color: scoreColor(item.confidence_percent, 0, 100) }}>{item.confidence_percent.toFixed(1)}%</span>
                                 </td>
                                 <td>{item.attention_score.toFixed(1)}</td>
+                                <td>
+                                  <div className="helper-text">{shortlisted ? `rank ${typeof item.diagnostics.shortlist_rank === "number" ? item.diagnostics.shortlist_rank : "—"}` : "not shortlisted"}</div>
+                                  <div className="helper-text">{shortlistReasons.length > 0 ? shortlistReasons.join(" · ") : "eligible"}</div>
+                                </td>
                                 <td>
                                   <div className="helper-text">trend {trendScore !== null ? trendScore.toFixed(0) : "—"}</div>
                                   <div className="helper-text">momentum {momentumScore !== null ? momentumScore.toFixed(0) : "—"}</div>

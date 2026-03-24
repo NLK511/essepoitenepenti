@@ -30,6 +30,7 @@ from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.proposals import ProposalService
+from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
 from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
 
 
@@ -561,7 +562,7 @@ class RepositoryTests(unittest.TestCase):
             context_snapshots=ContextSnapshotRepository(session),
             recommendation_plans=RecommendationPlanRepository(session),
             cheap_scan_service=CheapScanProposalService(),
-            deep_analysis_proposals=DeepAnalysisProposalService(),
+            deep_analysis_service=TickerDeepAnalysisService(DeepAnalysisProposalService()),
             confidence_threshold=60.0,
         )
         service = JobExecutionService(
@@ -604,8 +605,12 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(action_map["MSFT"], "no_action")
         self.assertEqual(action_map["TSLA"], "no_action")
         diagnostics_map = {item.ticker: item.diagnostics for item in ticker_signals}
+        source_breakdown_map = {item.ticker: item.source_breakdown for item in ticker_signals}
         self.assertEqual(diagnostics_map["AAPL"]["mode"], "deep_analysis")
+        self.assertEqual(diagnostics_map["AAPL"]["shortlist_reasons"], [])
         self.assertEqual(diagnostics_map["TSLA"]["mode"], "cheap_scan_only")
+        self.assertEqual(diagnostics_map["TSLA"]["shortlist_reasons"], ["below_confidence_threshold", "below_attention_threshold"])
+        self.assertEqual(source_breakdown_map["AAPL"]["deep_analysis_model"], "ticker_deep_analysis_v1")
 
     def test_watchlist_orchestration_shortlist_thresholds_vary_by_horizon_and_size(self) -> None:
         session = create_session()
@@ -613,7 +618,7 @@ class RepositoryTests(unittest.TestCase):
             context_snapshots=ContextSnapshotRepository(session),
             recommendation_plans=RecommendationPlanRepository(session),
             cheap_scan_service=CheapScanProposalService(),
-            deep_analysis_proposals=DeepAnalysisProposalService(),
+            deep_analysis_service=TickerDeepAnalysisService(DeepAnalysisProposalService()),
             confidence_threshold=60.0,
         )
 

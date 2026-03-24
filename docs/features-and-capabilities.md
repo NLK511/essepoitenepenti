@@ -47,6 +47,7 @@ This principle is consistently applied in the best parts of the product. It is a
   - ticker signal snapshots
   - recommendation plans
 - Macro and industry refresh runs now also write first-generation context snapshots, so those redesign objects are no longer schema-only for context refresh jobs.
+- Those context writers now use primary news first and social evidence second, while still warning explicitly when news coverage is thin or degraded.
 - Query those new objects through read APIs:
   - `GET /api/context/macro`
   - `GET /api/context/industry`
@@ -55,11 +56,13 @@ This principle is consistently applied in the best parts of the product. It is a
 - Filter redesign objects by `run_id` and inspect them directly from run detail.
 - Browse ticker signals and recommendation plans outside individual runs through dedicated UI pages.
 - Inspect cheap-scan diagnostics, component scores, shortlist rules, rejection counts, and per-ticker shortlist decisions in persisted run payloads and redesign objects.
+- Review shortlist reasoning directly in operator workflows: run detail now shows shortlist thresholds, rejection counts, and per-ticker shortlist outcomes, while ticker-signal views show shortlist rank/reasons without forcing operators into raw JSON first.
+- Watchlist orchestration now uses a dedicated `TickerDeepAnalysisService` boundary for deep analysis instead of calling `ProposalService` directly.
 
 Current limitation:
 - manual ticker proposal jobs still use the legacy per-ticker proposal path
-- macro and industry refresh runs do now write context objects, but those writers are still transitional and rely mainly on existing social/sentiment evidence rather than a mature news-first / official-source event pipeline
-- watchlist deep analysis still depends on the legacy proposal engine
+- macro and industry refresh runs do now write context objects, but those writers are still transitional: they are news-first now, yet still heuristic and not backed by a mature event-extraction / official-source ranking pipeline
+- watchlist deep analysis now has its own service boundary, but the underlying logic still delegates to the legacy proposal engine rather than a fully redesign-native ticker engine
 
 > **Enable the Nitter source**
 >
@@ -113,8 +116,8 @@ The weakest areas are operational rather than analytical:
 
 The biggest product-level gap is now the **remaining redesign migration**:
 - watchlist-backed proposal jobs do have a redesigned write/orchestration path, but manual ticker proposal jobs still run through the legacy path
-- macro and industry refresh runs now write context objects, but the current writers are still transitional and not yet driven by a strong news-first event extraction layer
-- ticker signals and recommendation plans are now produced by a real watchlist orchestration path, but deep analysis still depends on the legacy proposal engine
+- macro and industry refresh runs now write context objects through news-first transitional writers, but those writers still need stronger event extraction, saliency ranking, and source hierarchy
+- ticker signals and recommendation plans are now produced by a real watchlist orchestration path, and deep analysis now has a dedicated service boundary, but the underlying analysis logic still delegates to the legacy proposal engine
 - outcome tracking and backtesting for `RecommendationPlan` objects are not yet first-class
 
 The sentiment stack is also now coherent enough that the biggest remaining question is not feature completeness but measured effectiveness. More sentiment sources and heuristics should not be added faster than the team can evaluate whether they improve recommendation quality.

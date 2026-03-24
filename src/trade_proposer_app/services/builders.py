@@ -15,6 +15,7 @@ from trade_proposer_app.services.snapshot_resolver import SentimentSnapshotResol
 from trade_proposer_app.services.social import SocialIngestionService
 from trade_proposer_app.services.summary import SummaryService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
+from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
 from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignalService
 from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
 
@@ -44,6 +45,10 @@ def create_proposal_service(session: Session) -> ProposalService:
     )
 
 
+def create_ticker_deep_analysis_service(session: Session) -> TickerDeepAnalysisService:
+    return TickerDeepAnalysisService(create_proposal_service(session))
+
+
 def create_watchlist_orchestration_service(session: Session) -> WatchlistOrchestrationService:
     settings_repository = SettingsRepository(session)
     setting_map = settings_repository.get_setting_map()
@@ -57,7 +62,7 @@ def create_watchlist_orchestration_service(session: Session) -> WatchlistOrchest
         context_snapshots=ContextSnapshotRepository(session),
         recommendation_plans=RecommendationPlanRepository(session),
         cheap_scan_service=CheapScanSignalService(),
-        deep_analysis_proposals=create_proposal_service(session),
+        deep_analysis_service=create_ticker_deep_analysis_service(session),
         confidence_threshold=confidence_threshold,
     )
 

@@ -43,14 +43,14 @@ These exist as database models, repositories, migrations, read APIs, and run-det
 In addition, watchlist-backed proposal jobs now use a real staged orchestration path:
 1. cheap scan over all watchlist tickers
 2. shortlist selection using the dedicated cheap-scan signal model
-3. deep analysis only for shortlisted names
+3. deep analysis only for shortlisted names through `TickerDeepAnalysisService`
 4. persistence of `TickerSignalSnapshot` and `RecommendationPlan` for every scanned ticker
 5. creation of legacy `Recommendation` rows only for actionable deep-analysis outputs
 
 Current limitation:
 - manual ticker proposal jobs still use the legacy per-ticker production path
-- deep analysis still depends on the legacy `ProposalService`
-- macro and industry refresh runs now write context objects, but the current writers are still transitional and mostly derived from existing social/sentiment evidence rather than a mature news-first event pipeline
+- `TickerDeepAnalysisService` is now the execution boundary, but its underlying analysis still delegates to the legacy `ProposalService`
+- macro and industry refresh runs now write context objects through news-first transitional writers, but those writers are still heuristic and not yet backed by a mature event pipeline
 
 ## App-native independence
 
@@ -171,14 +171,14 @@ The methodology still has important limits:
 - sentiment is inspectable, but not yet fully validated as a source of measurable edge
 - scheduler and workflow reliability still matter because good methodology is less useful if operations are unreliable
 - more signal sources should not be added faster than their effectiveness can be measured
-- the redesign target architecture now has a real watchlist orchestration path and first-generation context writers, but those context writers still need a stronger news-first evidence layer and ticker deep analysis still relies on the legacy proposal engine
+- the redesign target architecture now has a real watchlist orchestration path, news-first transitional context writers, operator-visible shortlist reasoning, and a dedicated ticker deep-analysis service boundary, but context extraction quality and redesign-native deep-analysis logic still need substantial work
 
 ## Best next steps
 Given the work already completed, the next best implementation steps are:
-1. upgrade the current macro/industry context writers so they become news-first and official-evidence-first instead of mainly social-first transitional writers
-2. extract a dedicated ticker deep-analysis service so watchlist orchestration no longer depends on the legacy `ProposalService`
+1. strengthen the current news-first macro/industry context writers with better event extraction, saliency ranking, and official/trade-source prioritization
+2. evolve `TickerDeepAnalysisService` from a wrapper boundary into a redesign-native ticker analysis / recommendation engine
 3. define and implement `RecommendationPlan` outcome tracking, evaluation, and backtesting
-4. expose shortlist policy, thresholds, and reasons more directly in operator workflows rather than leaving them mostly in JSON payloads
+4. expose watchlist policy details more directly in operator workflows alongside the shortlist reasoning already surfaced
 5. only then decide how quickly to retire, absorb, or narrow the remaining sentiment-snapshot-first and legacy recommendation paths
 
 ## Practical reading guide
