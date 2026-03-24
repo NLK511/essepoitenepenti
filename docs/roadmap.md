@@ -9,7 +9,7 @@ Trade Proposer App now executes its critical workflows entirely inside this repo
 - **Feature-rich diagnostics**: every run emits structured `analysis_json`, feature vectors, aggregations, confidence weights, warnings, and workflow summaries.
 - **Shared sentiment context**: macro and industry refresh workflows persist reusable snapshots, proposal generation links back to those snapshots, and health/preflight now reports snapshot freshness.
 - **Signal integrity policy**: missing data becomes explicit neutral/warning output rather than an invented fallback.
-- **Redesign groundwork**: watchlist policy/scheduling metadata and the first persisted redesign objects now exist for macro context, industry context, ticker signals, and recommendation plans.
+- **Redesign write path**: watchlist orchestration, cheap-scan diagnostics, ticker signals, recommendation plans, and first-generation macro/industry context writers now exist inside the main app execution flow.
 
 ## Phase 1: Operational hardening (partially complete)
 
@@ -70,12 +70,12 @@ Delivered in this phase so far:
 - richer run artifacts that now record shortlist rules, rejection counts, and per-ticker shortlist decisions
 
 Next required work in this phase:
-- add real saliency-first writers for macro context and industry context
+- upgrade the current first-generation macro/industry context writers from social-first transitional logic to primary-news / official-evidence-first logic
 - replace deep-analysis dependence on the legacy `ProposalService` with a dedicated ticker-signal / recommendation-engine path
 - define how the new recommendation-plan path coexists with or replaces the current recommendation object path
 - add outcome tracking for the new recommendation-plan objects so backtesting and improvement stay first-class
 - expose watchlist policy, shortlist thresholds, and shortlist reasons more directly in the main operator workflows
-- continue shifting macro/industry analysis from polarity-first sentiment summaries to saliency-first context summaries backed by primary news and official evidence
+- decide whether sentiment snapshots become operator-facing compatibility artifacts, internal inputs, or candidates for retirement once context writers mature
 
 ## Phase 5: Expansion (only after the above)
 

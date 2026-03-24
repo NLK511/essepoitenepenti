@@ -26,7 +26,9 @@ from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapsho
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
+from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.proposals import ProposalService
 from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
 
@@ -698,6 +700,7 @@ class RepositoryTests(unittest.TestCase):
             runs=runs,
             proposals=ProposalService(),
             macro_sentiment=macro_service,
+            macro_context=MacroContextService(ContextSnapshotRepository(session)),
         )
         queued_run = service.enqueue_job(job.id or 0)
 
@@ -712,9 +715,14 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(macro_service.calls[0][1], queued_run.id)
         stored_run = runs.get_run(queued_run.id or 0)
         self.assertIn('"scope": "macro"', stored_run.summary_json or "")
+        self.assertIn('"macro_context_snapshot_id":', stored_run.summary_json or "")
         self.assertIn('"snapshot_id": 7', stored_run.artifact_json or "")
+        self.assertIn('"macro_context_snapshot_id":', stored_run.artifact_json or "")
         self.assertIn('"macro_refresh_seconds"', stored_run.timing_json or "")
         self.assertEqual(runs.list_recommendations_for_run(stored_run.id or 0), [])
+        macro_context_snapshots = ContextSnapshotRepository(session).list_macro_context_snapshots(run_id=queued_run.id or 0)
+        self.assertEqual(len(macro_context_snapshots), 1)
+        self.assertEqual(macro_context_snapshots[0].source_breakdown["sentiment_snapshot_id"], 7)
 
     def test_job_execution_processes_industry_sentiment_refresh_and_persists_snapshot_metadata(self) -> None:
         session = create_session()
@@ -732,6 +740,7 @@ class RepositoryTests(unittest.TestCase):
             runs=runs,
             proposals=ProposalService(),
             industry_sentiment=industry_service,
+            industry_context=IndustryContextService(ContextSnapshotRepository(session)),
         )
         queued_run = service.enqueue_job(job.id or 0)
 
@@ -746,9 +755,14 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(industry_service.calls[0][1], queued_run.id)
         stored_run = runs.get_run(queued_run.id or 0)
         self.assertIn('"scope": "industry"', stored_run.summary_json or "")
+        self.assertIn('"industry_context_snapshot_count": 1', stored_run.summary_json or "")
         self.assertIn('"snapshot_count": 1', stored_run.artifact_json or "")
+        self.assertIn('"industry_context_snapshot_ids": [', stored_run.artifact_json or "")
         self.assertIn('"industry_refresh_seconds"', stored_run.timing_json or "")
         self.assertEqual(runs.list_recommendations_for_run(stored_run.id or 0), [])
+        industry_context_snapshots = ContextSnapshotRepository(session).list_industry_context_snapshots(run_id=queued_run.id or 0)
+        self.assertEqual(len(industry_context_snapshots), 1)
+        self.assertEqual(industry_context_snapshots[0].source_breakdown["sentiment_snapshot_id"], 12)
 
     def test_job_execution_blocks_second_optimization_enqueue_when_one_is_active(self) -> None:
         session = create_session()

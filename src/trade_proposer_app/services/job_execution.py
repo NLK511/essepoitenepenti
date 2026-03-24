@@ -30,6 +30,8 @@ class JobExecutionService:
         optimizations: WeightOptimizationService | None = None,
         macro_sentiment: MacroSentimentService | None = None,
         industry_sentiment: IndustrySentimentService | None = None,
+        macro_context=None,
+        industry_context=None,
         watchlist_orchestration=None,
     ) -> None:
         self.jobs = jobs
@@ -39,6 +41,8 @@ class JobExecutionService:
         self.optimizations = optimizations
         self.macro_sentiment = macro_sentiment
         self.industry_sentiment = industry_sentiment
+        self.macro_context = macro_context
+        self.industry_context = industry_context
         self.watchlist_orchestration = watchlist_orchestration
 
     def enqueue_job(self, job_id: int, scheduled_for: datetime | None = None) -> Run:
@@ -265,13 +269,23 @@ class JobExecutionService:
             raise RunExecutionFailed(exc, timing) from exc
 
         persistence_started = perf_counter()
-        self.runs.set_summary(run.id or 0, result.get("summary", {}))
+        summary = dict(result.get("summary", {}))
         snapshot = result.get("snapshot")
+        context_snapshot = None
+        if snapshot is not None and self.macro_context is not None:
+            context_snapshot = self.macro_context.create_from_sentiment_snapshot(
+                snapshot,
+                job_id=run.job_id,
+                run_id=run.id,
+            )
+            summary["macro_context_snapshot_id"] = getattr(context_snapshot, "id", None)
+        self.runs.set_summary(run.id or 0, summary)
         artifact = {
             "snapshot_id": getattr(snapshot, "id", None),
             "scope": "macro",
             "subject_key": getattr(snapshot, "subject_key", None),
             "subject_label": getattr(snapshot, "subject_label", None),
+            "macro_context_snapshot_id": getattr(context_snapshot, "id", None),
         }
         self.runs.set_artifact(run.id or 0, artifact)
         timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
@@ -302,13 +316,27 @@ class JobExecutionService:
             raise RunExecutionFailed(exc, timing) from exc
 
         persistence_started = perf_counter()
-        self.runs.set_summary(run.id or 0, result.get("summary", {}))
+        summary = dict(result.get("summary", {}))
         snapshots = result.get("snapshots") or []
+        context_snapshots = []
+        if self.industry_context is not None:
+            for snapshot in snapshots:
+                context_snapshots.append(
+                    self.industry_context.create_from_sentiment_snapshot(
+                        snapshot,
+                        job_id=run.job_id,
+                        run_id=run.id,
+                    )
+                )
+            summary["industry_context_snapshot_count"] = len(context_snapshots)
+            summary["industry_context_snapshot_ids"] = [getattr(snapshot, "id", None) for snapshot in context_snapshots]
+        self.runs.set_summary(run.id or 0, summary)
         artifact = {
             "scope": "industry",
             "snapshot_count": len(snapshots),
             "snapshot_ids": [getattr(snapshot, "id", None) for snapshot in snapshots],
             "subject_keys": [getattr(snapshot, "subject_key", None) for snapshot in snapshots],
+            "industry_context_snapshot_ids": [getattr(snapshot, "id", None) for snapshot in context_snapshots],
         }
         self.runs.set_artifact(run.id or 0, artifact)
         timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)

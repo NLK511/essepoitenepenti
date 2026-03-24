@@ -6,7 +6,9 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.builders import (
+    create_industry_context_service,
     create_industry_sentiment_service,
+    create_macro_context_service,
     create_macro_sentiment_service,
     create_proposal_service,
     create_watchlist_orchestration_service,
@@ -32,6 +34,8 @@ def process_once() -> bool:
             ),
             macro_sentiment=create_macro_sentiment_service(session),
             industry_sentiment=create_industry_sentiment_service(session),
+            macro_context=create_macro_context_service(session),
+            industry_context=create_industry_context_service(session),
             watchlist_orchestration=create_watchlist_orchestration_service(session),
         )
         try:

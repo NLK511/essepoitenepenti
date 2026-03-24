@@ -47,6 +47,14 @@ class ContextSnapshotRepository:
         ).all()
         return [self._to_macro_model(row) for row in rows]
 
+    def get_latest_macro_context_snapshot(self) -> MacroContextSnapshot | None:
+        record = self.session.scalar(
+            select(MacroContextSnapshotRecord).order_by(MacroContextSnapshotRecord.computed_at.desc()).limit(1)
+        )
+        if record is None:
+            return None
+        return self._to_macro_model(record)
+
     def create_industry_context_snapshot(self, snapshot: IndustryContextSnapshot) -> IndustryContextSnapshot:
         record = IndustryContextSnapshotRecord(
             industry_key=snapshot.industry_key,
@@ -85,6 +93,17 @@ class ContextSnapshotRepository:
             query = query.where(IndustryContextSnapshotRecord.run_id == run_id)
         rows = self.session.scalars(query.order_by(IndustryContextSnapshotRecord.computed_at.desc()).limit(limit)).all()
         return [self._to_industry_model(row) for row in rows]
+
+    def get_latest_industry_context_snapshot(self, industry_key: str) -> IndustryContextSnapshot | None:
+        record = self.session.scalar(
+            select(IndustryContextSnapshotRecord)
+            .where(IndustryContextSnapshotRecord.industry_key == industry_key)
+            .order_by(IndustryContextSnapshotRecord.computed_at.desc())
+            .limit(1)
+        )
+        if record is None:
+            return None
+        return self._to_industry_model(record)
 
     def create_ticker_signal_snapshot(self, snapshot: TickerSignalSnapshot) -> TickerSignalSnapshot:
         record = TickerSignalSnapshotRecord(

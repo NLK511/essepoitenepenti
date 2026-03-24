@@ -46,6 +46,7 @@ This principle is consistently applied in the best parts of the product. It is a
   - industry context snapshots
   - ticker signal snapshots
   - recommendation plans
+- Macro and industry refresh runs now also write first-generation context snapshots, so those redesign objects are no longer schema-only for context refresh jobs.
 - Query those new objects through read APIs:
   - `GET /api/context/macro`
   - `GET /api/context/industry`
@@ -57,7 +58,8 @@ This principle is consistently applied in the best parts of the product. It is a
 
 Current limitation:
 - manual ticker proposal jobs still use the legacy per-ticker proposal path
-- macro and industry redesign objects exist, but real saliency-first writers for them are not yet the primary production path
+- macro and industry refresh runs do now write context objects, but those writers are still transitional and rely mainly on existing social/sentiment evidence rather than a mature news-first / official-source event pipeline
+- watchlist deep analysis still depends on the legacy proposal engine
 
 > **Enable the Nitter source**
 >
@@ -111,7 +113,7 @@ The weakest areas are operational rather than analytical:
 
 The biggest product-level gap is now the **remaining redesign migration**:
 - watchlist-backed proposal jobs do have a redesigned write/orchestration path, but manual ticker proposal jobs still run through the legacy path
-- macro and industry are still primarily exposed as sentiment snapshots rather than first-class saliency/context outputs
+- macro and industry refresh runs now write context objects, but the current writers are still transitional and not yet driven by a strong news-first event extraction layer
 - ticker signals and recommendation plans are now produced by a real watchlist orchestration path, but deep analysis still depends on the legacy proposal engine
 - outcome tracking and backtesting for `RecommendationPlan` objects are not yet first-class
 

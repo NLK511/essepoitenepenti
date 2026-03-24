@@ -12,7 +12,9 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
 from trade_proposer_app.services.builders import (
+    create_industry_context_service,
     create_industry_sentiment_service,
+    create_macro_context_service,
     create_macro_sentiment_service,
     create_proposal_service,
 )
@@ -38,6 +40,8 @@ def _create_job_execution_service(session: Session) -> JobExecutionService:
         ),
         macro_sentiment=create_macro_sentiment_service(session),
         industry_sentiment=create_industry_sentiment_service(session),
+        macro_context=create_macro_context_service(session),
+        industry_context=create_industry_context_service(session),
     )
 
 

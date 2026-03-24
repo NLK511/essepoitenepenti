@@ -50,7 +50,7 @@ In addition, watchlist-backed proposal jobs now use a real staged orchestration 
 Current limitation:
 - manual ticker proposal jobs still use the legacy per-ticker production path
 - deep analysis still depends on the legacy `ProposalService`
-- macro and industry context writers are not yet the main saliency-first production path
+- macro and industry refresh runs now write context objects, but the current writers are still transitional and mostly derived from existing social/sentiment evidence rather than a mature news-first event pipeline
 
 ## App-native independence
 
@@ -171,11 +171,11 @@ The methodology still has important limits:
 - sentiment is inspectable, but not yet fully validated as a source of measurable edge
 - scheduler and workflow reliability still matter because good methodology is less useful if operations are unreliable
 - more signal sources should not be added faster than their effectiveness can be measured
-- the redesign target architecture now has storage primitives, but not yet a full writer/orchestration pipeline
+- the redesign target architecture now has a real watchlist orchestration path and first-generation context writers, but those context writers still need a stronger news-first evidence layer and ticker deep analysis still relies on the legacy proposal engine
 
 ## Best next steps
 Given the work already completed, the next best implementation steps are:
-1. introduce real macro/industry context writers that populate the new context snapshot tables from saliency-first evidence
+1. upgrade the current macro/industry context writers so they become news-first and official-evidence-first instead of mainly social-first transitional writers
 2. extract a dedicated ticker deep-analysis service so watchlist orchestration no longer depends on the legacy `ProposalService`
 3. define and implement `RecommendationPlan` outcome tracking, evaluation, and backtesting
 4. expose shortlist policy, thresholds, and reasons more directly in operator workflows rather than leaving them mostly in JSON payloads

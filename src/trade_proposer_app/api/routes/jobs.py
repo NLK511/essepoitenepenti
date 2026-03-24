@@ -9,7 +9,9 @@ from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.builders import (
+    create_industry_context_service,
     create_industry_sentiment_service,
+    create_macro_context_service,
     create_macro_sentiment_service,
     create_proposal_service,
 )
@@ -154,6 +156,8 @@ async def execute_job(job_id: int, session: Session = Depends(get_db_session)) -
         optimizations=create_optimization_service(session),
         macro_sentiment=create_macro_sentiment_service(session),
         industry_sentiment=create_industry_sentiment_service(session),
+        macro_context=create_macro_context_service(session),
+        industry_context=create_industry_context_service(session),
     )
     return service.enqueue_job(job_id)
 

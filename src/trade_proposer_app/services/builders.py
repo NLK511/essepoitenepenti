@@ -4,7 +4,9 @@ from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRep
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
+from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.industry_sentiment import IndustrySentimentService
+from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.macro_sentiment import MacroSentimentService
 from trade_proposer_app.services.news import NewsIngestionService
 from trade_proposer_app.services.proposals import ProposalService
@@ -69,6 +71,10 @@ def create_macro_sentiment_service(session: Session) -> MacroSentimentService:
     return MacroSentimentService(snapshot_repository, social_service=social_service, news_service=news_service)
 
 
+def create_macro_context_service(session: Session) -> MacroContextService:
+    return MacroContextService(ContextSnapshotRepository(session))
+
+
 def create_industry_sentiment_service(session: Session) -> IndustrySentimentService:
     repository = SettingsRepository(session)
     social_service = SocialIngestionService.from_settings(repository.get_social_settings())
@@ -79,3 +85,7 @@ def create_industry_sentiment_service(session: Session) -> IndustrySentimentServ
         social_service=social_service,
         taxonomy_service=taxonomy_service,
     )
+
+
+def create_industry_context_service(session: Session) -> IndustryContextService:
+    return IndustryContextService(ContextSnapshotRepository(session))

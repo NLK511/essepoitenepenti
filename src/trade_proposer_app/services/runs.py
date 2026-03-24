@@ -6,7 +6,12 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
-from trade_proposer_app.services.builders import create_proposal_service, create_watchlist_orchestration_service
+from trade_proposer_app.services.builders import (
+    create_industry_context_service,
+    create_macro_context_service,
+    create_proposal_service,
+    create_watchlist_orchestration_service,
+)
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.evaluations import RecommendationEvaluationService
 from trade_proposer_app.services.job_execution import JobExecutionService
