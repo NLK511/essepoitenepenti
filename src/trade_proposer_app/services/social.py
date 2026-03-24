@@ -66,6 +66,7 @@ class NitterProvider(SocialProvider):
         max_items_per_query: int = 12,
         query_window_hours: int = 12,
         include_replies: bool = False,
+        max_queries_per_subject: int | None = None,
     ) -> None:
         super().__init__(timeout=timeout)
         self.base_url = base_url.rstrip("/")
@@ -73,10 +74,11 @@ class NitterProvider(SocialProvider):
         self.max_items_per_query = max(1, max_items_per_query)
         self.query_window_hours = max(1, query_window_hours)
         self.include_replies = include_replies
+        self.max_queries_per_subject = None if max_queries_per_subject is None or max_queries_per_subject < 1 else max_queries_per_subject
 
     def fetch(self, ticker: str) -> SignalBundle:
         query_profile = self.taxonomy_service.build_query_profile(ticker)
-        ticker_queries = query_profile.get("ticker_queries", [])[:3]
+        ticker_queries = self._limit_queries(query_profile.get("ticker_queries", []))
         return self._fetch_queries(
             subject_key=ticker,
             queries=ticker_queries,
@@ -94,11 +96,16 @@ class NitterProvider(SocialProvider):
         }
         return self._fetch_queries(
             subject_key=subject_key,
-            queries=queries[:3],
+            queries=self._limit_queries(queries),
             scope_tag=scope_tag,
             ticker=subject_key,
             query_profile=query_profile,
         )
+
+    def _limit_queries(self, queries: list[str]) -> list[str]:
+        if self.max_queries_per_subject is None:
+            return queries
+        return queries[: self.max_queries_per_subject]
 
     def _fetch_queries(
         self,
@@ -322,7 +329,7 @@ class SocialSentimentAnalyzer:
             label = "NEGATIVE"
         coverage_insights: list[str] = []
         if not bundle.items:
-            coverage_insights.append("social: no items fetched from Nitter for the current ticker query profile.")
+            coverage_insights.append("social: no items fetched from Nitter for the current subject query profile.")
         elif keyword_hits == 0:
             coverage_insights.append("social: posts arrived but no sentiment keywords matched, so the score stays neutral per the signal integrity policy.")
         if bundle.feed_errors:

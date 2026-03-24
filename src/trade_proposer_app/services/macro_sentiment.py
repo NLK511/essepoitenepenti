@@ -10,6 +10,21 @@ from trade_proposer_app.services.social import SocialIngestionService
 MACRO_SUBJECT_KEY = "global_macro"
 MACRO_SUBJECT_LABEL = "Global Macro"
 MACRO_TTL_HOURS = 6
+MACRO_QUERIES = [
+    "fed",
+    "inflation",
+    "treasury yields",
+    "oil",
+    "recession",
+    "risk off",
+    "european monetary policy",
+    "ecb",
+    "european central bank",
+    "eurozone rates",
+    "war",
+    "military tensions",
+    "geopolitical tensions",
+]
 
 
 class MacroSentimentService:
@@ -28,7 +43,7 @@ class MacroSentimentService:
         social_result = self.social_service.analyze_subject(
             subject_key=MACRO_SUBJECT_KEY,
             subject_label=MACRO_SUBJECT_LABEL,
-            queries=["fed", "inflation", "treasury yields", "oil", "recession", "risk off"],
+            queries=MACRO_QUERIES,
             scope_tag="macro",
         ) if self.social_service is not None else {"sentiment": {}, "bundle": None}
         social_sentiment = social_result.get("sentiment", {})

@@ -28,6 +28,7 @@ This principle is consistently applied in the best parts of the product. It is a
 - Manually queue or immediately execute macro and industry refresh workflows.
 - Trace which snapshot IDs were used by a run or recommendation through the detail views.
 - Surface snapshot freshness in `/api/health` and `/api/health/preflight` so stale shared context shows up before operators trust new proposals.
+- Macro refresh themes currently include U.S. rates/inflation, European monetary policy, and geopolitical risk topics such as war or military tensions.
 
 > **Enable the Nitter source**
 >
