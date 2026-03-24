@@ -21,42 +21,33 @@ class SnapshotSummaryContext:
 def build_snapshot_summary(context: SnapshotSummaryContext) -> str:
     subject_label = context.subject_label.strip() or context.scope.title()
     label = context.label.strip().upper() or "NEUTRAL"
-    intro = f"{subject_label} remains {label.lower()} overall."
+    baseline = f"Baseline: {subject_label} is {label.lower()} overall."
     focus = _pick_focus(context.drivers, context.coverage_insights)
     previous_snapshot = context.previous_snapshot
     if previous_snapshot is None:
         if focus:
-            return f"{intro} Current focus is {focus}."
-        return f"{intro} No material new developments were captured in this run."
+            return f"{baseline} Update: {focus}."
+        return f"{baseline} Update: no material new developments."
 
     previous_focus = _pick_focus(
         _coerce_text_list(_parse_json_field(previous_snapshot.drivers_json, [])),
         _coerce_text_list(_parse_json_field(previous_snapshot.diagnostics_json, {}).get("warnings", [])),
     )
     previous_summary = _clean_text(previous_snapshot.summary_text or "")
+    previous_summary_focus = _summary_focus_excerpt(previous_summary)
     score_delta = context.score - float(previous_snapshot.score or 0.0)
     movement = _describe_movement(score_delta)
-    if focus and previous_summary and _overlaps(focus, previous_summary):
-        return (
-            f"{intro} Compared with the prior snapshot, the backdrop is {movement}; "
-            f"the main focus remains {focus}."
-        )
+    if focus and previous_summary_focus and _overlaps(focus, previous_summary_focus):
+        return f"{baseline} Update: compared with the prior snapshot, the backdrop is {movement}; the same theme remains {focus}."
     if focus and previous_focus and _overlaps(focus, previous_focus):
-        return (
-            f"{intro} Compared with the prior snapshot, the backdrop is {movement}; "
-            f"the main focus remains {focus}."
-        )
+        return f"{baseline} Update: compared with the prior snapshot, the backdrop is {movement}; the same theme remains {focus}."
     if focus:
-        return f"{intro} Compared with the prior snapshot, the backdrop is {movement}; the main update is {focus}."
-    if previous_summary:
-        prior_sentence = _first_sentence(previous_summary).rstrip(".")
-        return (
-            f"{intro} Compared with the prior snapshot, the backdrop is {movement}; "
-            f"the earlier summary centered on {prior_sentence}."
-        )
+        return f"{baseline} Update: compared with the prior snapshot, the backdrop is {movement}; the main change is {focus}."
+    if previous_summary_focus:
+        return f"{baseline} Update: compared with the prior snapshot, the backdrop is {movement}; the prior summary centered on {previous_summary_focus}."
     if previous_focus:
-        return f"{intro} Compared with the prior snapshot, the backdrop is {movement}; the previous focus around {previous_focus} still appears to hold."
-    return f"{intro} Compared with the prior snapshot, the backdrop is {movement}, with no material new developments captured here."
+        return f"{baseline} Update: compared with the prior snapshot, the backdrop is {movement}; the prior focus around {previous_focus} still appears to hold."
+    return f"{baseline} Update: compared with the prior snapshot, the backdrop is {movement}; no material new developments were captured."
 
 
 def _pick_focus(drivers: Sequence[str], coverage_insights: Sequence[str]) -> str:
@@ -70,6 +61,40 @@ def _pick_focus(drivers: Sequence[str], coverage_insights: Sequence[str]) -> str
 def _first_sentence(text: str) -> str:
     sentence = text.split(".", 1)[0].strip()
     return sentence or text
+
+
+def _summary_focus_excerpt(text: str) -> str:
+    if not text:
+        return ""
+    if "Update:" in text:
+        tail = text.split("Update:", 1)[1].strip()
+        if ";" in tail:
+            tail = tail.rsplit(";", 1)[-1].strip()
+        candidate = tail
+    else:
+        sentences = [sentence.strip() for sentence in text.split(".") if sentence.strip()]
+        if len(sentences) >= 2:
+            candidate = sentences[1]
+        else:
+            candidate = sentences[0] if sentences else text
+    candidate = candidate.rstrip(".")
+    lowered = candidate.lower()
+    for prefix in (
+        "the prior summary centered on ",
+        "the earlier summary centered on ",
+        "the main change is ",
+        "the same theme remains ",
+        "the prior focus around ",
+    ):
+        if lowered.startswith(prefix):
+            candidate = candidate[len(prefix) :]
+            lowered = candidate.lower()
+            break
+    marker = "centered on"
+    marker_index = lowered.find(marker)
+    if marker_index != -1:
+        candidate = candidate[marker_index + len(marker) :].strip()
+    return candidate.rstrip(".")
 
 
 def _describe_movement(delta: float) -> str:

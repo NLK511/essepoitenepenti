@@ -106,8 +106,9 @@ class MacroSentimentServiceTests(unittest.TestCase):
         result = service.refresh()
         snapshot = result["snapshot"]
 
-        self.assertIn("Compared with the prior snapshot", snapshot.summary_text)
-        self.assertIn("earlier summary centered on", snapshot.summary_text)
+        self.assertIn("Baseline:", snapshot.summary_text)
+        self.assertIn("Update:", snapshot.summary_text)
+        self.assertIn("prior summary centered on rate pressure and risk-off tone", snapshot.summary_text)
         self.assertEqual(result["summary"]["previous_snapshot_id"], 1)
 
     def test_industry_summary_uses_previous_snapshot_summary_for_continuity(self) -> None:
@@ -148,6 +149,7 @@ class MacroSentimentServiceTests(unittest.TestCase):
             tickers=["AAPL"],
         )
 
-        self.assertIn("Compared with the prior snapshot", snapshot.summary_text)
-        self.assertIn("earlier summary centered on", snapshot.summary_text)
+        self.assertIn("Baseline:", snapshot.summary_text)
+        self.assertIn("Update:", snapshot.summary_text)
+        self.assertIn("prior summary centered on phone demand and stable margins", snapshot.summary_text)
         self.assertEqual(summary["previous_snapshot_id"], 1)
