@@ -194,6 +194,7 @@ export interface SentimentSnapshot {
   drivers: string[];
   signals: Record<string, unknown>;
   diagnostics: Record<string, unknown>;
+  summary_text: string;
   job_id: number | null;
   run_id: number | null;
 }

@@ -129,5 +129,6 @@ class SentimentSnapshotRecord(Base, TimestampMixin):
     drivers_json: Mapped[str] = mapped_column(Text, default="")
     signals_json: Mapped[str] = mapped_column(Text, default="")
     diagnostics_json: Mapped[str] = mapped_column(Text, default="")
+    summary_text: Mapped[str] = mapped_column(Text, default="")
     job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
     run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)

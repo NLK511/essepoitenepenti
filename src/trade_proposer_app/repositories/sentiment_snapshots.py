@@ -28,6 +28,7 @@ class SentimentSnapshotRepository:
         drivers: list[str] | None = None,
         signals: dict[str, object] | None = None,
         diagnostics: dict[str, object] | None = None,
+        summary_text: str = "",
         job_id: int | None = None,
         run_id: int | None = None,
     ) -> SentimentSnapshot:
@@ -45,6 +46,7 @@ class SentimentSnapshotRepository:
             drivers_json=self._serialize(drivers or []),
             signals_json=self._serialize(signals or {}),
             diagnostics_json=self._serialize(diagnostics or {}),
+            summary_text=summary_text,
             job_id=job_id,
             run_id=run_id,
         )
@@ -104,6 +106,7 @@ class SentimentSnapshotRepository:
             drivers_json=record.drivers_json or None,
             signals_json=record.signals_json or None,
             diagnostics_json=record.diagnostics_json or None,
+            summary_text=record.summary_text or "",
             job_id=record.job_id,
             run_id=record.run_id,
         )

@@ -186,6 +186,7 @@ function SnapshotList({ snapshots }: { snapshots: SentimentSnapshot[] }) {
               </div>
               <div className="helper-text">Score {snapshot.score.toFixed(2)} · computed {formatDate(snapshot.computed_at)}</div>
               {snapshot.expires_at ? <div className="helper-text">Expires {formatDate(snapshot.expires_at)}</div> : null}
+              {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
             </div>
             {snapshot.id ? <Link to={`/sentiment/${snapshot.id}`} className="button-subtle">Open</Link> : null}
           </div>
@@ -214,6 +215,11 @@ function SnapshotSummary({ snapshot }: { snapshot: SentimentSnapshot }) {
         <div className="summary-item"><span className="summary-label">Queries</span><span className="summary-value">{queryCount || "—"}</span></div>
         <div className="summary-item"><span className="summary-label">Tracked tickers</span><span className="summary-value">{trackedTickers || "—"}</span></div>
       </div>
+      {snapshot.summary_text ? (
+        <div className="summary-text-block top-gap-small">
+          <p>{snapshot.summary_text}</p>
+        </div>
+      ) : null}
       {snapshot.drivers.length > 0 ? (
         <div>
           <div className="section-heading"><strong>Drivers</strong></div>

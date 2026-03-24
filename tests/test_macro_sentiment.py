@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.domain.models import SignalBundle
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
-from trade_proposer_app.services.macro_sentiment import MACRO_QUERIES, MACRO_SUBJECT_KEY, MacroSentimentService
+from trade_proposer_app.services.industry_sentiment import IndustrySentimentService
+from trade_proposer_app.services.macro_sentiment import MACRO_QUERIES, MACRO_SUBJECT_KEY, MACRO_SUBJECT_LABEL, MacroSentimentService
 from trade_proposer_app.services.social import SocialSentimentAnalyzer
 
 
@@ -26,12 +27,31 @@ class StubSocialService:
             "sentiment": {
                 "score": 0.0,
                 "label": "NEUTRAL",
-                "item_count": 0,
+                "item_count": 1,
                 "coverage_insights": [],
                 "items": [],
                 "scope_breakdown": {},
             },
             "bundle": type("Bundle", (), {"feeds_used": ["Nitter"]})(),
+        }
+
+
+class StubTaxonomyService:
+    def list_industry_profiles(self) -> list[dict[str, object]]:
+        return [
+            {
+                "subject_key": "consumer_electronics",
+                "subject_label": "Consumer Electronics",
+                "queries": ["consumer electronics", "apple"],
+                "tickers": ["AAPL"],
+            }
+        ]
+
+    def get_industry_profile(self, ticker: str) -> dict[str, object]:
+        return {
+            "ticker": ticker,
+            "subject_key": "consumer_electronics",
+            "subject_label": "Consumer Electronics",
         }
 
 
@@ -67,3 +87,67 @@ class MacroSentimentServiceTests(unittest.TestCase):
         self.assertIn("geopolitical tensions", call["queries"])
         self.assertEqual(result["summary"]["subject_key"], MACRO_SUBJECT_KEY)
         self.assertEqual(result["summary"]["scope"], "macro")
+        self.assertIn("summary_text", result["summary"])
+        self.assertTrue(result["summary"]["summary_text"])
+
+    def test_macro_summary_uses_previous_snapshot_summary_for_continuity(self) -> None:
+        repository = SentimentSnapshotRepository(self.session)
+        repository.create_snapshot(
+            scope="macro",
+            subject_key=MACRO_SUBJECT_KEY,
+            subject_label=MACRO_SUBJECT_LABEL,
+            score=-0.25,
+            label="NEGATIVE",
+            summary_text="Global Macro remains negative overall. The earlier summary centered on rate pressure and risk-off tone.",
+        )
+        social_service = StubSocialService()
+        service = MacroSentimentService(repository, social_service=social_service)
+
+        result = service.refresh()
+        snapshot = result["snapshot"]
+
+        self.assertIn("Compared with the prior snapshot", snapshot.summary_text)
+        self.assertIn("earlier summary centered on", snapshot.summary_text)
+        self.assertEqual(result["summary"]["previous_snapshot_id"], 1)
+
+    def test_industry_summary_uses_previous_snapshot_summary_for_continuity(self) -> None:
+        repository = SentimentSnapshotRepository(self.session)
+        repository.create_snapshot(
+            scope="industry",
+            subject_key="consumer_electronics",
+            subject_label="Consumer Electronics",
+            score=0.12,
+            label="POSITIVE",
+            summary_text="Consumer Electronics remains positive overall. The earlier summary centered on phone demand and stable margins.",
+        )
+
+        class StubSocialServiceWithItem:
+            def analyze_subject(self, *, subject_key: str, subject_label: str, queries: list[str], scope_tag: str) -> dict[str, object]:
+                return {
+                    "sentiment": {
+                        "score": 0.15,
+                        "label": "POSITIVE",
+                        "item_count": 2,
+                        "coverage_insights": [],
+                        "items": [],
+                        "scope_breakdown": {},
+                    },
+                    "bundle": type("Bundle", (), {"feeds_used": ["Nitter"], "query_diagnostics": {}})(),
+                }
+
+        service = IndustrySentimentService(
+            repository,
+            social_service=StubSocialServiceWithItem(),
+            taxonomy_service=StubTaxonomyService(),
+        )
+
+        snapshot, summary = service.refresh_industry(
+            subject_key="consumer_electronics",
+            subject_label="Consumer Electronics",
+            queries=["consumer electronics", "apple"],
+            tickers=["AAPL"],
+        )
+
+        self.assertIn("Compared with the prior snapshot", snapshot.summary_text)
+        self.assertIn("earlier summary centered on", snapshot.summary_text)
+        self.assertEqual(summary["previous_snapshot_id"], 1)

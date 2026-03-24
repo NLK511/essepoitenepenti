@@ -72,6 +72,11 @@ export function SentimentSnapshotDetailPage() {
               <div className="summary-item"><span className="summary-label">Run</span><span className="summary-value">{snapshot.run_id ?? "—"}</span></div>
               <div className="summary-item"><span className="summary-label">Job</span><span className="summary-value">{snapshot.job_id ?? "—"}</span></div>
             </div>
+            {snapshot.summary_text ? (
+              <div className="summary-text-block top-gap-small">
+                <p>{snapshot.summary_text}</p>
+              </div>
+            ) : null}
           </Card>
 
           <Card>

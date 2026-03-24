@@ -172,6 +172,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                 source_breakdown={"social": {"score": -0.18, "item_count": 4}},
                 drivers=["rates rising"],
                 diagnostics={"warnings": ["snapshot fresh"]},
+                summary_text="Global Macro remains negative overall. Compared with the prior snapshot, the backdrop is slightly softer; the main update is rates rising.",
                 job_id=1,
                 run_id=2,
             )
@@ -187,6 +188,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                 source_breakdown={"social": {"score": 0.27, "item_count": 6}},
                 drivers=["iphone demand stable"],
                 diagnostics={"warnings": []},
+                summary_text="Consumer Electronics remains positive overall. Compared with the prior snapshot, the backdrop is broadly unchanged; the main update is iphone demand stable.",
                 job_id=3,
                 run_id=4,
             )
@@ -909,6 +911,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail_payload["subject_key"], "consumer_electronics")
         self.assertEqual(detail_payload["coverage"]["social_count"], 6)
         self.assertEqual(detail_payload["drivers"], ["iphone demand stable"])
+        self.assertIn("summary_text", detail_payload)
+        self.assertTrue(detail_payload["summary_text"])
 
     async def test_sentiment_snapshot_detail_returns_404_for_missing_snapshot(self) -> None:
         transport = httpx.ASGITransport(app=app)

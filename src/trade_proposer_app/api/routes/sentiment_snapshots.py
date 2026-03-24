@@ -161,6 +161,7 @@ def _serialize_snapshot(snapshot: SentimentSnapshot) -> dict[str, Any]:
         "drivers": _parse_json(snapshot.drivers_json, []),
         "signals": _parse_json(snapshot.signals_json, {}),
         "diagnostics": _parse_json(snapshot.diagnostics_json, {}),
+        "summary_text": snapshot.summary_text,
         "job_id": snapshot.job_id,
         "run_id": snapshot.run_id,
     }

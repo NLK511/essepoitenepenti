@@ -24,6 +24,7 @@ This principle is consistently applied in the best parts of the product. It is a
 
 ### Shared sentiment operations
 - Persist shared macro and industry sentiment as reusable snapshots.
+- Generate a short snapshot summary for each macro/industry refresh that stays anchored to the prior snapshot's summary so operators can see continuity and the latest change in one glance.
 - Inspect recent snapshots from the sentiment page and open snapshot detail views.
 - Manually queue or immediately execute macro and industry refresh workflows.
 - Trace which snapshot IDs were used by a run or recommendation through the detail views.

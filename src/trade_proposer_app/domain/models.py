@@ -247,6 +247,7 @@ class SentimentSnapshot(BaseModel):
     drivers_json: str | None = None
     signals_json: str | None = None
     diagnostics_json: str | None = None
+    summary_text: str = ""
     job_id: int | None = None
     run_id: int | None = None
 

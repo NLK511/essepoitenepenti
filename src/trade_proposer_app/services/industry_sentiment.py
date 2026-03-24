@@ -5,6 +5,7 @@ from typing import Any
 
 from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
 from trade_proposer_app.services.social import SocialIngestionService
+from trade_proposer_app.services.snapshot_summary import SnapshotSummaryContext, build_snapshot_summary
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 INDUSTRY_TTL_HOURS = 8
@@ -55,6 +56,7 @@ class IndustrySentimentService:
         job_id: int | None = None,
         run_id: int | None = None,
     ) -> tuple[Any, dict[str, Any]]:
+        previous_snapshot = self.repository.get_latest_snapshot("industry", subject_key)
         social_result = (
             self.social_service.analyze_subject(
                 subject_key=subject_key,
@@ -91,6 +93,17 @@ class IndustrySentimentService:
             "query_diagnostics": (getattr(bundle, "query_diagnostics", {}) if bundle is not None else {}),
             "queries": queries or [subject_label],
         }
+        summary_text = build_snapshot_summary(
+            SnapshotSummaryContext(
+                scope="industry",
+                subject_label=subject_label,
+                score=score,
+                label=label,
+                drivers=drivers,
+                coverage_insights=list(social_sentiment.get("coverage_insights", [])),
+                previous_snapshot=previous_snapshot,
+            )
+        )
         computed_at = datetime.now(timezone.utc)
         expires_at = computed_at + timedelta(hours=INDUSTRY_TTL_HOURS)
         snapshot = self.repository.create_snapshot(
@@ -109,6 +122,7 @@ class IndustrySentimentService:
                 "scope_breakdown": social_sentiment.get("scope_breakdown", {}),
             },
             diagnostics=diagnostics,
+            summary_text=summary_text,
             job_id=job_id,
             run_id=run_id,
         )
@@ -117,5 +131,7 @@ class IndustrySentimentService:
             "subject_label": subject_label,
             "score": score,
             "label": label,
+            "summary_text": summary_text,
+            "previous_snapshot_id": previous_snapshot.id if previous_snapshot is not None else None,
             "expires_at": expires_at.isoformat(),
         }
