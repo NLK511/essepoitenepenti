@@ -35,7 +35,7 @@ Delivered:
 - app-native weight optimization
 - configurable summarization via digest/OpenAI/Pi CLI
 - structured diagnostics surfaced in the UI
-- shared macro and industry sentiment snapshots reused during proposal generation
+- shared macro and industry sentiment snapshots reused during proposal generation (currently derived from social/Nitter refreshes, with news-based coverage listed as a future extension)
 
 Remaining:
 - validate the effectiveness of the expanded sentiment stack instead of only expanding it

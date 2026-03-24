@@ -104,7 +104,7 @@ done
 [[ -f "$ENV_FILE" ]] || fail "missing ${ENV_FILE}; run ./scripts/setup.sh first"
 
 read_env_value() {
-  python - "$1" "$2" <<'PY'
+  "$VENV_PYTHON" - "$1" "$2" <<'PY'
 import sys
 from pathlib import Path
 

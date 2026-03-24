@@ -30,6 +30,10 @@ For each ticker, the pipeline:
 
 If an input is unavailable, the system does not invent substitute confidence. It emits warnings or neutral values and stores why.
 
+## App-native independence
+
+The current pipeline is intentionally self-contained: recommendation generation, evaluation, optimization, and shared sentiment reuse all run inside this repository instead of delegating core behavior to a prototype script. That makes the methodology easier to inspect, easier to test, and less likely to drift from the product's stored diagnostics.
+
 ## Data and sentiment layers
 
 The methodology combines technical and sentiment context.

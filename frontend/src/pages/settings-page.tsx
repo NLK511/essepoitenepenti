@@ -79,6 +79,7 @@ export function SettingsPage() {
         max_tokens: String(formData.get("max_tokens") ?? "220"),
         pi_command: String(formData.get("pi_command") ?? "pi"),
         pi_agent_dir: String(formData.get("pi_agent_dir") ?? ""),
+        pi_cli_args: String(formData.get("pi_cli_args") ?? ""),
         pi_api_url: String(formData.get("pi_api_url") ?? ""),
         pi_api_key: String(formData.get("pi_api_key") ?? ""),
         prompt: String(formData.get("prompt") ?? ""),
@@ -122,6 +123,39 @@ export function SettingsPage() {
       await loadData();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to roll back weights");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function saveSocialSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    try {
+      setSaving("social");
+      setError(null);
+      setNotice(null);
+      await postForm<{ settings: Record<string, string> }>("/api/settings/social", {
+        sentiment_enabled: formData.get("sentiment_enabled") ? "true" : "false",
+        nitter_enabled: formData.get("nitter_enabled") ? "true" : "false",
+        nitter_base_url: String(formData.get("nitter_base_url") ?? settingMap.social_nitter_base_url ?? "http://127.0.0.1:8080"),
+        nitter_timeout_seconds: String(formData.get("nitter_timeout_seconds") ?? settingMap.social_nitter_timeout_seconds ?? "6"),
+        nitter_max_items_per_query: String(formData.get("nitter_max_items_per_query") ?? settingMap.social_nitter_max_items_per_query ?? "12"),
+        nitter_query_window_hours: String(formData.get("nitter_query_window_hours") ?? settingMap.social_nitter_query_window_hours ?? "12"),
+        nitter_include_replies: formData.get("nitter_include_replies") ? "true" : "false",
+        weight_news: settingMap.social_weight_news ?? "1.0",
+        weight_social: settingMap.social_weight_social ?? "0.6",
+        weight_macro: settingMap.social_weight_macro ?? "0.2",
+        weight_industry: settingMap.social_weight_industry ?? "0.3",
+        weight_ticker: settingMap.social_weight_ticker ?? "0.5",
+        enable_author_weighting: settingMap.social_enable_author_weighting ?? "true",
+        enable_engagement_weighting: settingMap.social_enable_engagement_weighting ?? "true",
+        enable_duplicate_suppression: settingMap.social_enable_duplicate_suppression ?? "true",
+      });
+      setNotice("Social settings saved");
+      await loadData();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save social settings");
     } finally {
       setSaving(null);
     }
@@ -263,6 +297,32 @@ export function SettingsPage() {
                   />
                 </label>
                 <button className="button" type="submit" disabled={saving === "summary"}>{saving === "summary" ? "Saving…" : "Save summary settings"}</button>
+              </form>
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Social signals" title="Nitter-powered macro & industry context" subtitle="Enable the native social pipeline and point it at your Nitter instance so refresh jobs can pull macro/industry posts directly." />
+              <form className="stack-form" onSubmit={saveSocialSettings}>
+                <div className="form-grid">
+                  <label className="checkbox-field">
+                    <span>Social sentiment enabled</span>
+                    <input type="checkbox" name="sentiment_enabled" value="true" defaultChecked={settingMap.social_sentiment_enabled === "true"} />
+                  </label>
+                  <label className="checkbox-field">
+                    <span>Nitter source enabled</span>
+                    <input type="checkbox" name="nitter_enabled" value="true" defaultChecked={settingMap.social_nitter_enabled === "true"} />
+                  </label>
+                  <label className="form-field"><span>Nitter base URL</span><input name="nitter_base_url" defaultValue={settingMap.social_nitter_base_url ?? "http://127.0.0.1:8080"} /></label>
+                  <label className="form-field"><span>Request timeout (s)</span><input name="nitter_timeout_seconds" defaultValue={settingMap.social_nitter_timeout_seconds ?? "6"} /></label>
+                  <label className="form-field"><span>Results per query</span><input name="nitter_max_items_per_query" defaultValue={settingMap.social_nitter_max_items_per_query ?? "12"} /></label>
+                  <label className="form-field"><span>Query window (h)</span><input name="nitter_query_window_hours" defaultValue={settingMap.social_nitter_query_window_hours ?? "12"} /></label>
+                  <label className="checkbox-field">
+                    <span>Include replies</span>
+                    <input type="checkbox" name="nitter_include_replies" value="true" defaultChecked={settingMap.social_nitter_include_replies === "true"} />
+                  </label>
+                </div>
+                <div className="helper-text">Enable the social sentiment stack plus the Nitter source, then adjust the timeout, window, and item limits so the refresh jobs can reach your instance reliably.</div>
+                <button className="button" type="submit" disabled={saving === "social"}>{saving === "social" ? "Saving…" : "Save social settings"}</button>
               </form>
             </Card>
           </section>

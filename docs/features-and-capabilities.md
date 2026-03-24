@@ -29,6 +29,12 @@ This principle is consistently applied in the best parts of the product. It is a
 - Trace which snapshot IDs were used by a run or recommendation through the detail views.
 - Surface snapshot freshness in `/api/health` and `/api/health/preflight` so stale shared context shows up before operators trust new proposals.
 
+> **Enable the Nitter source**
+>
+> Toggle `social_sentiment_enabled` and `social_nitter_enabled` to `true` through the Settings screen (or POST `/api/settings/social`).
+> Point `social_nitter_base_url` at your running Nitter instance and adjust the timeout, item, and window controls (`social_nitter_timeout_seconds`,
+> `social_nitter_max_items_per_query`, `social_nitter_query_window_hours`, `social_nitter_include_replies`) as needed. Once those settings are saved, the macro and industry refresh jobs query the configured Nitter endpoint for the macro/industry keyword profiles.
+
 ### Diagnostics and explainability
 - Render structured `analysis_json` sections in the run detail UI instead of forcing operators to parse raw blobs.
 - Show news coverage, sentiment coverage, context flags, feature vectors, aggregations, and weights.
