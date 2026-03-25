@@ -1120,16 +1120,54 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_recommendation_outcome_routes_and_plan_evaluation_queue_runs(self) -> None:
         self.seed_context_and_recommendation_plan_data()
+        session = Session(bind=self.engine)
+        try:
+            plan = RecommendationPlanRepository(session).create_plan(
+                RecommendationPlan(
+                    ticker="TSLA",
+                    horizon="1w",
+                    action="long",
+                    confidence_percent=52.0,
+                    thesis_summary="Weaker continuation setup.",
+                    signal_breakdown={"setup_family": "breakout"},
+                )
+            )
+            RecommendationOutcomeRepository(session).upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=plan.id or 0,
+                    ticker="TSLA",
+                    action="long",
+                    outcome="loss",
+                    status="resolved",
+                    horizon_return_5d=-2.4,
+                    confidence_bucket="50_to_64",
+                    setup_family="breakout",
+                    notes="Stopped out.",
+                )
+            )
+        finally:
+            session.close()
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             plans = await client.get("/api/recommendation-plans", params={"ticker": "AAPL"})
             plan_id = plans.json()[0]["id"]
             outcomes = await client.get("/api/recommendation-outcomes", params={"ticker": "AAPL"})
+            summary = await client.get("/api/recommendation-outcomes/summary")
             queued = await client.post("/api/recommendation-plans/evaluate", data={})
             scoped = await client.post(f"/api/recommendation-plans/{plan_id}/evaluate", data={})
 
         self.assertEqual(outcomes.status_code, 200)
         self.assertEqual(outcomes.json()[0]["outcome"], "win")
+        self.assertEqual(summary.status_code, 200)
+        self.assertEqual(summary.json()["total_outcomes"], 2)
+        self.assertEqual(summary.json()["resolved_outcomes"], 2)
+        self.assertEqual(summary.json()["overall_win_rate_percent"], 50.0)
+        bucket_map = {item["key"]: item for item in summary.json()["by_confidence_bucket"]}
+        self.assertEqual(bucket_map["65_to_79"]["win_count"], 1)
+        self.assertEqual(bucket_map["50_to_64"]["loss_count"], 1)
+        setup_map = {item["key"]: item for item in summary.json()["by_setup_family"]}
+        self.assertEqual(setup_map["continuation"]["win_count"], 1)
+        self.assertEqual(setup_map["breakout"]["loss_count"], 1)
         self.assertEqual(queued.status_code, 200)
         self.assertEqual(scoped.status_code, 200)
         self.assertEqual(queued.json()["job_type"], JobType.RECOMMENDATION_EVALUATION.value)

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { RecommendationPlan, Run } from "../types";
+import type { RecommendationCalibrationSummary, RecommendationPlan, Run } from "../types";
 import { formatDate } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams): string {
@@ -24,6 +24,7 @@ function actionTone(action: string): "ok" | "warning" | "neutral" {
 export function RecommendationPlansPage() {
   const [searchParams, setSearchParams] = useSearchParams({ limit: "100" });
   const [plans, setPlans] = useState<RecommendationPlan[] | null>(null);
+  const [calibration, setCalibration] = useState<RecommendationCalibrationSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [evaluationMessage, setEvaluationMessage] = useState<string | null>(null);
   const [evaluating, setEvaluating] = useState(false);
@@ -34,6 +35,11 @@ export function RecommendationPlansPage() {
       try {
         setError(null);
         setPlans(await getJson<RecommendationPlan[]>(buildQuery(searchParams)));
+        setCalibration(
+          await getJson<RecommendationCalibrationSummary>(
+            `/api/recommendation-outcomes/summary?limit=500${searchParams.get("run_id") ? `&run_id=${searchParams.get("run_id")}` : ""}${searchParams.get("ticker") ? `&ticker=${encodeURIComponent(searchParams.get("ticker") ?? "")}` : ""}`,
+          ),
+        );
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load recommendation plans");
       }
@@ -106,6 +112,78 @@ export function RecommendationPlansPage() {
           <label className="form-field"><span>Limit</span><select name="limit" defaultValue={searchParams.get("limit") ?? "100"}><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option></select></label>
           <div className="form-actions"><button className="button" type="submit">Apply</button></div>
         </form>
+      </Card>
+
+      <Card className="top-gap">
+        <SectionTitle
+          title="Calibration snapshot"
+          subtitle={calibration ? `Resolved ${calibration.resolved_outcomes} of ${calibration.total_outcomes} stored outcome(s)` : undefined}
+        />
+        {!calibration && !error ? <LoadingState message="Loading calibration summary…" /> : null}
+        {calibration ? (
+          <>
+            <div className="stats-grid top-gap-small">
+              <Card><strong>{calibration.overall_win_rate_percent ?? "—"}%</strong><div className="helper-text">overall resolved win rate</div></Card>
+              <Card><strong>{calibration.win_outcomes}</strong><div className="helper-text">wins</div></Card>
+              <Card><strong>{calibration.loss_outcomes}</strong><div className="helper-text">losses</div></Card>
+              <Card><strong>{calibration.no_action_outcomes}</strong><div className="helper-text">no_action outcomes</div></Card>
+            </div>
+            <div className="top-gap">
+              <SectionTitle title="By confidence bucket" />
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Bucket</th>
+                      <th>Total</th>
+                      <th>Resolved</th>
+                      <th>Win rate</th>
+                      <th>Avg 5d</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {calibration.by_confidence_bucket.map((bucket) => (
+                      <tr key={bucket.key}>
+                        <td>{bucket.label}</td>
+                        <td>{bucket.total_count}</td>
+                        <td>{bucket.resolved_count}</td>
+                        <td>{bucket.win_rate_percent ?? "—"}%</td>
+                        <td>{bucket.average_return_5d ?? "—"}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="top-gap">
+              <SectionTitle title="By setup family" />
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Setup family</th>
+                      <th>Total</th>
+                      <th>Resolved</th>
+                      <th>Win rate</th>
+                      <th>Avg 5d</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {calibration.by_setup_family.map((bucket) => (
+                      <tr key={bucket.key}>
+                        <td>{bucket.label}</td>
+                        <td>{bucket.total_count}</td>
+                        <td>{bucket.resolved_count}</td>
+                        <td>{bucket.win_rate_percent ?? "—"}%</td>
+                        <td>{bucket.average_return_5d ?? "—"}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        ) : null}
       </Card>
 
       <Card className="top-gap">

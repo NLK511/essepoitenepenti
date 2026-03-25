@@ -401,6 +401,37 @@ class RecommendationPlan(BaseModel):
     latest_outcome: RecommendationPlanOutcome | None = None
 
 
+class RecommendationCalibrationBucket(BaseModel):
+    key: str
+    label: str
+    total_count: int = 0
+    resolved_count: int = 0
+    win_count: int = 0
+    loss_count: int = 0
+    open_count: int = 0
+    no_action_count: int = 0
+    watchlist_count: int = 0
+    win_rate_percent: float | None = None
+    average_return_1d: float | None = None
+    average_return_3d: float | None = None
+    average_return_5d: float | None = None
+    average_mfe: float | None = None
+    average_mae: float | None = None
+
+
+class RecommendationCalibrationSummary(BaseModel):
+    total_outcomes: int = 0
+    resolved_outcomes: int = 0
+    open_outcomes: int = 0
+    win_outcomes: int = 0
+    loss_outcomes: int = 0
+    no_action_outcomes: int = 0
+    watchlist_outcomes: int = 0
+    overall_win_rate_percent: float | None = None
+    by_confidence_bucket: list[RecommendationCalibrationBucket] = Field(default_factory=list)
+    by_setup_family: list[RecommendationCalibrationBucket] = Field(default_factory=list)
+
+
 class ProviderCredential(BaseModel):
     provider: str
     api_key: str = ""

@@ -329,6 +329,37 @@ export interface RecommendationPlan {
   latest_outcome: RecommendationPlanOutcome | null;
 }
 
+export interface RecommendationCalibrationBucket {
+  key: string;
+  label: string;
+  total_count: number;
+  resolved_count: number;
+  win_count: number;
+  loss_count: number;
+  open_count: number;
+  no_action_count: number;
+  watchlist_count: number;
+  win_rate_percent: number | null;
+  average_return_1d: number | null;
+  average_return_3d: number | null;
+  average_return_5d: number | null;
+  average_mfe: number | null;
+  average_mae: number | null;
+}
+
+export interface RecommendationCalibrationSummary {
+  total_outcomes: number;
+  resolved_outcomes: number;
+  open_outcomes: number;
+  win_outcomes: number;
+  loss_outcomes: number;
+  no_action_outcomes: number;
+  watchlist_outcomes: number;
+  overall_win_rate_percent: number | null;
+  by_confidence_bucket: RecommendationCalibrationBucket[];
+  by_setup_family: RecommendationCalibrationBucket[];
+}
+
 export interface RunDetailResponse {
   run: Run;
   outputs: RunOutput[];
