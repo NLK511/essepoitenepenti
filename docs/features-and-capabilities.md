@@ -62,12 +62,12 @@ This principle is consistently applied in the best parts of the product. It is a
 - Queue global or scoped recommendation-plan evaluation runs from the recommendation-plans workflow and inspect the latest stored outcome directly on each plan.
 - Inspect cheap-scan diagnostics, component scores, shortlist rules, rejection counts, and per-ticker shortlist decisions in persisted run payloads and redesign objects.
 - Review shortlist reasoning directly in operator workflows: run detail now shows shortlist thresholds, rejection counts, and per-ticker shortlist outcomes, while ticker-signal views show shortlist rank/reasons without forcing operators into raw JSON first.
-- Watchlist orchestration now uses a dedicated `TickerDeepAnalysisService` boundary for deep analysis instead of calling `ProposalService` directly.
+- Watchlist orchestration now uses a redesign-native `TickerDeepAnalysisService` path for deep analysis instead of routing normal watchlist deep analysis through `ProposalService.generate(...)`.
 
 Current limitation:
 - manual ticker proposal jobs still use the legacy per-ticker proposal path
 - macro and industry refresh runs do now write context objects, but those writers are still transitional: they are news-first now, yet still heuristic and not backed by a mature event-extraction / official-source ranking pipeline
-- watchlist deep analysis now has its own service boundary, but the underlying logic still delegates to the legacy proposal engine rather than a fully redesign-native ticker engine
+- watchlist deep analysis now runs through its own native execution path, but it still reuses some legacy proposal-service internals and payload conventions rather than a fully separated ticker engine
 - recommendation-plan outcome persistence and evaluation are now first-class, but setup-family-aware generation and confidence calibration logic are still incomplete
 
 > **Enable the Nitter source**

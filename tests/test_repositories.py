@@ -632,7 +632,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(diagnostics_map["AAPL"]["shortlist_reasons"], [])
         self.assertEqual(diagnostics_map["TSLA"]["mode"], "cheap_scan_only")
         self.assertEqual(diagnostics_map["TSLA"]["shortlist_reasons"], ["below_confidence_threshold", "below_attention_threshold"])
-        self.assertEqual(source_breakdown_map["AAPL"]["deep_analysis_model"], "ticker_deep_analysis_v1")
+        self.assertEqual(source_breakdown_map["AAPL"]["deep_analysis_model"], "ticker_deep_analysis_v2")
 
     def test_watchlist_orchestration_shortlist_thresholds_vary_by_horizon_and_size(self) -> None:
         session = create_session()

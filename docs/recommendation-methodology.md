@@ -51,7 +51,7 @@ In addition, watchlist-backed proposal jobs now use a real staged orchestration 
 
 Current limitation:
 - manual ticker proposal jobs still use the legacy per-ticker production path
-- `TickerDeepAnalysisService` is now the execution boundary, but its underlying analysis still delegates to the legacy `ProposalService`
+- `TickerDeepAnalysisService` now executes its own native deep-analysis flow for watchlist orchestration, but it still reuses some legacy proposal-service internals and payload shapes rather than a fully separated ticker engine
 - macro and industry refresh runs now write context objects through news-first transitional writers, but those writers are still heuristic and not yet backed by a mature event pipeline
 - the redesign path now has first-class recommendation outcome persistence/evaluation, but setup-family-aware generation and confidence calibration are still incomplete
 
@@ -219,11 +219,11 @@ The methodology still has important limits:
 
 ## Best next steps
 Given the work already completed, the next best implementation steps are:
-1. evolve `TickerDeepAnalysisService` from a wrapper boundary into a redesign-native ticker analysis / recommendation engine
-2. strengthen the current news-first macro/industry context writers with better event extraction, saliency ranking, and official/trade-source prioritization
-3. add explicit setup-family classification and setup-aware recommendation logic
-4. use stored recommendation outcomes to calibrate confidence and compare setup-family performance
-5. expose watchlist policy details more directly in operator workflows alongside the shortlist reasoning already surfaced
+1. strengthen the current news-first macro/industry context writers with better event extraction, saliency ranking, and official/trade-source prioritization
+2. add explicit setup-family classification and setup-aware recommendation logic
+3. use stored recommendation outcomes to calibrate confidence and compare setup-family performance
+4. expose watchlist policy details more directly in operator workflows alongside the shortlist reasoning already surfaced
+5. deepen `TickerDeepAnalysisService` into a fuller redesign-native ticker engine with less dependence on legacy proposal payload conventions
 6. only then decide how quickly to retire, absorb, or narrow the remaining sentiment-snapshot-first and legacy recommendation paths
 
 ## Practical reading guide

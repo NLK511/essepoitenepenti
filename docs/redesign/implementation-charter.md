@@ -435,12 +435,13 @@ Completed in the redesign track so far:
 - macro and industry refresh runs now also write first-generation context snapshots into the redesign tables
 - those context writers now prefer primary news evidence, with social evidence used as secondary support
 - watchlist deep analysis now runs through a dedicated `TickerDeepAnalysisService` boundary
+- that deep-analysis path now executes natively inside `TickerDeepAnalysisService` for watchlist orchestration instead of delegating normal analysis to `ProposalService.generate(...)`
 - `RecommendationPlan` now has first-class persisted outcome tracking through `recommendation_outcomes`, including fixed-horizon returns, excursion metrics, direction correctness, confidence buckets, and latest-outcome API exposure
 
 Not yet complete:
 - real event extraction and saliency ranking
 - stronger official-source / trade-source ranking inside the news-first macro and industry context writers
-- redesign-native ticker deep-analysis and recommendation-engine logic independent of the legacy proposal engine internals
+- a fuller redesign-native ticker-analysis and recommendation-engine path with less dependence on legacy proposal-engine internals and payload conventions
 - explicit setup-family classification for recommendations at generation time
 - confidence calibration and outcome-driven refinement for the new recommendation-plan path
 - migration or retirement strategy for the remaining legacy recommendation and sentiment-snapshot paths
