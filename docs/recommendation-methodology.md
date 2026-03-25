@@ -213,17 +213,17 @@ The methodology still has important limits:
 - sentiment is inspectable, but not yet fully validated as a source of measurable edge
 - scheduler and workflow reliability still matter because good methodology is less useful if operations are unreliable
 - more signal sources should not be added faster than their effectiveness can be measured
-- the redesign target architecture now has a real watchlist orchestration path, news-first transitional context writers, operator-visible shortlist reasoning, first-class recommendation-plan outcome tracking, and a dedicated ticker deep-analysis service boundary, but context extraction quality and redesign-native deep-analysis logic still need substantial work
+- the redesign target architecture now has a real watchlist orchestration path, event-ranked news-first context writers, operator-visible shortlist reasoning, first-class recommendation-plan outcome tracking, and a dedicated ticker deep-analysis service boundary, but setup-family-aware generation, calibrated confidence, and deeper context extraction still need substantial work
 - the app is not yet justified as a broad few-day swing predictor because setup-family performance and confidence calibration are still not first-class decision loops
 - cheap scan is valuable for triage, but on its own it will not capture the full set of event-driven or regime-sensitive opportunities the redesign is supposed to surface
 
 ## Best next steps
 Given the work already completed, the next best implementation steps are:
-1. strengthen the current news-first macro/industry context writers with better event extraction, saliency ranking, and official/trade-source prioritization
-2. add explicit setup-family classification and setup-aware recommendation logic
-3. use stored recommendation outcomes to calibrate confidence and compare setup-family performance
-4. expose watchlist policy details more directly in operator workflows alongside the shortlist reasoning already surfaced
-5. deepen `TickerDeepAnalysisService` into a fuller redesign-native ticker engine with less dependence on legacy proposal payload conventions
+1. add explicit setup-family classification and setup-aware recommendation logic
+2. use stored recommendation outcomes to calibrate confidence and compare setup-family performance
+3. expose watchlist policy details more directly in operator workflows alongside the shortlist reasoning already surfaced
+4. deepen `TickerDeepAnalysisService` into a fuller redesign-native ticker engine with less dependence on legacy proposal payload conventions
+5. keep maturing macro/industry context extraction beyond the current heuristic event-ranking layer
 6. only then decide how quickly to retire, absorb, or narrow the remaining sentiment-snapshot-first and legacy recommendation paths
 
 ## Practical reading guide

@@ -6,36 +6,45 @@ from typing import Any
 
 from trade_proposer_app.domain.models import IndustryContextSnapshot, SentimentSnapshot
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.services.event_extraction import (
+    EventDefinition,
+    count_events_above_saliency,
+    coverage_quality_label,
+    event_keys,
+    extract_ranked_events,
+    publisher_summary,
+    source_priority_counts,
+    summarize_event_scores,
+    summarize_source_priorities,
+    top_event_labels,
+)
 from trade_proposer_app.services.news import NewsIngestionService
 
-MACRO_LINK_THEME_MAP: dict[str, str] = {
-    "inflation": "inflation",
-    "rate": "rates",
-    "yield": "yield_pressure",
-    "oil": "energy_costs",
-    "war": "geopolitics",
-    "geopolitical": "geopolitics",
-    "tariff": "trade_policy",
-    "recession": "growth_risk",
-}
+MACRO_LINK_DEFINITIONS = [
+    EventDefinition("inflation", "Inflation", ("inflation",), category="macro_transmission"),
+    EventDefinition("rates", "Rates", ("rate", "rates"), category="macro_transmission"),
+    EventDefinition("yield_pressure", "Yield pressure", ("yield",), category="macro_transmission"),
+    EventDefinition("energy_costs", "Energy costs", ("oil", "energy prices", "crude"), category="macro_transmission"),
+    EventDefinition("geopolitics", "Geopolitics", ("war", "geopolitical", "sanctions", "conflict"), category="macro_transmission"),
+    EventDefinition("trade_policy", "Trade policy", ("tariff", "export controls", "trade policy"), category="macro_transmission"),
+    EventDefinition("growth_risk", "Growth risk", ("recession", "slowdown"), category="macro_transmission"),
+]
 
-INDUSTRY_THEME_MAP: dict[str, str] = {
-    "conference": "conference_cycle",
-    "guidance": "guidance",
-    "pricing": "pricing",
-    "demand": "demand",
-    "backlog": "backlog",
-    "innovation": "innovation",
-    "launch": "product_cycle",
-    "product": "product_cycle",
-    "regulation": "regulation",
-    "approval": "regulation",
-    "supply chain": "supply_chain",
-    "inventory": "inventory",
-    "ai": "ai_theme",
-    "chip": "semiconductor_theme",
-    "cloud": "cloud_theme",
-}
+INDUSTRY_EVENT_DEFINITIONS = [
+    EventDefinition("conference_cycle", "Conference cycle", ("conference", "investor day", "expo"), category="industry_native"),
+    EventDefinition("guidance", "Guidance", ("guidance", "outlook"), category="industry_native"),
+    EventDefinition("pricing", "Pricing", ("pricing", "price increase", "price cuts"), category="industry_native"),
+    EventDefinition("demand", "Demand", ("demand", "orders", "order growth"), category="industry_native"),
+    EventDefinition("backlog", "Backlog", ("backlog",), category="industry_native"),
+    EventDefinition("innovation", "Innovation", ("innovation", "breakthrough", "roadmap"), category="industry_native"),
+    EventDefinition("product_cycle", "Product cycle", ("launch", "product", "rollout", "release"), category="industry_native"),
+    EventDefinition("regulation", "Regulation", ("regulation", "approval", "antitrust", "compliance"), category="industry_native"),
+    EventDefinition("supply_chain", "Supply chain", ("supply chain", "capacity", "lead time", "factory"), category="industry_native"),
+    EventDefinition("inventory", "Inventory", ("inventory", "stock build", "destocking"), category="industry_native"),
+    EventDefinition("ai_theme", "AI theme", ("ai", "artificial intelligence", "accelerator"), category="industry_native"),
+    EventDefinition("semiconductor_theme", "Semiconductor theme", ("chip", "semiconductor", "foundry"), category="industry_native"),
+    EventDefinition("cloud_theme", "Cloud theme", ("cloud", "hyperscaler"), category="industry_native"),
+]
 
 
 class IndustryContextService:
@@ -71,23 +80,28 @@ class IndustryContextService:
         primary_news_items = news_sentiment.get("news_items", []) if isinstance(news_sentiment, dict) else []
         news_items = primary_news_items if isinstance(primary_news_items, list) else []
 
-        active_drivers = self._extract_active_drivers(news_items, supporting_social_items)
-        linked_macro_themes = self._linked_macro_themes(news_items, supporting_social_items)
+        active_drivers = extract_ranked_events(news_items, supporting_social_items, INDUSTRY_EVENT_DEFINITIONS, max_events=5)
+        linked_macro_events = extract_ranked_events(news_items, supporting_social_items, MACRO_LINK_DEFINITIONS, max_events=5)
+        linked_macro_themes = event_keys(linked_macro_events)
         linked_industry_themes = self._linked_industry_themes(active_drivers)
         feed_errors = list(news_bundle.feed_errors) if news_bundle is not None else []
+        primary_source_counts = source_priority_counts(news_items, source_type="news")
+        primary_coverage_quality = coverage_quality_label(news_items, source_type="news")
 
         warnings: list[str] = []
         missing_inputs: list[str] = []
         if not news_items:
             warnings.append(f"industry context for {industry_label} was built without primary industry news evidence; social evidence was used only as a secondary fallback")
             missing_inputs.append("primary_industry_news_evidence")
+        elif primary_coverage_quality == "low":
+            warnings.append(f"industry context for {industry_label} lacks trade, official, or major-source coverage in its primary news evidence")
         if feed_errors:
             warnings.append(f"industry context for {industry_label} encountered provider issues while gathering primary-news evidence")
         if not supporting_social_items:
             missing_inputs.append("supporting_social_evidence")
 
-        saliency_score = self._saliency_score(active_drivers, len(news_items), len(supporting_social_items), len(linked_macro_themes))
-        confidence_percent = self._confidence_percent(active_drivers, len(news_items), len(supporting_social_items), diagnostics, feed_errors)
+        saliency_score = self._saliency_score(active_drivers, len(news_items), len(supporting_social_items), len(linked_macro_themes), primary_source_counts)
+        confidence_percent = self._confidence_percent(active_drivers, len(news_items), len(supporting_social_items), diagnostics, feed_errors, primary_source_counts)
         summary_text = self._summary_text(previous, industry_label, active_drivers, linked_macro_themes, news_items, supporting_social_items)
         context = IndustryContextSnapshot(
             industry_key=industry_key,
@@ -112,6 +126,9 @@ class IndustryContextService:
                 "tracked_tickers": tracked_tickers,
                 "primary_news_providers": list(dict.fromkeys(news_bundle.feeds_used)) if news_bundle is not None else [],
                 "primary_news_feed_errors": feed_errors,
+                "primary_news_source_priorities": summarize_source_priorities(news_items, source_type="news"),
+                "primary_news_publishers": publisher_summary(news_items),
+                "primary_news_coverage_quality": primary_coverage_quality,
                 "upstream": source_breakdown if isinstance(source_breakdown, dict) else {},
             },
             metadata={
@@ -120,6 +137,10 @@ class IndustryContextService:
                 "news_coverage_insights": news_sentiment.get("coverage_insights", []) if isinstance(news_sentiment, dict) else [],
                 "top_news_titles": [self._item_text(item)[:140] for item in news_items[:5]],
                 "top_social_titles": [self._item_text(item)[:140] for item in supporting_social_items[:5]],
+                "top_driver_labels": top_event_labels(active_drivers),
+                "driver_event_scores": summarize_event_scores(active_drivers),
+                "macro_event_scores": summarize_event_scores(linked_macro_events),
+                "salient_driver_count": count_events_above_saliency(active_drivers),
             },
             run_id=run_id,
             job_id=job_id,
@@ -144,69 +165,6 @@ class IndustryContextService:
         sentiment = analyzed.get("sentiment", {}) if isinstance(analyzed, dict) else {}
         return bundle, sentiment if isinstance(sentiment, dict) else {}
 
-    def _extract_active_drivers(self, news_items: list[object], social_items: list[object]) -> list[dict[str, object]]:
-        counts: dict[str, dict[str, object]] = {}
-        self._accumulate_driver_hits(counts, news_items, source="news")
-        self._accumulate_driver_hits(counts, social_items, source="social")
-        results = []
-        for key, payload in counts.items():
-            results.append(
-                {
-                    "key": key,
-                    "label": key.replace("_", " ").title(),
-                    "news_evidence_count": payload.get("news_evidence_count", 0),
-                    "social_evidence_count": payload.get("social_evidence_count", 0),
-                    "evidence_count": (int(payload.get("news_evidence_count", 0)) * 2) + int(payload.get("social_evidence_count", 0)),
-                    "evidence_samples": payload.get("evidence_samples", []),
-                }
-            )
-        results.sort(
-            key=lambda item: (
-                int(item.get("news_evidence_count", 0)),
-                int(item.get("social_evidence_count", 0)),
-                int(item.get("evidence_count", 0)),
-            ),
-            reverse=True,
-        )
-        return results[:5]
-
-    def _accumulate_driver_hits(self, counts: dict[str, dict[str, object]], items: list[object], *, source: str) -> None:
-        for raw_item in items:
-            text = self._item_text(raw_item).lower()
-            if not text:
-                continue
-            matched: set[str] = set()
-            for phrase, key in INDUSTRY_THEME_MAP.items():
-                if phrase in text:
-                    matched.add(key)
-            for key in matched:
-                entry = counts.setdefault(
-                    key,
-                    {
-                        "key": key,
-                        "news_evidence_count": 0,
-                        "social_evidence_count": 0,
-                        "evidence_samples": [],
-                    },
-                )
-                counter_key = "news_evidence_count" if source == "news" else "social_evidence_count"
-                entry[counter_key] = int(entry[counter_key]) + 1
-                sample = self._item_text(raw_item)[:160]
-                samples = entry["evidence_samples"]
-                if sample and isinstance(samples, list) and sample not in samples and len(samples) < 4:
-                    samples.append(sample)
-
-    def _linked_macro_themes(self, news_items: list[object], social_items: list[object]) -> list[str]:
-        linked: list[str] = []
-        for raw_item in [*news_items, *social_items]:
-            text = self._item_text(raw_item).lower()
-            if not text:
-                continue
-            for phrase, key in MACRO_LINK_THEME_MAP.items():
-                if phrase in text:
-                    linked.append(key)
-        return list(dict.fromkeys(linked))[:5]
-
     @staticmethod
     def _linked_industry_themes(active_drivers: list[dict[str, object]]) -> list[str]:
         return [str(item.get("key")) for item in active_drivers if item.get("key")]
@@ -221,8 +179,28 @@ class IndustryContextService:
         return "neutral"
 
     @staticmethod
-    def _saliency_score(active_drivers: list[dict[str, object]], news_item_count: int, social_item_count: int, macro_link_count: int) -> float:
-        score = 0.14 + (len(active_drivers) * 0.13) + (min(news_item_count, 6) * 0.07) + (min(social_item_count, 4) * 0.025) + (macro_link_count * 0.05)
+    def _saliency_score(
+        active_drivers: list[dict[str, object]],
+        news_item_count: int,
+        social_item_count: int,
+        macro_link_count: int,
+        primary_source_counts: dict[str, int],
+    ) -> float:
+        top_driver_score = max((float(item.get("saliency_weight", 0.0) or 0.0) for item in active_drivers), default=0.0)
+        trade_boost = min(0.16, primary_source_counts.get("trade", 0) * 0.08)
+        official_boost = min(0.1, primary_source_counts.get("official", 0) * 0.05)
+        major_boost = min(0.08, primary_source_counts.get("major", 0) * 0.04)
+        score = (
+            0.1
+            + top_driver_score * 0.4
+            + (len(active_drivers) * 0.08)
+            + (min(news_item_count, 6) * 0.05)
+            + (min(social_item_count, 4) * 0.02)
+            + (macro_link_count * 0.04)
+            + trade_boost
+            + official_boost
+            + major_boost
+        )
         return round(min(1.0, score), 3)
 
     @staticmethod
@@ -232,11 +210,25 @@ class IndustryContextService:
         social_item_count: int,
         diagnostics: dict[str, object],
         feed_errors: list[str],
+        primary_source_counts: dict[str, int],
     ) -> float:
         social_provider_count = len(diagnostics.get("providers", [])) if isinstance(diagnostics, dict) and isinstance(diagnostics.get("providers"), list) else 0
-        confidence = 26.0 + (len(active_drivers) * 8.0) + (min(news_item_count, 6) * 7.0) + (min(social_item_count, 4) * 2.0) + (social_provider_count * 2.0)
+        high_saliency_drivers = count_events_above_saliency(active_drivers)
+        confidence = (
+            24.0
+            + (len(active_drivers) * 7.0)
+            + (high_saliency_drivers * 6.0)
+            + (min(news_item_count, 6) * 6.0)
+            + (min(social_item_count, 4) * 1.5)
+            + (social_provider_count * 2.0)
+            + (primary_source_counts.get("trade", 0) * 5.0)
+            + (primary_source_counts.get("official", 0) * 4.0)
+            + (primary_source_counts.get("major", 0) * 3.0)
+        )
         if news_item_count == 0:
             confidence -= 18.0
+        if primary_source_counts.get("trade", 0) == 0 and primary_source_counts.get("official", 0) == 0 and primary_source_counts.get("major", 0) == 0:
+            confidence -= 8.0
         if feed_errors:
             confidence -= min(12.0, len(feed_errors) * 4.0)
         return round(max(5.0, min(92.0, confidence)), 1)
@@ -253,12 +245,15 @@ class IndustryContextService:
         driver_labels = [str(item.get("label", "")).strip() for item in active_drivers if item.get("label")]
         focus = ", ".join(driver_labels[:2]) if driver_labels else "no dominant industry-native driver"
         macro = ", ".join(linked_macro_themes[:2]) if linked_macro_themes else "limited visible macro transmission"
+        top_priority = str(active_drivers[0].get("source_priority", "other")) if active_drivers else "other"
         if previous and previous.summary_text and driver_labels and news_items:
-            return f"{industry_label} remains driven by {focus}, with macro read-through still centered on {macro} and primary industry news carrying most of the evidence in this run."
-        if driver_labels and news_items:
-            return f"{industry_label} context is led by {focus}, while macro transmission points to {macro}; primary industry news is the main evidence layer in this run."
+            return f"{industry_label} remains driven by {focus}, with macro read-through still centered on {macro}; this run ranks the strongest industry events by source quality before using social confirmation."
+        if driver_labels and news_items and top_priority in {"trade", "official"}:
+            return f"{industry_label} context is led by {focus}, while macro transmission points to {macro}; higher-priority industry sources carry the main evidence in this run."
+        if driver_labels and news_items and top_priority == "major":
+            return f"{industry_label} context is led by {focus}, while macro transmission points to {macro}; major primary-news coverage is carrying most of the evidence in this run."
         if driver_labels and social_items:
-            return f"{industry_label} context still points to {focus}, but primary industry news was thin so the run leans more on social confirmation than desired."
+            return f"{industry_label} context still points to {focus}, but primary industry news was thin or low quality so the run leans more on social confirmation than desired."
         if previous and previous.summary_text:
             return f"{industry_label} context is broadly unchanged, but this run did not surface a clearly dominant fresh driver."
         return f"{industry_label} context is currently light on salient evidence, so the output mainly records continuity and known macro links."

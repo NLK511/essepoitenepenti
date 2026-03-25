@@ -37,7 +37,7 @@ class ContextServiceTests(unittest.TestCase):
                 NewsArticle(
                     title="ECB signals eurozone rates may stay restrictive",
                     summary="Inflation remains sticky while bond yields climb",
-                    publisher="Example",
+                    publisher="European Central Bank",
                     link="https://example.com/ecb",
                 )
             ],
@@ -50,6 +50,7 @@ class ContextServiceTests(unittest.TestCase):
                     {
                         "title": "ECB signals eurozone rates may stay restrictive",
                         "summary": "Inflation remains sticky while bond yields climb",
+                        "publisher": "European Central Bank",
                     }
                 ],
                 "coverage_insights": [],
@@ -78,6 +79,9 @@ class ContextServiceTests(unittest.TestCase):
         self.assertEqual(context.source_breakdown["primary_news_item_count"], 1)
         self.assertNotIn("primary_news_evidence", context.missing_inputs)
         self.assertTrue(any(theme["key"] == "european_monetary_policy" for theme in context.active_themes))
+        self.assertEqual(context.active_themes[0]["source_priority"], "official")
+        self.assertEqual(context.source_breakdown["primary_news_coverage_quality"], "high")
+        self.assertIn("official:1", context.source_breakdown["primary_news_source_priorities"])
         self.assertIn("NewsAPI", context.source_breakdown["primary_news_providers"])
         self.assertTrue(news_service.fetch_topics_calls)
 
@@ -91,7 +95,7 @@ class ContextServiceTests(unittest.TestCase):
                 NewsArticle(
                     title="Chip demand stays strong as AI server backlog grows",
                     summary="Semiconductor conference highlights supply chain and pricing discipline",
-                    publisher="Example",
+                    publisher="DigiTimes",
                     link="https://example.com/chips",
                 )
             ],
@@ -104,6 +108,7 @@ class ContextServiceTests(unittest.TestCase):
                     {
                         "title": "Chip demand stays strong as AI server backlog grows",
                         "summary": "Semiconductor conference highlights supply chain and pricing discipline",
+                        "publisher": "DigiTimes",
                     }
                 ],
                 "coverage_insights": [],
@@ -134,6 +139,9 @@ class ContextServiceTests(unittest.TestCase):
         self.assertNotIn("primary_industry_news_evidence", context.missing_inputs)
         self.assertIn("conference_cycle", context.linked_industry_themes)
         self.assertIn("semiconductor_theme", context.linked_industry_themes)
+        self.assertEqual(context.active_drivers[0]["source_priority"], "trade")
+        self.assertEqual(context.source_breakdown["primary_news_coverage_quality"], "high")
+        self.assertIn("trade:1", context.source_breakdown["primary_news_source_priorities"])
         self.assertEqual(news_service.fetch_many_calls, [["NVDA", "AMD"]])
 
 

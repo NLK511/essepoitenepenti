@@ -350,8 +350,8 @@ Implemented write-path migration so far:
 
 Current limitation:
 - manual ticker proposal jobs still use the legacy path
-- macro and industry context objects are now written during refresh runs through news-first transitional writers, but those writers are still heuristic and not yet backed by mature event extraction / source ranking
-- watchlist deep analysis now has a dedicated service boundary, but its underlying analysis still depends on the legacy proposal engine
+- macro and industry context objects are now written during refresh runs through event-ranked, news-first transitional writers that prioritize official/trade/major sources, but those writers are still heuristic rather than a mature multi-step event pipeline
+- watchlist deep analysis now has a dedicated service boundary and native watchlist execution path, but its underlying analysis still depends partly on legacy proposal-engine internals and payload conventions
 
 ### Outcome-tracking requirement
 The redesign should treat stored recommendation outcomes as the main truth-testing mechanism for whether the engine is improving.
@@ -439,8 +439,7 @@ Completed in the redesign track so far:
 - `RecommendationPlan` now has first-class persisted outcome tracking through `recommendation_outcomes`, including fixed-horizon returns, excursion metrics, direction correctness, confidence buckets, and latest-outcome API exposure
 
 Not yet complete:
-- real event extraction and saliency ranking
-- stronger official-source / trade-source ranking inside the news-first macro and industry context writers
+- a richer event-extraction pipeline beyond the current heuristic event-ranking and source-priority layer
 - a fuller redesign-native ticker-analysis and recommendation-engine path with less dependence on legacy proposal-engine internals and payload conventions
 - explicit setup-family classification for recommendations at generation time
 - confidence calibration and outcome-driven refinement for the new recommendation-plan path

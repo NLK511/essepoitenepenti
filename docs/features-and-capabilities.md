@@ -66,7 +66,7 @@ This principle is consistently applied in the best parts of the product. It is a
 
 Current limitation:
 - manual ticker proposal jobs still use the legacy per-ticker proposal path
-- macro and industry refresh runs do now write context objects, but those writers are still transitional: they are news-first now, yet still heuristic and not backed by a mature event-extraction / official-source ranking pipeline
+- macro and industry refresh runs do now write context objects through event-ranked, news-first transitional writers that prioritize stronger official/trade/major sources before social confirmation, but they are still heuristic rather than a fully mature event pipeline
 - watchlist deep analysis now runs through its own native execution path, but it still reuses some legacy proposal-service internals and payload conventions rather than a fully separated ticker engine
 - recommendation-plan outcome persistence and evaluation are now first-class, but setup-family-aware generation and confidence calibration logic are still incomplete
 
@@ -129,8 +129,8 @@ The weakest areas are operational rather than analytical:
 
 The biggest product-level gap is now the **remaining redesign migration**:
 - watchlist-backed proposal jobs do have a redesigned write/orchestration path, but manual ticker proposal jobs still run through the legacy path
-- macro and industry refresh runs now write context objects through news-first transitional writers, but those writers still need stronger event extraction, saliency ranking, and source hierarchy
-- ticker signals and recommendation plans are now produced by a real watchlist orchestration path, and deep analysis now has a dedicated service boundary, but the underlying analysis logic still delegates to the legacy proposal engine
+- macro and industry refresh runs now write context objects through event-ranked, news-first transitional writers, but those writers still need richer multi-step event extraction and source hierarchy beyond their current heuristic saliency model
+- ticker signals and recommendation plans are now produced by a real watchlist orchestration path, and deep analysis now executes natively for watchlist runs, but the underlying analysis logic still reuses parts of the legacy proposal engine internals
 - outcome tracking for `RecommendationPlan` objects is now first-class, but setup-family evaluation and confidence calibration still need to mature beyond stored fields and buckets
 
 The biggest analytical caution is that coherent outputs do not yet equal measured edge. Right now the product can realistically claim strong operator support, explainability, and trade-candidate structuring. It should not yet claim broad predictive skill across all names and regimes until recommendation outcomes show that the redesign path is actually improving decision quality.
