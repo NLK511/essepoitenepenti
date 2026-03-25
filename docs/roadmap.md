@@ -78,9 +78,9 @@ Delivered in this phase so far:
 - operator-facing shortlist reasoning surfaced more directly in run detail and ticker-signal views
 - first-class `recommendation_outcomes` persistence for `RecommendationPlan`, including horizon returns, excursion metrics, direction correctness, confidence buckets, and setup-family capture
 - app-native recommendation-plan evaluation flow exposed through API/UI queue actions and persisted back onto plans as latest outcomes
+- setup-family-aware recommendation generation and decomposed confidence payloads now flow into watchlist-backed `RecommendationPlan` writes through `signal_breakdown` and `evidence_summary`
 
 Next required work in this phase:
-- add explicit setup-family classification at generation time so recommendations can be produced and ranked as continuation, breakout, mean-reversion, catalyst follow-through, macro beneficiary, and similar setup classes rather than one generic scorer output
 - start using stored outcome data for confidence calibration instead of only persisting the raw buckets and slices
 - continue maturing the redesign-native deep-analysis path from an internal native executor into a fuller ticker-signal / recommendation-engine layer with less dependence on legacy proposal payload shapes
 - expose watchlist policy details more directly in the main operator workflows, not only through the policy endpoint
@@ -88,11 +88,10 @@ Next required work in this phase:
 - decide whether sentiment snapshots become operator-facing compatibility artifacts, internal inputs, or candidates for retirement once context writers mature
 
 Recommended implementation order inside Phase 4:
-1. setup-family-aware recommendation logic and confidence decomposition
+1. confidence calibration from stored outcomes
 2. operator-facing watchlist policy visibility
-3. confidence calibration from stored outcomes
-4. deepen the redesign-native ticker-analysis engine beyond legacy proposal payload compatibility
-5. legacy-path narrowing and retirement decisions
+3. deepen the redesign-native ticker-analysis engine beyond legacy proposal payload compatibility
+4. legacy-path narrowing and retirement decisions
 
 ## Phase 5: Expansion (only after the above)
 

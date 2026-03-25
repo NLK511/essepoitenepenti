@@ -626,6 +626,11 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(action_map["AAPL"], "long")
         self.assertEqual(action_map["MSFT"], "no_action")
         self.assertEqual(action_map["TSLA"], "no_action")
+        plan_map = {plan.ticker: plan for plan in plans}
+        self.assertEqual(plan_map["AAPL"].signal_breakdown["setup_family"], "breakout")
+        self.assertEqual(plan_map["AAPL"].signal_breakdown["confidence_bucket"], "65_to_79")
+        self.assertIn("confidence_components", plan_map["AAPL"].signal_breakdown)
+        self.assertEqual(plan_map["TSLA"].evidence_summary["action_reason"], "not_shortlisted")
         diagnostics_map = {item.ticker: item.diagnostics for item in ticker_signals}
         source_breakdown_map = {item.ticker: item.source_breakdown for item in ticker_signals}
         self.assertEqual(diagnostics_map["AAPL"]["mode"], "deep_analysis")

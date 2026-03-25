@@ -437,11 +437,11 @@ Completed in the redesign track so far:
 - watchlist deep analysis now runs through a dedicated `TickerDeepAnalysisService` boundary
 - that deep-analysis path now executes natively inside `TickerDeepAnalysisService` for watchlist orchestration instead of delegating normal analysis to `ProposalService.generate(...)`
 - `RecommendationPlan` now has first-class persisted outcome tracking through `recommendation_outcomes`, including fixed-horizon returns, excursion metrics, direction correctness, confidence buckets, and latest-outcome API exposure
+- watchlist-backed `RecommendationPlan` generation now writes setup-family-aware signal breakdowns and decomposed confidence components into persisted redesign payloads
 
 Not yet complete:
 - a richer event-extraction pipeline beyond the current heuristic event-ranking and source-priority layer
 - a fuller redesign-native ticker-analysis and recommendation-engine path with less dependence on legacy proposal-engine internals and payload conventions
-- explicit setup-family classification for recommendations at generation time
 - confidence calibration and outcome-driven refinement for the new recommendation-plan path
 - migration or retirement strategy for the remaining legacy recommendation and sentiment-snapshot paths
 

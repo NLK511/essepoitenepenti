@@ -402,7 +402,9 @@ class WatchlistOrchestrationService:
     ) -> RecommendationPlan:
         analysis = self._analysis_payload(deep_output)
         summary_text = self._pluck(analysis, "summary", "text") or signal.source_breakdown.get("cheap_scan_summary") or ""
-        rationale = signal.source_breakdown.get("cheap_scan_summary") or ""
+        setup_family = self._plan_setup_family(signal, analysis, candidate)
+        confidence_components = self._plan_confidence_components(signal, analysis, candidate)
+        rationale = self._rationale_summary(signal, candidate, setup_family)
         warnings = list(signal.warnings)
         if deep_output is None or deep_error is not None:
             return RecommendationPlan(
@@ -414,8 +416,8 @@ class WatchlistOrchestrationService:
                 thesis_summary="Deep analysis did not complete; no actionable plan emitted.",
                 rationale_summary=rationale,
                 warnings=warnings,
-                evidence_summary={"summary": summary_text},
-                signal_breakdown=self._signal_breakdown(signal),
+                evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason="deep_analysis_unavailable"),
+                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -425,13 +427,17 @@ class WatchlistOrchestrationService:
 
         recommendation = deep_output.recommendation
         direction = self._normalize_direction(recommendation.direction)
+        action_reason = "actionable_setup"
         if direction == "short" and not watchlist.allow_shorts:
             warnings.append("watchlist does not allow shorts")
             action = "no_action"
+            action_reason = "shorts_disabled"
         elif signal.confidence_percent < self.confidence_threshold:
             action = "no_action"
+            action_reason = "below_action_confidence_threshold"
         elif direction not in {"long", "short"}:
             action = "no_action"
+            action_reason = "direction_not_actionable"
         else:
             action = direction
 
@@ -442,11 +448,11 @@ class WatchlistOrchestrationService:
                 action=action,
                 status="ok" if not warnings else "partial",
                 confidence_percent=signal.confidence_percent,
-                thesis_summary="Signal quality was insufficient for an actionable trade plan.",
+                thesis_summary=self._no_action_thesis(setup_family, action_reason),
                 rationale_summary=rationale,
                 warnings=list(dict.fromkeys(warnings)),
-                evidence_summary={"summary": summary_text},
-                signal_breakdown=self._signal_breakdown(signal),
+                evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason),
+                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -454,8 +460,6 @@ class WatchlistOrchestrationService:
                 ticker_signal_snapshot_id=signal.id,
             )
 
-        entry_low = round(min(recommendation.entry_price, recommendation.take_profit), 4)
-        entry_high = round(max(recommendation.entry_price, recommendation.entry_price), 4)
         stop_loss = round(float(recommendation.stop_loss), 4)
         take_profit = round(float(recommendation.take_profit), 4)
         return RecommendationPlan(
@@ -470,12 +474,12 @@ class WatchlistOrchestrationService:
             take_profit=take_profit,
             holding_period_days=self._holding_period_days(watchlist.default_horizon),
             risk_reward_ratio=self._risk_reward_ratio(recommendation),
-            thesis_summary=summary_text or "Actionable setup identified.",
+            thesis_summary=summary_text or self._actionable_thesis(action, setup_family),
             rationale_summary=rationale,
-            risks=list(dict.fromkeys(warnings)),
+            risks=self._plan_risks(warnings, setup_family, action),
             warnings=list(dict.fromkeys(warnings)),
-            evidence_summary={"summary": summary_text},
-            signal_breakdown=self._signal_breakdown(signal),
+            evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason),
+            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components),
             computed_at=signal.computed_at,
             run_id=run_id,
             job_id=job_id,
@@ -493,6 +497,8 @@ class WatchlistOrchestrationService:
         run_id: int | None,
         reason: str,
     ) -> RecommendationPlan:
+        setup_family = self._cheap_scan_setup_family(candidate)
+        confidence_components = self._plan_confidence_components(signal, {}, candidate)
         return RecommendationPlan(
             ticker=candidate.ticker,
             horizon=watchlist.default_horizon,
@@ -500,10 +506,10 @@ class WatchlistOrchestrationService:
             status="ok" if not signal.warnings else "partial",
             confidence_percent=signal.confidence_percent,
             thesis_summary=reason,
-            rationale_summary=candidate.indicator_summary,
+            rationale_summary=self._rationale_summary(signal, candidate, setup_family),
             warnings=list(signal.warnings),
-            evidence_summary={"cheap_scan_summary": candidate.indicator_summary},
-            signal_breakdown=self._signal_breakdown(signal),
+            evidence_summary=self._evidence_summary(candidate.indicator_summary, setup_family, confidence_components, action_reason="not_shortlisted"),
+            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components),
             computed_at=signal.computed_at,
             run_id=run_id,
             job_id=job_id,
@@ -586,7 +592,12 @@ class WatchlistOrchestrationService:
         return round(max(0.0, min(100.0, count * 10.0)), 2)
 
     @staticmethod
-    def _signal_breakdown(signal: TickerSignalSnapshot) -> dict[str, object]:
+    def _signal_breakdown(
+        signal: TickerSignalSnapshot,
+        *,
+        setup_family: str,
+        confidence_components: dict[str, float],
+    ) -> dict[str, object]:
         return {
             "attention_score": signal.attention_score,
             "macro_exposure_score": signal.macro_exposure_score,
@@ -596,8 +607,143 @@ class WatchlistOrchestrationService:
             "catalyst_score": signal.catalyst_score,
             "expected_move_score": signal.expected_move_score,
             "execution_quality_score": signal.execution_quality_score,
+            "setup_family": setup_family,
+            "confidence_components": confidence_components,
+            "confidence_bucket": WatchlistOrchestrationService._confidence_bucket(signal.confidence_percent),
             "mode": signal.diagnostics.get("mode"),
         }
+
+    def _plan_setup_family(
+        self,
+        signal: TickerSignalSnapshot,
+        analysis: dict[str, Any],
+        candidate: _CheapScanCandidate,
+    ) -> str:
+        explicit = self._pluck(analysis, "ticker_deep_analysis", "setup_family")
+        if isinstance(explicit, str) and explicit.strip() and explicit.strip() not in {"uncategorized", "no_action"}:
+            return explicit.strip()
+        return self._cheap_scan_setup_family(candidate, signal=signal)
+
+    def _plan_confidence_components(
+        self,
+        signal: TickerSignalSnapshot,
+        analysis: dict[str, Any],
+        candidate: _CheapScanCandidate,
+    ) -> dict[str, float]:
+        explicit = self._pluck(analysis, "ticker_deep_analysis", "confidence_components")
+        if isinstance(explicit, dict) and explicit:
+            return {str(key): round(float(value), 2) for key, value in explicit.items() if self._is_number(value)}
+        return {
+            "context_confidence": round((signal.macro_exposure_score * 0.45) + (signal.industry_alignment_score * 0.55), 2),
+            "directional_confidence": round(max(signal.ticker_sentiment_score, candidate.confidence_percent), 2),
+            "catalyst_confidence": round(signal.catalyst_score, 2),
+            "technical_clarity": round(signal.technical_setup_score, 2),
+            "execution_clarity": round(signal.execution_quality_score if signal.execution_quality_score > 0 else signal.attention_score, 2),
+            "data_quality_cap": round(max(25.0, 100.0 - (len(signal.warnings) * 10.0)), 2),
+        }
+
+    def _cheap_scan_setup_family(
+        self,
+        candidate: _CheapScanCandidate,
+        *,
+        signal: TickerSignalSnapshot | None = None,
+    ) -> str:
+        technical = signal.technical_setup_score if signal is not None else (candidate.cheap_scan_signal.trend_score if candidate.cheap_scan_signal is not None else candidate.confidence_percent)
+        breakout = candidate.cheap_scan_signal.breakout_score if candidate.cheap_scan_signal is not None else 0.0
+        momentum = candidate.cheap_scan_signal.momentum_score if candidate.cheap_scan_signal is not None else 0.0
+        catalyst = signal.catalyst_score if signal is not None else 0.0
+        macro = signal.macro_exposure_score if signal is not None else 0.0
+        industry = signal.industry_alignment_score if signal is not None else 0.0
+        direction = candidate.direction
+        if candidate.error_message:
+            return "no_action"
+        if catalyst >= 55.0:
+            return "catalyst_follow_through"
+        if breakout >= 70.0 and momentum >= 60.0:
+            return "breakout" if direction != "short" else "breakdown"
+        if technical >= 70.0 and momentum >= 55.0:
+            return "continuation"
+        if direction == "short" and technical >= 55.0:
+            return "macro_beneficiary_loser" if macro >= 55.0 or industry >= 55.0 else "mean_reversion"
+        if direction == "long" and technical >= 55.0 and (macro >= 55.0 or industry >= 55.0):
+            return "macro_beneficiary_loser"
+        if technical >= 50.0:
+            return "mean_reversion"
+        return "no_action"
+
+    @staticmethod
+    def _rationale_summary(signal: TickerSignalSnapshot, candidate: _CheapScanCandidate, setup_family: str) -> str:
+        components = [candidate.indicator_summary]
+        if setup_family and setup_family != "uncategorized":
+            components.append(f"setup family {setup_family.replace('_', ' ')}")
+        components.append(f"attention {signal.attention_score:.1f}")
+        components.append(f"confidence {signal.confidence_percent:.1f}")
+        return " · ".join(component for component in components if component)
+
+    @staticmethod
+    def _evidence_summary(
+        summary_text: str,
+        setup_family: str,
+        confidence_components: dict[str, float],
+        *,
+        action_reason: str,
+    ) -> dict[str, object]:
+        return {
+            "summary": summary_text,
+            "setup_family": setup_family,
+            "action_reason": action_reason,
+            "confidence_components": confidence_components,
+        }
+
+    @staticmethod
+    def _no_action_thesis(setup_family: str, action_reason: str) -> str:
+        setup_label = setup_family.replace("_", " ") if setup_family else "uncategorized"
+        if action_reason == "below_action_confidence_threshold":
+            return f"Detected a {setup_label} candidate, but conviction was too weak for an actionable trade plan."
+        if action_reason == "shorts_disabled":
+            return f"Detected a {setup_label} candidate, but the watchlist policy does not permit the required short expression."
+        if action_reason == "direction_not_actionable":
+            return f"Detected a {setup_label} structure, but direction remained too ambiguous for a trade plan."
+        return "Signal quality was insufficient for an actionable trade plan."
+
+    @staticmethod
+    def _actionable_thesis(action: str, setup_family: str) -> str:
+        direction = "bullish" if action == "long" else "bearish"
+        setup_label = setup_family.replace("_", " ") if setup_family else "uncategorized"
+        return f"Actionable {direction} {setup_label} setup identified."
+
+    @staticmethod
+    def _plan_risks(warnings: list[str], setup_family: str, action: str) -> list[str]:
+        risks = list(dict.fromkeys(warnings))
+        if setup_family in {"breakout", "breakdown"}:
+            risks.append("failed follow-through can reverse quickly after entry")
+        if setup_family == "mean_reversion":
+            risks.append("countertrend timing can fail if momentum persists")
+        if setup_family == "catalyst_follow_through":
+            risks.append("catalyst impulse may fade quickly if confirmation weakens")
+        if setup_family == "macro_beneficiary_loser":
+            risks.append("macro transmission can weaken if the broader regime shifts")
+        if action == "short":
+            risks.append("short squeeze risk remains elevated if sentiment reverses")
+        return list(dict.fromkeys(risks))
+
+    @staticmethod
+    def _confidence_bucket(confidence_percent: float) -> str:
+        if confidence_percent >= 80.0:
+            return "80_plus"
+        if confidence_percent >= 65.0:
+            return "65_to_79"
+        if confidence_percent >= 50.0:
+            return "50_to_64"
+        return "below_50"
+
+    @staticmethod
+    def _is_number(value: Any) -> bool:
+        try:
+            float(value)
+        except (TypeError, ValueError):
+            return False
+        return True
 
     @staticmethod
     def _holding_period_days(horizon: StrategyHorizon) -> int:

@@ -53,7 +53,7 @@ Current limitation:
 - manual ticker proposal jobs still use the legacy per-ticker production path
 - `TickerDeepAnalysisService` now executes its own native deep-analysis flow for watchlist orchestration, but it still reuses some legacy proposal-service internals and payload shapes rather than a fully separated ticker engine
 - macro and industry refresh runs now write context objects through news-first transitional writers, but those writers are still heuristic and not yet backed by a mature event pipeline
-- the redesign path now has first-class recommendation outcome persistence/evaluation, but setup-family-aware generation and confidence calibration are still incomplete
+- the redesign path now has first-class recommendation outcome persistence/evaluation, and watchlist-backed plans now persist setup family plus decomposed confidence components, but confidence calibration is still incomplete
 
 ## Recommendation-plan outcome evaluation
 
@@ -213,18 +213,17 @@ The methodology still has important limits:
 - sentiment is inspectable, but not yet fully validated as a source of measurable edge
 - scheduler and workflow reliability still matter because good methodology is less useful if operations are unreliable
 - more signal sources should not be added faster than their effectiveness can be measured
-- the redesign target architecture now has a real watchlist orchestration path, event-ranked news-first context writers, operator-visible shortlist reasoning, first-class recommendation-plan outcome tracking, and a dedicated ticker deep-analysis service boundary, but setup-family-aware generation, calibrated confidence, and deeper context extraction still need substantial work
+- the redesign target architecture now has a real watchlist orchestration path, event-ranked news-first context writers, operator-visible shortlist reasoning, first-class recommendation-plan outcome tracking, a dedicated ticker deep-analysis service boundary, and setup-family-aware generation for watchlist-backed plans, but calibrated confidence and deeper context extraction still need substantial work
 - the app is not yet justified as a broad few-day swing predictor because setup-family performance and confidence calibration are still not first-class decision loops
 - cheap scan is valuable for triage, but on its own it will not capture the full set of event-driven or regime-sensitive opportunities the redesign is supposed to surface
 
 ## Best next steps
 Given the work already completed, the next best implementation steps are:
-1. add explicit setup-family classification and setup-aware recommendation logic
-2. use stored recommendation outcomes to calibrate confidence and compare setup-family performance
-3. expose watchlist policy details more directly in operator workflows alongside the shortlist reasoning already surfaced
-4. deepen `TickerDeepAnalysisService` into a fuller redesign-native ticker engine with less dependence on legacy proposal payload conventions
-5. keep maturing macro/industry context extraction beyond the current heuristic event-ranking layer
-6. only then decide how quickly to retire, absorb, or narrow the remaining sentiment-snapshot-first and legacy recommendation paths
+1. use stored recommendation outcomes to calibrate confidence and compare setup-family performance
+2. expose watchlist policy details more directly in operator workflows alongside the shortlist reasoning already surfaced
+3. deepen `TickerDeepAnalysisService` into a fuller redesign-native ticker engine with less dependence on legacy proposal payload conventions
+4. keep maturing macro/industry context extraction beyond the current heuristic event-ranking layer
+5. only then decide how quickly to retire, absorb, or narrow the remaining sentiment-snapshot-first and legacy recommendation paths
 
 ## Practical reading guide
 
