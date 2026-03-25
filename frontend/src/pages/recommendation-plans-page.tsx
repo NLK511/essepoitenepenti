@@ -1,9 +1,9 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { getJson } from "../api";
+import { getJson, postForm } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { RecommendationPlan } from "../types";
+import type { RecommendationPlan, Run } from "../types";
 import { formatDate } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams): string {
@@ -25,6 +25,9 @@ export function RecommendationPlansPage() {
   const [searchParams, setSearchParams] = useSearchParams({ limit: "100" });
   const [plans, setPlans] = useState<RecommendationPlan[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [evaluationMessage, setEvaluationMessage] = useState<string | null>(null);
+  const [evaluating, setEvaluating] = useState(false);
+  const [evaluatingPlanId, setEvaluatingPlanId] = useState<number | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -37,6 +40,32 @@ export function RecommendationPlansPage() {
     }
     void load();
   }, [searchParams]);
+
+  async function queueEvaluation(planId?: number) {
+    try {
+      if (planId) {
+        setEvaluatingPlanId(planId);
+      } else {
+        setEvaluating(true);
+      }
+      setError(null);
+      setEvaluationMessage(null);
+      const run = planId
+        ? await postForm<Run>(`/api/recommendation-plans/${planId}/evaluate`, {})
+        : await postForm<Run>("/api/recommendation-plans/evaluate", {});
+      setEvaluationMessage(
+        planId
+          ? `Queued recommendation-plan evaluation run #${run.id} for plan #${planId}.`
+          : `Queued recommendation-plan evaluation run #${run.id}.`,
+      );
+      setPlans(await getJson<RecommendationPlan[]>(buildQuery(searchParams)));
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Failed to queue recommendation-plan evaluation");
+    } finally {
+      setEvaluating(false);
+      setEvaluatingPlanId(null);
+    }
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,8 +89,14 @@ export function RecommendationPlansPage() {
         kicker="Redesign browse"
         title="Recommendation plans"
         subtitle="Browse persisted plan outputs outside run detail. This page helps operators review long, short, and no-action decisions produced by the new orchestration layer."
+        actions={
+          <button type="button" className="button" onClick={() => void queueEvaluation()} disabled={evaluating}>
+            {evaluating ? "Queueing…" : "Queue plan evaluation"}
+          </button>
+        }
       />
       {error ? <ErrorState message={error} /> : null}
+      {evaluationMessage ? <Card><div className="helper-text">{evaluationMessage}</div></Card> : null}
       <Card>
         <SectionTitle kicker="Filters" title="Find recommendation plans" />
         <form className="form-grid" onSubmit={handleSubmit}>
@@ -87,6 +122,7 @@ export function RecommendationPlansPage() {
                   <th>Action</th>
                   <th>Confidence</th>
                   <th>Execution</th>
+                  <th>Latest outcome</th>
                   <th>Thesis</th>
                   <th>Run</th>
                 </tr>
@@ -110,8 +146,34 @@ export function RecommendationPlansPage() {
                       <div className="helper-text">take {plan.take_profit ?? "—"}</div>
                     </td>
                     <td>
+                      {plan.latest_outcome ? (
+                        <>
+                          <div className="cluster">
+                            <Badge tone={plan.latest_outcome.outcome === "win" ? "ok" : plan.latest_outcome.outcome === "loss" ? "danger" : "neutral"}>{plan.latest_outcome.outcome}</Badge>
+                            <span className="helper-text">{plan.latest_outcome.status}</span>
+                          </div>
+                          <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}%</div>
+                          <div className="helper-text top-gap-small">MFE {plan.latest_outcome.max_favorable_excursion ?? "—"}% · MAE {plan.latest_outcome.max_adverse_excursion ?? "—"}%</div>
+                        </>
+                      ) : (
+                        <div className="helper-text">No outcome stored yet.</div>
+                      )}
+                    </td>
+                    <td>
                       <div>{plan.thesis_summary || "No thesis stored."}</div>
                       {plan.rationale_summary ? <div className="helper-text top-gap-small">{plan.rationale_summary}</div> : null}
+                      {plan.id ? (
+                        <div className="helper-text top-gap-small">
+                          <button
+                            type="button"
+                            className="button-subtle"
+                            disabled={evaluatingPlanId === plan.id}
+                            onClick={() => void queueEvaluation(plan.id ?? undefined)}
+                          >
+                            {evaluatingPlanId === plan.id ? "Queueing evaluation…" : "Evaluate this plan"}
+                          </button>
+                        </div>
+                      ) : null}
                     </td>
                     <td>{plan.run_id ? <Link to={`/runs/${plan.run_id}`}>#{plan.run_id}</Link> : "—"}</td>
                   </tr>

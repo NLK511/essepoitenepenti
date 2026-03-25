@@ -22,6 +22,7 @@ from trade_proposer_app.domain.models import (
     PreflightCheck,
     Recommendation,
     RecommendationPlan,
+    RecommendationPlanOutcome,
     Run,
     RunDiagnostics,
     TickerSignalSnapshot,
@@ -29,6 +30,7 @@ from trade_proposer_app.domain.models import (
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
@@ -206,7 +208,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     run_id=run_id,
                 )
             )
-            RecommendationPlanRepository(session).create_plan(
+            plan = RecommendationPlanRepository(session).create_plan(
                 RecommendationPlan(
                     ticker="AAPL",
                     horizon="1w",
@@ -221,7 +223,25 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     thesis_summary="Macro and industry conditions remain supportive.",
                     rationale_summary="Signal stack aligns bullish.",
                     ticker_signal_snapshot_id=ticker_signal.id,
-                    signal_breakdown={"technical_setup": 0.77},
+                    signal_breakdown={"technical_setup": 0.77, "setup_family": "continuation"},
+                    run_id=run_id,
+                )
+            )
+            RecommendationOutcomeRepository(session).upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=plan.id or 0,
+                    ticker="AAPL",
+                    action="long",
+                    outcome="win",
+                    status="resolved",
+                    horizon_return_1d=1.2,
+                    horizon_return_3d=2.8,
+                    horizon_return_5d=3.4,
+                    max_favorable_excursion=4.1,
+                    max_adverse_excursion=0.9,
+                    confidence_bucket="65_to_79",
+                    setup_family="continuation",
+                    notes="Take profit reached before stop.",
                     run_id=run_id,
                 )
             )
@@ -1066,6 +1086,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ticker_signals.json()[0]["diagnostics"]["mode"], "deep_analysis")
         self.assertEqual(plans.json()[0]["action"], "long")
         self.assertEqual(plans.json()[0]["signal_breakdown"]["technical_setup"], 0.77)
+        self.assertEqual(plans.json()[0]["latest_outcome"]["outcome"], "win")
+        self.assertEqual(plans.json()[0]["latest_outcome"]["setup_family"], "continuation")
 
     async def test_run_detail_and_filtered_redesign_routes_expose_orchestration_results(self) -> None:
         run_id = self.seed_run_with_diagnostics()
@@ -1086,6 +1108,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(detail_payload["recommendation_plans"]), 1)
         self.assertEqual(detail_payload["ticker_signal_snapshots"][0]["diagnostics"]["mode"], "deep_analysis")
         self.assertEqual(detail_payload["recommendation_plans"][0]["action"], "long")
+        self.assertEqual(detail_payload["recommendation_plans"][0]["latest_outcome"]["outcome"], "win")
         self.assertEqual(macro.status_code, 200)
         self.assertEqual(industry.status_code, 200)
         self.assertEqual(ticker_signals.status_code, 200)
@@ -1094,6 +1117,23 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(industry.json()), 1)
         self.assertEqual(len(ticker_signals.json()), 1)
         self.assertEqual(len(plans.json()), 1)
+
+    async def test_recommendation_outcome_routes_and_plan_evaluation_queue_runs(self) -> None:
+        self.seed_context_and_recommendation_plan_data()
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            plans = await client.get("/api/recommendation-plans", params={"ticker": "AAPL"})
+            plan_id = plans.json()[0]["id"]
+            outcomes = await client.get("/api/recommendation-outcomes", params={"ticker": "AAPL"})
+            queued = await client.post("/api/recommendation-plans/evaluate", data={})
+            scoped = await client.post(f"/api/recommendation-plans/{plan_id}/evaluate", data={})
+
+        self.assertEqual(outcomes.status_code, 200)
+        self.assertEqual(outcomes.json()[0]["outcome"], "win")
+        self.assertEqual(queued.status_code, 200)
+        self.assertEqual(scoped.status_code, 200)
+        self.assertEqual(queued.json()["job_type"], JobType.RECOMMENDATION_EVALUATION.value)
+        self.assertEqual(scoped.json()["job_type"], JobType.RECOMMENDATION_EVALUATION.value)
 
     async def test_sentiment_snapshot_detail_returns_404_for_missing_snapshot(self) -> None:
         transport = httpx.ASGITransport(app=app)

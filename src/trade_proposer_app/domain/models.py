@@ -189,6 +189,13 @@ class EvaluationRunResult(BaseModel):
     pending_recommendations: int = 0
     win_recommendations: int = 0
     loss_recommendations: int = 0
+    evaluated_recommendation_plans: int = 0
+    synced_recommendation_plan_outcomes: int = 0
+    pending_recommendation_plan_outcomes: int = 0
+    win_recommendation_plan_outcomes: int = 0
+    loss_recommendation_plan_outcomes: int = 0
+    no_action_recommendation_plan_outcomes: int = 0
+    watchlist_recommendation_plan_outcomes: int = 0
     output: str = ""
 
 
@@ -342,6 +349,30 @@ class TickerSignalSnapshot(BaseModel):
     job_id: int | None = None
 
 
+class RecommendationPlanOutcome(BaseModel):
+    id: int | None = None
+    recommendation_plan_id: int
+    ticker: str = ""
+    action: str = ""
+    outcome: str
+    status: str = "open"
+    evaluated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    entry_touched: bool | None = None
+    stop_loss_hit: bool | None = None
+    take_profit_hit: bool | None = None
+    horizon_return_1d: float | None = None
+    horizon_return_3d: float | None = None
+    horizon_return_5d: float | None = None
+    max_favorable_excursion: float | None = None
+    max_adverse_excursion: float | None = None
+    realized_holding_period_days: float | None = None
+    direction_correct: bool | None = None
+    confidence_bucket: str = ""
+    setup_family: str = ""
+    notes: str = ""
+    run_id: int | None = None
+
+
 class RecommendationPlan(BaseModel):
     id: int | None = None
     ticker: str
@@ -367,6 +398,7 @@ class RecommendationPlan(BaseModel):
     job_id: int | None = None
     watchlist_id: int | None = None
     ticker_signal_snapshot_id: int | None = None
+    latest_outcome: RecommendationPlanOutcome | None = None
 
 
 class ProviderCredential(BaseModel):

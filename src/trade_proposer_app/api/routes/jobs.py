@@ -5,6 +5,7 @@ from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.domain.models import Job, Run, Watchlist
 from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
@@ -18,6 +19,7 @@ from trade_proposer_app.services.builders import (
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.evaluations import RecommendationEvaluationService
 from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.optimizations import WeightOptimizationService
 from trade_proposer_app.services.scheduling import CronSchedule, ScheduleParseError
 
@@ -152,12 +154,16 @@ async def execute_job(job_id: int, session: Session = Depends(get_db_session)) -
         jobs=JobRepository(session),
         runs=RunRepository(session),
         proposals=create_proposal_service(session),
-        evaluations=EvaluationExecutionService(RecommendationEvaluationService(session)),
+        evaluations=EvaluationExecutionService(
+            recommendation_evaluations=RecommendationEvaluationService(session),
+            recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
+        ),
         optimizations=create_optimization_service(session),
         macro_sentiment=create_macro_sentiment_service(session),
         industry_sentiment=create_industry_sentiment_service(session),
         macro_context=create_macro_context_service(session),
         industry_context=create_industry_context_service(session),
+        recommendation_plans=RecommendationPlanRepository(session),
     )
     return service.enqueue_job(job_id)
 

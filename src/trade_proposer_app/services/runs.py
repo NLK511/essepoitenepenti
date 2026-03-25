@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from trade_proposer_app.db import SessionLocal
 from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
@@ -15,6 +16,7 @@ from trade_proposer_app.services.builders import (
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.evaluations import RecommendationEvaluationService
 from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.optimizations import WeightOptimizationService
 from trade_proposer_app.services.scheduling import (
     ScheduleParseError,
@@ -38,12 +40,16 @@ def enqueue_enabled_jobs(now: datetime | None = None) -> int:
             jobs=jobs_repository,
             runs=runs_repository,
             proposals=create_proposal_service(session),
-            evaluations=EvaluationExecutionService(RecommendationEvaluationService(session)),
+            evaluations=EvaluationExecutionService(
+                recommendation_evaluations=RecommendationEvaluationService(session),
+                recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
+            ),
             optimizations=WeightOptimizationService(
                 session=session,
                 minimum_resolved_trades=settings_repository.get_optimization_minimum_resolved_trades(),
             ),
             watchlist_orchestration=create_watchlist_orchestration_service(session),
+            recommendation_plans=RecommendationPlanRepository(session),
         )
         normalized_now = normalize_schedule_time(now or datetime.now(timezone.utc))
         count = 0

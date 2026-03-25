@@ -277,6 +277,30 @@ export interface TickerSignalSnapshot {
   job_id: number | null;
 }
 
+export interface RecommendationPlanOutcome {
+  id: number | null;
+  recommendation_plan_id: number;
+  ticker: string;
+  action: string;
+  outcome: string;
+  status: string;
+  evaluated_at: string;
+  entry_touched: boolean | null;
+  stop_loss_hit: boolean | null;
+  take_profit_hit: boolean | null;
+  horizon_return_1d: number | null;
+  horizon_return_3d: number | null;
+  horizon_return_5d: number | null;
+  max_favorable_excursion: number | null;
+  max_adverse_excursion: number | null;
+  realized_holding_period_days: number | null;
+  direction_correct: boolean | null;
+  confidence_bucket: string;
+  setup_family: string;
+  notes: string;
+  run_id: number | null;
+}
+
 export interface RecommendationPlan {
   id: number | null;
   ticker: string;
@@ -302,6 +326,7 @@ export interface RecommendationPlan {
   job_id: number | null;
   watchlist_id: number | null;
   ticker_signal_snapshot_id: number | null;
+  latest_outcome: RecommendationPlanOutcome | null;
 }
 
 export interface RunDetailResponse {
@@ -325,6 +350,13 @@ export interface EvaluationRunResult {
   pending_recommendations: number;
   win_recommendations: number;
   loss_recommendations: number;
+  evaluated_recommendation_plans: number;
+  synced_recommendation_plan_outcomes: number;
+  pending_recommendation_plan_outcomes: number;
+  win_recommendation_plan_outcomes: number;
+  loss_recommendation_plan_outcomes: number;
+  no_action_recommendation_plan_outcomes: number;
+  watchlist_recommendation_plan_outcomes: number;
   output: string;
 }
 

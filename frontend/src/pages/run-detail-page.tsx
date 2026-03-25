@@ -372,6 +372,7 @@ export function RunDetailPage() {
                             <th>Entry</th>
                             <th>Stop</th>
                             <th>Take profit</th>
+                            <th>Latest outcome</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -396,6 +397,14 @@ export function RunDetailPage() {
                               </td>
                               <td>{plan.stop_loss ?? "—"}</td>
                               <td>{plan.take_profit ?? "—"}</td>
+                              <td>
+                                {plan.latest_outcome ? (
+                                  <>
+                                    <Badge tone={plan.latest_outcome.outcome === "win" ? "ok" : plan.latest_outcome.outcome === "loss" ? "danger" : "neutral"}>{plan.latest_outcome.outcome}</Badge>
+                                    <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}%</div>
+                                  </>
+                                ) : "—"}
+                              </td>
                             </tr>
                           ))}
                         </tbody>

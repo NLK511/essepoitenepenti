@@ -130,6 +130,13 @@ function EvaluationResultView({ summary, artifact, rawSummary, rawArtifact }: {
           <div className="summary-item"><span className="summary-label">Still pending</span><Badge tone="warning">{String(summary?.pending_recommendations ?? "—")}</Badge></div>
           <div className="summary-item"><span className="summary-label">WIN outcomes</span><Badge tone="ok">{String(summary?.win_recommendations ?? "—")}</Badge></div>
           <div className="summary-item"><span className="summary-label">LOSS outcomes</span><Badge tone="danger">{String(summary?.loss_recommendations ?? "—")}</Badge></div>
+          <div className="summary-item"><span className="summary-label">Plans evaluated</span><span className="summary-value">{String(summary?.evaluated_recommendation_plans ?? "—")}</span></div>
+          <div className="summary-item"><span className="summary-label">Plan outcomes synced</span><span className="summary-value">{String(summary?.synced_recommendation_plan_outcomes ?? "—")}</span></div>
+          <div className="summary-item"><span className="summary-label">Plan outcomes pending</span><Badge tone="warning">{String(summary?.pending_recommendation_plan_outcomes ?? "—")}</Badge></div>
+          <div className="summary-item"><span className="summary-label">Plan wins</span><Badge tone="ok">{String(summary?.win_recommendation_plan_outcomes ?? "—")}</Badge></div>
+          <div className="summary-item"><span className="summary-label">Plan losses</span><Badge tone="danger">{String(summary?.loss_recommendation_plan_outcomes ?? "—")}</Badge></div>
+          <div className="summary-item"><span className="summary-label">No-action plans</span><Badge tone="neutral">{String(summary?.no_action_recommendation_plan_outcomes ?? "—")}</Badge></div>
+          <div className="summary-item"><span className="summary-label">Watchlist plans</span><Badge tone="neutral">{String(summary?.watchlist_recommendation_plan_outcomes ?? "—")}</Badge></div>
         </div>
         {output ? (
           <details className="top-gap-small" open>

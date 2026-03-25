@@ -4,6 +4,8 @@
 
 Move from the current sentiment-oriented implementation toward a saliency-first, context-driven, short-horizon recommendation engine without breaking the app all at once.
 
+The migration should be steered by measurable recommendation quality, not just by architectural neatness. Near-term success is better operator decision support and better candidate ranking; stronger predictive claims should come only after stored outcomes and calibration support them.
+
 ## Guiding rule
 
 Do not try to convert the whole system in one step.
@@ -79,7 +81,28 @@ Actions:
 
 At this stage, macro and industry sentiment can remain as a secondary sub-signal if still useful.
 
-## Phase 6: Refactor ticker analysis around setup quality
+## Phase 6: Add recommendation-plan outcome tracking and evaluation
+
+Objective:
+
+Create a feedback loop for improving recommendation quality before making strong predictive claims.
+
+Status:
+
+This phase is now materially underway. The app persists recommendation outcomes against `RecommendationPlan`, exposes them through the API, and can queue recommendation-plan evaluation runs from operator workflows.
+
+Delivered actions:
+
+- store recommendation outcomes against `RecommendationPlan`
+- track TP/SL hits, fixed-horizon returns, and max favorable/adverse excursion
+- record direction correctness, setup-family attribution, and confidence buckets
+
+Remaining actions:
+
+- analyze which signal combinations and setup families work best
+- use stored outcomes for confidence calibration and recommendation-engine refinement
+
+## Phase 7: Refactor ticker analysis around setup quality
 
 Objective:
 
@@ -90,13 +113,15 @@ Actions:
 - feed macro context into ticker scoring
 - feed industry context into ticker scoring
 - combine ticker catalysts, sentiment, and technical structure
+- classify setup family
+- expose decomposed confidence components
 - output swing probability, direction, and tradeability
 
-## Phase 7: Add deterministic trade construction
+## Phase 8: Add deterministic trade construction
 
 Objective:
 
-Make the app produce practical recommendations.
+Make the app produce practical recommendation plans.
 
 Actions:
 
@@ -105,19 +130,6 @@ Actions:
 - add take-profit construction from structure and expected move
 - add risk/reward gating
 - emit `watchlist` or `no_action` when trade construction is weak
-
-## Phase 8: Add outcome tracking and evaluation
-
-Objective:
-
-Create a feedback loop for improving recommendation quality.
-
-Actions:
-
-- store recommendation outcomes
-- track TP/SL hits and realized P&L
-- record max favorable/adverse excursion
-- analyze which signal combinations work best
 
 ## Phase 9: Make context primary and sentiment secondary
 
@@ -141,9 +153,9 @@ A practical order would be:
 4. event extraction prototype
 5. macro context prototype
 6. industry context prototype
-7. ticker setup refactor
-8. recommendation construction
-9. outcome tracking
+7. outcome tracking and evaluation refinement
+8. ticker setup refactor
+9. recommendation construction
 
 ## Success criteria
 
@@ -152,5 +164,5 @@ The migration is successful when:
 - macro output explains salient market-moving developments
 - industry output reflects both macro transmission and industry-native drivers
 - ticker output evaluates short-horizon setup quality
-- final recommendations include entry, stop, take profit, confidence, and warnings
+- final recommendation plans include entry, stop, take profit, confidence, setup-aware rationale, and warnings
 - degraded inputs are always visible and never hidden behind silent fallbacks

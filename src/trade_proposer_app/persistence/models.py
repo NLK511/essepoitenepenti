@@ -237,3 +237,28 @@ class RecommendationPlanRecord(Base, TimestampMixin):
     ticker_signal_snapshot_id: Mapped[int | None] = mapped_column(ForeignKey("ticker_signal_snapshots.id"), nullable=True, index=True)
     job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
     run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+
+
+class RecommendationOutcomeRecord(Base, TimestampMixin):
+    __tablename__ = "recommendation_outcomes"
+    __table_args__ = (UniqueConstraint("recommendation_plan_id", name="uq_recommendation_outcomes_plan_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    recommendation_plan_id: Mapped[int] = mapped_column(ForeignKey("recommendation_plans.id"), index=True)
+    outcome: Mapped[str] = mapped_column(String(32), default="open", index=True)
+    status: Mapped[str] = mapped_column(String(32), default="open", index=True)
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    entry_touched: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    stop_loss_hit: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    take_profit_hit: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    horizon_return_1d: Mapped[float | None] = mapped_column(Float, nullable=True)
+    horizon_return_3d: Mapped[float | None] = mapped_column(Float, nullable=True)
+    horizon_return_5d: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_favorable_excursion: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_adverse_excursion: Mapped[float | None] = mapped_column(Float, nullable=True)
+    realized_holding_period_days: Mapped[float | None] = mapped_column(Float, nullable=True)
+    direction_correct: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    confidence_bucket: Mapped[str] = mapped_column(String(32), default="")
+    setup_family: Mapped[str] = mapped_column(String(64), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)

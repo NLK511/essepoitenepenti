@@ -133,7 +133,7 @@ class ContextServiceTests(unittest.TestCase):
         self.assertEqual(context.source_breakdown["primary_news_item_count"], 1)
         self.assertNotIn("primary_industry_news_evidence", context.missing_inputs)
         self.assertIn("conference_cycle", context.linked_industry_themes)
-        self.assertIn("backlog", context.linked_industry_themes)
+        self.assertIn("semiconductor_theme", context.linked_industry_themes)
         self.assertEqual(news_service.fetch_many_calls, [["NVDA", "AMD"]])
 
 

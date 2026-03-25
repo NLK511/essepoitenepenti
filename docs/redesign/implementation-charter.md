@@ -4,11 +4,19 @@
 
 This document locks the implementation-level defaults for the redesign.
 
-It exists so development can proceed with minimal ambiguity while staying aligned with the product objective: generate practical short-horizon recommendations that can help predict swings likely to happen within the next day, week, or month.
+It exists so development can proceed with minimal ambiguity while staying aligned with the product objective: generate practical short-horizon recommendations that can help identify likely swings within the next day, week, or month.
+
+This document also intentionally sets realism constraints on the redesign. The app should be built first as a high-quality operator decision-support and candidate-ranking system with explicit diagnostics, selective `no_action` behavior, and measurable recommendation outcomes. It should not be presented internally as a proven predictive engine until the redesign path has demonstrated real calibration and outcome quality through stored evaluation data.
 
 ## Core product objective
 
 The app should produce recommendation outputs for curated watchlists of tickers, using macro context, industry context, ticker-specific catalysts, sentiment, and technical structure.
+
+The realistic product target is:
+- surface a manageable shortlist from a broader watchlist
+- explain why each name was shortlisted, rejected, or downgraded to `no_action`
+- construct actionable trade plans only when the evidence is strong enough
+- create a stored feedback loop so the quality of those plans can be measured and improved
 
 The final recommendation states are:
 
@@ -117,6 +125,17 @@ This is required for:
 - backtesting
 - algorithm improvement
 
+### Practical product stance
+The redesign should optimize for decision quality and inspectability before claiming broad predictive skill.
+
+Near-term success means:
+- better operator triage
+- better candidate ranking
+- better trade framing
+- better suppression of weak or conflicted setups
+
+It does **not** yet mean the system should be treated as a fully validated few-day swing predictor across all names, sectors, and regimes.
+
 ## 5. Confidence representation
 Confidence should be exposed as a **percentage**.
 
@@ -128,6 +147,18 @@ Implementation note:
 Confidence should remain distinct from the action itself.
 
 A ticker can have usable data and moderate confidence in the analysis process yet still result in `no_action` if the directional edge is not strong enough.
+
+### Confidence design consequences
+Confidence should ultimately be decomposable rather than treated as one opaque number. The redesign should converge toward separate components such as:
+
+- context confidence
+- directional confidence
+- catalyst confidence
+- technical clarity
+- execution clarity
+- data-quality caps
+
+This keeps confidence honest and makes it easier to evaluate which parts of the engine actually add value.
 
 ## 6. Short-selling policy
 Whether shorts are allowed should be a **watchlist-level toggle**.
@@ -170,6 +201,11 @@ This may include:
 
 This staged model is required for efficiency.
 
+### Cheap-scan caution
+Cheap scan is a triage layer, not the source of truth for trade quality.
+
+It should be used to reduce cost and focus attention, but it should not be overinterpreted as the app's main edge. The redesign should continue to assume that event-sensitive, catalyst-driven, and regime-specific setups may require deeper evidence than trend or momentum features alone can provide.
+
 ## 8. Source policy
 The redesign should favor broad, free, and publicly accessible news sources.
 
@@ -196,6 +232,18 @@ The system should prefer:
 The app must not invent missing article content.
 
 If only headlines are available, downstream analysis must be aware that the evidence is headline-only.
+
+### Evidence-quality rule
+`News-first` is not enough on its own. The redesign should increasingly rank evidence by source quality and market usefulness, distinguishing between:
+
+- official or primary releases
+- top-tier market reporting
+- trade and industry press
+- company statements and filings
+- lower-value syndicated commentary
+- social confirmation and color
+
+The app should avoid treating all news items as equal evidence. Source class, freshness, specificity, and direct market relevance should all matter to context confidence and recommendation confidence.
 
 ## 9. Source hierarchy
 ### Macro
@@ -231,6 +279,22 @@ The app should use one shared context ingestion and event pipeline, which then p
 
 This avoids duplicated ingestion and helps reduce unnecessary API calls.
 
+### Event-centric expectation
+Macro and industry context should evolve toward explicit event objects and saliency ranking rather than remaining mostly keyword- or polarity-driven.
+
+The target shape is that the pipeline can identify and persist things such as:
+- event type
+- event title
+- event timestamp or active window
+- saliency
+- confidence
+- affected regions
+- affected industries
+- evidence links and source classes
+- expected transmission window
+
+Context snapshots should then explain what matters now, what changed since the previous run, and which sectors or tickers appear exposed.
+
 ## 11. Scheduling policy
 Watchlists may be split by region and exchange so that analysis can run at better moments of the day.
 
@@ -259,7 +323,7 @@ This includes:
 - macro context snapshots
 - industry context snapshots
 - ticker evaluations
-- recommendations
+- recommendation plans
 - recommendation outcomes
 
 ### Implemented groundwork and first write path
@@ -270,6 +334,7 @@ Implemented models and tables:
 - `IndustryContextSnapshot` → `industry_context_snapshots`
 - `TickerSignalSnapshot` → `ticker_signal_snapshots`
 - `RecommendationPlan` → `recommendation_plans`
+- `RecommendationPlanOutcome` → `recommendation_outcomes`
 
 Implemented support around them:
 - Alembic migration `0013_context_and_recommendation_models`
@@ -287,6 +352,31 @@ Current limitation:
 - manual ticker proposal jobs still use the legacy path
 - macro and industry context objects are now written during refresh runs through news-first transitional writers, but those writers are still heuristic and not yet backed by mature event extraction / source ranking
 - watchlist deep analysis now has a dedicated service boundary, but its underlying analysis still depends on the legacy proposal engine
+
+### Outcome-tracking requirement
+The redesign should treat stored recommendation outcomes as the main truth-testing mechanism for whether the engine is improving.
+
+That recommendation-plan path now records and evaluates measures such as:
+- entry touched or not
+- stop touched or not
+- take-profit touched or not
+- return after fixed horizons
+- maximum favorable excursion
+- maximum adverse excursion
+- realized holding period
+- direction correctness
+- confidence calibration buckets
+- setup-family capture
+
+Further analytical redesign work should be steered by those outcomes rather than by subjective plausibility alone.
+
+### Current outcome-tracking limitation
+Outcome persistence now exists, but the app still needs to use those stored results more intelligently.
+
+What remains unfinished is:
+- generation-time setup-family classification rather than mostly evaluation-time carry-through
+- confidence calibration against realized outcomes
+- stronger outcome-aware recommendation-engine refinement driven by measured setup-family performance
 
 ## 13. Observability rules
 Observability remains a hard rule.
@@ -324,12 +414,13 @@ That means development may:
 ## 15. Immediate design consequences
 The next implementation work should assume:
 
-- macro is saliency-first
-- industry combines macro and industry-native developments
-- ticker analysis is setup-oriented
+- macro is saliency-first and increasingly event-centric
+- industry combines macro transmission and industry-native developments
+- ticker analysis is setup-oriented rather than generic sentiment aggregation
 - recommendations are practical only when a directional edge is present
-- `no_action` produces no trade levels
+- `no_action` is a first-class success state when the edge is weak, conflicted, or untrustworthy
 - every evaluation is stored for learning and backtesting
+- the app should optimize for selective, inspectable decision quality before making strong predictive claims
 
 ## 16. Current redesign status
 Completed in the redesign track so far:
@@ -344,18 +435,22 @@ Completed in the redesign track so far:
 - macro and industry refresh runs now also write first-generation context snapshots into the redesign tables
 - those context writers now prefer primary news evidence, with social evidence used as secondary support
 - watchlist deep analysis now runs through a dedicated `TickerDeepAnalysisService` boundary
+- `RecommendationPlan` now has first-class persisted outcome tracking through `recommendation_outcomes`, including fixed-horizon returns, excursion metrics, direction correctness, confidence buckets, and latest-outcome API exposure
 
 Not yet complete:
 - real event extraction and saliency ranking
 - stronger official-source / trade-source ranking inside the news-first macro and industry context writers
 - redesign-native ticker deep-analysis and recommendation-engine logic independent of the legacy proposal engine internals
-- outcome tracking for the new recommendation-plan path
+- explicit setup-family classification for recommendations at generation time
+- confidence calibration and outcome-driven refinement for the new recommendation-plan path
 - migration or retirement strategy for the remaining legacy recommendation and sentiment-snapshot paths
 
 Practical meaning:
 - the redesign is now well past the purely conceptual stage
 - watchlist-backed proposal runs already exercise the first real redesign write path, refresh runs populate context tables, and shortlist reasoning is operator-visible without JSON spelunking
-- the next best work is no longer more persistence scaffolding; it is stronger evidence extraction, redesign-native ticker analysis, and evaluation of recommendation-plan outcomes
+- the app can realistically become a strong operator decision-support and candidate-ranking system in the near term
+- it should not yet be treated as a validated universal few-day swing predictor until recommendation outcomes and confidence calibration show real evidence of edge
+- the next best work is no longer more persistence scaffolding; it is stronger evidence extraction, redesign-native ticker analysis, setup-aware recommendation logic, and evaluation of recommendation-plan outcomes
 
 ## Open items not yet numerically fixed
 The following still require later tuning rather than immediate architectural decisions:

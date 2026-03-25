@@ -1,6 +1,6 @@
 # Raw Details Reference
 
-Trade Proposer App persists diagnostic metadata alongside runs, recommendations, and sentiment refresh workflows so operators can audit behavior without leaving the platform.
+Trade Proposer App persists diagnostic metadata alongside runs, legacy recommendations, redesign recommendation plans, and sentiment/context refresh workflows so operators can audit behavior without leaving the platform.
 
 ## Structured pipeline payloads
 
@@ -30,7 +30,7 @@ Typical shape:
 - `enhanced`: the fused sentiment result used by the scoring logic, plus component contributions
 - `coverage_insights` / `keyword_hits`: transparency fields for sparse or neutral sentiment coverage
 
-The UI uses the stored `snapshot_id` values to link runs and recommendations back to the exact shared snapshot records that influenced them.
+The UI uses the stored `snapshot_id` values to link runs and trade outputs back to the exact shared snapshot records that influenced them.
 
 ### Other stored payloads
 - `raw_output`: scripted stdout/stderr or raw pipeline detail when available
@@ -40,15 +40,17 @@ The UI uses the stored `snapshot_id` values to link runs and recommendations bac
 - `confidence_weights_json`: per-feature weights loaded from `weights.json`
 - `summary_method`: how the summarization backend generated the narrative
 
-## Recommendation-specific fields
+## Trade-output-specific fields
 
-Recommendations persist the execution-facing trade object:
+Legacy `Recommendation` objects persist the original execution-facing trade object:
 - `direction`: `LONG`, `SHORT`, or `NEUTRAL`
 - `confidence`: floating-point score in `[0, 1]`
 - `entry_price`
 - `stop_loss`
 - `take_profit`
 - `indicator_summary`
+
+The redesign path also persists `RecommendationPlan` objects, `RecommendationPlanOutcome` objects, and `TickerSignalSnapshot` objects for watchlist orchestration. Those redesign objects should increasingly become the canonical place to inspect structured trade planning, per-ticker reasoning, and measured plan outcomes.
 
 ## Run and workflow artifacts
 

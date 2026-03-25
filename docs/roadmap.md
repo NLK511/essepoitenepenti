@@ -54,6 +54,11 @@ Highest-value remaining non-analytical work:
 
 This is now the highest-value analytical/product phase once operational hardening remains under control.
 
+Guiding principle for the rest of this phase:
+- build the redesign first as a measurable decision-support and candidate-ranking system
+- do not assume predictive success just because the outputs look coherent
+- steer implementation by stored outcomes, calibration, and operator usefulness rather than by adding more unmeasured complexity
+
 Delivered in this phase so far:
 - first-class watchlist metadata aligned with trading horizons and exchange-aware scheduling
 - watchlist policy inspection endpoint
@@ -70,22 +75,34 @@ Delivered in this phase so far:
 - run-scoped API/UI visibility for redesign objects, including standalone browse pages for ticker signals and recommendation plans
 - richer run artifacts that now record shortlist rules, rejection counts, and per-ticker shortlist decisions
 - operator-facing shortlist reasoning surfaced more directly in run detail and ticker-signal views
+- first-class `recommendation_outcomes` persistence for `RecommendationPlan`, including horizon returns, excursion metrics, direction correctness, confidence buckets, and setup-family capture
+- app-native recommendation-plan evaluation flow exposed through API/UI queue actions and persisted back onto plans as latest outcomes
 
 Next required work in this phase:
-- strengthen the current news-first context writers with better event extraction, saliency ranking, and official/trade-source coverage quality
 - evolve `TickerDeepAnalysisService` from a service-boundary extraction into a genuinely redesign-native ticker-signal / recommendation-engine path
-- define how the new recommendation-plan path coexists with or replaces the current recommendation object path
-- add outcome tracking for the new recommendation-plan objects so backtesting and improvement stay first-class
+- strengthen the current news-first context writers with better event extraction, saliency ranking, and official/trade-source coverage quality
+- add explicit setup-family classification at generation time so recommendations can be produced and ranked as continuation, breakout, mean-reversion, catalyst follow-through, macro beneficiary, and similar setup classes rather than one generic scorer output
+- start using stored outcome data for confidence calibration instead of only persisting the raw buckets and slices
 - expose watchlist policy details more directly in the main operator workflows, not only through the policy endpoint
+- define how the new recommendation-plan path coexists with or replaces the current recommendation object path
 - decide whether sentiment snapshots become operator-facing compatibility artifacts, internal inputs, or candidates for retirement once context writers mature
+
+Recommended implementation order inside Phase 4:
+1. redesign-native `TickerDeepAnalysisService`
+2. event-centric macro/industry extraction with stronger source ranking
+3. setup-family-aware recommendation logic and confidence decomposition
+4. operator-facing watchlist policy visibility
+5. confidence calibration from stored outcomes
+6. legacy-path narrowing and retirement decisions
 
 ## Phase 5: Expansion (only after the above)
 
 Lower-priority growth items:
-- additional provider integrations where they demonstrably improve signal quality
+- additional provider integrations where they demonstrably improve measured signal quality rather than just increase source count
 - historical exports and reporting helpers
 - retry/dead-letter behavior for transient external failures
 - selective service extraction only if scale demands it
+- broader automation only after the recommendation-plan path shows credible, repeatable outcome quality
 
 ## Roadmap discipline
 
@@ -94,7 +111,7 @@ A useful roadmap should separate three things clearly:
 - what is incomplete but necessary
 - what is merely possible later
 
-The project had started to blur those categories in a few docs. This roadmap keeps them separate so the near-term priority stays clear: finish reliability/security/observability hardening, then wire the redesign onto a real execution path before broadening feature scope.
+The project had started to blur those categories in a few docs. This roadmap keeps them separate so the near-term priority stays clear: finish reliability/security/observability hardening, then push the redesign toward measurable recommendation quality before broadening feature scope.
 
 ## Related docs
 - `architecture.md`: system design and component boundaries

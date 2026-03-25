@@ -12,6 +12,7 @@ from trade_proposer_app.domain.models import (
     MacroContextSnapshot,
     Recommendation,
     RecommendationPlan,
+    RecommendationPlanOutcome,
     RunDiagnostics,
     RunOutput,
     SentimentSnapshot,
@@ -21,6 +22,7 @@ from trade_proposer_app.persistence.models import Base, JobRecord, ProviderCrede
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
@@ -394,6 +396,7 @@ class RepositoryTests(unittest.TestCase):
         session = create_session()
         context_repository = ContextSnapshotRepository(session)
         plan_repository = RecommendationPlanRepository(session)
+        outcome_repository = RecommendationOutcomeRepository(session)
 
         macro = context_repository.create_macro_context_snapshot(
             MacroContextSnapshot(
@@ -443,8 +446,24 @@ class RepositoryTests(unittest.TestCase):
                 thesis_summary="Oil-sensitive airlines face renewed cost pressure.",
                 rationale_summary="Macro and industry context align bearish.",
                 risks=["oil reversal"],
-                signal_breakdown={"macro_exposure": 0.8},
+                signal_breakdown={"macro_exposure": 0.8, "setup_family": "macro_beneficiary_loser"},
                 ticker_signal_snapshot_id=ticker_signal.id,
+            )
+        )
+        outcome_repository.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=plan.id or 0,
+                ticker="DAL",
+                action="short",
+                outcome="loss",
+                status="resolved",
+                horizon_return_1d=-1.2,
+                horizon_return_5d=-2.1,
+                max_favorable_excursion=0.9,
+                max_adverse_excursion=3.4,
+                confidence_bucket="50_to_64",
+                setup_family="macro_beneficiary_loser",
+                notes="Stop was hit first.",
             )
         )
 
@@ -462,6 +481,9 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(ticker_items[0].diagnostics["stage"], "cheap_scan_then_deep_analysis")
         self.assertEqual(plans[0].action, "short")
         self.assertEqual(plans[0].signal_breakdown["macro_exposure"], 0.8)
+        self.assertIsNotNone(plans[0].latest_outcome)
+        self.assertEqual(plans[0].latest_outcome.outcome, "loss")
+        self.assertEqual(plans[0].latest_outcome.setup_family, "macro_beneficiary_loser")
 
     def test_run_repository_lists_recommendation_history_for_ticker(self) -> None:
         session = create_session()

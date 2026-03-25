@@ -5,7 +5,7 @@ from sqlalchemy.exc import OperationalError
 
 from trade_proposer_app.config import settings
 
-HEAD_REVISION = "0013_context_and_recommendation_models"
+HEAD_REVISION = "0014_recommendation_outcomes"
 
 
 def get_alembic_config() -> Config:

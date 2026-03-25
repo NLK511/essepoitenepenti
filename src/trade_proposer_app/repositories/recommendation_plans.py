@@ -7,11 +7,13 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.domain.enums import StrategyHorizon
 from trade_proposer_app.domain.models import RecommendationPlan
 from trade_proposer_app.persistence.models import RecommendationPlanRecord
+from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 
 
 class RecommendationPlanRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
+        self.outcomes = RecommendationOutcomeRepository(session)
 
     def create_plan(self, plan: RecommendationPlan) -> RecommendationPlan:
         record = RecommendationPlanRecord(
@@ -44,6 +46,15 @@ class RecommendationPlanRepository:
         self.session.refresh(record)
         return self._to_model(record)
 
+    def get_plan(self, plan_id: int) -> RecommendationPlan:
+        record = self.session.get(RecommendationPlanRecord, plan_id)
+        if record is None:
+            raise ValueError(f"Recommendation plan {plan_id} not found")
+        plan = self._to_model(record)
+        outcome_map = self.outcomes.get_outcomes_by_plan_ids([record.id])
+        plan.latest_outcome = outcome_map.get(record.id)
+        return plan
+
     def list_plans(
         self,
         ticker: str | None = None,
@@ -59,7 +70,12 @@ class RecommendationPlanRepository:
         if run_id is not None:
             query = query.where(RecommendationPlanRecord.run_id == run_id)
         rows = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc()).limit(limit)).all()
-        return [self._to_model(row) for row in rows]
+        plans = [self._to_model(row) for row in rows]
+        outcome_map = self.outcomes.get_outcomes_by_plan_ids([plan.id for plan in plans if plan.id is not None])
+        for plan in plans:
+            if plan.id is not None:
+                plan.latest_outcome = outcome_map.get(plan.id)
+        return plans
 
     @staticmethod
     def _dump(value: Any) -> str:

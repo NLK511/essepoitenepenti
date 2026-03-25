@@ -33,6 +33,7 @@ class JobExecutionService:
         macro_context=None,
         industry_context=None,
         watchlist_orchestration=None,
+        recommendation_plans=None,
     ) -> None:
         self.jobs = jobs
         self.runs = runs
@@ -44,6 +45,7 @@ class JobExecutionService:
         self.macro_context = macro_context
         self.industry_context = industry_context
         self.watchlist_orchestration = watchlist_orchestration
+        self.recommendation_plans = recommendation_plans
 
     def enqueue_job(self, job_id: int, scheduled_for: datetime | None = None) -> Run:
         job = self.jobs.get(job_id)
@@ -385,14 +387,30 @@ class JobExecutionService:
         timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
         self.runs.set_timing(run_id, timing)
 
-    def enqueue_manual_evaluation(self, recommendation_id: int | None = None) -> Run:
+    def enqueue_manual_evaluation(
+        self,
+        recommendation_id: int | None = None,
+        recommendation_plan_id: int | None = None,
+        recommendation_plan_scope: bool = False,
+    ) -> Run:
         job_name = "manual recommendation evaluation" if recommendation_id is not None else "manual evaluation"
+        if recommendation_plan_id is not None:
+            job_name = "manual recommendation plan evaluation"
         job = self.jobs.get_or_create_system_job(job_name, JobType.RECOMMENDATION_EVALUATION)
         run = self.runs.enqueue(job.id or 0, job_type=JobType.RECOMMENDATION_EVALUATION)
+        trigger_mode = "manual_global"
+        trigger_source = "recommendations_ui"
+        if recommendation_plan_scope:
+            trigger_source = "recommendation_plans_ui"
+        if recommendation_plan_id is not None:
+            trigger_mode = "manual_recommendation_plan"
+            trigger_source = "recommendation_plans_ui"
+        elif recommendation_id is not None:
+            trigger_mode = "manual_recommendation"
         artifact: dict[str, object] = {
             "trigger": {
-                "mode": "manual_recommendation" if recommendation_id is not None else "manual_global",
-                "source": "recommendations_ui",
+                "mode": trigger_mode,
+                "source": trigger_source,
             }
         }
         if recommendation_id is not None:
@@ -401,6 +419,19 @@ class JobExecutionService:
                 "type": "recommendation_ids",
                 "recommendation_ids": [recommendation_id],
                 "ticker": recommendation.ticker,
+            }
+        elif recommendation_plan_scope:
+            artifact["scope"] = {
+                "type": "all_recommendation_plans",
+            }
+        if recommendation_plan_id is not None:
+            if self.recommendation_plans is None:
+                raise RuntimeError("recommendation plan repository is not configured")
+            plan = self.recommendation_plans.get_plan(recommendation_plan_id)
+            artifact["scope"] = {
+                "type": "recommendation_plan_ids",
+                "recommendation_plan_ids": [recommendation_plan_id],
+                "ticker": plan.ticker,
             }
         self.runs.set_artifact(run.id or 0, artifact)
         self.jobs.mark_enqueued(job.id or 0)
@@ -414,6 +445,13 @@ class JobExecutionService:
             "pending_recommendations": result.pending_recommendations,
             "win_recommendations": result.win_recommendations,
             "loss_recommendations": result.loss_recommendations,
+            "evaluated_recommendation_plans": result.evaluated_recommendation_plans,
+            "synced_recommendation_plan_outcomes": result.synced_recommendation_plan_outcomes,
+            "pending_recommendation_plan_outcomes": result.pending_recommendation_plan_outcomes,
+            "win_recommendation_plan_outcomes": result.win_recommendation_plan_outcomes,
+            "loss_recommendation_plan_outcomes": result.loss_recommendation_plan_outcomes,
+            "no_action_recommendation_plan_outcomes": result.no_action_recommendation_plan_outcomes,
+            "watchlist_recommendation_plan_outcomes": result.watchlist_recommendation_plan_outcomes,
             "output": result.output,
         }
 
