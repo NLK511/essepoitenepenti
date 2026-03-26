@@ -471,7 +471,13 @@ class WatchlistOrchestrationService:
         setup_family = self._plan_setup_family(signal, analysis, candidate)
         confidence_components = self._plan_confidence_components(signal, analysis, candidate)
         transmission_summary = self._transmission_summary(signal, analysis, candidate)
-        calibration_review = self._calibration_review(calibration_summary, setup_family, signal.confidence_percent)
+        calibration_review = self._calibration_review(
+            calibration_summary,
+            setup_family,
+            signal.confidence_percent,
+            horizon=watchlist.default_horizon.value,
+            transmission_summary=transmission_summary,
+        )
         rationale = self._rationale_summary(signal, candidate, setup_family, transmission_summary)
         warnings = list(signal.warnings)
         if deep_output is None or deep_error is not None:
@@ -573,7 +579,13 @@ class WatchlistOrchestrationService:
         setup_family = self._cheap_scan_setup_family(candidate)
         confidence_components = self._plan_confidence_components(signal, {}, candidate)
         transmission_summary = self._transmission_summary(signal, {}, candidate)
-        calibration_review = self._calibration_review(calibration_summary, setup_family, signal.confidence_percent)
+        calibration_review = self._calibration_review(
+            calibration_summary,
+            setup_family,
+            signal.confidence_percent,
+            horizon=watchlist.default_horizon.value,
+            transmission_summary=transmission_summary,
+        )
         return RecommendationPlan(
             ticker=candidate.ticker,
             horizon=watchlist.default_horizon,
@@ -907,6 +919,9 @@ class WatchlistOrchestrationService:
         calibration_summary: object | None,
         setup_family: str,
         confidence_percent: float,
+        *,
+        horizon: str,
+        transmission_summary: dict[str, object] | None = None,
     ) -> dict[str, object]:
         if calibration_summary is None:
             return {
@@ -919,26 +934,38 @@ class WatchlistOrchestrationService:
         bucket_key = self._confidence_bucket(confidence_percent)
         base_threshold = float(self.confidence_threshold)
         overall_win_rate = self._safe_rate(getattr(calibration_summary, "overall_win_rate_percent", None))
+        transmission_bias = self._calibration_transmission_bias(transmission_summary)
+        context_regime = self._calibration_context_regime(transmission_summary)
+        horizon_setup_key = f"{horizon}__{setup_family}"
+
         setup_bucket = self._find_calibration_bucket(getattr(calibration_summary, "by_setup_family", []), setup_family)
         confidence_bucket = self._find_calibration_bucket(getattr(calibration_summary, "by_confidence_bucket", []), bucket_key)
+        horizon_bucket = self._find_calibration_bucket(getattr(calibration_summary, "by_horizon", []), horizon)
+        transmission_bucket = self._find_calibration_bucket(getattr(calibration_summary, "by_transmission_bias", []), transmission_bias)
+        context_regime_bucket = self._find_calibration_bucket(getattr(calibration_summary, "by_context_regime", []), context_regime)
+        horizon_setup_bucket = self._find_calibration_bucket(getattr(calibration_summary, "by_horizon_setup_family", []), horizon_setup_key)
+
         threshold_adjustment = 0.0
         reasons: list[str] = []
-        for label, bucket in (("setup_family", setup_bucket), ("confidence_bucket", confidence_bucket)):
-            if bucket is None:
-                continue
-            resolved_count = int(getattr(bucket, "resolved_count", 0) or 0)
-            win_rate = self._safe_rate(getattr(bucket, "win_rate_percent", None))
-            if resolved_count < 3 or win_rate is None or overall_win_rate is None:
-                continue
-            if win_rate <= max(35.0, overall_win_rate - 15.0):
-                threshold_adjustment += 10.0
-                reasons.append(f"{label}_underperforming")
-            elif win_rate <= max(45.0, overall_win_rate - 8.0):
-                threshold_adjustment += 5.0
-                reasons.append(f"{label}_soft_underperformance")
-            elif win_rate >= min(80.0, overall_win_rate + 12.0):
-                threshold_adjustment -= 3.0
-                reasons.append(f"{label}_outperforming")
+        reviewed_buckets = (
+            ("setup_family", setup_bucket, 10.0, 5.0, -3.0),
+            ("confidence_bucket", confidence_bucket, 10.0, 5.0, -3.0),
+            ("horizon", horizon_bucket, 4.0, 2.0, -1.5),
+            ("transmission_bias", transmission_bucket, 4.0, 2.0, -1.5),
+            ("context_regime", context_regime_bucket, 4.0, 2.0, -1.5),
+            ("horizon_setup_family", horizon_setup_bucket, 6.0, 3.0, -2.0),
+        )
+        for label, bucket, hard_penalty, soft_penalty, reward in reviewed_buckets:
+            adjustment, bucket_reasons = self._bucket_threshold_adjustment(
+                label,
+                bucket,
+                overall_win_rate=overall_win_rate,
+                hard_penalty=hard_penalty,
+                soft_penalty=soft_penalty,
+                reward=reward,
+            )
+            threshold_adjustment += adjustment
+            reasons.extend(bucket_reasons)
         effective_threshold = max(45.0, min(90.0, base_threshold + threshold_adjustment))
         return {
             "enabled": True,
@@ -946,17 +973,13 @@ class WatchlistOrchestrationService:
             "effective_confidence_threshold": round(effective_threshold, 2),
             "threshold_adjustment": round(threshold_adjustment, 2),
             "overall_win_rate_percent": overall_win_rate,
-            "setup_family": {
-                "key": setup_family,
-                "resolved_count": int(getattr(setup_bucket, "resolved_count", 0) or 0) if setup_bucket is not None else 0,
-                "win_rate_percent": self._safe_rate(getattr(setup_bucket, "win_rate_percent", None)) if setup_bucket is not None else None,
-            },
-            "confidence_bucket": {
-                "key": bucket_key,
-                "resolved_count": int(getattr(confidence_bucket, "resolved_count", 0) or 0) if confidence_bucket is not None else 0,
-                "win_rate_percent": self._safe_rate(getattr(confidence_bucket, "win_rate_percent", None)) if confidence_bucket is not None else None,
-            },
-            "reasons": reasons,
+            "setup_family": self._bucket_snapshot(setup_family, setup_bucket),
+            "confidence_bucket": self._bucket_snapshot(bucket_key, confidence_bucket),
+            "horizon": self._bucket_snapshot(horizon, horizon_bucket),
+            "transmission_bias": self._bucket_snapshot(transmission_bias, transmission_bucket),
+            "context_regime": self._bucket_snapshot(context_regime, context_regime_bucket),
+            "horizon_setup_family": self._bucket_snapshot(horizon_setup_key, horizon_setup_bucket),
+            "reasons": list(dict.fromkeys(reasons)),
         }
 
     @staticmethod
@@ -967,6 +990,67 @@ class WatchlistOrchestrationService:
             if getattr(bucket, "key", None) == key:
                 return bucket
         return None
+
+    def _bucket_threshold_adjustment(
+        self,
+        label: str,
+        bucket: object | None,
+        *,
+        overall_win_rate: float | None,
+        hard_penalty: float,
+        soft_penalty: float,
+        reward: float,
+    ) -> tuple[float, list[str]]:
+        if bucket is None:
+            return 0.0, []
+        resolved_count = int(getattr(bucket, "resolved_count", 0) or 0)
+        win_rate = self._safe_rate(getattr(bucket, "win_rate_percent", None))
+        if resolved_count < 3 or win_rate is None or overall_win_rate is None:
+            return 0.0, []
+        if win_rate <= max(35.0, overall_win_rate - 15.0):
+            return hard_penalty, [f"{label}_underperforming"]
+        if win_rate <= max(45.0, overall_win_rate - 8.0):
+            return soft_penalty, [f"{label}_soft_underperformance"]
+        if win_rate >= min(80.0, overall_win_rate + 12.0):
+            return reward, [f"{label}_outperforming"]
+        return 0.0, []
+
+    def _bucket_snapshot(self, key: str, bucket: object | None) -> dict[str, object]:
+        return {
+            "key": key,
+            "resolved_count": int(getattr(bucket, "resolved_count", 0) or 0) if bucket is not None else 0,
+            "win_rate_percent": self._safe_rate(getattr(bucket, "win_rate_percent", None)) if bucket is not None else None,
+        }
+
+    @staticmethod
+    def _calibration_transmission_bias(transmission_summary: dict[str, object] | None) -> str:
+        if isinstance(transmission_summary, dict):
+            value = transmission_summary.get("context_bias")
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return "unknown"
+
+    def _calibration_context_regime(self, transmission_summary: dict[str, object] | None) -> str:
+        if not isinstance(transmission_summary, dict):
+            return "mixed_context"
+        tags = transmission_summary.get("transmission_tags")
+        normalized_tags = {str(item).strip() for item in tags} if isinstance(tags, list) else set()
+        if "catalyst_active" in normalized_tags and ("macro_dominant" in normalized_tags or "industry_dominant" in normalized_tags):
+            return "context_plus_catalyst"
+        if "macro_dominant" in normalized_tags and "industry_dominant" in normalized_tags:
+            return "macro_and_industry"
+        if "macro_dominant" in normalized_tags:
+            return "macro_dominant"
+        if "industry_dominant" in normalized_tags:
+            return "industry_dominant"
+        if "catalyst_active" in normalized_tags:
+            return "catalyst_active"
+        bias = self._calibration_transmission_bias(transmission_summary)
+        if bias == "tailwind":
+            return "tailwind_without_dominant_tag"
+        if bias == "headwind":
+            return "headwind_without_dominant_tag"
+        return "mixed_context"
 
     @staticmethod
     def _safe_rate(value: object) -> float | None:

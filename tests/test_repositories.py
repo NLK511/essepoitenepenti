@@ -733,7 +733,13 @@ class RepositoryTests(unittest.TestCase):
                     action="long",
                     confidence_percent=72.0,
                     thesis_summary="weak breakout",
-                    signal_breakdown={"setup_family": "breakout"},
+                    signal_breakdown={
+                        "setup_family": "breakout",
+                        "transmission_summary": {
+                            "context_bias": "tailwind",
+                            "transmission_tags": [],
+                        },
+                    },
                 )
             )
             outcomes.upsert_outcome(
@@ -768,8 +774,16 @@ class RepositoryTests(unittest.TestCase):
         calibration_review = plan_map["AAPL"].signal_breakdown["calibration_review"]
         self.assertEqual(calibration_review["enabled"], True)
         self.assertGreater(calibration_review["effective_confidence_threshold"], 78.0)
+        self.assertEqual(calibration_review["horizon"]["key"], "1w")
+        self.assertEqual(calibration_review["transmission_bias"]["key"], "tailwind")
+        self.assertEqual(calibration_review["context_regime"]["key"], "tailwind_without_dominant_tag")
+        self.assertEqual(calibration_review["horizon_setup_family"]["key"], "1w__breakout")
         self.assertIn("setup_family_underperforming", calibration_review["reasons"])
         self.assertIn("confidence_bucket_underperforming", calibration_review["reasons"])
+        self.assertIn("horizon_underperforming", calibration_review["reasons"])
+        self.assertIn("transmission_bias_underperforming", calibration_review["reasons"])
+        self.assertIn("context_regime_underperforming", calibration_review["reasons"])
+        self.assertIn("horizon_setup_family_underperforming", calibration_review["reasons"])
 
     def test_job_execution_processes_evaluation_run_and_persists_summary(self) -> None:
         session = create_session()
