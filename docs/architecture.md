@@ -103,7 +103,7 @@ flowchart LR
     NewsIngestionService --> Finnhub
     ProposalService --> OptionalLLM
 
-    ProposalService -->|recommendations + diagnostics| Services
+    ProposalService -->|historical legacy recommendation persistence only| Services
     Services --> Repositories
 ```
 
@@ -113,11 +113,11 @@ flowchart LR
 1. user creates or executes a proposal job from the frontend
 2. backend enqueues a run in the database
 3. worker claims the queued run atomically
-4. `JobExecutionService` calls `ProposalService`
-5. `ProposalService` fetches price history, computes technical features, loads the latest valid macro and industry snapshots, and computes live ticker sentiment
-6. the pipeline emits direction, confidence, entry/stop/take-profit, and diagnostic payloads
-7. backend persists the recommendation, diagnostics, run summary, and timing data
-8. frontend reads run and recommendation state back via `/api`
+4. `JobExecutionService` executes the redesign orchestration path for proposal workflows
+5. the active path fetches price history, computes technical/contextual inputs, loads the latest valid macro and industry sentiment/context artifacts, and computes ticker-level signals
+6. the pipeline emits redesign-native trade outputs and diagnostic payloads
+7. backend persists the relevant redesign objects, diagnostics, run summary, and timing data
+8. frontend reads run, recommendation-plan, and ticker-signal state back via `/api`
 
 ### Shared sentiment refresh
 1. scheduler or operator triggers macro/industry refresh
@@ -130,7 +130,7 @@ flowchart LR
 
 ### 1. API process
 Responsibilities:
-- expose JSON endpoints for dashboard, runs, jobs, watchlists, history, settings, docs, health, and sentiment snapshots
+- expose JSON endpoints for dashboard, runs, jobs, watchlists, recommendation plans/outcomes, settings, docs, health, and sentiment snapshots
 - validate user input
 - create jobs and runs
 - read and write database state
@@ -138,7 +138,7 @@ Responsibilities:
 
 ### 2. Frontend
 Responsibilities:
-- present operator workflows for setup, monitoring, debugging, history review, docs browsing, and sentiment inspection
+- present operator workflows for setup, monitoring, debugging, recommendation-plan review, docs browsing, and sentiment inspection
 - consume the API using typed fetch helpers
 - keep UI logic client-side while leaving domain logic on the backend
 
@@ -177,8 +177,10 @@ Stored entities today:
 - watchlists
 - jobs
 - runs
-- recommendations
+- historical legacy recommendations
 - sentiment snapshots
+- macro/industry/ticker context or signal objects on the redesign path
+- recommendation plans and recommendation-plan outcomes on the redesign path
 - app settings
 - provider credentials
 

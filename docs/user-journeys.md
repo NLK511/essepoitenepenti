@@ -15,10 +15,10 @@ Solo trader or operator bringing up the app locally or on a VPS.
 5. User creates a watchlist.
 6. User creates a proposal job.
 7. User runs the job.
-8. User reviews the resulting recommendations and the source run.
+8. User reviews the resulting trade outputs and the source run.
 
 ### Success outcome
-The user gets the first recommendation without needing to inspect raw logs or manually orchestrate backend components.
+The user gets the first recommendation or recommendation plan without needing to inspect raw logs or manually orchestrate backend components.
 
 ## Journey 2: Daily monitoring
 
@@ -27,29 +27,29 @@ Active user checking the system each day.
 
 ### Steps
 1. User opens the dashboard.
-2. User scans the latest recommendations as the primary trade objects.
+2. User scans the latest trade outputs as the primary trade objects.
 3. User scans recent runs as execution context.
 4. User notices whether health or snapshot freshness is degraded.
-5. User opens only problematic runs or recommendations for deeper inspection.
+5. User opens only problematic runs, recommendations, or recommendation plans for deeper inspection.
 
 ### Success outcome
 The user can separate trade decisions from system diagnostics without confusion.
 
-## Journey 3: Investigating a degraded recommendation
+## Journey 3: Investigating a degraded trade output
 
 ### Persona
-User sees that a recommendation came from a warning-heavy or partially degraded execution path.
+User sees that a recommendation plan came from a warning-heavy or partially degraded execution path.
 
 ### Steps
-1. User opens the recommendation detail page first.
+1. User opens the recommendation-plan browser or run detail redesign section first.
 2. User reviews the trade-ready object and stored diagnostics.
-3. User checks linked shared sentiment snapshots when present.
+3. User checks linked shared sentiment snapshots or context objects when present.
 4. User follows the link back to the source run.
 5. User reviews structured diagnostics to determine whether the issue came from missing providers, poor news coverage, stale snapshots, summary failure, or data retrieval problems.
-6. User decides whether the recommendation is still usable.
+6. User decides whether the trade output is still usable.
 
 ### Success outcome
-The user can judge whether a recommendation is degraded-but-usable or should be ignored.
+The user can judge whether a trade output is degraded-but-usable or should be ignored.
 
 ## Journey 4: Reviewing historical quality
 
@@ -57,14 +57,14 @@ The user can judge whether a recommendation is degraded-but-usable or should be 
 User wants to inspect archive quality and outcome quality over time.
 
 ### Steps
-1. User opens recommendation history.
-2. User filters by ticker, direction, state, or warnings.
-3. User runs or reviews evaluation workflows so older recommendations settle into `WIN`, `LOSS`, or `PENDING` states.
-4. User sorts by confidence or timestamp.
-5. User opens ticker pages or recommendation pages for deeper review.
+1. User opens recommendation plans.
+2. User filters by ticker, action, run, or calibration slice.
+3. User runs or reviews evaluation workflows so older plans settle into stored recommendation-plan outcomes.
+4. User sorts by confidence or timestamp through the available operator views.
+5. User opens ticker pages or run detail for deeper review.
 
 ### Success outcome
-The user can inspect recommendation quality and outcome state without direct database access.
+The user can inspect recommendation-plan quality and outcome state without direct database access.
 
 ## Journey 5: Running the self-improvement loop
 
@@ -81,7 +81,7 @@ Operator who wants evaluation and optimization to run on a cadence.
 ### Success outcome
 The self-improvement loop runs entirely inside the product with auditable records.
 
-## Journey 6: Managing shared sentiment context
+## Journey 6: Managing shared market context
 
 ### Persona
 Operator responsible for keeping macro and industry context fresh.
@@ -94,7 +94,7 @@ Operator responsible for keeping macro and industry context fresh.
 5. User opens snapshot detail pages or related runs when investigating quality problems.
 
 ### Success outcome
-Shared sentiment becomes an inspectable system artifact rather than hidden background state.
+Shared sentiment/context becomes an inspectable system artifact rather than hidden background state.
 
 ## Journey 7: Operating the deployment
 

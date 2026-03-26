@@ -14,7 +14,7 @@ This principle remains the correct constraint for Phase 2 because it prevents in
 - **App-native evaluation**: the evaluation workflow uses the same `yfinance`-derived price history as proposal generation and persists outcomes in the app.
 - **App-native optimization**: the optimization workflow reads resolved recommendations from the app database, adjusts the tracked `weights.json`, and stores backup metadata without depending on a prototype repo.
 - **Structured diagnostics**: each run persists `analysis_json`, feature vectors, aggregations, confidence weights, and run diagnostics in a stable backend-owned shape.
-- **UI inspection**: run and recommendation detail pages render structured diagnostics directly instead of exposing only raw JSON.
+- **UI inspection**: run detail and recommendation-plan-centered operator views render structured diagnostics directly instead of exposing only raw JSON.
 - **Configurable summarization**: the summary service supports digest-only output, OpenAI, and `pi_agent`, while preserving backend/model/runtime metadata and explicit errors.
 - **Shared sentiment snapshots**: macro and industry sentiment are now refreshed as first-class workflows, stored as `SentimentSnapshot` records, reused during proposal generation, linked from detail pages, and checked by health/preflight for freshness.
 - **Coverage transparency**: neutral outputs still explain themselves through `coverage_insights`, `keyword_hits`, provider errors, and snapshot freshness warnings.

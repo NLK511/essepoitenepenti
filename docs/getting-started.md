@@ -1,6 +1,6 @@
 # Getting Started
 
-Trade Proposer App is a FastAPI backend, a React/Vite frontend, a worker, and a scheduler. The recommendation pipeline runs entirely inside this repository: it uses `pandas` and `yfinance` for app-native scoring, applies the bundled `weights.json`, reuses shared macro and industry sentiment snapshots, and stores auditable diagnostics for every workflow.
+Trade Proposer App is a FastAPI backend, a React/Vite frontend, a worker, and a scheduler. The recommendation pipeline runs entirely inside this repository: it uses `pandas` and `yfinance` for app-native scoring, applies the bundled `weights.json`, reuses shared macro and industry sentiment/context artifacts, and stores auditable diagnostics for every workflow.
 
 This guide focuses on the fastest path to a healthy local install and the minimum checks that matter when something goes wrong.
 
@@ -36,6 +36,7 @@ What these scripts do:
 - `setup.sh`
   - creates `.venv`
   - installs the Python project in editable mode
+  - optionally installs dev and OpenAI extras
   - installs frontend dependencies in `frontend/`
   - creates or refreshes `.env`
   - generates a random `SECRET_KEY`
@@ -54,6 +55,8 @@ Useful options:
 ./scripts/setup.sh --python python3.12
 ./scripts/setup.sh --force-env
 ./scripts/setup.sh --skip-frontend-deps
+./scripts/setup.sh --with-dev-deps
+./scripts/setup.sh --with-openai
 
 ./scripts/start-dev.sh --allow-degraded-preflight
 ./scripts/start-dev.sh --run-scheduler-once
@@ -81,7 +84,7 @@ A good first pass is:
 5. create a proposal job
 6. run the job
 7. confirm the worker processes the run
-8. review the result in dashboard, run detail, recommendation detail, and history
+8. review the result in dashboard, run detail, recommendation plans, and ticker drill-downs
 9. open the sentiment page and confirm shared snapshots are present or clearly marked stale/missing
 
 ## Frontend development model
@@ -137,7 +140,7 @@ When using Vite manually, make sure `VITE_API_AUTH_TOKEN` matches `SINGLE_USER_A
 ## Summary engine and external services
 
 The app can keep summaries in digest-only mode or route them through:
-- `openai_api`
+- `openai_api` (install optional support with `./scripts/setup.sh --with-openai`)
 - `pi_agent`
 
 The resulting narrative, metadata, and any errors are stored in `analysis_json.summary`.
@@ -179,6 +182,12 @@ Frontend in a fourth terminal:
 ```bash
 cd frontend
 npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+Production-style local stop helper:
+
+```bash
+./scripts/stop-prod.sh
 ```
 
 ## Validation

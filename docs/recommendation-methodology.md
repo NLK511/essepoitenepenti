@@ -195,7 +195,7 @@ Each recommendation and run persists structured artifacts such as:
 - aggregations
 - diagnostics
 
-This is why the run detail and recommendation detail pages can explain what happened without relying on raw logs alone.
+This is why the run detail and recommendation-plan-centered operator views can explain what happened without relying on raw logs alone.
 
 ## Methodology strengths
 
@@ -227,8 +227,8 @@ Given the work already completed, the next best implementation steps are:
 
 ## Practical reading guide
 
-To inspect one recommendation end to end:
-1. open the recommendation detail page for the trade object
+To inspect one recommendation plan end to end:
+1. open the recommendation-plan browser for the trade object
 2. open the source run for the execution context
 3. inspect the shared snapshot references if present
 4. inspect the structured diagnostics and sentiment coverage fields

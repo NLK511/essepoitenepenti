@@ -1,6 +1,6 @@
 # Raw Details Reference
 
-Trade Proposer App persists diagnostic metadata alongside runs, legacy recommendations, redesign recommendation plans, and sentiment/context refresh workflows so operators can audit behavior without leaving the platform.
+Trade Proposer App persists diagnostic metadata alongside runs, redesign recommendation plans, and sentiment/context refresh workflows so operators can audit behavior without leaving the platform. Legacy recommendation records may still exist historically, but they are no longer the active operator workflow path.
 
 ## Structured pipeline payloads
 
@@ -42,15 +42,9 @@ The UI uses the stored `snapshot_id` values to link runs and trade outputs back 
 
 ## Trade-output-specific fields
 
-Legacy `Recommendation` objects persist the original execution-facing trade object:
-- `direction`: `LONG`, `SHORT`, or `NEUTRAL`
-- `confidence`: floating-point score in `[0, 1]`
-- `entry_price`
-- `stop_loss`
-- `take_profit`
-- `indicator_summary`
+The redesign path persists `RecommendationPlan` objects, `RecommendationPlanOutcome` objects, and `TickerSignalSnapshot` objects for watchlist orchestration. These redesign objects are the canonical place to inspect structured trade planning, per-ticker reasoning, and measured plan outcomes.
 
-The redesign path also persists `RecommendationPlan` objects, `RecommendationPlanOutcome` objects, and `TickerSignalSnapshot` objects for watchlist orchestration. Those redesign objects should increasingly become the canonical place to inspect structured trade planning, per-ticker reasoning, and measured plan outcomes.
+Historical legacy `Recommendation` rows may still exist in storage, but they are no longer the active proposal-review path.
 
 ## Run and workflow artifacts
 
@@ -102,4 +96,4 @@ These fields help populate debugger, run detail, and health views:
 - **Weights**: `weights.json` lives in `src/trade_proposer_app/data/` and is used for every scoring run.
 - **Preflight**: `/api/health/preflight` reports on dependency readiness and now also includes shared snapshot freshness checks, so the app can signal degraded sentiment context before proposal generation.
 - **Summarization**: operators configure the summary backend via `/settings` (`news_digest`, `openai_api`, or `pi_agent`).
-- **Diagnostics reuse**: the same stored payloads support the debugger, run detail pages, recommendation detail pages, ticker pages, and `/api/health`.
+- **Diagnostics reuse**: the same stored payloads support the debugger, run detail pages, recommendation-plan and ticker pages, and `/api/health`.

@@ -45,7 +45,7 @@ The app should continue to feel like one coherent operating system for this work
 - define watchlists and jobs
 - run proposal generation
 - inspect runs, redesign recommendation plans, and recommendation-plan outcomes as the main operator truth path
-- inspect legacy recommendations only where compatibility still requires them
+- treat legacy recommendations only as historical artifacts, not active operator workflow objects
 - review shared sentiment snapshots and newer context objects
 - evaluate historical outcomes
 - optimize weights
