@@ -107,6 +107,18 @@ function InfoBadge({ description, link }: { description: string; link: string })
   );
 }
 
+function calibrationSliceSummary(value: unknown, label: string): string {
+  const item = isRecord(value) ? (value as Record<string, unknown>) : null;
+  if (!item) {
+    return `${label} —`;
+  }
+  const key = typeof item.key === "string" ? item.key : label;
+  const sampleStatus = typeof item.sample_status === "string" ? item.sample_status : "unknown";
+  const resolvedCount = typeof item.resolved_count === "number" ? item.resolved_count : 0;
+  const winRate = typeof item.win_rate_percent === "number" ? `${item.win_rate_percent}%` : "—";
+  return `${label} ${key} · ${sampleStatus} · n=${resolvedCount} · win ${winRate}`;
+}
+
 export function RunDetailPage() {
   const { runId } = useParams<{ runId: string }>();
   const navigate = useNavigate();
@@ -499,6 +511,9 @@ export function RunDetailPage() {
                             const calibrationReviewStatus = typeof calibrationReview?.review_status === "string"
                               ? calibrationReview.review_status
                               : "disabled";
+                            const calibrationReasons = Array.isArray(calibrationReview?.reasons)
+                              ? calibrationReview.reasons.filter((value): value is string => typeof value === "string")
+                              : [];
                             return (
                               <tr key={plan.id ?? `${plan.ticker}-${plan.computed_at}`}>
                                 <td>
@@ -515,6 +530,10 @@ export function RunDetailPage() {
                                   <span style={{ color: scoreColor(plan.confidence_percent, 0, 100) }}>{plan.confidence_percent.toFixed(1)}%</span>
                                   <div className="helper-text top-gap-small">threshold {effectiveThreshold !== null ? `${effectiveThreshold.toFixed(1)}%` : "—"}</div>
                                   <div className="helper-text">calibration {calibrationReviewStatus}</div>
+                                  <div className="helper-text">{calibrationSliceSummary(calibrationReview?.horizon, "horizon")}</div>
+                                  <div className="helper-text">{calibrationSliceSummary(calibrationReview?.setup_family, "setup")}</div>
+                                  <div className="helper-text">{calibrationSliceSummary(calibrationReview?.confidence_bucket, "bucket")}</div>
+                                  <div className="helper-text">reasons {calibrationReasons.length > 0 ? calibrationReasons.join(" · ") : "none"}</div>
                                 </td>
                                 <td>
                                   <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>

@@ -80,6 +80,11 @@ Recommended default:
 ## Milestone A: redesign-first operator truth
 Achieved when operators can do most core review through redesign objects and views without needing legacy recommendation detail pages.
 
+Current status:
+- partially achieved
+- run detail, ticker-signal, recommendation-plan, calibration, and baseline workflows already expose most redesign-native operator review surfaces
+- the remaining major gap is that manual ticker jobs still bypass the redesign-native truth path
+
 ## Milestone B: manual-path convergence
 Achieved when manual ticker jobs can emit redesign-native ticker signals and recommendation plans with acceptable stability.
 

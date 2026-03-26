@@ -132,6 +132,7 @@ The biggest product-level gap is now the **remaining redesign migration**:
 - macro and industry refresh runs now write context objects through event-ranked, news-first transitional writers, but those writers still need richer multi-step event extraction and source hierarchy beyond their current heuristic saliency model
 - ticker signals and recommendation plans are now produced by a real watchlist orchestration path, and deep analysis now executes natively for watchlist runs, but the underlying analysis logic still reuses parts of the legacy proposal engine internals
 - outcome tracking for `RecommendationPlan` objects is now first-class, but setup-family evaluation and confidence calibration still need to mature beyond stored fields and buckets
+- redesign operator workflows should increasingly treat `RecommendationPlan` plus `RecommendationPlanOutcome` as the canonical truth path, with legacy `Recommendation` rows becoming compatibility-oriented rather than conceptually primary
 
 The biggest analytical caution is that coherent outputs do not yet equal measured edge. Right now the product can realistically claim strong operator support, explainability, and trade-candidate structuring. It should not yet claim broad predictive skill across all names and regimes until recommendation outcomes show that the redesign path is actually improving decision quality.
 

@@ -45,6 +45,18 @@ function sampleTone(status: string): "ok" | "warning" | "neutral" {
   return "neutral";
 }
 
+function calibrationSliceSummary(calibrationReview: Record<string, unknown> | null, key: string): string {
+  const item = asRecord(calibrationReview?.[key]);
+  if (!item) {
+    return "—";
+  }
+  const sliceKey = typeof item.key === "string" ? item.key : key;
+  const sampleStatus = typeof item.sample_status === "string" ? item.sample_status : "unknown";
+  const resolvedCount = typeof item.resolved_count === "number" ? item.resolved_count : 0;
+  const winRate = typeof item.win_rate_percent === "number" ? `${item.win_rate_percent}%` : "—";
+  return `${sliceKey} · ${sampleStatus} · n=${resolvedCount} · win ${winRate}`;
+}
+
 function CalibrationBucketTable({ title, buckets }: { title: string; buckets: RecommendationCalibrationSummary["by_confidence_bucket"] }) {
   return (
     <div className="top-gap">
@@ -287,6 +299,9 @@ export function RecommendationPlansPage() {
                   const calibrationReviewStatus = typeof calibrationReview?.review_status === "string"
                     ? calibrationReview.review_status
                     : "disabled";
+                  const calibrationReasons = Array.isArray(calibrationReview?.reasons)
+                    ? calibrationReview.reasons.filter((value): value is string => typeof value === "string")
+                    : [];
                   return (
                     <tr key={plan.id ?? `${plan.ticker}-${plan.computed_at}`}>
                       <td>{formatDate(plan.computed_at)}</td>
@@ -306,6 +321,10 @@ export function RecommendationPlansPage() {
                         <div>{plan.confidence_percent.toFixed(1)}%</div>
                         <div className="helper-text top-gap-small">threshold {effectiveThreshold !== null ? `${effectiveThreshold.toFixed(1)}%` : "—"}</div>
                         <div className="helper-text">calibration {calibrationReviewStatus}</div>
+                        <div className="helper-text">horizon {calibrationSliceSummary(calibrationReview, "horizon")}</div>
+                        <div className="helper-text">setup {calibrationSliceSummary(calibrationReview, "setup_family")}</div>
+                        <div className="helper-text">bucket {calibrationSliceSummary(calibrationReview, "confidence_bucket")}</div>
+                        <div className="helper-text">reasons {calibrationReasons.length > 0 ? calibrationReasons.join(" · ") : "none"}</div>
                       </td>
                       <td>
                         <div className="helper-text">entry {plan.entry_price_low ?? "—"}{plan.entry_price_high !== null && plan.entry_price_high !== plan.entry_price_low ? ` – ${plan.entry_price_high}` : ""}</div>
