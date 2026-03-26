@@ -35,6 +35,38 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
+function CalibrationBucketTable({ title, buckets }: { title: string; buckets: RecommendationCalibrationSummary["by_confidence_bucket"] }) {
+  return (
+    <div className="top-gap">
+      <SectionTitle title={title} />
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Slice</th>
+              <th>Total</th>
+              <th>Resolved</th>
+              <th>Win rate</th>
+              <th>Avg 5d</th>
+            </tr>
+          </thead>
+          <tbody>
+            {buckets.map((bucket) => (
+              <tr key={bucket.key}>
+                <td>{bucket.label}</td>
+                <td>{bucket.total_count}</td>
+                <td>{bucket.resolved_count}</td>
+                <td>{bucket.win_rate_percent ?? "—"}%</td>
+                <td>{bucket.average_return_5d ?? "—"}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function RecommendationPlansPage() {
   const [searchParams, setSearchParams] = useSearchParams({ limit: "100" });
   const [plans, setPlans] = useState<RecommendationPlan[] | null>(null);
@@ -141,60 +173,12 @@ export function RecommendationPlansPage() {
               <Card><strong>{calibration.loss_outcomes}</strong><div className="helper-text">losses</div></Card>
               <Card><strong>{calibration.no_action_outcomes}</strong><div className="helper-text">no_action outcomes</div></Card>
             </div>
-            <div className="top-gap">
-              <SectionTitle title="By confidence bucket" />
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Bucket</th>
-                      <th>Total</th>
-                      <th>Resolved</th>
-                      <th>Win rate</th>
-                      <th>Avg 5d</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {calibration.by_confidence_bucket.map((bucket) => (
-                      <tr key={bucket.key}>
-                        <td>{bucket.label}</td>
-                        <td>{bucket.total_count}</td>
-                        <td>{bucket.resolved_count}</td>
-                        <td>{bucket.win_rate_percent ?? "—"}%</td>
-                        <td>{bucket.average_return_5d ?? "—"}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div className="top-gap">
-              <SectionTitle title="By setup family" />
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Setup family</th>
-                      <th>Total</th>
-                      <th>Resolved</th>
-                      <th>Win rate</th>
-                      <th>Avg 5d</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {calibration.by_setup_family.map((bucket) => (
-                      <tr key={bucket.key}>
-                        <td>{bucket.label}</td>
-                        <td>{bucket.total_count}</td>
-                        <td>{bucket.resolved_count}</td>
-                        <td>{bucket.win_rate_percent ?? "—"}%</td>
-                        <td>{bucket.average_return_5d ?? "—"}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <CalibrationBucketTable title="By confidence bucket" buckets={calibration.by_confidence_bucket} />
+            <CalibrationBucketTable title="By setup family" buckets={calibration.by_setup_family} />
+            <CalibrationBucketTable title="By horizon" buckets={calibration.by_horizon} />
+            <CalibrationBucketTable title="By transmission bias" buckets={calibration.by_transmission_bias} />
+            <CalibrationBucketTable title="By context regime" buckets={calibration.by_context_regime} />
+            <CalibrationBucketTable title="By horizon + setup family" buckets={calibration.by_horizon_setup_family} />
           </>
         ) : null}
       </Card>

@@ -84,6 +84,7 @@ Delivered in this phase so far:
 - recommendation-plan workflows now expose baseline cohort comparisons so operators can compare actual actionable output against simple high-confidence, cheap-scan-attention, momentum-lane, and catalyst-lane slices
 - watchlist orchestration now includes richer ticker transmission summaries and a reserved catalyst/event shortlist lane so cheap-scan technical ranking does not own every deep-analysis slot
 - ticker deep analysis now uses a redesign-native internal feature/context pipeline and only leans on legacy proposal services for raw data/news enrichment and compatibility fallback
+- calibration reporting now includes horizon, transmission-bias, context-regime, and horizon-plus-setup-family slices so operators can judge where the redesign is or is not working
 
 Next required work in this phase:
 - use the new calibration summaries to drive actual confidence re-scaling and operator thresholds rather than only reporting grouped outcomes

@@ -310,6 +310,9 @@ export interface RecommendationPlanOutcome {
   direction_correct: boolean | null;
   confidence_bucket: string;
   setup_family: string;
+  horizon: string | null;
+  transmission_bias: string | null;
+  context_regime: string | null;
   notes: string;
   run_id: number | null;
 }
@@ -371,6 +374,10 @@ export interface RecommendationCalibrationSummary {
   overall_win_rate_percent: number | null;
   by_confidence_bucket: RecommendationCalibrationBucket[];
   by_setup_family: RecommendationCalibrationBucket[];
+  by_horizon: RecommendationCalibrationBucket[];
+  by_transmission_bias: RecommendationCalibrationBucket[];
+  by_context_regime: RecommendationCalibrationBucket[];
+  by_horizon_setup_family: RecommendationCalibrationBucket[];
 }
 
 export interface RecommendationBaselineComparison {

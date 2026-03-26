@@ -62,6 +62,9 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
         self.assertEqual(len(stored), 1)
         self.assertEqual(stored[0].outcome, "win")
         self.assertEqual(stored[0].setup_family, "continuation")
+        self.assertEqual(stored[0].horizon, "1w")
+        self.assertEqual(stored[0].transmission_bias, "unknown")
+        self.assertEqual(stored[0].context_regime, "mixed_context")
         self.assertTrue((stored[0].horizon_return_1d or 0) > 0)
         self.assertTrue((stored[0].max_favorable_excursion or 0) > 0)
 

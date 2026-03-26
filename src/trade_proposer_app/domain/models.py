@@ -369,6 +369,9 @@ class RecommendationPlanOutcome(BaseModel):
     direction_correct: bool | None = None
     confidence_bucket: str = ""
     setup_family: str = ""
+    horizon: str | None = None
+    transmission_bias: str | None = None
+    context_regime: str | None = None
     notes: str = ""
     run_id: int | None = None
 
@@ -430,6 +433,10 @@ class RecommendationCalibrationSummary(BaseModel):
     overall_win_rate_percent: float | None = None
     by_confidence_bucket: list[RecommendationCalibrationBucket] = Field(default_factory=list)
     by_setup_family: list[RecommendationCalibrationBucket] = Field(default_factory=list)
+    by_horizon: list[RecommendationCalibrationBucket] = Field(default_factory=list)
+    by_transmission_bias: list[RecommendationCalibrationBucket] = Field(default_factory=list)
+    by_context_regime: list[RecommendationCalibrationBucket] = Field(default_factory=list)
+    by_horizon_setup_family: list[RecommendationCalibrationBucket] = Field(default_factory=list)
 
 
 class RecommendationBaselineComparison(BaseModel):

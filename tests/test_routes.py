@@ -223,7 +223,14 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     thesis_summary="Macro and industry conditions remain supportive.",
                     rationale_summary="Signal stack aligns bullish.",
                     ticker_signal_snapshot_id=ticker_signal.id,
-                    signal_breakdown={"technical_setup": 0.77, "setup_family": "continuation"},
+                    signal_breakdown={
+                        "technical_setup": 0.77,
+                        "setup_family": "continuation",
+                        "transmission_summary": {
+                            "context_bias": "tailwind",
+                            "transmission_tags": ["macro_dominant", "catalyst_active"],
+                        },
+                    },
                     run_id=run_id,
                 )
             )
@@ -1133,7 +1140,13 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     action="long",
                     confidence_percent=52.0,
                     thesis_summary="Weaker continuation setup.",
-                    signal_breakdown={"setup_family": "breakout"},
+                    signal_breakdown={
+                        "setup_family": "breakout",
+                        "transmission_summary": {
+                            "context_bias": "headwind",
+                            "transmission_tags": ["industry_dominant"],
+                        },
+                    },
                 )
             )
             RecommendationOutcomeRepository(session).upsert_outcome(
@@ -1173,6 +1186,17 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         setup_map = {item["key"]: item for item in summary.json()["by_setup_family"]}
         self.assertEqual(setup_map["continuation"]["win_count"], 1)
         self.assertEqual(setup_map["breakout"]["loss_count"], 1)
+        horizon_map = {item["key"]: item for item in summary.json()["by_horizon"]}
+        self.assertEqual(horizon_map["1w"]["resolved_count"], 2)
+        transmission_map = {item["key"]: item for item in summary.json()["by_transmission_bias"]}
+        self.assertEqual(transmission_map["tailwind"]["win_count"], 1)
+        self.assertEqual(transmission_map["headwind"]["loss_count"], 1)
+        regime_map = {item["key"]: item for item in summary.json()["by_context_regime"]}
+        self.assertEqual(regime_map["context_plus_catalyst"]["win_count"], 1)
+        self.assertEqual(regime_map["industry_dominant"]["loss_count"], 1)
+        horizon_setup_map = {item["key"]: item for item in summary.json()["by_horizon_setup_family"]}
+        self.assertEqual(horizon_setup_map["1w__continuation"]["win_count"], 1)
+        self.assertEqual(horizon_setup_map["1w__breakout"]["loss_count"], 1)
         self.assertEqual(baselines.status_code, 200)
         self.assertEqual(baselines.json()["total_trade_plans_reviewed"], 2)
         baseline_map = {item["key"]: item for item in baselines.json()["comparisons"]}

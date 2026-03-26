@@ -1,3 +1,5 @@
+import json
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -111,4 +113,57 @@ class RecommendationOutcomeRepository:
         model = self._to_model(record)
         model.ticker = plan_record.ticker
         model.action = plan_record.action
+        model.horizon = plan_record.horizon
+        transmission_summary = self._transmission_summary(plan_record)
+        model.transmission_bias = self._string_value(transmission_summary.get("context_bias"), default="unknown")
+        model.context_regime = self._context_regime(transmission_summary)
         return model
+
+    @staticmethod
+    def _load_json(raw: str | None) -> dict[str, object]:
+        if not raw:
+            return {}
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+    def _transmission_summary(self, plan_record: RecommendationPlanRecord) -> dict[str, object]:
+        signal_breakdown = self._load_json(plan_record.signal_breakdown_json)
+        evidence_summary = self._load_json(plan_record.evidence_summary_json)
+        candidate = signal_breakdown.get("transmission_summary")
+        if isinstance(candidate, dict):
+            return candidate
+        candidate = evidence_summary.get("transmission_summary")
+        return candidate if isinstance(candidate, dict) else {}
+
+    @staticmethod
+    def _string_value(value: object, *, default: str) -> str:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        return default
+
+    def _context_regime(self, transmission_summary: dict[str, object]) -> str:
+        tags = transmission_summary.get("transmission_tags")
+        if isinstance(tags, list):
+            normalized = [str(item).strip() for item in tags if str(item).strip()]
+        else:
+            normalized = []
+        unique = set(normalized)
+        if "catalyst_active" in unique and ("macro_dominant" in unique or "industry_dominant" in unique):
+            return "context_plus_catalyst"
+        if "macro_dominant" in unique and "industry_dominant" in unique:
+            return "macro_and_industry"
+        if "macro_dominant" in unique:
+            return "macro_dominant"
+        if "industry_dominant" in unique:
+            return "industry_dominant"
+        if "catalyst_active" in unique:
+            return "catalyst_active"
+        bias = self._string_value(transmission_summary.get("context_bias"), default="mixed")
+        if bias == "tailwind":
+            return "tailwind_without_dominant_tag"
+        if bias == "headwind":
+            return "headwind_without_dominant_tag"
+        return "mixed_context"
