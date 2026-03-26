@@ -1157,6 +1157,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             plan_id = plans.json()[0]["id"]
             outcomes = await client.get("/api/recommendation-outcomes", params={"ticker": "AAPL"})
             summary = await client.get("/api/recommendation-outcomes/summary")
+            baselines = await client.get("/api/recommendation-plans/baselines")
             queued = await client.post("/api/recommendation-plans/evaluate", data={})
             scoped = await client.post(f"/api/recommendation-plans/{plan_id}/evaluate", data={})
 
@@ -1172,6 +1173,12 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         setup_map = {item["key"]: item for item in summary.json()["by_setup_family"]}
         self.assertEqual(setup_map["continuation"]["win_count"], 1)
         self.assertEqual(setup_map["breakout"]["loss_count"], 1)
+        self.assertEqual(baselines.status_code, 200)
+        self.assertEqual(baselines.json()["total_trade_plans_reviewed"], 2)
+        baseline_map = {item["key"]: item for item in baselines.json()["comparisons"]}
+        self.assertEqual(baseline_map["actual_actionable"]["resolved_trade_count"], 2)
+        self.assertEqual(baseline_map["actual_actionable"]["win_rate_percent"], 50.0)
+        self.assertEqual(baseline_map["momentum_setup_lane"]["resolved_trade_count"], 2)
         self.assertEqual(queued.status_code, 200)
         self.assertEqual(scoped.status_code, 200)
         self.assertEqual(queued.json()["job_type"], JobType.RECOMMENDATION_EVALUATION.value)

@@ -440,6 +440,7 @@ Completed in the redesign track so far:
 - watchlist-backed `RecommendationPlan` generation now writes setup-family-aware signal breakdowns and decomposed confidence components into persisted redesign payloads
 - recommendation outcomes can now be summarized by confidence bucket and setup family through API/UI calibration views for operator review
 - watchlist-backed plan generation now applies early calibration-aware action-threshold adjustments using stored setup-family and confidence-bucket outcome slices
+- recommendation-plan operator workflows now include baseline cohort comparisons against simple high-confidence, cheap-scan-attention, momentum-lane, and catalyst-lane heuristics
 
 Not yet complete:
 - a richer event-extraction pipeline beyond the current heuristic event-ranking and source-priority layer

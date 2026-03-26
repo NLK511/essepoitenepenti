@@ -432,6 +432,27 @@ class RecommendationCalibrationSummary(BaseModel):
     by_setup_family: list[RecommendationCalibrationBucket] = Field(default_factory=list)
 
 
+class RecommendationBaselineComparison(BaseModel):
+    key: str
+    label: str
+    description: str = ""
+    total_plan_count: int = 0
+    trade_plan_count: int = 0
+    resolved_trade_count: int = 0
+    win_count: int = 0
+    loss_count: int = 0
+    open_trade_count: int = 0
+    win_rate_percent: float | None = None
+    average_return_5d: float | None = None
+    average_confidence_percent: float | None = None
+
+
+class RecommendationBaselineSummary(BaseModel):
+    total_plans_reviewed: int = 0
+    total_trade_plans_reviewed: int = 0
+    comparisons: list[RecommendationBaselineComparison] = Field(default_factory=list)
+
+
 class ProviderCredential(BaseModel):
     provider: str
     api_key: str = ""

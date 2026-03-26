@@ -68,7 +68,7 @@ Current limitation:
 - manual ticker proposal jobs still use the legacy per-ticker proposal path
 - macro and industry refresh runs do now write context objects through event-ranked, news-first transitional writers that prioritize stronger official/trade/major sources before social confirmation, but they are still heuristic rather than a fully mature event pipeline
 - watchlist deep analysis now runs through its own native execution path, but it still reuses some legacy proposal-service internals and payload conventions rather than a fully separated ticker engine
-- recommendation-plan outcome persistence and evaluation are now first-class, watchlist-backed plan generation now records setup-family and decomposed confidence details, operator workflows can inspect grouped calibration summaries by confidence bucket and setup family, and watchlist-backed action gating now applies calibration-aware confidence-threshold adjustments for underperforming buckets/setup families; full recalibration remains early and heuristic
+- recommendation-plan outcome persistence and evaluation are now first-class, watchlist-backed plan generation now records setup-family and decomposed confidence details, operator workflows can inspect grouped calibration summaries by confidence bucket and setup family, watchlist-backed action gating now applies calibration-aware confidence-threshold adjustments for underperforming buckets/setup families, and recommendation-plan workflows now expose baseline cohort comparisons (actual actionable plans vs high-confidence, cheap-scan-attention, momentum-lane, and catalyst-lane slices); full recalibration remains early and heuristic
 
 > **Enable the Nitter source**
 >

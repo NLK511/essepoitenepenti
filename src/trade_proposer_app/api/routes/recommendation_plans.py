@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.domain.models import RecommendationPlan, Run
+from trade_proposer_app.domain.models import RecommendationBaselineSummary, RecommendationPlan, Run
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
@@ -12,6 +12,7 @@ from trade_proposer_app.services.evaluation_execution import EvaluationExecution
 from trade_proposer_app.services.evaluations import RecommendationEvaluationService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.optimizations import WeightOptimizationService
+from trade_proposer_app.services.recommendation_plan_baselines import RecommendationPlanBaselineService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 
 router = APIRouter(prefix="/recommendation-plans", tags=["recommendation-plans"])
@@ -32,6 +33,20 @@ async def list_recommendation_plans(
         action=normalized_action,
         limit=limit,
         run_id=run_id,
+    )
+
+
+@router.get("/baselines")
+async def summarize_recommendation_plan_baselines(
+    ticker: str | None = Query(default=None),
+    run_id: int | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=2000),
+    session: Session = Depends(get_db_session),
+) -> RecommendationBaselineSummary:
+    return RecommendationPlanBaselineService(RecommendationPlanRepository(session)).summarize(
+        ticker=ticker.strip().upper() if ticker else None,
+        run_id=run_id,
+        limit=limit,
     )
 
 

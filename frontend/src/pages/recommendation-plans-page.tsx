@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { RecommendationCalibrationSummary, RecommendationPlan, Run } from "../types";
+import type { RecommendationBaselineSummary, RecommendationCalibrationSummary, RecommendationPlan, Run } from "../types";
 import { formatDate } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams): string {
@@ -25,6 +25,7 @@ export function RecommendationPlansPage() {
   const [searchParams, setSearchParams] = useSearchParams({ limit: "100" });
   const [plans, setPlans] = useState<RecommendationPlan[] | null>(null);
   const [calibration, setCalibration] = useState<RecommendationCalibrationSummary | null>(null);
+  const [baselines, setBaselines] = useState<RecommendationBaselineSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [evaluationMessage, setEvaluationMessage] = useState<string | null>(null);
   const [evaluating, setEvaluating] = useState(false);
@@ -34,12 +35,10 @@ export function RecommendationPlansPage() {
     async function load() {
       try {
         setError(null);
+        const summaryQuery = `limit=500${searchParams.get("run_id") ? `&run_id=${searchParams.get("run_id")}` : ""}${searchParams.get("ticker") ? `&ticker=${encodeURIComponent(searchParams.get("ticker") ?? "")}` : ""}`;
         setPlans(await getJson<RecommendationPlan[]>(buildQuery(searchParams)));
-        setCalibration(
-          await getJson<RecommendationCalibrationSummary>(
-            `/api/recommendation-outcomes/summary?limit=500${searchParams.get("run_id") ? `&run_id=${searchParams.get("run_id")}` : ""}${searchParams.get("ticker") ? `&ticker=${encodeURIComponent(searchParams.get("ticker") ?? "")}` : ""}`,
-          ),
-        );
+        setCalibration(await getJson<RecommendationCalibrationSummary>(`/api/recommendation-outcomes/summary?${summaryQuery}`));
+        setBaselines(await getJson<RecommendationBaselineSummary>(`/api/recommendation-plans/baselines?${summaryQuery}`));
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load recommendation plans");
       }
@@ -183,6 +182,45 @@ export function RecommendationPlansPage() {
               </div>
             </div>
           </>
+        ) : null}
+      </Card>
+
+      <Card className="top-gap">
+        <SectionTitle
+          title="Baseline comparisons"
+          subtitle={baselines ? `Reviewed ${baselines.total_trade_plans_reviewed} trade plan(s) across ${baselines.total_plans_reviewed} total plan(s)` : undefined}
+        />
+        {!baselines && !error ? <LoadingState message="Loading baseline comparisons…" /> : null}
+        {baselines ? (
+          <div className="table-wrap top-gap-small">
+            <table>
+              <thead>
+                <tr>
+                  <th>Baseline</th>
+                  <th>Trade plans</th>
+                  <th>Resolved</th>
+                  <th>Win rate</th>
+                  <th>Avg 5d</th>
+                  <th>Avg confidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {baselines.comparisons.map((item) => (
+                  <tr key={item.key}>
+                    <td>
+                      <div>{item.label}</div>
+                      {item.description ? <div className="helper-text top-gap-small">{item.description}</div> : null}
+                    </td>
+                    <td>{item.trade_plan_count}</td>
+                    <td>{item.resolved_trade_count}</td>
+                    <td>{item.win_rate_percent ?? "—"}%</td>
+                    <td>{item.average_return_5d ?? "—"}%</td>
+                    <td>{item.average_confidence_percent ?? "—"}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : null}
       </Card>
 

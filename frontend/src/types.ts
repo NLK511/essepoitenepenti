@@ -373,6 +373,27 @@ export interface RecommendationCalibrationSummary {
   by_setup_family: RecommendationCalibrationBucket[];
 }
 
+export interface RecommendationBaselineComparison {
+  key: string;
+  label: string;
+  description: string;
+  total_plan_count: number;
+  trade_plan_count: number;
+  resolved_trade_count: number;
+  win_count: number;
+  loss_count: number;
+  open_trade_count: number;
+  win_rate_percent: number | null;
+  average_return_5d: number | null;
+  average_confidence_percent: number | null;
+}
+
+export interface RecommendationBaselineSummary {
+  total_plans_reviewed: number;
+  total_trade_plans_reviewed: number;
+  comparisons: RecommendationBaselineComparison[];
+}
+
 export interface RunDetailResponse {
   run: Run;
   outputs: RunOutput[];
