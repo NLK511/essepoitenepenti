@@ -121,6 +121,15 @@ export function TickerSignalsPage() {
                   const transmissionTags = Array.isArray(signal.diagnostics.transmission_tags)
                     ? signal.diagnostics.transmission_tags.filter((value): value is string => typeof value === "string")
                     : [];
+                  const primaryDrivers = Array.isArray(signal.diagnostics.primary_drivers)
+                    ? signal.diagnostics.primary_drivers.filter((value): value is string => typeof value === "string")
+                    : [];
+                  const conflictFlags = Array.isArray(signal.diagnostics.conflict_flags)
+                    ? signal.diagnostics.conflict_flags.filter((value): value is string => typeof value === "string")
+                    : [];
+                  const expectedWindow = typeof signal.diagnostics.expected_transmission_window === "string"
+                    ? signal.diagnostics.expected_transmission_window
+                    : "unknown";
                   const transmissionAlignment = typeof signal.diagnostics.transmission_alignment_score === "number"
                     ? signal.diagnostics.transmission_alignment_score
                     : null;
@@ -153,6 +162,9 @@ export function TickerSignalsPage() {
                       <td>
                         <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>
                         <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
+                        <div className="helper-text">window {expectedWindow}</div>
+                        <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
+                        <div className="helper-text">conflicts {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
                         <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
                       </td>
                       <td>

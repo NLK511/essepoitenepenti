@@ -255,6 +255,15 @@ export function RecommendationPlansPage() {
                   const transmissionTags = Array.isArray(transmissionSummary?.transmission_tags)
                     ? transmissionSummary.transmission_tags.filter((value): value is string => typeof value === "string")
                     : [];
+                  const primaryDrivers = Array.isArray(transmissionSummary?.primary_drivers)
+                    ? transmissionSummary.primary_drivers.filter((value): value is string => typeof value === "string")
+                    : [];
+                  const conflictFlags = Array.isArray(transmissionSummary?.conflict_flags)
+                    ? transmissionSummary.conflict_flags.filter((value): value is string => typeof value === "string")
+                    : [];
+                  const expectedWindow = typeof transmissionSummary?.expected_transmission_window === "string"
+                    ? transmissionSummary.expected_transmission_window
+                    : "unknown";
                   const effectiveThreshold = typeof calibrationReview?.effective_confidence_threshold === "number"
                     ? calibrationReview.effective_confidence_threshold
                     : null;
@@ -285,6 +294,9 @@ export function RecommendationPlansPage() {
                       <td>
                         <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>
                         <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
+                        <div className="helper-text">window {expectedWindow}</div>
+                        <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
+                        <div className="helper-text">conflicts {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
                         <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
                       </td>
                       <td>

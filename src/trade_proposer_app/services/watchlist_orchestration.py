@@ -404,6 +404,22 @@ class WatchlistOrchestrationService:
         if transmission_bias == "unknown":
             transmission_alignment_score = round((macro_exposure_score * 0.45) + (industry_alignment_score * 0.55), 2)
             transmission_bias = self._bias_from_alignment(transmission_alignment_score)
+        primary_drivers = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "primary_drivers") or []
+        expected_transmission_window = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "expected_transmission_window") or self._fallback_transmission_window_placeholder(watchlist.default_horizon)
+        conflict_flags = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "conflict_flags") or []
+        transmission_tags = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "transmission_tags") or []
+        if not isinstance(primary_drivers, list) or not primary_drivers:
+            primary_drivers = [
+                item for item in [
+                    "industry_context_support" if transmission_bias != "headwind" else "industry_context_headwind",
+                    "macro_context_support" if transmission_bias != "headwind" else "macro_context_headwind",
+                    "fresh_catalyst_pressure" if self._catalyst_score(analysis) >= 45.0 else None,
+                ] if isinstance(item, str)
+            ]
+        if not isinstance(conflict_flags, list):
+            conflict_flags = []
+        if not isinstance(transmission_tags, list):
+            transmission_tags = []
         return TickerSignalSnapshot(
             ticker=candidate.ticker,
             horizon=watchlist.default_horizon,
@@ -428,7 +444,10 @@ class WatchlistOrchestrationService:
                 "deep_analysis_model": self._pluck(analysis, "ticker_deep_analysis", "model"),
                 "summary_method": getattr(deep_output.diagnostics, "summary_method", None) if deep_output is not None else None,
                 "transmission_bias": transmission_bias,
-                "transmission_tags": self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "transmission_tags") or [],
+                "transmission_tags": transmission_tags,
+                "primary_drivers": primary_drivers,
+                "expected_transmission_window": expected_transmission_window,
+                "conflict_flags": conflict_flags,
             },
             diagnostics={
                 "mode": "deep_analysis" if shortlisted else "cheap_scan_only",
@@ -449,6 +468,10 @@ class WatchlistOrchestrationService:
                 "deep_analysis_error": deep_error,
                 "transmission_alignment_score": transmission_alignment_score,
                 "transmission_bias": transmission_bias,
+                "transmission_tags": transmission_tags,
+                "primary_drivers": primary_drivers,
+                "expected_transmission_window": expected_transmission_window,
+                "conflict_flags": conflict_flags,
             },
             job_id=job_id,
             run_id=run_id,
@@ -554,7 +577,7 @@ class WatchlistOrchestrationService:
             risk_reward_ratio=self._risk_reward_ratio(recommendation),
             thesis_summary=summary_text or self._actionable_thesis(action, setup_family),
             rationale_summary=rationale,
-            risks=self._plan_risks(warnings, setup_family, action),
+            risks=self._plan_risks(warnings, setup_family, action, transmission_summary),
             warnings=list(dict.fromkeys(warnings)),
             evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
             signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary),
@@ -764,12 +787,20 @@ class WatchlistOrchestrationService:
     ) -> dict[str, object]:
         explicit = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis")
         if isinstance(explicit, dict) and explicit:
+            bias = self._transmission_bias(analysis)
+            alignment_percent = round(float(explicit.get("alignment_percent", 0.0)), 2) if self._is_number(explicit.get("alignment_percent")) else 0.0
             return {
-                "alignment_percent": round(float(explicit.get("alignment_percent", 0.0)), 2) if self._is_number(explicit.get("alignment_percent")) else 0.0,
-                "context_bias": self._transmission_bias(analysis),
+                "alignment_percent": alignment_percent,
+                "context_bias": bias,
                 "catalyst_intensity_percent": round(float(explicit.get("catalyst_intensity_percent", 0.0)), 2) if self._is_number(explicit.get("catalyst_intensity_percent")) else signal.catalyst_score,
                 "transmission_tags": explicit.get("transmission_tags", []) if isinstance(explicit.get("transmission_tags"), list) else [],
-                "lane_hint": "event" if self._transmission_bias(analysis) == "tailwind" and signal.catalyst_score >= 65.0 else "technical",
+                "primary_drivers": explicit.get("primary_drivers", []) if isinstance(explicit.get("primary_drivers"), list) else [],
+                "industry_exposure_channels": explicit.get("industry_exposure_channels", []) if isinstance(explicit.get("industry_exposure_channels"), list) else [],
+                "ticker_exposure_channels": explicit.get("ticker_exposure_channels", []) if isinstance(explicit.get("ticker_exposure_channels"), list) else [],
+                "expected_transmission_window": self._string_value(explicit.get("expected_transmission_window"), default=self._fallback_transmission_window(signal)),
+                "conflict_flags": explicit.get("conflict_flags", []) if isinstance(explicit.get("conflict_flags"), list) else [],
+                "decay_state": self._string_value(explicit.get("decay_state"), default=self._fallback_decay_state(signal)),
+                "lane_hint": "event" if bias == "tailwind" and signal.catalyst_score >= 65.0 else "technical",
             }
         context_alignment = round((signal.macro_exposure_score * 0.45) + (signal.industry_alignment_score * 0.55), 2)
         if context_alignment >= 62.0:
@@ -783,8 +814,103 @@ class WatchlistOrchestrationService:
             "context_bias": bias,
             "catalyst_intensity_percent": signal.catalyst_score,
             "transmission_tags": [],
+            "primary_drivers": self._fallback_primary_drivers(signal, candidate, bias),
+            "industry_exposure_channels": self._fallback_industry_exposure_channels(signal),
+            "ticker_exposure_channels": self._fallback_ticker_exposure_channels(signal, candidate),
+            "expected_transmission_window": self._fallback_transmission_window(signal),
+            "conflict_flags": self._fallback_conflict_flags(signal, candidate, bias),
+            "decay_state": self._fallback_decay_state(signal),
             "lane_hint": "event" if signal.catalyst_score >= 65.0 else "technical",
         }
+
+    def _fallback_primary_drivers(
+        self,
+        signal: TickerSignalSnapshot,
+        candidate: _CheapScanCandidate,
+        bias: str,
+    ) -> list[str]:
+        drivers: list[tuple[str, float]] = [
+            ("industry_context_support" if bias != "headwind" else "industry_context_headwind", signal.industry_alignment_score),
+            ("macro_context_support" if bias != "headwind" else "macro_context_headwind", signal.macro_exposure_score),
+            ("ticker_sentiment_confirmation" if bias != "headwind" else "ticker_sentiment_conflict", signal.ticker_sentiment_score),
+            ("fresh_catalyst_pressure", signal.catalyst_score),
+            ("attention_leader", candidate.attention_score),
+        ]
+        ranked = [key for key, score in sorted(drivers, key=lambda item: item[1], reverse=True) if score >= 45.0]
+        return ranked[:3]
+
+    @staticmethod
+    def _fallback_industry_exposure_channels(signal: TickerSignalSnapshot) -> list[str]:
+        channels: list[str] = []
+        if signal.macro_exposure_score >= 55.0:
+            channels.append("macro_regime")
+        if signal.industry_alignment_score >= 55.0:
+            channels.append("industry_demand")
+        if signal.industry_alignment_score >= 65.0:
+            channels.append("industry_read_through")
+        return channels
+
+    @staticmethod
+    def _fallback_ticker_exposure_channels(signal: TickerSignalSnapshot, candidate: _CheapScanCandidate) -> list[str]:
+        channels: list[str] = []
+        if signal.ticker_sentiment_score >= 55.0:
+            channels.append("ticker_sentiment")
+        if signal.catalyst_score >= 45.0:
+            channels.append("news_catalyst")
+        if signal.catalyst_score >= 70.0:
+            channels.append("event_follow_through")
+        if candidate.attention_score >= 70.0:
+            channels.append("attention_leader")
+        return channels
+
+    @staticmethod
+    def _fallback_transmission_window(signal: TickerSignalSnapshot) -> str:
+        if signal.catalyst_score >= 70.0:
+            return "1d"
+        if signal.catalyst_score >= 45.0:
+            return "2d_5d"
+        if signal.macro_exposure_score >= 60.0 or signal.industry_alignment_score >= 60.0:
+            return "1w_plus"
+        return "unknown"
+
+    @staticmethod
+    def _fallback_transmission_window_placeholder(horizon: StrategyHorizon) -> str:
+        if horizon == StrategyHorizon.ONE_DAY:
+            return "1d"
+        if horizon == StrategyHorizon.ONE_WEEK:
+            return "2d_5d"
+        if horizon == StrategyHorizon.ONE_MONTH:
+            return "1w_plus"
+        return "unknown"
+
+    @staticmethod
+    def _fallback_decay_state(signal: TickerSignalSnapshot) -> str:
+        if signal.catalyst_score >= 75.0:
+            return "fresh"
+        if signal.catalyst_score >= 45.0:
+            return "active"
+        if signal.catalyst_score > 0.0:
+            return "fading"
+        return "unknown"
+
+    @staticmethod
+    def _fallback_conflict_flags(
+        signal: TickerSignalSnapshot,
+        candidate: _CheapScanCandidate,
+        bias: str,
+    ) -> list[str]:
+        flags: list[str] = []
+        if bias == "headwind" and candidate.direction in {"long", "short"} and signal.technical_setup_score >= 60.0:
+            flags.append("technical_context_conflict")
+        if signal.macro_exposure_score >= 55.0 and signal.industry_alignment_score <= 45.0:
+            flags.append("macro_industry_conflict")
+        if signal.ticker_sentiment_score <= 40.0 and candidate.direction == "long":
+            flags.append("directional_conflict")
+        if signal.ticker_sentiment_score >= 60.0 and candidate.direction == "short":
+            flags.append("directional_conflict")
+        if signal.catalyst_score >= 65.0 and 45.0 <= signal.industry_alignment_score <= 60.0:
+            flags.append("timing_conflict")
+        return list(dict.fromkeys(flags))
 
     def _cheap_scan_setup_family(
         self,
@@ -829,6 +955,12 @@ class WatchlistOrchestrationService:
             bias = transmission_summary.get("context_bias")
             if isinstance(bias, str) and bias:
                 components.append(f"context {bias}")
+            window = transmission_summary.get("expected_transmission_window")
+            if isinstance(window, str) and window and window != "unknown":
+                components.append(f"window {window}")
+            primary_drivers = transmission_summary.get("primary_drivers")
+            if isinstance(primary_drivers, list) and primary_drivers:
+                components.append(f"driver {str(primary_drivers[0]).replace('_', ' ')}")
         components.append(f"attention {signal.attention_score:.1f}")
         components.append(f"confidence {signal.confidence_percent:.1f}")
         return " · ".join(component for component in components if component)
@@ -872,7 +1004,12 @@ class WatchlistOrchestrationService:
         return f"Actionable {direction} {setup_label} setup identified."
 
     @staticmethod
-    def _plan_risks(warnings: list[str], setup_family: str, action: str) -> list[str]:
+    def _plan_risks(
+        warnings: list[str],
+        setup_family: str,
+        action: str,
+        transmission_summary: dict[str, object] | None = None,
+    ) -> list[str]:
         risks = list(dict.fromkeys(warnings))
         if setup_family in {"breakout", "breakdown"}:
             risks.append("failed follow-through can reverse quickly after entry")
@@ -882,6 +1019,16 @@ class WatchlistOrchestrationService:
             risks.append("catalyst impulse may fade quickly if confirmation weakens")
         if setup_family == "macro_beneficiary_loser":
             risks.append("macro transmission can weaken if the broader regime shifts")
+        if isinstance(transmission_summary, dict):
+            conflict_flags = transmission_summary.get("conflict_flags")
+            if isinstance(conflict_flags, list):
+                if "technical_context_conflict" in conflict_flags:
+                    risks.append("price structure and broader context are not fully aligned")
+                if "macro_industry_conflict" in conflict_flags or "industry_ticker_conflict" in conflict_flags:
+                    risks.append("cross-layer context conflicts can weaken follow-through")
+            decay_state = transmission_summary.get("decay_state")
+            if decay_state == "fading":
+                risks.append("context support may already be fading for this horizon")
         if action in {"long", "short"} and warnings == []:
             risks.append("macro/industry transmission should keep confirming the trade after entry")
         if action == "short":

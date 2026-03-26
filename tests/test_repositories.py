@@ -666,11 +666,15 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(diagnostics_map["AAPL"]["shortlist_reasons"], [])
         self.assertEqual(diagnostics_map["AAPL"]["selection_lane"], "technical")
         self.assertEqual(diagnostics_map["AAPL"]["transmission_bias"], "tailwind")
+        self.assertIn("primary_drivers", diagnostics_map["AAPL"])
+        self.assertEqual(diagnostics_map["AAPL"]["expected_transmission_window"], "2d_5d")
         self.assertEqual(diagnostics_map["TSLA"]["mode"], "cheap_scan_only")
         self.assertEqual(diagnostics_map["TSLA"]["shortlist_reasons"], ["below_confidence_threshold", "below_attention_threshold", "below_catalyst_lane_threshold"])
         self.assertEqual(source_breakdown_map["AAPL"]["deep_analysis_model"], "ticker_deep_analysis_v2")
         self.assertEqual(source_breakdown_map["AAPL"]["transmission_bias"], "tailwind")
+        self.assertIn("primary_drivers", source_breakdown_map["AAPL"])
         self.assertIn("transmission_summary", plan_map["AAPL"].signal_breakdown)
+        self.assertIn("primary_drivers", plan_map["AAPL"].signal_breakdown["transmission_summary"])
 
     def test_watchlist_orchestration_shortlist_thresholds_vary_by_horizon_and_size(self) -> None:
         session = create_session()

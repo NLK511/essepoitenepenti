@@ -553,6 +553,22 @@ class TickerDeepAnalysisService:
             tags.append("industry_dominant")
         if catalyst_intensity >= 65.0:
             tags.append("catalyst_active")
+        primary_drivers = TickerDeepAnalysisService._primary_transmission_drivers(
+            macro_score=macro_score,
+            industry_score=industry_score,
+            ticker_score=ticker_score,
+            catalyst_intensity=catalyst_intensity,
+            bias=bias,
+        )
+        conflict_flags = TickerDeepAnalysisService._transmission_conflict_flags(
+            macro_score=macro_score,
+            industry_score=industry_score,
+            ticker_score=ticker_score,
+            catalyst_intensity=catalyst_intensity,
+            alignment_percent=alignment_percent,
+            bias=bias,
+            direction=direction,
+        )
         return {
             "macro_score": round(macro_score, 3),
             "industry_score": round(industry_score, 3),
@@ -561,7 +577,106 @@ class TickerDeepAnalysisService:
             "context_bias": bias,
             "catalyst_intensity_percent": round(catalyst_intensity, 1),
             "transmission_tags": tags,
+            "primary_drivers": primary_drivers,
+            "industry_exposure_channels": TickerDeepAnalysisService._industry_exposure_channels(macro_score, industry_score),
+            "ticker_exposure_channels": TickerDeepAnalysisService._ticker_exposure_channels(ticker_score, catalyst_intensity),
+            "expected_transmission_window": TickerDeepAnalysisService._expected_transmission_window(catalyst_intensity, macro_score, industry_score),
+            "conflict_flags": conflict_flags,
+            "decay_state": TickerDeepAnalysisService._decay_state(catalyst_intensity, context),
         }
+
+    @staticmethod
+    def _primary_transmission_drivers(
+        *,
+        macro_score: float,
+        industry_score: float,
+        ticker_score: float,
+        catalyst_intensity: float,
+        bias: str,
+    ) -> list[str]:
+        candidates = [
+            ("macro_context_support", abs(macro_score)),
+            ("industry_context_support", abs(industry_score)),
+            ("ticker_sentiment_confirmation", abs(ticker_score)),
+            ("fresh_catalyst_pressure", catalyst_intensity / 100.0),
+        ]
+        if bias == "headwind":
+            candidates = [
+                (key.replace("support", "headwind").replace("confirmation", "conflict"), score)
+                for key, score in candidates
+            ]
+        ranked = [key for key, score in sorted(candidates, key=lambda item: item[1], reverse=True) if score >= 0.12]
+        return ranked[:3]
+
+    @staticmethod
+    def _industry_exposure_channels(macro_score: float, industry_score: float) -> list[str]:
+        channels: list[str] = []
+        if abs(macro_score) >= 0.2:
+            channels.append("macro_regime")
+        if abs(industry_score) >= 0.2:
+            channels.append("industry_demand")
+        if abs(industry_score) >= 0.3:
+            channels.append("industry_read_through")
+        return channels
+
+    @staticmethod
+    def _ticker_exposure_channels(ticker_score: float, catalyst_intensity: float) -> list[str]:
+        channels: list[str] = []
+        if abs(ticker_score) >= 0.18:
+            channels.append("ticker_sentiment")
+        if catalyst_intensity >= 45.0:
+            channels.append("news_catalyst")
+        if catalyst_intensity >= 70.0:
+            channels.append("event_follow_through")
+        return channels
+
+    @staticmethod
+    def _expected_transmission_window(catalyst_intensity: float, macro_score: float, industry_score: float) -> str:
+        if catalyst_intensity >= 70.0:
+            return "1d"
+        if catalyst_intensity >= 45.0:
+            return "2d_5d"
+        if abs(macro_score) >= 0.3 or abs(industry_score) >= 0.3:
+            return "1w_plus"
+        return "unknown"
+
+    @staticmethod
+    def _decay_state(catalyst_intensity: float, context: dict[str, Any]) -> str:
+        news_items = float(context.get("news_item_count", 0.0) or 0.0)
+        if catalyst_intensity >= 75.0 and news_items >= 4.0:
+            return "fresh"
+        if catalyst_intensity >= 45.0:
+            return "active"
+        if news_items >= 1.0:
+            return "fading"
+        return "unknown"
+
+    @staticmethod
+    def _transmission_conflict_flags(
+        *,
+        macro_score: float,
+        industry_score: float,
+        ticker_score: float,
+        catalyst_intensity: float,
+        alignment_percent: float,
+        bias: str,
+        direction: RecommendationDirection,
+    ) -> list[str]:
+        flags: list[str] = []
+        context_sign = (macro_score + industry_score) / 2.0
+        if bias == "headwind" and abs(ticker_score) >= 0.18:
+            flags.append("technical_context_conflict")
+        if macro_score * industry_score < -0.02:
+            flags.append("macro_industry_conflict")
+        if context_sign * ticker_score < -0.02:
+            flags.append("industry_ticker_conflict")
+        if catalyst_intensity >= 65.0 and 45.0 <= alignment_percent <= 60.0:
+            flags.append("timing_conflict")
+        if direction == RecommendationDirection.SHORT and ticker_score > 0.2:
+            flags.append("directional_conflict")
+        if direction == RecommendationDirection.LONG and ticker_score < -0.2:
+            flags.append("directional_conflict")
+        return list(dict.fromkeys(flags))
 
     @staticmethod
     def _classify_setup(
