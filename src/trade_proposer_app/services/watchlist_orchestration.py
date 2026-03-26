@@ -244,6 +244,8 @@ class WatchlistOrchestrationService:
         limit = self._shortlist_limit(watchlist.default_horizon, ticker_count)
         minimum_confidence = self._minimum_shortlist_confidence(watchlist.default_horizon, ticker_count)
         minimum_attention = self._minimum_shortlist_attention(watchlist.default_horizon, ticker_count)
+        catalyst_lane_limit = 1 if limit >= 2 else 0
+        core_limit = max(0, limit - catalyst_lane_limit)
         ranked = sorted(
             candidates,
             key=lambda item: (
@@ -254,10 +256,8 @@ class WatchlistOrchestrationService:
             ),
             reverse=True,
         )
-        shortlist: list[str] = []
-        decisions: list[dict[str, object]] = []
-        rejection_counts: dict[str, int] = {}
-        for rank, candidate in enumerate(ranked, start=1):
+        eligibility: dict[str, tuple[bool, list[str]]] = {}
+        for candidate in ranked:
             reasons: list[str] = []
             eligible = True
             if candidate.error_message:
@@ -272,12 +272,54 @@ class WatchlistOrchestrationService:
             if candidate.attention_score < minimum_attention:
                 reasons.append("below_attention_threshold")
                 eligible = False
-            shortlisted = eligible and len(shortlist) < limit
-            if eligible and not shortlisted:
-                reasons.append("outside_shortlist_limit")
-            if shortlisted:
+            eligibility[candidate.ticker] = (eligible, reasons)
+
+        shortlist: list[str] = []
+        selection_lane: dict[str, str] = {}
+        for candidate in ranked:
+            eligible, _ = eligibility[candidate.ticker]
+            if eligible and len(shortlist) < core_limit:
                 shortlist.append(candidate.ticker)
-            for reason in reasons:
+                selection_lane[candidate.ticker] = "technical"
+
+        catalyst_threshold = self._minimum_catalyst_proxy_score(watchlist.default_horizon, ticker_count)
+        catalyst_ranked = sorted(
+            [candidate for candidate in ranked if candidate.ticker not in shortlist],
+            key=lambda item: self._catalyst_shortlist_score(item),
+            reverse=True,
+        )
+        for candidate in catalyst_ranked:
+            if catalyst_lane_limit <= 0 or len(shortlist) >= limit:
+                break
+            eligible, reasons = eligibility[candidate.ticker]
+            catalyst_score = self._catalyst_shortlist_score(candidate)
+            relaxed_confidence_floor = max(40.0, minimum_confidence - 8.0)
+            relaxed_attention_floor = max(55.0, minimum_attention)
+            catalyst_eligible = (
+                not candidate.error_message
+                and not (candidate.direction == "short" and not watchlist.allow_shorts)
+                and candidate.confidence_percent >= relaxed_confidence_floor
+                and candidate.attention_score >= relaxed_attention_floor
+                and catalyst_score >= catalyst_threshold
+            )
+            if candidate.ticker in shortlist:
+                continue
+            if catalyst_eligible and (eligible or "below_confidence_threshold" in reasons or "below_attention_threshold" in reasons):
+                shortlist.append(candidate.ticker)
+                selection_lane[candidate.ticker] = "catalyst"
+                catalyst_lane_limit -= 1
+
+        decisions: list[dict[str, object]] = []
+        rejection_counts: dict[str, int] = {}
+        for rank, candidate in enumerate(ranked, start=1):
+            eligible, reasons = eligibility[candidate.ticker]
+            shortlisted = candidate.ticker in shortlist
+            if eligible and not shortlisted:
+                reasons = [*reasons, "outside_shortlist_limit"]
+            if not shortlisted and self._catalyst_shortlist_score(candidate) < catalyst_threshold:
+                reasons = [*reasons, "below_catalyst_lane_threshold"]
+            deduped_reasons = list(dict.fromkeys(reasons))
+            for reason in deduped_reasons:
                 rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
             decisions.append(
                 {
@@ -286,9 +328,11 @@ class WatchlistOrchestrationService:
                     "direction": candidate.direction,
                     "confidence_percent": candidate.confidence_percent,
                     "attention_score": candidate.attention_score,
+                    "catalyst_proxy_score": self._catalyst_shortlist_score(candidate),
                     "shortlisted": shortlisted,
-                    "shortlist_rank": len(shortlist) if shortlisted else None,
-                    "reasons": reasons,
+                    "shortlist_rank": shortlist.index(candidate.ticker) + 1 if shortlisted else None,
+                    "selection_lane": selection_lane.get(candidate.ticker),
+                    "reasons": deduped_reasons,
                     "eligible": eligible,
                     "error_message": candidate.error_message,
                 }
@@ -300,8 +344,11 @@ class WatchlistOrchestrationService:
                 "watchlist_size": ticker_count,
                 "allow_shorts": watchlist.allow_shorts,
                 "limit": limit,
+                "core_limit": core_limit,
+                "catalyst_lane_limit": 1 if limit >= 2 else 0,
                 "minimum_confidence_percent": minimum_confidence,
                 "minimum_attention_score": minimum_attention,
+                "minimum_catalyst_proxy_score": catalyst_threshold,
             },
             "decisions": decisions,
             "rejection_counts": rejection_counts,
@@ -352,6 +399,11 @@ class WatchlistOrchestrationService:
             warnings.append("watchlist does not allow shorts")
         if deep_error:
             warnings.append(deep_error)
+        transmission_alignment_score = self._transmission_alignment_score(analysis)
+        transmission_bias = self._transmission_bias(analysis)
+        if transmission_bias == "unknown":
+            transmission_alignment_score = round((macro_exposure_score * 0.45) + (industry_alignment_score * 0.55), 2)
+            transmission_bias = self._bias_from_alignment(transmission_alignment_score)
         return TickerSignalSnapshot(
             ticker=candidate.ticker,
             horizon=watchlist.default_horizon,
@@ -375,6 +427,8 @@ class WatchlistOrchestrationService:
                 "deep_analysis_available": deep_output is not None,
                 "deep_analysis_model": self._pluck(analysis, "ticker_deep_analysis", "model"),
                 "summary_method": getattr(deep_output.diagnostics, "summary_method", None) if deep_output is not None else None,
+                "transmission_bias": transmission_bias,
+                "transmission_tags": self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "transmission_tags") or [],
             },
             diagnostics={
                 "mode": "deep_analysis" if shortlisted else "cheap_scan_only",
@@ -382,6 +436,7 @@ class WatchlistOrchestrationService:
                 "shortlist_rank": shortlist_rank,
                 "shortlist_reasons": list(shortlist_decision.get("reasons", [])) if isinstance(shortlist_decision, dict) and isinstance(shortlist_decision.get("reasons"), list) else [],
                 "shortlist_eligible": bool(shortlist_decision.get("eligible")) if isinstance(shortlist_decision, dict) and shortlist_decision.get("eligible") is not None else shortlisted,
+                "selection_lane": shortlist_decision.get("selection_lane") if isinstance(shortlist_decision, dict) else None,
                 "cheap_scan_confidence_percent": candidate.confidence_percent,
                 "cheap_scan_directional_score": candidate.cheap_scan_signal.directional_score if candidate.cheap_scan_signal is not None else None,
                 "cheap_scan_component_scores": {
@@ -392,6 +447,8 @@ class WatchlistOrchestrationService:
                     "liquidity_score": candidate.cheap_scan_signal.liquidity_score if candidate.cheap_scan_signal is not None else None,
                 },
                 "deep_analysis_error": deep_error,
+                "transmission_alignment_score": transmission_alignment_score,
+                "transmission_bias": transmission_bias,
             },
             job_id=job_id,
             run_id=run_id,
@@ -413,8 +470,9 @@ class WatchlistOrchestrationService:
         summary_text = self._pluck(analysis, "summary", "text") or signal.source_breakdown.get("cheap_scan_summary") or ""
         setup_family = self._plan_setup_family(signal, analysis, candidate)
         confidence_components = self._plan_confidence_components(signal, analysis, candidate)
+        transmission_summary = self._transmission_summary(signal, analysis, candidate)
         calibration_review = self._calibration_review(calibration_summary, setup_family, signal.confidence_percent)
-        rationale = self._rationale_summary(signal, candidate, setup_family)
+        rationale = self._rationale_summary(signal, candidate, setup_family, transmission_summary)
         warnings = list(signal.warnings)
         if deep_output is None or deep_error is not None:
             return RecommendationPlan(
@@ -426,8 +484,8 @@ class WatchlistOrchestrationService:
                 thesis_summary="Deep analysis did not complete; no actionable plan emitted.",
                 rationale_summary=rationale,
                 warnings=warnings,
-                evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason="deep_analysis_unavailable", calibration_review=calibration_review),
-                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review),
+                evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason="deep_analysis_unavailable", calibration_review=calibration_review, transmission_summary=transmission_summary),
+                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -449,6 +507,9 @@ class WatchlistOrchestrationService:
         elif direction not in {"long", "short"}:
             action = "no_action"
             action_reason = "direction_not_actionable"
+        elif transmission_summary.get("context_bias") == "headwind" and signal.confidence_percent < min(95.0, effective_threshold + 5.0):
+            action = "no_action"
+            action_reason = "context_transmission_headwind"
         else:
             action = direction
 
@@ -462,8 +523,8 @@ class WatchlistOrchestrationService:
                 thesis_summary=self._no_action_thesis(setup_family, action_reason),
                 rationale_summary=rationale,
                 warnings=list(dict.fromkeys(warnings)),
-                evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review),
-                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review),
+                evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
+                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -489,8 +550,8 @@ class WatchlistOrchestrationService:
             rationale_summary=rationale,
             risks=self._plan_risks(warnings, setup_family, action),
             warnings=list(dict.fromkeys(warnings)),
-            evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review),
-            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review),
+            evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
+            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary),
             computed_at=signal.computed_at,
             run_id=run_id,
             job_id=job_id,
@@ -511,6 +572,7 @@ class WatchlistOrchestrationService:
     ) -> RecommendationPlan:
         setup_family = self._cheap_scan_setup_family(candidate)
         confidence_components = self._plan_confidence_components(signal, {}, candidate)
+        transmission_summary = self._transmission_summary(signal, {}, candidate)
         calibration_review = self._calibration_review(calibration_summary, setup_family, signal.confidence_percent)
         return RecommendationPlan(
             ticker=candidate.ticker,
@@ -519,10 +581,10 @@ class WatchlistOrchestrationService:
             status="ok" if not signal.warnings else "partial",
             confidence_percent=signal.confidence_percent,
             thesis_summary=reason,
-            rationale_summary=self._rationale_summary(signal, candidate, setup_family),
+            rationale_summary=self._rationale_summary(signal, candidate, setup_family, transmission_summary),
             warnings=list(signal.warnings),
-            evidence_summary=self._evidence_summary(candidate.indicator_summary, setup_family, confidence_components, action_reason="not_shortlisted", calibration_review=calibration_review),
-            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review),
+            evidence_summary=self._evidence_summary(candidate.indicator_summary, setup_family, confidence_components, action_reason="not_shortlisted", calibration_review=calibration_review, transmission_summary=transmission_summary),
+            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary),
             computed_at=signal.computed_at,
             run_id=run_id,
             job_id=job_id,
@@ -597,6 +659,9 @@ class WatchlistOrchestrationService:
 
     @staticmethod
     def _catalyst_score(analysis: dict[str, Any]) -> float:
+        explicit = WatchlistOrchestrationService._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "catalyst_intensity_percent")
+        if WatchlistOrchestrationService._is_number(explicit):
+            return round(float(explicit), 2)
         news_item_count = WatchlistOrchestrationService._pluck(analysis, "news", "item_count")
         try:
             count = float(news_item_count)
@@ -605,12 +670,33 @@ class WatchlistOrchestrationService:
         return round(max(0.0, min(100.0, count * 10.0)), 2)
 
     @staticmethod
+    def _transmission_alignment_score(analysis: dict[str, Any]) -> float:
+        value = WatchlistOrchestrationService._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "alignment_percent")
+        if WatchlistOrchestrationService._is_number(value):
+            return round(float(value), 2)
+        return 0.0
+
+    @staticmethod
+    def _transmission_bias(analysis: dict[str, Any]) -> str:
+        value = WatchlistOrchestrationService._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "context_bias")
+        return value.strip() if isinstance(value, str) and value.strip() else "unknown"
+
+    @staticmethod
+    def _bias_from_alignment(alignment_percent: float) -> str:
+        if alignment_percent >= 62.0:
+            return "tailwind"
+        if alignment_percent <= 42.0:
+            return "headwind"
+        return "mixed"
+
+    @staticmethod
     def _signal_breakdown(
         signal: TickerSignalSnapshot,
         *,
         setup_family: str,
         confidence_components: dict[str, float],
         calibration_review: dict[str, object] | None = None,
+        transmission_summary: dict[str, object] | None = None,
     ) -> dict[str, object]:
         return {
             "attention_score": signal.attention_score,
@@ -625,6 +711,7 @@ class WatchlistOrchestrationService:
             "confidence_components": confidence_components,
             "confidence_bucket": WatchlistOrchestrationService._confidence_bucket(signal.confidence_percent),
             "calibration_review": calibration_review or {},
+            "transmission_summary": transmission_summary or {},
             "mode": signal.diagnostics.get("mode"),
         }
 
@@ -657,6 +744,36 @@ class WatchlistOrchestrationService:
             "data_quality_cap": round(max(25.0, 100.0 - (len(signal.warnings) * 10.0)), 2),
         }
 
+    def _transmission_summary(
+        self,
+        signal: TickerSignalSnapshot,
+        analysis: dict[str, Any],
+        candidate: _CheapScanCandidate,
+    ) -> dict[str, object]:
+        explicit = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis")
+        if isinstance(explicit, dict) and explicit:
+            return {
+                "alignment_percent": round(float(explicit.get("alignment_percent", 0.0)), 2) if self._is_number(explicit.get("alignment_percent")) else 0.0,
+                "context_bias": self._transmission_bias(analysis),
+                "catalyst_intensity_percent": round(float(explicit.get("catalyst_intensity_percent", 0.0)), 2) if self._is_number(explicit.get("catalyst_intensity_percent")) else signal.catalyst_score,
+                "transmission_tags": explicit.get("transmission_tags", []) if isinstance(explicit.get("transmission_tags"), list) else [],
+                "lane_hint": "event" if self._transmission_bias(analysis) == "tailwind" and signal.catalyst_score >= 65.0 else "technical",
+            }
+        context_alignment = round((signal.macro_exposure_score * 0.45) + (signal.industry_alignment_score * 0.55), 2)
+        if context_alignment >= 62.0:
+            bias = "tailwind"
+        elif context_alignment <= 42.0:
+            bias = "headwind"
+        else:
+            bias = "mixed"
+        return {
+            "alignment_percent": context_alignment,
+            "context_bias": bias,
+            "catalyst_intensity_percent": signal.catalyst_score,
+            "transmission_tags": [],
+            "lane_hint": "event" if signal.catalyst_score >= 65.0 else "technical",
+        }
+
     def _cheap_scan_setup_family(
         self,
         candidate: _CheapScanCandidate,
@@ -687,10 +804,19 @@ class WatchlistOrchestrationService:
         return "no_action"
 
     @staticmethod
-    def _rationale_summary(signal: TickerSignalSnapshot, candidate: _CheapScanCandidate, setup_family: str) -> str:
+    def _rationale_summary(
+        signal: TickerSignalSnapshot,
+        candidate: _CheapScanCandidate,
+        setup_family: str,
+        transmission_summary: dict[str, object] | None = None,
+    ) -> str:
         components = [candidate.indicator_summary]
         if setup_family and setup_family != "uncategorized":
             components.append(f"setup family {setup_family.replace('_', ' ')}")
+        if isinstance(transmission_summary, dict):
+            bias = transmission_summary.get("context_bias")
+            if isinstance(bias, str) and bias:
+                components.append(f"context {bias}")
         components.append(f"attention {signal.attention_score:.1f}")
         components.append(f"confidence {signal.confidence_percent:.1f}")
         return " · ".join(component for component in components if component)
@@ -703,6 +829,7 @@ class WatchlistOrchestrationService:
         *,
         action_reason: str,
         calibration_review: dict[str, object] | None = None,
+        transmission_summary: dict[str, object] | None = None,
     ) -> dict[str, object]:
         return {
             "summary": summary_text,
@@ -710,6 +837,7 @@ class WatchlistOrchestrationService:
             "action_reason": action_reason,
             "confidence_components": confidence_components,
             "calibration_review": calibration_review or {},
+            "transmission_summary": transmission_summary or {},
         }
 
     @staticmethod
@@ -721,6 +849,8 @@ class WatchlistOrchestrationService:
             return f"Detected a {setup_label} candidate, but the watchlist policy does not permit the required short expression."
         if action_reason == "direction_not_actionable":
             return f"Detected a {setup_label} structure, but direction remained too ambiguous for a trade plan."
+        if action_reason == "context_transmission_headwind":
+            return f"Detected a {setup_label} structure, but macro and industry transmission remained a headwind to the proposed trade direction."
         return "Signal quality was insufficient for an actionable trade plan."
 
     @staticmethod
@@ -740,6 +870,8 @@ class WatchlistOrchestrationService:
             risks.append("catalyst impulse may fade quickly if confirmation weakens")
         if setup_family == "macro_beneficiary_loser":
             risks.append("macro transmission can weaken if the broader regime shifts")
+        if action in {"long", "short"} and warnings == []:
+            risks.append("macro/industry transmission should keep confirming the trade after entry")
         if action == "short":
             risks.append("short squeeze risk remains elevated if sentiment reverses")
         return list(dict.fromkeys(risks))
@@ -844,6 +976,31 @@ class WatchlistOrchestrationService:
             return round(float(value), 1)
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _catalyst_shortlist_score(candidate: _CheapScanCandidate) -> float:
+        if candidate.cheap_scan_signal is None:
+            return 0.0
+        directional_component = abs(float(candidate.cheap_scan_signal.directional_score)) * 100.0
+        return round(
+            (candidate.attention_score * 0.45)
+            + (float(candidate.cheap_scan_signal.breakout_score) * 0.35)
+            + (directional_component * 0.2),
+            2,
+        )
+
+    @staticmethod
+    def _minimum_catalyst_proxy_score(horizon: StrategyHorizon, ticker_count: int) -> float:
+        base = {
+            StrategyHorizon.ONE_DAY: 72.0,
+            StrategyHorizon.ONE_WEEK: 68.0,
+            StrategyHorizon.ONE_MONTH: 64.0,
+        }[horizon]
+        if ticker_count >= 20:
+            return min(90.0, base + 6.0)
+        if ticker_count >= 10:
+            return min(90.0, base + 3.0)
+        return base
 
     @staticmethod
     def _holding_period_days(horizon: StrategyHorizon) -> int:

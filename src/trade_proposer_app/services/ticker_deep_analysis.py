@@ -53,6 +53,7 @@ class TickerDeepAnalysisService:
                 aggregations,
             )
             setup_family = self._classify_setup(context, aggregations, direction)
+            transmission_analysis = self._build_transmission_analysis(context, direction)
             analysis = self.proposal_service._build_analysis_payload(
                 ticker=normalized_ticker,
                 direction=direction.value,
@@ -71,6 +72,7 @@ class TickerDeepAnalysisService:
                 "horizon": horizon.value if horizon is not None else None,
                 "setup_family": setup_family,
                 "confidence_components": confidence_components,
+                "transmission_analysis": transmission_analysis,
             }
             analysis_json = json.dumps(_sanitize_for_json(analysis), indent=2, sort_keys=True)
             diagnostics = self.proposal_service._build_diagnostics(
@@ -112,6 +114,7 @@ class TickerDeepAnalysisService:
             "horizon": horizon.value if horizon is not None else None,
             "setup_family": "uncategorized",
             "confidence_components": {},
+            "transmission_analysis": {},
         }
         analysis_json = json.dumps(_sanitize_for_json(analysis_payload), indent=2, sort_keys=True)
         diagnostics = diagnostics.model_copy(update={"analysis_json": analysis_json, "raw_output": analysis_json})
@@ -202,6 +205,50 @@ class TickerDeepAnalysisService:
         )
         quality_cap = components.get("data_quality_cap", 100.0) / 100.0
         return round(max(0.0, min(95.0, weighted * quality_cap)), 2)
+
+    @staticmethod
+    def _build_transmission_analysis(
+        context: dict[str, Any],
+        direction: RecommendationDirection,
+    ) -> dict[str, Any]:
+        macro_score = float(context.get("macro_sentiment_score", 0.0) or 0.0)
+        industry_score = float(context.get("industry_sentiment_score", 0.0) or 0.0)
+        ticker_score = float(context.get("ticker_sentiment_score", 0.0) or 0.0)
+        directional_multiplier = 1.0 if direction == RecommendationDirection.LONG else -1.0
+        signed_alignment = ((macro_score * 0.35) + (industry_score * 0.4) + (ticker_score * 0.25)) * directional_multiplier
+        alignment_percent = max(0.0, min(100.0, 50.0 + (signed_alignment * 50.0)))
+        catalyst_intensity = max(
+            0.0,
+            min(
+                100.0,
+                (
+                    min(1.0, float(context.get("news_item_count", 0.0) or 0.0) / 5.0) * 65.0
+                    + min(1.0, float(context.get("context_count", 0.0) or 0.0) / 3.0) * 35.0
+                ),
+            ),
+        )
+        if alignment_percent >= 62.0:
+            bias = "tailwind"
+        elif alignment_percent <= 42.0:
+            bias = "headwind"
+        else:
+            bias = "mixed"
+        tags: list[str] = []
+        if abs(macro_score) >= 0.25:
+            tags.append("macro_dominant")
+        if abs(industry_score) >= 0.25:
+            tags.append("industry_dominant")
+        if catalyst_intensity >= 65.0:
+            tags.append("catalyst_active")
+        return {
+            "macro_score": round(macro_score, 3),
+            "industry_score": round(industry_score, 3),
+            "ticker_score": round(ticker_score, 3),
+            "alignment_percent": round(alignment_percent, 1),
+            "context_bias": bias,
+            "catalyst_intensity_percent": round(catalyst_intensity, 1),
+            "transmission_tags": tags,
+        }
 
     @staticmethod
     def _classify_setup(

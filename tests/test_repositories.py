@@ -112,6 +112,33 @@ class CheapScanProposalService:
         )
 
 
+class CatalystLaneCheapScanService:
+    def score(self, ticker: str, horizon: StrategyHorizon):
+        from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal
+
+        fixtures = {
+            "AAPL": {"direction": "long", "directional": 0.58, "confidence": 82.0, "attention": 80.0, "trend": 78.0, "momentum": 76.0, "breakout": 72.0},
+            "SHOP": {"direction": "long", "directional": 0.54, "confidence": 44.0, "attention": 68.0, "trend": 52.0, "momentum": 60.0, "breakout": 92.0},
+            "IBM": {"direction": "long", "directional": 0.12, "confidence": 49.0, "attention": 46.0, "trend": 51.0, "momentum": 48.0, "breakout": 40.0},
+        }
+        item = fixtures[ticker]
+        return CheapScanSignal(
+            ticker=ticker,
+            horizon=horizon,
+            directional_bias=item["direction"],
+            directional_score=item["directional"],
+            confidence_percent=item["confidence"],
+            attention_score=item["attention"],
+            trend_score=item["trend"],
+            momentum_score=item["momentum"],
+            breakout_score=item["breakout"],
+            volatility_score=55.0,
+            liquidity_score=72.0,
+            diagnostics={"model": "cheap_scan_test"},
+            indicator_summary=f"cheap scan {ticker}",
+        )
+
+
 class DeepAnalysisProposalService:
     def generate(self, ticker: str) -> RunOutput:
         direction_map = {
@@ -617,8 +644,9 @@ class RepositoryTests(unittest.TestCase):
         decisions = {item["ticker"]: item for item in artifact_payload["shortlist_decisions"]}
         self.assertEqual(decisions["AAPL"]["shortlisted"], True)
         self.assertEqual(decisions["AAPL"]["shortlist_rank"], 1)
-        self.assertEqual(decisions["MSFT"]["reasons"], ["shorts_disabled"])
-        self.assertEqual(decisions["TSLA"]["reasons"], ["below_confidence_threshold", "below_attention_threshold"])
+        self.assertEqual(decisions["AAPL"]["selection_lane"], "technical")
+        self.assertEqual(decisions["MSFT"]["reasons"], ["shorts_disabled", "below_catalyst_lane_threshold"])
+        self.assertEqual(decisions["TSLA"]["reasons"], ["below_confidence_threshold", "below_attention_threshold", "below_catalyst_lane_threshold"])
         ticker_signals = ContextSnapshotRepository(session).list_ticker_signal_snapshots(limit=10)
         plans = RecommendationPlanRepository(session).list_plans(limit=10)
         self.assertEqual(len(ticker_signals), 3)
@@ -636,9 +664,13 @@ class RepositoryTests(unittest.TestCase):
         source_breakdown_map = {item.ticker: item.source_breakdown for item in ticker_signals}
         self.assertEqual(diagnostics_map["AAPL"]["mode"], "deep_analysis")
         self.assertEqual(diagnostics_map["AAPL"]["shortlist_reasons"], [])
+        self.assertEqual(diagnostics_map["AAPL"]["selection_lane"], "technical")
+        self.assertEqual(diagnostics_map["AAPL"]["transmission_bias"], "tailwind")
         self.assertEqual(diagnostics_map["TSLA"]["mode"], "cheap_scan_only")
-        self.assertEqual(diagnostics_map["TSLA"]["shortlist_reasons"], ["below_confidence_threshold", "below_attention_threshold"])
+        self.assertEqual(diagnostics_map["TSLA"]["shortlist_reasons"], ["below_confidence_threshold", "below_attention_threshold", "below_catalyst_lane_threshold"])
         self.assertEqual(source_breakdown_map["AAPL"]["deep_analysis_model"], "ticker_deep_analysis_v2")
+        self.assertEqual(source_breakdown_map["AAPL"]["transmission_bias"], "tailwind")
+        self.assertIn("transmission_summary", plan_map["AAPL"].signal_breakdown)
 
     def test_watchlist_orchestration_shortlist_thresholds_vary_by_horizon_and_size(self) -> None:
         session = create_session()
@@ -656,6 +688,32 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(orchestration._minimum_shortlist_confidence(StrategyHorizon.ONE_DAY, 4), 52.0)
         self.assertEqual(orchestration._minimum_shortlist_confidence(StrategyHorizon.ONE_WEEK, 12), 53.0)
         self.assertEqual(orchestration._minimum_shortlist_attention(StrategyHorizon.ONE_MONTH, 24), 52.0)
+
+    def test_watchlist_orchestration_uses_catalyst_lane_to_preserve_event_candidate(self) -> None:
+        session = create_session()
+        watchlist = WatchlistRepository(session).create(
+            "Catalyst Watch",
+            ["AAPL", "SHOP", "IBM"],
+            default_horizon=StrategyHorizon.ONE_WEEK,
+            allow_shorts=False,
+        )
+        orchestration = WatchlistOrchestrationService(
+            context_snapshots=ContextSnapshotRepository(session),
+            recommendation_plans=RecommendationPlanRepository(session),
+            cheap_scan_service=CatalystLaneCheapScanService(),
+            deep_analysis_service=TickerDeepAnalysisService(DeepAnalysisProposalService()),
+            confidence_threshold=60.0,
+        )
+
+        result = orchestration.execute(watchlist, watchlist.tickers, run_id=1)
+
+        self.assertEqual(result["summary"]["shortlist_count"], 2)
+        decisions = {item["ticker"]: item for item in result["artifact"]["shortlist_decisions"]}
+        self.assertEqual(decisions["AAPL"]["selection_lane"], "technical")
+        self.assertEqual(decisions["SHOP"]["selection_lane"], "catalyst")
+        self.assertTrue(decisions["SHOP"]["shortlisted"])
+        self.assertIn("below_confidence_threshold", decisions["SHOP"]["reasons"])
+        self.assertGreater(decisions["SHOP"]["catalyst_proxy_score"], result["summary"]["shortlist_rules"]["minimum_catalyst_proxy_score"])
 
     def test_watchlist_orchestration_uses_calibration_to_raise_action_thresholds(self) -> None:
         session = create_session()

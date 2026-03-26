@@ -441,6 +441,7 @@ Completed in the redesign track so far:
 - recommendation outcomes can now be summarized by confidence bucket and setup family through API/UI calibration views for operator review
 - watchlist-backed plan generation now applies early calibration-aware action-threshold adjustments using stored setup-family and confidence-bucket outcome slices
 - recommendation-plan operator workflows now include baseline cohort comparisons against simple high-confidence, cheap-scan-attention, momentum-lane, and catalyst-lane heuristics
+- ticker deep analysis now emits richer transmission summaries, and watchlist orchestration reserves a small catalyst/event shortlist lane in addition to the main technical lane
 
 Not yet complete:
 - a richer event-extraction pipeline beyond the current heuristic event-ranking and source-priority layer

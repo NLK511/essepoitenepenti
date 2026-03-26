@@ -82,6 +82,7 @@ Delivered in this phase so far:
 - recommendation-outcome calibration summaries now aggregate results by confidence bucket and setup family through API/UI operator workflows
 - watchlist-backed recommendation plans now use those stored calibration slices to raise or relax action thresholds for underperforming or outperforming confidence/setup cohorts
 - recommendation-plan workflows now expose baseline cohort comparisons so operators can compare actual actionable output against simple high-confidence, cheap-scan-attention, momentum-lane, and catalyst-lane slices
+- watchlist orchestration now includes richer ticker transmission summaries and a reserved catalyst/event shortlist lane so cheap-scan technical ranking does not own every deep-analysis slot
 
 Next required work in this phase:
 - use the new calibration summaries to drive actual confidence re-scaling and operator thresholds rather than only reporting grouped outcomes

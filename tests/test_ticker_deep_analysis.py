@@ -66,8 +66,8 @@ class StubProposalService:
             "momentum_long": 0.12,
             "sentiment_score": 0.22,
             "sentiment_label": "POSITIVE",
-            "macro_sentiment_score": 0.18,
-            "industry_sentiment_score": 0.24,
+            "macro_sentiment_score": 0.22,
+            "industry_sentiment_score": 0.3,
             "ticker_sentiment_score": 0.31,
             "ticker_sentiment_label": "POSITIVE",
             "news_item_count": 4,
@@ -137,8 +137,8 @@ class StubProposalService:
             "enhanced_sentiment_score": 0.22,
             "news_sentiment_score": 0.22,
             "social_sentiment_score": 0.0,
-            "macro_sentiment_score": 0.18,
-            "industry_sentiment_score": 0.24,
+            "macro_sentiment_score": 0.22,
+            "industry_sentiment_score": 0.3,
             "ticker_sentiment_score": 0.31,
             "social_item_count": 0.0,
             "macro_item_count": 1.0,
@@ -199,6 +199,8 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         self.assertEqual(payload["ticker_deep_analysis"]["horizon"], "1w")
         self.assertIn("setup_family", payload["ticker_deep_analysis"])
         self.assertIn("confidence_components", payload["ticker_deep_analysis"])
+        self.assertIn("transmission_analysis", payload["ticker_deep_analysis"])
+        self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["context_bias"], "tailwind")
         self.assertEqual(output.recommendation.direction, RecommendationDirection.LONG)
         self.assertGreater(output.recommendation.confidence, 0.0)
         self.assertEqual(output.diagnostics.analysis_json, output.diagnostics.raw_output)
