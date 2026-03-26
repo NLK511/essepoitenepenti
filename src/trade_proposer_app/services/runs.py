@@ -14,7 +14,6 @@ from trade_proposer_app.services.builders import (
     create_watchlist_orchestration_service,
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
-from trade_proposer_app.services.evaluations import RecommendationEvaluationService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.optimizations import WeightOptimizationService
@@ -41,7 +40,6 @@ def enqueue_enabled_jobs(now: datetime | None = None) -> int:
             runs=runs_repository,
             proposals=create_proposal_service(session),
             evaluations=EvaluationExecutionService(
-                recommendation_evaluations=RecommendationEvaluationService(session),
                 recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
             ),
             optimizations=WeightOptimizationService(

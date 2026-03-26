@@ -721,8 +721,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(jobs_after_delete.json(), [])
         self.assertEqual(runs_after_delete.status_code, 200)
         self.assertEqual(runs_after_delete.json(), [])
-        self.assertEqual(history_after_delete.status_code, 200)
-        self.assertEqual(history_after_delete.json()["items"], [])
+        self.assertEqual(history_after_delete.status_code, 404)
 
     async def test_create_job_requires_exactly_one_source_and_supports_watchlist(self) -> None:
         session = Session(bind=self.engine)
@@ -794,7 +793,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(created.status_code, 400)
         self.assertIn("watchlists can only be created from proposal_generation jobs", created.text)
 
-    async def test_dashboard_and_history_api_render_data(self) -> None:
+    async def test_dashboard_and_run_detail_render_redesign_data_without_legacy_history_api(self) -> None:
         run_id = self.seed_run_with_diagnostics()
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
@@ -807,10 +806,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(dashboard_payload["latest_runs"]), 1)
         self.assertEqual(dashboard_payload["recommendation_plans"], [])
 
-        self.assertEqual(history.status_code, 200)
-        history_payload = history.json()
-        self.assertEqual(history_payload["pagination"]["total_results"], 1)
-        self.assertEqual(history_payload["items"][0]["summary_error"], "summary timeout")
+        self.assertEqual(history.status_code, 404)
 
         self.assertEqual(run_detail.status_code, 200)
         detail_payload = run_detail.json()
@@ -836,8 +832,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(deleted.json()["deleted"])
         self.assertEqual(runs_after_delete.status_code, 200)
         self.assertEqual(runs_after_delete.json(), [])
-        self.assertEqual(history_after_delete.status_code, 200)
-        self.assertEqual(history_after_delete.json()["items"], [])
+        self.assertEqual(history_after_delete.status_code, 404)
         self.assertEqual(run_detail.status_code, 404)
         self.assertEqual(run_detail.json()["detail"], f"Run {run_id} not found")
 

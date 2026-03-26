@@ -89,6 +89,7 @@ Delivered in this phase so far:
 - run-detail operator views now show when a proposal run came from manual tickers versus a real watchlist and explicitly mark redesign plans/outcomes as canonical
 - new redesign-backed proposal runs no longer emit legacy recommendation compatibility artifacts, and operator navigation is being narrowed toward recommendation-plan-first workflows
 - ticker drill-downs are being converged onto recommendation-plan/outcome history instead of legacy recommendation history
+- mounted operator evaluation/history APIs are being narrowed toward recommendation-plan evaluation and away from legacy recommendation-history endpoints
 - ticker deep analysis now uses a redesign-native internal feature/context pipeline and only leans on legacy proposal services for raw data/news enrichment and compatibility fallback
 - calibration reporting now includes horizon, transmission-bias, context-regime, and horizon-plus-setup-family slices so operators can judge where the redesign is or is not working, now marks slice sample quality explicitly, and watchlist-backed action gating now uses those richer slices with bounded sample-aware adjustments instead of relying only on setup family and confidence bucket
 

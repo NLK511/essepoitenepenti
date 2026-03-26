@@ -17,7 +17,6 @@ from trade_proposer_app.services.builders import (
     create_proposal_service,
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
-from trade_proposer_app.services.evaluations import RecommendationEvaluationService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.optimizations import WeightOptimizationService
@@ -155,7 +154,6 @@ async def execute_job(job_id: int, session: Session = Depends(get_db_session)) -
         runs=RunRepository(session),
         proposals=create_proposal_service(session),
         evaluations=EvaluationExecutionService(
-            recommendation_evaluations=RecommendationEvaluationService(session),
             recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
         ),
         optimizations=create_optimization_service(session),
