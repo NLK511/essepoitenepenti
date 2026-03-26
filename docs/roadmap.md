@@ -83,6 +83,7 @@ Delivered in this phase so far:
 - watchlist-backed recommendation plans now use those stored calibration slices to raise or relax action thresholds for underperforming or outperforming confidence/setup cohorts
 - recommendation-plan workflows now expose baseline cohort comparisons so operators can compare actual actionable output against simple high-confidence, cheap-scan-attention, momentum-lane, and catalyst-lane slices
 - watchlist orchestration now includes richer ticker transmission summaries, now carrying primary drivers, conflict flags, and expected transmission windows, plus a reserved catalyst/event shortlist lane so cheap-scan technical ranking does not own every deep-analysis slot
+- recommendation-plan generation now carries setup-family-specific entry style and invalidation framing so plans differ more meaningfully across breakout / continuation / mean-reversion / catalyst-driven cases
 - ticker deep analysis now uses a redesign-native internal feature/context pipeline and only leans on legacy proposal services for raw data/news enrichment and compatibility fallback
 - calibration reporting now includes horizon, transmission-bias, context-regime, and horizon-plus-setup-family slices so operators can judge where the redesign is or is not working, now marks slice sample quality explicitly, and watchlist-backed action gating now uses those richer slices with bounded sample-aware adjustments instead of relying only on setup family and confidence bucket
 

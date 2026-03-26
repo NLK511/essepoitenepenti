@@ -265,6 +265,8 @@ export function RecommendationPlansPage() {
                   const calibrationReview = asRecord(signalBreakdown?.calibration_review) ?? asRecord(evidenceSummary?.calibration_review);
                   const setupFamily = typeof signalBreakdown?.setup_family === "string" ? signalBreakdown.setup_family : "—";
                   const actionReason = typeof evidenceSummary?.action_reason === "string" ? evidenceSummary.action_reason : "—";
+                  const entryStyle = typeof evidenceSummary?.entry_style === "string" ? evidenceSummary.entry_style : "—";
+                  const invalidationSummary = typeof evidenceSummary?.invalidation_summary === "string" ? evidenceSummary.invalidation_summary : "—";
                   const transmissionBias = typeof transmissionSummary?.context_bias === "string" ? transmissionSummary.context_bias : "unknown";
                   const transmissionAlignment = typeof transmissionSummary?.alignment_percent === "number" ? transmissionSummary.alignment_percent : null;
                   const transmissionTags = Array.isArray(transmissionSummary?.transmission_tags)
@@ -307,6 +309,7 @@ export function RecommendationPlansPage() {
                       </td>
                       <td>
                         <div className="helper-text">entry {plan.entry_price_low ?? "—"}{plan.entry_price_high !== null && plan.entry_price_high !== plan.entry_price_low ? ` – ${plan.entry_price_high}` : ""}</div>
+                        <div className="helper-text">style {entryStyle}</div>
                         <div className="helper-text">stop {plan.stop_loss ?? "—"}</div>
                         <div className="helper-text">take {plan.take_profit ?? "—"}</div>
                       </td>
@@ -335,6 +338,7 @@ export function RecommendationPlansPage() {
                       <td>
                         <div>{plan.thesis_summary || "No thesis stored."}</div>
                         {plan.rationale_summary ? <div className="helper-text top-gap-small">{plan.rationale_summary}</div> : null}
+                        <div className="helper-text top-gap-small">invalidation {invalidationSummary}</div>
                         {plan.id ? (
                           <div className="helper-text top-gap-small">
                             <button

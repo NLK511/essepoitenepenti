@@ -491,6 +491,8 @@ export function RunDetailPage() {
                               : "unknown";
                             const setupFamily = typeof signalBreakdown?.setup_family === "string" ? signalBreakdown.setup_family : null;
                             const actionReason = typeof evidenceSummary?.action_reason === "string" ? evidenceSummary.action_reason : null;
+                            const entryStyle = typeof evidenceSummary?.entry_style === "string" ? evidenceSummary.entry_style : null;
+                            const invalidationSummary = typeof evidenceSummary?.invalidation_summary === "string" ? evidenceSummary.invalidation_summary : null;
                             const effectiveThreshold = typeof calibrationReview?.effective_confidence_threshold === "number"
                               ? calibrationReview.effective_confidence_threshold
                               : null;
@@ -504,6 +506,8 @@ export function RunDetailPage() {
                                     <Link to={`/tickers/${plan.ticker}`} className="badge badge-info badge-link">{plan.ticker}</Link>
                                     <div className="helper-text top-gap-small">{plan.thesis_summary || plan.rationale_summary || "No thesis stored."}</div>
                                     <div className="helper-text">setup {setupFamily ?? "—"} · reason {actionReason ?? "—"}</div>
+                                    <div className="helper-text">entry style {entryStyle ?? "—"}</div>
+                                    <div className="helper-text">invalidation {invalidationSummary ?? "—"}</div>
                                   </div>
                                 </td>
                                 <td><Badge tone={plan.action === "long" ? "ok" : plan.action === "short" ? "warning" : "neutral"}>{plan.action}</Badge></td>

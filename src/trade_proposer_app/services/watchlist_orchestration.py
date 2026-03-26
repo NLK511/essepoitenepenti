@@ -549,7 +549,7 @@ class WatchlistOrchestrationService:
                 action=action,
                 status="ok" if not warnings else "partial",
                 confidence_percent=signal.confidence_percent,
-                thesis_summary=self._no_action_thesis(setup_family, action_reason),
+                thesis_summary=self._no_action_thesis(setup_family, action_reason, transmission_summary=transmission_summary),
                 rationale_summary=rationale,
                 warnings=list(dict.fromkeys(warnings)),
                 evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
@@ -561,21 +561,25 @@ class WatchlistOrchestrationService:
                 ticker_signal_snapshot_id=signal.id,
             )
 
-        stop_loss = round(float(recommendation.stop_loss), 4)
-        take_profit = round(float(recommendation.take_profit), 4)
+        entry_price_low, entry_price_high, stop_loss, take_profit = self._family_adjusted_trade_levels(
+            recommendation,
+            setup_family=setup_family,
+            action=action,
+            transmission_summary=transmission_summary,
+        )
         return RecommendationPlan(
             ticker=candidate.ticker,
             horizon=watchlist.default_horizon,
             action=action,
             status="ok" if not warnings else "partial",
             confidence_percent=signal.confidence_percent,
-            entry_price_low=round(float(recommendation.entry_price), 4),
-            entry_price_high=round(float(recommendation.entry_price), 4),
+            entry_price_low=entry_price_low,
+            entry_price_high=entry_price_high,
             stop_loss=stop_loss,
             take_profit=take_profit,
             holding_period_days=self._holding_period_days(watchlist.default_horizon),
             risk_reward_ratio=self._risk_reward_ratio(recommendation),
-            thesis_summary=summary_text or self._actionable_thesis(action, setup_family),
+            thesis_summary=summary_text or self._actionable_thesis(action, setup_family, transmission_summary=transmission_summary),
             rationale_summary=rationale,
             risks=self._plan_risks(warnings, setup_family, action, transmission_summary),
             warnings=list(dict.fromkeys(warnings)),
@@ -965,8 +969,8 @@ class WatchlistOrchestrationService:
         components.append(f"confidence {signal.confidence_percent:.1f}")
         return " · ".join(component for component in components if component)
 
-    @staticmethod
     def _evidence_summary(
+        self,
         summary_text: str,
         setup_family: str,
         confidence_components: dict[str, float],
@@ -982,26 +986,128 @@ class WatchlistOrchestrationService:
             "confidence_components": confidence_components,
             "calibration_review": calibration_review or {},
             "transmission_summary": transmission_summary or {},
+            "entry_style": self._entry_style(setup_family),
+            "invalidation_summary": self._invalidation_summary(setup_family, transmission_summary=transmission_summary),
         }
 
-    @staticmethod
-    def _no_action_thesis(setup_family: str, action_reason: str) -> str:
+    def _no_action_thesis(
+        self,
+        setup_family: str,
+        action_reason: str,
+        *,
+        transmission_summary: dict[str, object] | None = None,
+    ) -> str:
         setup_label = setup_family.replace("_", " ") if setup_family else "uncategorized"
         if action_reason in {"below_action_confidence_threshold", "below_calibrated_action_threshold"}:
-            return f"Detected a {setup_label} candidate, but conviction was too weak for an actionable trade plan."
+            family_text = {
+                "breakout": "the breakout lacked enough confirmed follow-through",
+                "breakdown": "the breakdown lacked enough confirmed follow-through",
+                "continuation": "trend continuation evidence was too soft",
+                "mean_reversion": "the reversion case was too weak against the prevailing move",
+                "catalyst_follow_through": "the catalyst impulse was not strong enough to trust",
+                "macro_beneficiary_loser": "the macro transmission case was not strong enough to express",
+            }.get(setup_family, "conviction was too weak")
+            return f"Detected a {setup_label} candidate, but {family_text} for an actionable trade plan."
         if action_reason == "shorts_disabled":
             return f"Detected a {setup_label} candidate, but the watchlist policy does not permit the required short expression."
         if action_reason == "direction_not_actionable":
             return f"Detected a {setup_label} structure, but direction remained too ambiguous for a trade plan."
         if action_reason == "context_transmission_headwind":
-            return f"Detected a {setup_label} structure, but macro and industry transmission remained a headwind to the proposed trade direction."
+            driver = self._primary_driver_label(transmission_summary)
+            return f"Detected a {setup_label} structure, but macro and industry transmission remained a headwind to the proposed trade direction{f' ({driver})' if driver else ''}."
         return "Signal quality was insufficient for an actionable trade plan."
 
-    @staticmethod
-    def _actionable_thesis(action: str, setup_family: str) -> str:
+    def _actionable_thesis(
+        self,
+        action: str,
+        setup_family: str,
+        *,
+        transmission_summary: dict[str, object] | None = None,
+    ) -> str:
         direction = "bullish" if action == "long" else "bearish"
         setup_label = setup_family.replace("_", " ") if setup_family else "uncategorized"
-        return f"Actionable {direction} {setup_label} setup identified."
+        driver = self._primary_driver_label(transmission_summary)
+        family_text = {
+            "continuation": f"Actionable {direction} continuation setup with trend structure still intact",
+            "breakout": f"Actionable {direction} breakout setup with follow-through conditions in place",
+            "breakdown": f"Actionable {direction} breakdown setup with support failure or failed retest pressure visible",
+            "mean_reversion": f"Actionable {direction} mean reversion setup with a defined reversal window",
+            "catalyst_follow_through": f"Actionable {direction} catalyst follow-through setup while event pressure remains active",
+            "macro_beneficiary_loser": f"Actionable {direction} macro beneficiary / loser setup tied to broader context transmission",
+        }.get(setup_family, f"Actionable {direction} {setup_label} setup identified")
+        if driver:
+            return f"{family_text}; primary driver is {driver}."
+        return f"{family_text}."
+
+    @staticmethod
+    def _entry_style(setup_family: str) -> str:
+        return {
+            "continuation": "pullback_or_reclaim",
+            "breakout": "break_or_retest",
+            "breakdown": "break_or_failed_retest",
+            "mean_reversion": "reversal_confirmation",
+            "catalyst_follow_through": "post_catalyst_continuation",
+            "macro_beneficiary_loser": "context_aligned_pullback",
+        }.get(setup_family, "standard_entry")
+
+    def _invalidation_summary(
+        self,
+        setup_family: str,
+        *,
+        transmission_summary: dict[str, object] | None = None,
+    ) -> str:
+        driver = self._primary_driver_label(transmission_summary)
+        base = {
+            "continuation": "invalidate if the trend pullback breaks and continuation structure fails",
+            "breakout": "invalidate if the breakout loses the breakout level or fails its retest",
+            "breakdown": "invalidate if the breakdown reclaims lost support or the failed retest resolves higher",
+            "mean_reversion": "invalidate if the stretched move keeps extending and reversal confirmation fails",
+            "catalyst_follow_through": "invalidate if the catalyst impulse loses confirmation or post-event continuation stalls",
+            "macro_beneficiary_loser": "invalidate if the broader context transmission weakens or sector sympathy breaks",
+        }.get(setup_family, "invalidate if the setup loses its defining structure")
+        if driver:
+            return f"{base}; primary driver to monitor is {driver}"
+        return base
+
+    @staticmethod
+    def _primary_driver_label(transmission_summary: dict[str, object] | None) -> str | None:
+        if not isinstance(transmission_summary, dict):
+            return None
+        drivers = transmission_summary.get("primary_drivers")
+        if not isinstance(drivers, list) or not drivers:
+            return None
+        first = drivers[0]
+        return str(first).replace("_", " ") if isinstance(first, str) and first else None
+
+    def _family_adjusted_trade_levels(
+        self,
+        recommendation: Recommendation,
+        *,
+        setup_family: str,
+        action: str,
+        transmission_summary: dict[str, object] | None = None,
+    ) -> tuple[float, float, float, float]:
+        entry = round(float(recommendation.entry_price), 4)
+        stop = round(float(recommendation.stop_loss), 4)
+        take = round(float(recommendation.take_profit), 4)
+        if entry <= 0:
+            return entry, entry, stop, take
+        risk_distance = abs(entry - stop)
+        reward_distance = abs(take - entry)
+        bias = transmission_summary.get("context_bias") if isinstance(transmission_summary, dict) else None
+        if setup_family in {"breakout", "breakdown"} and risk_distance > 0:
+            stop = round(stop + (risk_distance * 0.15 if action == "long" else -risk_distance * 0.15), 4)
+            take = round(take + (reward_distance * 0.12 if action == "long" else -reward_distance * 0.12), 4)
+        elif setup_family == "mean_reversion" and risk_distance > 0:
+            stop = round(stop - (risk_distance * 0.1 if action == "long" else -risk_distance * 0.1), 4)
+            take = round(take - (reward_distance * 0.12 if action == "long" else -reward_distance * 0.12), 4)
+        elif setup_family == "catalyst_follow_through" and reward_distance > 0:
+            take = round(take + (reward_distance * 0.18 if action == "long" else -reward_distance * 0.18), 4)
+        elif setup_family == "macro_beneficiary_loser" and reward_distance > 0:
+            take = round(take + (reward_distance * 0.08 if action == "long" else -reward_distance * 0.08), 4)
+        if bias == "headwind" and risk_distance > 0:
+            stop = round(stop + (risk_distance * 0.08 if action == "long" else -risk_distance * 0.08), 4)
+        return entry, entry, stop, take
 
     @staticmethod
     def _plan_risks(

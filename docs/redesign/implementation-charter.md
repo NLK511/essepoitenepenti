@@ -445,6 +445,7 @@ Completed in the redesign track so far:
 - recommendation-plan operator workflows now include baseline cohort comparisons against simple high-confidence, cheap-scan-attention, momentum-lane, and catalyst-lane heuristics
 - calibration reporting now includes horizon, transmission-bias, context-regime, and horizon-plus-setup-family slices for redesign-native operator review, marks slice sample quality explicitly, and watchlist-backed action gating now consumes those richer slices with bounded, sample-aware threshold adjustments when setting effective confidence thresholds
 - ticker deep analysis now emits richer transmission summaries, including primary drivers, conflict flags, and expected transmission windows, uses a redesign-native internal feature/context pipeline, and watchlist orchestration reserves a small catalyst/event shortlist lane in addition to the main technical lane
+- recommendation-plan generation now also persists setup-family-specific entry style and invalidation framing so the family label changes operator-facing plan behavior, not just metadata
 
 Not yet complete:
 - a richer event-extraction pipeline beyond the current heuristic event-ranking and source-priority layer
