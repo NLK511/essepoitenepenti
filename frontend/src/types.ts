@@ -141,14 +141,16 @@ export interface PrototypeTradeLogEntry {
 
 export interface TickerPerformanceSummary {
   ticker: string;
-  app_recommendation_count: number;
-  pending_recommendation_count: number;
-  win_recommendation_count: number;
-  loss_recommendation_count: number;
-  warning_recommendation_count: number;
-  long_recommendation_count: number;
-  short_recommendation_count: number;
-  neutral_recommendation_count: number;
+  app_plan_count: number;
+  actionable_plan_count: number;
+  long_plan_count: number;
+  short_plan_count: number;
+  no_action_plan_count: number;
+  watchlist_plan_count: number;
+  open_plan_count: number;
+  win_plan_count: number;
+  loss_plan_count: number;
+  warning_plan_count: number;
   average_confidence: number | null;
   prototype_trade_log_path: string;
   prototype_trade_log_available: boolean;
@@ -164,7 +166,7 @@ export interface TickerPerformanceSummary {
 export interface TickerAnalysisPage {
   ticker: string;
   performance: TickerPerformanceSummary;
-  recommendation_history: RecommendationHistoryItem[];
+  recommendation_plans: RecommendationPlan[];
   prototype_trades: PrototypeTradeLogEntry[];
 }
 

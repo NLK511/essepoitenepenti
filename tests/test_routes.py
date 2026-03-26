@@ -926,8 +926,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["latest_runs"][0]["id"], high_run.id)
         self.assertEqual(payload["recommendation_plans"], [])
 
-    async def test_ticker_api_aggregates_app_history_and_prototype_trade_log(self) -> None:
+    async def test_ticker_api_aggregates_plan_history_and_prototype_trade_log(self) -> None:
         self.seed_run_with_diagnostics()
+        self.seed_context_and_recommendation_plan_data()
         self.seed_prototype_trade_log()
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
@@ -936,7 +937,10 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["ticker"], "AAPL")
-        self.assertEqual(payload["performance"]["app_recommendation_count"], 1)
+        self.assertEqual(payload["performance"]["app_plan_count"], 1)
+        self.assertEqual(payload["performance"]["actionable_plan_count"], 1)
+        self.assertEqual(payload["performance"]["win_plan_count"], 1)
+        self.assertEqual(payload["performance"]["open_plan_count"], 0)
         self.assertEqual(payload["performance"]["prototype_trade_count"], 3)
         self.assertEqual(payload["performance"]["resolved_trade_count"], 2)
         self.assertEqual(payload["performance"]["win_count"], 1)
@@ -944,7 +948,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["performance"]["pending_trade_count"], 1)
         self.assertEqual(payload["performance"]["win_rate_percent"], 50.0)
         self.assertTrue(payload["performance"]["prototype_trade_log_available"])
-        self.assertEqual(len(payload["recommendation_history"]), 1)
+        self.assertEqual(len(payload["recommendation_plans"]), 1)
+        self.assertEqual(payload["recommendation_plans"][0]["latest_outcome"]["outcome"], "win")
         self.assertEqual(len(payload["prototype_trades"]), 3)
         self.assertEqual(payload["prototype_trades"][0]["status"], "PENDING")
 

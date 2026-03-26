@@ -3,28 +3,22 @@ from pathlib import Path
 from statistics import mean
 
 from trade_proposer_app.config import settings
-from trade_proposer_app.domain.enums import RecommendationState
-from trade_proposer_app.domain.models import (
-    PrototypeTradeLogEntry,
-    RecommendationHistoryItem,
-    TickerAnalysisPage,
-    TickerPerformanceSummary,
-)
-from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.domain.models import PrototypeTradeLogEntry, RecommendationPlan, TickerAnalysisPage, TickerPerformanceSummary
+from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 
 
 class TickerAnalysisService:
-    def __init__(self, runs: RunRepository) -> None:
-        self.runs = runs
+    def __init__(self, recommendation_plans: RecommendationPlanRepository) -> None:
+        self.recommendation_plans = recommendation_plans
 
     def get_ticker_page(self, ticker: str) -> TickerAnalysisPage:
         normalized_ticker = ticker.strip().upper()
-        recommendation_history = self.runs.list_recommendation_history_for_ticker(normalized_ticker)
+        recommendation_plans = self.recommendation_plans.list_plans(ticker=normalized_ticker, limit=200)
         prototype_trades = self._list_prototype_trades(normalized_ticker)
         return TickerAnalysisPage(
             ticker=normalized_ticker,
-            performance=self._build_performance_summary(normalized_ticker, recommendation_history, prototype_trades),
-            recommendation_history=recommendation_history,
+            performance=self._build_performance_summary(normalized_ticker, recommendation_plans, prototype_trades),
+            recommendation_plans=recommendation_plans,
             prototype_trades=prototype_trades,
         )
 
@@ -83,26 +77,32 @@ class TickerAnalysisService:
     def _build_performance_summary(
         self,
         ticker: str,
-        recommendation_history: list[RecommendationHistoryItem],
+        recommendation_plans: list[RecommendationPlan],
         prototype_trades: list[PrototypeTradeLogEntry],
     ) -> TickerPerformanceSummary:
         resolved_trades = [trade for trade in prototype_trades if trade.status in {"WIN", "LOSS"}]
         wins = [trade for trade in resolved_trades if trade.status == "WIN"]
         losses = [trade for trade in resolved_trades if trade.status == "LOSS"]
         pending_trades = [trade for trade in prototype_trades if trade.status == "PENDING"]
-        confidence_values = [item.confidence for item in recommendation_history]
+        confidence_values = [item.confidence_percent for item in recommendation_plans]
         resolved_durations = [trade.duration_days for trade in resolved_trades if trade.duration_days is not None]
 
         return TickerPerformanceSummary(
             ticker=ticker,
-            app_recommendation_count=len(recommendation_history),
-            pending_recommendation_count=sum(1 for item in recommendation_history if item.state.value == RecommendationState.PENDING.value),
-            win_recommendation_count=sum(1 for item in recommendation_history if item.state.value == RecommendationState.WIN.value),
-            loss_recommendation_count=sum(1 for item in recommendation_history if item.state.value == RecommendationState.LOSS.value),
-            warning_recommendation_count=sum(1 for item in recommendation_history if item.warnings),
-            long_recommendation_count=sum(1 for item in recommendation_history if item.direction.value == "LONG"),
-            short_recommendation_count=sum(1 for item in recommendation_history if item.direction.value == "SHORT"),
-            neutral_recommendation_count=sum(1 for item in recommendation_history if item.direction.value == "NEUTRAL"),
+            app_plan_count=len(recommendation_plans),
+            actionable_plan_count=sum(1 for item in recommendation_plans if item.action in {"long", "short"}),
+            long_plan_count=sum(1 for item in recommendation_plans if item.action == "long"),
+            short_plan_count=sum(1 for item in recommendation_plans if item.action == "short"),
+            no_action_plan_count=sum(1 for item in recommendation_plans if item.action == "no_action"),
+            watchlist_plan_count=sum(1 for item in recommendation_plans if item.action == "watchlist"),
+            open_plan_count=sum(
+                1
+                for item in recommendation_plans
+                if item.latest_outcome is None or item.latest_outcome.status not in {"resolved"}
+            ),
+            win_plan_count=sum(1 for item in recommendation_plans if item.latest_outcome and item.latest_outcome.outcome == "win"),
+            loss_plan_count=sum(1 for item in recommendation_plans if item.latest_outcome and item.latest_outcome.outcome == "loss"),
+            warning_plan_count=sum(1 for item in recommendation_plans if item.warnings),
             average_confidence=round(mean(confidence_values), 2) if confidence_values else None,
             prototype_trade_log_path=str(self.get_prototype_trade_log_path()),
             prototype_trade_log_available=self.get_prototype_trade_log_path().exists(),

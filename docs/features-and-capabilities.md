@@ -23,6 +23,7 @@ This principle is consistently applied in the best parts of the product. It is a
 - Store structured diagnostics beside each redesign object (`analysis_json`, feature vectors, aggregations, confidence weights, warnings, and raw output where applicable).
 - Evaluate recommendation plans through the app-native price-history path rather than a prototype script.
 - Review run, plan, and ticker pages through the redesign-native plan/outcome workflow rather than legacy recommendation-detail surfaces.
+- Ticker drill-down now centers stored recommendation plans and latest outcomes for that ticker instead of legacy recommendation-history rows.
 
 ### Shared sentiment operations
 - Persist shared macro and industry sentiment as reusable snapshots.

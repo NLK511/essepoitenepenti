@@ -152,7 +152,7 @@ export function JobsPage() {
       <PageHeader
         kicker="Automation journey"
         title="Create jobs, enqueue runs, and manage scheduled execution."
-        subtitle="Jobs define what should be analyzed. Each execution creates a run, and each successful run can produce one or more trade recommendations."
+        subtitle="Jobs define what should be analyzed. Each execution creates a run, and each successful run can produce redesign-native ticker signals and recommendation plans."
         actions={
           <Link to="/jobs/watchlists" className="button-secondary">
             Manage watchlists

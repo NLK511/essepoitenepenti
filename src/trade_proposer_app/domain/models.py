@@ -156,14 +156,16 @@ class PrototypeTradeLogEntry(BaseModel):
 
 class TickerPerformanceSummary(BaseModel):
     ticker: str
-    app_recommendation_count: int = 0
-    pending_recommendation_count: int = 0
-    win_recommendation_count: int = 0
-    loss_recommendation_count: int = 0
-    warning_recommendation_count: int = 0
-    long_recommendation_count: int = 0
-    short_recommendation_count: int = 0
-    neutral_recommendation_count: int = 0
+    app_plan_count: int = 0
+    actionable_plan_count: int = 0
+    long_plan_count: int = 0
+    short_plan_count: int = 0
+    no_action_plan_count: int = 0
+    watchlist_plan_count: int = 0
+    open_plan_count: int = 0
+    win_plan_count: int = 0
+    loss_plan_count: int = 0
+    warning_plan_count: int = 0
     average_confidence: float | None = None
     prototype_trade_log_path: str = ""
     prototype_trade_log_available: bool = False
@@ -179,7 +181,7 @@ class TickerPerformanceSummary(BaseModel):
 class TickerAnalysisPage(BaseModel):
     ticker: str
     performance: TickerPerformanceSummary
-    recommendation_history: list[RecommendationHistoryItem] = Field(default_factory=list)
+    recommendation_plans: list["RecommendationPlan"] = Field(default_factory=list)
     prototype_trades: list[PrototypeTradeLogEntry] = Field(default_factory=list)
 
 
