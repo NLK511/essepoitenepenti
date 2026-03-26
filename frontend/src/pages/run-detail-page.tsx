@@ -18,6 +18,16 @@ function scoreColor(value: number, min = -1, max = 1) {
   return `hsl(${hue}, 75%, 45%)`;
 }
 
+function biasTone(value: string): "ok" | "warning" | "neutral" {
+  if (value === "tailwind") {
+    return "ok";
+  }
+  if (value === "headwind") {
+    return "warning";
+  }
+  return "neutral";
+}
+
 const DOC_BASE = "https://github.com/NLK511/essepoitenepenti/blob/main/docs/recommendation-methodology.md";
 
 const INFO_DESCRIPTIONS = {
@@ -274,8 +284,11 @@ export function RunDetailPage() {
                     {shortlistRules ? (
                       <div className="cluster top-gap-small">
                         <Badge tone="info">limit {typeof shortlistRules.limit === "number" ? shortlistRules.limit : "—"}</Badge>
+                        <Badge tone="info">core {typeof shortlistRules.core_limit === "number" ? shortlistRules.core_limit : "—"}</Badge>
+                        <Badge tone="info">catalyst lane {typeof shortlistRules.catalyst_lane_limit === "number" ? shortlistRules.catalyst_lane_limit : "—"}</Badge>
                         <Badge tone="info">min confidence {typeof shortlistRules.minimum_confidence_percent === "number" ? `${shortlistRules.minimum_confidence_percent}%` : "—"}</Badge>
                         <Badge tone="info">min attention {typeof shortlistRules.minimum_attention_score === "number" ? shortlistRules.minimum_attention_score : "—"}</Badge>
+                        <Badge tone="info">min catalyst proxy {typeof shortlistRules.minimum_catalyst_proxy_score === "number" ? shortlistRules.minimum_catalyst_proxy_score : "—"}</Badge>
                         <Badge tone={shortlistRules.allow_shorts === true ? "warning" : "neutral"}>{shortlistRules.allow_shorts === true ? "shorts allowed" : "shorts disabled"}</Badge>
                       </div>
                     ) : null}
@@ -291,9 +304,11 @@ export function RunDetailPage() {
                             <tr>
                               <th>Ticker</th>
                               <th>Outcome</th>
+                              <th>Lane</th>
                               <th>Rank</th>
                               <th>Confidence</th>
                               <th>Attention</th>
+                              <th>Catalyst proxy</th>
                               <th>Reasons</th>
                             </tr>
                           </thead>
@@ -306,9 +321,11 @@ export function RunDetailPage() {
                                 <tr key={`${ticker}-${index}`}>
                                   <td><Link to={`/tickers/${ticker}`} className="badge badge-info badge-link">{ticker}</Link></td>
                                   <td><Badge tone={shortlisted ? "info" : "neutral"}>{shortlisted ? `shortlisted #${typeof decision.shortlist_rank === "number" ? decision.shortlist_rank : "—"}` : "rejected"}</Badge></td>
+                                  <td>{typeof decision.selection_lane === "string" ? decision.selection_lane : "—"}</td>
                                   <td>{typeof decision.rank === "number" ? decision.rank : "—"}</td>
                                   <td>{typeof decision.confidence_percent === "number" ? `${decision.confidence_percent.toFixed(1)}%` : "—"}</td>
                                   <td>{typeof decision.attention_score === "number" ? decision.attention_score.toFixed(1) : "—"}</td>
+                                  <td>{typeof decision.catalyst_proxy_score === "number" ? decision.catalyst_proxy_score.toFixed(1) : "—"}</td>
                                   <td>{reasons.length > 0 ? reasons.join(" · ") : "eligible"}</td>
                                 </tr>
                               );
@@ -335,6 +352,7 @@ export function RunDetailPage() {
                             <th>Confidence</th>
                             <th>Attention</th>
                             <th>Shortlist</th>
+                            <th>Transmission</th>
                             <th>Cheap-scan components</th>
                             <th>Status</th>
                           </tr>
@@ -358,6 +376,17 @@ export function RunDetailPage() {
                             const shortlistReasons = Array.isArray(item.diagnostics.shortlist_reasons)
                               ? item.diagnostics.shortlist_reasons.filter((value): value is string => typeof value === "string")
                               : [];
+                            const selectionLane = typeof item.diagnostics.selection_lane === "string" ? item.diagnostics.selection_lane : null;
+                            const transmissionBias = typeof item.diagnostics.transmission_bias === "string" ? item.diagnostics.transmission_bias : "unknown";
+                            const transmissionAlignment = typeof item.diagnostics.transmission_alignment_score === "number"
+                              ? item.diagnostics.transmission_alignment_score
+                              : null;
+                            const transmissionTags = Array.isArray(item.diagnostics.transmission_tags)
+                              ? item.diagnostics.transmission_tags.filter((value): value is string => typeof value === "string")
+                              : [];
+                            const catalystProxyScore = typeof item.diagnostics.catalyst_proxy_score === "number"
+                              ? item.diagnostics.catalyst_proxy_score
+                              : null;
                             return (
                               <tr key={item.id ?? `${item.ticker}-${item.computed_at}`}>
                                 <td>
@@ -374,7 +403,14 @@ export function RunDetailPage() {
                                 <td>{item.attention_score.toFixed(1)}</td>
                                 <td>
                                   <div className="helper-text">{shortlisted ? `rank ${typeof item.diagnostics.shortlist_rank === "number" ? item.diagnostics.shortlist_rank : "—"}` : "not shortlisted"}</div>
+                                  <div className="helper-text">lane {selectionLane ?? "—"}</div>
                                   <div className="helper-text">{shortlistReasons.length > 0 ? shortlistReasons.join(" · ") : "eligible"}</div>
+                                  <div className="helper-text">catalyst proxy {catalystProxyScore !== null ? catalystProxyScore.toFixed(1) : "—"}</div>
+                                </td>
+                                <td>
+                                  <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>
+                                  <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
+                                  <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
                                 </td>
                                 <td>
                                   <div className="helper-text">trend {trendScore !== null ? trendScore.toFixed(0) : "—"}</div>
@@ -406,6 +442,7 @@ export function RunDetailPage() {
                             <th>Ticker</th>
                             <th>Action</th>
                             <th>Confidence</th>
+                            <th>Transmission</th>
                             <th>Entry</th>
                             <th>Stop</th>
                             <th>Take profit</th>
@@ -413,37 +450,68 @@ export function RunDetailPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {detail.recommendation_plans.map((plan) => (
-                            <tr key={plan.id ?? `${plan.ticker}-${plan.computed_at}`}>
-                              <td>
-                                <div>
-                                  <Link to={`/tickers/${plan.ticker}`} className="badge badge-info badge-link">{plan.ticker}</Link>
-                                  <div className="helper-text top-gap-small">{plan.thesis_summary || plan.rationale_summary || "No thesis stored."}</div>
-                                </div>
-                              </td>
-                              <td><Badge tone={plan.action === "long" ? "ok" : plan.action === "short" ? "warning" : "neutral"}>{plan.action}</Badge></td>
-                              <td>
-                                <span style={{ color: scoreColor(plan.confidence_percent, 0, 100) }}>{plan.confidence_percent.toFixed(1)}%</span>
-                              </td>
-                              <td>
-                                {plan.entry_price_low !== null && plan.entry_price_high !== null
-                                  ? plan.entry_price_low === plan.entry_price_high
-                                    ? plan.entry_price_low
-                                    : `${plan.entry_price_low} – ${plan.entry_price_high}`
-                                  : "—"}
-                              </td>
-                              <td>{plan.stop_loss ?? "—"}</td>
-                              <td>{plan.take_profit ?? "—"}</td>
-                              <td>
-                                {plan.latest_outcome ? (
-                                  <>
-                                    <Badge tone={plan.latest_outcome.outcome === "win" ? "ok" : plan.latest_outcome.outcome === "loss" ? "danger" : "neutral"}>{plan.latest_outcome.outcome}</Badge>
-                                    <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}%</div>
-                                  </>
-                                ) : "—"}
-                              </td>
-                            </tr>
-                          ))}
+                          {detail.recommendation_plans.map((plan) => {
+                            const signalBreakdown = isRecord(plan.signal_breakdown) ? plan.signal_breakdown : null;
+                            const evidenceSummary = isRecord(plan.evidence_summary) ? plan.evidence_summary : null;
+                            const transmissionSummary = isRecord(signalBreakdown?.transmission_summary)
+                              ? signalBreakdown.transmission_summary as Record<string, unknown>
+                              : isRecord(evidenceSummary?.transmission_summary)
+                                ? evidenceSummary.transmission_summary as Record<string, unknown>
+                                : null;
+                            const calibrationReview = isRecord(signalBreakdown?.calibration_review)
+                              ? signalBreakdown.calibration_review as Record<string, unknown>
+                              : isRecord(evidenceSummary?.calibration_review)
+                                ? evidenceSummary.calibration_review as Record<string, unknown>
+                                : null;
+                            const transmissionBias = typeof transmissionSummary?.context_bias === "string" ? transmissionSummary.context_bias : "unknown";
+                            const transmissionAlignment = typeof transmissionSummary?.alignment_percent === "number" ? transmissionSummary.alignment_percent : null;
+                            const transmissionTags = Array.isArray(transmissionSummary?.transmission_tags)
+                              ? transmissionSummary.transmission_tags.filter((value): value is string => typeof value === "string")
+                              : [];
+                            const setupFamily = typeof signalBreakdown?.setup_family === "string" ? signalBreakdown.setup_family : null;
+                            const actionReason = typeof evidenceSummary?.action_reason === "string" ? evidenceSummary.action_reason : null;
+                            const effectiveThreshold = typeof calibrationReview?.effective_confidence_threshold === "number"
+                              ? calibrationReview.effective_confidence_threshold
+                              : null;
+                            return (
+                              <tr key={plan.id ?? `${plan.ticker}-${plan.computed_at}`}>
+                                <td>
+                                  <div>
+                                    <Link to={`/tickers/${plan.ticker}`} className="badge badge-info badge-link">{plan.ticker}</Link>
+                                    <div className="helper-text top-gap-small">{plan.thesis_summary || plan.rationale_summary || "No thesis stored."}</div>
+                                    <div className="helper-text">setup {setupFamily ?? "—"} · reason {actionReason ?? "—"}</div>
+                                  </div>
+                                </td>
+                                <td><Badge tone={plan.action === "long" ? "ok" : plan.action === "short" ? "warning" : "neutral"}>{plan.action}</Badge></td>
+                                <td>
+                                  <span style={{ color: scoreColor(plan.confidence_percent, 0, 100) }}>{plan.confidence_percent.toFixed(1)}%</span>
+                                  <div className="helper-text top-gap-small">threshold {effectiveThreshold !== null ? `${effectiveThreshold.toFixed(1)}%` : "—"}</div>
+                                </td>
+                                <td>
+                                  <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>
+                                  <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
+                                  <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
+                                </td>
+                                <td>
+                                  {plan.entry_price_low !== null && plan.entry_price_high !== null
+                                    ? plan.entry_price_low === plan.entry_price_high
+                                      ? plan.entry_price_low
+                                      : `${plan.entry_price_low} – ${plan.entry_price_high}`
+                                    : "—"}
+                                </td>
+                                <td>{plan.stop_loss ?? "—"}</td>
+                                <td>{plan.take_profit ?? "—"}</td>
+                                <td>
+                                  {plan.latest_outcome ? (
+                                    <>
+                                      <Badge tone={plan.latest_outcome.outcome === "win" ? "ok" : plan.latest_outcome.outcome === "loss" ? "danger" : "neutral"}>{plan.latest_outcome.outcome}</Badge>
+                                      <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}%</div>
+                                    </>
+                                  ) : "—"}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

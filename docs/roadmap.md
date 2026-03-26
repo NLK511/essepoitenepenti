@@ -75,7 +75,7 @@ Delivered in this phase so far:
 - persistence of `TickerSignalSnapshot` and `RecommendationPlan` for every scanned watchlist ticker
 - run-scoped API/UI visibility for redesign objects, including standalone browse pages for ticker signals and recommendation plans
 - richer run artifacts that now record shortlist rules, rejection counts, and per-ticker shortlist decisions
-- operator-facing shortlist reasoning surfaced more directly in run detail and ticker-signal views
+- operator-facing shortlist reasoning surfaced more directly in run detail and ticker-signal views, including lane selection, catalyst proxy scores, and transmission context
 - first-class `recommendation_outcomes` persistence for `RecommendationPlan`, including horizon returns, excursion metrics, direction correctness, confidence buckets, and setup-family capture
 - app-native recommendation-plan evaluation flow exposed through API/UI queue actions and persisted back onto plans as latest outcomes
 - setup-family-aware recommendation generation and decomposed confidence payloads now flow into watchlist-backed `RecommendationPlan` writes through `signal_breakdown` and `evidence_summary`

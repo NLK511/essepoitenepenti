@@ -21,6 +21,20 @@ function directionTone(direction: string): "ok" | "warning" | "neutral" {
   return "neutral";
 }
 
+function biasTone(value: string): "ok" | "warning" | "neutral" {
+  if (value === "tailwind") {
+    return "ok";
+  }
+  if (value === "headwind") {
+    return "warning";
+  }
+  return "neutral";
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
 export function TickerSignalsPage() {
   const [searchParams, setSearchParams] = useSearchParams({ limit: "100" });
   const [signals, setSignals] = useState<TickerSignalSnapshot[] | null>(null);
@@ -87,7 +101,8 @@ export function TickerSignalsPage() {
                   <th>Direction</th>
                   <th>Confidence</th>
                   <th>Attention</th>
-                  <th>Shortlist</th>
+                  <th>Shortlist lane</th>
+                  <th>Transmission</th>
                   <th>Components</th>
                   <th>Run</th>
                 </tr>
@@ -95,12 +110,23 @@ export function TickerSignalsPage() {
               <tbody>
                 {signals.map((signal) => {
                   const mode = typeof signal.diagnostics.mode === "string" ? signal.diagnostics.mode : "unknown";
-                  const components = signal.diagnostics.cheap_scan_component_scores as Record<string, unknown> | undefined;
+                  const components = asRecord(signal.diagnostics.cheap_scan_component_scores);
                   const shortlisted = signal.diagnostics.shortlisted === true;
                   const shortlistRank = typeof signal.diagnostics.shortlist_rank === "number" ? signal.diagnostics.shortlist_rank : null;
+                  const selectionLane = typeof signal.diagnostics.selection_lane === "string" ? signal.diagnostics.selection_lane : null;
                   const shortlistReasons = Array.isArray(signal.diagnostics.shortlist_reasons)
                     ? signal.diagnostics.shortlist_reasons.filter((value): value is string => typeof value === "string")
                     : [];
+                  const transmissionBias = typeof signal.diagnostics.transmission_bias === "string" ? signal.diagnostics.transmission_bias : "unknown";
+                  const transmissionTags = Array.isArray(signal.diagnostics.transmission_tags)
+                    ? signal.diagnostics.transmission_tags.filter((value): value is string => typeof value === "string")
+                    : [];
+                  const transmissionAlignment = typeof signal.diagnostics.transmission_alignment_score === "number"
+                    ? signal.diagnostics.transmission_alignment_score
+                    : null;
+                  const catalystProxyScore = typeof signal.diagnostics.catalyst_proxy_score === "number"
+                    ? signal.diagnostics.catalyst_proxy_score
+                    : null;
                   return (
                     <tr key={signal.id ?? `${signal.ticker}-${signal.computed_at}`}>
                       <td>{formatDate(signal.computed_at)}</td>
@@ -120,7 +146,14 @@ export function TickerSignalsPage() {
                       <td>{signal.attention_score.toFixed(1)}</td>
                       <td>
                         <Badge tone={shortlisted ? "info" : "neutral"}>{shortlisted ? `shortlisted${shortlistRank !== null ? ` #${shortlistRank}` : ""}` : "not shortlisted"}</Badge>
-                        <div className="helper-text top-gap-small">{shortlistReasons.length > 0 ? shortlistReasons.join(" · ") : "eligible"}</div>
+                        <div className="helper-text top-gap-small">lane {selectionLane ?? "—"}</div>
+                        <div className="helper-text">{shortlistReasons.length > 0 ? shortlistReasons.join(" · ") : "eligible"}</div>
+                        <div className="helper-text">catalyst proxy {catalystProxyScore !== null ? catalystProxyScore.toFixed(1) : "—"}</div>
+                      </td>
+                      <td>
+                        <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>
+                        <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
+                        <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
                       </td>
                       <td>
                         <div className="helper-text">trend {typeof components?.trend_score === "number" ? components.trend_score.toFixed(0) : "—"}</div>

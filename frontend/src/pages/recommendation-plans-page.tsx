@@ -21,6 +21,20 @@ function actionTone(action: string): "ok" | "warning" | "neutral" {
   return "neutral";
 }
 
+function biasTone(value: string): "ok" | "warning" | "neutral" {
+  if (value === "tailwind") {
+    return "ok";
+  }
+  if (value === "headwind") {
+    return "warning";
+  }
+  return "neutral";
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
 export function RecommendationPlansPage() {
   const [searchParams, setSearchParams] = useSearchParams({ limit: "100" });
   const [plans, setPlans] = useState<RecommendationPlan[] | null>(null);
@@ -238,62 +252,91 @@ export function RecommendationPlansPage() {
                   <th>Action</th>
                   <th>Confidence</th>
                   <th>Execution</th>
+                  <th>Transmission</th>
                   <th>Latest outcome</th>
                   <th>Thesis</th>
                   <th>Run</th>
                 </tr>
               </thead>
               <tbody>
-                {plans.map((plan) => (
-                  <tr key={plan.id ?? `${plan.ticker}-${plan.computed_at}`}>
-                    <td>{formatDate(plan.computed_at)}</td>
-                    <td>
-                      <div className="cluster">
-                        <Link to={`/tickers/${plan.ticker}`} className="badge badge-info badge-link">{plan.ticker}</Link>
-                        <Badge tone={plan.warnings.length > 0 ? "warning" : "ok"}>{plan.status}</Badge>
-                      </div>
-                      <div className="helper-text top-gap-small">horizon {plan.horizon}</div>
-                    </td>
-                    <td><Badge tone={actionTone(plan.action)}>{plan.action}</Badge></td>
-                    <td>{plan.confidence_percent.toFixed(1)}%</td>
-                    <td>
-                      <div className="helper-text">entry {plan.entry_price_low ?? "—"}{plan.entry_price_high !== null && plan.entry_price_high !== plan.entry_price_low ? ` – ${plan.entry_price_high}` : ""}</div>
-                      <div className="helper-text">stop {plan.stop_loss ?? "—"}</div>
-                      <div className="helper-text">take {plan.take_profit ?? "—"}</div>
-                    </td>
-                    <td>
-                      {plan.latest_outcome ? (
-                        <>
-                          <div className="cluster">
-                            <Badge tone={plan.latest_outcome.outcome === "win" ? "ok" : plan.latest_outcome.outcome === "loss" ? "danger" : "neutral"}>{plan.latest_outcome.outcome}</Badge>
-                            <span className="helper-text">{plan.latest_outcome.status}</span>
-                          </div>
-                          <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}%</div>
-                          <div className="helper-text top-gap-small">MFE {plan.latest_outcome.max_favorable_excursion ?? "—"}% · MAE {plan.latest_outcome.max_adverse_excursion ?? "—"}%</div>
-                        </>
-                      ) : (
-                        <div className="helper-text">No outcome stored yet.</div>
-                      )}
-                    </td>
-                    <td>
-                      <div>{plan.thesis_summary || "No thesis stored."}</div>
-                      {plan.rationale_summary ? <div className="helper-text top-gap-small">{plan.rationale_summary}</div> : null}
-                      {plan.id ? (
-                        <div className="helper-text top-gap-small">
-                          <button
-                            type="button"
-                            className="button-subtle"
-                            disabled={evaluatingPlanId === plan.id}
-                            onClick={() => void queueEvaluation(plan.id ?? undefined)}
-                          >
-                            {evaluatingPlanId === plan.id ? "Queueing evaluation…" : "Evaluate this plan"}
-                          </button>
+                {plans.map((plan) => {
+                  const signalBreakdown = asRecord(plan.signal_breakdown);
+                  const evidenceSummary = asRecord(plan.evidence_summary);
+                  const transmissionSummary = asRecord(signalBreakdown?.transmission_summary) ?? asRecord(evidenceSummary?.transmission_summary);
+                  const calibrationReview = asRecord(signalBreakdown?.calibration_review) ?? asRecord(evidenceSummary?.calibration_review);
+                  const setupFamily = typeof signalBreakdown?.setup_family === "string" ? signalBreakdown.setup_family : "—";
+                  const actionReason = typeof evidenceSummary?.action_reason === "string" ? evidenceSummary.action_reason : "—";
+                  const transmissionBias = typeof transmissionSummary?.context_bias === "string" ? transmissionSummary.context_bias : "unknown";
+                  const transmissionAlignment = typeof transmissionSummary?.alignment_percent === "number" ? transmissionSummary.alignment_percent : null;
+                  const transmissionTags = Array.isArray(transmissionSummary?.transmission_tags)
+                    ? transmissionSummary.transmission_tags.filter((value): value is string => typeof value === "string")
+                    : [];
+                  const effectiveThreshold = typeof calibrationReview?.effective_confidence_threshold === "number"
+                    ? calibrationReview.effective_confidence_threshold
+                    : null;
+                  return (
+                    <tr key={plan.id ?? `${plan.ticker}-${plan.computed_at}`}>
+                      <td>{formatDate(plan.computed_at)}</td>
+                      <td>
+                        <div className="cluster">
+                          <Link to={`/tickers/${plan.ticker}`} className="badge badge-info badge-link">{plan.ticker}</Link>
+                          <Badge tone={plan.warnings.length > 0 ? "warning" : "ok"}>{plan.status}</Badge>
                         </div>
-                      ) : null}
-                    </td>
-                    <td>{plan.run_id ? <Link to={`/runs/${plan.run_id}`}>#{plan.run_id}</Link> : "—"}</td>
-                  </tr>
-                ))}
+                        <div className="helper-text top-gap-small">horizon {plan.horizon}</div>
+                        <div className="helper-text">setup {setupFamily}</div>
+                      </td>
+                      <td>
+                        <Badge tone={actionTone(plan.action)}>{plan.action}</Badge>
+                        <div className="helper-text top-gap-small">reason {actionReason}</div>
+                      </td>
+                      <td>
+                        <div>{plan.confidence_percent.toFixed(1)}%</div>
+                        <div className="helper-text top-gap-small">threshold {effectiveThreshold !== null ? `${effectiveThreshold.toFixed(1)}%` : "—"}</div>
+                      </td>
+                      <td>
+                        <div className="helper-text">entry {plan.entry_price_low ?? "—"}{plan.entry_price_high !== null && plan.entry_price_high !== plan.entry_price_low ? ` – ${plan.entry_price_high}` : ""}</div>
+                        <div className="helper-text">stop {plan.stop_loss ?? "—"}</div>
+                        <div className="helper-text">take {plan.take_profit ?? "—"}</div>
+                      </td>
+                      <td>
+                        <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>
+                        <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
+                        <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
+                      </td>
+                      <td>
+                        {plan.latest_outcome ? (
+                          <>
+                            <div className="cluster">
+                              <Badge tone={plan.latest_outcome.outcome === "win" ? "ok" : plan.latest_outcome.outcome === "loss" ? "danger" : "neutral"}>{plan.latest_outcome.outcome}</Badge>
+                              <span className="helper-text">{plan.latest_outcome.status}</span>
+                            </div>
+                            <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}%</div>
+                            <div className="helper-text top-gap-small">MFE {plan.latest_outcome.max_favorable_excursion ?? "—"}% · MAE {plan.latest_outcome.max_adverse_excursion ?? "—"}%</div>
+                          </>
+                        ) : (
+                          <div className="helper-text">No outcome stored yet.</div>
+                        )}
+                      </td>
+                      <td>
+                        <div>{plan.thesis_summary || "No thesis stored."}</div>
+                        {plan.rationale_summary ? <div className="helper-text top-gap-small">{plan.rationale_summary}</div> : null}
+                        {plan.id ? (
+                          <div className="helper-text top-gap-small">
+                            <button
+                              type="button"
+                              className="button-subtle"
+                              disabled={evaluatingPlanId === plan.id}
+                              onClick={() => void queueEvaluation(plan.id ?? undefined)}
+                            >
+                              {evaluatingPlanId === plan.id ? "Queueing evaluation…" : "Evaluate this plan"}
+                            </button>
+                          </div>
+                        ) : null}
+                      </td>
+                      <td>{plan.run_id ? <Link to={`/runs/${plan.run_id}`}>#{plan.run_id}</Link> : "—"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

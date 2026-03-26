@@ -431,7 +431,7 @@ Completed in the redesign track so far:
 - the new persistence-layer foundations for context snapshots, ticker signals, and recommendation plans are in place
 - ticker signals and recommendation plans are browseable through run detail, run-scoped APIs, and dedicated pages
 - run artifacts now record shortlist rules, rejection counts, and per-ticker shortlist decisions
-- shortlist reasoning is surfaced directly in run detail and ticker-signal operator views
+- shortlist reasoning is surfaced directly in run detail and ticker-signal operator views, now including lane selection, catalyst proxy scores, and transmission context
 - macro and industry refresh runs now also write first-generation context snapshots into the redesign tables
 - those context writers now prefer primary news evidence, with social evidence used as secondary support
 - watchlist deep analysis now runs through a dedicated `TickerDeepAnalysisService` boundary
