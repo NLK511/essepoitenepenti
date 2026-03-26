@@ -25,10 +25,11 @@ def process_once() -> bool:
     session = SessionLocal()
     try:
         settings_repository = SettingsRepository(session)
+        proposal_service = create_proposal_service(session)
         service = JobExecutionService(
             jobs=JobRepository(session),
             runs=RunRepository(session),
-            proposals=create_proposal_service(session),
+            proposals=proposal_service,
             evaluations=EvaluationExecutionService(
                 recommendation_evaluations=RecommendationEvaluationService(session),
                 recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
@@ -41,7 +42,7 @@ def process_once() -> bool:
             industry_sentiment=create_industry_sentiment_service(session),
             macro_context=create_macro_context_service(session),
             industry_context=create_industry_context_service(session),
-            watchlist_orchestration=create_watchlist_orchestration_service(session),
+            watchlist_orchestration=create_watchlist_orchestration_service(session, proposal_service=proposal_service),
             recommendation_plans=RecommendationPlanRepository(session),
         )
         try:

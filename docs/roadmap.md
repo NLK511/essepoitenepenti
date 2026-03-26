@@ -85,6 +85,7 @@ Delivered in this phase so far:
 - watchlist orchestration now includes richer ticker transmission summaries, now carrying primary drivers, conflict flags, and expected transmission windows, plus a reserved catalyst/event shortlist lane so cheap-scan technical ranking does not own every deep-analysis slot
 - recommendation-plan generation now carries setup-family-specific entry style and invalidation framing so plans differ more meaningfully across breakout / continuation / mean-reversion / catalyst-driven cases
 - operator plan views now surface calibration slice reasons and sample quality more directly, while docs increasingly frame `RecommendationPlan` + outcome review as the redesign’s canonical operator truth path
+- manual ticker proposal jobs now also execute through redesign orchestration via an explicit synthetic `1w` wrapper, reducing the remaining proposal-path gap between watchlist and manual workflows
 - ticker deep analysis now uses a redesign-native internal feature/context pipeline and only leans on legacy proposal services for raw data/news enrichment and compatibility fallback
 - calibration reporting now includes horizon, transmission-bias, context-regime, and horizon-plus-setup-family slices so operators can judge where the redesign is or is not working, now marks slice sample quality explicitly, and watchlist-backed action gating now uses those richer slices with bounded sample-aware adjustments instead of relying only on setup family and confidence bucket
 

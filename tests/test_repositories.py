@@ -637,6 +637,9 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn('"shortlist_decisions": [', stored_run.artifact_json or "")
         summary_payload = json.loads(stored_run.summary_json or "{}")
         artifact_payload = json.loads(stored_run.artifact_json or "{}")
+        self.assertEqual(summary_payload["source_kind"], "watchlist")
+        self.assertEqual(summary_payload["execution_path"], "redesign_orchestration")
+        self.assertEqual(summary_payload["effective_horizon"], "1w")
         self.assertEqual(summary_payload["shortlist_rules"]["minimum_confidence_percent"], 48.0)
         self.assertEqual(summary_payload["shortlist_rules"]["minimum_attention_score"], 45.0)
         self.assertEqual(summary_payload["shortlist_rejections"]["shorts_disabled"], 1)
@@ -677,6 +680,50 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("primary_drivers", source_breakdown_map["AAPL"])
         self.assertIn("transmission_summary", plan_map["AAPL"].signal_breakdown)
         self.assertIn("primary_drivers", plan_map["AAPL"].signal_breakdown["transmission_summary"])
+
+    def test_job_execution_processes_manual_ticker_jobs_through_redesign_orchestration(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create("Manual Tech Run", ["AAPL", "TSLA"], None)
+        queued_run = runs.enqueue(job.id or 0)
+        orchestration = WatchlistOrchestrationService(
+            context_snapshots=ContextSnapshotRepository(session),
+            recommendation_plans=RecommendationPlanRepository(session),
+            cheap_scan_service=CheapScanProposalService(),
+            deep_analysis_service=TickerDeepAnalysisService(DeepAnalysisProposalService()),
+            confidence_threshold=60.0,
+        )
+        service = JobExecutionService(
+            jobs=jobs,
+            runs=runs,
+            proposals=ProposalService(),
+            watchlist_orchestration=orchestration,
+        )
+
+        processed_run, recommendations = service.process_next_queued_run()
+
+        self.assertIsNotNone(processed_run)
+        self.assertEqual(processed_run.status, "completed")
+        self.assertEqual([item.ticker for item in recommendations], ["AAPL"])
+        stored_run = runs.get_run(queued_run.id or 0)
+        summary_payload = json.loads(stored_run.summary_json or "{}")
+        artifact_payload = json.loads(stored_run.artifact_json or "{}")
+        self.assertEqual(summary_payload["mode"], "watchlist_orchestration")
+        self.assertEqual(summary_payload["source_kind"], "manual_tickers")
+        self.assertEqual(summary_payload["execution_path"], "redesign_orchestration")
+        self.assertEqual(summary_payload["effective_horizon"], "1w")
+        self.assertEqual(summary_payload["manual_job_defaults"]["default_horizon"], "1w")
+        self.assertEqual(summary_payload["manual_job_defaults"]["allow_shorts"], True)
+        self.assertEqual(summary_payload["manual_job_defaults"]["job_name"], "Manual Tech Run")
+        self.assertEqual(artifact_payload["source_kind"], "manual_tickers")
+        self.assertEqual(artifact_payload["execution_path"], "redesign_orchestration")
+        self.assertEqual(artifact_payload["manual_job_defaults"]["default_horizon"], "1w")
+        ticker_signals = ContextSnapshotRepository(session).list_ticker_signal_snapshots(limit=10)
+        plans = RecommendationPlanRepository(session).list_plans(limit=10)
+        self.assertEqual(len(ticker_signals), 2)
+        self.assertEqual(len(plans), 2)
+        self.assertEqual({plan.ticker: plan.action for plan in plans}, {"AAPL": "long", "TSLA": "no_action"})
 
     def test_watchlist_orchestration_shortlist_thresholds_vary_by_horizon_and_size(self) -> None:
         session = create_session()

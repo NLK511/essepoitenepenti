@@ -128,9 +128,9 @@ The weakest areas are operational rather than analytical:
 - credential lifecycle work is behind the product's growing provider surface
 
 The biggest product-level gap is now the **remaining redesign migration**:
-- watchlist-backed proposal jobs do have a redesigned write/orchestration path, but manual ticker proposal jobs still run through the legacy path
+- watchlist-backed proposal jobs and manual ticker proposal jobs now both feed the redesign orchestration path, with manual jobs using an explicit synthetic `1w` wrapper so they also write ticker signals and recommendation plans
 - macro and industry refresh runs now write context objects through event-ranked, news-first transitional writers, but those writers still need richer multi-step event extraction and source hierarchy beyond their current heuristic saliency model
-- ticker signals and recommendation plans are now produced by a real watchlist orchestration path, and deep analysis now executes natively for watchlist runs, but the underlying analysis logic still reuses parts of the legacy proposal engine internals
+- ticker signals and recommendation plans are now produced by a real orchestration path, and deep analysis now executes natively for redesign-backed runs, but the underlying analysis logic still reuses parts of the legacy proposal engine internals
 - outcome tracking for `RecommendationPlan` objects is now first-class, but setup-family evaluation and confidence calibration still need to mature beyond stored fields and buckets
 - redesign operator workflows should increasingly treat `RecommendationPlan` plus `RecommendationPlanOutcome` as the canonical truth path, with legacy `Recommendation` rows becoming compatibility-oriented rather than conceptually primary
 

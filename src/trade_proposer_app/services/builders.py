@@ -47,11 +47,17 @@ def create_proposal_service(session: Session) -> ProposalService:
     )
 
 
-def create_ticker_deep_analysis_service(session: Session) -> TickerDeepAnalysisService:
-    return TickerDeepAnalysisService(create_proposal_service(session))
+def create_ticker_deep_analysis_service(
+    session: Session,
+    proposal_service: ProposalService | None = None,
+) -> TickerDeepAnalysisService:
+    return TickerDeepAnalysisService(proposal_service or create_proposal_service(session))
 
 
-def create_watchlist_orchestration_service(session: Session) -> WatchlistOrchestrationService:
+def create_watchlist_orchestration_service(
+    session: Session,
+    proposal_service: ProposalService | None = None,
+) -> WatchlistOrchestrationService:
     settings_repository = SettingsRepository(session)
     setting_map = settings_repository.get_setting_map()
     raw_threshold = setting_map.get("confidence_threshold", "60")
@@ -64,7 +70,7 @@ def create_watchlist_orchestration_service(session: Session) -> WatchlistOrchest
         context_snapshots=ContextSnapshotRepository(session),
         recommendation_plans=RecommendationPlanRepository(session),
         cheap_scan_service=CheapScanSignalService(),
-        deep_analysis_service=create_ticker_deep_analysis_service(session),
+        deep_analysis_service=create_ticker_deep_analysis_service(session, proposal_service=proposal_service),
         confidence_threshold=confidence_threshold,
         calibration_service=RecommendationPlanCalibrationService(RecommendationOutcomeRepository(session)),
     )

@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from time import perf_counter
 
-from trade_proposer_app.domain.enums import JobType, RunStatus
+from trade_proposer_app.domain.enums import JobType, RunStatus, StrategyHorizon
 from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, Run, RunOutput, Watchlist
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
@@ -93,7 +93,7 @@ class JobExecutionService:
         resolve_started = perf_counter()
         job = self.jobs.get(run.job_id)
         tickers = self.jobs.resolve_tickers(run.job_id)
-        watchlist = self._extract_watchlist(job)
+        watchlist = self._resolve_execution_watchlist(job, tickers)
         timing["resolve_tickers_seconds"] = round(perf_counter() - resolve_started, 6)
 
         generated: list[RunOutput] = []
@@ -111,15 +111,21 @@ class JobExecutionService:
                 )
                 ticker_generation.extend(orchestration.get("ticker_generation", []))
                 warnings_found = bool(orchestration.get("warnings_found"))
-                generated = [
-                    output
-                    for output in self._convert_legacy_recommendations_to_outputs(orchestration.get("legacy_recommendations", []))
-                ]
+                legacy_outputs = self._normalize_legacy_outputs(orchestration.get("legacy_outputs"))
+                if legacy_outputs:
+                    generated = legacy_outputs
+                else:
+                    generated = [
+                        output
+                        for output in self._convert_legacy_recommendations_to_outputs(orchestration.get("legacy_recommendations", []))
+                    ]
                 summary = orchestration.get("summary")
                 artifact = orchestration.get("artifact")
                 if isinstance(summary, dict):
+                    self._annotate_orchestration_payload(summary, watchlist, job)
                     self.runs.set_summary(run.id or 0, summary)
                 if isinstance(artifact, dict):
+                    self._annotate_orchestration_payload(artifact, watchlist, job)
                     self.runs.set_artifact(run.id or 0, artifact)
             else:
                 for ticker in tickers:
@@ -487,6 +493,12 @@ class JobExecutionService:
         return normalized
 
     @staticmethod
+    def _normalize_legacy_outputs(outputs: object) -> list[RunOutput]:
+        if not isinstance(outputs, list):
+            return []
+        return [output for output in outputs if isinstance(output, RunOutput)]
+
+    @staticmethod
     def _convert_legacy_recommendations_to_outputs(recommendations: list[Recommendation] | object) -> list[RunOutput]:
         if not isinstance(recommendations, list):
             return []
@@ -518,3 +530,38 @@ class JobExecutionService:
             allow_shorts=getattr(job, "watchlist_allow_shorts", True),
             optimize_evaluation_timing=getattr(job, "watchlist_optimize_evaluation_timing", False),
         )
+
+    def _resolve_execution_watchlist(self, job, tickers: list[str]) -> Watchlist | None:
+        watchlist = self._extract_watchlist(job)
+        if watchlist is not None:
+            return watchlist
+        if getattr(job, "job_type", None) != JobType.PROPOSAL_GENERATION:
+            return None
+        if not tickers:
+            return None
+        return Watchlist(
+            id=None,
+            name=f"Manual ticker job: {getattr(job, 'name', 'proposal_generation')}",
+            tickers=tickers,
+            description="Synthetic watchlist wrapper for redesign-native manual proposal execution.",
+            region="",
+            exchange="",
+            timezone="",
+            default_horizon=StrategyHorizon.ONE_WEEK,
+            allow_shorts=True,
+            optimize_evaluation_timing=False,
+        )
+
+    @staticmethod
+    def _annotate_orchestration_payload(payload: dict[str, object], watchlist: Watchlist, job) -> None:
+        source_kind = "watchlist" if watchlist.id is not None else "manual_tickers"
+        payload["source_kind"] = source_kind
+        payload["execution_path"] = "redesign_orchestration"
+        payload["effective_horizon"] = watchlist.default_horizon.value
+        if source_kind == "manual_tickers":
+            payload["manual_job_defaults"] = {
+                "default_horizon": watchlist.default_horizon.value,
+                "allow_shorts": watchlist.allow_shorts,
+                "optimize_evaluation_timing": watchlist.optimize_evaluation_timing,
+                "job_name": getattr(job, "name", "proposal_generation"),
+            }

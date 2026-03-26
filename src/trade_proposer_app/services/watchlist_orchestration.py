@@ -65,6 +65,7 @@ class WatchlistOrchestrationService:
         stored_signals: list[TickerSignalSnapshot] = []
         stored_plans: list[RecommendationPlan] = []
         legacy_recommendations: list[Recommendation] = []
+        legacy_outputs: list[RunOutput] = []
         ticker_generation: list[dict[str, object]] = []
         warnings_found = False
 
@@ -147,6 +148,7 @@ class WatchlistOrchestrationService:
             )
             if plan.action in {"long", "short"} and deep_output is not None:
                 legacy_recommendations.append(deep_output.recommendation)
+                legacy_outputs.append(deep_output)
             if candidate.warnings or deep_error or plan.warnings:
                 warnings_found = True
 
@@ -181,6 +183,7 @@ class WatchlistOrchestrationService:
         }
         return {
             "legacy_recommendations": legacy_recommendations,
+            "legacy_outputs": legacy_outputs,
             "summary": summary,
             "artifact": artifact,
             "ticker_generation": ticker_generation,
@@ -842,6 +845,12 @@ class WatchlistOrchestrationService:
         ]
         ranked = [key for key, score in sorted(drivers, key=lambda item: item[1], reverse=True) if score >= 45.0]
         return ranked[:3]
+
+    @staticmethod
+    def _string_value(value: object, *, default: str) -> str:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        return default
 
     @staticmethod
     def _fallback_industry_exposure_channels(signal: TickerSignalSnapshot) -> list[str]:

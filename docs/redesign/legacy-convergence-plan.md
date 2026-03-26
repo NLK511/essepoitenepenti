@@ -14,7 +14,7 @@ Today the app still has both:
 
 Current practical split:
 - watchlist-backed proposal jobs already use the redesign orchestration path
-- manual ticker proposal jobs still use the legacy path
+- manual ticker proposal jobs now also execute through the redesign orchestration path via an explicit synthetic watchlist wrapper (`1w`, shorts enabled) so they write `TickerSignalSnapshot` and `RecommendationPlan` objects too
 - some sentiment snapshot workflows remain transitional
 - legacy `Recommendation` rows still exist for compatibility and some existing surfaces
 
@@ -81,9 +81,10 @@ Recommended default:
 Achieved when operators can do most core review through redesign objects and views without needing legacy recommendation detail pages.
 
 Current status:
-- partially achieved
+- substantially achieved
 - run detail, ticker-signal, recommendation-plan, calibration, and baseline workflows already expose most redesign-native operator review surfaces
-- the remaining major gap is that manual ticker jobs still bypass the redesign-native truth path
+- manual ticker jobs now also write redesign-native ticker signals and recommendation plans through an explicit synthetic watchlist wrapper
+- the remaining convergence gap is no longer operator truth for proposal jobs, but the longer-tail retirement/narrowing decision around legacy `Recommendation` compatibility artifacts and transitional snapshot-first framing
 
 ## Milestone B: manual-path convergence
 Achieved when manual ticker jobs can emit redesign-native ticker signals and recommendation plans with acceptable stability.

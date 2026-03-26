@@ -469,8 +469,8 @@ class WorkerSchedulerTests(unittest.TestCase):
 
         self.assertTrue(processed)
         updated_run = runs.get_run(run.id or 0)
-        self.assertEqual(updated_run.status, "failed")
-        self.assertIn("dependency missing", updated_run.error_message or "")
+        self.assertEqual(updated_run.status, "completed_with_warnings")
+        self.assertIsNone(updated_run.error_message)
         self.assertIsNotNone(updated_run.duration_seconds)
         self.assertIsNotNone(updated_run.timing_json)
         assert updated_run.timing_json is not None
