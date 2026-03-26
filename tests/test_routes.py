@@ -1182,6 +1182,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(summary.json()["overall_win_rate_percent"], 50.0)
         bucket_map = {item["key"]: item for item in summary.json()["by_confidence_bucket"]}
         self.assertEqual(bucket_map["65_to_79"]["win_count"], 1)
+        self.assertEqual(bucket_map["65_to_79"]["sample_status"], "insufficient")
         self.assertEqual(bucket_map["50_to_64"]["loss_count"], 1)
         setup_map = {item["key"]: item for item in summary.json()["by_setup_family"]}
         self.assertEqual(setup_map["continuation"]["win_count"], 1)

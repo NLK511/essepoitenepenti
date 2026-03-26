@@ -35,6 +35,16 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
+function sampleTone(status: string): "ok" | "warning" | "neutral" {
+  if (status === "strong" || status === "usable") {
+    return "ok";
+  }
+  if (status === "limited") {
+    return "warning";
+  }
+  return "neutral";
+}
+
 function CalibrationBucketTable({ title, buckets }: { title: string; buckets: RecommendationCalibrationSummary["by_confidence_bucket"] }) {
   return (
     <div className="top-gap">
@@ -46,6 +56,7 @@ function CalibrationBucketTable({ title, buckets }: { title: string; buckets: Re
               <th>Slice</th>
               <th>Total</th>
               <th>Resolved</th>
+              <th>Sample</th>
               <th>Win rate</th>
               <th>Avg 5d</th>
             </tr>
@@ -56,6 +67,10 @@ function CalibrationBucketTable({ title, buckets }: { title: string; buckets: Re
                 <td>{bucket.label}</td>
                 <td>{bucket.total_count}</td>
                 <td>{bucket.resolved_count}</td>
+                <td>
+                  <Badge tone={sampleTone(bucket.sample_status)}>{bucket.sample_status}</Badge>
+                  <div className="helper-text top-gap-small">min {bucket.min_required_resolved_count}</div>
+                </td>
                 <td>{bucket.win_rate_percent ?? "—"}%</td>
                 <td>{bucket.average_return_5d ?? "—"}%</td>
               </tr>
@@ -267,6 +282,9 @@ export function RecommendationPlansPage() {
                   const effectiveThreshold = typeof calibrationReview?.effective_confidence_threshold === "number"
                     ? calibrationReview.effective_confidence_threshold
                     : null;
+                  const calibrationReviewStatus = typeof calibrationReview?.review_status === "string"
+                    ? calibrationReview.review_status
+                    : "disabled";
                   return (
                     <tr key={plan.id ?? `${plan.ticker}-${plan.computed_at}`}>
                       <td>{formatDate(plan.computed_at)}</td>
@@ -285,6 +303,7 @@ export function RecommendationPlansPage() {
                       <td>
                         <div>{plan.confidence_percent.toFixed(1)}%</div>
                         <div className="helper-text top-gap-small">threshold {effectiveThreshold !== null ? `${effectiveThreshold.toFixed(1)}%` : "—"}</div>
+                        <div className="helper-text">calibration {calibrationReviewStatus}</div>
                       </td>
                       <td>
                         <div className="helper-text">entry {plan.entry_price_low ?? "—"}{plan.entry_price_high !== null && plan.entry_price_high !== plan.entry_price_low ? ` – ${plan.entry_price_high}` : ""}</div>

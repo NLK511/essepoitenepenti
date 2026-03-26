@@ -414,6 +414,8 @@ class RecommendationCalibrationBucket(BaseModel):
     open_count: int = 0
     no_action_count: int = 0
     watchlist_count: int = 0
+    sample_status: str = "insufficient"
+    min_required_resolved_count: int = 0
     win_rate_percent: float | None = None
     average_return_1d: float | None = None
     average_return_3d: float | None = None

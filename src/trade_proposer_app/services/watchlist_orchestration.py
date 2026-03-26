@@ -1073,6 +1073,7 @@ class WatchlistOrchestrationService:
         if calibration_summary is None:
             return {
                 "enabled": False,
+                "review_status": "disabled",
                 "base_confidence_threshold": round(self.confidence_threshold, 2),
                 "effective_confidence_threshold": round(self.confidence_threshold, 2),
                 "threshold_adjustment": 0.0,
@@ -1095,15 +1096,17 @@ class WatchlistOrchestrationService:
         threshold_adjustment = 0.0
         reasons: list[str] = []
         reviewed_buckets = (
-            ("setup_family", setup_bucket, 10.0, 5.0, -3.0),
-            ("confidence_bucket", confidence_bucket, 10.0, 5.0, -3.0),
-            ("horizon", horizon_bucket, 4.0, 2.0, -1.5),
-            ("transmission_bias", transmission_bucket, 4.0, 2.0, -1.5),
-            ("context_regime", context_regime_bucket, 4.0, 2.0, -1.5),
-            ("horizon_setup_family", horizon_setup_bucket, 6.0, 3.0, -2.0),
+            ("setup_family", setup_bucket, 10.0, 5.0, -2.0),
+            ("confidence_bucket", confidence_bucket, 10.0, 5.0, -2.0),
+            ("horizon", horizon_bucket, 4.0, 2.0, -1.0),
+            ("transmission_bias", transmission_bucket, 3.0, 1.5, -0.75),
+            ("context_regime", context_regime_bucket, 3.0, 1.5, -0.75),
+            ("horizon_setup_family", horizon_setup_bucket, 4.0, 2.0, -1.0),
         )
+        usable_bucket_count = 0
+        strong_bucket_count = 0
         for label, bucket, hard_penalty, soft_penalty, reward in reviewed_buckets:
-            adjustment, bucket_reasons = self._bucket_threshold_adjustment(
+            adjustment, bucket_reasons, sample_status = self._bucket_threshold_adjustment(
                 label,
                 bucket,
                 overall_win_rate=overall_win_rate,
@@ -1111,11 +1114,18 @@ class WatchlistOrchestrationService:
                 soft_penalty=soft_penalty,
                 reward=reward,
             )
+            if sample_status in {"usable", "strong"}:
+                usable_bucket_count += 1
+            if sample_status == "strong":
+                strong_bucket_count += 1
             threshold_adjustment += adjustment
             reasons.extend(bucket_reasons)
+        threshold_adjustment = max(-6.0, min(15.0, threshold_adjustment))
         effective_threshold = max(45.0, min(90.0, base_threshold + threshold_adjustment))
+        review_status = self._calibration_review_status(usable_bucket_count, strong_bucket_count, reasons)
         return {
             "enabled": True,
+            "review_status": review_status,
             "base_confidence_threshold": round(base_threshold, 2),
             "effective_confidence_threshold": round(effective_threshold, 2),
             "threshold_adjustment": round(threshold_adjustment, 2),
@@ -1147,27 +1157,46 @@ class WatchlistOrchestrationService:
         hard_penalty: float,
         soft_penalty: float,
         reward: float,
-    ) -> tuple[float, list[str]]:
+    ) -> tuple[float, list[str], str]:
         if bucket is None:
-            return 0.0, []
+            return 0.0, [], "insufficient"
         resolved_count = int(getattr(bucket, "resolved_count", 0) or 0)
         win_rate = self._safe_rate(getattr(bucket, "win_rate_percent", None))
-        if resolved_count < 3 or win_rate is None or overall_win_rate is None:
-            return 0.0, []
+        sample_status = str(getattr(bucket, "sample_status", "insufficient") or "insufficient")
+        if win_rate is None or overall_win_rate is None:
+            return 0.0, [f"{label}_insufficient_data"], sample_status
+        if sample_status in {"insufficient", "limited"}:
+            return 0.0, [f"{label}_insufficient_data"], sample_status
+        penalty_multiplier = 1.0 if sample_status == "strong" else 0.75
+        reward_multiplier = 1.0 if sample_status == "strong" else 0.5
         if win_rate <= max(35.0, overall_win_rate - 15.0):
-            return hard_penalty, [f"{label}_underperforming"]
+            return round(hard_penalty * penalty_multiplier, 2), [f"{label}_underperforming"], sample_status
         if win_rate <= max(45.0, overall_win_rate - 8.0):
-            return soft_penalty, [f"{label}_soft_underperformance"]
+            return round(soft_penalty * penalty_multiplier, 2), [f"{label}_soft_underperformance"], sample_status
         if win_rate >= min(80.0, overall_win_rate + 12.0):
-            return reward, [f"{label}_outperforming"]
-        return 0.0, []
+            return round(reward * reward_multiplier, 2), [f"{label}_outperforming"], sample_status
+        return 0.0, [], sample_status
 
     def _bucket_snapshot(self, key: str, bucket: object | None) -> dict[str, object]:
         return {
             "key": key,
             "resolved_count": int(getattr(bucket, "resolved_count", 0) or 0) if bucket is not None else 0,
             "win_rate_percent": self._safe_rate(getattr(bucket, "win_rate_percent", None)) if bucket is not None else None,
+            "sample_status": str(getattr(bucket, "sample_status", "insufficient") or "insufficient") if bucket is not None else "insufficient",
+            "min_required_resolved_count": int(getattr(bucket, "min_required_resolved_count", 0) or 0) if bucket is not None else 0,
         }
+
+    @staticmethod
+    def _calibration_review_status(usable_bucket_count: int, strong_bucket_count: int, reasons: list[str]) -> str:
+        if usable_bucket_count == 0:
+            return "insufficient_data"
+        if strong_bucket_count >= 2 and usable_bucket_count >= 4:
+            return "strong_for_gating"
+        if usable_bucket_count >= 3:
+            return "usable_for_gating"
+        if reasons:
+            return "heuristic_limited"
+        return "heuristic_limited"
 
     @staticmethod
     def _calibration_transmission_bias(transmission_summary: dict[str, object] | None) -> str:

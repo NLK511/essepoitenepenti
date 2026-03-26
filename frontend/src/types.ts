@@ -355,6 +355,8 @@ export interface RecommendationCalibrationBucket {
   open_count: number;
   no_action_count: number;
   watchlist_count: number;
+  sample_status: string;
+  min_required_resolved_count: number;
   win_rate_percent: number | null;
   average_return_1d: number | null;
   average_return_3d: number | null;

@@ -729,7 +729,7 @@ class RepositoryTests(unittest.TestCase):
         )
         plans = RecommendationPlanRepository(session)
         outcomes = RecommendationOutcomeRepository(session)
-        for index in range(3):
+        for index in range(12):
             plan = plans.create_plan(
                 RecommendationPlan(
                     ticker=f"BRK{index}",
@@ -773,13 +773,15 @@ class RepositoryTests(unittest.TestCase):
         stored_plans = plans.list_plans(limit=10)
         plan_map = {plan.ticker: plan for plan in stored_plans if plan.ticker in {"AAPL", "MSFT", "TSLA"}}
         self.assertEqual(result["summary"]["calibration_enabled"], True)
-        self.assertEqual(plan_map["AAPL"].action, "no_action")
-        self.assertEqual(plan_map["AAPL"].evidence_summary["action_reason"], "below_calibrated_action_threshold")
+        self.assertEqual(plan_map["AAPL"].action, "long")
+        self.assertEqual(plan_map["AAPL"].evidence_summary["action_reason"], "actionable_setup")
         calibration_review = plan_map["AAPL"].signal_breakdown["calibration_review"]
         self.assertEqual(calibration_review["enabled"], True)
-        self.assertGreater(calibration_review["effective_confidence_threshold"], 78.0)
+        self.assertEqual(calibration_review["review_status"], "usable_for_gating")
+        self.assertGreaterEqual(calibration_review["effective_confidence_threshold"], 75.0)
         self.assertEqual(calibration_review["horizon"]["key"], "1w")
         self.assertEqual(calibration_review["transmission_bias"]["key"], "tailwind")
+        self.assertEqual(calibration_review["transmission_bias"]["sample_status"], "usable")
         self.assertEqual(calibration_review["context_regime"]["key"], "tailwind_without_dominant_tag")
         self.assertEqual(calibration_review["horizon_setup_family"]["key"], "1w__breakout")
         self.assertIn("setup_family_underperforming", calibration_review["reasons"])

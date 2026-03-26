@@ -494,6 +494,9 @@ export function RunDetailPage() {
                             const effectiveThreshold = typeof calibrationReview?.effective_confidence_threshold === "number"
                               ? calibrationReview.effective_confidence_threshold
                               : null;
+                            const calibrationReviewStatus = typeof calibrationReview?.review_status === "string"
+                              ? calibrationReview.review_status
+                              : "disabled";
                             return (
                               <tr key={plan.id ?? `${plan.ticker}-${plan.computed_at}`}>
                                 <td>
@@ -507,6 +510,7 @@ export function RunDetailPage() {
                                 <td>
                                   <span style={{ color: scoreColor(plan.confidence_percent, 0, 100) }}>{plan.confidence_percent.toFixed(1)}%</span>
                                   <div className="helper-text top-gap-small">threshold {effectiveThreshold !== null ? `${effectiveThreshold.toFixed(1)}%` : "—"}</div>
+                                  <div className="helper-text">calibration {calibrationReviewStatus}</div>
                                 </td>
                                 <td>
                                   <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>
