@@ -2,10 +2,8 @@ import type {
   AppSetting,
   JobType,
   RecommendationDirection,
-  RecommendationHistoryItem,
   RecommendationState,
   RunDiagnostics,
-  RunOutput,
   RunStatus,
 } from "./types";
 
@@ -139,20 +137,6 @@ export function diagnosticsMessages(diagnostics: RunDiagnostics): string[] {
     messages.push(value);
   }
   return messages;
-}
-
-export function warningCount(item: RecommendationHistoryItem | RunOutput): number {
-  if ("diagnostics" in item) {
-    return diagnosticsMessages(item.diagnostics).length;
-  }
-  const messages = [...item.warnings, ...item.provider_errors];
-  if (item.summary_error) {
-    messages.push(item.summary_error);
-  }
-  if (item.llm_error) {
-    messages.push(item.llm_error);
-  }
-  return new Set(messages.filter(Boolean)).size;
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

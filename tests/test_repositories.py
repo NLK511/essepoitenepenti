@@ -513,50 +513,6 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(plans[0].latest_outcome.outcome, "loss")
         self.assertEqual(plans[0].latest_outcome.setup_family, "macro_beneficiary_loser")
 
-    def test_run_repository_lists_recommendation_history_for_ticker(self) -> None:
-        session = create_session()
-        jobs = JobRepository(session)
-        runs = RunRepository(session)
-        job = jobs.create("Ticker History", ["AAPL", "MSFT"], None)
-        run = runs.enqueue(job.id or 0)
-        claimed = runs.claim_next_queued_run()
-        assert claimed is not None
-        runs.add_recommendation(
-            run.id or 0,
-            Recommendation(
-                ticker="AAPL",
-                direction=RecommendationDirection.LONG,
-                confidence=82.0,
-                entry_price=100.0,
-                stop_loss=95.0,
-                take_profit=110.0,
-                indicator_summary="Above SMA200 · RSI 55.0",
-            ),
-            RunDiagnostics(warnings=["summary timeout"]),
-        )
-        runs.add_recommendation(
-            run.id or 0,
-            Recommendation(
-                ticker="MSFT",
-                direction=RecommendationDirection.SHORT,
-                confidence=67.0,
-                entry_price=300.0,
-                stop_loss=310.0,
-                take_profit=280.0,
-                indicator_summary="Below SMA200 · RSI 42.0",
-            ),
-            RunDiagnostics(),
-        )
-
-        aapl_items = runs.list_recommendation_history_for_ticker("AAPL")
-        msft_items = runs.list_recommendation_history_for_ticker("MSFT")
-
-        self.assertEqual(len(aapl_items), 1)
-        self.assertEqual(aapl_items[0].ticker, "AAPL")
-        self.assertEqual(aapl_items[0].warnings, ["summary timeout"])
-        self.assertEqual(len(msft_items), 1)
-        self.assertEqual(msft_items[0].ticker, "MSFT")
-
     def test_job_execution_enqueues_and_processes_run(self) -> None:
         session = create_session()
         jobs = JobRepository(session)

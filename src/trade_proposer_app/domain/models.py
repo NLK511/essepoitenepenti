@@ -119,26 +119,6 @@ class RunOutput(BaseModel):
     diagnostics: RunDiagnostics = Field(default_factory=RunDiagnostics)
 
 
-class RecommendationHistoryItem(BaseModel):
-    recommendation_id: int
-    run_id: int
-    run_status: str
-    ticker: str
-    direction: RecommendationDirection
-    confidence: float
-    entry_price: float
-    stop_loss: float
-    take_profit: float
-    indicator_summary: str = ""
-    state: RecommendationState = RecommendationState.PENDING
-    created_at: datetime
-    evaluated_at: datetime | None = None
-    warnings: list[str] = Field(default_factory=list)
-    provider_errors: list[str] = Field(default_factory=list)
-    summary_error: str | None = None
-    llm_error: str | None = None
-
-
 class PrototypeTradeLogEntry(BaseModel):
     id: int
     timestamp: str

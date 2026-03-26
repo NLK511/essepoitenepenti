@@ -5,7 +5,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from trade_proposer_app.domain.enums import JobType, RecommendationState, RunStatus
-from trade_proposer_app.domain.models import Recommendation, RecommendationHistoryItem, Run, RunDiagnostics, RunOutput
+from trade_proposer_app.domain.models import Recommendation, Run, RunDiagnostics, RunOutput
 from trade_proposer_app.persistence.models import JobRecord, RecommendationRecord, RunRecord
 
 
@@ -269,14 +269,6 @@ class RunRepository:
     def list_recommendations_for_run(self, run_id: int) -> list[Recommendation]:
         return [output.recommendation for output in self.list_outputs_for_run(run_id)]
 
-    def list_recommendation_history(self) -> list[RecommendationHistoryItem]:
-        rows = self.session.execute(
-            select(RecommendationRecord, RunRecord)
-            .join(RunRecord, RecommendationRecord.run_id == RunRecord.id)
-            .order_by(RecommendationRecord.created_at.desc())
-        ).all()
-        return [self._to_recommendation_history_item(recommendation_record, run_record) for recommendation_record, run_record in rows]
-
     def set_recommendation_state(
         self,
         recommendation_id: int,
@@ -291,15 +283,6 @@ class RunRepository:
         self.session.commit()
         self.session.refresh(record)
         return self._to_recommendation_model(record)
-
-    def list_recommendation_history_for_ticker(self, ticker: str) -> list[RecommendationHistoryItem]:
-        rows = self.session.execute(
-            select(RecommendationRecord, RunRecord)
-            .join(RunRecord, RecommendationRecord.run_id == RunRecord.id)
-            .where(RecommendationRecord.ticker == ticker)
-            .order_by(RecommendationRecord.created_at.desc())
-        ).all()
-        return [self._to_recommendation_history_item(recommendation_record, run_record) for recommendation_record, run_record in rows]
 
     def delete_run(self, run_id: int) -> None:
         record = self.session.get(RunRecord, run_id)
@@ -361,34 +344,6 @@ class RunRepository:
             aggregations_json=record.aggregations_json or None,
             confidence_weights_json=record.confidence_weights_json or None,
             summary_method=record.summary_method or None,
-        )
-
-    @classmethod
-    def _to_recommendation_history_item(
-        cls,
-        recommendation_record: RecommendationRecord,
-        run_record: RunRecord,
-    ) -> RecommendationHistoryItem:
-        warnings = cls._split_lines(recommendation_record.warnings_json)
-        provider_errors = cls._split_lines(recommendation_record.provider_errors_json)
-        return RecommendationHistoryItem(
-            recommendation_id=recommendation_record.id,
-            run_id=run_record.id,
-            run_status=run_record.status,
-            ticker=recommendation_record.ticker,
-            direction=recommendation_record.direction,
-            confidence=recommendation_record.confidence,
-            entry_price=recommendation_record.entry_price,
-            stop_loss=recommendation_record.stop_loss,
-            take_profit=recommendation_record.take_profit,
-            indicator_summary=recommendation_record.indicator_summary or "",
-            state=recommendation_record.evaluation_state or RecommendationState.PENDING.value,
-            created_at=recommendation_record.created_at,
-            evaluated_at=recommendation_record.evaluated_at,
-            warnings=warnings,
-            provider_errors=provider_errors,
-            summary_error=recommendation_record.summary_error or None,
-            llm_error=recommendation_record.llm_error or None,
         )
 
     def _resolve_job_type(self, job_id: int, job_type: JobType | None) -> JobType:

@@ -104,26 +104,6 @@ export interface Run {
   timing_json: string | null;
 }
 
-export interface RecommendationHistoryItem {
-  recommendation_id: number;
-  run_id: number;
-  run_status: string;
-  ticker: string;
-  direction: RecommendationDirection;
-  confidence: number;
-  entry_price: number;
-  stop_loss: number;
-  take_profit: number;
-  indicator_summary: string;
-  state: RecommendationState;
-  created_at: string;
-  evaluated_at: string | null;
-  warnings: string[];
-  provider_errors: string[];
-  summary_error: string | null;
-  llm_error: string | null;
-}
-
 export interface PrototypeTradeLogEntry {
   id: number;
   timestamp: string;
@@ -414,12 +394,6 @@ export interface RunDetailResponse {
   recommendation_plans: RecommendationPlan[];
 }
 
-export interface RecommendationDetailResponse {
-  recommendation: Recommendation;
-  run: Run;
-  diagnostics: RunDiagnostics;
-}
-
 export interface EvaluationRunResult {
   evaluated_trade_log_entries: number;
   synced_recommendations: number;
@@ -434,33 +408,6 @@ export interface EvaluationRunResult {
   no_action_recommendation_plan_outcomes: number;
   watchlist_recommendation_plan_outcomes: number;
   output: string;
-}
-
-export interface HistoryFilters {
-  ticker: string;
-  direction: string;
-  state: string;
-  warnings: string;
-  sort: string;
-  order: string;
-  per_page: number;
-}
-
-export interface HistoryPagination {
-  page: number;
-  per_page: number;
-  total_results: number;
-  total_pages: number;
-  has_prev: boolean;
-  has_next: boolean;
-  prev_page: number;
-  next_page: number;
-}
-
-export interface HistoryResponse {
-  items: RecommendationHistoryItem[];
-  filters: HistoryFilters;
-  pagination: HistoryPagination;
 }
 
 export interface OptimizationFileFingerprint {
