@@ -87,7 +87,7 @@ Delivered in this phase so far:
 - operator plan views now surface calibration slice reasons and sample quality more directly, while docs increasingly frame `RecommendationPlan` + outcome review as the redesign’s canonical operator truth path
 - manual ticker proposal jobs now also execute through redesign orchestration via an explicit synthetic `1w` wrapper, reducing the remaining proposal-path gap between watchlist and manual workflows
 - run-detail operator views now show when a proposal run came from manual tickers versus a real watchlist and explicitly mark redesign plans/outcomes as canonical
-- new redesign-backed proposal runs no longer emit legacy recommendation compatibility artifacts, and operator navigation is being narrowed toward recommendation-plan-first workflows
+- new redesign-backed proposal runs no longer emit legacy recommendation compatibility artifacts, and operator navigation now redirects retired recommendation-detail routes toward recommendation-plan-first workflows
 - ticker drill-downs are being converged onto recommendation-plan/outcome history instead of legacy recommendation history
 - mounted operator evaluation/history APIs are being narrowed toward recommendation-plan evaluation and away from legacy recommendation-history endpoints, with unused legacy history/detail UI code removed and evaluation-run summaries converged onto recommendation-plan outcome vocabulary
 - ticker deep analysis now uses a redesign-native internal feature/context pipeline and only leans on legacy proposal services for raw data/news enrichment and compatibility fallback

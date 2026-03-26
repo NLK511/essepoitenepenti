@@ -432,6 +432,10 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertIn("<title>Trade Proposer App</title>", response.text)
 
+            legacy_redirect = await client.get("/recommendations/1", follow_redirects=False)
+            self.assertEqual(legacy_redirect.status_code, 307)
+            self.assertEqual(legacy_redirect.headers["location"], "/jobs/recommendation-plans")
+
     async def test_docs_api_lists_markdown_documents(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
