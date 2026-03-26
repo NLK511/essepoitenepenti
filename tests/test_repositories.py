@@ -32,6 +32,7 @@ from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.proposals import ProposalService
+from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
 from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
 
@@ -655,6 +656,62 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(orchestration._minimum_shortlist_confidence(StrategyHorizon.ONE_DAY, 4), 52.0)
         self.assertEqual(orchestration._minimum_shortlist_confidence(StrategyHorizon.ONE_WEEK, 12), 53.0)
         self.assertEqual(orchestration._minimum_shortlist_attention(StrategyHorizon.ONE_MONTH, 24), 52.0)
+
+    def test_watchlist_orchestration_uses_calibration_to_raise_action_thresholds(self) -> None:
+        session = create_session()
+        watchlist = WatchlistRepository(session).create(
+            "Core Tech",
+            ["AAPL", "MSFT", "TSLA"],
+            default_horizon=StrategyHorizon.ONE_WEEK,
+            allow_shorts=False,
+        )
+        plans = RecommendationPlanRepository(session)
+        outcomes = RecommendationOutcomeRepository(session)
+        for index in range(3):
+            plan = plans.create_plan(
+                RecommendationPlan(
+                    ticker=f"BRK{index}",
+                    horizon="1w",
+                    action="long",
+                    confidence_percent=72.0,
+                    thesis_summary="weak breakout",
+                    signal_breakdown={"setup_family": "breakout"},
+                )
+            )
+            outcomes.upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=plan.id or 0,
+                    ticker=f"BRK{index}",
+                    action="long",
+                    outcome="loss",
+                    status="resolved",
+                    horizon_return_5d=-2.0,
+                    confidence_bucket="65_to_79",
+                    setup_family="breakout",
+                    notes="failed breakout",
+                )
+            )
+        orchestration = WatchlistOrchestrationService(
+            context_snapshots=ContextSnapshotRepository(session),
+            recommendation_plans=plans,
+            cheap_scan_service=CheapScanProposalService(),
+            deep_analysis_service=TickerDeepAnalysisService(DeepAnalysisProposalService()),
+            confidence_threshold=60.0,
+            calibration_service=RecommendationPlanCalibrationService(outcomes),
+        )
+
+        result = orchestration.execute(watchlist, watchlist.tickers, run_id=1)
+
+        stored_plans = plans.list_plans(limit=10)
+        plan_map = {plan.ticker: plan for plan in stored_plans if plan.ticker in {"AAPL", "MSFT", "TSLA"}}
+        self.assertEqual(result["summary"]["calibration_enabled"], True)
+        self.assertEqual(plan_map["AAPL"].action, "no_action")
+        self.assertEqual(plan_map["AAPL"].evidence_summary["action_reason"], "below_calibrated_action_threshold")
+        calibration_review = plan_map["AAPL"].signal_breakdown["calibration_review"]
+        self.assertEqual(calibration_review["enabled"], True)
+        self.assertGreater(calibration_review["effective_confidence_threshold"], 78.0)
+        self.assertIn("setup_family_underperforming", calibration_review["reasons"])
+        self.assertIn("confidence_bucket_underperforming", calibration_review["reasons"])
 
     def test_job_execution_processes_evaluation_run_and_persists_summary(self) -> None:
         session = create_session()

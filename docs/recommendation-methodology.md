@@ -53,7 +53,7 @@ Current limitation:
 - manual ticker proposal jobs still use the legacy per-ticker production path
 - `TickerDeepAnalysisService` now executes its own native deep-analysis flow for watchlist orchestration, but it still reuses some legacy proposal-service internals and payload shapes rather than a fully separated ticker engine
 - macro and industry refresh runs now write context objects through news-first transitional writers, but those writers are still heuristic and not yet backed by a mature event pipeline
-- the redesign path now has first-class recommendation outcome persistence/evaluation, watchlist-backed plans now persist setup family plus decomposed confidence components, and grouped calibration summaries are now available by confidence bucket and setup family, but true confidence recalibration is still incomplete
+- the redesign path now has first-class recommendation outcome persistence/evaluation, watchlist-backed plans now persist setup family plus decomposed confidence components, grouped calibration summaries are available by confidence bucket and setup family, and watchlist-backed action gating now applies early calibration-aware threshold adjustments for underperforming buckets/setup families; true recalibration is still incomplete
 
 ## Recommendation-plan outcome evaluation
 

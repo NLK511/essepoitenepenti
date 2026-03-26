@@ -80,6 +80,7 @@ Delivered in this phase so far:
 - app-native recommendation-plan evaluation flow exposed through API/UI queue actions and persisted back onto plans as latest outcomes
 - setup-family-aware recommendation generation and decomposed confidence payloads now flow into watchlist-backed `RecommendationPlan` writes through `signal_breakdown` and `evidence_summary`
 - recommendation-outcome calibration summaries now aggregate results by confidence bucket and setup family through API/UI operator workflows
+- watchlist-backed recommendation plans now use those stored calibration slices to raise or relax action thresholds for underperforming or outperforming confidence/setup cohorts
 
 Next required work in this phase:
 - use the new calibration summaries to drive actual confidence re-scaling and operator thresholds rather than only reporting grouped outcomes

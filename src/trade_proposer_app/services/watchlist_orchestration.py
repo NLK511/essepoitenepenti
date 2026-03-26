@@ -9,6 +9,7 @@ from trade_proposer_app.domain.enums import RecommendationDirection, StrategyHor
 from trade_proposer_app.domain.models import Recommendation, RecommendationPlan, RunOutput, TickerSignalSnapshot, Watchlist
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
+from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal, CheapScanSignalService
 
 
@@ -34,12 +35,14 @@ class WatchlistOrchestrationService:
         cheap_scan_service: CheapScanSignalService,
         deep_analysis_service,
         confidence_threshold: float = 60.0,
+        calibration_service: RecommendationPlanCalibrationService | None = None,
     ) -> None:
         self.context_snapshots = context_snapshots
         self.recommendation_plans = recommendation_plans
         self.cheap_scan_service = cheap_scan_service
         self.deep_analysis_service = deep_analysis_service
         self.confidence_threshold = confidence_threshold
+        self.calibration_service = calibration_service
 
     def execute(
         self,
@@ -53,6 +56,7 @@ class WatchlistOrchestrationService:
         if not normalized_tickers:
             raise ValueError("watchlist job has no effective tickers configured")
 
+        calibration_summary = self._load_calibration_summary()
         candidates = [self._run_cheap_scan(ticker, watchlist.default_horizon) for ticker in normalized_tickers]
         shortlist_evaluation = self._evaluate_shortlist(watchlist, candidates)
         shortlist = shortlist_evaluation["shortlist"]
@@ -84,6 +88,7 @@ class WatchlistOrchestrationService:
                     watchlist,
                     candidate,
                     stored_signal,
+                    calibration_summary=calibration_summary,
                     job_id=job_id,
                     run_id=run_id,
                     reason="Ticker did not make the deep-analysis shortlist.",
@@ -123,6 +128,7 @@ class WatchlistOrchestrationService:
                 stored_signal,
                 deep_output=deep_output,
                 deep_error=deep_error,
+                calibration_summary=calibration_summary,
                 job_id=job_id,
                 run_id=run_id,
             )
@@ -160,6 +166,7 @@ class WatchlistOrchestrationService:
             "no_action_plan_count": len([plan for plan in stored_plans if plan.action == "no_action"]),
             "shortlist_rules": shortlist_evaluation["rules"],
             "shortlist_rejections": shortlist_evaluation["rejection_counts"],
+            "calibration_enabled": calibration_summary is not None,
             "warnings_found": warnings_found,
         }
         artifact = {
@@ -168,6 +175,7 @@ class WatchlistOrchestrationService:
             "shortlist": shortlist,
             "shortlist_rules": shortlist_evaluation["rules"],
             "shortlist_decisions": shortlist_evaluation["decisions"],
+            "calibration_enabled": calibration_summary is not None,
             "ticker_signal_snapshot_ids": [item.id for item in stored_signals],
             "recommendation_plan_ids": [item.id for item in stored_plans],
         }
@@ -397,6 +405,7 @@ class WatchlistOrchestrationService:
         *,
         deep_output: RunOutput | None,
         deep_error: str | None,
+        calibration_summary: object | None,
         job_id: int | None,
         run_id: int | None,
     ) -> RecommendationPlan:
@@ -404,6 +413,7 @@ class WatchlistOrchestrationService:
         summary_text = self._pluck(analysis, "summary", "text") or signal.source_breakdown.get("cheap_scan_summary") or ""
         setup_family = self._plan_setup_family(signal, analysis, candidate)
         confidence_components = self._plan_confidence_components(signal, analysis, candidate)
+        calibration_review = self._calibration_review(calibration_summary, setup_family, signal.confidence_percent)
         rationale = self._rationale_summary(signal, candidate, setup_family)
         warnings = list(signal.warnings)
         if deep_output is None or deep_error is not None:
@@ -416,8 +426,8 @@ class WatchlistOrchestrationService:
                 thesis_summary="Deep analysis did not complete; no actionable plan emitted.",
                 rationale_summary=rationale,
                 warnings=warnings,
-                evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason="deep_analysis_unavailable"),
-                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components),
+                evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason="deep_analysis_unavailable", calibration_review=calibration_review),
+                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -428,13 +438,14 @@ class WatchlistOrchestrationService:
         recommendation = deep_output.recommendation
         direction = self._normalize_direction(recommendation.direction)
         action_reason = "actionable_setup"
+        effective_threshold = float(calibration_review.get("effective_confidence_threshold", self.confidence_threshold))
         if direction == "short" and not watchlist.allow_shorts:
             warnings.append("watchlist does not allow shorts")
             action = "no_action"
             action_reason = "shorts_disabled"
-        elif signal.confidence_percent < self.confidence_threshold:
+        elif signal.confidence_percent < effective_threshold:
             action = "no_action"
-            action_reason = "below_action_confidence_threshold"
+            action_reason = "below_calibrated_action_threshold" if effective_threshold > self.confidence_threshold else "below_action_confidence_threshold"
         elif direction not in {"long", "short"}:
             action = "no_action"
             action_reason = "direction_not_actionable"
@@ -451,8 +462,8 @@ class WatchlistOrchestrationService:
                 thesis_summary=self._no_action_thesis(setup_family, action_reason),
                 rationale_summary=rationale,
                 warnings=list(dict.fromkeys(warnings)),
-                evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason),
-                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components),
+                evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review),
+                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -478,8 +489,8 @@ class WatchlistOrchestrationService:
             rationale_summary=rationale,
             risks=self._plan_risks(warnings, setup_family, action),
             warnings=list(dict.fromkeys(warnings)),
-            evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason),
-            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components),
+            evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review),
+            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review),
             computed_at=signal.computed_at,
             run_id=run_id,
             job_id=job_id,
@@ -493,12 +504,14 @@ class WatchlistOrchestrationService:
         candidate: _CheapScanCandidate,
         signal: TickerSignalSnapshot,
         *,
+        calibration_summary: object | None,
         job_id: int | None,
         run_id: int | None,
         reason: str,
     ) -> RecommendationPlan:
         setup_family = self._cheap_scan_setup_family(candidate)
         confidence_components = self._plan_confidence_components(signal, {}, candidate)
+        calibration_review = self._calibration_review(calibration_summary, setup_family, signal.confidence_percent)
         return RecommendationPlan(
             ticker=candidate.ticker,
             horizon=watchlist.default_horizon,
@@ -508,8 +521,8 @@ class WatchlistOrchestrationService:
             thesis_summary=reason,
             rationale_summary=self._rationale_summary(signal, candidate, setup_family),
             warnings=list(signal.warnings),
-            evidence_summary=self._evidence_summary(candidate.indicator_summary, setup_family, confidence_components, action_reason="not_shortlisted"),
-            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components),
+            evidence_summary=self._evidence_summary(candidate.indicator_summary, setup_family, confidence_components, action_reason="not_shortlisted", calibration_review=calibration_review),
+            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review),
             computed_at=signal.computed_at,
             run_id=run_id,
             job_id=job_id,
@@ -597,6 +610,7 @@ class WatchlistOrchestrationService:
         *,
         setup_family: str,
         confidence_components: dict[str, float],
+        calibration_review: dict[str, object] | None = None,
     ) -> dict[str, object]:
         return {
             "attention_score": signal.attention_score,
@@ -610,6 +624,7 @@ class WatchlistOrchestrationService:
             "setup_family": setup_family,
             "confidence_components": confidence_components,
             "confidence_bucket": WatchlistOrchestrationService._confidence_bucket(signal.confidence_percent),
+            "calibration_review": calibration_review or {},
             "mode": signal.diagnostics.get("mode"),
         }
 
@@ -687,18 +702,20 @@ class WatchlistOrchestrationService:
         confidence_components: dict[str, float],
         *,
         action_reason: str,
+        calibration_review: dict[str, object] | None = None,
     ) -> dict[str, object]:
         return {
             "summary": summary_text,
             "setup_family": setup_family,
             "action_reason": action_reason,
             "confidence_components": confidence_components,
+            "calibration_review": calibration_review or {},
         }
 
     @staticmethod
     def _no_action_thesis(setup_family: str, action_reason: str) -> str:
         setup_label = setup_family.replace("_", " ") if setup_family else "uncategorized"
-        if action_reason == "below_action_confidence_threshold":
+        if action_reason in {"below_action_confidence_threshold", "below_calibrated_action_threshold"}:
             return f"Detected a {setup_label} candidate, but conviction was too weak for an actionable trade plan."
         if action_reason == "shorts_disabled":
             return f"Detected a {setup_label} candidate, but the watchlist policy does not permit the required short expression."
@@ -744,6 +761,89 @@ class WatchlistOrchestrationService:
         except (TypeError, ValueError):
             return False
         return True
+
+    def _load_calibration_summary(self) -> object | None:
+        if self.calibration_service is None:
+            return None
+        try:
+            return self.calibration_service.summarize(limit=500)
+        except Exception:
+            return None
+
+    def _calibration_review(
+        self,
+        calibration_summary: object | None,
+        setup_family: str,
+        confidence_percent: float,
+    ) -> dict[str, object]:
+        if calibration_summary is None:
+            return {
+                "enabled": False,
+                "base_confidence_threshold": round(self.confidence_threshold, 2),
+                "effective_confidence_threshold": round(self.confidence_threshold, 2),
+                "threshold_adjustment": 0.0,
+                "reasons": [],
+            }
+        bucket_key = self._confidence_bucket(confidence_percent)
+        base_threshold = float(self.confidence_threshold)
+        overall_win_rate = self._safe_rate(getattr(calibration_summary, "overall_win_rate_percent", None))
+        setup_bucket = self._find_calibration_bucket(getattr(calibration_summary, "by_setup_family", []), setup_family)
+        confidence_bucket = self._find_calibration_bucket(getattr(calibration_summary, "by_confidence_bucket", []), bucket_key)
+        threshold_adjustment = 0.0
+        reasons: list[str] = []
+        for label, bucket in (("setup_family", setup_bucket), ("confidence_bucket", confidence_bucket)):
+            if bucket is None:
+                continue
+            resolved_count = int(getattr(bucket, "resolved_count", 0) or 0)
+            win_rate = self._safe_rate(getattr(bucket, "win_rate_percent", None))
+            if resolved_count < 3 or win_rate is None or overall_win_rate is None:
+                continue
+            if win_rate <= max(35.0, overall_win_rate - 15.0):
+                threshold_adjustment += 10.0
+                reasons.append(f"{label}_underperforming")
+            elif win_rate <= max(45.0, overall_win_rate - 8.0):
+                threshold_adjustment += 5.0
+                reasons.append(f"{label}_soft_underperformance")
+            elif win_rate >= min(80.0, overall_win_rate + 12.0):
+                threshold_adjustment -= 3.0
+                reasons.append(f"{label}_outperforming")
+        effective_threshold = max(45.0, min(90.0, base_threshold + threshold_adjustment))
+        return {
+            "enabled": True,
+            "base_confidence_threshold": round(base_threshold, 2),
+            "effective_confidence_threshold": round(effective_threshold, 2),
+            "threshold_adjustment": round(threshold_adjustment, 2),
+            "overall_win_rate_percent": overall_win_rate,
+            "setup_family": {
+                "key": setup_family,
+                "resolved_count": int(getattr(setup_bucket, "resolved_count", 0) or 0) if setup_bucket is not None else 0,
+                "win_rate_percent": self._safe_rate(getattr(setup_bucket, "win_rate_percent", None)) if setup_bucket is not None else None,
+            },
+            "confidence_bucket": {
+                "key": bucket_key,
+                "resolved_count": int(getattr(confidence_bucket, "resolved_count", 0) or 0) if confidence_bucket is not None else 0,
+                "win_rate_percent": self._safe_rate(getattr(confidence_bucket, "win_rate_percent", None)) if confidence_bucket is not None else None,
+            },
+            "reasons": reasons,
+        }
+
+    @staticmethod
+    def _find_calibration_bucket(buckets: object, key: str) -> object | None:
+        if not isinstance(buckets, list):
+            return None
+        for bucket in buckets:
+            if getattr(bucket, "key", None) == key:
+                return bucket
+        return None
+
+    @staticmethod
+    def _safe_rate(value: object) -> float | None:
+        if value is None:
+            return None
+        try:
+            return round(float(value), 1)
+        except (TypeError, ValueError):
+            return None
 
     @staticmethod
     def _holding_period_days(horizon: StrategyHorizon) -> int:

@@ -439,6 +439,7 @@ Completed in the redesign track so far:
 - `RecommendationPlan` now has first-class persisted outcome tracking through `recommendation_outcomes`, including fixed-horizon returns, excursion metrics, direction correctness, confidence buckets, and latest-outcome API exposure
 - watchlist-backed `RecommendationPlan` generation now writes setup-family-aware signal breakdowns and decomposed confidence components into persisted redesign payloads
 - recommendation outcomes can now be summarized by confidence bucket and setup family through API/UI calibration views for operator review
+- watchlist-backed plan generation now applies early calibration-aware action-threshold adjustments using stored setup-family and confidence-bucket outcome slices
 
 Not yet complete:
 - a richer event-extraction pipeline beyond the current heuristic event-ranking and source-priority layer
