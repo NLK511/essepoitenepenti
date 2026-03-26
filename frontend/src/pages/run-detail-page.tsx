@@ -218,7 +218,7 @@ export function RunDetailPage() {
         actions={
           <>
             <Link to="/jobs/debugger" className="button-secondary">Back to debugger</Link>
-            <Link to="/jobs/history" className="button-subtle">Open history</Link>
+            <Link to="/jobs/recommendation-plans" className="button-subtle">Browse recommendation plans</Link>
             {detail ? (
               <button
                 type="button"
@@ -300,7 +300,7 @@ export function RunDetailPage() {
                           Manual ticker jobs now run through redesign orchestration using an explicit synthetic wrapper instead of the old legacy-only loop.
                         </div>
                         <div className="helper-text">
-                          Recommendation plans and outcomes are the canonical redesign review path; any legacy recommendations below are compatibility artifacts.
+                          Recommendation plans and outcomes are the canonical review path; new proposal runs no longer emit legacy recommendation artifacts.
                         </div>
                       </div>
                     ) : null}
@@ -654,10 +654,10 @@ export function RunDetailPage() {
           ) : null}
 
           <Card>
-            <SectionTitle kicker="Produced output" title={detail.run.job_type === "proposal_generation" ? "Recommendations created by this run" : "Workflow result stored on the run"} />
+            <SectionTitle kicker="Produced output" title={detail.run.job_type === "proposal_generation" ? "Retired legacy recommendation artifacts" : "Workflow result stored on the run"} />
             {detail.run.job_type === "proposal_generation" ? (
               <>
-                {detail.outputs.length === 0 ? <EmptyState message="No recommendations stored for this run." /> : null}
+                {detail.outputs.length === 0 ? <EmptyState message="No legacy recommendation artifacts were written for this run. Review the recommendation plans above instead." /> : null}
                 <div className="stack-page">
                   {detail.outputs.map((output) => {
                     const item = output.recommendation;

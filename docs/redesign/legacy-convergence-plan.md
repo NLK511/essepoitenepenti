@@ -1,26 +1,23 @@
-# Legacy Convergence Plan
+# Legacy Retirement Plan
 
 ## Purpose
 
-This document defines how the app should converge from coexistence between legacy and redesign paths toward a clearer end state.
+This document defines how the app should retire legacy recommendation surfaces now that the redesign path is the only intended operator workflow.
 
-The goal is not to remove legacy code as fast as possible. The goal is to retire or narrow legacy paths when the redesign path is operationally and evaluatively stronger.
+The goal is no longer coexistence. The goal is to remove legacy recommendation-path maintenance and keep the product centered on redesign-native objects.
 
-## Current coexistence reality
+## Current retirement reality
 
-Today the app still has both:
-- legacy sentiment/snapshot-oriented workflows
-- redesign-native watchlist/context/recommendation-plan workflows
+Today the app still contains some legacy code and historical data, but new proposal workflows are redesign-native:
+- watchlist-backed proposal jobs use the redesign orchestration path
+- manual ticker proposal jobs also execute through redesign orchestration via an explicit synthetic watchlist wrapper (`1w`, shorts enabled)
+- proposal runs persist `TickerSignalSnapshot` and `RecommendationPlan` objects as the canonical output path
+- new redesign-backed proposal runs no longer emit legacy `Recommendation` rows as compatibility projections
+- some sentiment snapshot workflows remain transitional, but legacy recommendation-detail/recommendation-history operator framing is being retired
 
-Current practical split:
-- watchlist-backed proposal jobs already use the redesign orchestration path
-- manual ticker proposal jobs now also execute through the redesign orchestration path via an explicit synthetic watchlist wrapper (`1w`, shorts enabled) so they write `TickerSignalSnapshot` and `RecommendationPlan` objects too
-- some sentiment snapshot workflows remain transitional
-- legacy `Recommendation` rows still exist for compatibility and some existing surfaces
+## Canonical product direction
 
-## Canonical future direction
-
-The intended canonical product path should be:
+The canonical product path is:
 1. context refresh
 2. watchlist or ticker setup evaluation
 3. `TickerSignalSnapshot`
@@ -28,9 +25,7 @@ The intended canonical product path should be:
 5. `RecommendationPlanOutcome`
 6. calibration / baseline / operator review
 
-Legacy `Recommendation` should ultimately become either:
-- a compatibility projection
-- or a narrow legacy-only artifact pending retirement
+Legacy `Recommendation` objects are no longer part of the intended proposal-generation path.
 
 ## Convergence principles
 
@@ -39,37 +34,23 @@ Legacy `Recommendation` should ultimately become either:
 - favor one clear operator truth path over parallel partially-overlapping systems
 - retire claims and UI wording before or with code retirement, not long after
 
-## Required decisions
+## Retirement decisions now in force
 
 ## 1. Manual ticker jobs
-Decision needed:
-- should manual ticker jobs converge onto redesign-native deep analysis and `RecommendationPlan` generation?
+Decision:
+- manual ticker jobs run through redesign-native orchestration and write redesign-native objects
 
-Recommended default:
-- yes, once redesign-native deep analysis is operationally stable and outcome review is acceptable
+## 2. Legacy recommendation rows
+Decision:
+- new proposal-generation runs should not emit legacy `Recommendation` compatibility rows
 
-## 2. Sentiment snapshot workflows
-Decision needed:
-- which snapshot workflows remain first-class, transitional, or deprecated?
-
-Recommended default:
-- keep macro/industry refresh only where they support redesign context objects
-- narrow or retire snapshot-first operator framing over time
-
-## 3. Legacy recommendation rows
-Decision needed:
-- should legacy `Recommendation` remain canonical?
-
-Recommended default:
-- no; `RecommendationPlan` should become canonical for redesign workflows
-- keep legacy rows only as compatibility projections until dependent surfaces are migrated
+## 3. Legacy operator surfaces
+Decision:
+- recommendation-detail and recommendation-history operator framing should be retired in favor of recommendation-plan views
 
 ## 4. UI terminology
-Decision needed:
-- which surfaces should lead with context/plans/outcomes versus sentiment/recommendation legacy language?
-
-Recommended default:
-- redesign surfaces should lead with:
+Decision:
+- operator surfaces should lead with:
   - context
   - ticker signal
   - recommendation plan
@@ -89,23 +70,20 @@ Current status:
 ## Milestone B: manual-path convergence
 Achieved when manual ticker jobs can emit redesign-native ticker signals and recommendation plans with acceptable stability.
 
-## Milestone C: compatibility-only legacy recommendations
-Achieved when legacy `Recommendation` rows are no longer the primary internal truth for new workflows.
+## Milestone C: legacy recommendation retirement
+Achieved when legacy `Recommendation` rows are no longer emitted for new proposal workflows and no operator-facing flow depends on them.
 
-## Milestone D: legacy-path retirement decision
-Achieved when enough measured evidence exists to choose whether to:
-- retire legacy flows
-- narrow them sharply
-- or keep a limited fallback posture intentionally
+## Milestone D: snapshot-flow narrowing
+Achieved when remaining sentiment snapshot surfaces are either clearly transitional or replaced by context-first views.
 
 ## Preconditions before retiring legacy paths
 
-Do not retire key legacy paths until:
+These conditions are now sufficiently met for legacy recommendation-path retirement:
 - redesign-native outputs are operator-visible
 - evaluation/outcome persistence is working reliably
-- deep analysis is sufficiently stable
-- core workflows no longer depend on legacy-only fields
-- documentation and API semantics are updated
+- deep analysis is sufficiently stable for the redesign path to be the default operator workflow
+- core proposal workflows no longer need legacy-only fields
+- documentation and API semantics are being updated to match the redesign-only posture
 
 ## Anti-patterns to avoid
 

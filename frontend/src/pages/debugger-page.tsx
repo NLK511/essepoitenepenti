@@ -130,7 +130,7 @@ export function DebuggerPage() {
                             <div className="summary-item"><span className="summary-label">Take profit</span><span className="summary-value">{item.take_profit}</span></div>
                           </div>
                           <div className="helper-text">{item.indicator_summary || "No indicator summary stored for this recommendation."}</div>
-                          <div className="helper-text"><Link to={`/recommendations/${item.id}`}>Open recommendation detail</Link></div>
+                          <div className="helper-text">Legacy recommendation detail pages are retired. Review the run's recommendation plans instead.</div>
                           {messages.length > 0 ? <ul>{messages.map((message) => <li key={message} className="warning-text">{message}</li>)}</ul> : <div className="helper-text">No warnings or errors.</div>}
                           {output.diagnostics.raw_output ? (
                             <details>

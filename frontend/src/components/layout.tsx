@@ -6,7 +6,6 @@ import { useAuth } from "../auth";
 const jobsSectionLinks = [
   { to: "/jobs", label: "Jobs overview", shortLabel: "Jobs", end: true },
   { to: "/jobs/watchlists", label: "Watchlists", shortLabel: "WL" },
-  { to: "/jobs/history", label: "Recommendations", shortLabel: "Recs" },
   { to: "/jobs/ticker-signals", label: "Ticker signals", shortLabel: "Signals" },
   { to: "/jobs/recommendation-plans", label: "Recommendation plans", shortLabel: "Plans" },
   { to: "/jobs/debugger", label: "Debugger", shortLabel: "Debug" },

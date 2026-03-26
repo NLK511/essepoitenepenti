@@ -1,10 +1,10 @@
 # Trade Proposer App
 
-Trade Proposer App is a deployable application for systematic trade recommendation workflows. It provides a FastAPI backend, a React/Vite operator UI, and worker-backed execution. The recommendation pipeline runs entirely inside this repository: it fetches price history via `yfinance`, builds technical feature vectors with `pandas`, applies the bundled weights (`src/trade_proposer_app/data/weights.json`), ingests news via the native `NewsIngestionService`, reuses shared macro/industry sentiment snapshots, and emits directional/confidence/price outputs with auditable diagnostics.
+Trade Proposer App is a deployable application for systematic short-horizon trade planning workflows. It provides a FastAPI backend, a React/Vite operator UI, and worker-backed execution. The recommendation pipeline runs entirely inside this repository: it fetches price history via `yfinance`, builds technical feature vectors with `pandas`, applies the bundled weights (`src/trade_proposer_app/data/weights.json`), ingests news via the native `NewsIngestionService`, reuses shared macro/industry sentiment snapshots, and emits redesign-native ticker signals plus actionable `RecommendationPlan` outputs with auditable diagnostics.
 
 ## Core Features
 - **Job Management**: Define scheduled or manual runs for proposal generation, evaluation, weight optimization, and sentiment snapshot refresh.
-- **Traceability**: Full history of runs, recommendations, and shared sentiment snapshots with drill-down views and stored diagnostics.
+- **Traceability**: Full history of runs, recommendation plans/outcomes, and shared sentiment snapshots with drill-down views and stored diagnostics.
 - **Reliability**: Atomic run claiming, duplicate-run prevention, explicit degraded-state reporting, and snapshot freshness checks in health/preflight.
 - **News-aware insights**: Native news ingestion pulls configured articles, derives sentiment, and stores both a digest and structured metadata. Operators can optionally route that digest through OpenAI or the `pi` CLI (configured via `/settings`) so richer narratives and enhanced sentiment metadata appear in detail views.
 - **In-App Docs**: Integrated documentation browser for methodology and technical reference.
@@ -16,13 +16,18 @@ Trade Proposer App is a deployable application for systematic trade recommendati
 ./scripts/start-dev.sh
 ```
 
+Useful setup options:
+- `./scripts/setup.sh --with-dev-deps`
+- `./scripts/setup.sh --with-openai`
+- `./scripts/setup.sh --skip-frontend-deps`
+
 - **Frontend**: `http://localhost:5173/`
 - **API Health**: `http://localhost:8000/api/health`
 - **Preflight**: `http://localhost:8000/api/health/preflight`
 
 ## Production deployment
 
-For production-like launches use `./scripts/start-prod.sh`. The script reads your `.env`, builds the frontend with `npm run build`, runs any pending migrations, and then starts the FastAPI API (which serves the built SPA from `frontend/dist`) and the worker process together. Run it from the repo root after installing dependencies (the same setup process as development) and configuring secrets such as `SECRET_KEY`.
+For production-like launches use `./scripts/start-prod.sh`. The script reads your `.env`, builds the frontend with `npm run build`, runs any pending migrations, runs preflight, and then starts the FastAPI API (which serves the built SPA from `frontend/dist`), the worker, and the scheduler together. Run it from the repo root after installing dependencies (the same setup process as development) and configuring secrets such as `SECRET_KEY`.
 
 `start-prod.sh` exposes the API and frontend on `APP_HOST:APP_PORT` (defaults to `0.0.0.0:8000`). You can override those values on the command line with `--host` and `--port`, or leave them configured in `.env`. Example:
 
@@ -30,7 +35,13 @@ For production-like launches use `./scripts/start-prod.sh`. The script reads you
 ./scripts/start-prod.sh --host 0.0.0.0 --port 8000
 ```
 
-If you build the frontend separately (with `npm ci` + `npm run build`) in your deployment pipeline, pass `--skip-frontend-build` so the script uses the existing `frontend/dist` assets instead of rebuilding.
+Stop production-style local processes with:
+
+```bash
+./scripts/stop-prod.sh
+```
+
+If you build the frontend separately (with `npm ci` + `npm run build`) in your deployment pipeline, pass `--skip-frontend-build` so the script uses the existing `frontend/dist` assets instead of rebuilding. If preflight is expected to be degraded during a temporary rollout, you can also pass `--allow-degraded-preflight`.
 
 After startup:
 

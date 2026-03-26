@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from trade_proposer_app.domain.enums import RecommendationDirection, StrategyHorizon
-from trade_proposer_app.domain.models import Recommendation, RecommendationPlan, RunOutput, TickerSignalSnapshot, Watchlist
+from trade_proposer_app.domain.models import RecommendationPlan, RunOutput, TickerSignalSnapshot, Watchlist
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
@@ -64,8 +64,6 @@ class WatchlistOrchestrationService:
 
         stored_signals: list[TickerSignalSnapshot] = []
         stored_plans: list[RecommendationPlan] = []
-        legacy_recommendations: list[Recommendation] = []
-        legacy_outputs: list[RunOutput] = []
         ticker_generation: list[dict[str, object]] = []
         warnings_found = False
 
@@ -146,9 +144,6 @@ class WatchlistOrchestrationService:
                     "shortlist_decision": decision,
                 }
             )
-            if plan.action in {"long", "short"} and deep_output is not None:
-                legacy_recommendations.append(deep_output.recommendation)
-                legacy_outputs.append(deep_output)
             if candidate.warnings or deep_error or plan.warnings:
                 warnings_found = True
 
@@ -163,7 +158,6 @@ class WatchlistOrchestrationService:
             "deep_analysis_count": len(shortlist),
             "ticker_signal_snapshot_count": len(stored_signals),
             "recommendation_plan_count": len(stored_plans),
-            "legacy_recommendation_count": len(legacy_recommendations),
             "actionable_plan_count": len([plan for plan in stored_plans if plan.action in {"long", "short"}]),
             "no_action_plan_count": len([plan for plan in stored_plans if plan.action == "no_action"]),
             "shortlist_rules": shortlist_evaluation["rules"],
@@ -182,8 +176,6 @@ class WatchlistOrchestrationService:
             "recommendation_plan_ids": [item.id for item in stored_plans],
         }
         return {
-            "legacy_recommendations": legacy_recommendations,
-            "legacy_outputs": legacy_outputs,
             "summary": summary,
             "artifact": artifact,
             "ticker_generation": ticker_generation,

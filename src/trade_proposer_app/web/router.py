@@ -16,6 +16,8 @@ SPA_ROUTE_PREFIXES = {
     "settings",
     "docs",
     "sentiment",
+    "recommendation-plans",
+    "ticker-signals",
 }
 
 

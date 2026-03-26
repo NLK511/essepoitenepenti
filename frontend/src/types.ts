@@ -197,7 +197,7 @@ export interface DashboardResponse {
   watchlists: Watchlist[];
   jobs: Job[];
   latest_runs: Run[];
-  recommendations: Recommendation[];
+  recommendation_plans: RecommendationPlan[];
 }
 
 export interface SentimentSnapshot {

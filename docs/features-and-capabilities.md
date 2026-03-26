@@ -1,6 +1,6 @@
 # Features and Capabilities
 
-Trade Proposer App already covers the main operator loop: define what to watch, enqueue work, inspect recommendations, understand degraded runs, evaluate outcomes, review history, refresh shared sentiment, and adjust configuration without leaving the product.
+Trade Proposer App already covers the main operator loop: define what to watch, enqueue work, inspect recommendation plans, understand degraded runs, evaluate outcomes, review redesign-native history, refresh shared sentiment, and adjust configuration without leaving the product.
 
 In realistic terms, the product is now strongest as an operator-facing analysis, candidate-ranking, and trade-framing system. It is not yet a validated universal short-horizon predictor, and the docs should reflect that explicitly.
 
@@ -19,10 +19,10 @@ This principle is consistently applied in the best parts of the product. It is a
 - Inspect queued, running, completed, failed, cancelled, and warning-heavy runs from the debugger and run detail pages.
 
 ### Recommendation lifecycle
-- Persist proposal outputs with direction, confidence, entry, stop loss, take profit, recommendation state, and compact indicator summaries.
-- Store structured diagnostics beside each recommendation (`analysis_json`, feature vectors, aggregations, confidence weights, warnings, and raw output).
-- Evaluate recommendations through the app-native price-history path rather than a prototype script.
-- Review ticker pages with recommendation history and app-derived outcome summaries.
+- Persist redesign-native proposal outputs as `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome` objects.
+- Store structured diagnostics beside each redesign object (`analysis_json`, feature vectors, aggregations, confidence weights, warnings, and raw output where applicable).
+- Evaluate recommendation plans through the app-native price-history path rather than a prototype script.
+- Review run, plan, and ticker pages through the redesign-native plan/outcome workflow rather than legacy recommendation-detail surfaces.
 
 ### Shared sentiment operations
 - Persist shared macro and industry sentiment as reusable snapshots.
@@ -65,10 +65,10 @@ This principle is consistently applied in the best parts of the product. It is a
 - Watchlist orchestration now uses a redesign-native `TickerDeepAnalysisService` path for deep analysis instead of routing normal watchlist deep analysis through `ProposalService.generate(...)`.
 
 Current limitation:
-- manual ticker proposal jobs still use the legacy per-ticker proposal path
 - macro and industry refresh runs do now write context objects through event-ranked, news-first transitional writers that prioritize stronger official/trade/major sources before social confirmation, but they are still heuristic rather than a fully mature event pipeline
 - watchlist deep analysis now runs through its own native execution path, but it still reuses some legacy proposal-service internals and payload conventions rather than a fully separated ticker engine
 - recommendation-plan outcome persistence and evaluation are now first-class, watchlist-backed plan generation now records setup-family and decomposed confidence details, operator workflows can inspect grouped calibration summaries by confidence bucket and setup family, watchlist-backed action gating now applies calibration-aware confidence-threshold adjustments for underperforming buckets/setup families and now also folds in horizon, transmission-bias, context-regime, and horizon-plus-setup-family slices, recommendation-plan workflows now expose baseline cohort comparisons (actual actionable plans vs high-confidence, cheap-scan-attention, momentum-lane, and catalyst-lane slices), and watchlist orchestration now carries richer ticker transmission summaries plus a small catalyst/event shortlist lane so purely technical ranking does not dominate every deep-analysis slot; those transmission summaries now include primary drivers, conflict flags, and expected transmission windows, and recommendation-plan generation now persists setup-family-specific entry style plus invalidation framing instead of only generic thesis text, while run detail / recommendation-plan browse views surface them alongside transmission bias/alignment, action reasons, and effective threshold context, and calibration views now slice outcomes by horizon, transmission bias, context regime, and horizon-plus-setup-family cohorts and mark cohort sample quality (`insufficient`, `limited`, `usable`, `strong`) instead of treating all slices as equally trustworthy; full recalibration remains early and heuristic
+- legacy recommendation-detail and recommendation-history surfaces are being retired; historical legacy rows may still exist in storage, but new proposal-generation runs are redesign-native and should be reviewed through recommendation plans and outcomes
 
 > **Enable the Nitter source**
 >

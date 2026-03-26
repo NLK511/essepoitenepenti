@@ -315,10 +315,8 @@ class WorkerSchedulerTests(unittest.TestCase):
         self.assertIn('"ticker_generation"', updated_run.timing_json)
         recommendations = runs.list_recommendations_for_run(updated_run.id or 0)
         outputs = runs.list_outputs_for_run(updated_run.id or 0)
-        self.assertEqual(len(recommendations), 1)
-        self.assertEqual(len(outputs), 1)
-        self.assertEqual(outputs[0].diagnostics.provider_errors, ["feed timeout"])
-        self.assertEqual(recommendations[0].state.value, "PENDING")
+        self.assertEqual(recommendations, [])
+        self.assertEqual(outputs, [])
 
     def test_worker_process_once_processes_evaluation_run(self) -> None:
         session = self.create_session()

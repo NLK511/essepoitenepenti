@@ -626,11 +626,10 @@ class RepositoryTests(unittest.TestCase):
 
         self.assertIsNotNone(processed_run)
         self.assertEqual(processed_run.status, "completed")
-        self.assertEqual([item.ticker for item in recommendations], ["AAPL"])
+        self.assertEqual(recommendations, [])
         stored_run = runs.get_run(queued_run.id or 0)
         self.assertIn('"mode": "watchlist_orchestration"', stored_run.summary_json or "")
         self.assertIn('"shortlist_count": 1', stored_run.summary_json or "")
-        self.assertIn('"legacy_recommendation_count": 1', stored_run.summary_json or "")
         self.assertIn('"shortlist_rules": {', stored_run.summary_json or "")
         self.assertIn('"shortlist_rejections": {', stored_run.summary_json or "")
         self.assertIn('"shortlist": [', stored_run.artifact_json or "")
@@ -705,7 +704,7 @@ class RepositoryTests(unittest.TestCase):
 
         self.assertIsNotNone(processed_run)
         self.assertEqual(processed_run.status, "completed")
-        self.assertEqual([item.ticker for item in recommendations], ["AAPL"])
+        self.assertEqual(recommendations, [])
         stored_run = runs.get_run(queued_run.id or 0)
         summary_payload = json.loads(stored_run.summary_json or "{}")
         artifact_payload = json.loads(stored_run.artifact_json or "{}")

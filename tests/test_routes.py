@@ -427,7 +427,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
     async def test_spa_shell_routes_render(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            for path in ("/", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/sentiment", "/sentiment/1", "/runs/1", "/recommendations/1", "/tickers/AAPL"):
+            for path in ("/", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/sentiment", "/sentiment/1", "/runs/1", "/recommendation-plans", "/tickers/AAPL"):
                 response = await client.get(path)
                 self.assertEqual(response.status_code, 200)
                 self.assertIn("<title>Trade Proposer App</title>", response.text)
@@ -805,7 +805,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(dashboard.status_code, 200)
         dashboard_payload = dashboard.json()
         self.assertEqual(len(dashboard_payload["latest_runs"]), 1)
-        self.assertEqual(len(dashboard_payload["recommendations"]), 1)
+        self.assertEqual(dashboard_payload["recommendation_plans"], [])
 
         self.assertEqual(history.status_code, 200)
         history_payload = history.json()
@@ -856,35 +856,17 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("queued or running", response.text)
 
-    async def test_recommendation_evaluation_endpoint_queues_auditable_run(self) -> None:
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            response = await client.post("/api/recommendations/evaluate")
-            runs = await client.get("/api/runs")
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["job_type"], JobType.RECOMMENDATION_EVALUATION.value)
-        self.assertEqual(payload["status"], "queued")
-        self.assertEqual(runs.status_code, 200)
-        self.assertEqual(runs.json()[0]["job_type"], JobType.RECOMMENDATION_EVALUATION.value)
-
-    async def test_recommendation_specific_evaluation_endpoint_queues_scoped_run(self) -> None:
+    async def test_legacy_recommendation_evaluation_endpoints_are_retired(self) -> None:
         run_id = self.seed_run_with_diagnostics()
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             detail = await client.get(f"/api/runs/{run_id}")
             recommendation_id = detail.json()["outputs"][0]["recommendation"]["id"]
-            response = await client.post(f"/api/recommendations/{recommendation_id}/evaluate")
-            queued_run_id = response.json()["id"]
-            queued_run = await client.get(f"/api/runs/{queued_run_id}")
+            global_response = await client.post("/api/recommendations/evaluate")
+            scoped_response = await client.post(f"/api/recommendations/{recommendation_id}/evaluate")
 
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["job_type"], JobType.RECOMMENDATION_EVALUATION.value)
-        self.assertEqual(payload["status"], "queued")
-        self.assertIn("recommendation_ids", queued_run.json()["run"]["artifact_json"])
-        self.assertIn(str(recommendation_id), queued_run.json()["run"]["artifact_json"])
+        self.assertIn(global_response.status_code, {404, 405})
+        self.assertIn(scoped_response.status_code, {404, 405})
 
     async def test_dashboard_latest_runs_only_include_runs_above_confidence_threshold(self) -> None:
         session = Session(bind=self.engine)
@@ -942,8 +924,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         payload = dashboard.json()
         self.assertEqual(len(payload["latest_runs"]), 1)
         self.assertEqual(payload["latest_runs"][0]["id"], high_run.id)
-        self.assertEqual(len(payload["recommendations"]), 2)
-        self.assertEqual(payload["recommendations"][0]["state"], "PENDING")
+        self.assertEqual(payload["recommendation_plans"], [])
 
     async def test_ticker_api_aggregates_app_history_and_prototype_trade_log(self) -> None:
         self.seed_run_with_diagnostics()

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
@@ -21,10 +22,10 @@ async def get_dashboard(session: Session = Depends(get_db_session)) -> dict[str,
     except ValueError:
         confidence_threshold = 60.0
     latest_runs = runs.list_latest_runs_above_confidence_threshold(confidence_threshold=confidence_threshold, limit=10)
-    recommendations = runs.list_latest_recommendations(limit=12)
+    recommendation_plans = RecommendationPlanRepository(session).list_plans(limit=12)
     return {
         "watchlists": watchlists,
         "jobs": jobs,
         "latest_runs": latest_runs,
-        "recommendations": recommendations,
+        "recommendation_plans": recommendation_plans,
     }

@@ -43,8 +43,8 @@ export function DashboardPage() {
     <>
       <PageHeader
         kicker="Daily monitoring"
-        title="Review trade recommendations separately from the runs that produced them."
-        subtitle="Runs are execution records for jobs. Recommendations are the trade-ready outputs. The dashboard keeps both views visible without mixing their roles."
+        title="Review recommendation plans separately from the runs that produced them."
+        subtitle="Runs are execution records for jobs. Recommendation plans are the canonical trade-review objects. The dashboard keeps both views visible without reviving retired legacy recommendation surfaces."
         actions={
           <>
             <Link to="/jobs" className="button">
@@ -67,8 +67,8 @@ export function DashboardPage() {
         <div className="stack-page">
           <section className="metrics-grid">
             <Card>
-              <div className="metric-label">Latest recommendations</div>
-              <div className="metric-value">{data.recommendations.length}</div>
+              <div className="metric-label">Latest recommendation plans</div>
+              <div className="metric-value">{data.recommendation_plans.length}</div>
             </Card>
             <Card>
               <div className="metric-label">Configured watchlists</div>
@@ -105,7 +105,7 @@ export function DashboardPage() {
                 <li>Configure provider credentials and summary backend in Settings.</li>
                 <li>Create reusable ticker groups in Watchlists.</li>
                 <li>Create a job from a watchlist or manual tickers.</li>
-                <li>Run the job to create recommendations, then evaluate them later to settle PENDING into WIN or LOSS.</li>
+                <li>Run the job to create recommendation plans, then evaluate them later to settle outcomes.</li>
               </ol>
             </Card>
             <Card>
@@ -192,38 +192,40 @@ export function DashboardPage() {
           <Card>
             <SectionTitle
               kicker="Latest output"
-              title="Trade recommendations"
+              title="Recommendation plans"
               actions={
-                <Link to="/jobs/history" className="button-secondary">
-                  Full history
+                <Link to="/jobs/recommendation-plans" className="button-secondary">
+                  Browse plans
                 </Link>
               }
             />
-            {data.recommendations.length === 0 ? (
-              <EmptyState message="No recommendations persisted yet." />
+            {data.recommendation_plans.length === 0 ? (
+              <EmptyState message="No recommendation plans persisted yet." />
             ) : (
               <div className="card-grid">
-                {data.recommendations.map((item) => (
-                  <article key={item.id ?? `${item.ticker}-${item.created_at}`} className="recommendation-card">
+                {data.recommendation_plans.map((item) => (
+                  <article key={item.id ?? `${item.ticker}-${item.computed_at}`} className="recommendation-card">
                     <div className="card-headline">
                       <div>
                         <div className="cluster">
                           <Link to={`/tickers/${item.ticker}`} className="badge badge-info badge-link">{item.ticker}</Link>
-                          <Badge tone={directionTone(item.direction)}>{item.direction}</Badge>
-                          <Badge tone={recommendationStateTone(item.state)}>{item.state}</Badge>
+                          <Badge tone={directionTone(item.action === "short" ? "SHORT" : item.action === "long" ? "LONG" : "NEUTRAL")}>{item.action}</Badge>
+                          <Badge tone={recommendationStateTone(item.latest_outcome?.outcome === "win" ? "WIN" : item.latest_outcome?.outcome === "loss" ? "LOSS" : "PENDING")}>
+                            {item.latest_outcome?.outcome ?? item.status}
+                          </Badge>
                         </div>
-                        <h3 className="subsection-title">{item.confidence}% confidence</h3>
+                        <h3 className="subsection-title">{item.confidence_percent}% confidence</h3>
                       </div>
-                      <Link to={`/recommendations/${item.id}`} className="button-secondary">
-                        Open
+                      <Link to={item.run_id ? `/runs/${item.run_id}` : "/jobs/recommendation-plans"} className="button-secondary">
+                        Open run
                       </Link>
                     </div>
                     <div className="summary-grid">
-                      <div className="summary-item"><span className="summary-label">Entry</span><span className="summary-value">{item.entry_price}</span></div>
-                      <div className="summary-item"><span className="summary-label">Stop</span><span className="summary-value">{item.stop_loss}</span></div>
-                      <div className="summary-item"><span className="summary-label">Take profit</span><span className="summary-value">{item.take_profit}</span></div>
+                      <div className="summary-item"><span className="summary-label">Entry</span><span className="summary-value">{item.entry_price_low ?? item.entry_price_high ?? "—"}</span></div>
+                      <div className="summary-item"><span className="summary-label">Stop</span><span className="summary-value">{item.stop_loss ?? "—"}</span></div>
+                      <div className="summary-item"><span className="summary-label">Take profit</span><span className="summary-value">{item.take_profit ?? "—"}</span></div>
                     </div>
-                    <div className="helper-text">{item.indicator_summary || "No indicator summary captured for this recommendation."}</div>
+                    <div className="helper-text">{item.thesis_summary || "No thesis summary captured for this recommendation plan."}</div>
                   </article>
                 ))}
               </div>

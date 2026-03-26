@@ -3,7 +3,7 @@ from datetime import datetime
 from time import perf_counter
 
 from trade_proposer_app.domain.enums import JobType, RunStatus, StrategyHorizon
-from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, Run, RunOutput, Watchlist
+from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, Run, Watchlist
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
@@ -111,14 +111,7 @@ class JobExecutionService:
                 )
                 ticker_generation.extend(orchestration.get("ticker_generation", []))
                 warnings_found = bool(orchestration.get("warnings_found"))
-                legacy_outputs = self._normalize_legacy_outputs(orchestration.get("legacy_outputs"))
-                if legacy_outputs:
-                    generated = legacy_outputs
-                else:
-                    generated = [
-                        output
-                        for output in self._convert_legacy_recommendations_to_outputs(orchestration.get("legacy_recommendations", []))
-                    ]
+                generated = []
                 summary = orchestration.get("summary")
                 artifact = orchestration.get("artifact")
                 if isinstance(summary, dict):
@@ -491,22 +484,6 @@ class JobExecutionService:
         normalized: list[dict[str, object]] = []
         timing["ticker_generation"] = normalized
         return normalized
-
-    @staticmethod
-    def _normalize_legacy_outputs(outputs: object) -> list[RunOutput]:
-        if not isinstance(outputs, list):
-            return []
-        return [output for output in outputs if isinstance(output, RunOutput)]
-
-    @staticmethod
-    def _convert_legacy_recommendations_to_outputs(recommendations: list[Recommendation] | object) -> list[RunOutput]:
-        if not isinstance(recommendations, list):
-            return []
-        outputs: list[RunOutput] = []
-        for recommendation in recommendations:
-            if isinstance(recommendation, Recommendation):
-                outputs.append(RunOutput(recommendation=recommendation))
-        return outputs
 
     @staticmethod
     def _extract_watchlist(job) -> Watchlist | None:

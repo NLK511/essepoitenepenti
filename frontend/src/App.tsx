@@ -5,9 +5,7 @@ import { LoginPage } from "./pages/login-page";
 import { DashboardPage } from "./pages/dashboard-page";
 import { DebuggerPage } from "./pages/debugger-page";
 import { DocsPage } from "./pages/docs-page";
-import { HistoryPage } from "./pages/history-page";
 import { JobsPage } from "./pages/jobs-page";
-import { RecommendationDetailPage } from "./pages/recommendation-detail-page";
 import { RecommendationPlansPage } from "./pages/recommendation-plans-page";
 import { RunDetailPage } from "./pages/run-detail-page";
 import { SentimentSnapshotDetailPage } from "./pages/sentiment-snapshot-detail-page";
@@ -31,12 +29,12 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="jobs" element={<JobsPage />} />
           <Route path="jobs/watchlists" element={<WatchlistsPage />} />
-          <Route path="jobs/history" element={<HistoryPage />} />
+          <Route path="jobs/history" element={<Navigate to="/jobs/recommendation-plans" replace />} />
           <Route path="jobs/ticker-signals" element={<TickerSignalsPage />} />
           <Route path="jobs/recommendation-plans" element={<RecommendationPlansPage />} />
           <Route path="jobs/debugger" element={<DebuggerPage />} />
           <Route path="watchlists" element={<Navigate to="/jobs/watchlists" replace />} />
-          <Route path="history" element={<Navigate to="/jobs/history" replace />} />
+          <Route path="history" element={<Navigate to="/jobs/recommendation-plans" replace />} />
           <Route path="ticker-signals" element={<Navigate to="/jobs/ticker-signals" replace />} />
           <Route path="recommendation-plans" element={<Navigate to="/jobs/recommendation-plans" replace />} />
           <Route path="debugger" element={<Navigate to="/jobs/debugger" replace />} />
@@ -45,7 +43,7 @@ export default function App() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="docs" element={<DocsPage />} />
           <Route path="runs/:runId" element={<RunDetailPage />} />
-          <Route path="recommendations/:recommendationId" element={<RecommendationDetailPage />} />
+          <Route path="recommendations/:recommendationId" element={<Navigate to="/jobs/recommendation-plans" replace />} />
           <Route path="tickers/:ticker" element={<TickerPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
