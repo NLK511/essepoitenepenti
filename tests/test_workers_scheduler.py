@@ -53,11 +53,11 @@ class StubEvaluationExecutionService:
 
     def execute(self, run=None) -> EvaluationRunResult:
         return EvaluationRunResult(
-            evaluated_trade_log_entries=8,
-            synced_recommendations=3,
-            pending_recommendations=2,
-            win_recommendations=3,
-            loss_recommendations=1,
+            evaluated_recommendation_plans=8,
+            synced_recommendation_plan_outcomes=3,
+            pending_recommendation_plan_outcomes=2,
+            win_recommendation_plan_outcomes=3,
+            loss_recommendation_plan_outcomes=1,
             output="scheduled evaluation complete",
         )
 
@@ -341,7 +341,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         updated_run = runs.get_run(run.id or 0)
         self.assertEqual(updated_run.status, "completed")
         self.assertEqual(updated_run.job_type, JobType.RECOMMENDATION_EVALUATION)
-        self.assertIn('"synced_recommendations": 3', updated_run.summary_json or "")
+        self.assertIn('"synced_recommendation_plan_outcomes": 3', updated_run.summary_json or "")
         self.assertIn('"evaluation_seconds"', updated_run.timing_json or "")
         self.assertEqual(runs.list_recommendations_for_run(updated_run.id or 0), [])
 

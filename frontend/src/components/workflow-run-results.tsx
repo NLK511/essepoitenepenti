@@ -123,13 +123,8 @@ function EvaluationResultView({ summary, artifact, rawSummary, rawArtifact }: {
   return (
     <div className="stack-page">
       <Card>
-        <SectionTitle kicker="Evaluation summary" title="Outcome" subtitle="Evaluation workflows settle pending recommendations and record summary counts on the run." />
+        <SectionTitle kicker="Evaluation summary" title="Outcome" subtitle="Evaluation workflows settle recommendation-plan outcomes and record summary counts on the run." />
         <div className="summary-grid">
-          <div className="summary-item"><span className="summary-label">Trade log entries evaluated</span><span className="summary-value">{String(summary?.evaluated_trade_log_entries ?? "—")}</span></div>
-          <div className="summary-item"><span className="summary-label">Recommendations synced</span><span className="summary-value">{String(summary?.synced_recommendations ?? "—")}</span></div>
-          <div className="summary-item"><span className="summary-label">Still pending</span><Badge tone="warning">{String(summary?.pending_recommendations ?? "—")}</Badge></div>
-          <div className="summary-item"><span className="summary-label">WIN outcomes</span><Badge tone="ok">{String(summary?.win_recommendations ?? "—")}</Badge></div>
-          <div className="summary-item"><span className="summary-label">LOSS outcomes</span><Badge tone="danger">{String(summary?.loss_recommendations ?? "—")}</Badge></div>
           <div className="summary-item"><span className="summary-label">Plans evaluated</span><span className="summary-value">{String(summary?.evaluated_recommendation_plans ?? "—")}</span></div>
           <div className="summary-item"><span className="summary-label">Plan outcomes synced</span><span className="summary-value">{String(summary?.synced_recommendation_plan_outcomes ?? "—")}</span></div>
           <div className="summary-item"><span className="summary-label">Plan outcomes pending</span><Badge tone="warning">{String(summary?.pending_recommendation_plan_outcomes ?? "—")}</Badge></div>

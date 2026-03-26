@@ -76,11 +76,11 @@ class StubEvaluationExecutionService(EvaluationExecutionService):
 
     def execute(self, run=None) -> EvaluationRunResult:
         return EvaluationRunResult(
-            evaluated_trade_log_entries=12,
-            synced_recommendations=4,
-            pending_recommendations=5,
-            win_recommendations=4,
-            loss_recommendations=3,
+            evaluated_recommendation_plans=12,
+            synced_recommendation_plan_outcomes=4,
+            pending_recommendation_plan_outcomes=5,
+            win_recommendation_plan_outcomes=4,
+            loss_recommendation_plan_outcomes=3,
             output="evaluation complete",
         )
 
@@ -355,12 +355,12 @@ class RepositoryTests(unittest.TestCase):
         )
 
         run = runs.enqueue(job.id or 0)
-        runs.set_summary(run.id or 0, {"synced_recommendations": 3, "pending_recommendations": 7})
+        runs.set_summary(run.id or 0, {"synced_recommendation_plan_outcomes": 3, "pending_recommendation_plan_outcomes": 7})
         runs.set_artifact(run.id or 0, {"weights_path": "/tmp/weights.json", "changed": False})
 
         stored_run = runs.get_run(run.id or 0)
         self.assertEqual(stored_run.job_type, JobType.RECOMMENDATION_EVALUATION)
-        self.assertIn('"synced_recommendations": 3', stored_run.summary_json or "")
+        self.assertIn('"synced_recommendation_plan_outcomes": 3', stored_run.summary_json or "")
         self.assertIn('"weights_path": "/tmp/weights.json"', stored_run.artifact_json or "")
 
     def test_sentiment_snapshot_repository_returns_latest_valid_snapshot(self) -> None:
@@ -820,7 +820,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(processed_run.status, "completed")
         self.assertEqual(recommendations, [])
         stored_run = runs.get_run(queued_run.id or 0)
-        self.assertIn('"synced_recommendations": 4', stored_run.summary_json or "")
+        self.assertIn('"synced_recommendation_plan_outcomes": 4', stored_run.summary_json or "")
         self.assertIn('"output": "evaluation complete"', stored_run.summary_json or "")
         self.assertIn('"evaluation_seconds"', stored_run.timing_json or "")
         self.assertEqual(runs.list_recommendations_for_run(stored_run.id or 0), [])

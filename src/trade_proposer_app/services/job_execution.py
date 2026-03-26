@@ -439,11 +439,6 @@ class JobExecutionService:
     @staticmethod
     def _evaluation_result_to_summary(result: EvaluationRunResult) -> dict[str, object]:
         return {
-            "evaluated_trade_log_entries": result.evaluated_trade_log_entries,
-            "synced_recommendations": result.synced_recommendations,
-            "pending_recommendations": result.pending_recommendations,
-            "win_recommendations": result.win_recommendations,
-            "loss_recommendations": result.loss_recommendations,
             "evaluated_recommendation_plans": result.evaluated_recommendation_plans,
             "synced_recommendation_plan_outcomes": result.synced_recommendation_plan_outcomes,
             "pending_recommendation_plan_outcomes": result.pending_recommendation_plan_outcomes,

@@ -166,11 +166,6 @@ class TickerAnalysisPage(BaseModel):
 
 
 class EvaluationRunResult(BaseModel):
-    evaluated_trade_log_entries: int = 0
-    synced_recommendations: int = 0
-    pending_recommendations: int = 0
-    win_recommendations: int = 0
-    loss_recommendations: int = 0
     evaluated_recommendation_plans: int = 0
     synced_recommendation_plan_outcomes: int = 0
     pending_recommendation_plan_outcomes: int = 0

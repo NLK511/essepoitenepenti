@@ -395,11 +395,6 @@ export interface RunDetailResponse {
 }
 
 export interface EvaluationRunResult {
-  evaluated_trade_log_entries: number;
-  synced_recommendations: number;
-  pending_recommendations: number;
-  win_recommendations: number;
-  loss_recommendations: number;
   evaluated_recommendation_plans: number;
   synced_recommendation_plan_outcomes: number;
   pending_recommendation_plan_outcomes: number;
