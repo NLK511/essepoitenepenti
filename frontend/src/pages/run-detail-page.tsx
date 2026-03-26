@@ -188,6 +188,26 @@ export function RunDetailPage() {
   const shortlistDecisions = Array.isArray(runArtifact?.shortlist_decisions)
     ? runArtifact.shortlist_decisions.filter((item): item is Record<string, unknown> => isRecord(item))
     : [];
+  const orchestrationSourceKind = typeof runSummary?.source_kind === "string"
+    ? runSummary.source_kind
+    : typeof runArtifact?.source_kind === "string"
+      ? runArtifact.source_kind
+      : null;
+  const orchestrationExecutionPath = typeof runSummary?.execution_path === "string"
+    ? runSummary.execution_path
+    : typeof runArtifact?.execution_path === "string"
+      ? runArtifact.execution_path
+      : null;
+  const orchestrationEffectiveHorizon = typeof runSummary?.effective_horizon === "string"
+    ? runSummary.effective_horizon
+    : typeof runArtifact?.effective_horizon === "string"
+      ? runArtifact.effective_horizon
+      : null;
+  const manualJobDefaults = isRecord(runSummary?.manual_job_defaults)
+    ? runSummary.manual_job_defaults
+    : isRecord(runArtifact?.manual_job_defaults)
+      ? runArtifact.manual_job_defaults
+      : null;
 
   return (
     <>
@@ -260,6 +280,47 @@ export function RunDetailPage() {
                 }
               />
               <div className="stack-page">
+                {orchestrationSourceKind || orchestrationExecutionPath || orchestrationEffectiveHorizon || manualJobDefaults ? (
+                  <section>
+                    <div className="section-heading">
+                      <strong>Execution source</strong>
+                    </div>
+                    <div className="cluster top-gap-small">
+                      {orchestrationSourceKind ? (
+                        <Badge tone={orchestrationSourceKind === "manual_tickers" ? "warning" : "info"}>
+                          source: {orchestrationSourceKind}
+                        </Badge>
+                      ) : null}
+                      {orchestrationExecutionPath ? <Badge tone="info">path: {orchestrationExecutionPath}</Badge> : null}
+                      {orchestrationEffectiveHorizon ? <Badge tone="info">effective horizon: {orchestrationEffectiveHorizon}</Badge> : null}
+                    </div>
+                    {orchestrationSourceKind === "manual_tickers" ? (
+                      <div className="top-gap-small">
+                        <div className="helper-text">
+                          Manual ticker jobs now run through redesign orchestration using an explicit synthetic wrapper instead of the old legacy-only loop.
+                        </div>
+                        <div className="helper-text">
+                          Recommendation plans and outcomes are the canonical redesign review path; any legacy recommendations below are compatibility artifacts.
+                        </div>
+                      </div>
+                    ) : null}
+                    {manualJobDefaults ? (
+                      <div className="cluster top-gap-small">
+                        <Badge tone="info">default horizon: {typeof manualJobDefaults.default_horizon === "string" ? manualJobDefaults.default_horizon : "—"}</Badge>
+                        <Badge tone={manualJobDefaults.allow_shorts === true ? "warning" : "neutral"}>
+                          {manualJobDefaults.allow_shorts === true ? "shorts enabled" : "shorts disabled"}
+                        </Badge>
+                        <Badge tone={manualJobDefaults.optimize_evaluation_timing === true ? "ok" : "neutral"}>
+                          {manualJobDefaults.optimize_evaluation_timing === true ? "optimized timing on" : "optimized timing off"}
+                        </Badge>
+                      </div>
+                    ) : null}
+                    {typeof manualJobDefaults?.job_name === "string" ? (
+                      <div className="helper-text top-gap-small">Synthetic wrapper job name: {manualJobDefaults.job_name}</div>
+                    ) : null}
+                  </section>
+                ) : null}
+
                 {watchlistPolicy ? (
                   <section>
                     <div className="section-heading">

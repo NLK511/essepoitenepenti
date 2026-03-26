@@ -24,7 +24,7 @@ The system should store at least:
 - macro context snapshots
 - industry context snapshots
 - ticker signal snapshots
-- recommendations
+- recommendation plans
 - recommendation outcomes
 
 ## Schema direction
@@ -132,6 +132,7 @@ Suggested fields:
 - direction
 - swing_probability
 - confidence_score
+- setup_family
 - macro_exposure_score
 - industry_alignment_score
 - ticker_sentiment_score
@@ -139,11 +140,12 @@ Suggested fields:
 - catalyst_score
 - expected_move_score
 - execution_quality_score
+- confidence_components JSONB
 - warnings JSONB
 - missing_inputs JSONB
 - metadata JSONB
 
-### `recommendations`
+### `recommendation_plans`
 Suggested fields:
 
 - id
@@ -164,15 +166,24 @@ Suggested fields:
 - evidence_summary JSONB
 - metadata JSONB
 
+For redesign-native workflows, `recommendation_plans` should be treated as the canonical trade-planning object. Legacy `Recommendation` rows may still be emitted as compatibility projections, but they should not be the primary persistence target for redesigned proposal flows.
+
 ### `recommendation_outcomes`
 Suggested fields:
 
-- recommendation_id
+- recommendation_plan_id
 - resolved_at
 - outcome
 - pnl_pct
+- horizon_return_1d
+- horizon_return_3d
+- horizon_return_5d
 - max_favorable_excursion
 - max_adverse_excursion
+- realized_holding_period_days
+- direction_correct
+- confidence_bucket
+- setup_family
 - notes
 
 ## Diagnostics as first-class data
@@ -205,7 +216,7 @@ This should apply to:
 - ingestion runs
 - context snapshots
 - ticker signal snapshots
-- recommendations
+- recommendation plans
 
 ## Why persistence matters
 

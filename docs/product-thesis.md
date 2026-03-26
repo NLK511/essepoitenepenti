@@ -4,6 +4,8 @@
 
 Trade Proposer App is an operator-facing system for generating, inspecting, evaluating, and improving systematic trade recommendations inside one product boundary.
 
+Near-term, the most realistic interpretation of that goal is an explainable market-analysis, candidate-ranking, and trade-framing system. Stronger predictive claims should follow only after recommendation outcomes show measurable edge and confidence calibration.
+
 It is not just a model runner and it is not just a dashboard. Its value comes from combining:
 - execution workflows
 - auditable diagnostics
@@ -31,7 +33,7 @@ If an input is missing, stale, or failing, the app should say so explicitly.
 
 That means:
 - missing data should become warnings or neutral values
-- stale shared sentiment should degrade health/preflight rather than disappear silently
+- stale shared macro or industry context/sentiment should degrade health/preflight rather than disappear silently
 - provider failures should remain visible in stored diagnostics
 - fallback behavior must never pretend to be equivalent to healthy input
 
@@ -42,8 +44,9 @@ This principle is the product's most important consistency rule.
 The app should continue to feel like one coherent operating system for this workflow:
 - define watchlists and jobs
 - run proposal generation
-- inspect runs and recommendations
-- review shared sentiment snapshots
+- inspect runs, redesign recommendation plans, and recommendation-plan outcomes as the main operator truth path
+- inspect legacy recommendations only where compatibility still requires them
+- review shared sentiment snapshots and newer context objects
 - evaluate historical outcomes
 - optimize weights
 - read the docs in-product
@@ -55,11 +58,11 @@ The user should not have to leave the app to understand what happened.
 1. **Single backend-owned contract**
    The backend owns execution, persistence, diagnostics, and workflow semantics. This reduces drift between what happened and what the UI claims happened.
 
-2. **Runs and recommendations are distinct**
-   Recommendations are the trade objects. Runs are the execution records. Keeping that distinction visible improves operator judgment.
+2. **Runs and trade outputs are distinct**
+   Runs are execution records. Legacy recommendations and redesign recommendation plans are trade outputs. Keeping that distinction visible improves operator judgment.
 
-3. **Shared sentiment snapshots are auditable**
-   Macro and industry sentiment are now inspectable system artifacts instead of invisible background calculations.
+3. **Shared context and sentiment artifacts are auditable**
+   Macro and industry sentiment snapshots remain inspectable system artifacts, and the redesign is adding context objects as a more context-first surface.
 
 4. **Evaluation and optimization stay inside the product**
    This gives the app a real learning loop instead of a fragmented toolchain.

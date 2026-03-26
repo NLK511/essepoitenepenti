@@ -6,6 +6,8 @@ These principles define the product and engineering rules for the redesigned app
 
 The system is being redesigned to support **short-horizon trade recommendations** intended to capture swings likely to happen within a few days.
 
+The realistic near-term target is an explainable decision-support and candidate-ranking system that can surface actionable `RecommendationPlan` outputs when the evidence is strong enough. It should not be treated as a broadly validated predictive engine until outcomes and calibration show that the redesign path is actually working.
+
 ## Product objective
 
 The app should answer this sequence:
@@ -57,6 +59,8 @@ A valid recommendation should include:
 - risks
 
 If the system cannot support those fields credibly, it should not force a recommendation.
+
+`watchlist` and `no_action` are first-class successful outputs because selective inaction is part of recommendation quality.
 
 ## Source hierarchy
 
@@ -144,6 +148,16 @@ Supported states should include:
 
 `watchlist` and `no_action` are valid outputs.
 
+## Canonical operator truth
+
+For redesign-native proposal workflows, the canonical operator review path should be:
+
+1. `TickerSignalSnapshot`
+2. `RecommendationPlan`
+3. `RecommendationPlanOutcome`
+
+Legacy `Recommendation` rows may still exist for compatibility, but they should not remain the primary internal truth for redesigned proposal workflows.
+
 ## Confidence philosophy
 
 Confidence should be component-based and traceable.
@@ -165,3 +179,5 @@ Confidence must be reduced or capped when:
 - upstream context is degraded
 - technical structure is weak
 - the recommendation is not robust enough to trade
+
+Confidence should also be built so it can later be calibrated against outcomes. The redesign should converge toward explicit confidence components such as context confidence, directional confidence, catalyst confidence, technical clarity, execution clarity, and data-quality caps.
