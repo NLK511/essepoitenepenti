@@ -4,6 +4,8 @@
 
 This document locks the implementation-level defaults for the redesign.
 
+More detailed supporting specs now live alongside this charter for transmission modeling, calibration governance, setup-family behavior, measured success criteria, and legacy convergence.
+
 It exists so development can proceed with minimal ambiguity while staying aligned with the product objective: generate practical short-horizon recommendations that can help identify likely swings within the next day, week, or month.
 
 This document also intentionally sets realism constraints on the redesign. The app should be built first as a high-quality operator decision-support and candidate-ranking system with explicit diagnostics, selective `no_action` behavior, and measurable recommendation outcomes. It should not be presented internally as a proven predictive engine until the redesign path has demonstrated real calibration and outcome quality through stored evaluation data.

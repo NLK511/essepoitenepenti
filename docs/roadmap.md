@@ -89,6 +89,7 @@ Delivered in this phase so far:
 Next required work in this phase:
 - use the new calibration summaries to drive actual confidence re-scaling and operator thresholds rather than only reporting grouped outcomes
 - continue maturing the redesign-native deep-analysis path from an internal native executor into a fuller ticker-signal / recommendation-engine layer with less dependence on legacy proposal payload shapes
+- lock the remaining redesign decision logic into explicit specs: transmission modeling, calibration governance, setup-family playbook, measured success criteria, and legacy convergence
 - expose watchlist policy details more directly in the main operator workflows, not only through the policy endpoint
 - define how the new recommendation-plan path coexists with or replaces the current recommendation object path
 - decide whether sentiment snapshots become operator-facing compatibility artifacts, internal inputs, or candidates for retirement once context writers mature
