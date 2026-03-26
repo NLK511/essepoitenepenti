@@ -508,6 +508,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(created.status_code, 200)
             watchlist_id = created.json()["id"]
             policy = await client.get(f"/api/watchlists/{watchlist_id}/policy")
+            policies = await client.get("/api/watchlists/policies")
 
         self.assertEqual(policy.status_code, 200)
         payload = policy.json()
@@ -516,6 +517,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["primary_cron"], "20 9 * * MON-FRI")
         self.assertEqual(payload["shortlist_strategy"], "cheap_scan_then_deep_analysis")
         self.assertEqual(payload["warnings"], [])
+        self.assertEqual(policies.status_code, 200)
+        self.assertEqual(len(policies.json()), 1)
+        self.assertEqual(policies.json()[0]["watchlist_id"], watchlist_id)
 
     async def test_create_job_and_enqueue_run_via_api(self) -> None:
         transport = httpx.ASGITransport(app=app)

@@ -5,7 +5,7 @@ import { deleteJson, getJson } from "../api";
 import { WorkflowRunResults } from "../components/workflow-run-results";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { RunDetailResponse } from "../types";
+import type { Job, RunDetailResponse, WatchlistEvaluationPolicy } from "../types";
 import { diagnosticsMessages, directionTone, extractSentimentSnapshotReferences, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, recommendationStateTone, runTone } from "../utils";
 
 function scoreColor(value: number, min = -1, max = 1) {
@@ -102,6 +102,7 @@ export function RunDetailPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [detail, setDetail] = useState<RunDetailResponse | null>(null);
+  const [watchlistPolicy, setWatchlistPolicy] = useState<WatchlistEvaluationPolicy | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -114,7 +115,15 @@ export function RunDetailPage() {
       }
       try {
         setError(null);
-        setDetail(await getJson<RunDetailResponse>(`/api/runs/${runId}`));
+        const runDetail = await getJson<RunDetailResponse>(`/api/runs/${runId}`);
+        setDetail(runDetail);
+        const jobs = await getJson<Job[]>("/api/jobs");
+        const job = jobs.find((item) => item.id === runDetail.run.job_id);
+        if (job?.watchlist_id) {
+          setWatchlistPolicy(await getJson<WatchlistEvaluationPolicy>(`/api/watchlists/${job.watchlist_id}/policy`));
+        } else {
+          setWatchlistPolicy(null);
+        }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load run");
       }
@@ -229,6 +238,34 @@ export function RunDetailPage() {
                 }
               />
               <div className="stack-page">
+                {watchlistPolicy ? (
+                  <section>
+                    <div className="section-heading">
+                      <strong>Watchlist policy</strong>
+                    </div>
+                    <div className="cluster top-gap-small">
+                      <Badge tone="info">source: {watchlistPolicy.schedule_source}</Badge>
+                      <Badge tone="info">timezone: {watchlistPolicy.schedule_timezone || "—"}</Badge>
+                      <Badge tone={watchlistPolicy.primary_cron ? "ok" : "neutral"}>
+                        cron: {watchlistPolicy.primary_cron ?? "none"}
+                      </Badge>
+                      <Badge tone="info">horizon: {watchlistPolicy.default_horizon}</Badge>
+                      <Badge tone="info">strategy: {watchlistPolicy.shortlist_strategy}</Badge>
+                    </div>
+                    <div className="helper-text top-gap-small">Primary window: {watchlistPolicy.primary_window_label || "—"}</div>
+                    {watchlistPolicy.secondary_window_label ? (
+                      <div className="helper-text">Secondary window: {watchlistPolicy.secondary_window_label}</div>
+                    ) : null}
+                    {watchlistPolicy.warnings.length > 0 ? (
+                      <div className="cluster top-gap-small">
+                        {watchlistPolicy.warnings.map((warning) => (
+                          <Badge key={warning} tone="warning">{warning}</Badge>
+                        ))}
+                      </div>
+                    ) : null}
+                  </section>
+                ) : null}
+
                 {shortlistRules || shortlistDecisions.length > 0 ? (
                   <section>
                     <div className="section-heading">

@@ -36,6 +36,13 @@ async def list_watchlists(session: Session = Depends(get_db_session)) -> list[Wa
     return WatchlistRepository(session).list_all()
 
 
+@router.get("/policies")
+async def list_watchlist_policies(session: Session = Depends(get_db_session)) -> list[WatchlistEvaluationPolicy]:
+    repository = WatchlistRepository(session)
+    policy_service = WatchlistPolicyService()
+    return [policy_service.describe_watchlist(watchlist) for watchlist in repository.list_all()]
+
+
 @router.get("/{watchlist_id}/policy")
 async def get_watchlist_policy(
     watchlist_id: int,

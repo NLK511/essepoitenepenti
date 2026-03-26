@@ -61,7 +61,7 @@ Guiding principle for the rest of this phase:
 
 Delivered in this phase so far:
 - first-class watchlist metadata aligned with trading horizons and exchange-aware scheduling
-- watchlist policy inspection endpoint
+- watchlist policy inspection endpoints and operator-visible policy summaries in watchlist/run-detail workflows
 - persisted redesign-domain models for:
   - macro context snapshots
   - industry context snapshots

@@ -37,7 +37,7 @@ This principle is consistently applied in the best parts of the product. It is a
 
 ### Redesign execution path now present
 - Persist watchlists with richer trading and scheduling metadata: `description`, `region`, `exchange`, `timezone`, `default_horizon`, `allow_shorts`, and `optimize_evaluation_timing`.
-- Inspect derived watchlist timing and warnings through `GET /api/watchlists/{watchlist_id}/policy`.
+- Inspect derived watchlist timing and warnings through `GET /api/watchlists/{watchlist_id}/policy`, `GET /api/watchlists/policies`, and the frontend watchlist/run-detail operator views.
 - Watchlist-backed proposal jobs now run through a real staged orchestration flow:
   1. cheap scan across all watchlist tickers
   2. shortlist selection using a dedicated cheap-scan signal model

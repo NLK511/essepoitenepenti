@@ -62,6 +62,19 @@ export interface Watchlist {
   tickers: string[];
 }
 
+export interface WatchlistEvaluationPolicy {
+  watchlist_id: number | null;
+  watchlist_name: string;
+  default_horizon: StrategyHorizon;
+  schedule_source: string;
+  schedule_timezone: string;
+  primary_cron: string | null;
+  primary_window_label: string;
+  secondary_window_label: string;
+  shortlist_strategy: string;
+  warnings: string[];
+}
+
 export interface Job {
   id: number | null;
   name: string;

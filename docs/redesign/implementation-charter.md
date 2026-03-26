@@ -425,7 +425,7 @@ The next implementation work should assume:
 ## 16. Current redesign status
 Completed in the redesign track so far:
 - watchlists now carry trading and scheduling metadata (`description`, `region`, `exchange`, `timezone`, `default_horizon`, `allow_shorts`, `optimize_evaluation_timing`)
-- watchlist evaluation policy and timezone-aware scheduling are implemented
+- watchlist evaluation policy and timezone-aware scheduling are implemented, and policy details are now surfaced directly in watchlist and run-detail operator workflows
 - watchlist-backed proposal jobs now run through cheap-scan to shortlist to deep-analysis orchestration
 - a dedicated cheap-scan signal model now drives shortlist selection
 - the new persistence-layer foundations for context snapshots, ticker signals, and recommendation plans are in place
