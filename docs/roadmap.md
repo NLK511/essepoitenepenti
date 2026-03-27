@@ -107,7 +107,8 @@ Defined implementation phases from here:
    - ✅ refactor optimization services, summaries, and tests to consume `RecommendationPlanOutcome`
    - ✅ remove remaining optimization dependence on legacy recommendation WIN/LOSS rows
    - ✅ stop proposal-run persistence, dashboard filtering, and mounted run-detail/debugger flows from depending on legacy recommendation rows/output payloads
-   - next: delete dormant legacy recommendation persistence/models/repository code and decide when the old table/migration history is actually dropped
+   - ✅ delete dormant legacy recommendation ORM/repository persistence code from the active product path
+   - next: decide when the old `recommendations` table and migration history are explicitly dropped or migrated away
    - continue updating API/UI/docs wording so recommendation-plan outcomes are the only optimization truth source
 2. **Phase 4B — setup-family-native recommendation behavior**
    - strengthen family-specific thesis, invalidation, target, stop, and `no_action` generation

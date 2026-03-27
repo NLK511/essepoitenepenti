@@ -79,7 +79,8 @@ Achieved when:
 - legacy `Recommendation` rows are no longer emitted for new proposal workflows
 - optimization no longer depends on legacy recommendation WIN/LOSS semantics
 - no operator-facing flow depends on legacy recommendation objects
-- legacy recommendation persistence, repository helpers, and historical data have been deleted from the product path
+- legacy recommendation ORM/repository persistence code has been removed from the product path
+- any remaining historical `recommendations` table data is either explicitly migrated away or dropped by an intentional cleanup decision
 
 ## Milestone D: snapshot-flow narrowing
 Achieved when remaining sentiment snapshot surfaces are either clearly transitional or replaced by context-first views.

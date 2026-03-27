@@ -65,37 +65,6 @@ class RunRecord(Base, TimestampMixin):
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     timing_json: Mapped[str] = mapped_column(Text, default="")
     job: Mapped[JobRecord] = relationship(back_populates="runs")
-    recommendations: Mapped[list["RecommendationRecord"]] = relationship(back_populates="run")
-
-
-class RecommendationRecord(Base, TimestampMixin):
-    __tablename__ = "recommendations"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("runs.id"), index=True)
-    ticker: Mapped[str] = mapped_column(String(32), index=True)
-    direction: Mapped[str] = mapped_column(String(32))
-    confidence: Mapped[float] = mapped_column(Float)
-    entry_price: Mapped[float] = mapped_column(Float)
-    stop_loss: Mapped[float] = mapped_column(Float)
-    take_profit: Mapped[float] = mapped_column(Float)
-    indicator_summary: Mapped[str] = mapped_column(Text, default="")
-    evaluation_state: Mapped[str] = mapped_column(String(16), default="PENDING", index=True)
-    evaluated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    warnings_json: Mapped[str] = mapped_column(Text, default="")
-    provider_errors_json: Mapped[str] = mapped_column(Text, default="")
-    problems_json: Mapped[str] = mapped_column(Text, default="")
-    news_feed_errors_json: Mapped[str] = mapped_column(Text, default="")
-    summary_error: Mapped[str] = mapped_column(Text, default="")
-    llm_error: Mapped[str] = mapped_column(Text, default="")
-    analysis_json: Mapped[str] = mapped_column(Text, default="")
-    raw_output: Mapped[str] = mapped_column(Text, default="")
-    feature_vector_json: Mapped[str] = mapped_column(Text, default="")
-    normalized_feature_vector_json: Mapped[str] = mapped_column(Text, default="")
-    aggregations_json: Mapped[str] = mapped_column(Text, default="")
-    confidence_weights_json: Mapped[str] = mapped_column(Text, default="")
-    summary_method: Mapped[str] = mapped_column(String(64), default="")
-    run: Mapped[RunRecord] = relationship(back_populates="recommendations")
 
 
 class AppSettingRecord(Base, TimestampMixin):
