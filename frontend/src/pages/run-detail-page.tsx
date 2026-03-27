@@ -159,7 +159,7 @@ export function RunDetailPage() {
     }
     if (
       !window.confirm(
-        `Delete run #${detail.run.id}? This will permanently remove the run and its associated recommendations and diagnostics.`,
+        `Delete run #${detail.run.id}? This will permanently remove the run and its associated recommendation plans, outcomes, context objects, signals, and diagnostics.`,
       )
     ) {
       return;
@@ -214,7 +214,7 @@ export function RunDetailPage() {
       <PageHeader
         kicker="Run detail"
         title={detail ? `Run #${detail.run.id}` : "Run detail"}
-        subtitle="A run is one job execution. This page focuses on execution state and the recommendations produced by that run, not on treating the run itself as the trade output."
+        subtitle="A run is one job execution. This page focuses on execution state and the recommendation plans produced by that run, not on treating the run itself as the trade output."
         actions={
           <>
             <Link to="/jobs/debugger" className="button-secondary">Back to debugger</Link>

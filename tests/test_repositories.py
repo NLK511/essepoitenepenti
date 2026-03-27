@@ -529,7 +529,7 @@ class RepositoryTests(unittest.TestCase):
         processed_run, recommendations = service.process_next_queued_run()
 
         self.assertIsNotNone(processed_run)
-        self.assertEqual(len(recommendations), 2)
+        self.assertEqual(recommendations, [])
         latest_runs = runs.list_latest_runs()
         self.assertEqual(len(latest_runs), 1)
         self.assertIn(latest_runs[0].status, {"completed", "completed_with_warnings"})
@@ -542,12 +542,8 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn('"ticker_generation"', latest_runs[0].timing_json)
         stored = runs.list_recommendations_for_run(latest_runs[0].id or 0)
         outputs = runs.list_outputs_for_run(latest_runs[0].id or 0)
-        self.assertEqual(len(stored), 2)
-        self.assertEqual(len(outputs), 2)
-        self.assertTrue(outputs[0].diagnostics.raw_output is not None or outputs[0].diagnostics.warnings)
-        self.assertIsInstance(outputs[0].diagnostics.provider_errors, list)
-        self.assertIsInstance(outputs[0].diagnostics.problems, list)
-        self.assertEqual(stored[0].state.value, "PENDING")
+        self.assertEqual(stored, [])
+        self.assertEqual(outputs, [])
         refreshed_job = jobs.get(job.id or 0)
         self.assertIsNotNone(refreshed_job.last_enqueued_at)
 

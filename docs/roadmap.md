@@ -104,10 +104,11 @@ Next required work in this phase:
 
 Defined implementation phases from here:
 1. **Phase 4A — optimization convergence and legacy deletion**
-   - refactor optimization services, summaries, and tests to consume `RecommendationPlanOutcome`
-   - remove remaining optimization dependence on legacy recommendation WIN/LOSS rows
-   - delete legacy recommendation persistence/models/repository code and migrations only after redesign-native optimization is validated in-app
-   - update API/UI/docs wording so recommendation-plan outcomes are the only optimization truth source
+   - ✅ refactor optimization services, summaries, and tests to consume `RecommendationPlanOutcome`
+   - ✅ remove remaining optimization dependence on legacy recommendation WIN/LOSS rows
+   - in progress: stop proposal-run persistence and dashboard filtering from depending on legacy recommendation rows
+   - next: delete legacy recommendation persistence/models/repository code and migrations now that redesign-native optimization is validated in-app
+   - continue updating API/UI/docs wording so recommendation-plan outcomes are the only optimization truth source
 2. **Phase 4B — setup-family-native recommendation behavior**
    - strengthen family-specific thesis, invalidation, target, stop, and `no_action` generation
    - add family-specific evaluation slices and operator review surfaces

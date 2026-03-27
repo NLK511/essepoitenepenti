@@ -2,11 +2,20 @@ import json
 from datetime import datetime, timezone
 
 from sqlalchemy import delete, select, update
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import JobType, RecommendationState, RunStatus
 from trade_proposer_app.domain.models import Recommendation, Run, RunDiagnostics, RunOutput
-from trade_proposer_app.persistence.models import JobRecord, RecommendationRecord, RunRecord
+from trade_proposer_app.persistence.models import (
+    IndustryContextSnapshotRecord,
+    JobRecord,
+    MacroContextSnapshotRecord,
+    RecommendationOutcomeRecord,
+    RecommendationPlanRecord,
+    RecommendationRecord,
+    RunRecord,
+    TickerSignalSnapshotRecord,
+)
 
 
 ACTIVE_RUN_STATUSES = (RunStatus.QUEUED.value, RunStatus.RUNNING.value)
@@ -167,14 +176,16 @@ class RunRepository:
         return [self._to_run_model(row) for row in rows]
 
     def list_latest_runs_above_confidence_threshold(self, confidence_threshold: float, limit: int = 20) -> list[Run]:
-        rows = self.session.scalars(
-            select(RunRecord)
-            .options(selectinload(RunRecord.recommendations))
-            .order_by(RunRecord.created_at.desc())
-        ).all()
+        rows = self.session.scalars(select(RunRecord).order_by(RunRecord.created_at.desc())).all()
         filtered: list[Run] = []
         for row in rows:
-            if any(recommendation.confidence >= confidence_threshold for recommendation in row.recommendations):
+            has_confident_plan = self.session.scalars(
+                select(RecommendationPlanRecord.id)
+                .where(RecommendationPlanRecord.run_id == row.id)
+                .where(RecommendationPlanRecord.confidence_percent >= confidence_threshold)
+                .limit(1)
+            ).first()
+            if has_confident_plan is not None:
                 filtered.append(self._to_run_model(row))
             if len(filtered) >= limit:
                 break
@@ -288,6 +299,19 @@ class RunRepository:
         record = self.session.get(RunRecord, run_id)
         if record is None:
             raise ValueError(f"Run {run_id} not found")
+        plan_ids = list(
+            self.session.scalars(
+                select(RecommendationPlanRecord.id).where(RecommendationPlanRecord.run_id == run_id)
+            ).all()
+        )
+        if plan_ids:
+            self.session.execute(
+                delete(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.recommendation_plan_id.in_(plan_ids))
+            )
+            self.session.execute(delete(RecommendationPlanRecord).where(RecommendationPlanRecord.id.in_(plan_ids)))
+        self.session.execute(delete(TickerSignalSnapshotRecord).where(TickerSignalSnapshotRecord.run_id == run_id))
+        self.session.execute(delete(MacroContextSnapshotRecord).where(MacroContextSnapshotRecord.run_id == run_id))
+        self.session.execute(delete(IndustryContextSnapshotRecord).where(IndustryContextSnapshotRecord.run_id == run_id))
         self.session.execute(delete(RecommendationRecord).where(RecommendationRecord.run_id == run_id))
         self.session.delete(record)
         self.session.commit()

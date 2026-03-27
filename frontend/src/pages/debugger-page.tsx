@@ -104,7 +104,7 @@ export function DebuggerPage() {
               ) : null}
               {detail.run.job_type === "proposal_generation" ? (
                 <>
-                  {detail.outputs.length === 0 ? <EmptyState message="No recommendations for the selected run." /> : null}
+                  {detail.outputs.length === 0 ? <EmptyState message="No legacy recommendation outputs for the selected run. Review recommendation plans and outcomes instead." /> : null}
                   <div className="stack-page">
                     {detail.outputs.map((output) => {
                       const item = output.recommendation;

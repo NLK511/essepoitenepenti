@@ -5,7 +5,17 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import JobType, StrategyHorizon
 from trade_proposer_app.domain.models import Job
-from trade_proposer_app.persistence.models import JobRecord, RecommendationRecord, RunRecord, WatchlistRecord
+from trade_proposer_app.persistence.models import (
+    IndustryContextSnapshotRecord,
+    JobRecord,
+    MacroContextSnapshotRecord,
+    RecommendationOutcomeRecord,
+    RecommendationPlanRecord,
+    RecommendationRecord,
+    RunRecord,
+    TickerSignalSnapshotRecord,
+    WatchlistRecord,
+)
 
 
 SYSTEM_JOB_PREFIX = "__system__:"
@@ -112,6 +122,19 @@ class JobRepository:
             ).all()
         )
         if run_ids:
+            plan_ids = list(
+                self.session.scalars(
+                    select(RecommendationPlanRecord.id).where(RecommendationPlanRecord.run_id.in_(run_ids))
+                ).all()
+            )
+            if plan_ids:
+                self.session.execute(
+                    delete(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.recommendation_plan_id.in_(plan_ids))
+                )
+                self.session.execute(delete(RecommendationPlanRecord).where(RecommendationPlanRecord.id.in_(plan_ids)))
+            self.session.execute(delete(TickerSignalSnapshotRecord).where(TickerSignalSnapshotRecord.run_id.in_(run_ids)))
+            self.session.execute(delete(MacroContextSnapshotRecord).where(MacroContextSnapshotRecord.run_id.in_(run_ids)))
+            self.session.execute(delete(IndustryContextSnapshotRecord).where(IndustryContextSnapshotRecord.run_id.in_(run_ids)))
             self.session.execute(delete(RecommendationRecord).where(RecommendationRecord.run_id.in_(run_ids)))
             self.session.execute(delete(RunRecord).where(RunRecord.id.in_(run_ids)))
 

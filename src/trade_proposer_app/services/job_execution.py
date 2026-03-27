@@ -165,14 +165,6 @@ class JobExecutionService:
 
         persistence_started = perf_counter()
         stored: list[Recommendation] = []
-        for output in generated:
-            stored.append(
-                self.runs.add_recommendation(
-                    run.id or 0,
-                    output.recommendation,
-                    output.diagnostics,
-                )
-            )
         timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
 
         final_status = RunStatus.COMPLETED_WITH_WARNINGS.value if warnings_found else RunStatus.COMPLETED.value

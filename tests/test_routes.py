@@ -120,27 +120,26 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     "ticker_generation": [{"ticker": "AAPL", "duration_seconds": 0.03}],
                 },
             )
-            runs.add_recommendation(
-                run.id or 0,
-                Recommendation(
+            RecommendationPlanRepository(session).create_plan(
+                RecommendationPlan(
                     ticker="AAPL",
-                    direction=RecommendationDirection.LONG,
-                    confidence=81.0,
-                    entry_price=101.0,
+                    horizon="1w",
+                    action="long",
+                    confidence_percent=81.0,
+                    entry_price_low=101.0,
+                    entry_price_high=102.0,
                     stop_loss=97.0,
                     take_profit=111.0,
-                    indicator_summary="Sentiment Bullish · Above SMA200 · RSI 58.0",
-                    state=RecommendationState.PENDING,
-                ),
-                RunDiagnostics(
+                    holding_period_days=5,
+                    risk_reward_ratio=1.8,
+                    thesis_summary="Sentiment Bullish · Above SMA200 · RSI 58.0",
+                    rationale_summary="Seeded run detail plan",
                     warnings=["summary timeout", "feed timeout"],
-                    provider_errors=["feed timeout"],
-                    problems=["summary timeout"],
-                    news_feed_errors=["feed timeout"],
-                    summary_error="summary timeout",
-                    raw_output="raw output",
-                    analysis_json='{"problems": ["summary timeout"]}',
-                ),
+                    signal_breakdown={"setup_family": "continuation"},
+                    evidence_summary={"provider_errors": ["feed timeout"]},
+                    run_id=run.id,
+                    job_id=job.id,
+                )
             )
             return run.id or 0
         finally:
@@ -808,20 +807,21 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(dashboard.status_code, 200)
         dashboard_payload = dashboard.json()
         self.assertEqual(len(dashboard_payload["latest_runs"]), 1)
-        self.assertEqual(dashboard_payload["recommendation_plans"], [])
+        self.assertEqual(len(dashboard_payload["recommendation_plans"]), 1)
 
         self.assertEqual(history.status_code, 404)
 
         self.assertEqual(run_detail.status_code, 200)
         detail_payload = run_detail.json()
         self.assertEqual(detail_payload["run"]["id"], run_id)
-        self.assertEqual(detail_payload["outputs"][0]["diagnostics"]["provider_errors"], ["feed timeout"])
-        self.assertEqual(detail_payload["outputs"][0]["recommendation"]["state"], "PENDING")
+        self.assertEqual(detail_payload["outputs"], [])
+        self.assertEqual(detail_payload["recommendation_plans"][0]["ticker"], "AAPL")
+        self.assertEqual(detail_payload["recommendation_plans"][0]["warnings"], ["summary timeout", "feed timeout"])
         self.assertIn("ticker_generation", detail_payload["run"]["timing_json"])
         self.assertEqual(detail_payload["macro_context_snapshots"], [])
         self.assertEqual(detail_payload["industry_context_snapshots"], [])
         self.assertEqual(detail_payload["ticker_signal_snapshots"], [])
-        self.assertEqual(detail_payload["recommendation_plans"], [])
+        self.assertEqual(len(detail_payload["recommendation_plans"]), 1)
 
     async def test_delete_run_via_api(self) -> None:
         run_id = self.seed_run_with_diagnostics()
@@ -856,13 +856,11 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("queued or running", response.text)
 
     async def test_legacy_recommendation_evaluation_endpoints_are_retired(self) -> None:
-        run_id = self.seed_run_with_diagnostics()
+        self.seed_run_with_diagnostics()
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            detail = await client.get(f"/api/runs/{run_id}")
-            recommendation_id = detail.json()["outputs"][0]["recommendation"]["id"]
             global_response = await client.post("/api/recommendations/evaluate")
-            scoped_response = await client.post(f"/api/recommendations/{recommendation_id}/evaluate")
+            scoped_response = await client.post("/api/recommendations/1/evaluate")
 
         self.assertIn(global_response.status_code, {404, 405})
         self.assertIn(scoped_response.status_code, {404, 405})
@@ -875,23 +873,30 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             jobs = JobRepository(session)
             runs = RunRepository(session)
 
+            plan_repository = RecommendationPlanRepository(session)
+
             high_job = jobs.create("High Confidence", ["AAPL"], None)
             high_run = runs.enqueue(high_job.id or 0)
             claimed_high = runs.claim_next_queued_run()
             assert claimed_high is not None
             runs.update_status(high_run.id or 0, "completed")
-            runs.add_recommendation(
-                high_run.id or 0,
-                Recommendation(
+            plan_repository.create_plan(
+                RecommendationPlan(
                     ticker="AAPL",
-                    direction=RecommendationDirection.LONG,
-                    confidence=81.0,
-                    entry_price=101.0,
+                    horizon="1w",
+                    action="long",
+                    confidence_percent=81.0,
+                    entry_price_low=101.0,
+                    entry_price_high=102.0,
                     stop_loss=97.0,
                     take_profit=111.0,
-                    indicator_summary="Above SMA200 · RSI 58.0",
-                ),
-                RunDiagnostics(),
+                    holding_period_days=5,
+                    risk_reward_ratio=1.8,
+                    thesis_summary="High-confidence seeded plan",
+                    rationale_summary="Dashboard filter test",
+                    run_id=high_run.id,
+                    job_id=high_job.id,
+                )
             )
 
             low_job = jobs.create("Low Confidence", ["MSFT"], None)
@@ -899,18 +904,23 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             claimed_low = runs.claim_next_queued_run()
             assert claimed_low is not None
             runs.update_status(low_run.id or 0, "completed")
-            runs.add_recommendation(
-                low_run.id or 0,
-                Recommendation(
+            plan_repository.create_plan(
+                RecommendationPlan(
                     ticker="MSFT",
-                    direction=RecommendationDirection.LONG,
-                    confidence=62.0,
-                    entry_price=201.0,
+                    horizon="1w",
+                    action="long",
+                    confidence_percent=62.0,
+                    entry_price_low=201.0,
+                    entry_price_high=202.0,
                     stop_loss=197.0,
                     take_profit=211.0,
-                    indicator_summary="Above SMA200 · RSI 51.0",
-                ),
-                RunDiagnostics(),
+                    holding_period_days=5,
+                    risk_reward_ratio=1.8,
+                    thesis_summary="Lower-confidence seeded plan",
+                    rationale_summary="Dashboard filter test",
+                    run_id=low_run.id,
+                    job_id=low_job.id,
+                )
             )
         finally:
             session.close()
@@ -923,7 +933,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         payload = dashboard.json()
         self.assertEqual(len(payload["latest_runs"]), 1)
         self.assertEqual(payload["latest_runs"][0]["id"], high_run.id)
-        self.assertEqual(payload["recommendation_plans"], [])
+        self.assertEqual(len(payload["recommendation_plans"]), 2)
 
     async def test_ticker_api_aggregates_plan_history_and_prototype_trade_log(self) -> None:
         self.seed_run_with_diagnostics()
@@ -936,10 +946,10 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["ticker"], "AAPL")
-        self.assertEqual(payload["performance"]["app_plan_count"], 1)
-        self.assertEqual(payload["performance"]["actionable_plan_count"], 1)
+        self.assertEqual(payload["performance"]["app_plan_count"], 2)
+        self.assertEqual(payload["performance"]["actionable_plan_count"], 2)
         self.assertEqual(payload["performance"]["win_plan_count"], 1)
-        self.assertEqual(payload["performance"]["open_plan_count"], 0)
+        self.assertEqual(payload["performance"]["open_plan_count"], 1)
         self.assertEqual(payload["performance"]["prototype_trade_count"], 3)
         self.assertEqual(payload["performance"]["resolved_trade_count"], 2)
         self.assertEqual(payload["performance"]["win_count"], 1)
@@ -947,7 +957,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["performance"]["pending_trade_count"], 1)
         self.assertEqual(payload["performance"]["win_rate_percent"], 50.0)
         self.assertTrue(payload["performance"]["prototype_trade_log_available"])
-        self.assertEqual(len(payload["recommendation_plans"]), 1)
+        self.assertEqual(len(payload["recommendation_plans"]), 2)
         self.assertEqual(payload["recommendation_plans"][0]["latest_outcome"]["outcome"], "win")
         self.assertEqual(len(payload["prototype_trades"]), 3)
         self.assertEqual(payload["prototype_trades"][0]["status"], "PENDING")
@@ -1101,7 +1111,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(detail_payload["macro_context_snapshots"]), 1)
         self.assertEqual(len(detail_payload["industry_context_snapshots"]), 1)
         self.assertEqual(len(detail_payload["ticker_signal_snapshots"]), 1)
-        self.assertEqual(len(detail_payload["recommendation_plans"]), 1)
+        self.assertEqual(len(detail_payload["recommendation_plans"]), 2)
         self.assertEqual(detail_payload["ticker_signal_snapshots"][0]["diagnostics"]["mode"], "deep_analysis")
         self.assertEqual(detail_payload["recommendation_plans"][0]["action"], "long")
         self.assertEqual(detail_payload["recommendation_plans"][0]["latest_outcome"]["outcome"], "win")
@@ -1112,7 +1122,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(macro.json()), 1)
         self.assertEqual(len(industry.json()), 1)
         self.assertEqual(len(ticker_signals.json()), 1)
-        self.assertEqual(len(plans.json()), 1)
+        self.assertEqual(len(plans.json()), 2)
 
     async def test_recommendation_outcome_routes_and_plan_evaluation_queue_runs(self) -> None:
         self.seed_context_and_recommendation_plan_data()
