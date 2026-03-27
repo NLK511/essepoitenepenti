@@ -179,11 +179,11 @@ function OptimizationResultView({ summary, artifact, rawSummary, rawArtifact }: 
   return (
     <div className="stack-page">
       <Card>
-        <SectionTitle kicker="Optimization summary" title="Outcome" subtitle="Optimization workflows update prototype weights and persist before/after fingerprint metadata for audit and rollback." />
+        <SectionTitle kicker="Optimization summary" title="Outcome" subtitle="Optimization workflows update weights using resolved recommendation-plan outcomes and persist before/after fingerprint metadata for audit and rollback." />
         <div className="summary-grid">
           <div className="summary-item"><span className="summary-label">Status</span><span className="summary-value">{String(summary?.status ?? "—")}</span></div>
-          <div className="summary-item"><span className="summary-label">Resolved trades</span><span className="summary-value">{String(summary?.resolved_trade_count ?? "—")}</span></div>
-          <div className="summary-item"><span className="summary-label">Minimum required</span><span className="summary-value">{String(summary?.minimum_resolved_trades ?? "—")}</span></div>
+          <div className="summary-item"><span className="summary-label">Resolved plan outcomes</span><span className="summary-value">{String(summary?.resolved_recommendation_plan_outcomes ?? summary?.resolved_trade_count ?? "—")}</span></div>
+          <div className="summary-item"><span className="summary-label">Minimum required</span><span className="summary-value">{String(summary?.minimum_resolved_recommendation_plan_outcomes ?? summary?.minimum_resolved_trades ?? "—")}</span></div>
           <div className="summary-item"><span className="summary-label">Weights changed</span><Badge tone={weightsChanged === true ? "ok" : "warning"}>{weightsChanged === true ? "yes" : weightsChanged === false ? "no" : "—"}</Badge></div>
           <div className="summary-item"><span className="summary-label">Rollback available</span><Badge tone={rollbackAvailable === true ? "ok" : "neutral"}>{rollbackAvailable === true ? "yes" : rollbackAvailable === false ? "no" : "—"}</Badge></div>
           <div className="summary-item"><span className="summary-label">Weights path</span><span className="summary-value">{String(artifact?.weights_path ?? "—")}</span></div>

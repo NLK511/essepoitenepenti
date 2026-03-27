@@ -215,10 +215,10 @@ export function SettingsPage() {
             </Card>
 
             <Card>
-              <SectionTitle kicker="Optimization guardrails" title="Weight optimization safety controls" subtitle="These settings affect scheduled and manual optimization runs. Each optimization now creates a rollback-capable backup of weights.json before the prototype script mutates it." />
+              <SectionTitle kicker="Optimization guardrails" title="Weight optimization safety controls" subtitle="These settings affect scheduled and manual optimization runs. Each optimization now creates a rollback-capable backup of weights.json before the app mutates it using resolved recommendation-plan outcomes." />
               <form className="stack-form" onSubmit={saveOptimizationSettings}>
                 <label className="form-field">
-                  <span>Minimum resolved trades</span>
+                  <span>Minimum resolved plan outcomes</span>
                   <input name="minimum_resolved_trades" defaultValue={String(data.optimization.minimum_resolved_trades)} />
                 </label>
                 <div className="helper-text">Current weights file: {data.optimization.weights_path}</div>
