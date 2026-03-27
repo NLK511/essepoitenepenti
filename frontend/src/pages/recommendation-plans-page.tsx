@@ -217,35 +217,72 @@ export function RecommendationPlansPage() {
         />
         {!baselines && !error ? <LoadingState message="Loading baseline comparisons…" /> : null}
         {baselines ? (
-          <div className="table-wrap top-gap-small">
-            <table>
-              <thead>
-                <tr>
-                  <th>Baseline</th>
-                  <th>Trade plans</th>
-                  <th>Resolved</th>
-                  <th>Win rate</th>
-                  <th>Avg 5d</th>
-                  <th>Avg confidence</th>
-                </tr>
-              </thead>
-              <tbody>
-                {baselines.comparisons.map((item) => (
-                  <tr key={item.key}>
-                    <td>
-                      <div>{item.label}</div>
-                      {item.description ? <div className="helper-text top-gap-small">{item.description}</div> : null}
-                    </td>
-                    <td>{item.trade_plan_count}</td>
-                    <td>{item.resolved_trade_count}</td>
-                    <td>{item.win_rate_percent ?? "—"}%</td>
-                    <td>{item.average_return_5d ?? "—"}%</td>
-                    <td>{item.average_confidence_percent ?? "—"}%</td>
+          <>
+            <div className="table-wrap top-gap-small">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Baseline</th>
+                    <th>Trade plans</th>
+                    <th>Resolved</th>
+                    <th>Win rate</th>
+                    <th>Avg 5d</th>
+                    <th>Avg confidence</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {baselines.comparisons.map((item) => (
+                    <tr key={item.key}>
+                      <td>
+                        <div>{item.label}</div>
+                        {item.description ? <div className="helper-text top-gap-small">{item.description}</div> : null}
+                      </td>
+                      <td>{item.trade_plan_count}</td>
+                      <td>{item.resolved_trade_count}</td>
+                      <td>{item.win_rate_percent ?? "—"}%</td>
+                      <td>{item.average_return_5d ?? "—"}%</td>
+                      <td>{item.average_confidence_percent ?? "—"}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <SectionTitle
+              title="Setup-family cohorts"
+              subtitle="Directly compare breakout, continuation, mean-reversion, breakdown, catalyst, and macro cohorts without relying only on shared calibration slices."
+            />
+            <div className="table-wrap top-gap-small">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Family cohort</th>
+                    <th>Trade plans</th>
+                    <th>Open</th>
+                    <th>Resolved</th>
+                    <th>Win rate</th>
+                    <th>Avg 5d</th>
+                    <th>Avg confidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {baselines.family_cohorts.map((item) => (
+                    <tr key={item.key}>
+                      <td>
+                        <div>{item.label}</div>
+                        {item.description ? <div className="helper-text top-gap-small">{item.description}</div> : null}
+                      </td>
+                      <td>{item.trade_plan_count}</td>
+                      <td>{item.open_trade_count}</td>
+                      <td>{item.resolved_trade_count}</td>
+                      <td>{item.win_rate_percent ?? "—"}%</td>
+                      <td>{item.average_return_5d ?? "—"}%</td>
+                      <td>{item.average_confidence_percent ?? "—"}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : null}
       </Card>
 

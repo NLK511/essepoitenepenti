@@ -363,6 +363,7 @@ export interface RecommendationBaselineSummary {
   total_plans_reviewed: number;
   total_trade_plans_reviewed: number;
   comparisons: RecommendationBaselineComparison[];
+  family_cohorts: RecommendationBaselineComparison[];
 }
 
 export interface RunDetailResponse {

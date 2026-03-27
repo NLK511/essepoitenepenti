@@ -1202,6 +1202,10 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(baseline_map["actual_actionable"]["resolved_trade_count"], 2)
         self.assertEqual(baseline_map["actual_actionable"]["win_rate_percent"], 50.0)
         self.assertEqual(baseline_map["momentum_setup_lane"]["resolved_trade_count"], 2)
+        family_baseline_map = {item["key"]: item for item in baselines.json()["family_cohorts"]}
+        self.assertEqual(family_baseline_map["family__continuation"]["win_count"], 1)
+        self.assertEqual(family_baseline_map["family__breakout"]["loss_count"], 1)
+        self.assertEqual(family_baseline_map["family__mean_reversion"]["trade_plan_count"], 0)
         self.assertEqual(queued.status_code, 200)
         self.assertEqual(scoped.status_code, 200)
         self.assertEqual(queued.json()["job_type"], JobType.RECOMMENDATION_EVALUATION.value)

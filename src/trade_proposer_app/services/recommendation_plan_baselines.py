@@ -33,10 +33,13 @@ class RecommendationPlanBaselineService:
         plans = self.plans.list_plans(ticker=ticker, run_id=run_id, limit=limit)
         comparisons = [self._build_comparison(definition, plans) for definition in self._definitions()]
         comparisons.sort(key=lambda item: (item.resolved_trade_count, item.trade_plan_count, item.win_count), reverse=True)
+        family_cohorts = [self._build_comparison(definition, plans) for definition in self._family_definitions()]
+        family_cohorts.sort(key=lambda item: (item.resolved_trade_count, item.trade_plan_count, item.win_count), reverse=True)
         return RecommendationBaselineSummary(
             total_plans_reviewed=len(plans),
             total_trade_plans_reviewed=sum(1 for plan in plans if self._is_trade_plan(plan)),
             comparisons=comparisons,
+            family_cohorts=family_cohorts,
         )
 
     def _build_comparison(
@@ -111,6 +114,35 @@ class RecommendationPlanBaselineService:
                 selector=lambda plan: RecommendationPlanBaselineService._is_trade_plan(plan)
                 and RecommendationPlanBaselineService._setup_family(plan) in {"catalyst_follow_through", "macro_beneficiary_loser"},
             ),
+        ]
+
+    @staticmethod
+    def _family_definitions() -> list[_BaselineDefinition]:
+        families = [
+            ("breakout", "Breakout cohort", "Trade plans classified as breakout setups."),
+            ("continuation", "Continuation cohort", "Trade plans classified as continuation setups."),
+            ("mean_reversion", "Mean-reversion cohort", "Trade plans classified as mean-reversion setups."),
+            ("breakdown", "Breakdown cohort", "Trade plans classified as breakdown setups."),
+            (
+                "catalyst_follow_through",
+                "Catalyst follow-through cohort",
+                "Trade plans classified as catalyst-follow-through setups.",
+            ),
+            (
+                "macro_beneficiary_loser",
+                "Macro beneficiary / loser cohort",
+                "Trade plans classified as macro-beneficiary / loser setups.",
+            ),
+        ]
+        return [
+            _BaselineDefinition(
+                key=f"family__{family}",
+                label=label,
+                description=description,
+                selector=lambda plan, family=family: RecommendationPlanBaselineService._is_trade_plan(plan)
+                and RecommendationPlanBaselineService._setup_family(plan) == family,
+            )
+            for family, label, description in families
         ]
 
     @staticmethod

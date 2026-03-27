@@ -113,7 +113,7 @@ Defined implementation phases from here:
 2. **Phase 4B — setup-family-native recommendation behavior**
    - in progress: strengthen family-specific thesis, invalidation, target, stop, timing expectation, and `no_action` generation
    - in progress: surface family-specific execution metadata and evaluation focus directly in operator review views
-   - next: add deeper family-specific evaluation cohorts/reporting beyond the current shared calibration slices
+   - in progress: add deeper family-specific evaluation cohorts/reporting beyond the current shared calibration slices
    - continue reducing generic plan text that hides substantive setup differences
 3. **Phase 4C — richer context and transmission engine**
    - improve macro/industry event clustering and deduplication

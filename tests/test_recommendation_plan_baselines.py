@@ -115,6 +115,13 @@ class RecommendationPlanBaselineServiceTests(unittest.TestCase):
         self.assertEqual(comparison_map["momentum_setup_lane"].resolved_trade_count, 2)
         self.assertEqual(comparison_map["event_setup_lane"].trade_plan_count, 1)
         self.assertEqual(comparison_map["event_setup_lane"].open_trade_count, 1)
+        family_map = {item.key: item for item in summary.family_cohorts}
+        self.assertEqual(family_map["family__continuation"].resolved_trade_count, 1)
+        self.assertEqual(family_map["family__continuation"].win_rate_percent, 100.0)
+        self.assertEqual(family_map["family__breakdown"].resolved_trade_count, 1)
+        self.assertEqual(family_map["family__breakdown"].win_rate_percent, 0.0)
+        self.assertEqual(family_map["family__mean_reversion"].trade_plan_count, 0)
+        self.assertEqual(family_map["family__catalyst_follow_through"].open_trade_count, 1)
 
         session.close()
 

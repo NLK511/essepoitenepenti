@@ -10,6 +10,7 @@ The goal is to make setup families drive:
 - evaluation expectations
 - calibration review
 - operator explanation
+- operator-visible cohort review
 
 ## Core rule
 

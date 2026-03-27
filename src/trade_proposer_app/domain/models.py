@@ -437,6 +437,7 @@ class RecommendationBaselineSummary(BaseModel):
     total_plans_reviewed: int = 0
     total_trade_plans_reviewed: int = 0
     comparisons: list[RecommendationBaselineComparison] = Field(default_factory=list)
+    family_cohorts: list[RecommendationBaselineComparison] = Field(default_factory=list)
 
 
 class ProviderCredential(BaseModel):
