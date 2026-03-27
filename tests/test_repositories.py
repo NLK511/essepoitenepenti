@@ -610,8 +610,13 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(plan_map["AAPL"].signal_breakdown["confidence_bucket"], "65_to_79")
         self.assertIn("confidence_components", plan_map["AAPL"].signal_breakdown)
         self.assertEqual(plan_map["AAPL"].evidence_summary["entry_style"], "break_or_retest")
+        self.assertEqual(plan_map["AAPL"].evidence_summary["stop_style"], "below_break_level_with_buffer")
+        self.assertEqual(plan_map["AAPL"].evidence_summary["target_style"], "measured_move_or_next_resistance")
+        self.assertEqual(plan_map["AAPL"].evidence_summary["timing_expectation"], "1w_plus")
+        self.assertIn("follow_through_speed", plan_map["AAPL"].evidence_summary["evaluation_focus"])
         self.assertIn("breakout", plan_map["AAPL"].evidence_summary["invalidation_summary"])
         self.assertEqual(plan_map["TSLA"].evidence_summary["action_reason"], "not_shortlisted")
+        self.assertIn("did not clear shortlist competition", plan_map["TSLA"].evidence_summary["action_reason_detail"])
         diagnostics_map = {item.ticker: item.diagnostics for item in ticker_signals}
         source_breakdown_map = {item.ticker: item.source_breakdown for item in ticker_signals}
         self.assertEqual(diagnostics_map["AAPL"]["mode"], "deep_analysis")

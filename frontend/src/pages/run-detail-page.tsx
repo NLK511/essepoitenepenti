@@ -485,7 +485,14 @@ export function RunDetailPage() {
                               : "unknown";
                             const setupFamily = typeof signalBreakdown?.setup_family === "string" ? signalBreakdown.setup_family : null;
                             const actionReason = typeof evidenceSummary?.action_reason === "string" ? evidenceSummary.action_reason : null;
+                            const actionReasonDetail = typeof evidenceSummary?.action_reason_detail === "string" ? evidenceSummary.action_reason_detail : null;
                             const entryStyle = typeof evidenceSummary?.entry_style === "string" ? evidenceSummary.entry_style : null;
+                            const stopStyle = typeof evidenceSummary?.stop_style === "string" ? evidenceSummary.stop_style : null;
+                            const targetStyle = typeof evidenceSummary?.target_style === "string" ? evidenceSummary.target_style : null;
+                            const timingExpectation = typeof evidenceSummary?.timing_expectation === "string" ? evidenceSummary.timing_expectation : null;
+                            const evaluationFocus = Array.isArray(evidenceSummary?.evaluation_focus)
+                              ? evidenceSummary.evaluation_focus.filter((value): value is string => typeof value === "string")
+                              : [];
                             const invalidationSummary = typeof evidenceSummary?.invalidation_summary === "string" ? evidenceSummary.invalidation_summary : null;
                             const effectiveThreshold = typeof calibrationReview?.effective_confidence_threshold === "number"
                               ? calibrationReview.effective_confidence_threshold
@@ -503,8 +510,11 @@ export function RunDetailPage() {
                                     <Link to={`/tickers/${plan.ticker}`} className="badge badge-info badge-link">{plan.ticker}</Link>
                                     <div className="helper-text top-gap-small">{plan.thesis_summary || plan.rationale_summary || "No thesis stored."}</div>
                                     <div className="helper-text">setup {setupFamily ?? "—"} · reason {actionReason ?? "—"}</div>
-                                    <div className="helper-text">entry style {entryStyle ?? "—"}</div>
+                                    <div className="helper-text">{actionReasonDetail ?? "No family-specific action note stored."}</div>
+                                    <div className="helper-text">entry style {entryStyle ?? "—"} · timing {timingExpectation ?? "—"}</div>
+                                    <div className="helper-text">stop style {stopStyle ?? "—"} · target style {targetStyle ?? "—"}</div>
                                     <div className="helper-text">invalidation {invalidationSummary ?? "—"}</div>
+                                    <div className="helper-text">review focus {evaluationFocus.length > 0 ? evaluationFocus.join(" · ") : "—"}</div>
                                   </div>
                                 </td>
                                 <td><Badge tone={plan.action === "long" ? "ok" : plan.action === "short" ? "warning" : "neutral"}>{plan.action}</Badge></td>

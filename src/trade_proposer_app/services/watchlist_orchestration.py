@@ -984,10 +984,15 @@ class WatchlistOrchestrationService:
             "summary": summary_text,
             "setup_family": setup_family,
             "action_reason": action_reason,
+            "action_reason_detail": self._action_reason_detail(setup_family, action_reason, transmission_summary=transmission_summary),
             "confidence_components": confidence_components,
             "calibration_review": calibration_review or {},
             "transmission_summary": transmission_summary or {},
             "entry_style": self._entry_style(setup_family),
+            "stop_style": self._stop_style(setup_family),
+            "target_style": self._target_style(setup_family),
+            "timing_expectation": self._timing_expectation(setup_family, transmission_summary=transmission_summary),
+            "evaluation_focus": self._evaluation_focus(setup_family),
             "invalidation_summary": self._invalidation_summary(setup_family, transmission_summary=transmission_summary),
         }
 
@@ -1013,6 +1018,16 @@ class WatchlistOrchestrationService:
             return f"Detected a {setup_label} candidate, but the watchlist policy does not permit the required short expression."
         if action_reason == "direction_not_actionable":
             return f"Detected a {setup_label} structure, but direction remained too ambiguous for a trade plan."
+        if action_reason == "not_shortlisted":
+            family_text = {
+                "breakout": "the breakout was not clean enough relative to stronger shortlist candidates",
+                "breakdown": "the breakdown pressure was weaker than the selected names",
+                "continuation": "trend continuation quality lagged stronger shortlist names",
+                "mean_reversion": "the reversal setup lacked enough exhaustion confirmation",
+                "catalyst_follow_through": "the catalyst lane found stronger event continuation candidates",
+                "macro_beneficiary_loser": "macro transmission existed but did not rank highly enough for escalation",
+            }.get(setup_family, "it did not rank highly enough for escalation")
+            return f"Detected a {setup_label} structure, but {family_text}."
         if action_reason == "context_transmission_headwind":
             driver = self._primary_driver_label(transmission_summary)
             return f"Detected a {setup_label} structure, but macro and industry transmission remained a headwind to the proposed trade direction{f' ({driver})' if driver else ''}."
@@ -1028,17 +1043,19 @@ class WatchlistOrchestrationService:
         direction = "bullish" if action == "long" else "bearish"
         setup_label = setup_family.replace("_", " ") if setup_family else "uncategorized"
         driver = self._primary_driver_label(transmission_summary)
+        entry_style = self._entry_style(setup_family).replace("_", " ")
+        timing = self._timing_expectation(setup_family, transmission_summary=transmission_summary)
         family_text = {
-            "continuation": f"Actionable {direction} continuation setup with trend structure still intact",
-            "breakout": f"Actionable {direction} breakout setup with follow-through conditions in place",
+            "continuation": f"Actionable {direction} continuation setup with trend structure still intact and a pullback-or-reclaim style trigger",
+            "breakout": f"Actionable {direction} breakout setup with follow-through conditions in place and a break-or-retest trigger",
             "breakdown": f"Actionable {direction} breakdown setup with support failure or failed retest pressure visible",
-            "mean_reversion": f"Actionable {direction} mean reversion setup with a defined reversal window",
+            "mean_reversion": f"Actionable {direction} mean reversion setup with a defined reversal window and exhaustion-sensitive timing",
             "catalyst_follow_through": f"Actionable {direction} catalyst follow-through setup while event pressure remains active",
             "macro_beneficiary_loser": f"Actionable {direction} macro beneficiary / loser setup tied to broader context transmission",
         }.get(setup_family, f"Actionable {direction} {setup_label} setup identified")
         if driver:
-            return f"{family_text}; primary driver is {driver}."
-        return f"{family_text}."
+            return f"{family_text}; entry style is {entry_style}, expected window is {timing}, and the primary driver is {driver}."
+        return f"{family_text}; entry style is {entry_style} and expected window is {timing}."
 
     @staticmethod
     def _entry_style(setup_family: str) -> str:
@@ -1050,6 +1067,85 @@ class WatchlistOrchestrationService:
             "catalyst_follow_through": "post_catalyst_continuation",
             "macro_beneficiary_loser": "context_aligned_pullback",
         }.get(setup_family, "standard_entry")
+
+    @staticmethod
+    def _stop_style(setup_family: str) -> str:
+        return {
+            "continuation": "below_pullback_structure",
+            "breakout": "below_break_level_with_buffer",
+            "breakdown": "above_failed_retest_level",
+            "mean_reversion": "beyond_exhaustion_extreme",
+            "catalyst_follow_through": "beyond_catalyst_impulse_level",
+            "macro_beneficiary_loser": "below_or_above_exposure_invalidation",
+        }.get(setup_family, "generic_structure_stop")
+
+    @staticmethod
+    def _target_style(setup_family: str) -> str:
+        return {
+            "continuation": "trend_extension_or_next_level",
+            "breakout": "measured_move_or_next_resistance",
+            "breakdown": "measured_move_or_next_support",
+            "mean_reversion": "range_midpoint_or_moving_average_retest",
+            "catalyst_follow_through": "event_follow_through_extension",
+            "macro_beneficiary_loser": "context_continuation_extension",
+        }.get(setup_family, "generic_target")
+
+    def _timing_expectation(
+        self,
+        setup_family: str,
+        *,
+        transmission_summary: dict[str, object] | None = None,
+    ) -> str:
+        explicit_window = None
+        if isinstance(transmission_summary, dict):
+            raw_window = transmission_summary.get("expected_transmission_window")
+            if isinstance(raw_window, str) and raw_window and raw_window != "unknown":
+                explicit_window = raw_window
+        family_default = {
+            "continuation": "2d_5d",
+            "breakout": "1d_3d",
+            "breakdown": "1d_3d",
+            "mean_reversion": "2d_5d",
+            "catalyst_follow_through": "1d_2d",
+            "macro_beneficiary_loser": "1w_plus",
+        }.get(setup_family, "unknown")
+        return explicit_window or family_default
+
+    @staticmethod
+    def _evaluation_focus(setup_family: str) -> list[str]:
+        return {
+            "continuation": ["trend_persistence", "pullback_hold_quality", "stall_rate"],
+            "breakout": ["follow_through_speed", "false_break_frequency", "retest_hold_quality"],
+            "breakdown": ["support_failure_persistence", "reclaim_risk", "downside_extension_quality"],
+            "mean_reversion": ["reversal_confirmation", "reversion_completion_rate", "trend_resumption_risk"],
+            "catalyst_follow_through": ["catalyst_decay_speed", "day1_vs_day5_follow_through", "confirmation_quality"],
+            "macro_beneficiary_loser": ["transmission_persistence", "context_regime_sensitivity", "sector_sympathy_quality"],
+        }.get(setup_family, ["execution_quality", "follow_through", "risk_control"])
+
+    def _action_reason_detail(
+        self,
+        setup_family: str,
+        action_reason: str,
+        *,
+        transmission_summary: dict[str, object] | None = None,
+    ) -> str:
+        driver = self._primary_driver_label(transmission_summary)
+        family_label = setup_family.replace("_", " ") if setup_family else "setup"
+        if action_reason == "actionable_setup":
+            return f"Promoted because the {family_label} structure met the current execution and confidence requirements."
+        if action_reason == "not_shortlisted":
+            return f"Observed a potential {family_label} structure, but it did not clear shortlist competition for deep analysis."
+        if action_reason in {"below_action_confidence_threshold", "below_calibrated_action_threshold"}:
+            return f"The {family_label} structure remained visible, but conviction and execution clarity were not strong enough to justify promotion."
+        if action_reason == "shorts_disabled":
+            return "The required short expression was blocked by watchlist policy."
+        if action_reason == "direction_not_actionable":
+            return f"The {family_label} structure did not resolve into a tradeable direction."
+        if action_reason == "deep_analysis_unavailable":
+            return f"Cheap scan detected a possible {family_label} case, but deep analysis did not complete cleanly enough to frame a trade plan."
+        if action_reason == "context_transmission_headwind":
+            return f"Broader context remained a headwind to the setup{f' via {driver}' if driver else ''}."
+        return f"The {family_label} setup was reviewed but did not earn promotion."
 
     def _invalidation_summary(
         self,

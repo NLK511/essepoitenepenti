@@ -277,7 +277,14 @@ export function RecommendationPlansPage() {
                   const calibrationReview = asRecord(signalBreakdown?.calibration_review) ?? asRecord(evidenceSummary?.calibration_review);
                   const setupFamily = typeof signalBreakdown?.setup_family === "string" ? signalBreakdown.setup_family : "—";
                   const actionReason = typeof evidenceSummary?.action_reason === "string" ? evidenceSummary.action_reason : "—";
+                  const actionReasonDetail = typeof evidenceSummary?.action_reason_detail === "string" ? evidenceSummary.action_reason_detail : "—";
                   const entryStyle = typeof evidenceSummary?.entry_style === "string" ? evidenceSummary.entry_style : "—";
+                  const stopStyle = typeof evidenceSummary?.stop_style === "string" ? evidenceSummary.stop_style : "—";
+                  const targetStyle = typeof evidenceSummary?.target_style === "string" ? evidenceSummary.target_style : "—";
+                  const timingExpectation = typeof evidenceSummary?.timing_expectation === "string" ? evidenceSummary.timing_expectation : "—";
+                  const evaluationFocus = Array.isArray(evidenceSummary?.evaluation_focus)
+                    ? evidenceSummary.evaluation_focus.filter((value): value is string => typeof value === "string")
+                    : [];
                   const invalidationSummary = typeof evidenceSummary?.invalidation_summary === "string" ? evidenceSummary.invalidation_summary : "—";
                   const transmissionBias = typeof transmissionSummary?.context_bias === "string" ? transmissionSummary.context_bias : "unknown";
                   const transmissionAlignment = typeof transmissionSummary?.alignment_percent === "number" ? transmissionSummary.alignment_percent : null;
@@ -316,6 +323,7 @@ export function RecommendationPlansPage() {
                       <td>
                         <Badge tone={actionTone(plan.action)}>{plan.action}</Badge>
                         <div className="helper-text top-gap-small">reason {actionReason}</div>
+                        <div className="helper-text">{actionReasonDetail}</div>
                       </td>
                       <td>
                         <div>{plan.confidence_percent.toFixed(1)}%</div>
@@ -328,9 +336,10 @@ export function RecommendationPlansPage() {
                       </td>
                       <td>
                         <div className="helper-text">entry {plan.entry_price_low ?? "—"}{plan.entry_price_high !== null && plan.entry_price_high !== plan.entry_price_low ? ` – ${plan.entry_price_high}` : ""}</div>
-                        <div className="helper-text">style {entryStyle}</div>
-                        <div className="helper-text">stop {plan.stop_loss ?? "—"}</div>
-                        <div className="helper-text">take {plan.take_profit ?? "—"}</div>
+                        <div className="helper-text">entry style {entryStyle}</div>
+                        <div className="helper-text">stop {plan.stop_loss ?? "—"} · {stopStyle}</div>
+                        <div className="helper-text">take {plan.take_profit ?? "—"} · {targetStyle}</div>
+                        <div className="helper-text">timing {timingExpectation}</div>
                       </td>
                       <td>
                         <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>
@@ -358,6 +367,7 @@ export function RecommendationPlansPage() {
                         <div>{plan.thesis_summary || "No thesis stored."}</div>
                         {plan.rationale_summary ? <div className="helper-text top-gap-small">{plan.rationale_summary}</div> : null}
                         <div className="helper-text top-gap-small">invalidation {invalidationSummary}</div>
+                        <div className="helper-text">review focus {evaluationFocus.length > 0 ? evaluationFocus.join(" · ") : "—"}</div>
                         {plan.id ? (
                           <div className="helper-text top-gap-small">
                             <button

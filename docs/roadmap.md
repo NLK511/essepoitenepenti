@@ -98,7 +98,7 @@ Next required work in this phase:
 - delete the remaining dormant legacy `Recommendation` persistence/models/helpers now that optimization and active operator flows are plan-outcome-native
 - use the new calibration summaries to drive actual confidence re-scaling and operator thresholds rather than only reporting grouped outcomes
 - continue maturing the redesign-native deep-analysis path from an internal native executor into a fuller ticker-signal / recommendation-engine layer with less dependence on legacy proposal payload shapes
-- harden setup-family-native plan behavior so thesis, invalidation, stop/target framing, and `no_action` reasoning differ materially by family
+- continue hardening setup-family-native plan behavior so thesis, invalidation, stop/target framing, timing expectation, evaluation focus, and `no_action` reasoning differ materially by family
 - deepen macro/industry context extraction beyond heuristic saliency ranking into stronger event clustering, persistence/escalation, and contradiction handling
 - decide whether sentiment snapshots become operator-facing compatibility artifacts, internal inputs, or candidates for retirement once context writers mature
 
@@ -111,9 +111,10 @@ Defined implementation phases from here:
    - next: decide when the old `recommendations` table and migration history are explicitly dropped or migrated away
    - continue updating API/UI/docs wording so recommendation-plan outcomes are the only optimization truth source
 2. **Phase 4B — setup-family-native recommendation behavior**
-   - strengthen family-specific thesis, invalidation, target, stop, and `no_action` generation
-   - add family-specific evaluation slices and operator review surfaces
-   - reduce generic plan text that hides substantive setup differences
+   - in progress: strengthen family-specific thesis, invalidation, target, stop, timing expectation, and `no_action` generation
+   - in progress: surface family-specific execution metadata and evaluation focus directly in operator review views
+   - next: add deeper family-specific evaluation cohorts/reporting beyond the current shared calibration slices
+   - continue reducing generic plan text that hides substantive setup differences
 3. **Phase 4C — richer context and transmission engine**
    - improve macro/industry event clustering and deduplication
    - track persistence vs escalation vs fade more explicitly
