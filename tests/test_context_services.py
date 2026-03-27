@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import MagicMock
 
-from trade_proposer_app.domain.models import NewsArticle, NewsBundle, SentimentSnapshot
+from trade_proposer_app.domain.models import IndustryContextSnapshot, MacroContextSnapshot, NewsArticle, NewsBundle, SentimentSnapshot
 from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.macro_context import MacroContextService
 
@@ -80,10 +80,71 @@ class ContextServiceTests(unittest.TestCase):
         self.assertNotIn("primary_news_evidence", context.missing_inputs)
         self.assertTrue(any(theme["key"] == "european_monetary_policy" for theme in context.active_themes))
         self.assertEqual(context.active_themes[0]["source_priority"], "official")
+        self.assertEqual(context.active_themes[0]["window_hint"], "1w_plus")
+        self.assertEqual(context.active_themes[0]["persistence_state"], "new")
         self.assertEqual(context.source_breakdown["primary_news_coverage_quality"], "high")
         self.assertIn("official:1", context.source_breakdown["primary_news_source_priorities"])
         self.assertIn("NewsAPI", context.source_breakdown["primary_news_providers"])
+        self.assertGreaterEqual(context.metadata["event_lifecycle_summary"]["new_event_count"], 1)
         self.assertTrue(news_service.fetch_topics_calls)
+
+    def test_macro_context_tracks_lifecycle_and_contradictions(self) -> None:
+        repository = MagicMock()
+        repository.get_latest_macro_context_snapshot.return_value = MacroContextSnapshot(
+            summary_text="Older macro state",
+            active_themes=[
+                {
+                    "key": "energy_oil",
+                    "label": "Oil and energy",
+                    "event_score": 0.9,
+                    "evidence_direction": "positive",
+                    "unique_evidence_count": 1,
+                }
+            ],
+        )
+        repository.create_macro_context_snapshot.side_effect = lambda context: context
+        news_bundle = NewsBundle(
+            ticker="Global Macro",
+            articles=[],
+            feeds_used=["NewsAPI"],
+        )
+        news_service = StubNewsService(
+            news_bundle,
+            {
+                "news_items": [
+                    {
+                        "title": "Oil spikes as conflict risk escalates",
+                        "summary": "Brent rises on geopolitical conflict and sanctions pressure",
+                        "publisher": "Reuters",
+                    },
+                    {
+                        "title": "Oil falls as traders expect de-escalation",
+                        "summary": "Crude retreats as de-escalation hopes improve",
+                        "publisher": "Reuters",
+                    },
+                ],
+                "coverage_insights": [],
+            },
+        )
+        snapshot = SentimentSnapshot(
+            id=8,
+            scope="macro",
+            subject_key="global_macro",
+            subject_label="Global Macro",
+            score=-0.1,
+            label="NEGATIVE",
+            signals_json=json.dumps({"social_items": []}),
+            diagnostics_json=json.dumps({"providers": ["nitter"]}),
+            source_breakdown_json=json.dumps({}),
+        )
+
+        context = MacroContextService(repository, news_service=news_service).create_from_sentiment_snapshot(snapshot)
+
+        energy = next(theme for theme in context.active_themes if theme["key"] == "energy_oil")
+        self.assertTrue(energy["contradiction_flag"])
+        self.assertIn(energy["persistence_state"], {"persistent", "escalating"})
+        self.assertIn("Oil and energy", context.metadata["event_lifecycle_summary"]["contradictory_event_labels"])
+        self.assertTrue(any("contradictory evidence" in warning for warning in context.warnings))
 
     def test_industry_context_uses_tracked_ticker_news_first(self) -> None:
         repository = MagicMock()
@@ -140,8 +201,10 @@ class ContextServiceTests(unittest.TestCase):
         self.assertIn("conference_cycle", context.linked_industry_themes)
         self.assertIn("semiconductor_theme", context.linked_industry_themes)
         self.assertEqual(context.active_drivers[0]["source_priority"], "trade")
+        self.assertIn(context.active_drivers[0]["window_hint"], {"1d", "2d_5d", "1w_plus"})
         self.assertEqual(context.source_breakdown["primary_news_coverage_quality"], "high")
         self.assertIn("trade:1", context.source_breakdown["primary_news_source_priorities"])
+        self.assertGreaterEqual(context.metadata["event_lifecycle_summary"]["new_event_count"], 1)
         self.assertEqual(news_service.fetch_many_calls, [["NVDA", "AMD"]])
 
 

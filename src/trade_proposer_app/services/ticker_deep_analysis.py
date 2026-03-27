@@ -19,6 +19,7 @@ from trade_proposer_app.services.proposals import (
     ProposalService,
     _sanitize_for_json,
 )
+from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
 class TickerDeepAnalysisError(Exception):
@@ -30,9 +31,11 @@ class TickerDeepAnalysisService:
         self,
         proposal_service: ProposalService,
         *,
+        taxonomy_service: TickerTaxonomyService | None = None,
         model_name: str = "ticker_deep_analysis_v2",
     ) -> None:
         self.proposal_service = proposal_service
+        self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
         self.model_name = model_name
 
     def analyze(self, ticker: str, *, horizon: StrategyHorizon | None = None) -> RunOutput:
@@ -46,6 +49,7 @@ class TickerDeepAnalysisService:
             enriched = self._enrich_history(history)
             context = self._build_context(enriched)
             context = self._apply_context_enrichment(context, normalized_ticker)
+            context = self._apply_taxonomy_profile(context, normalized_ticker)
             feature_vector = self._build_feature_vector(context)
             column_ranges = self._compute_column_ranges(enriched)
             normalized_vector = self._normalize_feature_vector(feature_vector, column_ranges)
@@ -130,6 +134,12 @@ class TickerDeepAnalysisService:
         apply_news_context = getattr(self.proposal_service, "_apply_news_context", None)
         if callable(apply_news_context):
             return apply_news_context(context, ticker)
+        return context
+
+    def _apply_taxonomy_profile(self, context: dict[str, Any], ticker: str) -> dict[str, Any]:
+        profile = context.get("ticker_profile") if isinstance(context.get("ticker_profile"), dict) else {}
+        merged = {**self.taxonomy_service.get_ticker_profile(ticker), **profile}
+        context["ticker_profile"] = merged
         return context
 
     def _enrich_history(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -527,9 +537,12 @@ class TickerDeepAnalysisService:
         macro_score = float(context.get("macro_sentiment_score", 0.0) or 0.0)
         industry_score = float(context.get("industry_sentiment_score", 0.0) or 0.0)
         ticker_score = float(context.get("ticker_sentiment_score", 0.0) or 0.0)
+        profile = context.get("ticker_profile") if isinstance(context.get("ticker_profile"), dict) else {}
+        macro_events = TickerDeepAnalysisService._context_events(context.get("macro_context_events"))
+        industry_events = TickerDeepAnalysisService._context_events(context.get("industry_context_events"))
         directional_multiplier = 1.0 if direction == RecommendationDirection.LONG else -1.0
-        signed_alignment = ((macro_score * 0.35) + (industry_score * 0.4) + (ticker_score * 0.25)) * directional_multiplier
-        alignment_percent = max(0.0, min(100.0, 50.0 + (signed_alignment * 50.0)))
+        score_alignment = ((macro_score * 0.35) + (industry_score * 0.4) + (ticker_score * 0.25)) * directional_multiplier
+        base_alignment_percent = max(0.0, min(100.0, 50.0 + (score_alignment * 50.0)))
         catalyst_intensity = max(
             0.0,
             min(
@@ -540,20 +553,38 @@ class TickerDeepAnalysisService:
                 ),
             ),
         )
+        macro_event_strength = TickerDeepAnalysisService._event_relevance_strength(
+            macro_events,
+            profile,
+            keywords=TickerDeepAnalysisService._profile_macro_keywords(profile),
+        )
+        industry_event_strength = TickerDeepAnalysisService._event_relevance_strength(
+            industry_events,
+            profile,
+            keywords=TickerDeepAnalysisService._profile_industry_keywords(profile),
+        )
+        contradiction_count = TickerDeepAnalysisService._context_contradiction_count(context, macro_events, industry_events)
+        freshness_bonus = TickerDeepAnalysisService._freshness_bonus(macro_events, industry_events)
+        contradiction_penalty = min(12.0, contradiction_count * 4.0)
+        alignment_percent = max(
+            0.0,
+            min(
+                100.0,
+                base_alignment_percent
+                + ((macro_event_strength * 0.4) + (industry_event_strength * 0.6)) * (0.1 if base_alignment_percent >= 50.0 else -0.1)
+                + freshness_bonus
+                - contradiction_penalty,
+            ),
+        )
         if alignment_percent >= 62.0:
             bias = "tailwind"
         elif alignment_percent <= 42.0:
             bias = "headwind"
         else:
             bias = "mixed"
-        tags: list[str] = []
-        if abs(macro_score) >= 0.25:
-            tags.append("macro_dominant")
-        if abs(industry_score) >= 0.25:
-            tags.append("industry_dominant")
-        if catalyst_intensity >= 65.0:
-            tags.append("catalyst_active")
         primary_drivers = TickerDeepAnalysisService._primary_transmission_drivers(
+            macro_events=macro_events,
+            industry_events=industry_events,
             macro_score=macro_score,
             industry_score=industry_score,
             ticker_score=ticker_score,
@@ -568,32 +599,171 @@ class TickerDeepAnalysisService:
             alignment_percent=alignment_percent,
             bias=bias,
             direction=direction,
+            contradiction_count=contradiction_count,
+            context=context,
         )
+        decay_state = TickerDeepAnalysisService._decay_state(catalyst_intensity, context, macro_events=macro_events, industry_events=industry_events)
         return {
             "macro_score": round(macro_score, 3),
             "industry_score": round(industry_score, 3),
             "ticker_score": round(ticker_score, 3),
+            "base_alignment_percent": round(base_alignment_percent, 1),
             "alignment_percent": round(alignment_percent, 1),
             "context_bias": bias,
             "catalyst_intensity_percent": round(catalyst_intensity, 1),
-            "transmission_tags": tags,
+            "context_strength_percent": round(max(0.0, min(100.0, (macro_event_strength * 45.0) + (industry_event_strength * 55.0))), 1),
+            "context_event_relevance_percent": round(max(0.0, min(100.0, (macro_event_strength * 100.0 + industry_event_strength * 100.0) / 2.0)), 1),
+            "contradiction_count": contradiction_count,
+            "transmission_tags": TickerDeepAnalysisService._transmission_tags(context, macro_score, industry_score, catalyst_intensity, macro_events, industry_events),
             "primary_drivers": primary_drivers,
-            "industry_exposure_channels": TickerDeepAnalysisService._industry_exposure_channels(macro_score, industry_score),
-            "ticker_exposure_channels": TickerDeepAnalysisService._ticker_exposure_channels(ticker_score, catalyst_intensity),
-            "expected_transmission_window": TickerDeepAnalysisService._expected_transmission_window(catalyst_intensity, macro_score, industry_score),
+            "industry_exposure_channels": TickerDeepAnalysisService._industry_exposure_channels(macro_score, industry_score, macro_events, industry_events, profile),
+            "ticker_exposure_channels": TickerDeepAnalysisService._ticker_exposure_channels(ticker_score, catalyst_intensity, profile, macro_events, industry_events),
+            "expected_transmission_window": TickerDeepAnalysisService._expected_transmission_window(catalyst_intensity, macro_score, industry_score, macro_events, industry_events),
             "conflict_flags": conflict_flags,
-            "decay_state": TickerDeepAnalysisService._decay_state(catalyst_intensity, context),
+            "decay_state": decay_state,
+            "macro_event_keys": [str(item.get("key", "")) for item in macro_events if str(item.get("key", "")).strip()][:5],
+            "industry_event_keys": [str(item.get("key", "")) for item in industry_events if str(item.get("key", "")).strip()][:5],
         }
+
+    @staticmethod
+    def _context_events(raw: object) -> list[dict[str, Any]]:
+        if not isinstance(raw, list):
+            return []
+        return [item for item in raw if isinstance(item, dict)]
+
+    @staticmethod
+    def _profile_macro_keywords(profile: dict[str, Any]) -> list[str]:
+        keywords = []
+        for key in ("macro_sensitivity", "themes", "industry_keywords"):
+            raw_values = profile.get(key)
+            if isinstance(raw_values, list):
+                for value in raw_values:
+                    text = str(value).strip().lower()
+                    if text:
+                        keywords.append(text)
+        return list(dict.fromkeys(keywords))
+
+    @staticmethod
+    def _profile_industry_keywords(profile: dict[str, Any]) -> list[str]:
+        keywords = []
+        for key in ("industry", "sector", "themes", "industry_keywords"):
+            raw_values = profile.get(key)
+            if isinstance(raw_values, list):
+                for value in raw_values:
+                    text = str(value).strip().lower()
+                    if text:
+                        keywords.append(text)
+            else:
+                text = str(raw_values or "").strip().lower()
+                if text:
+                    keywords.append(text)
+        return list(dict.fromkeys(keywords))
+
+    @staticmethod
+    def _event_relevance_strength(
+        events: list[dict[str, Any]],
+        profile: dict[str, Any],
+        *,
+        keywords: list[str],
+    ) -> float:
+        if not events:
+            return 0.0
+        profile_text = " ".join(keywords)
+        relevance_scores: list[float] = []
+        for event in events[:5]:
+            channels = event.get("transmission_channels", []) if isinstance(event.get("transmission_channels"), list) else []
+            tags = event.get("regime_tags", []) if isinstance(event.get("regime_tags"), list) else []
+            event_text = " ".join([str(event.get("key", "")), str(event.get("label", "")), *[str(item) for item in channels], *[str(item) for item in tags]]).lower()
+            keyword_hits = sum(1 for keyword in keywords if keyword and keyword in event_text)
+            channel_hits = sum(1 for channel in channels if isinstance(channel, str) and channel.lower() in profile_text)
+            base = float(event.get("saliency_weight", 0.0) or 0.0)
+            lifecycle = str(event.get("persistence_state", "new") or "new")
+            lifecycle_multiplier = {"new": 1.0, "escalating": 1.1, "persistent": 0.95, "fading": 0.72}.get(lifecycle, 0.9)
+            relevance = base * lifecycle_multiplier * (1.0 + min(0.6, (keyword_hits * 0.18) + (channel_hits * 0.22)))
+            relevance_scores.append(relevance)
+        if not relevance_scores:
+            return 0.0
+        return min(1.0, sum(relevance_scores) / max(1, len(relevance_scores)))
+
+    @staticmethod
+    def _context_contradiction_count(context: dict[str, Any], macro_events: list[dict[str, Any]], industry_events: list[dict[str, Any]]) -> int:
+        count = 0
+        count += sum(1 for event in macro_events if bool(event.get("contradiction_flag")))
+        count += sum(1 for event in industry_events if bool(event.get("contradiction_flag")))
+        raw_macro = context.get("macro_context_contradictory_event_labels")
+        raw_industry = context.get("industry_context_contradictory_event_labels")
+        if isinstance(raw_macro, list):
+            count += len(raw_macro)
+        if isinstance(raw_industry, list):
+            count += len(raw_industry)
+        return count
+
+    @staticmethod
+    def _freshness_bonus(macro_events: list[dict[str, Any]], industry_events: list[dict[str, Any]]) -> float:
+        events = macro_events[:3] + industry_events[:3]
+        bonus = 0.0
+        for event in events:
+            lifecycle = str(event.get("persistence_state", "new") or "new")
+            recency = str(event.get("recency_bucket", "unknown") or "unknown")
+            if lifecycle == "escalating":
+                bonus += 3.5
+            elif lifecycle == "new":
+                bonus += 2.0
+            if recency == "fresh":
+                bonus += 2.0
+            elif recency == "recent":
+                bonus += 1.0
+        return min(8.0, bonus)
+
+    @staticmethod
+    def _transmission_tags(
+        context: dict[str, Any],
+        macro_score: float,
+        industry_score: float,
+        catalyst_intensity: float,
+        macro_events: list[dict[str, Any]],
+        industry_events: list[dict[str, Any]],
+    ) -> list[str]:
+        tags: list[str] = []
+        if abs(macro_score) >= 0.25:
+            tags.append("macro_dominant")
+        if abs(industry_score) >= 0.25:
+            tags.append("industry_dominant")
+        if catalyst_intensity >= 65.0:
+            tags.append("catalyst_active")
+        for raw in (context.get("macro_context_regime_tags"), context.get("industry_context_regime_tags")):
+            if isinstance(raw, list):
+                for item in raw:
+                    if isinstance(item, str) and item.strip():
+                        tags.append(item.strip())
+        for event in macro_events[:2] + industry_events[:2]:
+            key = str(event.get("key", "")).strip()
+            if key:
+                tags.append(key)
+        return list(dict.fromkeys(tags))
 
     @staticmethod
     def _primary_transmission_drivers(
         *,
+        macro_events: list[dict[str, Any]],
+        industry_events: list[dict[str, Any]],
         macro_score: float,
         industry_score: float,
         ticker_score: float,
         catalyst_intensity: float,
         bias: str,
     ) -> list[str]:
+        ranked_events: list[tuple[str, float]] = []
+        for event in macro_events[:3] + industry_events[:3]:
+            key = str(event.get("key", "")).strip()
+            score = float(event.get("event_score", 0.0) or 0.0)
+            if key:
+                ranked_events.append((key, score))
+        if ranked_events:
+            labels = [key for key, _ in sorted(ranked_events, key=lambda item: item[1], reverse=True)[:3]]
+            if bias == "headwind":
+                return [f"{label}_headwind" for label in labels]
+            return labels
         candidates = [
             ("macro_context_support", abs(macro_score)),
             ("industry_context_support", abs(industry_score)),
@@ -609,7 +779,13 @@ class TickerDeepAnalysisService:
         return ranked[:3]
 
     @staticmethod
-    def _industry_exposure_channels(macro_score: float, industry_score: float) -> list[str]:
+    def _industry_exposure_channels(
+        macro_score: float,
+        industry_score: float,
+        macro_events: list[dict[str, Any]],
+        industry_events: list[dict[str, Any]],
+        profile: dict[str, Any],
+    ) -> list[str]:
         channels: list[str] = []
         if abs(macro_score) >= 0.2:
             channels.append("macro_regime")
@@ -617,10 +793,25 @@ class TickerDeepAnalysisService:
             channels.append("industry_demand")
         if abs(industry_score) >= 0.3:
             channels.append("industry_read_through")
-        return channels
+        for event in macro_events[:3] + industry_events[:3]:
+            raw_channels = event.get("transmission_channels")
+            if isinstance(raw_channels, list):
+                for channel in raw_channels:
+                    if isinstance(channel, str) and channel.strip():
+                        channels.append(channel.strip())
+        profile_industry = str(profile.get("industry", "") or "").strip().lower()
+        if profile_industry:
+            channels.append(profile_industry.replace(" ", "_"))
+        return list(dict.fromkeys(channels))[:6]
 
     @staticmethod
-    def _ticker_exposure_channels(ticker_score: float, catalyst_intensity: float) -> list[str]:
+    def _ticker_exposure_channels(
+        ticker_score: float,
+        catalyst_intensity: float,
+        profile: dict[str, Any],
+        macro_events: list[dict[str, Any]],
+        industry_events: list[dict[str, Any]],
+    ) -> list[str]:
         channels: list[str] = []
         if abs(ticker_score) >= 0.18:
             channels.append("ticker_sentiment")
@@ -628,10 +819,33 @@ class TickerDeepAnalysisService:
             channels.append("news_catalyst")
         if catalyst_intensity >= 70.0:
             channels.append("event_follow_through")
-        return channels
+        for key in ("macro_sensitivity", "themes"):
+            raw_values = profile.get(key)
+            if isinstance(raw_values, list):
+                for value in raw_values[:3]:
+                    text = str(value).strip().lower()
+                    if text:
+                        channels.append(text.replace(" ", "_"))
+        if macro_events or industry_events:
+            channels.append("context_linked")
+        return list(dict.fromkeys(channels))[:6]
 
     @staticmethod
-    def _expected_transmission_window(catalyst_intensity: float, macro_score: float, industry_score: float) -> str:
+    def _expected_transmission_window(
+        catalyst_intensity: float,
+        macro_score: float,
+        industry_score: float,
+        macro_events: list[dict[str, Any]],
+        industry_events: list[dict[str, Any]],
+    ) -> str:
+        windows: list[str] = []
+        for event in macro_events[:3] + industry_events[:3]:
+            window = str(event.get("window_hint", "") or "").strip()
+            if window:
+                windows.append(window)
+        for candidate in ("1d", "2d_5d", "1w_plus"):
+            if candidate in windows:
+                return candidate
         if catalyst_intensity >= 70.0:
             return "1d"
         if catalyst_intensity >= 45.0:
@@ -641,7 +855,22 @@ class TickerDeepAnalysisService:
         return "unknown"
 
     @staticmethod
-    def _decay_state(catalyst_intensity: float, context: dict[str, Any]) -> str:
+    def _decay_state(
+        catalyst_intensity: float,
+        context: dict[str, Any],
+        *,
+        macro_events: list[dict[str, Any]],
+        industry_events: list[dict[str, Any]],
+    ) -> str:
+        for event in macro_events[:2] + industry_events[:2]:
+            lifecycle = str(event.get("persistence_state", "") or "")
+            recency = str(event.get("recency_bucket", "") or "")
+            if lifecycle == "escalating" or recency == "fresh":
+                return "fresh"
+            if lifecycle in {"new", "persistent"} or recency == "recent":
+                return "active"
+            if lifecycle == "fading" or recency == "aging":
+                return "fading"
         news_items = float(context.get("news_item_count", 0.0) or 0.0)
         if catalyst_intensity >= 75.0 and news_items >= 4.0:
             return "fresh"
@@ -661,6 +890,8 @@ class TickerDeepAnalysisService:
         alignment_percent: float,
         bias: str,
         direction: RecommendationDirection,
+        contradiction_count: int,
+        context: dict[str, Any],
     ) -> list[str]:
         flags: list[str] = []
         context_sign = (macro_score + industry_score) / 2.0
@@ -672,10 +903,14 @@ class TickerDeepAnalysisService:
             flags.append("industry_ticker_conflict")
         if catalyst_intensity >= 65.0 and 45.0 <= alignment_percent <= 60.0:
             flags.append("timing_conflict")
+        if contradiction_count > 0:
+            flags.append("context_contradiction")
         if direction == RecommendationDirection.SHORT and ticker_score > 0.2:
             flags.append("directional_conflict")
         if direction == RecommendationDirection.LONG and ticker_score < -0.2:
             flags.append("directional_conflict")
+        if str(context.get("macro_context_status", "")) == "warning" or str(context.get("industry_context_status", "")) == "warning":
+            flags.append("context_quality_conflict")
         return list(dict.fromkeys(flags))
 
     @staticmethod

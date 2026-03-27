@@ -566,18 +566,46 @@ export function RunDetailPage() {
                     <div className="section-heading">
                       <strong>Context objects written by this run</strong>
                     </div>
-                    {detail.macro_context_snapshots.map((item) => (
-                      <div key={item.id ?? item.computed_at} className="top-gap-small">
-                        <Badge tone={item.warnings.length > 0 ? "warning" : "ok"}>macro context</Badge>
-                        <span className="helper-text"> {item.summary_text || "No macro summary stored."}</span>
-                      </div>
-                    ))}
-                    {detail.industry_context_snapshots.map((item) => (
-                      <div key={item.id ?? `${item.industry_key}-${item.computed_at}`} className="top-gap-small">
-                        <Badge tone={item.warnings.length > 0 ? "warning" : "ok"}>{item.industry_label || item.industry_key}</Badge>
-                        <span className="helper-text"> {item.summary_text || "No industry summary stored."}</span>
-                      </div>
-                    ))}
+                    {detail.macro_context_snapshots.map((item) => {
+                      const lifecycle = typeof item.metadata?.event_lifecycle_summary === "object" && item.metadata?.event_lifecycle_summary !== null
+                        ? (item.metadata.event_lifecycle_summary as Record<string, unknown>)
+                        : null;
+                      const contradictory = Array.isArray(item.metadata?.contradictory_event_labels)
+                        ? item.metadata.contradictory_event_labels.filter((value): value is string => typeof value === "string")
+                        : [];
+                      return (
+                        <div key={item.id ?? item.computed_at} className="top-gap-small">
+                          <Badge tone={item.warnings.length > 0 ? "warning" : "ok"}>macro context</Badge>
+                          <span className="helper-text"> {item.summary_text || "No macro summary stored."}</span>
+                          {lifecycle ? (
+                            <div className="helper-text top-gap-small">
+                              lifecycle: new {String(lifecycle.new_event_count ?? 0)} · escalating {String(lifecycle.escalating_event_count ?? 0)} · fading {String(lifecycle.fading_event_count ?? 0)}
+                              {contradictory.length > 0 ? ` · contradictions ${contradictory.join(", ")}` : ""}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                    {detail.industry_context_snapshots.map((item) => {
+                      const lifecycle = typeof item.metadata?.event_lifecycle_summary === "object" && item.metadata?.event_lifecycle_summary !== null
+                        ? (item.metadata.event_lifecycle_summary as Record<string, unknown>)
+                        : null;
+                      const contradictory = Array.isArray(item.metadata?.contradictory_event_labels)
+                        ? item.metadata.contradictory_event_labels.filter((value): value is string => typeof value === "string")
+                        : [];
+                      return (
+                        <div key={item.id ?? `${item.industry_key}-${item.computed_at}`} className="top-gap-small">
+                          <Badge tone={item.warnings.length > 0 ? "warning" : "ok"}>{item.industry_label || item.industry_key}</Badge>
+                          <span className="helper-text"> {item.summary_text || "No industry summary stored."}</span>
+                          {lifecycle ? (
+                            <div className="helper-text top-gap-small">
+                              lifecycle: new {String(lifecycle.new_event_count ?? 0)} · escalating {String(lifecycle.escalating_event_count ?? 0)} · fading {String(lifecycle.fading_event_count ?? 0)}
+                              {contradictory.length > 0 ? ` · contradictions ${contradictory.join(", ")}` : ""}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </section>
                 ) : null}
               </div>

@@ -37,6 +37,7 @@ def create_proposal_service(session: Session) -> ProposalService:
     snapshot_resolver = SentimentSnapshotResolver(
         SentimentSnapshotRepository(session),
         taxonomy_service=taxonomy_service,
+        context_repository=ContextSnapshotRepository(session),
     )
     return ProposalService(
         news_service=news_service,

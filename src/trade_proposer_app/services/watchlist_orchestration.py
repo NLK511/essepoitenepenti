@@ -403,6 +403,9 @@ class WatchlistOrchestrationService:
         expected_transmission_window = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "expected_transmission_window") or self._fallback_transmission_window_placeholder(watchlist.default_horizon)
         conflict_flags = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "conflict_flags") or []
         transmission_tags = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "transmission_tags") or []
+        transmission_effect = self._transmission_confidence_adjustment(analysis, transmission_bias=transmission_bias, alignment_score=transmission_alignment_score)
+        base_confidence = round(float(deep_recommendation.confidence if deep_recommendation is not None else candidate.confidence_percent), 2)
+        adjusted_confidence = round(max(0.0, min(95.0, base_confidence + transmission_effect)), 2)
         if not isinstance(primary_drivers, list) or not primary_drivers:
             primary_drivers = [
                 item for item in [
@@ -420,8 +423,8 @@ class WatchlistOrchestrationService:
             horizon=watchlist.default_horizon,
             status="degraded" if warnings else "ok",
             direction=(self._normalize_direction(deep_recommendation.direction) if deep_recommendation is not None else candidate.direction),
-            swing_probability_percent=round(float(deep_recommendation.confidence if deep_recommendation is not None else candidate.confidence_percent), 2),
-            confidence_percent=round(float(deep_recommendation.confidence if deep_recommendation is not None else candidate.confidence_percent), 2),
+            swing_probability_percent=adjusted_confidence,
+            confidence_percent=adjusted_confidence,
             attention_score=round(candidate.attention_score, 2),
             macro_exposure_score=macro_exposure_score,
             industry_alignment_score=industry_alignment_score,
@@ -443,6 +446,8 @@ class WatchlistOrchestrationService:
                 "primary_drivers": primary_drivers,
                 "expected_transmission_window": expected_transmission_window,
                 "conflict_flags": conflict_flags,
+                "base_confidence_percent": base_confidence,
+                "transmission_confidence_adjustment": transmission_effect,
             },
             diagnostics={
                 "mode": "deep_analysis" if shortlisted else "cheap_scan_only",
@@ -461,6 +466,8 @@ class WatchlistOrchestrationService:
                     "liquidity_score": candidate.cheap_scan_signal.liquidity_score if candidate.cheap_scan_signal is not None else None,
                 },
                 "deep_analysis_error": deep_error,
+                "base_confidence_percent": base_confidence,
+                "transmission_confidence_adjustment": transmission_effect,
                 "transmission_alignment_score": transmission_alignment_score,
                 "transmission_bias": transmission_bias,
                 "transmission_tags": transmission_tags,
@@ -531,6 +538,9 @@ class WatchlistOrchestrationService:
         elif direction not in {"long", "short"}:
             action = "no_action"
             action_reason = "direction_not_actionable"
+        elif int(transmission_summary.get("contradiction_count", 0) or 0) > 0 and signal.confidence_percent < min(95.0, effective_threshold + 4.0):
+            action = "no_action"
+            action_reason = "context_transmission_contradiction"
         elif transmission_summary.get("context_bias") == "headwind" and signal.confidence_percent < min(95.0, effective_threshold + 5.0):
             action = "no_action"
             action_reason = "context_transmission_headwind"
@@ -723,6 +733,34 @@ class WatchlistOrchestrationService:
             return "headwind"
         return "mixed"
 
+    def _transmission_confidence_adjustment(
+        self,
+        analysis: dict[str, Any],
+        *,
+        transmission_bias: str,
+        alignment_score: float,
+    ) -> float:
+        transmission = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis")
+        if not isinstance(transmission, dict):
+            return 0.0
+        contradiction_count = int(transmission.get("contradiction_count", 0) or 0) if self._is_number(transmission.get("contradiction_count")) else 0
+        context_strength = float(transmission.get("context_strength_percent", 0.0) or 0.0) if self._is_number(transmission.get("context_strength_percent")) else 0.0
+        event_relevance = float(transmission.get("context_event_relevance_percent", 0.0) or 0.0) if self._is_number(transmission.get("context_event_relevance_percent")) else 0.0
+        decay_state = self._string_value(transmission.get("decay_state"), default="unknown")
+        adjustment = 0.0
+        if transmission_bias == "tailwind":
+            adjustment += min(6.0, max(0.0, (alignment_score - 55.0) * 0.12))
+        elif transmission_bias == "headwind":
+            adjustment -= min(8.0, max(0.0, (55.0 - alignment_score) * 0.16))
+        adjustment += min(3.0, context_strength / 40.0)
+        adjustment += min(2.0, event_relevance / 50.0)
+        if decay_state == "fresh":
+            adjustment += 1.5 if transmission_bias == "tailwind" else -1.5
+        elif decay_state == "fading":
+            adjustment -= 1.5
+        adjustment -= min(6.0, contradiction_count * 2.0)
+        return round(max(-10.0, min(8.0, adjustment)), 2)
+
     @staticmethod
     def _signal_breakdown(
         signal: TickerSignalSnapshot,
@@ -768,13 +806,16 @@ class WatchlistOrchestrationService:
     ) -> dict[str, float]:
         explicit = self._pluck(analysis, "ticker_deep_analysis", "confidence_components")
         if isinstance(explicit, dict) and explicit:
-            return {str(key): round(float(value), 2) for key, value in explicit.items() if self._is_number(value)}
+            normalized = {str(key): round(float(value), 2) for key, value in explicit.items() if self._is_number(value)}
+            normalized.setdefault("transmission_quality", round(signal.diagnostics.get("transmission_alignment_score", 0.0) if self._is_number(signal.diagnostics.get("transmission_alignment_score")) else 0.0, 2))
+            return normalized
         return {
             "context_confidence": round((signal.macro_exposure_score * 0.45) + (signal.industry_alignment_score * 0.55), 2),
             "directional_confidence": round(max(signal.ticker_sentiment_score, candidate.confidence_percent), 2),
             "catalyst_confidence": round(signal.catalyst_score, 2),
             "technical_clarity": round(signal.technical_setup_score, 2),
             "execution_clarity": round(signal.execution_quality_score if signal.execution_quality_score > 0 else signal.attention_score, 2),
+            "transmission_quality": round(signal.diagnostics.get("transmission_alignment_score", 0.0) if self._is_number(signal.diagnostics.get("transmission_alignment_score")) else 0.0, 2),
             "data_quality_cap": round(max(25.0, 100.0 - (len(signal.warnings) * 10.0)), 2),
         }
 
@@ -792,6 +833,9 @@ class WatchlistOrchestrationService:
                 "alignment_percent": alignment_percent,
                 "context_bias": bias,
                 "catalyst_intensity_percent": round(float(explicit.get("catalyst_intensity_percent", 0.0)), 2) if self._is_number(explicit.get("catalyst_intensity_percent")) else signal.catalyst_score,
+                "context_strength_percent": round(float(explicit.get("context_strength_percent", 0.0)), 2) if self._is_number(explicit.get("context_strength_percent")) else 0.0,
+                "context_event_relevance_percent": round(float(explicit.get("context_event_relevance_percent", 0.0)), 2) if self._is_number(explicit.get("context_event_relevance_percent")) else 0.0,
+                "contradiction_count": int(float(explicit.get("contradiction_count", 0.0))) if self._is_number(explicit.get("contradiction_count")) else 0,
                 "transmission_tags": explicit.get("transmission_tags", []) if isinstance(explicit.get("transmission_tags"), list) else [],
                 "primary_drivers": explicit.get("primary_drivers", []) if isinstance(explicit.get("primary_drivers"), list) else [],
                 "industry_exposure_channels": explicit.get("industry_exposure_channels", []) if isinstance(explicit.get("industry_exposure_channels"), list) else [],
@@ -799,6 +843,7 @@ class WatchlistOrchestrationService:
                 "expected_transmission_window": self._string_value(explicit.get("expected_transmission_window"), default=self._fallback_transmission_window(signal)),
                 "conflict_flags": explicit.get("conflict_flags", []) if isinstance(explicit.get("conflict_flags"), list) else [],
                 "decay_state": self._string_value(explicit.get("decay_state"), default=self._fallback_decay_state(signal)),
+                "transmission_confidence_adjustment": round(float(signal.diagnostics.get("transmission_confidence_adjustment", 0.0)), 2) if self._is_number(signal.diagnostics.get("transmission_confidence_adjustment")) else 0.0,
                 "lane_hint": "event" if bias == "tailwind" and signal.catalyst_score >= 65.0 else "technical",
             }
         context_alignment = round((signal.macro_exposure_score * 0.45) + (signal.industry_alignment_score * 0.55), 2)
@@ -812,6 +857,9 @@ class WatchlistOrchestrationService:
             "alignment_percent": context_alignment,
             "context_bias": bias,
             "catalyst_intensity_percent": signal.catalyst_score,
+            "context_strength_percent": round((signal.macro_exposure_score * 0.45) + (signal.industry_alignment_score * 0.55), 2),
+            "context_event_relevance_percent": round((signal.macro_exposure_score * 0.35) + (signal.industry_alignment_score * 0.35) + (signal.catalyst_score * 0.3), 2),
+            "contradiction_count": 1 if "context_contradiction" in self._fallback_conflict_flags(signal, candidate, bias) else 0,
             "transmission_tags": [],
             "primary_drivers": self._fallback_primary_drivers(signal, candidate, bias),
             "industry_exposure_channels": self._fallback_industry_exposure_channels(signal),
@@ -819,6 +867,7 @@ class WatchlistOrchestrationService:
             "expected_transmission_window": self._fallback_transmission_window(signal),
             "conflict_flags": self._fallback_conflict_flags(signal, candidate, bias),
             "decay_state": self._fallback_decay_state(signal),
+            "transmission_confidence_adjustment": round(float(signal.diagnostics.get("transmission_confidence_adjustment", 0.0)), 2) if self._is_number(signal.diagnostics.get("transmission_confidence_adjustment")) else 0.0,
             "lane_hint": "event" if signal.catalyst_score >= 65.0 else "technical",
         }
 
@@ -909,6 +958,7 @@ class WatchlistOrchestrationService:
             flags.append("technical_context_conflict")
         if signal.macro_exposure_score >= 55.0 and signal.industry_alignment_score <= 45.0:
             flags.append("macro_industry_conflict")
+            flags.append("context_contradiction")
         if signal.ticker_sentiment_score <= 40.0 and candidate.direction == "long":
             flags.append("directional_conflict")
         if signal.ticker_sentiment_score >= 60.0 and candidate.direction == "short":
@@ -1031,6 +1081,9 @@ class WatchlistOrchestrationService:
         if action_reason == "context_transmission_headwind":
             driver = self._primary_driver_label(transmission_summary)
             return f"Detected a {setup_label} structure, but macro and industry transmission remained a headwind to the proposed trade direction{f' ({driver})' if driver else ''}."
+        if action_reason == "context_transmission_contradiction":
+            driver = self._primary_driver_label(transmission_summary)
+            return f"Detected a {setup_label} structure, but active context evidence was internally contradictory{f' around {driver}' if driver else ''}, so the trade case was not clean enough to promote."
         return "Signal quality was insufficient for an actionable trade plan."
 
     def _actionable_thesis(
@@ -1145,6 +1198,8 @@ class WatchlistOrchestrationService:
             return f"Cheap scan detected a possible {family_label} case, but deep analysis did not complete cleanly enough to frame a trade plan."
         if action_reason == "context_transmission_headwind":
             return f"Broader context remained a headwind to the setup{f' via {driver}' if driver else ''}."
+        if action_reason == "context_transmission_contradiction":
+            return f"Broader context evidence remained too contradictory to trust the setup cleanly{f' around {driver}' if driver else ''}."
         return f"The {family_label} setup was reviewed but did not earn promotion."
 
     def _invalidation_summary(

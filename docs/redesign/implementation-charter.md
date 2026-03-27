@@ -450,11 +450,13 @@ Completed in the redesign track so far:
 - watchlist-backed plan generation now applies early calibration-aware action-threshold adjustments using stored setup-family and confidence-bucket outcome slices
 - recommendation-plan operator workflows now include baseline cohort comparisons against simple high-confidence, cheap-scan-attention, momentum-lane, and catalyst-lane heuristics
 - calibration reporting now includes horizon, transmission-bias, context-regime, and horizon-plus-setup-family slices for redesign-native operator review, marks slice sample quality explicitly, and watchlist-backed action gating now consumes those richer slices with bounded, sample-aware threshold adjustments when setting effective confidence thresholds
-- ticker deep analysis now emits richer transmission summaries, including primary drivers, conflict flags, and expected transmission windows, uses a redesign-native internal feature/context pipeline, and watchlist orchestration reserves a small catalyst/event shortlist lane in addition to the main technical lane
+- ticker deep analysis now emits richer transmission summaries, including primary drivers, conflict flags, expected transmission windows, context strength, event relevance, contradiction counts, and decay state; it also uses snapshot-plus-context enrichment so active macro/industry context objects can influence ticker transmission more directly
 - recommendation-plan generation now also persists setup-family-specific entry style and invalidation framing so the family label changes operator-facing plan behavior, not just metadata
+- macro and industry context writers now dedupe repeated evidence, track event lifecycle state (`new`, `escalating`, `persistent`, `fading`), and persist contradiction/lifecycle summaries in redesign-native context metadata
+- watchlist orchestration now applies bounded transmission-confidence adjustments and explicit contradiction-aware `no_action` behavior instead of keeping transmission purely diagnostic
 
 Not yet complete:
-- a richer event-extraction pipeline beyond the current heuristic event-ranking and source-priority layer
+- a richer event-extraction pipeline beyond the current heuristic event-ranking/source-priority/lifecycle layer
 - a fuller redesign-native ticker-analysis and recommendation-engine path with less dependence on legacy proposal-engine internals and payload conventions
 - confidence calibration and outcome-driven refinement for the new recommendation-plan path
 - migration or retirement strategy for the remaining legacy recommendation and sentiment-snapshot paths

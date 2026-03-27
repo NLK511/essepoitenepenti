@@ -50,6 +50,46 @@ class StubProposalService:
             "ticker_item_count": 4.0,
             "social_item_count": 0.0,
             "context_tag_industry": 1.0,
+            "ticker_profile": {
+                "ticker": ticker,
+                "industry": "Semiconductors",
+                "sector": "Technology",
+                "themes": ["ai", "semiconductor"],
+                "macro_sensitivity": ["rates", "growth"],
+                "industry_keywords": ["semiconductor", "chip"],
+            },
+            "macro_context_events": [
+                {
+                    "key": "bond_yields",
+                    "label": "Bond yields",
+                    "saliency_weight": 0.7,
+                    "event_score": 1.9,
+                    "persistence_state": "escalating",
+                    "recency_bucket": "fresh",
+                    "window_hint": "2d_5d",
+                    "transmission_channels": ["rates", "valuation_duration"],
+                    "regime_tags": ["rates", "yield_pressure"],
+                    "contradiction_flag": False,
+                }
+            ],
+            "industry_context_events": [
+                {
+                    "key": "ai_theme",
+                    "label": "AI theme",
+                    "saliency_weight": 0.8,
+                    "event_score": 2.1,
+                    "persistence_state": "escalating",
+                    "recency_bucket": "fresh",
+                    "window_hint": "2d_5d",
+                    "transmission_channels": ["theme_attention", "compute_demand"],
+                    "regime_tags": ["industry_dominant"],
+                    "contradiction_flag": False,
+                }
+            ],
+            "macro_context_regime_tags": ["risk_off"],
+            "industry_context_regime_tags": ["industry_dominant"],
+            "macro_context_contradictory_event_labels": [],
+            "industry_context_contradictory_event_labels": [],
         }
 
 
@@ -70,7 +110,10 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         self.assertIn("primary_drivers", payload["ticker_deep_analysis"]["transmission_analysis"])
         self.assertIn("expected_transmission_window", payload["ticker_deep_analysis"]["transmission_analysis"])
         self.assertIn("conflict_flags", payload["ticker_deep_analysis"]["transmission_analysis"])
-        self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["expected_transmission_window"], "1d")
+        self.assertIn("context_strength_percent", payload["ticker_deep_analysis"]["transmission_analysis"])
+        self.assertIn("context_event_relevance_percent", payload["ticker_deep_analysis"]["transmission_analysis"])
+        self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["expected_transmission_window"], "2d_5d")
+        self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["decay_state"], "fresh")
         self.assertEqual(payload["summary"]["method"], "digest")
         self.assertEqual(payload["news"]["feeds_used"], ["stub_news"])
         self.assertEqual(output.recommendation.direction, RecommendationDirection.LONG)

@@ -14,6 +14,7 @@ from trade_proposer_app.services.event_extraction import (
     extract_ranked_events,
     publisher_summary,
     source_priority_counts,
+    summarize_event_lifecycle,
     summarize_event_scores,
     summarize_source_priorities,
     top_event_labels,
@@ -27,6 +28,10 @@ MACRO_THEME_DEFINITIONS = [
         phrases=("fed", "fomc", "powell", "rate cut", "rate hike", "policy easing", "policy tightening"),
         tags=("rates", "policy"),
         category="policy",
+        window_hint="1w_plus",
+        transmission_channels=("rates", "valuation_duration", "funding_costs"),
+        beneficiary_tags=("financials",),
+        loser_tags=("long_duration", "rate_sensitive"),
     ),
     EventDefinition(
         key="inflation",
@@ -34,6 +39,10 @@ MACRO_THEME_DEFINITIONS = [
         phrases=("inflation", "cpi", "ppi", "sticky prices", "disinflation"),
         tags=("inflation",),
         category="macro",
+        window_hint="2d_5d",
+        transmission_channels=("input_costs", "rates", "consumer_pressure"),
+        beneficiary_tags=("pricing_power",),
+        loser_tags=("margin_pressure",),
     ),
     EventDefinition(
         key="bond_yields",
@@ -41,6 +50,10 @@ MACRO_THEME_DEFINITIONS = [
         phrases=("yield", "treasury", "10-year", "2-year", "bond market"),
         tags=("rates", "yield_pressure"),
         category="macro",
+        window_hint="2d_5d",
+        transmission_channels=("rates", "valuation_duration", "funding_costs"),
+        beneficiary_tags=("financials",),
+        loser_tags=("long_duration",),
     ),
     EventDefinition(
         key="energy_oil",
@@ -48,6 +61,10 @@ MACRO_THEME_DEFINITIONS = [
         phrases=("oil", "crude", "opec", "energy prices", "brent", "wti"),
         tags=("commodities",),
         category="macro",
+        window_hint="2d_5d",
+        transmission_channels=("commodity_input_costs", "energy_revenue", "transport_costs"),
+        beneficiary_tags=("energy",),
+        loser_tags=("airlines", "chemicals", "consumer"),
     ),
     EventDefinition(
         key="growth_recession",
@@ -55,6 +72,10 @@ MACRO_THEME_DEFINITIONS = [
         phrases=("recession", "slowdown", "growth scare", "soft landing", "hard landing"),
         tags=("growth",),
         category="macro",
+        window_hint="1w_plus",
+        transmission_channels=("cyclical_demand", "credit_risk", "beta"),
+        beneficiary_tags=("defensive",),
+        loser_tags=("cyclical",),
     ),
     EventDefinition(
         key="risk_off",
@@ -62,6 +83,10 @@ MACRO_THEME_DEFINITIONS = [
         phrases=("risk off", "flight to safety", "selloff", "defensive"),
         tags=("risk_off",),
         category="market_regime",
+        window_hint="1d",
+        transmission_channels=("risk_appetite", "beta", "liquidity"),
+        beneficiary_tags=("defensive",),
+        loser_tags=("high_beta",),
     ),
     EventDefinition(
         key="european_monetary_policy",
@@ -69,6 +94,10 @@ MACRO_THEME_DEFINITIONS = [
         phrases=("ecb", "european central bank", "eurozone rates", "european monetary policy", "lagarde"),
         tags=("europe", "rates"),
         category="policy",
+        window_hint="1w_plus",
+        transmission_channels=("euro_rates", "european_demand", "funding_costs"),
+        beneficiary_tags=("euro_banks",),
+        loser_tags=("real_estate", "euro_cyclicals"),
     ),
     EventDefinition(
         key="geopolitics",
@@ -76,6 +105,10 @@ MACRO_THEME_DEFINITIONS = [
         phrases=("war", "military tensions", "geopolitical tensions", "missile", "sanctions", "conflict"),
         tags=("geopolitics", "risk_off"),
         category="macro_shock",
+        window_hint="1d",
+        transmission_channels=("commodity_risk", "supply_chain", "risk_appetite"),
+        beneficiary_tags=("defense", "energy"),
+        loser_tags=("travel", "global_supply_chain"),
     ),
 ]
 
@@ -116,12 +149,21 @@ class MacroContextService:
         primary_news_items = news_sentiment.get("news_items", []) if isinstance(news_sentiment, dict) else []
         news_items = primary_news_items if isinstance(primary_news_items, list) else []
 
-        active_themes = extract_ranked_events(news_items, supporting_social_items, MACRO_THEME_DEFINITIONS, max_events=5)
+        previous_events = previous.active_themes if previous is not None else []
+        active_themes = extract_ranked_events(
+            news_items,
+            supporting_social_items,
+            MACRO_THEME_DEFINITIONS,
+            previous_events=previous_events,
+            max_events=5,
+        )
+        lifecycle_summary = summarize_event_lifecycle(active_themes, previous_events=previous_events)
         warnings: list[str] = []
         missing_inputs: list[str] = []
         feed_errors = list(news_bundle.feed_errors) if news_bundle is not None else []
         primary_source_counts = source_priority_counts(news_items, source_type="news")
         primary_coverage_quality = coverage_quality_label(news_items, source_type="news")
+        contradiction_labels = list(lifecycle_summary.get("contradictory_event_labels", []))
 
         if not news_items:
             warnings.append("macro context was built without primary news evidence; social evidence was used only as a secondary fallback")
@@ -130,6 +172,8 @@ class MacroContextService:
             warnings.append("macro context primary-news evidence lacks official or major-source coverage, so saliency confidence is capped")
         if feed_errors:
             warnings.append("macro context primary-news ingestion reported provider issues")
+        if contradiction_labels:
+            warnings.append("macro context contains contradictory evidence across active events")
         if not supporting_social_items:
             missing_inputs.append("supporting_social_evidence")
 
@@ -137,8 +181,16 @@ class MacroContextService:
         sentiment_label = str(getattr(snapshot, "label", "NEUTRAL") or "NEUTRAL")
         regime_tags = self._regime_tags(active_themes, sentiment_score, sentiment_label)
         saliency_score = self._saliency_score(active_themes, len(news_items), len(supporting_social_items), abs(sentiment_score), primary_source_counts)
-        confidence_percent = self._confidence_percent(active_themes, len(news_items), len(supporting_social_items), diagnostics, feed_errors, primary_source_counts)
-        summary_text = self._summary_text(previous, active_themes, news_items, supporting_social_items, warnings)
+        confidence_percent = self._confidence_percent(
+            active_themes,
+            len(news_items),
+            len(supporting_social_items),
+            diagnostics,
+            feed_errors,
+            primary_source_counts,
+            contradiction_count=int(lifecycle_summary.get("contradiction_count", 0) or 0),
+        )
+        summary_text = self._summary_text(previous, active_themes, lifecycle_summary, news_items, supporting_social_items, warnings)
         status = "warning" if warnings else "ok"
 
         context = MacroContextSnapshot(
@@ -175,6 +227,9 @@ class MacroContextService:
                 "salient_event_scores": summarize_event_scores(active_themes),
                 "salient_event_count": count_events_above_saliency(active_themes),
                 "event_regime_tags": extract_event_tags(active_themes),
+                "event_lifecycle_summary": lifecycle_summary,
+                "contradictory_event_labels": contradiction_labels,
+                "event_windows": list(lifecycle_summary.get("window_hints", [])),
                 "news_queries": list(DEFAULT_MACRO_NEWS_QUERIES),
             },
             run_id=run_id,
@@ -213,6 +268,7 @@ class MacroContextService:
         primary_source_counts: dict[str, int],
     ) -> float:
         top_event_score = max((float(item.get("saliency_weight", 0.0) or 0.0) for item in active_themes), default=0.0)
+        escalating_boost = min(0.1, sum(1 for item in active_themes if item.get("persistence_state") == "escalating") * 0.05)
         official_boost = min(0.14, primary_source_counts.get("official", 0) * 0.07)
         major_boost = min(0.08, primary_source_counts.get("major", 0) * 0.04)
         score = (
@@ -223,6 +279,7 @@ class MacroContextService:
             + (min(social_item_count, 4) * 0.02)
             + official_boost
             + major_boost
+            + escalating_boost
             + (sentiment_magnitude * 0.12)
         )
         return round(min(1.0, score), 3)
@@ -235,6 +292,8 @@ class MacroContextService:
         diagnostics: dict[str, object],
         feed_errors: list[str],
         primary_source_counts: dict[str, int],
+        *,
+        contradiction_count: int,
     ) -> float:
         social_provider_count = len(diagnostics.get("providers", [])) if isinstance(diagnostics, dict) and isinstance(diagnostics.get("providers"), list) else 0
         high_saliency_events = count_events_above_saliency(active_themes)
@@ -249,10 +308,14 @@ class MacroContextService:
             + (primary_source_counts.get("major", 0) * 3.0)
             + (primary_source_counts.get("trade", 0) * 3.0)
         )
+        if any(item.get("persistence_state") == "escalating" for item in active_themes):
+            confidence += 4.0
         if news_item_count == 0:
             confidence -= 18.0
         if primary_source_counts.get("official", 0) == 0 and primary_source_counts.get("major", 0) == 0:
             confidence -= 8.0
+        if contradiction_count > 0:
+            confidence -= min(10.0, contradiction_count * 4.0)
         if feed_errors:
             confidence -= min(12.0, len(feed_errors) * 4.0)
         return round(max(5.0, min(92.0, confidence)), 1)
@@ -261,21 +324,29 @@ class MacroContextService:
     def _summary_text(
         previous: MacroContextSnapshot | None,
         active_themes: list[dict[str, object]],
+        lifecycle_summary: dict[str, object],
         news_items: list[object],
         social_items: list[object],
         warnings: list[str],
     ) -> str:
         theme_labels = [str(item.get("label", "")).strip() for item in active_themes if item.get("label")]
         focus = ", ".join(theme_labels[:2]) if theme_labels else "no dominant macro theme"
-        top_priority = str(active_themes[0].get("source_priority", "other")) if active_themes else "other"
-        if previous and previous.summary_text and theme_labels:
-            return f"Backdrop stays centered on {focus}. This run is led by the most source-ranked macro events first, with primary news still doing the heavy lifting and social evidence used for secondary confirmation."
-        if theme_labels and news_items and top_priority == "official":
-            return f"Macro context is currently led by {focus}, with official-source coverage carrying the strongest saliency signal in this run."
-        if theme_labels and news_items and top_priority in {"trade", "major"}:
-            return f"Macro context is currently led by {focus}, with higher-priority primary news sources carrying most of the saliency signal in this run."
+        new_labels = list(lifecycle_summary.get("new_event_labels", []))
+        escalating_labels = list(lifecycle_summary.get("escalating_event_labels", []))
+        contradiction_labels = list(lifecycle_summary.get("contradictory_event_labels", []))
+        fading_labels = list(lifecycle_summary.get("fading_event_labels", []))
+        if contradiction_labels and theme_labels:
+            return f"Macro context centers on {focus}. Fresh evidence is present, but contradictions remain around {', '.join(contradiction_labels[:2])}."
+        if escalating_labels:
+            return f"Macro context centers on {focus}. The key update is escalation in {', '.join(escalating_labels[:2])}, keeping transmission pressure active."
+        if previous and previous.summary_text and new_labels:
+            return f"Backdrop still leans on {focus}, with fresh macro attention shifting toward {', '.join(new_labels[:2])}."
+        if fading_labels and theme_labels:
+            return f"Macro context still points to {focus}, but some earlier pressure is fading around {', '.join(fading_labels[:2])}."
+        if theme_labels and news_items:
+            return f"Macro context is currently led by {focus}, with primary news doing most of the regime-identification work in this run."
         if theme_labels and social_items:
-            return f"Macro context points to {focus}, but primary-news evidence was thin or low quality so the run leans more on social confirmation than desired."
+            return f"Macro context points to {focus}, but primary-news evidence was thin so this run leans more on social confirmation than desired."
         if warnings:
             return "Macro context evidence is light in this run, so the output is mainly a continuity placeholder rather than a strong regime call."
         return "Macro context remains mixed without one clearly dominant theme."

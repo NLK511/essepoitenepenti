@@ -1,6 +1,6 @@
 # Raw Details Reference
 
-Trade Proposer App persists diagnostic metadata alongside runs, redesign recommendation plans, and sentiment/context refresh workflows so operators can audit behavior without leaving the platform. Legacy recommendation records may still exist historically, but they are no longer the active operator workflow path.
+Trade Proposer App persists diagnostic metadata alongside runs, redesign recommendation plans, and sentiment/context refresh workflows so operators can audit behavior without leaving the platform. `RecommendationPlan`, `RecommendationPlanOutcome`, context snapshots, and ticker-signal snapshots are the active operator workflow objects.
 
 ## Structured pipeline payloads
 
@@ -24,13 +24,13 @@ The canonical structured payload groups diagnostics into a small number of logic
 This section is especially important because it now mixes live and snapshot-backed inputs.
 
 Typical shape:
-- `macro`: snapshot-backed shared macro sentiment, including `snapshot_id`, `subject_key`, `label`, `score`, and source/freshness metadata
-- `industry`: snapshot-backed shared industry sentiment, including `snapshot_id`, `subject_key`, `label`, `score`, and source/freshness metadata
+- `macro`: snapshot-backed shared macro sentiment, including `snapshot_id`, `subject_key`, `label`, `score`, and source/freshness metadata; when available it also carries `context_snapshot_id`, `context_summary`, `context_events`, `context_lifecycle`, and contradiction labels from the redesign-native macro context object
+- `industry`: snapshot-backed shared industry sentiment, including `snapshot_id`, `subject_key`, `label`, `score`, and source/freshness metadata; when available it also carries `context_snapshot_id`, `context_summary`, `context_events`, `context_lifecycle`, and contradiction labels from the redesign-native industry context object
 - `ticker`: live per-proposal ticker sentiment
 - `enhanced`: the fused sentiment result used by the scoring logic, plus component contributions
 - `coverage_insights` / `keyword_hits`: transparency fields for sparse or neutral sentiment coverage
 
-The UI uses the stored `snapshot_id` values to link runs and trade outputs back to the exact shared snapshot records that influenced them.
+The UI uses the stored `snapshot_id` and `context_snapshot_id` values to link runs and trade outputs back to the exact shared artifacts that influenced them.
 
 ### Other stored payloads
 - `raw_output`: scripted stdout/stderr or raw pipeline detail when available
@@ -44,7 +44,10 @@ The UI uses the stored `snapshot_id` values to link runs and trade outputs back 
 
 The redesign path persists `RecommendationPlan` objects, `RecommendationPlanOutcome` objects, and `TickerSignalSnapshot` objects for watchlist orchestration. These redesign objects are the canonical place to inspect structured trade planning, per-ticker reasoning, and measured plan outcomes.
 
-Historical legacy `Recommendation` rows may still exist in storage, but they are no longer the active proposal-review path.
+Important redesign-native fields now include:
+- context snapshot lifecycle metadata such as `event_lifecycle_summary`, `contradictory_event_labels`, and per-event `persistence_state` / `window_hint`
+- ticker transmission fields such as `context_strength_percent`, `context_event_relevance_percent`, `contradiction_count`, `decay_state`, and `transmission_confidence_adjustment`
+- recommendation-plan action reasons such as `context_transmission_headwind` and `context_transmission_contradiction` when broader context blocks promotion
 
 ## Run and workflow artifacts
 
