@@ -30,7 +30,7 @@ Active user checking the system each day.
 2. User scans the latest trade outputs as the primary trade objects.
 3. User scans recent runs as execution context.
 4. User notices whether health or snapshot freshness is degraded.
-5. User opens only problematic runs, recommendations, or recommendation plans for deeper inspection.
+5. User opens only problematic runs or recommendation plans for deeper inspection.
 
 ### Success outcome
 The user can separate trade decisions from system diagnostics without confusion.
@@ -58,9 +58,9 @@ User wants to inspect archive quality and outcome quality over time.
 
 ### Steps
 1. User opens recommendation plans.
-2. User filters by ticker, action, run, or calibration slice.
+2. User filters by ticker, action, run, setup family, or calibration slice.
 3. User runs or reviews evaluation workflows so older plans settle into stored recommendation-plan outcomes.
-4. User sorts by confidence or timestamp through the available operator views.
+4. User reviews setup-family cohort surfaces or sorts by confidence / timestamp through the available operator views.
 5. User opens ticker pages or run detail for deeper review.
 
 ### Success outcome
@@ -73,9 +73,9 @@ Operator who wants evaluation and optimization to run on a cadence.
 
 ### Steps
 1. User enables or schedules evaluation workflows.
-2. The app evaluates older recommendations through the normal run system.
+2. The app evaluates older recommendation plans through the normal run system.
 3. User enables or schedules optimization workflows.
-4. The app updates `weights.json` using app-native data and stores backup metadata.
+4. The app updates `weights.json` using resolved recommendation-plan outcomes and stores backup metadata.
 5. User reviews run outputs, failures, and resulting weight changes.
 
 ### Success outcome

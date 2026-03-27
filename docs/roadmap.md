@@ -10,7 +10,7 @@ Trade Proposer App now executes its critical workflows entirely inside this repo
 - **Shared sentiment/context**: macro and industry refresh workflows persist reusable snapshots and transitional context objects, proposal generation links back to those artifacts, and health/preflight now reports snapshot freshness.
 - **Signal integrity policy**: missing data becomes explicit neutral/warning output rather than an invented fallback.
 - **Redesign write path**: watchlist orchestration, cheap-scan diagnostics, ticker signals, recommendation plans, recommendation-plan outcomes, event-ranked news-first macro/industry context writers, and a dedicated ticker deep-analysis service now exist inside the main app execution flow.
-- **Legacy posture**: legacy recommendation operator surfaces are retired, optimization already uses recommendation-plan outcomes, and the remaining work is deletion-oriented cleanup of dormant legacy recommendation persistence/code.
+- **Legacy posture**: legacy recommendation operator surfaces are retired, optimization already uses recommendation-plan outcomes, and the active product path no longer depends on legacy recommendation persistence; the only remaining legacy question is whether historical `recommendations` table data is explicitly dropped or retained for audit/migration reasons.
 
 ## Phase 1: Operational hardening (partially complete)
 
@@ -95,7 +95,7 @@ Delivered in this phase so far:
 - calibration reporting now includes horizon, transmission-bias, context-regime, and horizon-plus-setup-family slices so operators can judge where the redesign is or is not working, now marks slice sample quality explicitly, and watchlist-backed action gating now uses those richer slices with bounded sample-aware adjustments instead of relying only on setup family and confidence bucket
 
 Current Phase 4 status:
-- **Phase 4A** is mostly complete: optimization, mounted operator flows, and active proposal-run review are now recommendation-plan/outcome-native, and dormant legacy recommendation ORM persistence has been removed from the product path
+- **Phase 4A** is operationally complete: optimization, mounted operator flows, and active proposal-run review are now recommendation-plan/outcome-native, dormant legacy recommendation ORM persistence has been removed from the product path, and the remaining schema/data-retention question has been explicitly deferred as a separate audit/product decision rather than hidden inside ongoing implementation work
 - **Phase 4B** is now substantially complete: setup-family-aware plan framing includes family-specific thesis/invalidation text, execution metadata, `no_action` reasoning, operator-visible evaluation focus, dedicated setup-family cohort reporting, family-specific evaluation review slices, and direct browse filtering by setup family
 - **Phase 4C** is partially implemented: event-ranking/source-priority context writers, richer transmission diagnostics, a catalyst shortlist lane, and redesign-native ticker deep analysis are in place, but the context/transmission engine is still largely heuristic
 - **Phase 4D** is meaningfully started but still early: stored outcomes, sample-aware calibration summaries, calibration-informed threshold gating, baseline cohort comparisons, and setup-family cohort review now exist, but confidence re-scaling and measured evidence concentration remain incomplete
@@ -105,7 +105,7 @@ Next required work in this phase:
 - continue maturing the redesign-native deep-analysis path from an internal native executor into a fuller ticker-signal / recommendation-engine layer with less dependence on legacy proposal payload shapes
 - carry the completed Phase 4B setup-family framing/evaluation work forward into later phases without reopening generic plan behavior
 - deepen macro/industry context extraction beyond heuristic saliency ranking into stronger event clustering, persistence/escalation, and contradiction handling
-- decide when the old `recommendations` table and migration history are explicitly dropped or migrated away, now that legacy recommendation persistence is removed from the active product path
+- make an explicit product/audit decision on whether the old `recommendations` table and migration history are dropped, migrated, or temporarily retained; this is no longer an implementation-path blocker, but it is an intentional data-retention tradeoff
 - decide whether sentiment snapshots become operator-facing compatibility artifacts, internal inputs, or candidates for retirement once context writers mature
 
 Defined implementation phases from here:
@@ -114,8 +114,9 @@ Defined implementation phases from here:
    - ✅ remove remaining optimization dependence on legacy recommendation WIN/LOSS rows
    - ✅ stop proposal-run persistence, dashboard filtering, and mounted run-detail/debugger flows from depending on legacy recommendation rows/output payloads
    - ✅ delete dormant legacy recommendation ORM/repository persistence code from the active product path
-   - next: decide when the old `recommendations` table and migration history are explicitly dropped or migrated away
-   - continue updating API/UI/docs wording so recommendation-plan outcomes are the only optimization truth source
+   - ✅ continue narrowing API/UI/docs wording so recommendation-plan outcomes are the only active optimization truth source
+   - status: implementation scope complete for the active product path
+   - deferred explicit decision: whether historical `recommendations` table data and migration history are dropped, migrated, or temporarily retained for audit compatibility
 2. **Phase 4B — setup-family-native recommendation behavior**
    - ✅ strengthen family-specific thesis, invalidation, target, stop, timing expectation, and `no_action` generation
    - ✅ surface family-specific execution metadata and evaluation focus directly in operator review views

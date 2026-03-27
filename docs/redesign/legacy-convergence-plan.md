@@ -75,12 +75,14 @@ Current status:
 Achieved when manual ticker jobs can emit redesign-native ticker signals and recommendation plans with acceptable stability.
 
 ## Milestone C: legacy recommendation retirement
-Achieved when:
+Achieved operationally when:
 - legacy `Recommendation` rows are no longer emitted for new proposal workflows
 - optimization no longer depends on legacy recommendation WIN/LOSS semantics
 - no operator-facing flow depends on legacy recommendation objects
 - legacy recommendation ORM/repository persistence code has been removed from the product path
-- any remaining historical `recommendations` table data is either explicitly migrated away or dropped by an intentional cleanup decision
+
+Remaining explicit decision after operational retirement:
+- any historical `recommendations` table data must be either explicitly migrated away, explicitly dropped, or explicitly retained for audit reasons by a conscious cleanup decision
 
 ## Milestone D: snapshot-flow narrowing
 Achieved when remaining sentiment snapshot surfaces are either clearly transitional or replaced by context-first views.
@@ -110,3 +112,4 @@ Convergence is succeeding if:
 - fewer duplicated concepts remain
 - new evaluation, calibration, and optimization logic consistently applies to `RecommendationPlan` / `RecommendationPlanOutcome`
 - legacy recommendation data can be deleted without removing any active product capability
+- any retention of the old `recommendations` table is treated as an explicit audit choice rather than a hidden product dependency

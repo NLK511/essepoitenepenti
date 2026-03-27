@@ -177,12 +177,12 @@ Stored entities today:
 - watchlists
 - jobs
 - runs
-- historical legacy recommendations
 - sentiment snapshots
 - macro/industry/ticker context or signal objects on the redesign path
 - recommendation plans and recommendation-plan outcomes on the redesign path
 - app settings
 - provider credentials
+- optionally, historical legacy `recommendations` table data retained only until an explicit drop/migration/audit decision is made
 
 ## Internal module boundaries
 

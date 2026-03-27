@@ -59,7 +59,7 @@ The user should not have to leave the app to understand what happened.
    The backend owns execution, persistence, diagnostics, and workflow semantics. This reduces drift between what happened and what the UI claims happened.
 
 2. **Runs and trade outputs are distinct**
-   Runs are execution records. Legacy recommendations and redesign recommendation plans are trade outputs. Keeping that distinction visible improves operator judgment.
+   Runs are execution records. Recommendation plans and recommendation-plan outcomes are the active trade-output truth path. Any retained legacy recommendation data should be treated only as a historical artifact, not as an active product object.
 
 3. **Shared context and sentiment artifacts are auditable**
    Macro and industry sentiment snapshots remain inspectable system artifacts, and the redesign is adding context objects as a more context-first surface.
