@@ -103,7 +103,7 @@ flowchart LR
     NewsIngestionService --> Finnhub
     ProposalService --> OptionalLLM
 
-    ProposalService -->|historical legacy recommendation persistence only| Services
+    ProposalService -->|shared legacy-compatible analysis helpers only| Services
     Services --> Repositories
 ```
 

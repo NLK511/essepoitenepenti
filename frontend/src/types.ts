@@ -27,26 +27,6 @@ export interface RunDiagnostics {
   analysis_json: string | null;
 }
 
-export interface Recommendation {
-  id: number | null;
-  run_id: number | null;
-  ticker: string;
-  direction: RecommendationDirection;
-  confidence: number;
-  entry_price: number;
-  stop_loss: number;
-  take_profit: number;
-  indicator_summary: string;
-  state: RecommendationState;
-  created_at: string;
-  evaluated_at: string | null;
-}
-
-export interface RunOutput {
-  recommendation: Recommendation;
-  diagnostics: RunDiagnostics;
-}
-
 export type StrategyHorizon = "1d" | "1w" | "1m";
 
 export interface Watchlist {
@@ -387,7 +367,6 @@ export interface RecommendationBaselineSummary {
 
 export interface RunDetailResponse {
   run: Run;
-  outputs: RunOutput[];
   macro_context_snapshots: MacroContextSnapshot[];
   industry_context_snapshots: IndustryContextSnapshot[];
   ticker_signal_snapshots: TickerSignalSnapshot[];

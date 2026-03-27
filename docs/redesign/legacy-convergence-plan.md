@@ -8,13 +8,14 @@ The goal is no longer coexistence. The goal is to remove legacy recommendation-p
 
 ## Current retirement reality
 
-Today the app still contains some legacy code and historical data, but new proposal workflows are redesign-native:
+Today the app still contains some legacy code and historical data, but the active proposal/evaluation workflow is redesign-native:
 - watchlist-backed proposal jobs use the redesign orchestration path
 - manual ticker proposal jobs also execute through redesign orchestration via an explicit synthetic watchlist wrapper (`1w`, shorts enabled)
 - proposal runs persist `TickerSignalSnapshot` and `RecommendationPlan` objects as the canonical output path
 - new redesign-backed proposal runs no longer emit legacy `Recommendation` rows as compatibility projections
-- some sentiment snapshot workflows remain transitional, but legacy recommendation-detail/recommendation-history operator framing is being retired
-- the remaining substantive legacy dependency is optimization, which must migrate to `RecommendationPlanOutcome` before legacy recommendation data is deleted
+- mounted operator evaluation and optimization now use `RecommendationPlanOutcome`
+- run-detail/debugger operator flows no longer rely on legacy recommendation output payloads
+- some sentiment snapshot workflows remain transitional, but legacy recommendation-detail/recommendation-history operator framing is already retired
 
 ## Canonical product direction
 
@@ -44,7 +45,7 @@ Decision:
 ## 2. Legacy recommendation rows
 Decision:
 - new proposal-generation runs should not emit legacy `Recommendation` compatibility rows
-- legacy recommendation rows are not a long-term compatibility layer; they are slated for deletion after optimization fully migrates to `RecommendationPlanOutcome`
+- legacy recommendation rows are not a long-term compatibility layer; remaining code around them is retirement-only cleanup rather than an endorsed compatibility path
 
 ## 3. Legacy operator surfaces
 Decision:
@@ -67,7 +68,8 @@ Current status:
 - substantially achieved
 - run detail, ticker-signal, recommendation-plan, calibration, and baseline workflows already expose most redesign-native operator review surfaces
 - manual ticker jobs now also write redesign-native ticker signals and recommendation plans through an explicit synthetic watchlist wrapper
-- the remaining convergence gap is no longer operator truth for proposal jobs, but the longer-tail retirement/narrowing decision around legacy `Recommendation` compatibility artifacts and transitional snapshot-first framing
+- mounted run-detail/debugger flows now treat recommendation plans and outcomes as canonical instead of surfacing legacy recommendation-output payloads
+- the remaining convergence gap is no longer operator truth for proposal jobs, but the longer-tail cleanup of dormant legacy persistence/models plus transitional snapshot-first framing
 
 ## Milestone B: manual-path convergence
 Achieved when manual ticker jobs can emit redesign-native ticker signals and recommendation plans with acceptable stability.

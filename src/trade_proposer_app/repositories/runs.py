@@ -4,8 +4,8 @@ from datetime import datetime, timezone
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.enums import JobType, RecommendationState, RunStatus
-from trade_proposer_app.domain.models import Recommendation, Run, RunDiagnostics, RunOutput
+from trade_proposer_app.domain.enums import JobType, RunStatus
+from trade_proposer_app.domain.models import Run
 from trade_proposer_app.persistence.models import (
     IndustryContextSnapshotRecord,
     JobRecord,
@@ -218,83 +218,6 @@ class RunRepository:
         self.session.refresh(record)
         return self._to_run_model(record)
 
-    def add_recommendation(self, run_id: int, recommendation: Recommendation, diagnostics: RunDiagnostics) -> Recommendation:
-        record = RecommendationRecord(
-            run_id=run_id,
-            ticker=recommendation.ticker,
-            direction=recommendation.direction.value,
-            confidence=recommendation.confidence,
-            entry_price=recommendation.entry_price,
-            stop_loss=recommendation.stop_loss,
-            take_profit=recommendation.take_profit,
-            indicator_summary=recommendation.indicator_summary,
-            evaluation_state=recommendation.state.value,
-            evaluated_at=recommendation.evaluated_at,
-            warnings_json="\n".join(diagnostics.warnings),
-            provider_errors_json="\n".join(diagnostics.provider_errors),
-            problems_json="\n".join(diagnostics.problems),
-            news_feed_errors_json="\n".join(diagnostics.news_feed_errors),
-            summary_error=diagnostics.summary_error or "",
-            llm_error=diagnostics.llm_error or "",
-            analysis_json=diagnostics.analysis_json or "",
-            raw_output=diagnostics.raw_output or "",
-            feature_vector_json=diagnostics.feature_vector_json or "",
-            normalized_feature_vector_json=diagnostics.normalized_feature_vector_json or "",
-            aggregations_json=diagnostics.aggregations_json or "",
-            confidence_weights_json=diagnostics.confidence_weights_json or "",
-            summary_method=diagnostics.summary_method or "",
-        )
-        self.session.add(record)
-        self.session.commit()
-        self.session.refresh(record)
-        return self._to_recommendation_model(record)
-
-    def list_latest_recommendations(self, limit: int = 20) -> list[Recommendation]:
-        rows = self.session.scalars(
-            select(RecommendationRecord)
-            .order_by(RecommendationRecord.created_at.desc())
-            .limit(limit)
-        ).all()
-        return [self._to_recommendation_model(row) for row in rows]
-
-    def get_recommendation(self, recommendation_id: int) -> Recommendation:
-        record = self.session.get(RecommendationRecord, recommendation_id)
-        if record is None:
-            raise ValueError(f"Recommendation {recommendation_id} not found")
-        return self._to_recommendation_model(record)
-
-    def get_recommendation_diagnostics(self, recommendation_id: int) -> RunDiagnostics:
-        record = self.session.get(RecommendationRecord, recommendation_id)
-        if record is None:
-            raise ValueError(f"Recommendation {recommendation_id} not found")
-        return self._to_diagnostics_model(record)
-
-    def list_outputs_for_run(self, run_id: int) -> list[RunOutput]:
-        rows = self.session.scalars(
-            select(RecommendationRecord)
-            .where(RecommendationRecord.run_id == run_id)
-            .order_by(RecommendationRecord.created_at.desc())
-        ).all()
-        return [RunOutput(recommendation=self._to_recommendation_model(row), diagnostics=self._to_diagnostics_model(row)) for row in rows]
-
-    def list_recommendations_for_run(self, run_id: int) -> list[Recommendation]:
-        return [output.recommendation for output in self.list_outputs_for_run(run_id)]
-
-    def set_recommendation_state(
-        self,
-        recommendation_id: int,
-        state: RecommendationState,
-        evaluated_at: datetime | None = None,
-    ) -> Recommendation:
-        record = self.session.get(RecommendationRecord, recommendation_id)
-        if record is None:
-            raise ValueError(f"Recommendation {recommendation_id} not found")
-        record.evaluation_state = state.value
-        record.evaluated_at = evaluated_at
-        self.session.commit()
-        self.session.refresh(record)
-        return self._to_recommendation_model(record)
-
     def delete_run(self, run_id: int) -> None:
         record = self.session.get(RunRecord, run_id)
         if record is None:
@@ -335,41 +258,6 @@ class RunRepository:
             timing_json=record.timing_json or None,
         )
 
-    @classmethod
-    def _to_recommendation_model(cls, record: RecommendationRecord) -> Recommendation:
-        return Recommendation(
-            id=record.id,
-            run_id=record.run_id,
-            ticker=record.ticker,
-            direction=record.direction,
-            confidence=record.confidence,
-            entry_price=record.entry_price,
-            stop_loss=record.stop_loss,
-            take_profit=record.take_profit,
-            indicator_summary=record.indicator_summary or "",
-            state=record.evaluation_state or RecommendationState.PENDING.value,
-            created_at=record.created_at,
-            evaluated_at=record.evaluated_at,
-        )
-
-    @classmethod
-    def _to_diagnostics_model(cls, record: RecommendationRecord) -> RunDiagnostics:
-        return RunDiagnostics(
-            warnings=cls._split_lines(record.warnings_json),
-            provider_errors=cls._split_lines(record.provider_errors_json),
-            problems=cls._split_lines(record.problems_json),
-            news_feed_errors=cls._split_lines(record.news_feed_errors_json),
-            summary_error=record.summary_error or None,
-            llm_error=record.llm_error or None,
-            raw_output=record.raw_output or None,
-            analysis_json=record.analysis_json or None,
-            feature_vector_json=record.feature_vector_json or None,
-            normalized_feature_vector_json=record.normalized_feature_vector_json or None,
-            aggregations_json=record.aggregations_json or None,
-            confidence_weights_json=record.confidence_weights_json or None,
-            summary_method=record.summary_method or None,
-        )
-
     def _resolve_job_type(self, job_id: int, job_type: JobType | None) -> JobType:
         if job_type is not None:
             return job_type
@@ -377,10 +265,6 @@ class RunRepository:
         if job is None:
             raise ValueError(f"Job {job_id} not found")
         return JobType(job.job_type or JobType.PROPOSAL_GENERATION.value)
-
-    @staticmethod
-    def _split_lines(value: str) -> list[str]:
-        return [item for item in value.split("\n") if item]
 
     @staticmethod
     def _serialize_timing(timing: dict[str, object]) -> str:

@@ -13,18 +13,16 @@ from sqlalchemy.pool import StaticPool
 from trade_proposer_app.app import app
 from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.domain.enums import JobType, RecommendationDirection, RecommendationState
+from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.domain.models import (
     AppPreflightReport,
     EvaluationRunResult,
     IndustryContextSnapshot,
     MacroContextSnapshot,
     PreflightCheck,
-    Recommendation,
     RecommendationPlan,
     RecommendationPlanOutcome,
     Run,
-    RunDiagnostics,
     TickerSignalSnapshot,
 )
 from trade_proposer_app.persistence.models import Base
@@ -695,18 +693,23 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             claimed = runs.claim_next_queued_run()
             assert claimed is not None
             runs.update_status(run.id or 0, "completed")
-            runs.add_recommendation(
-                run.id or 0,
-                Recommendation(
+            RecommendationPlanRepository(session).create_plan(
+                RecommendationPlan(
                     ticker="AAPL",
-                    direction=RecommendationDirection.LONG,
-                    confidence=80.0,
-                    entry_price=100.0,
+                    horizon="1w",
+                    action="long",
+                    confidence_percent=80.0,
+                    entry_price_low=100.0,
+                    entry_price_high=101.0,
                     stop_loss=95.0,
                     take_profit=110.0,
-                    indicator_summary="Above SMA200 · RSI 55.0",
-                ),
-                RunDiagnostics(),
+                    holding_period_days=5,
+                    risk_reward_ratio=2.0,
+                    thesis_summary="Seeded historical plan",
+                    rationale_summary="Job delete cleanup coverage",
+                    run_id=run.id,
+                    job_id=job.id,
+                )
             )
         finally:
             session.close()
@@ -814,7 +817,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(run_detail.status_code, 200)
         detail_payload = run_detail.json()
         self.assertEqual(detail_payload["run"]["id"], run_id)
-        self.assertEqual(detail_payload["outputs"], [])
+        self.assertNotIn("outputs", detail_payload)
         self.assertEqual(detail_payload["recommendation_plans"][0]["ticker"], "AAPL")
         self.assertEqual(detail_payload["recommendation_plans"][0]["warnings"], ["summary timeout", "feed timeout"])
         self.assertIn("ticker_generation", detail_payload["run"]["timing_json"])
@@ -973,7 +976,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         payload = api_response.json()
         self.assertEqual(payload["run"]["status"], "failed")
         self.assertIn("yfinance", payload["run"]["error_message"])
-        self.assertEqual(payload["outputs"], [])
+        self.assertNotIn("outputs", payload)
         self.assertIn("recommendation_generation_seconds", payload["run"]["timing_json"])
 
         self.assertEqual(dashboard.status_code, 200)
@@ -1236,7 +1239,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             def enqueue_job(self, job_id: int, scheduled_for=None) -> Run:
                 return self.runs.enqueue(job_id, scheduled_for=scheduled_for, job_type=self.jobs.get(job_id).job_type)
 
-            def execute_claimed_run(self, run: Run) -> tuple[Run, list[Recommendation]]:
+            def execute_claimed_run(self, run: Run) -> tuple[Run, list[object]]:
                 artifact = {"snapshot_id": 99, "scope": "macro", "subject_key": "global_macro"}
                 summary = {"status": "completed", "snapshot_count": 1}
                 self.runs.set_artifact(run.id or 0, artifact)

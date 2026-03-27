@@ -380,38 +380,25 @@ class JobExecutionService:
 
     def enqueue_manual_evaluation(
         self,
-        recommendation_id: int | None = None,
         recommendation_plan_id: int | None = None,
         recommendation_plan_scope: bool = False,
     ) -> Run:
-        job_name = "manual recommendation evaluation" if recommendation_id is not None else "manual evaluation"
+        job_name = "manual evaluation"
         if recommendation_plan_id is not None:
             job_name = "manual recommendation plan evaluation"
         job = self.jobs.get_or_create_system_job(job_name, JobType.RECOMMENDATION_EVALUATION)
         run = self.runs.enqueue(job.id or 0, job_type=JobType.RECOMMENDATION_EVALUATION)
         trigger_mode = "manual_global"
-        trigger_source = "recommendations_ui"
-        if recommendation_plan_scope:
-            trigger_source = "recommendation_plans_ui"
+        trigger_source = "recommendation_plans_ui"
         if recommendation_plan_id is not None:
             trigger_mode = "manual_recommendation_plan"
-            trigger_source = "recommendation_plans_ui"
-        elif recommendation_id is not None:
-            trigger_mode = "manual_recommendation"
         artifact: dict[str, object] = {
             "trigger": {
                 "mode": trigger_mode,
                 "source": trigger_source,
             }
         }
-        if recommendation_id is not None:
-            recommendation = self.runs.get_recommendation(recommendation_id)
-            artifact["scope"] = {
-                "type": "recommendation_ids",
-                "recommendation_ids": [recommendation_id],
-                "ticker": recommendation.ticker,
-            }
-        elif recommendation_plan_scope:
+        if recommendation_plan_scope:
             artifact["scope"] = {
                 "type": "all_recommendation_plans",
             }

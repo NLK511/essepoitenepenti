@@ -540,10 +540,6 @@ class RepositoryTests(unittest.TestCase):
         self.assertIsNotNone(latest_runs[0].timing_json)
         assert latest_runs[0].timing_json is not None
         self.assertIn('"ticker_generation"', latest_runs[0].timing_json)
-        stored = runs.list_recommendations_for_run(latest_runs[0].id or 0)
-        outputs = runs.list_outputs_for_run(latest_runs[0].id or 0)
-        self.assertEqual(stored, [])
-        self.assertEqual(outputs, [])
         refreshed_job = jobs.get(job.id or 0)
         self.assertIsNotNone(refreshed_job.last_enqueued_at)
 
@@ -819,7 +815,6 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn('"synced_recommendation_plan_outcomes": 4', stored_run.summary_json or "")
         self.assertIn('"output": "evaluation complete"', stored_run.summary_json or "")
         self.assertIn('"evaluation_seconds"', stored_run.timing_json or "")
-        self.assertEqual(runs.list_recommendations_for_run(stored_run.id or 0), [])
 
     def test_job_execution_processes_optimization_run_and_persists_summary_and_artifact(self) -> None:
         session = create_session()
@@ -849,7 +844,6 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn('"weights_changed": true', (stored_run.summary_json or "").lower())
         self.assertIn('"weights_path": "/tmp/weights.json"', stored_run.artifact_json or "")
         self.assertIn('"optimization_seconds"', stored_run.timing_json or "")
-        self.assertEqual(runs.list_recommendations_for_run(stored_run.id or 0), [])
 
     def test_job_execution_processes_macro_sentiment_refresh_and_persists_snapshot_metadata(self) -> None:
         session = create_session()
@@ -886,7 +880,6 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn('"snapshot_id": 7', stored_run.artifact_json or "")
         self.assertIn('"macro_context_snapshot_id":', stored_run.artifact_json or "")
         self.assertIn('"macro_refresh_seconds"', stored_run.timing_json or "")
-        self.assertEqual(runs.list_recommendations_for_run(stored_run.id or 0), [])
         macro_context_snapshots = ContextSnapshotRepository(session).list_macro_context_snapshots(run_id=queued_run.id or 0)
         self.assertEqual(len(macro_context_snapshots), 1)
         self.assertEqual(macro_context_snapshots[0].source_breakdown["sentiment_snapshot_id"], 7)
@@ -926,7 +919,6 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn('"snapshot_count": 1', stored_run.artifact_json or "")
         self.assertIn('"industry_context_snapshot_ids": [', stored_run.artifact_json or "")
         self.assertIn('"industry_refresh_seconds"', stored_run.timing_json or "")
-        self.assertEqual(runs.list_recommendations_for_run(stored_run.id or 0), [])
         industry_context_snapshots = ContextSnapshotRepository(session).list_industry_context_snapshots(run_id=queued_run.id or 0)
         self.assertEqual(len(industry_context_snapshots), 1)
         self.assertEqual(industry_context_snapshots[0].source_breakdown["sentiment_snapshot_id"], 12)
@@ -967,7 +959,6 @@ class RepositoryTests(unittest.TestCase):
         self.assertIsNotNone(latest_run.timing_json)
         assert latest_run.timing_json is not None
         self.assertIn('"recommendation_generation_seconds"', latest_run.timing_json)
-        self.assertEqual(runs.list_recommendations_for_run(latest_run.id or 0), [])
 
     def test_job_execution_stops_immediately_on_multi_ticker_failure_without_partial_persistence(self) -> None:
         session = create_session()
@@ -983,7 +974,6 @@ class RepositoryTests(unittest.TestCase):
         latest_run = runs.get_run(queued_run.id or 0)
         self.assertEqual(latest_run.status, "failed")
         self.assertEqual(latest_run.error_message, "ticker not found: MISSING")
-        self.assertEqual(runs.list_recommendations_for_run(latest_run.id or 0), [])
         self.assertIsNotNone(latest_run.timing_json)
         assert latest_run.timing_json is not None
         self.assertIn('"ticker": "AAPL"', latest_run.timing_json)
@@ -1001,25 +991,29 @@ class RepositoryTests(unittest.TestCase):
         claimed = runs.claim_next_queued_run()
         assert claimed is not None
         runs.update_status(run.id or 0, "completed")
-        runs.add_recommendation(
-            run.id or 0,
-            Recommendation(
+        RecommendationPlanRepository(session).create_plan(
+            RecommendationPlan(
                 ticker="AAPL",
-                direction=RecommendationDirection.LONG,
-                confidence=80.0,
-                entry_price=100.0,
+                horizon="1w",
+                action="long",
+                confidence_percent=80.0,
+                entry_price_low=100.0,
+                entry_price_high=101.0,
                 stop_loss=95.0,
                 take_profit=110.0,
-                indicator_summary="Above SMA200 · RSI 55.0",
-            ),
-            RunDiagnostics(),
+                holding_period_days=5,
+                risk_reward_ratio=2.0,
+                thesis_summary="Seeded historical plan",
+                rationale_summary="Repository delete cleanup coverage",
+                run_id=run.id,
+                job_id=job.id,
+            )
         )
 
         jobs.delete(job.id or 0)
 
         self.assertIsNone(session.get(JobRecord, job.id or 0))
         self.assertIsNone(session.get(RunRecord, run.id or 0))
-        self.assertEqual(runs.list_recommendations_for_run(run.id or 0), [])
 
     def test_settings_repository_defaults_summary_backend_to_pi_agent(self) -> None:
         session = create_session()

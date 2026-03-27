@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.domain.models import Run, RunOutput
+from trade_proposer_app.domain.models import Run
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import ACTIVE_RUN_STATUSES, RunRepository
@@ -22,12 +22,10 @@ async def get_run(run_id: int, session: Session = Depends(get_db_session)) -> di
         run = repository.get_run(run_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    outputs: list[RunOutput] = repository.list_outputs_for_run(run_id)
     context_repository = ContextSnapshotRepository(session)
     recommendation_plans = RecommendationPlanRepository(session)
     return {
         "run": run,
-        "outputs": outputs,
         "macro_context_snapshots": context_repository.list_macro_context_snapshots(run_id=run_id, limit=200),
         "industry_context_snapshots": context_repository.list_industry_context_snapshots(run_id=run_id, limit=200),
         "ticker_signal_snapshots": context_repository.list_ticker_signal_snapshots(run_id=run_id, limit=200),

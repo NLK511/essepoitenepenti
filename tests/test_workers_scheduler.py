@@ -313,10 +313,6 @@ class WorkerSchedulerTests(unittest.TestCase):
         self.assertIsNotNone(updated_run.timing_json)
         assert updated_run.timing_json is not None
         self.assertIn('"ticker_generation"', updated_run.timing_json)
-        recommendations = runs.list_recommendations_for_run(updated_run.id or 0)
-        outputs = runs.list_outputs_for_run(updated_run.id or 0)
-        self.assertEqual(recommendations, [])
-        self.assertEqual(outputs, [])
 
     def test_worker_process_once_processes_evaluation_run(self) -> None:
         session = self.create_session()
@@ -343,7 +339,6 @@ class WorkerSchedulerTests(unittest.TestCase):
         self.assertEqual(updated_run.job_type, JobType.RECOMMENDATION_EVALUATION)
         self.assertIn('"synced_recommendation_plan_outcomes": 3', updated_run.summary_json or "")
         self.assertIn('"evaluation_seconds"', updated_run.timing_json or "")
-        self.assertEqual(runs.list_recommendations_for_run(updated_run.id or 0), [])
 
     def test_worker_process_once_processes_optimization_run(self) -> None:
         session = self.create_session()
@@ -371,7 +366,6 @@ class WorkerSchedulerTests(unittest.TestCase):
         self.assertIn('"weights_changed": true', (updated_run.summary_json or "").lower())
         self.assertIn('"weights_path": "/tmp/weights.json"', updated_run.artifact_json or "")
         self.assertIn('"optimization_seconds"', updated_run.timing_json or "")
-        self.assertEqual(runs.list_recommendations_for_run(updated_run.id or 0), [])
 
     def test_worker_process_once_processes_macro_sentiment_refresh_run(self) -> None:
         session = self.create_session()
@@ -401,7 +395,6 @@ class WorkerSchedulerTests(unittest.TestCase):
         self.assertIn('"scope": "macro"', updated_run.summary_json or "")
         self.assertIn('"snapshot_id": 11', updated_run.artifact_json or "")
         self.assertIn('"macro_refresh_seconds"', updated_run.timing_json or "")
-        self.assertEqual(runs.list_recommendations_for_run(updated_run.id or 0), [])
 
     def test_worker_process_once_processes_industry_sentiment_refresh_run(self) -> None:
         session = self.create_session()
@@ -431,7 +424,6 @@ class WorkerSchedulerTests(unittest.TestCase):
         self.assertIn('"scope": "industry"', updated_run.summary_json or "")
         self.assertIn('"snapshot_count": 1', updated_run.artifact_json or "")
         self.assertIn('"industry_refresh_seconds"', updated_run.timing_json or "")
-        self.assertEqual(runs.list_recommendations_for_run(updated_run.id or 0), [])
 
     def test_scheduler_skips_second_optimization_job_when_one_is_active(self) -> None:
         session = self.create_session()
@@ -473,7 +465,6 @@ class WorkerSchedulerTests(unittest.TestCase):
         self.assertIsNotNone(updated_run.timing_json)
         assert updated_run.timing_json is not None
         self.assertIn('"recommendation_generation_seconds"', updated_run.timing_json)
-        self.assertEqual(runs.list_recommendations_for_run(updated_run.id or 0), [])
 
     def test_worker_process_once_returns_false_when_queue_empty(self) -> None:
         session = self.create_session()

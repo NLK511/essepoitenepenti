@@ -10,7 +10,7 @@ Trade Proposer App now executes its critical workflows entirely inside this repo
 - **Shared sentiment/context**: macro and industry refresh workflows persist reusable snapshots and transitional context objects, proposal generation links back to those artifacts, and health/preflight now reports snapshot freshness.
 - **Signal integrity policy**: missing data becomes explicit neutral/warning output rather than an invented fallback.
 - **Redesign write path**: watchlist orchestration, cheap-scan diagnostics, ticker signals, recommendation plans, recommendation-plan outcomes, event-ranked news-first macro/industry context writers, and a dedicated ticker deep-analysis service now exist inside the main app execution flow.
-- **Legacy posture**: legacy recommendation operator surfaces are retired, and legacy recommendation data is now slated for deletion once the remaining optimization migration is completed.
+- **Legacy posture**: legacy recommendation operator surfaces are retired, optimization already uses recommendation-plan outcomes, and the remaining work is deletion-oriented cleanup of dormant legacy recommendation persistence/code.
 
 ## Phase 1: Operational hardening (partially complete)
 
@@ -95,7 +95,7 @@ Delivered in this phase so far:
 - calibration reporting now includes horizon, transmission-bias, context-regime, and horizon-plus-setup-family slices so operators can judge where the redesign is or is not working, now marks slice sample quality explicitly, and watchlist-backed action gating now uses those richer slices with bounded sample-aware adjustments instead of relying only on setup family and confidence bucket
 
 Next required work in this phase:
-- migrate optimization from legacy `Recommendation` outcomes to `RecommendationPlanOutcome` and remove legacy recommendation data after the migration lands
+- delete the remaining dormant legacy `Recommendation` persistence/models/helpers now that optimization and active operator flows are plan-outcome-native
 - use the new calibration summaries to drive actual confidence re-scaling and operator thresholds rather than only reporting grouped outcomes
 - continue maturing the redesign-native deep-analysis path from an internal native executor into a fuller ticker-signal / recommendation-engine layer with less dependence on legacy proposal payload shapes
 - harden setup-family-native plan behavior so thesis, invalidation, stop/target framing, and `no_action` reasoning differ materially by family
@@ -106,8 +106,8 @@ Defined implementation phases from here:
 1. **Phase 4A — optimization convergence and legacy deletion**
    - ✅ refactor optimization services, summaries, and tests to consume `RecommendationPlanOutcome`
    - ✅ remove remaining optimization dependence on legacy recommendation WIN/LOSS rows
-   - in progress: stop proposal-run persistence and dashboard filtering from depending on legacy recommendation rows
-   - next: delete legacy recommendation persistence/models/repository code and migrations now that redesign-native optimization is validated in-app
+   - ✅ stop proposal-run persistence, dashboard filtering, and mounted run-detail/debugger flows from depending on legacy recommendation rows/output payloads
+   - next: delete dormant legacy recommendation persistence/models/repository code and decide when the old table/migration history is actually dropped
    - continue updating API/UI/docs wording so recommendation-plan outcomes are the only optimization truth source
 2. **Phase 4B — setup-family-native recommendation behavior**
    - strengthen family-specific thesis, invalidation, target, stop, and `no_action` generation
