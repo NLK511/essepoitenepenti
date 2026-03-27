@@ -28,9 +28,10 @@ class RecommendationPlanBaselineService:
         *,
         ticker: str | None = None,
         run_id: int | None = None,
+        setup_family: str | None = None,
         limit: int = 500,
     ) -> RecommendationBaselineSummary:
-        plans = self.plans.list_plans(ticker=ticker, run_id=run_id, limit=limit)
+        plans = self.plans.list_plans(ticker=ticker, run_id=run_id, setup_family=setup_family, limit=limit)
         comparisons = [self._build_comparison(definition, plans) for definition in self._definitions()]
         comparisons.sort(key=lambda item: (item.resolved_trade_count, item.trade_plan_count, item.win_count), reverse=True)
         family_cohorts = [self._build_comparison(definition, plans) for definition in self._family_definitions()]

@@ -253,6 +253,8 @@ Operators should be able to see:
 - family-specific risks
 - family-specific invalidation framing
 - whether calibration penalized that family
+- direct family review slices by horizon, transmission bias, and context regime
+- recommendation-plan browse filtering by setup family when reviewing stored plans
 
 ## Success criteria
 

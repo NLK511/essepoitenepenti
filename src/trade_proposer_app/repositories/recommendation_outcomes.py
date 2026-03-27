@@ -48,6 +48,7 @@ class RecommendationOutcomeRepository:
         outcome: str | None = None,
         recommendation_plan_id: int | None = None,
         run_id: int | None = None,
+        setup_family: str | None = None,
         limit: int = 50,
     ) -> list[RecommendationPlanOutcome]:
         query = select(RecommendationOutcomeRecord, RecommendationPlanRecord).join(
@@ -62,6 +63,8 @@ class RecommendationOutcomeRepository:
             query = query.where(RecommendationOutcomeRecord.recommendation_plan_id == recommendation_plan_id)
         if run_id is not None:
             query = query.where(RecommendationOutcomeRecord.run_id == run_id)
+        if setup_family:
+            query = query.where(RecommendationOutcomeRecord.setup_family == setup_family)
         rows = self.session.execute(
             query.order_by(RecommendationOutcomeRecord.evaluated_at.desc()).limit(limit)
         ).all()

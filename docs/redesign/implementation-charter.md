@@ -124,6 +124,7 @@ That result should include:
 - warnings
 - diagnostics
 - supporting signal breakdown
+- setup-family-aware execution framing and review metadata where available
 
 This is required for:
 

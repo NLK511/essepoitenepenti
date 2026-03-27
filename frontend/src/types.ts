@@ -366,6 +366,30 @@ export interface RecommendationBaselineSummary {
   family_cohorts: RecommendationBaselineComparison[];
 }
 
+export interface RecommendationSetupFamilyReview {
+  family: string;
+  label: string;
+  total_outcomes: number;
+  resolved_outcomes: number;
+  open_outcomes: number;
+  win_outcomes: number;
+  loss_outcomes: number;
+  overall_win_rate_percent: number | null;
+  average_return_1d: number | null;
+  average_return_3d: number | null;
+  average_return_5d: number | null;
+  average_mfe: number | null;
+  average_mae: number | null;
+  by_horizon: RecommendationCalibrationBucket[];
+  by_transmission_bias: RecommendationCalibrationBucket[];
+  by_context_regime: RecommendationCalibrationBucket[];
+}
+
+export interface RecommendationSetupFamilyReviewSummary {
+  total_outcomes_reviewed: number;
+  families: RecommendationSetupFamilyReview[];
+}
+
 export interface RunDetailResponse {
   run: Run;
   macro_context_snapshots: MacroContextSnapshot[];

@@ -1168,7 +1168,10 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             plan_id = plans.json()[0]["id"]
             outcomes = await client.get("/api/recommendation-outcomes", params={"ticker": "AAPL"})
             summary = await client.get("/api/recommendation-outcomes/summary")
+            family_filtered_summary = await client.get("/api/recommendation-outcomes/summary", params={"setup_family": "continuation"})
+            setup_family_review = await client.get("/api/recommendation-outcomes/setup-family-review")
             baselines = await client.get("/api/recommendation-plans/baselines")
+            filtered_plans = await client.get("/api/recommendation-plans", params={"setup_family": "continuation"})
             queued = await client.post("/api/recommendation-plans/evaluate", data={})
             scoped = await client.post(f"/api/recommendation-plans/{plan_id}/evaluate", data={})
 
@@ -1178,6 +1181,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(summary.json()["total_outcomes"], 2)
         self.assertEqual(summary.json()["resolved_outcomes"], 2)
         self.assertEqual(summary.json()["overall_win_rate_percent"], 50.0)
+        self.assertEqual(family_filtered_summary.status_code, 200)
+        self.assertEqual(family_filtered_summary.json()["total_outcomes"], 1)
+        self.assertEqual(family_filtered_summary.json()["overall_win_rate_percent"], 100.0)
         bucket_map = {item["key"]: item for item in summary.json()["by_confidence_bucket"]}
         self.assertEqual(bucket_map["65_to_79"]["win_count"], 1)
         self.assertEqual(bucket_map["65_to_79"]["sample_status"], "insufficient")
@@ -1196,6 +1202,14 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         horizon_setup_map = {item["key"]: item for item in summary.json()["by_horizon_setup_family"]}
         self.assertEqual(horizon_setup_map["1w__continuation"]["win_count"], 1)
         self.assertEqual(horizon_setup_map["1w__breakout"]["loss_count"], 1)
+        self.assertEqual(setup_family_review.status_code, 200)
+        family_review_map = {item["family"]: item for item in setup_family_review.json()["families"]}
+        self.assertEqual(family_review_map["continuation"]["win_outcomes"], 1)
+        self.assertEqual(family_review_map["continuation"]["by_horizon"][0]["key"], "1w")
+        self.assertEqual(family_review_map["breakout"]["loss_outcomes"], 1)
+        self.assertEqual(filtered_plans.status_code, 200)
+        self.assertEqual(len(filtered_plans.json()), 1)
+        self.assertEqual(filtered_plans.json()[0]["ticker"], "AAPL")
         self.assertEqual(baselines.status_code, 200)
         self.assertEqual(baselines.json()["total_trade_plans_reviewed"], 2)
         baseline_map = {item["key"]: item for item in baselines.json()["comparisons"]}

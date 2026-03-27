@@ -3,7 +3,13 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { RecommendationBaselineSummary, RecommendationCalibrationSummary, RecommendationPlan, Run } from "../types";
+import type {
+  RecommendationBaselineSummary,
+  RecommendationCalibrationSummary,
+  RecommendationPlan,
+  RecommendationSetupFamilyReviewSummary,
+  Run,
+} from "../types";
 import { formatDate } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams): string {
@@ -94,11 +100,58 @@ function CalibrationBucketTable({ title, buckets }: { title: string; buckets: Re
   );
 }
 
+function SetupFamilySliceTable({
+  title,
+  buckets,
+}: {
+  title: string;
+  buckets: RecommendationCalibrationSummary["by_confidence_bucket"];
+}) {
+  return (
+    <div className="table-wrap top-gap-small">
+      <table>
+        <thead>
+          <tr>
+            <th>{title}</th>
+            <th>Total</th>
+            <th>Resolved</th>
+            <th>Sample</th>
+            <th>Win rate</th>
+            <th>Avg 5d</th>
+          </tr>
+        </thead>
+        <tbody>
+          {buckets.length > 0 ? (
+            buckets.map((bucket) => (
+              <tr key={bucket.key}>
+                <td>{bucket.label}</td>
+                <td>{bucket.total_count}</td>
+                <td>{bucket.resolved_count}</td>
+                <td>
+                  <Badge tone={sampleTone(bucket.sample_status)}>{bucket.sample_status}</Badge>
+                  <div className="helper-text top-gap-small">min {bucket.min_required_resolved_count}</div>
+                </td>
+                <td>{bucket.win_rate_percent ?? "—"}%</td>
+                <td>{bucket.average_return_5d ?? "—"}%</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={6} className="helper-text">No slices stored yet.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function RecommendationPlansPage() {
   const [searchParams, setSearchParams] = useSearchParams({ limit: "100" });
   const [plans, setPlans] = useState<RecommendationPlan[] | null>(null);
   const [calibration, setCalibration] = useState<RecommendationCalibrationSummary | null>(null);
   const [baselines, setBaselines] = useState<RecommendationBaselineSummary | null>(null);
+  const [familyReview, setFamilyReview] = useState<RecommendationSetupFamilyReviewSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [evaluationMessage, setEvaluationMessage] = useState<string | null>(null);
   const [evaluating, setEvaluating] = useState(false);
@@ -108,10 +161,24 @@ export function RecommendationPlansPage() {
     async function load() {
       try {
         setError(null);
-        const summaryQuery = `limit=500${searchParams.get("run_id") ? `&run_id=${searchParams.get("run_id")}` : ""}${searchParams.get("ticker") ? `&ticker=${encodeURIComponent(searchParams.get("ticker") ?? "")}` : ""}`;
+        const summaryParams = new URLSearchParams({ limit: "500" });
+        const runId = searchParams.get("run_id");
+        const ticker = searchParams.get("ticker");
+        const setupFamily = searchParams.get("setup_family");
+        if (runId) {
+          summaryParams.set("run_id", runId);
+        }
+        if (ticker) {
+          summaryParams.set("ticker", ticker);
+        }
+        if (setupFamily) {
+          summaryParams.set("setup_family", setupFamily);
+        }
+        const summaryQuery = summaryParams.toString();
         setPlans(await getJson<RecommendationPlan[]>(buildQuery(searchParams)));
         setCalibration(await getJson<RecommendationCalibrationSummary>(`/api/recommendation-outcomes/summary?${summaryQuery}`));
         setBaselines(await getJson<RecommendationBaselineSummary>(`/api/recommendation-plans/baselines?${summaryQuery}`));
+        setFamilyReview(await getJson<RecommendationSetupFamilyReviewSummary>(`/api/recommendation-outcomes/setup-family-review?${summaryQuery}`));
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load recommendation plans");
       }
@@ -181,6 +248,7 @@ export function RecommendationPlansPage() {
           <label className="form-field"><span>Ticker</span><input name="ticker" defaultValue={searchParams.get("ticker") ?? ""} placeholder="AAPL" /></label>
           <label className="form-field"><span>Action</span><select name="action" defaultValue={searchParams.get("action") ?? ""}><option value="">All</option><option value="long">long</option><option value="short">short</option><option value="no_action">no_action</option></select></label>
           <label className="form-field"><span>Run id</span><input name="run_id" defaultValue={searchParams.get("run_id") ?? ""} placeholder="145" /></label>
+          <label className="form-field"><span>Setup family</span><select name="setup_family" defaultValue={searchParams.get("setup_family") ?? ""}><option value="">All</option><option value="breakout">breakout</option><option value="continuation">continuation</option><option value="mean_reversion">mean_reversion</option><option value="breakdown">breakdown</option><option value="catalyst_follow_through">catalyst_follow_through</option><option value="macro_beneficiary_loser">macro_beneficiary_loser</option></select></label>
           <label className="form-field"><span>Limit</span><select name="limit" defaultValue={searchParams.get("limit") ?? "100"}><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option></select></label>
           <div className="form-actions"><button className="button" type="submit">Apply</button></div>
         </form>
@@ -283,6 +351,35 @@ export function RecommendationPlansPage() {
               </table>
             </div>
           </>
+        ) : null}
+      </Card>
+
+      <Card className="top-gap">
+        <SectionTitle
+          title="Setup-family evaluation review"
+          subtitle={familyReview ? `Built from ${familyReview.total_outcomes_reviewed} stored outcome(s) across the current filters` : undefined}
+        />
+        {!familyReview && !error ? <LoadingState message="Loading setup-family review…" /> : null}
+        {familyReview ? (
+          <div className="top-gap-small">
+            {familyReview.families.map((family) => (
+              <Card key={family.family} className="top-gap-small">
+                <SectionTitle
+                  title={family.label}
+                  subtitle={`resolved ${family.resolved_outcomes} · open ${family.open_outcomes} · wins ${family.win_outcomes} · losses ${family.loss_outcomes}`}
+                />
+                <div className="stats-grid top-gap-small">
+                  <Card><strong>{family.overall_win_rate_percent ?? "—"}%</strong><div className="helper-text">resolved win rate</div></Card>
+                  <Card><strong>{family.average_return_5d ?? "—"}%</strong><div className="helper-text">avg 5d return</div></Card>
+                  <Card><strong>{family.average_mfe ?? "—"}%</strong><div className="helper-text">avg MFE</div></Card>
+                  <Card><strong>{family.average_mae ?? "—"}%</strong><div className="helper-text">avg MAE</div></Card>
+                </div>
+                <SetupFamilySliceTable title="By horizon" buckets={family.by_horizon} />
+                <SetupFamilySliceTable title="By transmission bias" buckets={family.by_transmission_bias} />
+                <SetupFamilySliceTable title="By context regime" buckets={family.by_context_regime} />
+              </Card>
+            ))}
+          </div>
         ) : null}
       </Card>
 

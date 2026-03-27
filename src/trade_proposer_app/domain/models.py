@@ -440,6 +440,30 @@ class RecommendationBaselineSummary(BaseModel):
     family_cohorts: list[RecommendationBaselineComparison] = Field(default_factory=list)
 
 
+class RecommendationSetupFamilyReview(BaseModel):
+    family: str
+    label: str
+    total_outcomes: int = 0
+    resolved_outcomes: int = 0
+    open_outcomes: int = 0
+    win_outcomes: int = 0
+    loss_outcomes: int = 0
+    overall_win_rate_percent: float | None = None
+    average_return_1d: float | None = None
+    average_return_3d: float | None = None
+    average_return_5d: float | None = None
+    average_mfe: float | None = None
+    average_mae: float | None = None
+    by_horizon: list[RecommendationCalibrationBucket] = Field(default_factory=list)
+    by_transmission_bias: list[RecommendationCalibrationBucket] = Field(default_factory=list)
+    by_context_regime: list[RecommendationCalibrationBucket] = Field(default_factory=list)
+
+
+class RecommendationSetupFamilyReviewSummary(BaseModel):
+    total_outcomes_reviewed: int = 0
+    families: list[RecommendationSetupFamilyReview] = Field(default_factory=list)
+
+
 class ProviderCredential(BaseModel):
     provider: str
     api_key: str = ""

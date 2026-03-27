@@ -61,6 +61,7 @@ class RecommendationPlanRepository:
         action: str | None = None,
         limit: int = 50,
         run_id: int | None = None,
+        setup_family: str | None = None,
     ) -> list[RecommendationPlan]:
         query = select(RecommendationPlanRecord)
         if ticker:
@@ -69,8 +70,17 @@ class RecommendationPlanRepository:
             query = query.where(RecommendationPlanRecord.action == action)
         if run_id is not None:
             query = query.where(RecommendationPlanRecord.run_id == run_id)
-        rows = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc()).limit(limit)).all()
+        fetch_limit = max(limit * 4, limit) if setup_family else limit
+        rows = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc()).limit(fetch_limit)).all()
         plans = [self._to_model(row) for row in rows]
+        if setup_family:
+            normalized_setup_family = setup_family.strip().lower()
+            plans = [
+                plan
+                for plan in plans
+                if str(plan.signal_breakdown.get("setup_family") or "").strip().lower() == normalized_setup_family
+            ]
+        plans = plans[:limit]
         outcome_map = self.outcomes.get_outcomes_by_plan_ids([plan.id for plan in plans if plan.id is not None])
         for plan in plans:
             if plan.id is not None:
