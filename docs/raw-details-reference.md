@@ -47,6 +47,7 @@ The redesign path persists `RecommendationPlan` objects, `RecommendationPlanOutc
 Important redesign-native fields now include:
 - context snapshot lifecycle metadata such as `event_lifecycle_summary`, `contradictory_event_labels`, and per-event `persistence_state` / `window_hint`
 - ticker transmission fields such as `context_strength_percent`, `context_event_relevance_percent`, `contradiction_count`, `decay_state`, and `transmission_confidence_adjustment`
+- recommendation-plan calibration fields such as `raw_confidence_percent`, `calibrated_confidence_percent`, `confidence_adjustment`, `effective_confidence_threshold`, and slice-level sample-status snapshots inside `calibration_review`
 - recommendation-plan action reasons such as `context_transmission_headwind` and `context_transmission_contradiction` when broader context blocks promotion
 
 ## Run and workflow artifacts

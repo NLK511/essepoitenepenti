@@ -98,7 +98,7 @@ Current Phase 4 status:
 - **Phase 4A** is complete: optimization, mounted operator flows, active proposal-run review, and legacy recommendation persistence retirement are all recommendation-plan/outcome-native, and the historical `recommendations` table is now explicitly dropped instead of being left as a hidden compatibility artifact
 - **Phase 4B** is now substantially complete: setup-family-aware plan framing includes family-specific thesis/invalidation text, execution metadata, `no_action` reasoning, operator-visible evaluation focus, dedicated setup-family cohort reporting, family-specific evaluation review slices, and direct browse filtering by setup family
 - **Phase 4C** is now substantially complete: macro/industry context writers now dedupe and cluster evidence, track persistence vs escalation vs fade, flag contradictory event evidence, feed redesign-native context metadata back into ticker analysis, and ticker transmission now affects stored signal confidence/gating rather than living only in diagnostics
-- **Phase 4D** is meaningfully started but still early: stored outcomes, sample-aware calibration summaries, calibration-informed threshold gating, baseline cohort comparisons, and setup-family cohort review now exist, but confidence re-scaling and measured evidence concentration remain incomplete
+- **Phase 4D** is now substantially complete: calibration-aware confidence re-scaling, operator-visible evidence concentration reporting, bounded sample-aware threshold gating, baseline cohort comparisons, and setup-family cohort review are all in place; remaining work should now focus on accumulating enough outcome history to justify stronger claims, not on adding more calibration theater
 
 Next required work in this phase:
 - use the new calibration summaries to drive actual confidence re-scaling and operator thresholds rather than only reporting grouped outcomes
@@ -129,9 +129,10 @@ Defined implementation phases from here:
    - ✅ make transmission effects more measurable inside recommendation ranking via transmission-aware confidence adjustment and contradiction-aware no-action gating
    - status: substantially complete; further work should now roll into Phase 4D evidence concentration unless a clearly better transmission model is justified by measured outcomes
 4. **Phase 4D — calibration and evidence concentration**
-   - move from grouped reporting toward cautious confidence re-scaling and operator gating informed by plan-outcome evidence
-   - expand operator-visible cohort review around setup family, horizon, transmission bias, and context regime
-   - prefer measured cohort concentration over broad predictive claims
+   - ✅ move from grouped reporting toward cautious confidence re-scaling and operator gating informed by plan-outcome evidence
+   - ✅ expand operator-visible cohort review around setup family, horizon, transmission bias, and context regime
+   - ✅ add evidence-concentration reporting so operators can inspect the strongest and weakest measurable cohorts directly
+   - status: substantially complete; the limiting factor is now evidence accumulation over time rather than missing calibration plumbing
 
 Recommended implementation order inside Phase 4:
 1. Phase 4A — optimization convergence and legacy deletion

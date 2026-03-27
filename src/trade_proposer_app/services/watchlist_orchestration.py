@@ -503,6 +503,7 @@ class WatchlistOrchestrationService:
             horizon=watchlist.default_horizon.value,
             transmission_summary=transmission_summary,
         )
+        calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", signal.confidence_percent) or signal.confidence_percent)
         rationale = self._rationale_summary(signal, candidate, setup_family, transmission_summary)
         warnings = list(signal.warnings)
         if deep_output is None or deep_error is not None:
@@ -511,7 +512,7 @@ class WatchlistOrchestrationService:
                 horizon=watchlist.default_horizon,
                 action="no_action",
                 status="degraded",
-                confidence_percent=signal.confidence_percent,
+                confidence_percent=calibrated_confidence,
                 thesis_summary="Deep analysis did not complete; no actionable plan emitted.",
                 rationale_summary=rationale,
                 warnings=warnings,
@@ -528,20 +529,21 @@ class WatchlistOrchestrationService:
         direction = self._normalize_direction(recommendation.direction)
         action_reason = "actionable_setup"
         effective_threshold = float(calibration_review.get("effective_confidence_threshold", self.confidence_threshold))
+        calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", signal.confidence_percent) or signal.confidence_percent)
         if direction == "short" and not watchlist.allow_shorts:
             warnings.append("watchlist does not allow shorts")
             action = "no_action"
             action_reason = "shorts_disabled"
-        elif signal.confidence_percent < effective_threshold:
+        elif calibrated_confidence < effective_threshold:
             action = "no_action"
-            action_reason = "below_calibrated_action_threshold" if effective_threshold > self.confidence_threshold else "below_action_confidence_threshold"
+            action_reason = "below_calibrated_action_threshold" if effective_threshold > self.confidence_threshold or calibrated_confidence != signal.confidence_percent else "below_action_confidence_threshold"
         elif direction not in {"long", "short"}:
             action = "no_action"
             action_reason = "direction_not_actionable"
-        elif int(transmission_summary.get("contradiction_count", 0) or 0) > 0 and signal.confidence_percent < min(95.0, effective_threshold + 4.0):
+        elif int(transmission_summary.get("contradiction_count", 0) or 0) > 0 and calibrated_confidence < min(95.0, effective_threshold + 4.0):
             action = "no_action"
             action_reason = "context_transmission_contradiction"
-        elif transmission_summary.get("context_bias") == "headwind" and signal.confidence_percent < min(95.0, effective_threshold + 5.0):
+        elif transmission_summary.get("context_bias") == "headwind" and calibrated_confidence < min(95.0, effective_threshold + 5.0):
             action = "no_action"
             action_reason = "context_transmission_headwind"
         else:
@@ -553,7 +555,7 @@ class WatchlistOrchestrationService:
                 horizon=watchlist.default_horizon,
                 action=action,
                 status="ok" if not warnings else "partial",
-                confidence_percent=signal.confidence_percent,
+                confidence_percent=calibrated_confidence,
                 thesis_summary=self._no_action_thesis(setup_family, action_reason, transmission_summary=transmission_summary),
                 rationale_summary=rationale,
                 warnings=list(dict.fromkeys(warnings)),
@@ -577,7 +579,7 @@ class WatchlistOrchestrationService:
             horizon=watchlist.default_horizon,
             action=action,
             status="ok" if not warnings else "partial",
-            confidence_percent=signal.confidence_percent,
+            confidence_percent=calibrated_confidence,
             entry_price_low=entry_price_low,
             entry_price_high=entry_price_high,
             stop_loss=stop_loss,
@@ -618,12 +620,13 @@ class WatchlistOrchestrationService:
             horizon=watchlist.default_horizon.value,
             transmission_summary=transmission_summary,
         )
+        calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", signal.confidence_percent) or signal.confidence_percent)
         return RecommendationPlan(
             ticker=candidate.ticker,
             horizon=watchlist.default_horizon,
             action="no_action",
             status="ok" if not signal.warnings else "partial",
-            confidence_percent=signal.confidence_percent,
+            confidence_percent=calibrated_confidence,
             thesis_summary=reason,
             rationale_summary=self._rationale_summary(signal, candidate, setup_family, transmission_summary),
             warnings=list(signal.warnings),
@@ -770,6 +773,8 @@ class WatchlistOrchestrationService:
         calibration_review: dict[str, object] | None = None,
         transmission_summary: dict[str, object] | None = None,
     ) -> dict[str, object]:
+        calibration = calibration_review or {}
+        calibrated_confidence = calibration.get("calibrated_confidence_percent") if isinstance(calibration.get("calibrated_confidence_percent"), (int, float)) else signal.confidence_percent
         return {
             "attention_score": signal.attention_score,
             "macro_exposure_score": signal.macro_exposure_score,
@@ -781,8 +786,10 @@ class WatchlistOrchestrationService:
             "execution_quality_score": signal.execution_quality_score,
             "setup_family": setup_family,
             "confidence_components": confidence_components,
-            "confidence_bucket": WatchlistOrchestrationService._confidence_bucket(signal.confidence_percent),
-            "calibration_review": calibration_review or {},
+            "raw_confidence_percent": signal.confidence_percent,
+            "calibrated_confidence_percent": round(float(calibrated_confidence), 2),
+            "confidence_bucket": WatchlistOrchestrationService._confidence_bucket(float(calibrated_confidence)),
+            "calibration_review": calibration,
             "transmission_summary": transmission_summary or {},
             "mode": signal.diagnostics.get("mode"),
         }
@@ -1030,13 +1037,17 @@ class WatchlistOrchestrationService:
         calibration_review: dict[str, object] | None = None,
         transmission_summary: dict[str, object] | None = None,
     ) -> dict[str, object]:
+        calibration = calibration_review or {}
         return {
             "summary": summary_text,
             "setup_family": setup_family,
             "action_reason": action_reason,
             "action_reason_detail": self._action_reason_detail(setup_family, action_reason, transmission_summary=transmission_summary),
             "confidence_components": confidence_components,
-            "calibration_review": calibration_review or {},
+            "raw_confidence_percent": calibration.get("raw_confidence_percent"),
+            "calibrated_confidence_percent": calibration.get("calibrated_confidence_percent"),
+            "confidence_adjustment": calibration.get("confidence_adjustment"),
+            "calibration_review": calibration,
             "transmission_summary": transmission_summary or {},
             "entry_style": self._entry_style(setup_family),
             "stop_style": self._stop_style(setup_family),
@@ -1332,6 +1343,9 @@ class WatchlistOrchestrationService:
             return {
                 "enabled": False,
                 "review_status": "disabled",
+                "raw_confidence_percent": round(confidence_percent, 2),
+                "calibrated_confidence_percent": round(confidence_percent, 2),
+                "confidence_adjustment": 0.0,
                 "base_confidence_threshold": round(self.confidence_threshold, 2),
                 "effective_confidence_threshold": round(self.confidence_threshold, 2),
                 "threshold_adjustment": 0.0,
@@ -1352,18 +1366,19 @@ class WatchlistOrchestrationService:
         horizon_setup_bucket = self._find_calibration_bucket(getattr(calibration_summary, "by_horizon_setup_family", []), horizon_setup_key)
 
         threshold_adjustment = 0.0
+        confidence_adjustment = 0.0
         reasons: list[str] = []
         reviewed_buckets = (
-            ("setup_family", setup_bucket, 10.0, 5.0, -2.0),
-            ("confidence_bucket", confidence_bucket, 10.0, 5.0, -2.0),
-            ("horizon", horizon_bucket, 4.0, 2.0, -1.0),
-            ("transmission_bias", transmission_bucket, 3.0, 1.5, -0.75),
-            ("context_regime", context_regime_bucket, 3.0, 1.5, -0.75),
-            ("horizon_setup_family", horizon_setup_bucket, 4.0, 2.0, -1.0),
+            ("setup_family", setup_bucket, 10.0, 5.0, -2.0, 1.6, 0.9, -0.6),
+            ("confidence_bucket", confidence_bucket, 10.0, 5.0, -2.0, 1.2, 0.75, -0.5),
+            ("horizon", horizon_bucket, 4.0, 2.0, -1.0, 0.85, 0.5, -0.3),
+            ("transmission_bias", transmission_bucket, 3.0, 1.5, -0.75, 0.6, 0.35, -0.2),
+            ("context_regime", context_regime_bucket, 3.0, 1.5, -0.75, 0.6, 0.35, -0.2),
+            ("horizon_setup_family", horizon_setup_bucket, 4.0, 2.0, -1.0, 0.75, 0.4, -0.2),
         )
         usable_bucket_count = 0
         strong_bucket_count = 0
-        for label, bucket, hard_penalty, soft_penalty, reward in reviewed_buckets:
+        for label, bucket, hard_penalty, soft_penalty, reward, hard_conf_penalty, soft_conf_penalty, conf_reward in reviewed_buckets:
             adjustment, bucket_reasons, sample_status = self._bucket_threshold_adjustment(
                 label,
                 bucket,
@@ -1372,18 +1387,32 @@ class WatchlistOrchestrationService:
                 soft_penalty=soft_penalty,
                 reward=reward,
             )
+            conf_adjustment = self._bucket_confidence_adjustment(
+                label,
+                bucket,
+                overall_win_rate=overall_win_rate,
+                hard_penalty=hard_conf_penalty,
+                soft_penalty=soft_conf_penalty,
+                reward=conf_reward,
+            )
             if sample_status in {"usable", "strong"}:
                 usable_bucket_count += 1
             if sample_status == "strong":
                 strong_bucket_count += 1
             threshold_adjustment += adjustment
+            confidence_adjustment += conf_adjustment
             reasons.extend(bucket_reasons)
         threshold_adjustment = max(-6.0, min(15.0, threshold_adjustment))
+        confidence_adjustment = max(-4.0, min(2.5, confidence_adjustment))
         effective_threshold = max(45.0, min(90.0, base_threshold + threshold_adjustment))
+        calibrated_confidence = max(5.0, min(95.0, confidence_percent + confidence_adjustment))
         review_status = self._calibration_review_status(usable_bucket_count, strong_bucket_count, reasons)
         return {
             "enabled": True,
             "review_status": review_status,
+            "raw_confidence_percent": round(confidence_percent, 2),
+            "calibrated_confidence_percent": round(calibrated_confidence, 2),
+            "confidence_adjustment": round(confidence_adjustment, 2),
             "base_confidence_threshold": round(base_threshold, 2),
             "effective_confidence_threshold": round(effective_threshold, 2),
             "threshold_adjustment": round(threshold_adjustment, 2),
@@ -1435,6 +1464,31 @@ class WatchlistOrchestrationService:
             return round(reward * reward_multiplier, 2), [f"{label}_outperforming"], sample_status
         return 0.0, [], sample_status
 
+    def _bucket_confidence_adjustment(
+        self,
+        label: str,
+        bucket: object | None,
+        *,
+        overall_win_rate: float | None,
+        hard_penalty: float,
+        soft_penalty: float,
+        reward: float,
+    ) -> float:
+        if bucket is None:
+            return 0.0
+        win_rate = self._safe_rate(getattr(bucket, "win_rate_percent", None))
+        sample_status = str(getattr(bucket, "sample_status", "insufficient") or "insufficient")
+        if win_rate is None or overall_win_rate is None or sample_status in {"insufficient", "limited"}:
+            return 0.0
+        sample_multiplier = 1.0 if sample_status == "strong" else 0.65
+        if win_rate <= max(35.0, overall_win_rate - 15.0):
+            return round(-hard_penalty * sample_multiplier, 2)
+        if win_rate <= max(45.0, overall_win_rate - 8.0):
+            return round(-soft_penalty * sample_multiplier, 2)
+        if win_rate >= min(80.0, overall_win_rate + 12.0):
+            return round(abs(reward) * sample_multiplier, 2)
+        return 0.0
+
     def _bucket_snapshot(self, key: str, bucket: object | None) -> dict[str, object]:
         return {
             "key": key,
@@ -1442,6 +1496,7 @@ class WatchlistOrchestrationService:
             "win_rate_percent": self._safe_rate(getattr(bucket, "win_rate_percent", None)) if bucket is not None else None,
             "sample_status": str(getattr(bucket, "sample_status", "insufficient") or "insufficient") if bucket is not None else "insufficient",
             "min_required_resolved_count": int(getattr(bucket, "min_required_resolved_count", 0) or 0) if bucket is not None else 0,
+            "average_return_5d": round(float(getattr(bucket, "average_return_5d", 0.0) or 0.0), 3) if bucket is not None and getattr(bucket, "average_return_5d", None) is not None else None,
         }
 
     @staticmethod

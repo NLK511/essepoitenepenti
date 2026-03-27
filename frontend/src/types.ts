@@ -390,6 +390,32 @@ export interface RecommendationSetupFamilyReviewSummary {
   families: RecommendationSetupFamilyReview[];
 }
 
+export interface RecommendationEvidenceConcentrationCohort {
+  slice_name: string;
+  key: string;
+  label: string;
+  sample_status: string;
+  resolved_count: number;
+  min_required_resolved_count: number;
+  win_rate_percent: number | null;
+  average_return_5d: number | null;
+  edge_vs_overall_win_rate_percent: number | null;
+  edge_vs_overall_return_5d: number | null;
+  concentration_score: number;
+  interpretation: string;
+}
+
+export interface RecommendationEvidenceConcentrationSummary {
+  total_outcomes_reviewed: number;
+  resolved_outcomes_reviewed: number;
+  overall_win_rate_percent: number | null;
+  overall_average_return_5d: number | null;
+  ready_for_expansion: boolean;
+  focus_message: string;
+  strongest_positive_cohorts: RecommendationEvidenceConcentrationCohort[];
+  weakest_cohorts: RecommendationEvidenceConcentrationCohort[];
+}
+
 export interface RunDetailResponse {
   run: Run;
   macro_context_snapshots: MacroContextSnapshot[];

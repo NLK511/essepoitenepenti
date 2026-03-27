@@ -454,11 +454,12 @@ Completed in the redesign track so far:
 - recommendation-plan generation now also persists setup-family-specific entry style and invalidation framing so the family label changes operator-facing plan behavior, not just metadata
 - macro and industry context writers now dedupe repeated evidence, track event lifecycle state (`new`, `escalating`, `persistent`, `fading`), and persist contradiction/lifecycle summaries in redesign-native context metadata
 - watchlist orchestration now applies bounded transmission-confidence adjustments and explicit contradiction-aware `no_action` behavior instead of keeping transmission purely diagnostic
+- calibration review now performs cautious confidence re-scaling in addition to threshold gating, and operator browse flows now expose evidence-concentration surfaces that highlight the strongest and weakest measurable cohorts directly
 
 Not yet complete:
 - a richer event-extraction pipeline beyond the current heuristic event-ranking/source-priority/lifecycle layer
 - a fuller redesign-native ticker-analysis and recommendation-engine path with less dependence on legacy proposal-engine internals and payload conventions
-- confidence calibration and outcome-driven refinement for the new recommendation-plan path
+- long-lived evidence accumulation and review discipline for the new recommendation-plan path
 - migration or retirement strategy for the remaining legacy recommendation and sentiment-snapshot paths
 
 Practical meaning:

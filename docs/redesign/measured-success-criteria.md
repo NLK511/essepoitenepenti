@@ -30,6 +30,8 @@ The redesign is succeeding at Phase 2 if it produces:
 - enough stored outcomes for repeated review
 - usable cohort summaries by horizon/setup/transmission
 - operator-visible threshold logic
+- operator-visible bounded confidence re-scaling rather than hidden calibration magic
+- evidence-concentration views that show where the app is strongest and weakest
 - fewer unjustified promotions of weak setups
 - stable review workflows for wins, losses, and missed opportunities
 

@@ -6,6 +6,7 @@ import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionT
 import type {
   RecommendationBaselineSummary,
   RecommendationCalibrationSummary,
+  RecommendationEvidenceConcentrationSummary,
   RecommendationPlan,
   RecommendationSetupFamilyReviewSummary,
   Run,
@@ -152,6 +153,7 @@ export function RecommendationPlansPage() {
   const [calibration, setCalibration] = useState<RecommendationCalibrationSummary | null>(null);
   const [baselines, setBaselines] = useState<RecommendationBaselineSummary | null>(null);
   const [familyReview, setFamilyReview] = useState<RecommendationSetupFamilyReviewSummary | null>(null);
+  const [evidenceConcentration, setEvidenceConcentration] = useState<RecommendationEvidenceConcentrationSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [evaluationMessage, setEvaluationMessage] = useState<string | null>(null);
   const [evaluating, setEvaluating] = useState(false);
@@ -179,6 +181,7 @@ export function RecommendationPlansPage() {
         setCalibration(await getJson<RecommendationCalibrationSummary>(`/api/recommendation-outcomes/summary?${summaryQuery}`));
         setBaselines(await getJson<RecommendationBaselineSummary>(`/api/recommendation-plans/baselines?${summaryQuery}`));
         setFamilyReview(await getJson<RecommendationSetupFamilyReviewSummary>(`/api/recommendation-outcomes/setup-family-review?${summaryQuery}`));
+        setEvidenceConcentration(await getJson<RecommendationEvidenceConcentrationSummary>(`/api/recommendation-outcomes/evidence-concentration?${summaryQuery}`));
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load recommendation plans");
       }
@@ -356,6 +359,78 @@ export function RecommendationPlansPage() {
 
       <Card className="top-gap">
         <SectionTitle
+          title="Evidence concentration"
+          subtitle={evidenceConcentration ? `Resolved ${evidenceConcentration.resolved_outcomes_reviewed} of ${evidenceConcentration.total_outcomes_reviewed} reviewed outcomes` : undefined}
+        />
+        {!evidenceConcentration && !error ? <LoadingState message="Loading evidence concentration…" /> : null}
+        {evidenceConcentration ? (
+          <>
+            <div className="stats-grid top-gap-small">
+              <Card><strong>{evidenceConcentration.overall_win_rate_percent ?? "—"}%</strong><div className="helper-text">overall resolved win rate</div></Card>
+              <Card><strong>{evidenceConcentration.overall_average_return_5d ?? "—"}%</strong><div className="helper-text">overall avg 5d return</div></Card>
+              <Card><strong>{evidenceConcentration.ready_for_expansion ? "yes" : "not yet"}</strong><div className="helper-text">ready for broader concentration</div></Card>
+            </div>
+            <div className="helper-text top-gap-small">{evidenceConcentration.focus_message}</div>
+            <SectionTitle title="Strongest positive cohorts" />
+            <div className="table-wrap top-gap-small">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cohort</th>
+                    <th>Sample</th>
+                    <th>Win rate edge</th>
+                    <th>5d edge</th>
+                    <th>Score</th>
+                    <th>Interpretation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {evidenceConcentration.strongest_positive_cohorts.map((item) => (
+                    <tr key={`${item.slice_name}-${item.key}`}>
+                      <td>{item.label}<div className="helper-text top-gap-small">{item.slice_name}</div></td>
+                      <td><Badge tone={sampleTone(item.sample_status)}>{item.sample_status}</Badge><div className="helper-text top-gap-small">n={item.resolved_count} / min {item.min_required_resolved_count}</div></td>
+                      <td>{item.edge_vs_overall_win_rate_percent ?? "—"} pts</td>
+                      <td>{item.edge_vs_overall_return_5d ?? "—"}%</td>
+                      <td>{item.concentration_score}</td>
+                      <td>{item.interpretation}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <SectionTitle title="Weakest cohorts" />
+            <div className="table-wrap top-gap-small">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cohort</th>
+                    <th>Sample</th>
+                    <th>Win rate edge</th>
+                    <th>5d edge</th>
+                    <th>Score</th>
+                    <th>Interpretation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {evidenceConcentration.weakest_cohorts.map((item) => (
+                    <tr key={`${item.slice_name}-${item.key}`}>
+                      <td>{item.label}<div className="helper-text top-gap-small">{item.slice_name}</div></td>
+                      <td><Badge tone={sampleTone(item.sample_status)}>{item.sample_status}</Badge><div className="helper-text top-gap-small">n={item.resolved_count} / min {item.min_required_resolved_count}</div></td>
+                      <td>{item.edge_vs_overall_win_rate_percent ?? "—"} pts</td>
+                      <td>{item.edge_vs_overall_return_5d ?? "—"}%</td>
+                      <td>{item.concentration_score}</td>
+                      <td>{item.interpretation}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
+      </Card>
+
+      <Card className="top-gap">
+        <SectionTitle
           title="Setup-family evaluation review"
           subtitle={familyReview ? `Built from ${familyReview.total_outcomes_reviewed} stored outcome(s) across the current filters` : undefined}
         />
@@ -437,6 +512,15 @@ export function RecommendationPlansPage() {
                   const effectiveThreshold = typeof calibrationReview?.effective_confidence_threshold === "number"
                     ? calibrationReview.effective_confidence_threshold
                     : null;
+                  const rawConfidence = typeof calibrationReview?.raw_confidence_percent === "number"
+                    ? calibrationReview.raw_confidence_percent
+                    : null;
+                  const calibratedConfidence = typeof calibrationReview?.calibrated_confidence_percent === "number"
+                    ? calibrationReview.calibrated_confidence_percent
+                    : null;
+                  const confidenceAdjustment = typeof calibrationReview?.confidence_adjustment === "number"
+                    ? calibrationReview.confidence_adjustment
+                    : null;
                   const calibrationReviewStatus = typeof calibrationReview?.review_status === "string"
                     ? calibrationReview.review_status
                     : "disabled";
@@ -461,7 +545,9 @@ export function RecommendationPlansPage() {
                       </td>
                       <td>
                         <div>{plan.confidence_percent.toFixed(1)}%</div>
-                        <div className="helper-text top-gap-small">threshold {effectiveThreshold !== null ? `${effectiveThreshold.toFixed(1)}%` : "—"}</div>
+                        <div className="helper-text top-gap-small">raw {rawConfidence !== null ? `${rawConfidence.toFixed(1)}%` : "—"} · calibrated {calibratedConfidence !== null ? `${calibratedConfidence.toFixed(1)}%` : "—"}</div>
+                        <div className="helper-text">adjustment {confidenceAdjustment !== null ? `${confidenceAdjustment > 0 ? "+" : ""}${confidenceAdjustment.toFixed(1)} pts` : "—"}</div>
+                        <div className="helper-text">threshold {effectiveThreshold !== null ? `${effectiveThreshold.toFixed(1)}%` : "—"}</div>
                         <div className="helper-text">calibration {calibrationReviewStatus}</div>
                         <div className="helper-text">horizon {calibrationSliceSummary(calibrationReview, "horizon")}</div>
                         <div className="helper-text">setup {calibrationSliceSummary(calibrationReview, "setup_family")}</div>

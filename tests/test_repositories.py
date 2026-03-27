@@ -782,6 +782,8 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(calibration_review["enabled"], True)
         self.assertEqual(calibration_review["review_status"], "usable_for_gating")
         self.assertGreaterEqual(calibration_review["effective_confidence_threshold"], 75.0)
+        self.assertLess(calibration_review["calibrated_confidence_percent"], calibration_review["raw_confidence_percent"])
+        self.assertLess(plan_map["AAPL"].confidence_percent, calibration_review["raw_confidence_percent"])
         self.assertEqual(calibration_review["horizon"]["key"], "1w")
         self.assertEqual(calibration_review["transmission_bias"]["key"], "tailwind")
         self.assertEqual(calibration_review["transmission_bias"]["sample_status"], "usable")

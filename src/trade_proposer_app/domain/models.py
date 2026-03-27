@@ -418,6 +418,32 @@ class RecommendationCalibrationSummary(BaseModel):
     by_horizon_setup_family: list[RecommendationCalibrationBucket] = Field(default_factory=list)
 
 
+class RecommendationEvidenceConcentrationCohort(BaseModel):
+    slice_name: str
+    key: str
+    label: str
+    sample_status: str = "insufficient"
+    resolved_count: int = 0
+    min_required_resolved_count: int = 0
+    win_rate_percent: float | None = None
+    average_return_5d: float | None = None
+    edge_vs_overall_win_rate_percent: float | None = None
+    edge_vs_overall_return_5d: float | None = None
+    concentration_score: float = 0.0
+    interpretation: str = ""
+
+
+class RecommendationEvidenceConcentrationSummary(BaseModel):
+    total_outcomes_reviewed: int = 0
+    resolved_outcomes_reviewed: int = 0
+    overall_win_rate_percent: float | None = None
+    overall_average_return_5d: float | None = None
+    ready_for_expansion: bool = False
+    focus_message: str = ""
+    strongest_positive_cohorts: list[RecommendationEvidenceConcentrationCohort] = Field(default_factory=list)
+    weakest_cohorts: list[RecommendationEvidenceConcentrationCohort] = Field(default_factory=list)
+
+
 class RecommendationBaselineComparison(BaseModel):
     key: str
     label: str

@@ -186,4 +186,6 @@ Calibration governance is working if:
 - sparse cohorts stop causing noisy threshold movement
 - blocked plans are easier to audit
 - operators can see where the system is weak, not just where it is confident
+- calibrated confidence is shown as a bounded adjustment from raw confidence rather than a fake precise probability
+- evidence concentration surfaces help operators focus attention on the strongest usable cohorts instead of broadening usage blindly
 - measured plan quality improves without pretending to have stronger certainty than the data supports
