@@ -3,13 +3,14 @@
 ## Current status
 
 Trade Proposer App now executes its critical workflows entirely inside this repository:
-- **Persistent state**: watchlists, jobs, runs, recommendations, settings, and sentiment snapshots live in one schema and remain queryable from the UI or API.
-- **Operator UI**: the React/Vite SPA provides dashboard, jobs, history, debugger, settings, docs, ticker, and sentiment pages for the core operator workflows.
+- **Persistent state**: watchlists, jobs, runs, settings, sentiment snapshots, redesign-native context/signal objects, recommendation plans, and recommendation-plan outcomes live in one schema and remain queryable from the UI or API.
+- **Operator UI**: the React/Vite SPA provides dashboard, jobs, debugger, settings, docs, ticker, sentiment, ticker-signal, and recommendation-plan pages for the core operator workflows.
 - **Execution model**: the worker-backed queue persists job metadata, honors concurrency controls, and logs timing/diagnostic payloads for reproducibility.
 - **Feature-rich diagnostics**: every run emits structured `analysis_json`, feature vectors, aggregations, confidence weights, warnings, and workflow summaries.
-- **Shared sentiment context**: macro and industry refresh workflows persist reusable snapshots, proposal generation links back to those snapshots, and health/preflight now reports snapshot freshness.
+- **Shared sentiment/context**: macro and industry refresh workflows persist reusable snapshots and transitional context objects, proposal generation links back to those artifacts, and health/preflight now reports snapshot freshness.
 - **Signal integrity policy**: missing data becomes explicit neutral/warning output rather than an invented fallback.
-- **Redesign write path**: watchlist orchestration, cheap-scan diagnostics, ticker signals, recommendation plans, event-ranked news-first macro/industry context writers, and a dedicated ticker deep-analysis service now exist inside the main app execution flow.
+- **Redesign write path**: watchlist orchestration, cheap-scan diagnostics, ticker signals, recommendation plans, recommendation-plan outcomes, event-ranked news-first macro/industry context writers, and a dedicated ticker deep-analysis service now exist inside the main app execution flow.
+- **Legacy posture**: legacy recommendation operator surfaces are retired, and legacy recommendation data is now slated for deletion once the remaining optimization migration is completed.
 
 ## Phase 1: Operational hardening (partially complete)
 
@@ -94,18 +95,37 @@ Delivered in this phase so far:
 - calibration reporting now includes horizon, transmission-bias, context-regime, and horizon-plus-setup-family slices so operators can judge where the redesign is or is not working, now marks slice sample quality explicitly, and watchlist-backed action gating now uses those richer slices with bounded sample-aware adjustments instead of relying only on setup family and confidence bucket
 
 Next required work in this phase:
+- migrate optimization from legacy `Recommendation` outcomes to `RecommendationPlanOutcome` and remove legacy recommendation data after the migration lands
 - use the new calibration summaries to drive actual confidence re-scaling and operator thresholds rather than only reporting grouped outcomes
 - continue maturing the redesign-native deep-analysis path from an internal native executor into a fuller ticker-signal / recommendation-engine layer with less dependence on legacy proposal payload shapes
-- lock the remaining redesign decision logic into explicit specs: transmission modeling, calibration governance, setup-family playbook, measured success criteria, and legacy convergence
-- expose watchlist policy details more directly in the main operator workflows, not only through the policy endpoint
-- define how the new recommendation-plan path coexists with or replaces the current recommendation object path
+- harden setup-family-native plan behavior so thesis, invalidation, stop/target framing, and `no_action` reasoning differ materially by family
+- deepen macro/industry context extraction beyond heuristic saliency ranking into stronger event clustering, persistence/escalation, and contradiction handling
 - decide whether sentiment snapshots become operator-facing compatibility artifacts, internal inputs, or candidates for retirement once context writers mature
 
+Defined implementation phases from here:
+1. **Phase 4A — optimization convergence and legacy deletion**
+   - refactor optimization services, summaries, and tests to consume `RecommendationPlanOutcome`
+   - remove remaining optimization dependence on legacy recommendation WIN/LOSS rows
+   - delete legacy recommendation persistence/models/repository code and migrations only after redesign-native optimization is validated in-app
+   - update API/UI/docs wording so recommendation-plan outcomes are the only optimization truth source
+2. **Phase 4B — setup-family-native recommendation behavior**
+   - strengthen family-specific thesis, invalidation, target, stop, and `no_action` generation
+   - add family-specific evaluation slices and operator review surfaces
+   - reduce generic plan text that hides substantive setup differences
+3. **Phase 4C — richer context and transmission engine**
+   - improve macro/industry event clustering and deduplication
+   - track persistence vs escalation vs fade more explicitly
+   - make transmission effects more measurable inside recommendation ranking, not just inspectable in diagnostics
+4. **Phase 4D — calibration and evidence concentration**
+   - move from grouped reporting toward cautious confidence re-scaling and operator gating informed by plan-outcome evidence
+   - expand operator-visible cohort review around setup family, horizon, transmission bias, and context regime
+   - prefer measured cohort concentration over broad predictive claims
+
 Recommended implementation order inside Phase 4:
-1. operator-facing watchlist policy visibility
-2. deepen the redesign-native ticker-analysis engine beyond legacy proposal payload compatibility
-3. calibration-informed confidence/threshold refinement
-4. legacy-path narrowing and retirement decisions
+1. Phase 4A — optimization convergence and legacy deletion
+2. Phase 4B — setup-family-native recommendation behavior
+3. Phase 4C — richer context and transmission engine
+4. Phase 4D — calibration and evidence concentration
 
 ## Phase 5: Expansion (only after the above)
 

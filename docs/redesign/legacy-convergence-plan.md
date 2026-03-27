@@ -14,6 +14,7 @@ Today the app still contains some legacy code and historical data, but new propo
 - proposal runs persist `TickerSignalSnapshot` and `RecommendationPlan` objects as the canonical output path
 - new redesign-backed proposal runs no longer emit legacy `Recommendation` rows as compatibility projections
 - some sentiment snapshot workflows remain transitional, but legacy recommendation-detail/recommendation-history operator framing is being retired
+- the remaining substantive legacy dependency is optimization, which must migrate to `RecommendationPlanOutcome` before legacy recommendation data is deleted
 
 ## Canonical product direction
 
@@ -43,6 +44,7 @@ Decision:
 ## 2. Legacy recommendation rows
 Decision:
 - new proposal-generation runs should not emit legacy `Recommendation` compatibility rows
+- legacy recommendation rows are not a long-term compatibility layer; they are slated for deletion after optimization fully migrates to `RecommendationPlanOutcome`
 
 ## 3. Legacy operator surfaces
 Decision:
@@ -71,7 +73,11 @@ Current status:
 Achieved when manual ticker jobs can emit redesign-native ticker signals and recommendation plans with acceptable stability.
 
 ## Milestone C: legacy recommendation retirement
-Achieved when legacy `Recommendation` rows are no longer emitted for new proposal workflows and no operator-facing flow depends on them.
+Achieved when:
+- legacy `Recommendation` rows are no longer emitted for new proposal workflows
+- optimization no longer depends on legacy recommendation WIN/LOSS semantics
+- no operator-facing flow depends on legacy recommendation objects
+- legacy recommendation persistence, repository helpers, and historical data have been deleted from the product path
 
 ## Milestone D: snapshot-flow narrowing
 Achieved when remaining sentiment snapshot surfaces are either clearly transitional or replaced by context-first views.
@@ -99,4 +105,5 @@ Convergence is succeeding if:
 - the primary product story becomes simpler
 - operators know which objects are canonical
 - fewer duplicated concepts remain
-- new evaluation and calibration logic consistently applies to the main recommendation path
+- new evaluation, calibration, and optimization logic consistently applies to `RecommendationPlan` / `RecommendationPlanOutcome`
+- legacy recommendation data can be deleted without removing any active product capability

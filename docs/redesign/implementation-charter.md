@@ -10,6 +10,11 @@ It exists so development can proceed with minimal ambiguity while staying aligne
 
 This document also intentionally sets realism constraints on the redesign. The app should be built first as a high-quality operator decision-support and candidate-ranking system with explicit diagnostics, selective `no_action` behavior, and measurable recommendation outcomes. It should not be presented internally as a proven predictive engine until the redesign path has demonstrated real calibration and outcome quality through stored evaluation data.
 
+Implementation policy now locked:
+- `RecommendationPlan` and `RecommendationPlanOutcome` are the canonical recommendation and evaluation objects
+- optimization must use `RecommendationPlanOutcome`, not legacy `Recommendation` WIN/LOSS history
+- legacy recommendation data is transitional and should be deleted rather than maintained indefinitely once optimization migration is complete
+
 ## Core product objective
 
 The app should produce recommendation outputs for curated watchlists of tickers, using macro context, industry context, ticker-specific catalysts, sentiment, and technical structure.
