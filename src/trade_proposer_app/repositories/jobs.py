@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, inspect, select, text
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import JobType, StrategyHorizon
@@ -134,7 +134,6 @@ class JobRepository:
             self.session.execute(delete(TickerSignalSnapshotRecord).where(TickerSignalSnapshotRecord.run_id.in_(run_ids)))
             self.session.execute(delete(MacroContextSnapshotRecord).where(MacroContextSnapshotRecord.run_id.in_(run_ids)))
             self.session.execute(delete(IndustryContextSnapshotRecord).where(IndustryContextSnapshotRecord.run_id.in_(run_ids)))
-            self._delete_legacy_recommendations(run_ids)
             self.session.execute(delete(RunRecord).where(RunRecord.id.in_(run_ids)))
 
         self.session.execute(delete(JobRecord).where(JobRecord.id == job_id))
@@ -183,15 +182,6 @@ class JobRepository:
             self.session.commit()
             self.session.refresh(record)
         return self._to_model(record)
-
-    def _delete_legacy_recommendations(self, run_ids: list[int]) -> None:
-        if not run_ids:
-            return
-        bind = self.session.get_bind()
-        if bind is None or not inspect(bind).has_table("recommendations"):
-            return
-        for run_id in run_ids:
-            self.session.execute(text("DELETE FROM recommendations WHERE run_id = :run_id"), {"run_id": run_id})
 
     @staticmethod
     def _validate_job_source(job_type: JobType, tickers: list[str], watchlist_id: int | None) -> None:

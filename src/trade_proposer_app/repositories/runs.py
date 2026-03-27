@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, inspect, select, text, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import JobType, RunStatus
@@ -234,7 +234,6 @@ class RunRepository:
         self.session.execute(delete(TickerSignalSnapshotRecord).where(TickerSignalSnapshotRecord.run_id == run_id))
         self.session.execute(delete(MacroContextSnapshotRecord).where(MacroContextSnapshotRecord.run_id == run_id))
         self.session.execute(delete(IndustryContextSnapshotRecord).where(IndustryContextSnapshotRecord.run_id == run_id))
-        self._delete_legacy_recommendations([run_id])
         self.session.delete(record)
         self.session.commit()
 
@@ -264,15 +263,6 @@ class RunRepository:
         if job is None:
             raise ValueError(f"Job {job_id} not found")
         return JobType(job.job_type or JobType.PROPOSAL_GENERATION.value)
-
-    def _delete_legacy_recommendations(self, run_ids: list[int]) -> None:
-        if not run_ids:
-            return
-        bind = self.session.get_bind()
-        if bind is None or not inspect(bind).has_table("recommendations"):
-            return
-        for run_id in run_ids:
-            self.session.execute(text("DELETE FROM recommendations WHERE run_id = :run_id"), {"run_id": run_id})
 
     @staticmethod
     def _serialize_timing(timing: dict[str, object]) -> str:

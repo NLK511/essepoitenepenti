@@ -81,8 +81,8 @@ Achieved operationally when:
 - no operator-facing flow depends on legacy recommendation objects
 - legacy recommendation ORM/repository persistence code has been removed from the product path
 
-Remaining explicit decision after operational retirement:
-- any historical `recommendations` table data must be either explicitly migrated away, explicitly dropped, or explicitly retained for audit reasons by a conscious cleanup decision
+Retirement cleanup decision now executed:
+- the historical `recommendations` table is dropped through migration `0015_drop_legacy_recommendations_table`, so legacy recommendation retention no longer survives as hidden database baggage in the active app schema
 
 ## Milestone D: snapshot-flow narrowing
 Achieved when remaining sentiment snapshot surfaces are either clearly transitional or replaced by context-first views.

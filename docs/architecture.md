@@ -182,7 +182,6 @@ Stored entities today:
 - recommendation plans and recommendation-plan outcomes on the redesign path
 - app settings
 - provider credentials
-- optionally, historical legacy `recommendations` table data retained only until an explicit drop/migration/audit decision is made
 
 ## Internal module boundaries
 
