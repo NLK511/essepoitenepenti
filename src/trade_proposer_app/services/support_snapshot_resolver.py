@@ -55,6 +55,7 @@ class SupportSnapshotResolver:
 
     def resolve_industry_snapshot(self, ticker: str) -> dict[str, Any]:
         industry_profile = self.taxonomy_service.get_industry_profile(ticker)
+        taxonomy_metadata = self._industry_taxonomy_metadata(industry_profile)
         snapshot = self.repository.get_latest_valid_snapshot(
             "industry",
             industry_profile["subject_key"],
@@ -80,7 +81,8 @@ class SupportSnapshotResolver:
                 "coverage": {},
                 "source_breakdown": {},
                 "drivers": [],
-                "diagnostics": {"warnings": [warning]},
+                "context_metadata": taxonomy_metadata,
+                "diagnostics": {"warnings": [warning], "taxonomy_subject_key": industry_profile["subject_key"]},
             }
         payload = self._snapshot_payload(snapshot) if snapshot is not None else {
             "score": 0.0,
@@ -92,16 +94,28 @@ class SupportSnapshotResolver:
             "coverage": {},
             "source_breakdown": {},
             "drivers": [],
+            "context_metadata": taxonomy_metadata,
             "diagnostics": {
                 "warnings": [
                     f"industry support snapshot unavailable for {industry_profile['subject_label']}; using context-only fallback"
-                ]
+                ],
+                "taxonomy_subject_key": industry_profile["subject_key"],
             },
         }
         if context_snapshot is not None:
             payload.update(self._industry_context_payload(context_snapshot))
             payload["source"] = "snapshot_plus_context" if snapshot is not None else "context_only"
         return payload
+
+    def _industry_taxonomy_metadata(self, industry_profile: dict[str, Any]) -> dict[str, Any]:
+        subject_key = str(industry_profile.get("subject_key", "")).strip()
+        return {
+            "ontology_profile": self.taxonomy_service.get_industry_definition(subject_key),
+            "sector_definition": self.taxonomy_service.get_sector_definition(str(industry_profile.get("sector", ""))),
+            "ontology_relationships": self.taxonomy_service.list_relationships(subject_key, direction="outbound"),
+            "matched_ontology_relationships": [],
+            "taxonomy_source_mode": self.taxonomy_service.taxonomy_overview().get("source_mode"),
+        }
 
     def _snapshot_payload(self, snapshot: Any) -> dict[str, Any]:
         return {

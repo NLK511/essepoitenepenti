@@ -460,6 +460,7 @@ class IndustryContextService:
             for channel in (event.get("transmission_channels") if isinstance(event.get("transmission_channels"), list) else [])
             if str(channel).strip()
         }
+        active_driver_keys = {str(event.get("key", "")).strip().lower() for event in active_drivers if str(event.get("key", "")).strip()}
         macro_channels = {
             str(channel).strip().lower()
             for event in linked_macro_events
@@ -473,9 +474,15 @@ class IndustryContextService:
                 continue
             target = str(relationship.get("target", "")).strip()
             target_kind = str(relationship.get("target_kind", "industry")).strip() or "industry"
-            target_label = target.replace("_", " ")
+            target_label = str(relationship.get("target_label", "")).strip() or target.replace("_", " ")
             if target_kind == "industry" and target:
                 target_label = self.taxonomy_service.get_industry_definition(target).get("label") or target_label
+            elif target_kind == "sector" and target:
+                target_label = self.taxonomy_service.get_sector_definition(target).get("label") or target_label
+            elif target_kind == "theme" and target:
+                target_label = self.taxonomy_service.get_theme_definition(target).get("label") or target_label
+            elif target_kind == "macro_channel" and target:
+                target_label = self.taxonomy_service.get_macro_channel_definition(target).get("label") or target_label
             tokens = self._relationship_tokens(relationship, target_label)
             channel = str(relationship.get("channel", "")).strip()
             channel_key = channel.lower()
@@ -485,20 +492,27 @@ class IndustryContextService:
                 relevance_hits += 1
             if channel_key and (channel_key in active_driver_channels or channel_key in macro_channels):
                 relevance_hits += 1
-            if target_key and target_kind != "industry" and target_key in macro_keys:
+            if target_kind == "macro_channel" and target_key and target_key in macro_keys:
+                relevance_hits += 1
+            if target_kind == "theme" and target_key and target_key in active_driver_keys:
                 relevance_hits += 1
             if relevance_hits <= 0:
                 continue
             matched.append(
                 {
                     "source": str(relationship.get("source", industry_label)).strip(),
+                    "source_label": str(relationship.get("source_label", industry_label)).strip() or industry_label,
                     "type": str(relationship.get("type", "linked_to")).strip() or "linked_to",
+                    "type_label": str(relationship.get("type_label", relationship.get("type", "linked to"))).strip() or "linked to",
                     "target": target,
                     "target_kind": target_kind,
+                    "target_kind_label": str(relationship.get("target_kind_label", target_kind.replace("_", " "))).strip() or target_kind.replace("_", " "),
                     "target_label": str(target_label).strip() or target,
                     "channel": channel or "unknown channel",
+                    "channel_label": str(relationship.get("channel_label", channel.replace("_", " "))).strip() if channel else "unknown channel",
                     "strength": str(relationship.get("strength", "")).strip() or "unspecified",
                     "note": str(relationship.get("note", "")).strip(),
+                    "relevance_hits": relevance_hits,
                 }
             )
         return matched[:6]
@@ -509,6 +523,8 @@ class IndustryContextService:
             str(relationship.get("target", "")).replace("_", " "),
             str(target_label),
             str(relationship.get("channel", "")).replace("_", " "),
+            str(relationship.get("channel_label", "")),
+            str(relationship.get("type_label", "")),
             str(relationship.get("note", "")),
         ]
         tokens: list[str] = []

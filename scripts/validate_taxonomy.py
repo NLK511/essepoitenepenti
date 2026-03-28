@@ -17,6 +17,8 @@ from trade_proposer_app.services.taxonomy import (  # noqa: E402
     TICKERS_PATH,
     THEMES_PATH,
     MACRO_CHANNELS_PATH,
+    RELATIONSHIP_TARGET_KINDS_PATH,
+    RELATIONSHIP_TYPES_PATH,
     TRANSMISSION_CHANNELS_PATH,
     TAXONOMY_DIR,
     TAXONOMY_PATH,
@@ -25,18 +27,6 @@ from trade_proposer_app.services.taxonomy import (  # noqa: E402
 
 REQUIRED_TICKER_FIELDS = ["company_name", "sector", "industry", "ticker_keywords"]
 REQUIRED_INDUSTRY_FIELDS = ["label", "sector", "queries", "transmission_channels"]
-VALID_RELATIONSHIP_TYPES = {
-    "belongs_to_sector",
-    "belongs_to_industry",
-    "peer_of",
-    "supplier_to",
-    "customer_of",
-    "benefits_from",
-    "hurt_by",
-    "sensitive_to",
-    "exposed_to_theme",
-    "linked_macro_channel",
-}
 
 
 def main() -> int:
@@ -45,7 +35,7 @@ def main() -> int:
     service = TickerTaxonomyService()
     alias_to_tickers: dict[str, set[str]] = {}
 
-    expected_paths = [TICKERS_PATH, INDUSTRIES_PATH, SECTORS_PATH, RELATIONSHIPS_PATH, EVENT_VOCAB_PATH, THEMES_PATH, MACRO_CHANNELS_PATH, TRANSMISSION_CHANNELS_PATH]
+    expected_paths = [TICKERS_PATH, INDUSTRIES_PATH, SECTORS_PATH, RELATIONSHIPS_PATH, EVENT_VOCAB_PATH, THEMES_PATH, MACRO_CHANNELS_PATH, TRANSMISSION_CHANNELS_PATH, RELATIONSHIP_TYPES_PATH, RELATIONSHIP_TARGET_KINDS_PATH]
     split_mode = all(path.exists() for path in expected_paths)
     if not split_mode and not TAXONOMY_PATH.exists():
         errors.append(f"no taxonomy source found; expected split files in {TAXONOMY_DIR} or fallback file {TAXONOMY_PATH}")
@@ -130,19 +120,30 @@ def main() -> int:
             if macro_definition.get("key") not in service._macro_channels:
                 errors.append(f"sector {sector_key} uses ungoverned macro channel {raw_macro!r}")
 
+    valid_relationship_types = set(service._relationship_types)
+    valid_target_kinds = set(service._relationship_target_kinds)
+    sector_keys = set(service._sectors)
     for index, relationship in enumerate(service._relationships, start=1):
         relation_type = str(relationship.get("type", "")).strip()
         source = service._normalize_subject_key(relationship.get("source"))
-        target = service._normalize_subject_key(relationship.get("target"))
+        target = str(relationship.get("target", "")).strip()
         target_kind = str(relationship.get("target_kind", "industry")).strip() or "industry"
-        if relation_type not in VALID_RELATIONSHIP_TYPES:
-            warnings.append(f"relationship #{index} uses non-standard type {relation_type!r}")
-        if source not in industry_keys:
-            errors.append(f"relationship #{index} source {source!r} is not a defined industry key")
+        if relation_type not in valid_relationship_types:
+            errors.append(f"relationship #{index} type {relation_type!r} is not a governed relationship type")
+        if target_kind not in valid_target_kinds:
+            errors.append(f"relationship #{index} target kind {target_kind!r} is not a governed relationship target kind")
+        if source not in industry_keys and source not in sector_keys:
+            errors.append(f"relationship #{index} source {source!r} is not a defined industry or sector key")
         if target_kind == "industry" and target not in industry_keys:
             errors.append(f"relationship #{index} target {target!r} is not a defined industry key")
+        if target_kind == "sector" and target not in sector_keys:
+            errors.append(f"relationship #{index} target {target!r} is not a defined sector key")
         if target_kind == "macro_channel" and target not in service._macro_channels:
             errors.append(f"relationship #{index} target {target!r} is not a governed macro channel")
+        if target_kind == "theme" and target not in service._themes:
+            errors.append(f"relationship #{index} target {target!r} is not a governed theme")
+        if target_kind == "ticker" and target not in service._taxonomy:
+            errors.append(f"relationship #{index} target {target!r} is not a known ticker")
         channel = str(relationship.get("channel", "")).strip()
         if channel:
             channel_definition = service.get_transmission_channel_definition(channel)
@@ -169,6 +170,9 @@ def main() -> int:
     print(f"Themes: {overview['theme_count']}")
     print(f"Macro channels: {overview['macro_channel_count']}")
     print(f"Transmission channels: {overview['transmission_channel_count']}")
+    print(f"Relationship types: {overview['relationship_type_count']}")
+    print(f"Relationship target kinds: {overview['relationship_target_kind_count']}")
+    print(f"Derived relationships: {overview['derived_relationship_count']}")
     if warnings:
         print("Warnings:")
         for warning in warnings:

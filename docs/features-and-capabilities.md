@@ -42,6 +42,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 - Show dedicated ticker relationship read-through cards on key review pages so operators can inspect the matched peer / supplier / customer edges without digging into raw diagnostics.
 - Normalize taxonomy themes and macro-channel values against governed registries so ontology consumers use a controlled vocabulary instead of only ad hoc free-form strings.
 - Normalize transmission-channel values against a governed registry too, so ticker exposure and relationship channel fields move toward fully governed ontology values instead of drifting as free-form strings.
+- Govern ontology relationship types and target kinds too, then derive structural edges like sector membership, macro-channel links, and theme exposure so more of the ontology graph uses controlled values instead of ad hoc strings.
 - Queue or run macro and industry refresh workflows manually.
 - Trace which shared artifacts were used by a run or recommendation plan.
 - See support-snapshot freshness in `/api/health` and `/api/health/preflight`; context objects are reviewable through the context APIs and UI.

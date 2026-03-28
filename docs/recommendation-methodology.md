@@ -91,6 +91,8 @@ Under the hood, taxonomy themes and macro-sensitivity values are now normalized 
 
 Transmission channels are now on the same path. Ticker exposure channels, industry transmission channels, and relationship channels are normalized against a governed registry too, while operator-facing displays can still use readable labels derived from that controlled vocabulary.
 
+The same cleanup now applies to ontology relationships themselves. Relationship types and target kinds are governed too, and the taxonomy service now derives extra structural edges such as `belongs_to_sector`, `linked_macro_channel`, and `exposed_to_theme`. That means downstream consumers can reason over a more explicit graph without having to duplicate that structure by hand in every other service.
+
 If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings. Transitional support snapshots still support that shared-artifact layer and freshness reporting.
 
 ### 3. News ingestion and live ticker sentiment

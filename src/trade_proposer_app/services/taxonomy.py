@@ -16,6 +16,8 @@ EVENT_VOCAB_PATH = TAXONOMY_DIR / "event_vocab.json"
 THEMES_PATH = TAXONOMY_DIR / "themes.json"
 MACRO_CHANNELS_PATH = TAXONOMY_DIR / "macro_channels.json"
 TRANSMISSION_CHANNELS_PATH = TAXONOMY_DIR / "transmission_channels.json"
+RELATIONSHIP_TYPES_PATH = TAXONOMY_DIR / "relationship_types.json"
+RELATIONSHIP_TARGET_KINDS_PATH = TAXONOMY_DIR / "relationship_target_kinds.json"
 
 SECTOR_ALIASES = {
     "technology": "information_technology",
@@ -47,9 +49,13 @@ class TickerTaxonomyService:
         self._themes: dict[str, dict[str, Any]] = payload["themes"]
         self._macro_channels: dict[str, dict[str, Any]] = payload["macro_channels"]
         self._transmission_channels: dict[str, dict[str, Any]] = payload["transmission_channels"]
+        self._relationship_types: dict[str, dict[str, Any]] = payload["relationship_types"]
+        self._relationship_target_kinds: dict[str, dict[str, Any]] = payload["relationship_target_kinds"]
         self._theme_alias_map: dict[str, str] = self._build_alias_map(self._themes)
         self._macro_channel_alias_map: dict[str, str] = self._build_alias_map(self._macro_channels)
         self._transmission_channel_alias_map: dict[str, str] = self._build_alias_map(self._transmission_channels)
+        self._relationship_type_alias_map: dict[str, str] = self._build_alias_map(self._relationship_types)
+        self._relationship_target_kind_alias_map: dict[str, str] = self._build_alias_map(self._relationship_target_kinds)
         self._source_mode: str = payload["source_mode"]
 
     def _load_payload(self) -> dict[str, Any]:
@@ -67,6 +73,21 @@ class TickerTaxonomyService:
         tickers_payload = self._read_json_file(TICKERS_PATH)
         if not isinstance(tickers_payload, dict):
             return None
+        themes = self._load_registry(self._read_json_file(THEMES_PATH))
+        macro_channels = self._load_registry(self._read_json_file(MACRO_CHANNELS_PATH))
+        transmission_channels = self._load_registry(self._read_json_file(TRANSMISSION_CHANNELS_PATH))
+        relationship_types = self._load_registry(self._read_json_file(RELATIONSHIP_TYPES_PATH))
+        relationship_target_kinds = self._load_registry(self._read_json_file(RELATIONSHIP_TARGET_KINDS_PATH))
+        self._themes = themes
+        self._macro_channels = macro_channels
+        self._transmission_channels = transmission_channels
+        self._relationship_types = relationship_types
+        self._relationship_target_kinds = relationship_target_kinds
+        self._theme_alias_map = self._build_alias_map(themes)
+        self._macro_channel_alias_map = self._build_alias_map(macro_channels)
+        self._transmission_channel_alias_map = self._build_alias_map(transmission_channels)
+        self._relationship_type_alias_map = self._build_alias_map(relationship_types)
+        self._relationship_target_kind_alias_map = self._build_alias_map(relationship_target_kinds)
         return {
             "tickers": {
                 key.upper(): value
@@ -77,18 +98,35 @@ class TickerTaxonomyService:
             "sectors": self._load_sectors(self._read_json_file(SECTORS_PATH)),
             "relationships": self._load_relationships(self._read_json_file(RELATIONSHIPS_PATH)),
             "event_vocab": self._load_event_vocab(self._read_json_file(EVENT_VOCAB_PATH)),
-            "themes": self._load_registry(self._read_json_file(THEMES_PATH)),
-            "macro_channels": self._load_registry(self._read_json_file(MACRO_CHANNELS_PATH)),
-            "transmission_channels": self._load_registry(self._read_json_file(TRANSMISSION_CHANNELS_PATH)),
+            "themes": themes,
+            "macro_channels": macro_channels,
+            "transmission_channels": transmission_channels,
+            "relationship_types": relationship_types,
+            "relationship_target_kinds": relationship_target_kinds,
         }
 
     def _load_monolith_payload(self) -> dict[str, Any]:
-        empty = {"tickers": {}, "industries": {}, "sectors": {}, "relationships": [], "event_vocab": {}, "themes": {}, "macro_channels": {}, "transmission_channels": {}}
+        empty = {"tickers": {}, "industries": {}, "sectors": {}, "relationships": [], "event_vocab": {}, "themes": {}, "macro_channels": {}, "transmission_channels": {}, "relationship_types": {}, "relationship_target_kinds": {}}
         if not TAXONOMY_PATH.exists():
             return empty
         payload = self._read_json_file(TAXONOMY_PATH)
         if not isinstance(payload, dict):
             return empty
+        themes = self._load_registry(payload.get("_themes"))
+        macro_channels = self._load_registry(payload.get("_macro_channels"))
+        transmission_channels = self._load_registry(payload.get("_transmission_channels"))
+        relationship_types = self._load_registry(payload.get("_relationship_types"))
+        relationship_target_kinds = self._load_registry(payload.get("_relationship_target_kinds"))
+        self._themes = themes
+        self._macro_channels = macro_channels
+        self._transmission_channels = transmission_channels
+        self._relationship_types = relationship_types
+        self._relationship_target_kinds = relationship_target_kinds
+        self._theme_alias_map = self._build_alias_map(themes)
+        self._macro_channel_alias_map = self._build_alias_map(macro_channels)
+        self._transmission_channel_alias_map = self._build_alias_map(transmission_channels)
+        self._relationship_type_alias_map = self._build_alias_map(relationship_types)
+        self._relationship_target_kind_alias_map = self._build_alias_map(relationship_target_kinds)
         return {
             "tickers": {
                 key.upper(): value
@@ -99,9 +137,11 @@ class TickerTaxonomyService:
             "sectors": self._load_sectors(payload.get("_sectors")),
             "relationships": self._load_relationships(payload.get("_relationships")),
             "event_vocab": self._load_event_vocab(payload.get("_event_vocab")),
-            "themes": self._load_registry(payload.get("_themes")),
-            "macro_channels": self._load_registry(payload.get("_macro_channels")),
-            "transmission_channels": self._load_registry(payload.get("_transmission_channels")),
+            "themes": themes,
+            "macro_channels": macro_channels,
+            "transmission_channels": transmission_channels,
+            "relationship_types": relationship_types,
+            "relationship_target_kinds": relationship_target_kinds,
         }
 
     @staticmethod
@@ -173,8 +213,10 @@ class TickerTaxonomyService:
             if not isinstance(value, dict):
                 continue
             source = self._normalize_subject_key(value.get("source"))
-            target = self._normalize_subject_key(value.get("target"))
-            relation_type = str(value.get("type", "")).strip()
+            target_kind = self._normalize_relationship_target_kind(value.get("target_kind", "industry"))
+            target = self._canonicalize_relationship_target(value.get("target"), target_kind)
+            relation_type = self._normalize_relationship_type(value.get("type"))
+            channel = self._canonicalize_transmission_channel(value.get("channel"))
             if not source or source == "unknown" or not target or target == "unknown" or not relation_type:
                 continue
             relationships.append(
@@ -182,13 +224,42 @@ class TickerTaxonomyService:
                     "source": source,
                     "target": target,
                     "type": relation_type,
-                    "target_kind": str(value.get("target_kind", "industry")).strip() or "industry",
-                    "channel": str(value.get("channel", "")).strip(),
+                    "target_kind": target_kind,
+                    "channel": channel,
                     "strength": str(value.get("strength", "")).strip(),
                     "note": str(value.get("note", "")).strip(),
                 }
             )
         return relationships
+
+    def _normalize_relationship_type(self, value: object) -> str:
+        normalized = self._normalize_subject_key(value)
+        if normalized == "unknown":
+            return ""
+        return self._relationship_type_alias_map.get(normalized, normalized)
+
+    def _normalize_relationship_target_kind(self, value: object) -> str:
+        normalized = self._normalize_subject_key(value)
+        if normalized == "unknown":
+            return "industry"
+        return self._relationship_target_kind_alias_map.get(normalized, normalized)
+
+    def _canonicalize_transmission_channel(self, value: object) -> str:
+        normalized = self._normalize_transmission_channel_values([value])
+        return normalized[0] if normalized else ""
+
+    def _canonicalize_relationship_target(self, value: object, target_kind: str) -> str:
+        if target_kind == "ticker":
+            return str(value or "").strip().upper()
+        if target_kind == "macro_channel":
+            definition = self.get_macro_channel_definition(str(value or ""))
+            return str(definition.get("key") or self._normalize_subject_key(value))
+        if target_kind == "theme":
+            definition = self.get_theme_definition(str(value or ""))
+            return str(definition.get("key") or self._normalize_subject_key(value))
+        if target_kind == "sector":
+            return self._resolve_sector_key(str(value or ""))
+        return self._normalize_subject_key(value)
 
     def get_ticker_profile(self, ticker: str) -> dict[str, Any]:
         normalized = ticker.upper()
@@ -395,9 +466,110 @@ class TickerTaxonomyService:
     def list_sector_definitions(self) -> list[dict[str, Any]]:
         return [self.get_sector_definition(key) for key in sorted(self._sectors)]
 
+    def _derived_relationships(self, subject_key: str | None = None) -> list[dict[str, Any]]:
+        if subject_key is None:
+            derived: list[dict[str, Any]] = []
+            for key in sorted(set(self._industries) | set(self._sectors)):
+                derived.extend(self._derived_relationships(key))
+            return derived
+        normalized = self._normalize_subject_key(subject_key)
+        derived: list[dict[str, Any]] = []
+        if normalized in self._industries:
+            definition = self.get_industry_definition(normalized)
+            sector_key = self._resolve_sector_key(str(definition.get("sector", "")))
+            if sector_key and sector_key not in {"", "unknown"} and sector_key in self._sectors:
+                derived.append(
+                    {
+                        "source": normalized,
+                        "target": sector_key,
+                        "type": "belongs_to_sector",
+                        "target_kind": "sector",
+                        "channel": "",
+                        "strength": "structural",
+                        "note": "industry classification edge",
+                    }
+                )
+            for raw_macro in self._normalize_string_list(definition.get("macro_sensitivity")):
+                macro_definition = self.get_macro_channel_definition(raw_macro)
+                macro_key = str(macro_definition.get("key", "")).strip()
+                if macro_key and macro_key != "unknown":
+                    derived.append(
+                        {
+                            "source": normalized,
+                            "target": macro_key,
+                            "type": "linked_macro_channel",
+                            "target_kind": "macro_channel",
+                            "channel": "",
+                            "strength": "structural",
+                            "note": "industry macro sensitivity mapping",
+                        }
+                    )
+            for raw_theme in self._normalize_string_list(definition.get("themes")):
+                theme_definition = self.get_theme_definition(raw_theme)
+                theme_key = str(theme_definition.get("key", "")).strip()
+                if theme_key and theme_key != "unknown":
+                    derived.append(
+                        {
+                            "source": normalized,
+                            "target": theme_key,
+                            "type": "exposed_to_theme",
+                            "target_kind": "theme",
+                            "channel": "",
+                            "strength": "structural",
+                            "note": "industry theme exposure mapping",
+                        }
+                    )
+        elif normalized in self._sectors:
+            definition = self.get_sector_definition(normalized)
+            for raw_macro in self._normalize_string_list(definition.get("macro_sensitivity")):
+                macro_definition = self.get_macro_channel_definition(raw_macro)
+                macro_key = str(macro_definition.get("key", "")).strip()
+                if macro_key and macro_key != "unknown":
+                    derived.append(
+                        {
+                            "source": normalized,
+                            "target": macro_key,
+                            "type": "linked_macro_channel",
+                            "target_kind": "macro_channel",
+                            "channel": "",
+                            "strength": "structural",
+                            "note": "sector macro sensitivity mapping",
+                        }
+                    )
+            for raw_theme in self._normalize_string_list(definition.get("themes")):
+                theme_definition = self.get_theme_definition(raw_theme)
+                theme_key = str(theme_definition.get("key", "")).strip()
+                if theme_key and theme_key != "unknown":
+                    derived.append(
+                        {
+                            "source": normalized,
+                            "target": theme_key,
+                            "type": "exposed_to_theme",
+                            "target_kind": "theme",
+                            "channel": "",
+                            "strength": "structural",
+                            "note": "sector theme exposure mapping",
+                        }
+                    )
+        deduped: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str, str, str]] = set()
+        for item in derived:
+            key = (
+                str(item.get("source", "")),
+                str(item.get("type", "")),
+                str(item.get("target_kind", "")),
+                str(item.get("target", "")),
+                str(item.get("channel", "")),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(item)
+        return deduped
+
     def list_relationships(self, subject_key: str | None = None, *, direction: str = "any") -> list[dict[str, Any]]:
         normalized = self._normalize_subject_key(subject_key) if subject_key else None
-        relationships = [self._enrich_relationship(relationship) for relationship in self._relationships]
+        relationships = [self._enrich_relationship(relationship) for relationship in [*self._relationships, *self._derived_relationships(normalized)]]
         if normalized is None:
             return list(relationships)
         if direction == "outbound":
@@ -408,14 +580,39 @@ class TickerTaxonomyService:
 
     def _enrich_relationship(self, relationship: dict[str, Any]) -> dict[str, Any]:
         enriched = dict(relationship)
-        if enriched.get("target_kind") == "macro_channel":
-            definition = self.get_macro_channel_definition(str(enriched.get("target", "")))
+        source = str(enriched.get("source", "")).strip()
+        target = str(enriched.get("target", "")).strip()
+        target_kind = str(enriched.get("target_kind", "industry")).strip() or "industry"
+        relation_type = str(enriched.get("type", "")).strip()
+        source_label = self._label_for_relationship_subject(source)
+        if source_label:
+            enriched["source_label"] = source_label
+        if target_kind == "macro_channel":
+            definition = self.get_macro_channel_definition(target)
             if definition.get("label"):
                 enriched["target_label"] = definition.get("label")
-        elif enriched.get("target_kind") == "industry":
-            definition = self.get_industry_definition(str(enriched.get("target", "")))
+        elif target_kind == "industry":
+            definition = self.get_industry_definition(target)
             if definition.get("label"):
                 enriched["target_label"] = definition.get("label")
+        elif target_kind == "sector":
+            definition = self.get_sector_definition(target)
+            if definition.get("label"):
+                enriched["target_label"] = definition.get("label")
+        elif target_kind == "theme":
+            definition = self.get_theme_definition(target)
+            if definition.get("label"):
+                enriched["target_label"] = definition.get("label")
+        elif target_kind == "ticker":
+            definition = self.get_ticker_profile(target)
+            if definition.get("company_name"):
+                enriched["target_label"] = definition.get("company_name")
+        type_definition = self.get_relationship_type_definition(relation_type)
+        if type_definition.get("label"):
+            enriched["type_label"] = type_definition.get("label")
+        target_kind_definition = self.get_relationship_target_kind_definition(target_kind)
+        if target_kind_definition.get("label"):
+            enriched["target_kind_label"] = target_kind_definition.get("label")
         channel_definition = self.get_transmission_channel_definition(str(enriched.get("channel", "")))
         if channel_definition.get("label"):
             enriched["channel_label"] = channel_definition.get("label")
@@ -437,11 +634,14 @@ class TickerTaxonomyService:
                         "source": profile["ticker"],
                         "source_label": profile.get("company_name", profile["ticker"]),
                         "type": relation_type,
+                        "type_label": self.get_relationship_type_definition(relation_type).get("label", relation_type.replace("_", " ")),
                         "target": target,
                         "target_kind": "ticker",
+                        "target_kind_label": self.get_relationship_target_kind_definition("ticker").get("label", "ticker"),
                         "target_label": target_profile.get("company_name", target),
                         "target_industry": target_profile.get("industry", ""),
                         "channel": channel,
+                        "channel_label": self.get_transmission_channel_definition(channel).get("label", channel.replace("_", " ")),
                         "strength": "medium",
                         "note": note,
                     }
@@ -459,6 +659,9 @@ class TickerTaxonomyService:
             "theme_count": len(self._themes),
             "macro_channel_count": len(self._macro_channels),
             "transmission_channel_count": len(self._transmission_channels),
+            "relationship_type_count": len(self._relationship_types),
+            "relationship_target_kind_count": len(self._relationship_target_kinds),
+            "derived_relationship_count": len(self._derived_relationships()),
         }
 
     def _fetch_external_profile(self, ticker: str) -> dict[str, Any]:
@@ -609,6 +812,31 @@ class TickerTaxonomyService:
 
     def list_transmission_channel_definitions(self) -> list[dict[str, Any]]:
         return [self.get_transmission_channel_definition(key) for key in sorted(self._transmission_channels)]
+
+    def get_relationship_type_definition(self, value: str) -> dict[str, Any]:
+        canonical_key = self._relationship_type_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))
+        return dict(self._relationship_types.get(canonical_key, {"key": canonical_key, "label": str(value or "").strip().replace("_", " "), "aliases": []}))
+
+    def list_relationship_type_definitions(self) -> list[dict[str, Any]]:
+        return [self.get_relationship_type_definition(key) for key in sorted(self._relationship_types)]
+
+    def get_relationship_target_kind_definition(self, value: str) -> dict[str, Any]:
+        canonical_key = self._relationship_target_kind_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))
+        return dict(self._relationship_target_kinds.get(canonical_key, {"key": canonical_key, "label": str(value or "").strip().replace("_", " "), "aliases": []}))
+
+    def list_relationship_target_kind_definitions(self) -> list[dict[str, Any]]:
+        return [self.get_relationship_target_kind_definition(key) for key in sorted(self._relationship_target_kinds)]
+
+    def _label_for_relationship_subject(self, subject: str) -> str:
+        normalized = self._normalize_subject_key(subject)
+        if normalized in self._industries:
+            return str(self.get_industry_definition(normalized).get("label", "")).strip()
+        if normalized in self._sectors:
+            return str(self.get_sector_definition(normalized).get("label", "")).strip()
+        ticker = str(subject or "").strip().upper()
+        if ticker:
+            return str(self.get_ticker_profile(ticker).get("company_name", ticker)).strip()
+        return ""
 
     @staticmethod
     def _normalize_string_list(values: object) -> list[str]:

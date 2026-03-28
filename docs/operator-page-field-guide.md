@@ -581,6 +581,8 @@ Behind the scenes, theme and macro-channel fields are now being normalized again
 
 Transmission-channel fields are now being normalized the same way. In practice, that means you may see human-readable channel labels in operator surfaces even though the underlying stored values are now being pulled toward one controlled registry.
 
+The same is now true for ontology relationship metadata. Industry relationship payloads can carry readable type, target-kind, and channel labels on top of governed canonical values, and some structural links like sector membership, theme exposure, and macro-channel linkage are now derived automatically from the governed taxonomy instead of being left implicit.
+
 This page is intentionally closer to raw storage than the higher-level review pages.
 
 ---

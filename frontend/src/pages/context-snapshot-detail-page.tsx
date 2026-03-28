@@ -269,7 +269,7 @@ export function ContextSnapshotDetailPage() {
                   <ul className="list-reset top-gap-small">
                     {ontologyRelationships.map((relationship, index) => (
                       <li key={`${index}-${eventLabel(relationship.target)}`} className="list-item compact-item">
-                        {eventLabel(relationship.type)} {eventLabel(relationship.target_label ?? relationship.target)} via {eventLabel(relationship.channel)}
+                        {eventLabel(relationship.type_label ?? relationship.type)} {eventLabel(relationship.target_label ?? relationship.target)} via {eventLabel(relationship.channel_label ?? relationship.channel)}
                       </li>
                     ))}
                   </ul>

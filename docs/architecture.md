@@ -139,10 +139,12 @@ flowchart LR
 8. watchlist orchestration now carries matched ticker relationships forward into stored `RecommendationPlan.signal_breakdown.transmission_summary`, which lets operator review pages surface them without re-reading the full deep-analysis JSON blob
 9. watchlist plan-construction logic now also uses matched ticker relationships when writing rationale, action-reason detail, invalidation text, and risk framing, but only as secondary read-through grounded in the active transmission payload
 10. frontend review surfaces now share a dedicated ticker-relationship read-through component so ticker and run-detail pages can show the matched edges themselves instead of only a one-line summary
-11. taxonomy now also loads governed `themes`, `macro_channels`, and `transmission_channels` registries, then normalizes ticker / industry / sector values against them so ontology consumers are not relying only on scattered free-form strings
-12. relationship payloads now also carry governed channel labels in addition to canonical channel keys, which helps operator-facing provenance stay readable without losing controlled values underneath
-13. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
-14. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
+11. taxonomy now also loads governed `themes`, `macro_channels`, `transmission_channels`, `relationship_types`, and `relationship_target_kinds` registries, then normalizes ticker / industry / sector values and explicit ontology relationships against them so downstream consumers are not relying only on scattered free-form strings
+12. taxonomy also derives governed `belongs_to_sector`, `linked_macro_channel`, and `exposed_to_theme` edges from industry and sector definitions, which gives downstream services structured ontology links even when those links were not manually duplicated in the stored relationship file
+13. relationship payloads now also carry governed `type_label`, `target_label`, `target_kind_label`, and `channel_label` fields in addition to canonical keys, which helps operator-facing provenance stay readable without losing controlled values underneath
+14. the support-snapshot resolver now backfills baseline industry ontology metadata even when an industry context snapshot is missing, so downstream proposal/ticker analysis code can still see sector and relationship context instead of dropping to a taxonomy-blind fallback
+15. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
+16. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
 
 ## Runtime components
 
@@ -200,6 +202,9 @@ Stored entities today:
 - recommendation plans and recommendation-plan outcomes on the redesign path
 - app settings
 - provider credentials
+
+See also:
+- `er-model.md` — current database entity-relationship diagram for the live schema
 
 ## Internal module boundaries
 

@@ -134,7 +134,7 @@ Goal: stop relying only on ticker-derived industry labels and add explicit indus
 Goal: make the ontology behave more like a real market-structure graph.
 
 #### Relationship types to support
-- [ ] `belongs_to_sector`
+- [x] `belongs_to_sector`
 - [ ] `belongs_to_industry`
 - [x] `peer_of`
 - [x] `supplier_to`
@@ -142,15 +142,17 @@ Goal: make the ontology behave more like a real market-structure graph.
 - [x] `benefits_from`
 - [x] `hurt_by`
 - [x] `sensitive_to`
-- [ ] `exposed_to_theme`
-- [ ] `linked_macro_channel`
+- [x] `exposed_to_theme`
+- [x] `linked_macro_channel`
 
 #### Governed value registries
 - [x] add governed `themes.json`
 - [x] add governed `macro_channels.json`
 - [x] add governed `transmission_channels.json`
+- [x] add governed `relationship_types.json`
+- [x] add governed `relationship_target_kinds.json`
 - [x] normalize ticker / industry / sector taxonomy values against those registries inside the taxonomy service
-- [x] validate that taxonomy themes, macro-channel references, and transmission-channel references resolve to governed values
+- [x] validate that taxonomy themes, macro-channel references, transmission-channel references, relationship types, and relationship target kinds resolve to governed values
 - [ ] migrate all remaining ontology relationship/channel fields to governed registries where practical
 
 #### Example relationships
@@ -282,7 +284,9 @@ Use this section to note concrete shipped steps.
 - [x] Added a reusable frontend ticker relationship read-through component and promoted matched relationship cards onto ticker and run-detail review surfaces so operators can inspect the actual relationship provenance more directly.
 - [x] Added governed registry files at `src/trade_proposer_app/data/taxonomy/themes.json` and `src/trade_proposer_app/data/taxonomy/macro_channels.json`, then normalized taxonomy values against them in `src/trade_proposer_app/services/taxonomy.py`.
 - [x] Added a governed `src/trade_proposer_app/data/taxonomy/transmission_channels.json` registry and normalized ticker exposure channels, industry transmission channels, and relationship channels against it.
-- [x] Updated taxonomy validation so ticker, industry, sector, and relationship macro-channel / transmission-channel references are checked against the governed registries.
+- [x] Added governed `src/trade_proposer_app/data/taxonomy/relationship_types.json` and `src/trade_proposer_app/data/taxonomy/relationship_target_kinds.json` registries, then normalized stored ontology relationships against them.
+- [x] Added derived industry and sector ontology edges for `belongs_to_sector`, `linked_macro_channel`, and `exposed_to_theme` so downstream consumers can use governed relationship semantics even when the source data only stored broader industry definitions.
+- [x] Updated taxonomy validation so ticker, industry, sector, and relationship macro-channel / transmission-channel references are checked against the governed registries, and explicit relationship type / target-kind values now also fail validation if they are not governed.
 - [x] Split the active ontology into `src/trade_proposer_app/data/taxonomy/` with separate `tickers.json`, `industries.json`, `sectors.json`, `relationships.json`, and `event_vocab.json` files while keeping `ticker_taxonomy.json` as a backward-compatible fallback.
 - [x] Added baseline taxonomy integrity tests for breadth, multi-region coverage, industry grouping behavior, explicit industry definitions, split-file loading, relationship availability, relationship-aware context behavior, and ticker-level relationship edges.
 - [x] Added a validation script at `scripts/validate_taxonomy.py`.
@@ -305,6 +309,8 @@ When ontology-related work ships:
 - `src/trade_proposer_app/data/taxonomy/themes.json`
 - `src/trade_proposer_app/data/taxonomy/macro_channels.json`
 - `src/trade_proposer_app/data/taxonomy/transmission_channels.json`
+- `src/trade_proposer_app/data/taxonomy/relationship_types.json`
+- `src/trade_proposer_app/data/taxonomy/relationship_target_kinds.json`
 - `src/trade_proposer_app/data/ticker_taxonomy.json` (fallback compatibility file)
 - `src/trade_proposer_app/services/taxonomy.py`
 - `src/trade_proposer_app/services/industry_context.py`

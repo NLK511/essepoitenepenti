@@ -24,6 +24,12 @@ def main() -> int:
     print(f"- sectors: {overview['sector_count']}")
     print(f"- relationships: {overview['relationship_count']}")
     print(f"- event vocab groups: {overview['event_vocab_group_count']}")
+    print(f"- themes: {overview['theme_count']}")
+    print(f"- macro channels: {overview['macro_channel_count']}")
+    print(f"- transmission channels: {overview['transmission_channel_count']}")
+    print(f"- relationship types: {overview['relationship_type_count']}")
+    print(f"- relationship target kinds: {overview['relationship_target_kind_count']}")
+    print(f"- derived relationships: {overview['derived_relationship_count']}")
     print()
     print("Industry coverage")
     for profile in profiles:
