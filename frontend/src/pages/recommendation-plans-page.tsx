@@ -4,6 +4,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import type {
+  IndustryContextSnapshot,
+  MacroContextSnapshot,
   RecommendationBaselineSummary,
   RecommendationCalibrationSummary,
   RecommendationEvidenceConcentrationSummary,
@@ -62,6 +64,40 @@ function calibrationSliceSummary(calibrationReview: Record<string, unknown> | nu
   const resolvedCount = typeof item.resolved_count === "number" ? item.resolved_count : 0;
   const winRate = typeof item.win_rate_percent === "number" ? `${item.win_rate_percent}%` : "—";
   return `${sliceKey} · ${sampleStatus} · n=${resolvedCount} · win ${winRate}`;
+}
+
+function contextSummaryMethod(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null | undefined): string {
+  return snapshot && typeof snapshot.metadata?.context_summary_method === "string" ? snapshot.metadata.context_summary_method : "unknown";
+}
+
+function contextSummaryBackend(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null | undefined): string {
+  return snapshot && typeof snapshot.metadata?.context_summary_backend === "string" ? snapshot.metadata.context_summary_backend : "—";
+}
+
+function contextSummaryModel(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null | undefined): string {
+  return snapshot && typeof snapshot.metadata?.context_summary_model === "string" ? snapshot.metadata.context_summary_model : "—";
+}
+
+function contextSummaryError(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null | undefined): string | null {
+  return snapshot && typeof snapshot.metadata?.context_summary_error === "string" ? snapshot.metadata.context_summary_error : null;
+}
+
+function contextProvenanceTone(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null | undefined): "ok" | "warning" | "neutral" {
+  if (contextSummaryError(snapshot)) {
+    return "warning";
+  }
+  if (contextSummaryMethod(snapshot) === "llm_summary") {
+    return "ok";
+  }
+  return "neutral";
+}
+
+function contextProvenanceLabel(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null | undefined): string {
+  if (contextSummaryMethod(snapshot) === "llm_summary") {
+    const model = contextSummaryModel(snapshot);
+    return `LLM · ${contextSummaryBackend(snapshot)}${model !== "—" ? ` · ${model}` : ""}`;
+  }
+  return `fallback · ${contextSummaryBackend(snapshot)}`;
 }
 
 function CalibrationBucketTable({ title, buckets }: { title: string; buckets: RecommendationCalibrationSummary["by_confidence_bucket"] }) {
@@ -150,6 +186,8 @@ function SetupFamilySliceTable({
 export function RecommendationPlansPage() {
   const [searchParams, setSearchParams] = useSearchParams({ limit: "100" });
   const [plans, setPlans] = useState<RecommendationPlan[] | null>(null);
+  const [macroContextByRun, setMacroContextByRun] = useState<Record<number, MacroContextSnapshot | null>>({});
+  const [industryContextByRun, setIndustryContextByRun] = useState<Record<number, IndustryContextSnapshot | null>>({});
   const [calibration, setCalibration] = useState<RecommendationCalibrationSummary | null>(null);
   const [baselines, setBaselines] = useState<RecommendationBaselineSummary | null>(null);
   const [familyReview, setFamilyReview] = useState<RecommendationSetupFamilyReviewSummary | null>(null);
@@ -178,11 +216,27 @@ export function RecommendationPlansPage() {
           summaryParams.set("setup_family", setupFamily);
         }
         const summaryQuery = summaryParams.toString();
-        setPlans(await getJson<RecommendationPlan[]>(buildQuery(searchParams)));
+        const planResults = await getJson<RecommendationPlan[]>(buildQuery(searchParams));
+        setPlans(planResults);
         setCalibration(await getJson<RecommendationCalibrationSummary>(`/api/recommendation-outcomes/summary?${summaryQuery}`));
         setBaselines(await getJson<RecommendationBaselineSummary>(`/api/recommendation-plans/baselines?${summaryQuery}`));
         setFamilyReview(await getJson<RecommendationSetupFamilyReviewSummary>(`/api/recommendation-outcomes/setup-family-review?${summaryQuery}`));
         setEvidenceConcentration(await getJson<RecommendationEvidenceConcentrationSummary>(`/api/recommendation-outcomes/evidence-concentration?${summaryQuery}`));
+
+        const runIds = Array.from(new Set(planResults.map((item) => item.run_id).filter((value): value is number => typeof value === "number"))).slice(0, 20);
+        if (runIds.length === 0) {
+          setMacroContextByRun({});
+          setIndustryContextByRun({});
+        } else {
+          const macroEntries = await Promise.all(
+            runIds.map(async (id) => [id, (await getJson<MacroContextSnapshot[]>(`/api/context/macro?run_id=${id}&limit=1`))[0] ?? null] as const),
+          );
+          const industryEntries = await Promise.all(
+            runIds.map(async (id) => [id, (await getJson<IndustryContextSnapshot[]>(`/api/context/industry?run_id=${id}&limit=1`))[0] ?? null] as const),
+          );
+          setMacroContextByRun(Object.fromEntries(macroEntries));
+          setIndustryContextByRun(Object.fromEntries(industryEntries));
+        }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load recommendation plans");
       }
@@ -613,6 +667,8 @@ export function RecommendationPlansPage() {
                   const calibrationReasons = Array.isArray(calibrationReview?.reasons)
                     ? calibrationReview.reasons.filter((value): value is string => typeof value === "string")
                     : [];
+                  const macroContext = plan.run_id ? macroContextByRun[plan.run_id] : null;
+                  const industryContext = plan.run_id ? industryContextByRun[plan.run_id] : null;
                   return (
                     <tr key={plan.id ?? `${plan.ticker}-${plan.computed_at}`}>
                       <td>{formatDate(plan.computed_at)}</td>
@@ -649,6 +705,12 @@ export function RecommendationPlansPage() {
                       </td>
                       <td>
                         <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>
+                        <div className="top-gap-small cluster">
+                          {macroContext ? <Badge tone={contextProvenanceTone(macroContext)}>macro {contextProvenanceLabel(macroContext)}</Badge> : null}
+                          {industryContext ? <Badge tone={contextProvenanceTone(industryContext)}>industry {contextProvenanceLabel(industryContext)}</Badge> : null}
+                        </div>
+                        {contextSummaryError(macroContext) ? <div className="helper-text top-gap-small">macro fallback: {contextSummaryError(macroContext)}</div> : null}
+                        {contextSummaryError(industryContext) ? <div className="helper-text top-gap-small">industry fallback: {contextSummaryError(industryContext)}</div> : null}
                         <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
                         <div className="helper-text">window {expectedWindow}</div>
                         <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>

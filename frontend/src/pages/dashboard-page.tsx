@@ -3,23 +3,61 @@ import { Link } from "react-router-dom";
 
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { DashboardResponse, SupportSnapshotListResponse } from "../types";
+import type { DashboardResponse, IndustryContextSnapshot, MacroContextSnapshot, SupportSnapshotListResponse } from "../types";
 import { directionTone, formatDate, formatDuration, jobTypeLabel, recommendationStateTone, runTone, tickerTone } from "../utils";
+
+function contextSummaryMethod(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
+  return snapshot && typeof snapshot.metadata?.context_summary_method === "string" ? snapshot.metadata.context_summary_method : "unknown";
+}
+
+function contextSummaryBackend(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
+  return snapshot && typeof snapshot.metadata?.context_summary_backend === "string" ? snapshot.metadata.context_summary_backend : "—";
+}
+
+function contextSummaryModel(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
+  return snapshot && typeof snapshot.metadata?.context_summary_model === "string" ? snapshot.metadata.context_summary_model : "—";
+}
+
+function contextSummaryError(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string | null {
+  return snapshot && typeof snapshot.metadata?.context_summary_error === "string" ? snapshot.metadata.context_summary_error : null;
+}
+
+function contextProvenanceTone(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): "ok" | "warning" | "neutral" {
+  if (contextSummaryError(snapshot)) {
+    return "warning";
+  }
+  if (contextSummaryMethod(snapshot) === "llm_summary") {
+    return "ok";
+  }
+  return "neutral";
+}
+
+function contextProvenanceLabel(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
+  if (contextSummaryMethod(snapshot) === "llm_summary") {
+    const model = contextSummaryModel(snapshot);
+    return `LLM · ${contextSummaryBackend(snapshot)}${model !== "—" ? ` · ${model}` : ""}`;
+  }
+  return `fallback · ${contextSummaryBackend(snapshot)}`;
+}
 
 export function DashboardPage() {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [latestMacroLabel, setLatestMacroLabel] = useState<string>("—");
   const [latestIndustryLabel, setLatestIndustryLabel] = useState<string>("—");
+  const [latestMacroContext, setLatestMacroContext] = useState<MacroContextSnapshot | null>(null);
+  const [latestIndustryContext, setLatestIndustryContext] = useState<IndustryContextSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
         setError(null);
-        const [dashboard, macroSnapshots, industrySnapshots] = await Promise.all([
+        const [dashboard, macroSnapshots, industrySnapshots, macroContexts, industryContexts] = await Promise.all([
           getJson<DashboardResponse>("/api/dashboard"),
           getJson<SupportSnapshotListResponse>("/api/support-snapshots/macro?limit=1"),
           getJson<SupportSnapshotListResponse>("/api/support-snapshots/industry?limit=1"),
+          getJson<MacroContextSnapshot[]>("/api/context/macro?limit=1"),
+          getJson<IndustryContextSnapshot[]>("/api/context/industry?limit=1"),
         ]);
         setData(dashboard);
         setLatestMacroLabel(
@@ -32,6 +70,8 @@ export function DashboardPage() {
             ? `${industrySnapshots.snapshots[0].subject_label} · ${industrySnapshots.snapshots[0].label.toLowerCase()}`
             : "no snapshot"
         );
+        setLatestMacroContext(macroContexts[0] ?? null);
+        setLatestIndustryContext(industryContexts[0] ?? null);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
       }
@@ -90,11 +130,23 @@ export function DashboardPage() {
               <div className="metric-label">Macro context freshness</div>
               <div className="metric-value">{latestMacroLabel.split(" · ")[0]}</div>
               <div className="helper-text">{latestMacroLabel}</div>
+              {latestMacroContext ? (
+                <div className="top-gap-small cluster">
+                  <Badge tone={contextProvenanceTone(latestMacroContext)}>{contextProvenanceLabel(latestMacroContext)}</Badge>
+                  {contextSummaryError(latestMacroContext) ? <Badge tone="warning">summary warning</Badge> : null}
+                </div>
+              ) : null}
             </Card>
             <Card>
               <div className="metric-label">Industry context freshness</div>
               <div className="metric-value">{latestIndustryLabel.split(" · ")[0]}</div>
               <div className="helper-text">{latestIndustryLabel}</div>
+              {latestIndustryContext ? (
+                <div className="top-gap-small cluster">
+                  <Badge tone={contextProvenanceTone(latestIndustryContext)}>{contextProvenanceLabel(latestIndustryContext)}</Badge>
+                  {contextSummaryError(latestIndustryContext) ? <Badge tone="warning">summary warning</Badge> : null}
+                </div>
+              ) : null}
             </Card>
           </section>
 
@@ -118,8 +170,12 @@ export function DashboardPage() {
             <Card>
               <SectionTitle kicker="Context review" title="Check the market backdrop" subtitle="Best for macro and industry awareness." />
               <div className="helper-text">Review stored context snapshots before over-weighting any one ticker setup. Macro and industry context are saliency-first, not sentiment theater.</div>
+              <div className="top-gap-small cluster">
+                {latestMacroContext ? <Badge tone={contextProvenanceTone(latestMacroContext)}>macro {contextProvenanceLabel(latestMacroContext)}</Badge> : null}
+                {latestIndustryContext ? <Badge tone={contextProvenanceTone(latestIndustryContext)}>industry {contextProvenanceLabel(latestIndustryContext)}</Badge> : null}
+              </div>
               <div className="cluster top-gap-small">
-                <Link to="/context" className="button-secondary">Context snapshots</Link>
+                <Link to="/sentiment" className="button-secondary">Context snapshots</Link>
                 <Link to="/docs" className="button-subtle">Docs</Link>
               </div>
             </Card>
