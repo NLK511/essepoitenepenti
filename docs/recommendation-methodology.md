@@ -51,7 +51,7 @@ Watchlist-backed proposal jobs use a staged flow:
 3. deep analysis for shortlisted names through `TickerDeepAnalysisService`
 4. persistence of ticker signals and recommendation plans
 
-## Data layers used by the methodology
+## App-native independence and data layers used by the methodology
 
 ### 1. Market data
 The app uses `yfinance` for price history and volume.
