@@ -16,7 +16,7 @@ This only works if it keeps three things true:
 ### Implemented now
 - one FastAPI backend process serving the product API
 - one React/Vite frontend for operator workflows
-- SQLite as the default local persistence engine
+- PostgreSQL as the recommended default persistence engine, with SQLite retained as a lightweight fallback
 - worker and scheduler entrypoints
 - repository-based persistence access
 - app-native proposal, evaluation, optimization, and macro/industry refresh workflows
@@ -57,7 +57,7 @@ flowchart LR
     end
 
     subgraph Storage[Persistence]
-        DB[(SQLite local dev\nPostgres target)]
+        DB[(Postgres default\nSQLite fallback)]
         Snapshots[(shared support snapshots\n+ context snapshots)]
     end
 
@@ -145,9 +145,11 @@ flowchart LR
 14. ticker deep-analysis transmission summaries now emit governed channel-detail arrays for industry and ticker exposure channels, and the service no longer mixes raw theme or macro-sensitivity tags into those channel lists
 15. redesign transmission summary semantics such as `transmission_tags`, `primary_drivers`, and `conflict_flags` are now also governed through dedicated registries, with detail arrays carried alongside canonical keys for operator-facing readability
 16. event keys still persist separately via fields like `macro_event_keys` and `industry_event_keys`, but they are no longer overloaded into governed summary-tag or primary-driver fields
-17. the support-snapshot resolver now backfills baseline industry ontology metadata even when an industry context snapshot is missing, so downstream proposal/ticker analysis code can still see sector and relationship context instead of dropping to a taxonomy-blind fallback
-18. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
-19. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
+17. watchlist orchestration now also carries governed transmission detail arrays and exposure-channel detail arrays into ticker-signal diagnostics/source breakdown and recommendation-plan transmission summaries, with fallback label generation when only canonical keys are present
+18. operator-facing run-detail, recommendation-plan, and ticker-signal pages now prefer those detail arrays so they render stable readable labels for drivers, tags, conflicts, and exposure channels instead of mostly raw canonical keys
+19. the support-snapshot resolver now backfills baseline industry ontology metadata even when an industry context snapshot is missing, so downstream proposal/ticker analysis code can still see sector and relationship context instead of dropping to a taxonomy-blind fallback
+20. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
+21. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
 
 ## Runtime components
 
@@ -191,7 +193,7 @@ Current state:
 
 ### 5. Persistence
 Current default:
-- SQLite for lightweight startup and fast local validation
+- Postgres for local and production-like startup, with SQLite retained as a lightweight fallback
 
 Target:
 - Postgres as durable system of record

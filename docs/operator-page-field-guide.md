@@ -587,6 +587,8 @@ Ticker transmission payloads are also a little cleaner now. Exposure channels ca
 
 Transmission summary tags, primary drivers, and conflict flags are now moving in the same direction. Expect more stable wording there over time because those keys are being governed separately from the lower-level event-key details.
 
+On newer review pages, the UI should prefer the labeled detail arrays when they are available. That means operator-facing transmission rows increasingly show readable labels for drivers, conflicts, tags, and industry/ticker exposure channels instead of raw canonical keys.
+
 This page is intentionally closer to raw storage than the higher-level review pages.
 
 ---

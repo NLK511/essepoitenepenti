@@ -63,6 +63,7 @@ Important stored fields include:
 - relationship payloads can now include readable labels like `source_label`, `type_label`, `target_label`, `target_kind_label`, and `channel_label` while still preserving governed canonical keys underneath
 - ticker deep-analysis `transmission_analysis` can now also include labeled channel detail arrays like `industry_exposure_channel_details` and `ticker_exposure_channel_details`, plus `primary_driver_labels`
 - ticker deep-analysis and downstream plan transmission payloads can also include governed detail arrays such as `transmission_tag_details`, `primary_driver_details`, and `conflict_flag_details`
+- watchlist ticker-signal diagnostics and source-breakdown payloads can now also carry those governed detail arrays, plus `industry_exposure_channel_details` and `ticker_exposure_channel_details`, so frontend views do not have to guess labels from raw keys
 - event-key detail still persists separately via fields like `macro_event_keys` and `industry_event_keys` instead of being overloaded into governed tag/driver lists
 - industry snapshot resolution can now backfill baseline taxonomy metadata such as `ontology_profile`, `sector_definition`, and `ontology_relationships` even when no fresh industry context snapshot is available yet
 - ticker transmission fields such as `context_strength_percent`, `context_event_relevance_percent`, `contradiction_count`, `decay_state`, and `transmission_confidence_adjustment`

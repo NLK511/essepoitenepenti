@@ -192,9 +192,24 @@ class DeepAnalysisProposalService:
                     "context_event_relevance_percent": 66.0,
                     "contradiction_count": 0,
                     "transmission_tags": ["industry_dominant", "catalyst_active"],
+                    "transmission_tag_details": [
+                        {"key": "industry_dominant", "label": "industry dominant"},
+                        {"key": "catalyst_active", "label": "catalyst active"},
+                    ],
                     "primary_drivers": ["industry_context_support", "ticker_sentiment_confirmation"],
+                    "primary_driver_details": [
+                        {"key": "industry_context_support", "label": "industry context support"},
+                        {"key": "ticker_sentiment_confirmation", "label": "ticker sentiment confirmation"},
+                    ],
                     "industry_exposure_channels": ["industry_demand"],
+                    "industry_exposure_channel_details": [
+                        {"key": "industry_demand", "label": "industry demand"},
+                    ],
                     "ticker_exposure_channels": ["ticker_sentiment", "news_catalyst"],
+                    "ticker_exposure_channel_details": [
+                        {"key": "ticker_sentiment", "label": "ticker sentiment"},
+                        {"key": "news_catalyst", "label": "news catalyst"},
+                    ],
                     "ticker_relationship_edges": [
                         {"type": "supplier_to", "target": "TSM", "channel": "supply_chain"},
                         {"type": "peer_of", "target": "SONY", "channel": "competitive_position"},
@@ -680,6 +695,9 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(diagnostics_map["AAPL"]["selection_lane"], "technical")
         self.assertEqual(diagnostics_map["AAPL"]["transmission_bias"], "tailwind")
         self.assertIn("primary_drivers", diagnostics_map["AAPL"])
+        self.assertIn("primary_driver_details", diagnostics_map["AAPL"])
+        self.assertIn("industry_exposure_channel_details", diagnostics_map["AAPL"])
+        self.assertIn("ticker_exposure_channel_details", diagnostics_map["AAPL"])
         self.assertIn("transmission_confidence_adjustment", diagnostics_map["AAPL"])
         self.assertEqual(diagnostics_map["AAPL"]["expected_transmission_window"], "2d_5d")
         self.assertEqual(diagnostics_map["TSLA"]["mode"], "cheap_scan_only")
@@ -687,9 +705,14 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(source_breakdown_map["AAPL"]["deep_analysis_model"], "ticker_deep_analysis_v2")
         self.assertEqual(source_breakdown_map["AAPL"]["transmission_bias"], "tailwind")
         self.assertIn("primary_drivers", source_breakdown_map["AAPL"])
+        self.assertIn("industry_exposure_channel_details", source_breakdown_map["AAPL"])
+        self.assertIn("ticker_exposure_channel_details", source_breakdown_map["AAPL"])
         self.assertIn("transmission_confidence_adjustment", source_breakdown_map["AAPL"])
         self.assertIn("transmission_summary", plan_map["AAPL"].signal_breakdown)
         self.assertIn("primary_drivers", plan_map["AAPL"].signal_breakdown["transmission_summary"])
+        self.assertIn("primary_driver_details", plan_map["AAPL"].signal_breakdown["transmission_summary"])
+        self.assertIn("industry_exposure_channel_details", plan_map["AAPL"].signal_breakdown["transmission_summary"])
+        self.assertIn("ticker_exposure_channel_details", plan_map["AAPL"].signal_breakdown["transmission_summary"])
         self.assertIn("ticker_relationship_edges", plan_map["AAPL"].signal_breakdown["transmission_summary"])
         self.assertIn("matched_ticker_relationships", plan_map["AAPL"].signal_breakdown["transmission_summary"])
 

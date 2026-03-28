@@ -35,16 +35,23 @@ Instead, the engine should answer:
 Every redesign-native ticker analysis should derive a structured transmission object with at least:
 - `context_bias`: `tailwind | headwind | mixed | unknown`
 - `alignment_percent`: 0-100
-- `transmission_tags`: list of tags
-- `primary_drivers`: ranked list of driver keys
-- `industry_exposure_channels`: list of industry-level channels
-- `ticker_exposure_channels`: list of ticker-specific channels
+- `transmission_tags`: list of governed summary-tag keys
+- `transmission_tag_details`: optional labeled detail array for operator/UI display
+- `primary_drivers`: ranked list of governed driver keys
+- `primary_driver_details`: optional labeled detail array for operator/UI display
+- `industry_exposure_channels`: list of industry-level channel keys
+- `industry_exposure_channel_details`: optional labeled detail array for operator/UI display
+- `ticker_exposure_channels`: list of ticker-specific channel keys
+- `ticker_exposure_channel_details`: optional labeled detail array for operator/UI display
 - `expected_transmission_window`: `intraday | 1d | 2d_5d | 1w_plus | unknown`
 - `catalyst_intensity_percent`: 0-100
-- `conflict_flags`: list of explicit conflicts
+- `conflict_flags`: list of governed explicit-conflict keys
+- `conflict_flag_details`: optional labeled detail array for operator/UI display
 - `decay_state`: `fresh | active | fading | stale | unknown`
 
 The app may persist more fields, but these fields are the minimum redesign-native contract.
+
+Lower-level event identifiers should remain on dedicated event-detail fields such as `macro_event_keys` and `industry_event_keys`; they should not be overloaded into the governed summary-tag or primary-driver lists.
 
 ## Transmission pipeline
 

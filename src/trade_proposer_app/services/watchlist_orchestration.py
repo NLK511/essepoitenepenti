@@ -406,6 +406,10 @@ class WatchlistOrchestrationService:
         conflict_flag_details = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "conflict_flag_details") or []
         transmission_tags = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "transmission_tags") or []
         transmission_tag_details = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "transmission_tag_details") or []
+        industry_exposure_channels = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "industry_exposure_channels") or []
+        industry_exposure_channel_details = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "industry_exposure_channel_details") or []
+        ticker_exposure_channels = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "ticker_exposure_channels") or []
+        ticker_exposure_channel_details = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "ticker_exposure_channel_details") or []
         transmission_effect = self._transmission_confidence_adjustment(analysis, transmission_bias=transmission_bias, alignment_score=transmission_alignment_score)
         base_confidence = round(float(deep_recommendation.confidence if deep_recommendation is not None else candidate.confidence_percent), 2)
         adjusted_confidence = round(max(0.0, min(95.0, base_confidence + transmission_effect)), 2)
@@ -427,6 +431,14 @@ class WatchlistOrchestrationService:
             transmission_tags = []
         if not isinstance(transmission_tag_details, list) or not transmission_tag_details:
             transmission_tag_details = self._detail_fallback(transmission_tags)
+        if not isinstance(industry_exposure_channels, list):
+            industry_exposure_channels = []
+        if not isinstance(industry_exposure_channel_details, list) or not industry_exposure_channel_details:
+            industry_exposure_channel_details = self._channel_detail_fallback(industry_exposure_channels)
+        if not isinstance(ticker_exposure_channels, list):
+            ticker_exposure_channels = []
+        if not isinstance(ticker_exposure_channel_details, list) or not ticker_exposure_channel_details:
+            ticker_exposure_channel_details = self._channel_detail_fallback(ticker_exposure_channels)
         return TickerSignalSnapshot(
             ticker=candidate.ticker,
             horizon=watchlist.default_horizon,
@@ -455,6 +467,10 @@ class WatchlistOrchestrationService:
                 "transmission_tag_details": transmission_tag_details,
                 "primary_drivers": primary_drivers,
                 "primary_driver_details": primary_driver_details,
+                "industry_exposure_channels": industry_exposure_channels,
+                "industry_exposure_channel_details": industry_exposure_channel_details,
+                "ticker_exposure_channels": ticker_exposure_channels,
+                "ticker_exposure_channel_details": ticker_exposure_channel_details,
                 "expected_transmission_window": expected_transmission_window,
                 "conflict_flags": conflict_flags,
                 "conflict_flag_details": conflict_flag_details,
@@ -486,6 +502,10 @@ class WatchlistOrchestrationService:
                 "transmission_tag_details": transmission_tag_details,
                 "primary_drivers": primary_drivers,
                 "primary_driver_details": primary_driver_details,
+                "industry_exposure_channels": industry_exposure_channels,
+                "industry_exposure_channel_details": industry_exposure_channel_details,
+                "ticker_exposure_channels": ticker_exposure_channels,
+                "ticker_exposure_channel_details": ticker_exposure_channel_details,
                 "expected_transmission_window": expected_transmission_window,
                 "conflict_flags": conflict_flags,
                 "conflict_flag_details": conflict_flag_details,
@@ -851,6 +871,16 @@ class WatchlistOrchestrationService:
         if isinstance(explicit, dict) and explicit:
             bias = self._transmission_bias(analysis)
             alignment_percent = round(float(explicit.get("alignment_percent", 0.0)), 2) if self._is_number(explicit.get("alignment_percent")) else 0.0
+            transmission_tags = explicit.get("transmission_tags", []) if isinstance(explicit.get("transmission_tags"), list) else []
+            transmission_tag_details = explicit.get("transmission_tag_details", []) if isinstance(explicit.get("transmission_tag_details"), list) else []
+            primary_drivers = explicit.get("primary_drivers", []) if isinstance(explicit.get("primary_drivers"), list) else []
+            primary_driver_details = explicit.get("primary_driver_details", []) if isinstance(explicit.get("primary_driver_details"), list) else []
+            industry_exposure_channels = explicit.get("industry_exposure_channels", []) if isinstance(explicit.get("industry_exposure_channels"), list) else []
+            industry_exposure_channel_details = explicit.get("industry_exposure_channel_details", []) if isinstance(explicit.get("industry_exposure_channel_details"), list) else []
+            ticker_exposure_channels = explicit.get("ticker_exposure_channels", []) if isinstance(explicit.get("ticker_exposure_channels"), list) else []
+            ticker_exposure_channel_details = explicit.get("ticker_exposure_channel_details", []) if isinstance(explicit.get("ticker_exposure_channel_details"), list) else []
+            conflict_flags = explicit.get("conflict_flags", []) if isinstance(explicit.get("conflict_flags"), list) else []
+            conflict_flag_details = explicit.get("conflict_flag_details", []) if isinstance(explicit.get("conflict_flag_details"), list) else []
             return {
                 "alignment_percent": alignment_percent,
                 "context_bias": bias,
@@ -858,19 +888,19 @@ class WatchlistOrchestrationService:
                 "context_strength_percent": round(float(explicit.get("context_strength_percent", 0.0)), 2) if self._is_number(explicit.get("context_strength_percent")) else 0.0,
                 "context_event_relevance_percent": round(float(explicit.get("context_event_relevance_percent", 0.0)), 2) if self._is_number(explicit.get("context_event_relevance_percent")) else 0.0,
                 "contradiction_count": int(float(explicit.get("contradiction_count", 0.0))) if self._is_number(explicit.get("contradiction_count")) else 0,
-                "transmission_tags": explicit.get("transmission_tags", []) if isinstance(explicit.get("transmission_tags"), list) else [],
-                "transmission_tag_details": explicit.get("transmission_tag_details", []) if isinstance(explicit.get("transmission_tag_details"), list) else [],
-                "primary_drivers": explicit.get("primary_drivers", []) if isinstance(explicit.get("primary_drivers"), list) else [],
-                "primary_driver_details": explicit.get("primary_driver_details", []) if isinstance(explicit.get("primary_driver_details"), list) else [],
-                "industry_exposure_channels": explicit.get("industry_exposure_channels", []) if isinstance(explicit.get("industry_exposure_channels"), list) else [],
-                "industry_exposure_channel_details": explicit.get("industry_exposure_channel_details", []) if isinstance(explicit.get("industry_exposure_channel_details"), list) else [],
-                "ticker_exposure_channels": explicit.get("ticker_exposure_channels", []) if isinstance(explicit.get("ticker_exposure_channels"), list) else [],
-                "ticker_exposure_channel_details": explicit.get("ticker_exposure_channel_details", []) if isinstance(explicit.get("ticker_exposure_channel_details"), list) else [],
+                "transmission_tags": transmission_tags,
+                "transmission_tag_details": transmission_tag_details or self._detail_fallback(transmission_tags),
+                "primary_drivers": primary_drivers,
+                "primary_driver_details": primary_driver_details or self._detail_fallback(primary_drivers),
+                "industry_exposure_channels": industry_exposure_channels,
+                "industry_exposure_channel_details": industry_exposure_channel_details or self._channel_detail_fallback(industry_exposure_channels),
+                "ticker_exposure_channels": ticker_exposure_channels,
+                "ticker_exposure_channel_details": ticker_exposure_channel_details or self._channel_detail_fallback(ticker_exposure_channels),
                 "ticker_relationship_edges": explicit.get("ticker_relationship_edges", []) if isinstance(explicit.get("ticker_relationship_edges"), list) else [],
                 "matched_ticker_relationships": explicit.get("matched_ticker_relationships", []) if isinstance(explicit.get("matched_ticker_relationships"), list) else [],
                 "expected_transmission_window": self._string_value(explicit.get("expected_transmission_window"), default=self._fallback_transmission_window(signal)),
-                "conflict_flags": explicit.get("conflict_flags", []) if isinstance(explicit.get("conflict_flags"), list) else [],
-                "conflict_flag_details": explicit.get("conflict_flag_details", []) if isinstance(explicit.get("conflict_flag_details"), list) else [],
+                "conflict_flags": conflict_flags,
+                "conflict_flag_details": conflict_flag_details or self._detail_fallback(conflict_flags),
                 "decay_state": self._string_value(explicit.get("decay_state"), default=self._fallback_decay_state(signal)),
                 "transmission_confidence_adjustment": round(float(signal.diagnostics.get("transmission_confidence_adjustment", 0.0)), 2) if self._is_number(signal.diagnostics.get("transmission_confidence_adjustment")) else 0.0,
                 "lane_hint": "event" if bias == "tailwind" and signal.catalyst_score >= 65.0 else "technical",

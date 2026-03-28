@@ -12,7 +12,7 @@ import { WorkflowRunResults } from "../components/workflow-run-results";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import type { Job, RunDetailResponse, WatchlistEvaluationPolicy } from "../types";
-import { formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, runTone } from "../utils";
+import { extractDisplayLabels, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, runTone } from "../utils";
 
 function scoreColor(value: number, min = -1, max = 1) {
   if (!Number.isFinite(value) || max <= min) {
@@ -434,15 +434,11 @@ export function RunDetailPage() {
                             const transmissionAlignment = typeof item.diagnostics.transmission_alignment_score === "number"
                               ? item.diagnostics.transmission_alignment_score
                               : null;
-                            const transmissionTags = Array.isArray(item.diagnostics.transmission_tags)
-                              ? item.diagnostics.transmission_tags.filter((value): value is string => typeof value === "string")
-                              : [];
-                            const primaryDrivers = Array.isArray(item.diagnostics.primary_drivers)
-                              ? item.diagnostics.primary_drivers.filter((value): value is string => typeof value === "string")
-                              : [];
-                            const conflictFlags = Array.isArray(item.diagnostics.conflict_flags)
-                              ? item.diagnostics.conflict_flags.filter((value): value is string => typeof value === "string")
-                              : [];
+                            const transmissionTags = extractDisplayLabels(item.diagnostics, "transmission_tag_details", "transmission_tags");
+                            const primaryDrivers = extractDisplayLabels(item.diagnostics, "primary_driver_details", "primary_drivers");
+                            const conflictFlags = extractDisplayLabels(item.diagnostics, "conflict_flag_details", "conflict_flags");
+                            const industryExposureChannels = extractDisplayLabels(item.diagnostics, "industry_exposure_channel_details", "industry_exposure_channels");
+                            const tickerExposureChannels = extractDisplayLabels(item.diagnostics, "ticker_exposure_channel_details", "ticker_exposure_channels");
                             const expectedWindow = typeof item.diagnostics.expected_transmission_window === "string"
                               ? item.diagnostics.expected_transmission_window
                               : "unknown";
@@ -474,6 +470,8 @@ export function RunDetailPage() {
                                   <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
                                   <div className="helper-text">window {expectedWindow}</div>
                                   <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
+                                  <div className="helper-text">industry channels {industryExposureChannels.length > 0 ? industryExposureChannels.join(" · ") : "none"}</div>
+                                  <div className="helper-text">ticker channels {tickerExposureChannels.length > 0 ? tickerExposureChannels.join(" · ") : "none"}</div>
                                   <div className="helper-text">conflicts {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
                                   <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
                                 </td>
@@ -530,15 +528,11 @@ export function RunDetailPage() {
                                 : null;
                             const transmissionBias = typeof transmissionSummary?.context_bias === "string" ? transmissionSummary.context_bias : "unknown";
                             const transmissionAlignment = typeof transmissionSummary?.alignment_percent === "number" ? transmissionSummary.alignment_percent : null;
-                            const transmissionTags = Array.isArray(transmissionSummary?.transmission_tags)
-                              ? transmissionSummary.transmission_tags.filter((value): value is string => typeof value === "string")
-                              : [];
-                            const primaryDrivers = Array.isArray(transmissionSummary?.primary_drivers)
-                              ? transmissionSummary.primary_drivers.filter((value): value is string => typeof value === "string")
-                              : [];
-                            const conflictFlags = Array.isArray(transmissionSummary?.conflict_flags)
-                              ? transmissionSummary.conflict_flags.filter((value): value is string => typeof value === "string")
-                              : [];
+                            const transmissionTags = extractDisplayLabels(transmissionSummary, "transmission_tag_details", "transmission_tags");
+                            const primaryDrivers = extractDisplayLabels(transmissionSummary, "primary_driver_details", "primary_drivers");
+                            const conflictFlags = extractDisplayLabels(transmissionSummary, "conflict_flag_details", "conflict_flags");
+                            const industryExposureChannels = extractDisplayLabels(transmissionSummary, "industry_exposure_channel_details", "industry_exposure_channels");
+                            const tickerExposureChannels = extractDisplayLabels(transmissionSummary, "ticker_exposure_channel_details", "ticker_exposure_channels");
                             const expectedWindow = typeof transmissionSummary?.expected_transmission_window === "string"
                               ? transmissionSummary.expected_transmission_window
                               : "unknown";
@@ -591,6 +585,8 @@ export function RunDetailPage() {
                                   <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
                                   <div className="helper-text">window {expectedWindow}</div>
                                   <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
+                                  <div className="helper-text">industry channels {industryExposureChannels.length > 0 ? industryExposureChannels.join(" · ") : "none"}</div>
+                                  <div className="helper-text">ticker channels {tickerExposureChannels.length > 0 ? tickerExposureChannels.join(" · ") : "none"}</div>
                                   <div className="helper-text">ticker relationships {relationshipSummary(plan)}</div>
                                   <div className="helper-text">conflicts {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
                                   <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>

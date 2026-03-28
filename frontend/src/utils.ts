@@ -17,6 +17,11 @@ export interface SupportSnapshotReference {
   score: number | null;
 }
 
+export interface KeyLabelDetail {
+  key: string;
+  label: string;
+}
+
 export function formatDate(value: string | null): string {
   if (!value) {
     return "—";
@@ -215,4 +220,59 @@ export function extractSupportSnapshotReferences(value: string | null): SupportS
     });
   }
   return references;
+}
+
+function humanizeKey(value: string): string {
+  return value.replace(/_/g, " ");
+}
+
+export function extractKeyLabelDetails(value: unknown): KeyLabelDetail[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const details: KeyLabelDetail[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!isRecord(item)) {
+      continue;
+    }
+    const key = typeof item.key === "string" && item.key.trim() ? item.key.trim() : null;
+    const label = typeof item.label === "string" && item.label.trim()
+      ? item.label.trim()
+      : key ? humanizeKey(key) : null;
+    if (!key || !label || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    details.push({ key, label });
+  }
+  return details;
+}
+
+export function extractDisplayLabels(
+  source: Record<string, unknown> | null | undefined,
+  detailKey: string,
+  fallbackKey: string,
+): string[] {
+  const detailLabels = extractKeyLabelDetails(source?.[detailKey]).map((item) => item.label);
+  if (detailLabels.length > 0) {
+    return detailLabels;
+  }
+  if (!Array.isArray(source?.[fallbackKey])) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const labels: string[] = [];
+  for (const item of source[fallbackKey] as unknown[]) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const value = item.trim();
+    if (!value || seen.has(value)) {
+      continue;
+    }
+    seen.add(value);
+    labels.push(humanizeKey(value));
+  }
+  return labels;
 }

@@ -14,7 +14,7 @@ import type {
   RecommendationSetupFamilyReviewSummary,
   Run,
 } from "../types";
-import { formatDate } from "../utils";
+import { extractDisplayLabels, formatDate } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams): string {
   const query = searchParams.toString();
@@ -659,15 +659,11 @@ export function RecommendationPlansPage() {
                   const invalidationSummary = typeof evidenceSummary?.invalidation_summary === "string" ? evidenceSummary.invalidation_summary : "—";
                   const transmissionBias = typeof transmissionSummary?.context_bias === "string" ? transmissionSummary.context_bias : "unknown";
                   const transmissionAlignment = typeof transmissionSummary?.alignment_percent === "number" ? transmissionSummary.alignment_percent : null;
-                  const transmissionTags = Array.isArray(transmissionSummary?.transmission_tags)
-                    ? transmissionSummary.transmission_tags.filter((value): value is string => typeof value === "string")
-                    : [];
-                  const primaryDrivers = Array.isArray(transmissionSummary?.primary_drivers)
-                    ? transmissionSummary.primary_drivers.filter((value): value is string => typeof value === "string")
-                    : [];
-                  const conflictFlags = Array.isArray(transmissionSummary?.conflict_flags)
-                    ? transmissionSummary.conflict_flags.filter((value): value is string => typeof value === "string")
-                    : [];
+                  const transmissionTags = extractDisplayLabels(transmissionSummary, "transmission_tag_details", "transmission_tags");
+                  const primaryDrivers = extractDisplayLabels(transmissionSummary, "primary_driver_details", "primary_drivers");
+                  const conflictFlags = extractDisplayLabels(transmissionSummary, "conflict_flag_details", "conflict_flags");
+                  const industryExposureChannels = extractDisplayLabels(transmissionSummary, "industry_exposure_channel_details", "industry_exposure_channels");
+                  const tickerExposureChannels = extractDisplayLabels(transmissionSummary, "ticker_exposure_channel_details", "ticker_exposure_channels");
                   const expectedWindow = typeof transmissionSummary?.expected_transmission_window === "string"
                     ? transmissionSummary.expected_transmission_window
                     : "unknown";
@@ -736,6 +732,8 @@ export function RecommendationPlansPage() {
                         <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
                         <div className="helper-text">window {expectedWindow}</div>
                         <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
+                        <div className="helper-text">industry channels {industryExposureChannels.length > 0 ? industryExposureChannels.join(" · ") : "none"}</div>
+                        <div className="helper-text">ticker channels {tickerExposureChannels.length > 0 ? tickerExposureChannels.join(" · ") : "none"}</div>
                         <div className="helper-text">ticker relationships {relationshipSummary(plan)}</div>
                         <div className="helper-text">conflicts {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
                         <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>

@@ -4,7 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { TickerSignalSnapshot } from "../types";
-import { formatDate } from "../utils";
+import { extractDisplayLabels, formatDate } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams): string {
   const query = searchParams.toString();
@@ -118,15 +118,11 @@ export function TickerSignalsPage() {
                 ? signal.diagnostics.shortlist_reasons.filter((value): value is string => typeof value === "string")
                 : [];
               const transmissionBias = typeof signal.diagnostics.transmission_bias === "string" ? signal.diagnostics.transmission_bias : "unknown";
-              const transmissionTags = Array.isArray(signal.diagnostics.transmission_tags)
-                ? signal.diagnostics.transmission_tags.filter((value): value is string => typeof value === "string")
-                : [];
-              const primaryDrivers = Array.isArray(signal.diagnostics.primary_drivers)
-                ? signal.diagnostics.primary_drivers.filter((value): value is string => typeof value === "string")
-                : [];
-              const conflictFlags = Array.isArray(signal.diagnostics.conflict_flags)
-                ? signal.diagnostics.conflict_flags.filter((value): value is string => typeof value === "string")
-                : [];
+              const transmissionTags = extractDisplayLabels(signal.diagnostics, "transmission_tag_details", "transmission_tags");
+              const primaryDrivers = extractDisplayLabels(signal.diagnostics, "primary_driver_details", "primary_drivers");
+              const conflictFlags = extractDisplayLabels(signal.diagnostics, "conflict_flag_details", "conflict_flags");
+              const industryExposureChannels = extractDisplayLabels(signal.diagnostics, "industry_exposure_channel_details", "industry_exposure_channels");
+              const tickerExposureChannels = extractDisplayLabels(signal.diagnostics, "ticker_exposure_channel_details", "ticker_exposure_channels");
               const expectedWindow = typeof signal.diagnostics.expected_transmission_window === "string"
                 ? signal.diagnostics.expected_transmission_window
                 : "unknown";
@@ -164,6 +160,8 @@ export function TickerSignalsPage() {
 
                   <div className="helper-text top-gap-small">shortlist reasons: {shortlistReasons.length > 0 ? shortlistReasons.join(" · ") : "eligible"}</div>
                   <div className="helper-text">drivers: {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
+                  <div className="helper-text">industry channels: {industryExposureChannels.length > 0 ? industryExposureChannels.join(" · ") : "none"}</div>
+                  <div className="helper-text">ticker channels: {tickerExposureChannels.length > 0 ? tickerExposureChannels.join(" · ") : "none"}</div>
                   <div className="helper-text">conflicts: {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
                   <div className="helper-text">tags: {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
                   <div className="helper-text">cheap scan: trend {typeof components?.trend_score === "number" ? components.trend_score.toFixed(0) : "—"} · momentum {typeof components?.momentum_score === "number" ? components.momentum_score.toFixed(0) : "—"} · breakout {typeof components?.breakout_score === "number" ? components.breakout_score.toFixed(0) : "—"}</div>

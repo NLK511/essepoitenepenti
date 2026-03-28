@@ -158,6 +158,8 @@ Goal: make the ontology behave more like a real market-structure graph.
 - [x] govern redesign transmission tags, primary-driver keys, and conflict-flag keys through dedicated registries
 - [x] stop mixing raw event keys and regime tags into `transmission_tags`; keep event keys on their dedicated fields and transmission tags on controlled summary semantics
 - [x] stop using raw event keys as `primary_drivers`; keep event-key detail on `macro_event_keys` / `industry_event_keys` and use governed summary driver keys instead
+- [x] propagate governed transmission summary detail arrays into watchlist diagnostics and plan payloads so operator-facing pages can render labels instead of raw keys
+- [x] update operator-facing run, plan, and signal pages to prefer governed transmission labels and exposure-channel labels when present
 - [ ] migrate all remaining ontology relationship/channel fields to governed registries where practical
 
 #### Example relationships
