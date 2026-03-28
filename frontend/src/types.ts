@@ -230,6 +230,7 @@ export interface RecommendationTransmissionSummary {
   alignment_percent?: number;
   context_bias?: string;
   transmission_bias?: string;
+  transmission_bias_detail?: KeyLabelDetail;
   transmission_alignment_score?: number;
   catalyst_intensity_percent?: number;
   context_strength_percent?: number;

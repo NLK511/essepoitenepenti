@@ -313,6 +313,7 @@ class RecommendationTransmissionSummary(DictLikeModel):
     alignment_percent: float | None = None
     context_bias: str | None = None
     transmission_bias: str | None = None
+    transmission_bias_detail: KeyLabelDetail | None = None
     catalyst_intensity_percent: float | None = None
     context_strength_percent: float | None = None
     context_event_relevance_percent: float | None = None

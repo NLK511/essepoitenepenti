@@ -6,15 +6,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import StrategyHorizon
-from trade_proposer_app.domain.models import RecommendationPlan
+from trade_proposer_app.domain.models import KeyLabelDetail, RecommendationPlan
 from trade_proposer_app.persistence.models import RecommendationPlanRecord
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
+from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
 class RecommendationPlanRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
         self.outcomes = RecommendationOutcomeRepository(session)
+        self.taxonomy_service = TickerTaxonomyService()
 
     def create_plan(self, plan: RecommendationPlan) -> RecommendationPlan:
         record = RecommendationPlanRecord(
@@ -107,11 +109,39 @@ class RecommendationPlanRepository:
         except json.JSONDecodeError:
             return default
 
+    def _transmission_bias_detail(self, value: object) -> KeyLabelDetail | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        definition = self.taxonomy_service.get_transmission_bias_definition(value)
+        key = str(definition.get("key", value)).strip() or value.strip()
+        label = str(definition.get("label", value)).strip() or value.strip()
+        return KeyLabelDetail(key=key, label=label)
+
+    def _with_transmission_bias_detail(self, payload: Any) -> Any:
+        if not isinstance(payload, dict):
+            return payload
+        transmission_summary = payload.get("transmission_summary")
+        if not isinstance(transmission_summary, dict):
+            return payload
+        if transmission_summary.get("transmission_bias_detail") is not None:
+            return payload
+        transmission_bias = transmission_summary.get("transmission_bias") or transmission_summary.get("context_bias")
+        if not isinstance(transmission_bias, str) or not transmission_bias.strip():
+            return payload
+        enriched_transmission_summary = dict(transmission_summary)
+        enriched_transmission_summary.setdefault("transmission_bias", transmission_bias)
+        enriched_transmission_summary["transmission_bias_detail"] = self._transmission_bias_detail(transmission_bias)
+        enriched = dict(payload)
+        enriched["transmission_summary"] = enriched_transmission_summary
+        return enriched
+
     def _to_model(self, record: RecommendationPlanRecord) -> RecommendationPlan:
         try:
             horizon = StrategyHorizon(record.horizon)
         except ValueError:
             horizon = StrategyHorizon.ONE_WEEK
+        evidence_summary = self._with_transmission_bias_detail(self._load(record.evidence_summary_json, {}))
+        signal_breakdown = self._with_transmission_bias_detail(self._load(record.signal_breakdown_json, {}))
         return RecommendationPlan(
             id=record.id,
             ticker=record.ticker,
@@ -130,8 +160,8 @@ class RecommendationPlanRepository:
             risks=self._load(record.risks_json, []),
             warnings=self._load(record.warnings_json, []),
             missing_inputs=self._load(record.missing_inputs_json, []),
-            evidence_summary=self._load(record.evidence_summary_json, {}),
-            signal_breakdown=self._load(record.signal_breakdown_json, {}),
+            evidence_summary=evidence_summary,
+            signal_breakdown=signal_breakdown,
             computed_at=record.computed_at,
             run_id=record.run_id,
             job_id=record.job_id,

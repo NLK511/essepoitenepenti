@@ -118,6 +118,7 @@ export function TickerSignalsPage() {
                 : typeof signal.diagnostics.selection_lane === "string" ? signal.diagnostics.selection_lane : null;
               const shortlistReasons = extractDisplayLabels(signal.diagnostics, "shortlist_reason_details", "shortlist_reasons");
               const transmissionBias = typeof signal.diagnostics.transmission_bias === "string" ? signal.diagnostics.transmission_bias : "unknown";
+              const transmissionBiasLabel = detailLabel(signal.diagnostics.transmission_bias_detail, signal.diagnostics.transmission_bias ?? "unknown", false) ?? "unknown";
               const transmissionTags = extractDisplayLabels(signal.diagnostics, "transmission_tag_details", "transmission_tags");
               const primaryDrivers = extractDisplayLabels(signal.diagnostics, "primary_driver_details", "primary_drivers");
               const conflictFlags = extractDisplayLabels(signal.diagnostics, "conflict_flag_details", "conflict_flags");
@@ -148,7 +149,7 @@ export function TickerSignalsPage() {
                     </div>
                     <div className="data-card-meta">
                       <Badge tone={shortlisted ? "info" : "neutral"}>{shortlisted ? `shortlisted${shortlistRank !== null ? ` #${shortlistRank}` : ""}` : "not shortlisted"}</Badge>
-                      <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>
+                      <Badge tone={biasTone(transmissionBias)}>{transmissionBiasLabel}</Badge>
                     </div>
                   </div>
 

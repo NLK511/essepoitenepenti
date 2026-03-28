@@ -661,7 +661,12 @@ export function RecommendationPlansPage() {
                     ? evidenceSummary.evaluation_focus.filter((value): value is string => typeof value === "string")
                     : [];
                   const invalidationSummary = typeof evidenceSummary?.invalidation_summary === "string" ? evidenceSummary.invalidation_summary : "—";
-                  const transmissionBias = typeof transmissionSummary?.context_bias === "string" ? transmissionSummary.context_bias : "unknown";
+                  const transmissionBias = typeof transmissionSummary?.transmission_bias === "string"
+                    ? transmissionSummary.transmission_bias
+                    : typeof transmissionSummary?.context_bias === "string"
+                      ? transmissionSummary.context_bias
+                      : "unknown";
+                  const transmissionBiasLabel = detailLabel(transmissionSummary?.transmission_bias_detail, transmissionSummary?.transmission_bias ?? transmissionSummary?.context_bias ?? "unknown", false) ?? "unknown";
                   const transmissionAlignment = typeof transmissionSummary?.alignment_percent === "number" ? transmissionSummary.alignment_percent : null;
                   const transmissionTags = extractDisplayLabels(transmissionSummary, "transmission_tag_details", "transmission_tags");
                   const primaryDrivers = extractDisplayLabels(transmissionSummary, "primary_driver_details", "primary_drivers");
@@ -727,7 +732,7 @@ export function RecommendationPlansPage() {
                         <div className="helper-text">timing {timingExpectation}</div>
                       </td>
                       <td>
-                        <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>
+                        <Badge tone={biasTone(transmissionBias)}>{transmissionBiasLabel}</Badge>
                         <div className="top-gap-small cluster">
                           {macroContext ? <Badge tone={contextProvenanceTone(macroContext)}>macro {contextProvenanceLabel(macroContext)}</Badge> : null}
                           {industryContext ? <Badge tone={contextProvenanceTone(industryContext)}>industry {contextProvenanceLabel(industryContext)}</Badge> : null}

@@ -471,6 +471,7 @@ class WatchlistOrchestrationService:
                 "deep_analysis_model": self._pluck(analysis, "ticker_deep_analysis", "model"),
                 "summary_method": getattr(deep_output.diagnostics, "summary_method", None) if deep_output is not None else None,
                 "transmission_bias": transmission_bias,
+                "transmission_bias_detail": self._transmission_bias_detail(transmission_bias),
                 "transmission_tags": transmission_tags,
                 "transmission_tag_details": transmission_tag_details,
                 "primary_drivers": primary_drivers,
@@ -509,6 +510,7 @@ class WatchlistOrchestrationService:
                 "transmission_confidence_adjustment": transmission_effect,
                 "transmission_alignment_score": transmission_alignment_score,
                 "transmission_bias": transmission_bias,
+                "transmission_bias_detail": self._transmission_bias_detail(transmission_bias),
                 "transmission_tags": transmission_tags,
                 "transmission_tag_details": transmission_tag_details,
                 "primary_drivers": primary_drivers,
@@ -770,10 +772,19 @@ class WatchlistOrchestrationService:
             return round(float(value), 2)
         return 0.0
 
-    @staticmethod
-    def _transmission_bias(analysis: dict[str, Any]) -> str:
-        value = WatchlistOrchestrationService._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "context_bias")
-        return value.strip() if isinstance(value, str) and value.strip() else "unknown"
+    def _transmission_bias(self, analysis: dict[str, Any]) -> str:
+        transmission = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis")
+        if isinstance(transmission, dict):
+            return self.taxonomy_service.derive_transmission_bias(transmission)
+        return "unknown"
+
+    def _transmission_bias_detail(self, value: object) -> dict[str, str] | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        definition = self.taxonomy_service.get_transmission_bias_definition(value)
+        key = str(definition.get("key", value)).strip() or value.strip()
+        label = str(definition.get("label", value)).strip() or value.strip()
+        return {"key": key, "label": label}
 
     @staticmethod
     def _bias_from_alignment(alignment_percent: float) -> str:
@@ -896,6 +907,8 @@ class WatchlistOrchestrationService:
             return {
                 "alignment_percent": alignment_percent,
                 "context_bias": bias,
+                "transmission_bias": bias,
+                "transmission_bias_detail": self._transmission_bias_detail(bias),
                 "catalyst_intensity_percent": round(float(explicit.get("catalyst_intensity_percent", 0.0)), 2) if self._is_number(explicit.get("catalyst_intensity_percent")) else signal.catalyst_score,
                 "context_strength_percent": round(float(explicit.get("context_strength_percent", 0.0)), 2) if self._is_number(explicit.get("context_strength_percent")) else 0.0,
                 "context_event_relevance_percent": round(float(explicit.get("context_event_relevance_percent", 0.0)), 2) if self._is_number(explicit.get("context_event_relevance_percent")) else 0.0,
@@ -928,6 +941,8 @@ class WatchlistOrchestrationService:
         return {
             "alignment_percent": context_alignment,
             "context_bias": bias,
+            "transmission_bias": bias,
+            "transmission_bias_detail": self._transmission_bias_detail(bias),
             "catalyst_intensity_percent": signal.catalyst_score,
             "context_strength_percent": round((signal.macro_exposure_score * 0.45) + (signal.industry_alignment_score * 0.55), 2),
             "context_event_relevance_percent": round((signal.macro_exposure_score * 0.35) + (signal.industry_alignment_score * 0.35) + (signal.catalyst_score * 0.3), 2),

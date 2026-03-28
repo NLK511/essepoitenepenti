@@ -174,6 +174,7 @@ Goal: make the ontology behave more like a real market-structure graph.
 - [x] tighten backend recommendation-plan and ticker-signal domain models around those same governed substructures so repositories and APIs preserve typed nested payloads end-to-end
 - [x] govern transmission-window semantics so recommendation/signal review pages can render readable window labels from registry-backed detail objects instead of raw canonical keys
 - [x] govern latest-outcome analytics display semantics so transmission bias and context regime can travel with detail objects on recommendation/ticker review surfaces too
+- [x] normalize transmission-bias labels across signal diagnostics and plan transmission summaries too, so shortlist/run/plan review surfaces no longer depend on raw `context_bias` rendering
 - [x] tighten evidence-concentration payload typing by exposing readable governed slice labels alongside canonical slice keys
 - [ ] migrate all remaining ontology relationship/channel fields to governed registries where practical
 

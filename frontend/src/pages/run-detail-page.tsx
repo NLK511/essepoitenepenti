@@ -437,6 +437,7 @@ export function RunDetailPage() {
                               ? item.diagnostics.selection_lane_label
                               : typeof item.diagnostics.selection_lane === "string" ? item.diagnostics.selection_lane : null;
                             const transmissionBias = typeof item.diagnostics.transmission_bias === "string" ? item.diagnostics.transmission_bias : "unknown";
+                            const transmissionBiasLabel = detailLabel(item.diagnostics.transmission_bias_detail, item.diagnostics.transmission_bias ?? "unknown", false) ?? "unknown";
                             const transmissionAlignment = typeof item.diagnostics.transmission_alignment_score === "number"
                               ? item.diagnostics.transmission_alignment_score
                               : null;
@@ -473,7 +474,7 @@ export function RunDetailPage() {
                                   <div className="helper-text">catalyst proxy {catalystProxyScore !== null ? catalystProxyScore.toFixed(1) : "—"}</div>
                                 </td>
                                 <td>
-                                  <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>
+                                  <Badge tone={biasTone(transmissionBias)}>{transmissionBiasLabel}</Badge>
                                   <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
                                   <div className="helper-text">window {expectedWindow}</div>
                                   <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
@@ -525,7 +526,12 @@ export function RunDetailPage() {
                             const evidenceSummary = plan.evidence_summary;
                             const transmissionSummary = signalBreakdown.transmission_summary ?? evidenceSummary.transmission_summary ?? null;
                             const calibrationReview = signalBreakdown.calibration_review ?? evidenceSummary.calibration_review ?? null;
-                            const transmissionBias = typeof transmissionSummary?.context_bias === "string" ? transmissionSummary.context_bias : "unknown";
+                            const transmissionBias = typeof transmissionSummary?.transmission_bias === "string"
+                              ? transmissionSummary.transmission_bias
+                              : typeof transmissionSummary?.context_bias === "string"
+                                ? transmissionSummary.context_bias
+                                : "unknown";
+                            const transmissionBiasLabel = detailLabel(transmissionSummary?.transmission_bias_detail, transmissionSummary?.transmission_bias ?? transmissionSummary?.context_bias ?? "unknown", false) ?? "unknown";
                             const transmissionAlignment = typeof transmissionSummary?.alignment_percent === "number" ? transmissionSummary.alignment_percent : null;
                             const transmissionTags = extractDisplayLabels(transmissionSummary, "transmission_tag_details", "transmission_tags");
                             const primaryDrivers = extractDisplayLabels(transmissionSummary, "primary_driver_details", "primary_drivers");
@@ -583,7 +589,7 @@ export function RunDetailPage() {
                                   <div className="helper-text">reasons {calibrationReasons.length > 0 ? calibrationReasons.join(" · ") : "none"}</div>
                                 </td>
                                 <td>
-                                  <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>
+                                  <Badge tone={biasTone(transmissionBias)}>{transmissionBiasLabel}</Badge>
                                   <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
                                   <div className="helper-text">window {expectedWindow}</div>
                                   <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>

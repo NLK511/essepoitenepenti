@@ -186,7 +186,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     swing_probability_percent=66.0,
                     confidence_percent=71.0,
                     attention_score=83.0,
-                    diagnostics={"mode": "deep_analysis"},
+                    diagnostics={"mode": "deep_analysis", "transmission_bias": "tailwind"},
                     run_id=run_id,
                 )
             )
@@ -990,6 +990,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(macro_detail.json()["summary_text"], "Fed and yields remain the dominant macro themes.")
         self.assertEqual(industry_detail.json()["industry_key"], "consumer_electronics")
         self.assertEqual(ticker_signals.json()[0]["diagnostics"]["mode"], "deep_analysis")
+        self.assertEqual(ticker_signals.json()[0]["diagnostics"]["transmission_bias_detail"]["label"], "tailwind")
         self.assertEqual(plans.json()[0]["action"], "long")
         self.assertEqual(plans.json()[0]["signal_breakdown"]["technical_setup"], 0.77)
         self.assertEqual(plans.json()[0]["latest_outcome"]["outcome"], "win")
@@ -998,6 +999,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(plans.json()[0]["latest_outcome"]["transmission_bias_detail"]["label"], "tailwind")
         self.assertEqual(plans.json()[0]["latest_outcome"]["context_regime_label"], "context + catalyst")
         self.assertEqual(plans.json()[0]["latest_outcome"]["context_regime_detail"]["label"], "context + catalyst")
+        self.assertEqual(plans.json()[0]["signal_breakdown"]["transmission_summary"]["transmission_bias_detail"]["label"], "tailwind")
 
     async def test_run_detail_and_filtered_redesign_routes_expose_orchestration_results(self) -> None:
         run_id = self.seed_run_with_diagnostics()
@@ -1017,11 +1019,13 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(detail_payload["ticker_signal_snapshots"]), 1)
         self.assertEqual(len(detail_payload["recommendation_plans"]), 2)
         self.assertEqual(detail_payload["ticker_signal_snapshots"][0]["diagnostics"]["mode"], "deep_analysis")
+        self.assertEqual(detail_payload["ticker_signal_snapshots"][0]["diagnostics"]["transmission_bias_detail"]["label"], "tailwind")
         self.assertEqual(detail_payload["recommendation_plans"][0]["action"], "long")
         self.assertEqual(detail_payload["recommendation_plans"][0]["latest_outcome"]["outcome"], "win")
         self.assertEqual(detail_payload["recommendation_plans"][0]["latest_outcome"]["transmission_bias_detail"]["label"], "tailwind")
         self.assertEqual(detail_payload["recommendation_plans"][0]["latest_outcome"]["context_regime_label"], "context + catalyst")
         self.assertEqual(detail_payload["recommendation_plans"][0]["latest_outcome"]["context_regime_detail"]["label"], "context + catalyst")
+        self.assertEqual(detail_payload["recommendation_plans"][0]["signal_breakdown"]["transmission_summary"]["transmission_bias_detail"]["label"], "tailwind")
         self.assertEqual(macro.status_code, 200)
         self.assertEqual(industry.status_code, 200)
         self.assertEqual(ticker_signals.status_code, 200)
