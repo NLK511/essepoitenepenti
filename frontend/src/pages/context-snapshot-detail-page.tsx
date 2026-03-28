@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { getJson } from "../api";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
+import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
 import type { IndustryContextSnapshot, MacroContextSnapshot } from "../types";
 import { formatDate } from "../utils";
 
@@ -57,8 +57,10 @@ function recordList(value: unknown): Array<Record<string, unknown>> {
 }
 
 export function ContextSnapshotDetailPage() {
+  const navigate = useNavigate();
   const { scope, snapshotId } = useParams<{ scope: ContextScope; snapshotId: string }>();
   const [snapshot, setSnapshot] = useState<ContextSnapshot | null>(null);
+  const [industryTabs, setIndustryTabs] = useState<IndustryContextSnapshot[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -80,6 +82,28 @@ export function ContextSnapshotDetailPage() {
     }
     void load();
   }, [scope, snapshotId]);
+
+  useEffect(() => {
+    async function loadIndustryTabs() {
+      if (scope !== "industry") {
+        setIndustryTabs([]);
+        return;
+      }
+      try {
+        const snapshots = await getJson<IndustryContextSnapshot[]>("/api/context/industry?limit=100");
+        const latestByIndustry = new Map<string, IndustryContextSnapshot>();
+        snapshots.forEach((item) => {
+          if (!latestByIndustry.has(item.industry_key)) {
+            latestByIndustry.set(item.industry_key, item);
+          }
+        });
+        setIndustryTabs(Array.from(latestByIndustry.values()));
+      } catch {
+        setIndustryTabs([]);
+      }
+    }
+    void loadIndustryTabs();
+  }, [scope]);
 
   const title = snapshot
     ? isIndustrySnapshot(snapshot)
@@ -115,6 +139,27 @@ export function ContextSnapshotDetailPage() {
     : null;
   const ontologyRelationships = snapshot && isIndustrySnapshot(snapshot) ? recordList(snapshot.metadata?.matched_ontology_relationships) : [];
 
+  const industryTabOptions = useMemo(() => {
+    if (!snapshot || !isIndustrySnapshot(snapshot)) {
+      return [] as Array<{ value: string; label: string }>;
+    }
+    const items = [...industryTabs];
+    if (!items.some((item) => item.industry_key === snapshot.industry_key)) {
+      items.unshift(snapshot);
+    }
+    return items.map((item) => ({
+      value: item.industry_key,
+      label: item.industry_label || item.industry_key,
+    }));
+  }, [industryTabs, snapshot]);
+
+  function handleIndustryTabChange(industryKey: string) {
+    const selected = industryTabs.find((item) => item.industry_key === industryKey);
+    if (selected?.id) {
+      navigate(`/context/industry/${selected.id}`);
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -132,6 +177,20 @@ export function ContextSnapshotDetailPage() {
       {!snapshot && !error ? <LoadingState message="Loading context snapshot…" /> : null}
       {snapshot ? (
         <div className="stack-page">
+          {isIndustrySnapshot(snapshot) && industryTabOptions.length > 1 ? (
+            <Card>
+              <SectionTitle kicker="Industry selector" title="Jump between industries" />
+              <div className="helper-text">Pick an industry to open its latest stored context snapshot.</div>
+              <div className="top-gap-small">
+                <SegmentedTabs
+                  value={snapshot.industry_key}
+                  onChange={handleIndustryTabChange}
+                  options={industryTabOptions}
+                />
+              </div>
+            </Card>
+          ) : null}
+
           <Card>
             <div className="cluster">
               <Badge tone="info">{scope}</Badge>

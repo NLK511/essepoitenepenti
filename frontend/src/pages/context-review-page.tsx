@@ -114,7 +114,6 @@ function docsLink(doc: string, section?: string): string {
 }
 
 const contextReviewDoc = (section?: string) => docsLink("operator-page-field-guide", section);
-const glossaryDoc = (section?: string) => docsLink("glossary", section);
 
 export function ContextReviewPage() {
   const { showToast } = useToast();
@@ -124,7 +123,7 @@ export function ContextReviewPage() {
   const [industryContexts, setIndustryContexts] = useState<IndustryContextSnapshot[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busyAction, setBusyAction] = useState<"macro" | "industry" | "macro-now" | "industry-now" | null>(null);
+  const [busyAction, setBusyAction] = useState<"macro" | "industry" | null>(null);
   const [activeTab, setActiveTab] = useState<"macro" | "industry">("macro");
 
   async function load() {
@@ -163,25 +162,6 @@ export function ContextReviewPage() {
       });
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : `Failed to queue ${scope} refresh`);
-    } finally {
-      setBusyAction(null);
-    }
-  }
-
-  async function runRefreshNow(scope: "macro" | "industry") {
-    try {
-      setBusyAction(scope === "macro" ? "macro-now" : "industry-now");
-      setError(null);
-      const response = await postForm<{ run: Run; executed: boolean }>(`/api/support-snapshots/refresh/${scope}/run-now`, {});
-      showToast({
-        message: response.executed
-          ? `${actionLabel(scope)} refresh finished in run #${response.run.id}`
-          : `${actionLabel(scope)} refresh reused existing run #${response.run.id}`,
-        tone: response.executed ? "success" : "warning",
-      });
-      await load();
-    } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : `Failed to run ${scope} refresh now`);
     } finally {
       setBusyAction(null);
     }
@@ -255,12 +235,9 @@ export function ContextReviewPage() {
         actions={
           <>
             <button type="button" className="button" onClick={() => void enqueueRefresh(activeScope)} disabled={busyAction !== null}>
-              {busyAction === activeScope ? `Queueing ${activeScope} refresh…` : `Queue ${activeScope} refresh`}
+              {busyAction === activeScope ? `Queueing ${activeScope} refresh…` : `Refresh ${activeScope} context`}
             </button>
-            <button type="button" className="button-secondary" onClick={() => void runRefreshNow(activeScope)} disabled={busyAction !== null}>
-              {busyAction === `${activeScope}-now` ? `Running ${activeScope} refresh…` : `Run ${activeScope} now`}
-            </button>
-            <button type="button" className="button-subtle" onClick={() => void load()} disabled={loading}>
+            <button type="button" className="button-subtle" onClick={() => void load()} disabled={loading || busyAction !== null}>
               Reload
             </button>
           </>
