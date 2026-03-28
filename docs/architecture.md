@@ -123,15 +123,16 @@ flowchart LR
 2. backend enqueues a run in the database
 3. worker claims the queued run atomically
 4. `JobExecutionService` executes the redesign orchestration path for proposal workflows
-5. the active path fetches price history, computes technical/contextual inputs, loads the latest valid macro and industry shared artifacts, and computes ticker-level signals
+5. the active path fetches price history, computes technical/contextual inputs, loads the latest valid macro and industry shared artifacts through the transitional `SupportSnapshotResolver`, and computes ticker-level signals
 6. the pipeline emits redesign-native trade outputs and diagnostic payloads
 7. backend persists the relevant redesign objects, diagnostics, run summary, and timing data
 8. frontend reads run, recommendation-plan, and ticker-signal state back via `/api`
+9. if execution fails, run timing and error state are still persisted, but partial downstream writes are not yet rolled back across the full workflow
 
 ### Shared macro/industry refresh
 1. scheduler or operator triggers macro or industry refresh
 2. backend enqueues a refresh run
-3. worker claims the run, or the operator uses the `run-now` endpoint for immediate execution
+3. worker claims the queued run and executes it asynchronously; the operator UI now uses only the queued refresh path
 4. industry refresh scope is seeded from the taxonomy layer, which now contains split ontology files for tickers, industries, sectors, relationships, and event vocabulary
 5. the taxonomy service still supports a fallback monolith file so the repo does not hard-break if the split files are temporarily missing
 6. industry context generation now reads ontology relationships and stores matched transmission edges plus ontology provenance inside the snapshot metadata
@@ -153,9 +154,10 @@ flowchart LR
 22. analytics-facing `transmission_bias` semantics are now governed through the same taxonomy layer instead of relying on raw `context_bias` strings to survive unchanged downstream
 23. recommendation calibration and setup-family review buckets now reuse governed analytics labels for both transmission bias and context regime instead of only humanizing raw derived keys
 24. evidence-concentration cohorts now expose a readable `slice_label` alongside the canonical `slice_name`, so API consumers and operator pages can render cohort families without hand-humanizing backend keys
-23. the support-snapshot resolver now backfills baseline industry ontology metadata even when an industry context snapshot is missing, so downstream proposal/ticker analysis code can still see sector and relationship context instead of dropping to a taxonomy-blind fallback
-24. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
-25. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
+25. the support-snapshot resolver now backfills baseline industry ontology metadata even when an industry context snapshot is missing, so downstream proposal/ticker analysis code can still see sector and relationship context instead of dropping to a taxonomy-blind fallback
+26. refresh services still persist transitional `SupportSnapshot` records first and then materialize redesign-native macro or industry context snapshots from the same run
+27. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
+28. this means the redesign review UX is ahead of backend convergence: context snapshots are the primary review object, but support snapshots still remain in refresh, health, and resolver paths
 
 ## Runtime components
 
@@ -184,6 +186,10 @@ Responsibilities:
 - execute recommendation, evaluation, optimization, and support-refresh workflows asynchronously
 - persist run results
 - mark warnings and failures explicitly
+
+Current state:
+- queued runs are claimed with a guarded row update so duplicate execution is reduced under the current polling model
+- there is not yet a heartbeat, lease timeout, or stale-run recovery path if a worker dies mid-run
 
 ### 4. Scheduler process
 Responsibilities:
@@ -241,6 +247,8 @@ Owns the React/Vite application.
 
 The main thing working here is that execution, diagnostics, persistence, and the UI all share the same backend-owned contract. That reduces drift.
 
+The current architecture already has some real operational safeguards: scheduled-run idempotency is persisted in the database, run claiming is atomic enough for the current single-queue polling model, and run diagnostics are stored for later inspection.
+
 The main weak point is not the module split. It is the amount of operational behavior carried by one process family without stronger production coordination yet. Scheduler reliability, auth and credential lifecycle, and observability now matter more than adding more features.
 
 ## Immediate next architectural moves
@@ -249,3 +257,4 @@ The main weak point is not the module split. It is the amount of operational beh
 2. improve production observability (structured logs, run correlation, health signals)
 3. complete credential lifecycle work instead of adding more provider surface area
 4. keep API payloads and diagnostic schemas small, explicit, and versioned when they change materially
+5. finish converging support-snapshot-backed refresh and resolver paths onto context-native reads so the remaining legacy layer can be removed cleanly

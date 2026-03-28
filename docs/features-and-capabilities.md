@@ -23,6 +23,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 - Run proposal generation, recommendation evaluation, weight optimization, and macro/industry context refresh jobs through the same run system.
 - Convert proposal jobs into watchlists and schedule them.
 - Inspect queued, running, completed, failed, cancelled, and warning-heavy runs from the debugger and run detail pages.
+- Review persisted run timing, summary, artifact, and error details after execution finishes or fails.
 
 ### Recommendation workflow
 - Persist proposal outputs as `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`.
@@ -49,7 +50,8 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 - Render governed transmission-channel labels on context snapshot detail pages too, including stored event rows and industry ontology profile channels.
 - Use governed context-regime semantics in recommendation analytics slices too, so calibration and setup-family review cohorts rely less on duplicated ad hoc derivation.
 - Govern transmission-bias analytics semantics too, and expose readable evidence-concentration slice labels so operator review surfaces rely less on raw backend keys.
-- Queue or run macro and industry refresh workflows manually.
+- Queue macro and industry refresh workflows manually from the operator UI.
+- Execute macro and industry refresh workflows asynchronously through the shared queued run path; immediate `run-now` endpoints still exist in the backend but are no longer the primary operator workflow.
 - Trace which shared artifacts were used by a run or recommendation plan.
 - See support-snapshot freshness in `/api/health` and `/api/health/preflight`; context objects are reviewable through the context APIs and UI.
 - Optionally use Nitter as supporting social input for macro and industry context.
@@ -81,19 +83,22 @@ These parts of the product are already in place and connected:
 - auditable run persistence
 - redesign-native signal and plan storage
 - recommendation-plan outcome evaluation
+- persisted recommendation calibration, baseline, setup-family review, and evidence-concentration summaries derived from stored outcomes
 - weight optimization inside the app
 - shared support snapshots and context snapshots reused across runs
 - operator-visible shortlist reasoning
 - in-app docs and settings
+- single-user bearer-token API protection plus encrypted provider credentials at rest
 
 ## Current limits
 
 The main limits are still practical ones:
-- scheduler and worker reliability still need more hardening
-- observability is still thin for a multi-process workflow app
-- auth, RBAC, tenancy, and credential lifecycle are still incomplete
+- scheduler and worker reliability still need more hardening, especially stale-run recovery after process death
+- observability is still thin for a multi-process workflow app because logs are not yet structured and daemon liveness is not surfaced explicitly
+- auth, RBAC, tenancy, and credential lifecycle are still incomplete; the current security model is single-user and frontend auth tokens are stored in local storage
 - context extraction is still heuristic rather than a mature event model
 - ticker deep analysis still reuses some older proposal-engine internals
+- support snapshots are no longer the main review UX, but they still remain in refresh, resolver, and health paths as a transitional backend dependency
 - confidence calibration is present, but it still needs more evidence over time
 
 There is also one analytical limit:
