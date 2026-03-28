@@ -31,9 +31,10 @@ For each proposal run, the pipeline:
 4. runs `TickerDeepAnalysisService` for shortlisted names
 5. fetches recent OHLC price history through `yfinance`
 6. computes technical indicators and context-enriched features with `pandas`
-7. loads the latest valid shared macro and industry artifacts for the ticker’s mapped profile
+7. loads the latest valid shared macro and industry artifacts for the ticker’s mapped profile through the transitional `SupportSnapshotResolver`, optionally enriching them with context-snapshot data when available
 8. builds recommendation plans, diagnostics, and structured audit payloads
 9. persists ticker signals, recommendation plans, run summaries, and run artifacts
+10. if deep analysis is unavailable or confidence/policy gates fail, the pipeline still persists explicit `no_action` plans instead of silently dropping the name
 
 `ProposalService` still exists as a lower-level analysis helper used by deep analysis for price history, feature engineering, news/context enrichment, and structured diagnostics, but it is no longer the main proposal-run execution path.
 
@@ -51,7 +52,8 @@ Watchlist-backed proposal jobs use a staged flow:
 1. cheap scan across the watchlist
 2. shortlist selection
 3. deep analysis for shortlisted names through `TickerDeepAnalysisService`
-4. persistence of ticker signals and recommendation plans
+4. calibration-aware confidence review and policy gating during plan construction
+5. persistence of ticker signals and recommendation plans
 
 ## App-native independence and data layers used by the methodology
 
@@ -116,13 +118,14 @@ So a neutral score can mean either:
 - or the coverage was weak
 
 ### 4. Optional summary enrichment
-The app always stores a digest of the news context.
+The app stores a digest-style summary payload for the news/context section.
 
 Operators can optionally route that digest and a compact technical snapshot through:
 - `openai_api`
 - `pi_agent`
+- the built-in `news_digest` fallback path
 
-The result is stored in `analysis_json.summary`. If summarization fails, the digest remains and the error is recorded.
+The result is stored in `analysis_json.summary`. If summarization fails, the digest-style fallback remains and the error is recorded.
 
 ## Feature engineering
 
@@ -173,6 +176,9 @@ Current evaluation records fields such as:
 - direction correctness
 - confidence bucket
 - setup family
+- transmission-bias and context-regime slices used by downstream calibration summaries
+
+`no_action` and `watchlist` plans are also preserved as first-class evaluated outcomes instead of being discarded as non-trades.
 
 These outcomes are written back into the main database and attached to plan reads as the latest stored outcome.
 
@@ -185,7 +191,8 @@ The current limits matter:
 - cheap scan is only a triage layer, not the full trade-quality engine
 - context extraction is still heuristic
 - ticker deep analysis still reuses some older proposal internals
-- confidence calibration needs more evidence over time
+- the methodology still depends on a transitional support-snapshot-backed resolver layer for shared macro and industry context
+- confidence calibration is implemented and already influences plan construction, but it still needs more resolved evidence over time
 
 ## See also
 
