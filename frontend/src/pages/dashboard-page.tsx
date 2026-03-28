@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { DashboardResponse, IndustryContextSnapshot, MacroContextSnapshot, SupportSnapshotListResponse } from "../types";
+import type { DashboardResponse, IndustryContextSnapshot, MacroContextSnapshot } from "../types";
 import { directionTone, formatDate, formatDuration, jobTypeLabel, recommendationStateTone, runTone, tickerTone } from "../utils";
 
 function contextSummaryMethod(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
@@ -42,8 +42,6 @@ function contextProvenanceLabel(snapshot: MacroContextSnapshot | IndustryContext
 
 export function DashboardPage() {
   const [data, setData] = useState<DashboardResponse | null>(null);
-  const [latestMacroLabel, setLatestMacroLabel] = useState<string>("—");
-  const [latestIndustryLabel, setLatestIndustryLabel] = useState<string>("—");
   const [latestMacroContext, setLatestMacroContext] = useState<MacroContextSnapshot | null>(null);
   const [latestIndustryContext, setLatestIndustryContext] = useState<IndustryContextSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,24 +50,12 @@ export function DashboardPage() {
     async function load() {
       try {
         setError(null);
-        const [dashboard, macroSnapshots, industrySnapshots, macroContexts, industryContexts] = await Promise.all([
+        const [dashboard, macroContexts, industryContexts] = await Promise.all([
           getJson<DashboardResponse>("/api/dashboard"),
-          getJson<SupportSnapshotListResponse>("/api/support-snapshots/macro?limit=1"),
-          getJson<SupportSnapshotListResponse>("/api/support-snapshots/industry?limit=1"),
           getJson<MacroContextSnapshot[]>("/api/context/macro?limit=1"),
           getJson<IndustryContextSnapshot[]>("/api/context/industry?limit=1"),
         ]);
         setData(dashboard);
-        setLatestMacroLabel(
-          macroSnapshots.snapshots[0]
-            ? `${macroSnapshots.snapshots[0].label.toLowerCase()} · ${formatDate(macroSnapshots.snapshots[0].computed_at)}`
-            : "no snapshot"
-        );
-        setLatestIndustryLabel(
-          industrySnapshots.snapshots[0]
-            ? `${industrySnapshots.snapshots[0].subject_label} · ${industrySnapshots.snapshots[0].label.toLowerCase()}`
-            : "no snapshot"
-        );
         setLatestMacroContext(macroContexts[0] ?? null);
         setLatestIndustryContext(industryContexts[0] ?? null);
       } catch (loadError) {
@@ -128,8 +114,8 @@ export function DashboardPage() {
             </Card>
             <Card>
               <div className="metric-label">Macro context freshness</div>
-              <div className="metric-value">{latestMacroLabel.split(" · ")[0]}</div>
-              <div className="helper-text">{latestMacroLabel}</div>
+              <div className="metric-value">{latestMacroContext ? latestMacroContext.status : "—"}</div>
+              <div className="helper-text">{latestMacroContext ? formatDate(latestMacroContext.computed_at) : "no context snapshot"}</div>
               {latestMacroContext ? (
                 <div className="top-gap-small cluster">
                   <Badge tone={contextProvenanceTone(latestMacroContext)}>{contextProvenanceLabel(latestMacroContext)}</Badge>
@@ -139,8 +125,8 @@ export function DashboardPage() {
             </Card>
             <Card>
               <div className="metric-label">Industry context freshness</div>
-              <div className="metric-value">{latestIndustryLabel.split(" · ")[0]}</div>
-              <div className="helper-text">{latestIndustryLabel}</div>
+              <div className="metric-value">{latestIndustryContext ? latestIndustryContext.industry_label || latestIndustryContext.industry_key : "—"}</div>
+              <div className="helper-text">{latestIndustryContext ? `${latestIndustryContext.status} · ${formatDate(latestIndustryContext.computed_at)}` : "no context snapshot"}</div>
               {latestIndustryContext ? (
                 <div className="top-gap-small cluster">
                   <Badge tone={contextProvenanceTone(latestIndustryContext)}>{contextProvenanceLabel(latestIndustryContext)}</Badge>

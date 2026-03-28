@@ -4,21 +4,8 @@ import { Link } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
-import type { IndustryContextSnapshot, MacroContextSnapshot, Run, SupportSnapshot, SupportSnapshotListResponse } from "../types";
+import type { IndustryContextSnapshot, MacroContextSnapshot, Run } from "../types";
 import { formatDate } from "../utils";
-
-function snapshotTone(snapshot: SupportSnapshot): "ok" | "warning" | "danger" | "neutral" {
-  if (snapshot.is_expired) {
-    return "danger";
-  }
-  if (snapshot.label === "POSITIVE") {
-    return "ok";
-  }
-  if (snapshot.label === "NEGATIVE") {
-    return "danger";
-  }
-  return "warning";
-}
 
 function contextTone(snapshot: { status: string; warnings: string[] }): "ok" | "warning" | "danger" | "neutral" {
   if (snapshot.status === "failed") {
@@ -138,8 +125,6 @@ function InlineMetric(props: { label: string; value: string }) {
 
 export function ContextReviewPage() {
   const { showToast } = useToast();
-  const [macro, setMacro] = useState<SupportSnapshot[]>([]);
-  const [industry, setIndustry] = useState<SupportSnapshot[]>([]);
   const [macroContexts, setMacroContexts] = useState<MacroContextSnapshot[]>([]);
   const [industryContexts, setIndustryContexts] = useState<IndustryContextSnapshot[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -151,14 +136,10 @@ export function ContextReviewPage() {
     try {
       setLoading(true);
       setError(null);
-      const [macroResponse, industryResponse, macroContextResponse, industryContextResponse] = await Promise.all([
-        getJson<SupportSnapshotListResponse>("/api/support-snapshots/macro?limit=6"),
-        getJson<SupportSnapshotListResponse>("/api/support-snapshots/industry?limit=12"),
+      const [macroContextResponse, industryContextResponse] = await Promise.all([
         getJson<MacroContextSnapshot[]>("/api/context/macro?limit=6"),
-        getJson<IndustryContextSnapshot[]>("/api/context/industry?limit=12"),
+        getJson<IndustryContextSnapshot[]>("/api/context/industry?limit=24"),
       ]);
-      setMacro(macroResponse.snapshots);
-      setIndustry(industryResponse.snapshots);
       setMacroContexts(macroContextResponse);
       setIndustryContexts(industryContextResponse);
     } catch (loadError) {
@@ -188,7 +169,6 @@ export function ContextReviewPage() {
     }
   }
 
-  const latestMacroSentiment = macro[0] ?? null;
   const latestMacroContext = macroContexts[0] ?? null;
 
   const latestIndustryByKey = useMemo(() => {
@@ -222,10 +202,6 @@ export function ContextReviewPage() {
   }, [industryOptions, latestIndustryByKey, selectedIndustryKey]);
 
   const latestIndustryContext = selectedIndustryKey ? latestIndustryByKey.get(selectedIndustryKey) ?? null : industryContexts[0] ?? null;
-  const industrySupportHistory = selectedIndustryKey
-    ? industry.filter((snapshot) => snapshot.subject_key === selectedIndustryKey)
-    : industry;
-  const latestIndustrySentiment = industrySupportHistory[0] ?? null;
   const visibleIndustryHistory = selectedIndustryKey
     ? industryContexts.filter((snapshot) => snapshot.industry_key === selectedIndustryKey)
     : industryContexts;
@@ -250,9 +226,9 @@ export function ContextReviewPage() {
           helper: latestMacroContext && summaryError(latestMacroContext) ? "fallback reason stored" : "Narrative source for this snapshot",
         },
         {
-          label: "Support artifact",
-          value: latestMacroSentiment ? latestMacroSentiment.label : "—",
-          helper: latestMacroSentiment ? formatDate(latestMacroSentiment.computed_at) : "No macro support artifact yet",
+          label: "Snapshot status",
+          value: latestMacroContext ? latestMacroContext.status : "—",
+          helper: latestMacroContext ? `Run ${latestMacroContext.run_id ?? "—"} · Job ${latestMacroContext.job_id ?? "—"}` : "No macro context yet",
         },
       ];
     }
@@ -275,12 +251,12 @@ export function ContextReviewPage() {
         helper: latestIndustryContext && summaryError(latestIndustryContext) ? "fallback reason stored" : "Narrative source for this snapshot",
       },
       {
-        label: "Support artifact",
-        value: latestIndustrySentiment ? latestIndustrySentiment.subject_label : "—",
-        helper: latestIndustrySentiment ? `${latestIndustrySentiment.label} · ${formatDate(latestIndustrySentiment.computed_at)}` : "No industry support artifact yet",
+        label: "Snapshot status",
+        value: latestIndustryContext ? latestIndustryContext.status : "—",
+        helper: latestIndustryContext ? `Run ${latestIndustryContext.run_id ?? "—"} · Job ${latestIndustryContext.job_id ?? "—"}` : "No industry context yet",
       },
     ];
-  }, [activeTab, latestIndustryContext, latestIndustrySentiment, latestMacroContext, latestMacroSentiment]);
+  }, [activeTab, latestIndustryContext, latestMacroContext]);
 
   const activeScope = activeTab;
 
@@ -289,7 +265,7 @@ export function ContextReviewPage() {
       <PageHeader
         kicker="Shared context"
         title="Context review"
-        subtitle="Review macro and industry context in dedicated tabs, with the latest context snapshots shown first and support artifacts kept nearby for freshness and refresh auditing."
+        subtitle="Review macro and industry context in dedicated tabs, with the latest context snapshots shown first so shared backdrop changes are easier to inspect."
         actions={
           <>
             <button type="button" className="button" onClick={() => void enqueueRefresh(activeScope)} disabled={busyAction !== null}>
@@ -303,7 +279,7 @@ export function ContextReviewPage() {
       />
 
       {error ? <ErrorState message={error} /> : null}
-      {loading ? <LoadingState message="Loading shared context and support artifacts…" /> : null}
+      {loading ? <LoadingState message="Loading shared context snapshots…" /> : null}
 
       {!loading ? (
         <div className="stack-page">
@@ -330,12 +306,11 @@ export function ContextReviewPage() {
           </Card>
 
           {activeTab === "macro" ? (
-            <MacroContextTab snapshot={latestMacroContext} history={macroContexts} supportHistory={macro} />
+            <MacroContextTab snapshot={latestMacroContext} history={macroContexts} />
           ) : (
             <IndustryContextTab
               snapshot={latestIndustryContext}
               history={visibleIndustryHistory}
-              supportHistory={industrySupportHistory}
               industryOptions={industryOptions}
               selectedIndustryKey={selectedIndustryKey}
               onSelectIndustry={setSelectedIndustryKey}
@@ -350,7 +325,6 @@ export function ContextReviewPage() {
 function MacroContextTab(props: {
   snapshot: MacroContextSnapshot | null;
   history: MacroContextSnapshot[];
-  supportHistory: SupportSnapshot[];
 }) {
   const snapshot = props.snapshot;
 
@@ -376,10 +350,6 @@ function MacroContextTab(props: {
           <SectionTitle kicker="Macro context history" title="Recent macro context snapshots" actions={<HelpHint tooltip="Recent macro context snapshots show how the shared backdrop changed over time." to={contextReviewDoc("history-lists")} />} />
           {props.history.length === 0 ? <EmptyState message="No macro context snapshots stored yet." /> : <MacroContextList snapshots={props.history} />}
         </Card>
-        <Card>
-          <SectionTitle kicker="Macro support history" title="Recent macro support snapshots" actions={<HelpHint tooltip="Support snapshots are transitional refresh artifacts used for freshness checks and audit trails." to={contextReviewDoc("important-snapshot-fields")} />} />
-          {props.supportHistory.length === 0 ? <EmptyState message="No macro support snapshots stored yet." /> : <SnapshotList snapshots={props.supportHistory} />}
-        </Card>
       </section>
     </div>
   );
@@ -388,7 +358,6 @@ function MacroContextTab(props: {
 function IndustryContextTab(props: {
   snapshot: IndustryContextSnapshot | null;
   history: IndustryContextSnapshot[];
-  supportHistory: SupportSnapshot[];
   industryOptions: Array<{ value: string; label: string }>;
   selectedIndustryKey: string | null;
   onSelectIndustry: (industryKey: string) => void;
@@ -432,39 +401,8 @@ function IndustryContextTab(props: {
           <SectionTitle kicker="Industry context history" title="Recent industry context snapshots" actions={<HelpHint tooltip="Recent industry context snapshots help you see whether the sector backdrop is stable, shifting, or degraded." to={contextReviewDoc("history-lists")} />} />
           {props.history.length === 0 ? <EmptyState message="No industry context snapshots stored yet." /> : <IndustryContextList snapshots={props.history} />}
         </Card>
-        <Card>
-          <SectionTitle kicker="Industry support history" title="Recent industry support snapshots" actions={<HelpHint tooltip="Support snapshots keep the older refresh artifact path visible for freshness checks and source auditability." to={contextReviewDoc("important-snapshot-fields")} />} />
-          {props.supportHistory.length === 0 ? <EmptyState message="No industry support snapshots stored yet." /> : <SnapshotList snapshots={props.supportHistory} />}
-        </Card>
       </section>
     </div>
-  );
-}
-
-function SnapshotList({ snapshots }: { snapshots: SupportSnapshot[] }) {
-  return (
-    <ul className="list-reset">
-      {snapshots.map((snapshot) => (
-        <li key={`${snapshot.scope}-${snapshot.id}`} className="list-item">
-          <div className="card-headline">
-            <div>
-              <div className="cluster">
-                <LabeledBadge tone="info" label="subject" value={snapshot.subject_label} />
-                <LabeledBadge tone={snapshotTone(snapshot)} label="label" value={snapshot.label} />
-                <LabeledBadge tone={snapshot.is_expired ? "danger" : "ok"} label="freshness" value={snapshot.is_expired ? "expired" : "fresh"} />
-              </div>
-              <div className="helper-text context-inline-metrics">
-                <InlineMetric label="Score" value={snapshot.score.toFixed(2)} />
-                <InlineMetric label="Computed" value={formatDate(snapshot.computed_at)} />
-              </div>
-              {snapshot.expires_at ? <div className="helper-text">Expires {formatDate(snapshot.expires_at)}</div> : null}
-              {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
-            </div>
-            {snapshot.id ? <Link to={`/context/sentiment/${snapshot.id}`} className="button-subtle">Open support detail</Link> : null}
-          </div>
-        </li>
-      ))}
-    </ul>
   );
 }
 
