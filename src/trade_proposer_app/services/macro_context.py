@@ -180,10 +180,10 @@ class MacroContextService:
         if not supporting_social_items:
             missing_inputs.append("supporting_social_evidence")
 
-        sentiment_score = float(getattr(snapshot, "score", 0.0) or 0.0)
-        sentiment_label = str(getattr(snapshot, "label", "NEUTRAL") or "NEUTRAL")
-        regime_tags = self._regime_tags(active_themes, sentiment_score, sentiment_label)
-        saliency_score = self._saliency_score(active_themes, len(news_items), len(supporting_social_items), abs(sentiment_score), primary_source_counts)
+        support_score = float(getattr(snapshot, "score", 0.0) or 0.0)
+        support_label = str(getattr(snapshot, "label", "NEUTRAL") or "NEUTRAL")
+        regime_tags = self._regime_tags(active_themes, support_score, support_label)
+        saliency_score = self._saliency_score(active_themes, len(news_items), len(supporting_social_items), abs(support_score), primary_source_counts)
         confidence_percent = self._confidence_percent(
             active_themes,
             len(news_items),
@@ -218,9 +218,9 @@ class MacroContextService:
             warnings=list(dict.fromkeys(warnings)),
             missing_inputs=list(dict.fromkeys(missing_inputs)),
             source_breakdown={
-                "sentiment_snapshot_id": getattr(snapshot, "id", None),
-                "sentiment_label": sentiment_label,
-                "sentiment_score": sentiment_score,
+                "support_snapshot_id": getattr(snapshot, "id", None),
+                "support_label": support_label,
+                "support_score": support_score,
                 "primary_news_item_count": len(news_items),
                 "supporting_social_item_count": len(supporting_social_items),
                 "primary_news_providers": list(dict.fromkeys(news_bundle.feeds_used)) if news_bundle is not None else [],
@@ -258,14 +258,6 @@ class MacroContextService:
         )
         return self.repository.create_macro_context_snapshot(context)
 
-    def create_from_sentiment_snapshot(
-        self,
-        snapshot: SupportSnapshot,
-        *,
-        job_id: int | None = None,
-        run_id: int | None = None,
-    ) -> MacroContextSnapshot:
-        return self.create_from_support_snapshot(snapshot, job_id=job_id, run_id=run_id)
 
     def _load_news_evidence(self) -> tuple[object | None, dict[str, object]]:
         if self.news_service is None:

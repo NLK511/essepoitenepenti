@@ -355,7 +355,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         self.assertIn('"weights_path": "/tmp/weights.json"', updated_run.artifact_json or "")
         self.assertIn('"optimization_seconds"', updated_run.timing_json or "")
 
-    def test_worker_process_once_processes_macro_sentiment_refresh_run(self) -> None:
+    def test_worker_process_once_processes_macro_support_refresh_run(self) -> None:
         session = self.create_session()
         jobs = JobRepository(session)
         runs = RunRepository(session)
@@ -384,7 +384,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         self.assertIn('"snapshot_id": 11', updated_run.artifact_json or "")
         self.assertIn('"macro_refresh_seconds"', updated_run.timing_json or "")
 
-    def test_worker_process_once_processes_industry_sentiment_refresh_run(self) -> None:
+    def test_worker_process_once_processes_industry_support_refresh_run(self) -> None:
         session = self.create_session()
         jobs = JobRepository(session)
         runs = RunRepository(session)

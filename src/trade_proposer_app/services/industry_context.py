@@ -168,9 +168,9 @@ class IndustryContextService:
             warnings=list(dict.fromkeys(warnings)),
             missing_inputs=list(dict.fromkeys(missing_inputs)),
             source_breakdown={
-                "sentiment_snapshot_id": getattr(snapshot, "id", None),
-                "sentiment_label": getattr(snapshot, "label", None),
-                "sentiment_score": getattr(snapshot, "score", None),
+                "support_snapshot_id": getattr(snapshot, "id", None),
+                "support_label": getattr(snapshot, "label", None),
+                "support_score": getattr(snapshot, "score", None),
                 "primary_news_item_count": len(news_items),
                 "supporting_social_item_count": len(supporting_social_items),
                 "tracked_tickers": tracked_tickers,
@@ -208,14 +208,6 @@ class IndustryContextService:
         )
         return self.repository.create_industry_context_snapshot(context)
 
-    def create_from_sentiment_snapshot(
-        self,
-        snapshot: SupportSnapshot,
-        *,
-        job_id: int | None = None,
-        run_id: int | None = None,
-    ) -> IndustryContextSnapshot:
-        return self.create_from_support_snapshot(snapshot, job_id=job_id, run_id=run_id)
 
     def _load_news_evidence(
         self,

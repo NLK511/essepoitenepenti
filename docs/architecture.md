@@ -62,9 +62,11 @@ flowchart LR
     end
 
     subgraph Pipeline[App-native analysis pipeline]
-        ProposalService[ProposalService\nfetches data, builds features, applies weights]
+        Orchestration[WatchlistOrchestrationService\ncheap scan -> shortlist -> deep analysis]
+        DeepAnalysis[TickerDeepAnalysisService\nnative ticker analysis + transmission]
+        ProposalService[ProposalService\nshared helper engine for features/news/context]
         SnapshotResolver[SupportSnapshotResolver\nloads latest macro + industry snapshots]
-        NewsIngestionService[NewsIngestionService\nfetches news + sentiment signals]
+        NewsIngestionService[NewsIngestionService\nfetches news + supporting signal inputs]
         FeatureEngine[Feature engineering &\nnormalization]
         Weights[weights.json\ninternal scoring weights]
         RefreshServices[MacroSupportRefreshService +\nIndustrySupportRefreshService]
@@ -92,8 +94,12 @@ flowchart LR
     Repositories --> DB
     Repositories --> Snapshots
 
+    Services --> Orchestration
+    Services --> DeepAnalysis
     Services --> ProposalService
     Services --> RefreshServices
+    Orchestration --> DeepAnalysis
+    DeepAnalysis --> ProposalService
     ProposalService --> SnapshotResolver
     ProposalService --> FeatureEngine
     ProposalService --> NewsIngestionService
@@ -106,7 +112,7 @@ flowchart LR
     NewsIngestionService --> Finnhub
     ProposalService --> OptionalLLM
 
-    ProposalService -->|shared legacy-compatible analysis helpers only| Services
+    ProposalService -->|shared helper methods only| Services
     Services --> Repositories
 ```
 
@@ -153,7 +159,7 @@ Implementation constraints:
 
 ### 3. Worker process
 Responsibilities:
-- execute recommendation, evaluation, optimization, and sentiment-refresh workflows asynchronously
+- execute recommendation, evaluation, optimization, and support-refresh workflows asynchronously
 - persist run results
 - mark warnings and failures explicitly
 

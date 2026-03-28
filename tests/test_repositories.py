@@ -883,7 +883,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn('"weights_path": "/tmp/weights.json"', stored_run.artifact_json or "")
         self.assertIn('"optimization_seconds"', stored_run.timing_json or "")
 
-    def test_job_execution_processes_macro_sentiment_refresh_and_persists_snapshot_metadata(self) -> None:
+    def test_job_execution_processes_macro_support_refresh_and_persists_snapshot_metadata(self) -> None:
         session = create_session()
         jobs = JobRepository(session)
         runs = RunRepository(session)
@@ -919,9 +919,9 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn('"macro_refresh_seconds"', stored_run.timing_json or "")
         macro_context_snapshots = ContextSnapshotRepository(session).list_macro_context_snapshots(run_id=queued_run.id or 0)
         self.assertEqual(len(macro_context_snapshots), 1)
-        self.assertEqual(macro_context_snapshots[0].source_breakdown["sentiment_snapshot_id"], 7)
+        self.assertEqual(macro_context_snapshots[0].source_breakdown["support_snapshot_id"], 7)
 
-    def test_job_execution_processes_industry_sentiment_refresh_and_persists_snapshot_metadata(self) -> None:
+    def test_job_execution_processes_industry_support_refresh_and_persists_snapshot_metadata(self) -> None:
         session = create_session()
         jobs = JobRepository(session)
         runs = RunRepository(session)
@@ -957,7 +957,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn('"industry_refresh_seconds"', stored_run.timing_json or "")
         industry_context_snapshots = ContextSnapshotRepository(session).list_industry_context_snapshots(run_id=queued_run.id or 0)
         self.assertEqual(len(industry_context_snapshots), 1)
-        self.assertEqual(industry_context_snapshots[0].source_breakdown["sentiment_snapshot_id"], 12)
+        self.assertEqual(industry_context_snapshots[0].source_breakdown["support_snapshot_id"], 12)
 
     def test_job_execution_blocks_second_optimization_enqueue_when_one_is_active(self) -> None:
         session = create_session()

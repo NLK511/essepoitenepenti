@@ -160,8 +160,8 @@ Important fields:
   - `proposal_generation`
   - `recommendation_evaluation`
   - `weight_optimization`
-  - `macro_sentiment_refresh`
-  - `industry_sentiment_refresh`
+  - `macro_sentiment_refresh` — legacy enum value used for macro context/support refresh jobs
+  - `industry_sentiment_refresh` — legacy enum value used for industry context/support refresh jobs
 - **Schedule**: cron-like schedule for automatic enqueueing
 - **Manual tickers**: comma-separated source when not using a watchlist
 - **Watchlist**: reusable source universe for proposal jobs
@@ -529,7 +529,7 @@ Recent macro and industry context snapshots, plus the transitional macro/industr
 
 ### Important snapshot fields
 - **Label**: high-level polarity or state
-- **Score**: numeric sentiment/context value
+- **Score**: numeric support value stored by the refresh artifact
 - **Computed**: when it was produced
 - **Expires**: freshness boundary
 - **Drivers**: main reasons behind the snapshot

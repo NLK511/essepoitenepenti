@@ -35,7 +35,7 @@ For each proposal run, the pipeline:
 8. builds recommendation plans, diagnostics, and structured audit payloads
 9. persists ticker signals, recommendation plans, run summaries, and run artifacts
 
-`ProposalService` still exists as a lower-level analysis helper and compatibility layer, but it is no longer the main proposal-run execution path.
+`ProposalService` still exists as a lower-level analysis helper used by deep analysis for price history, feature engineering, news/context enrichment, and structured diagnostics, but it is no longer the main proposal-run execution path.
 
 If an input is unavailable, the system stores that fact and falls back to warnings or neutral values.
 
