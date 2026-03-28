@@ -53,6 +53,8 @@ The app may persist more fields, but these fields are the minimum redesign-nativ
 
 Lower-level event identifiers should remain on dedicated event-detail fields such as `macro_event_keys` and `industry_event_keys`; they should not be overloaded into the governed summary-tag or primary-driver lists.
 
+The same readability pattern is useful on context-review objects too: event-level `transmission_channels` can be accompanied by `transmission_channel_details` so operator-facing pages are not forced to render raw canonical channel keys.
+
 ## Transmission pipeline
 
 ## 1. Event extraction

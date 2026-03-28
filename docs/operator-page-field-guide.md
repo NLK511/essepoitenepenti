@@ -589,6 +589,8 @@ Transmission summary tags, primary drivers, and conflict flags are now moving in
 
 On newer review pages, the UI should prefer the labeled detail arrays when they are available. That means operator-facing transmission rows increasingly show readable labels for drivers, conflicts, tags, and industry/ticker exposure channels instead of raw canonical keys.
 
+That same pattern now extends into context snapshot detail pages: stored macro/industry event rows and industry ontology-profile transmission channels should increasingly display readable governed labels instead of raw channel keys.
+
 This page is intentionally closer to raw storage than the higher-level review pages.
 
 ---

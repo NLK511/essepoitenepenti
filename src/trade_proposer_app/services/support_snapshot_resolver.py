@@ -109,8 +109,14 @@ class SupportSnapshotResolver:
 
     def _industry_taxonomy_metadata(self, industry_profile: dict[str, Any]) -> dict[str, Any]:
         subject_key = str(industry_profile.get("subject_key", "")).strip()
+        ontology_profile = self.taxonomy_service.get_industry_definition(subject_key)
+        transmission_channels = ontology_profile.get("transmission_channels") if isinstance(ontology_profile.get("transmission_channels"), list) else []
+        ontology_profile = {
+            **ontology_profile,
+            "transmission_channel_details": self._channel_details(transmission_channels),
+        }
         return {
-            "ontology_profile": self.taxonomy_service.get_industry_definition(subject_key),
+            "ontology_profile": ontology_profile,
             "sector_definition": self.taxonomy_service.get_sector_definition(str(industry_profile.get("sector", ""))),
             "ontology_relationships": self.taxonomy_service.list_relationships(subject_key, direction="outbound"),
             "matched_ontology_relationships": [],
@@ -184,6 +190,21 @@ class SupportSnapshotResolver:
                 ) if isinstance(snapshot.source_breakdown, dict) else list(snapshot.warnings),
             },
         }
+
+    def _channel_details(self, values: list[object]) -> list[dict[str, str]]:
+        details: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for value in values:
+            if not isinstance(value, str) or not value.strip():
+                continue
+            definition = self.taxonomy_service.get_transmission_channel_definition(value)
+            key = str(definition.get("key", value)).strip() or value.strip()
+            if key in seen:
+                continue
+            seen.add(key)
+            label = str(definition.get("label", key.replace("_", " "))).strip() or key.replace("_", " ")
+            details.append({"key": key, "label": label})
+        return details
 
     @staticmethod
     def _parse_json(value: str | None, default: Any) -> Any:

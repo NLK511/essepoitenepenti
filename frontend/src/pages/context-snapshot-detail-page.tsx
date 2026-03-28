@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
 import type { IndustryContextSnapshot, MacroContextSnapshot } from "../types";
-import { formatDate } from "../utils";
+import { extractDisplayLabels, formatDate } from "../utils";
 
 type ContextScope = "macro" | "industry";
 
@@ -246,7 +246,7 @@ export function ContextSnapshotDetailPage() {
               <ul className="list-reset">
                 {eventRows.map((event, index) => {
                   const row = typeof event === "object" && event !== null ? event as Record<string, unknown> : {};
-                  const channels = stringList(row.transmission_channels);
+                  const channels = extractDisplayLabels(row, "transmission_channel_details", "transmission_channels");
                   return (
                     <li key={`${index}-${eventLabel(row.key)}`} className="list-item">
                       <div className="cluster">
@@ -322,7 +322,7 @@ export function ContextSnapshotDetailPage() {
                   <div className="summary-item"><span className="summary-label">Risk flags</span><span className="summary-value">{stringList(ontologyProfile?.risk_flags).join(", ") || "—"}</span></div>
                   <div className="summary-item"><span className="summary-label">Taxonomy source</span><span className="summary-value">{eventLabel(snapshot.metadata?.taxonomy_source_mode)}</span></div>
                 </div>
-                <div className="helper-text top-gap-small">Transmission channels: {stringList(ontologyProfile?.transmission_channels).join(", ") || "—"}</div>
+                <div className="helper-text top-gap-small">Transmission channels: {extractDisplayLabels(ontologyProfile, "transmission_channel_details", "transmission_channels").join(", ") || "—"}</div>
                 <div className="helper-text top-gap-small">Matched ontology relationships: {ontologyRelationships.length}</div>
                 {ontologyRelationships.length > 0 ? (
                   <ul className="list-reset top-gap-small">

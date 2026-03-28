@@ -21,6 +21,7 @@ from trade_proposer_app.services.event_extraction import (
 )
 from trade_proposer_app.services.news import NewsIngestionService
 from trade_proposer_app.services.summary import SummaryResult, SummaryService
+from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 MACRO_THEME_DEFINITIONS = [
     EventDefinition(
@@ -129,10 +130,12 @@ class MacroContextService:
         *,
         news_service: NewsIngestionService | None = None,
         summary_service: SummaryService | None = None,
+        taxonomy_service: TickerTaxonomyService | None = None,
     ) -> None:
         self.repository = repository
         self.news_service = news_service
         self.summary_service = summary_service
+        self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
     def create_from_support_snapshot(
         self,
@@ -153,12 +156,14 @@ class MacroContextService:
         news_items = primary_news_items if isinstance(primary_news_items, list) else []
 
         previous_events = previous.active_themes if previous is not None else []
-        active_themes = extract_ranked_events(
-            news_items,
-            supporting_social_items,
-            MACRO_THEME_DEFINITIONS,
-            previous_events=previous_events,
-            max_events=5,
+        active_themes = self._with_channel_details(
+            extract_ranked_events(
+                news_items,
+                supporting_social_items,
+                MACRO_THEME_DEFINITIONS,
+                previous_events=previous_events,
+                max_events=5,
+            )
         )
         lifecycle_summary = summarize_event_lifecycle(active_themes, previous_events=previous_events)
         warnings: list[str] = []
@@ -259,6 +264,30 @@ class MacroContextService:
         )
         return self.repository.create_macro_context_snapshot(context)
 
+
+    def _channel_details(self, values: list[object]) -> list[dict[str, str]]:
+        details: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for value in values:
+            if not isinstance(value, str) or not value.strip():
+                continue
+            definition = self.taxonomy_service.get_transmission_channel_definition(value)
+            key = str(definition.get("key", value)).strip() or value.strip()
+            if key in seen:
+                continue
+            seen.add(key)
+            label = str(definition.get("label", key.replace("_", " "))).strip() or key.replace("_", " ")
+            details.append({"key": key, "label": label})
+        return details
+
+    def _with_channel_details(self, events: list[dict[str, object]]) -> list[dict[str, object]]:
+        enriched: list[dict[str, object]] = []
+        for event in events:
+            payload = dict(event)
+            channels = payload.get("transmission_channels") if isinstance(payload.get("transmission_channels"), list) else []
+            payload["transmission_channel_details"] = self._channel_details(channels)
+            enriched.append(payload)
+        return enriched
 
     def _load_news_evidence(self) -> tuple[object | None, dict[str, object]]:
         if self.news_service is None:

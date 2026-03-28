@@ -88,24 +88,28 @@ class IndustryContextService:
         news_items = primary_news_items if isinstance(primary_news_items, list) else []
 
         previous_drivers = previous.active_drivers if previous is not None else []
-        active_drivers = extract_ranked_events(
-            news_items,
-            supporting_social_items,
-            INDUSTRY_EVENT_DEFINITIONS,
-            previous_events=previous_drivers,
-            max_events=5,
+        active_drivers = self._with_channel_details(
+            extract_ranked_events(
+                news_items,
+                supporting_social_items,
+                INDUSTRY_EVENT_DEFINITIONS,
+                previous_events=previous_drivers,
+                max_events=5,
+            )
         )
-        linked_macro_events = extract_ranked_events(
-            news_items,
-            supporting_social_items,
-            MACRO_LINK_DEFINITIONS,
-            previous_events=(previous.active_drivers if previous is not None else []),
-            max_events=5,
+        linked_macro_events = self._with_channel_details(
+            extract_ranked_events(
+                news_items,
+                supporting_social_items,
+                MACRO_LINK_DEFINITIONS,
+                previous_events=(previous.active_drivers if previous is not None else []),
+                max_events=5,
+            )
         )
         linked_macro_themes = event_keys(linked_macro_events)
         linked_industry_themes = self._linked_industry_themes(active_drivers)
         lifecycle_summary = summarize_event_lifecycle(active_drivers, previous_events=previous_drivers)
-        ontology_profile = self.taxonomy_service.get_industry_definition(industry_key or industry_label)
+        ontology_profile = self._with_profile_channel_details(self.taxonomy_service.get_industry_definition(industry_key or industry_label))
         sector_definition = self.taxonomy_service.get_sector_definition(ontology_profile.get("sector", ""))
         ontology_relationships = self.taxonomy_service.list_relationships(industry_key or industry_label, direction="outbound")
         matched_ontology_relationships = self._matched_ontology_relationships(
@@ -233,6 +237,36 @@ class IndustryContextService:
         )
         return self.repository.create_industry_context_snapshot(context)
 
+
+    def _channel_details(self, values: list[object]) -> list[dict[str, str]]:
+        details: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for value in values:
+            if not isinstance(value, str) or not value.strip():
+                continue
+            definition = self.taxonomy_service.get_transmission_channel_definition(value)
+            key = str(definition.get("key", value)).strip() or value.strip()
+            if key in seen:
+                continue
+            seen.add(key)
+            label = str(definition.get("label", key.replace("_", " "))).strip() or key.replace("_", " ")
+            details.append({"key": key, "label": label})
+        return details
+
+    def _with_channel_details(self, events: list[dict[str, object]]) -> list[dict[str, object]]:
+        enriched: list[dict[str, object]] = []
+        for event in events:
+            payload = dict(event)
+            channels = payload.get("transmission_channels") if isinstance(payload.get("transmission_channels"), list) else []
+            payload["transmission_channel_details"] = self._channel_details(channels)
+            enriched.append(payload)
+        return enriched
+
+    def _with_profile_channel_details(self, profile: dict[str, object]) -> dict[str, object]:
+        payload = dict(profile)
+        channels = payload.get("transmission_channels") if isinstance(payload.get("transmission_channels"), list) else []
+        payload["transmission_channel_details"] = self._channel_details(channels)
+        return payload
 
     def _load_news_evidence(
         self,
