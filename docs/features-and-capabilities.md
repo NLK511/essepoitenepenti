@@ -35,6 +35,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 - Persist shared macro and industry support snapshots plus redesign-native macro and industry context snapshots.
 - Seed industry refresh from a richer taxonomy layer that now includes per-ticker profiles, explicit industry definitions, sector definitions, and first-pass relationship edges.
 - Inspect recent context snapshots from the Context review page and open detail views for macro or industry context objects.
+- Review stored industry ontology context in detail views, including sector, peer-industry framing, risk flags, and matched transmission edges.
 - Queue or run macro and industry refresh workflows manually.
 - Trace which shared artifacts were used by a run or recommendation plan.
 - See support-snapshot freshness in `/api/health` and `/api/health/preflight`; context objects are reviewable through the context APIs and UI.

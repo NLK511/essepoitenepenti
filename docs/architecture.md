@@ -134,8 +134,9 @@ flowchart LR
 3. worker claims the run, or the operator uses the `run-now` endpoint for immediate execution
 4. industry refresh scope is seeded from the taxonomy layer, which now contains split ontology files for tickers, industries, sectors, relationships, and event vocabulary
 5. the taxonomy service still supports a fallback monolith file so the repo does not hard-break if the split files are temporarily missing
-6. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
-7. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
+6. industry context generation now reads ontology relationships and stores matched transmission edges plus ontology provenance inside the snapshot metadata
+7. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
+8. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
 
 ## Runtime components
 

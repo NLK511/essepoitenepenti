@@ -558,15 +558,15 @@ Industry refresh now pulls from a broader ontology than the old one-name starter
 ### Main sections
 - header summary
 - primary drivers
-- coverage JSON
-- source breakdown JSON
-- normalized signals JSON
+- evidence and warnings
+- source mix
+- for industry snapshots: stored ontology context and matched transmission edges
 - diagnostics JSON
 
 ### Field meanings
 - **Coverage**: quantity and shape of evidence found
 - **Source breakdown**: where evidence came from
-- **Signals**: normalized fields used to characterize the snapshot
+- **Ontology context**: stored sector/peer/risk/relationship framing for industry snapshots
 - **Diagnostics**: what may have gone wrong or degraded quality
 
 This page is intentionally closer to raw storage than the higher-level review pages.

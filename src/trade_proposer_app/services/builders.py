@@ -117,5 +117,11 @@ def create_industry_context_service(session: Session) -> IndustryContextService:
         summary_settings=repository.get_summary_settings(),
         provider_credentials=credentials,
     )
-    return IndustryContextService(ContextSnapshotRepository(session), news_service=news_service, summary_service=summary_service)
+    taxonomy_service = TickerTaxonomyService()
+    return IndustryContextService(
+        ContextSnapshotRepository(session),
+        news_service=news_service,
+        summary_service=summary_service,
+        taxonomy_service=taxonomy_service,
+    )
 

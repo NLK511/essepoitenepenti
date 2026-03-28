@@ -77,6 +77,8 @@ Industry scope is no longer only a ticker-to-industry label shortcut. The taxono
 
 That gives industry refresh and query generation a better base for broader coverage and clearer transmission framing.
 
+Industry context snapshots now also persist matched ontology relationships in their metadata so operator-facing summaries and detail views can show which stored transmission edges were actually relevant to the current evidence.
+
 If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings. Transitional support snapshots still support that shared-artifact layer and freshness reporting.
 
 ### 3. News ingestion and live ticker sentiment

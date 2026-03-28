@@ -21,6 +21,7 @@ from trade_proposer_app.services.event_extraction import (
 )
 from trade_proposer_app.services.news import NewsIngestionService
 from trade_proposer_app.services.summary import SummaryResult, SummaryService
+from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 MACRO_LINK_DEFINITIONS = [
     EventDefinition("inflation", "Inflation", ("inflation",), category="macro_transmission", window_hint="2d_5d", transmission_channels=("input_costs", "pricing_power")),
@@ -56,10 +57,12 @@ class IndustryContextService:
         *,
         news_service: NewsIngestionService | None = None,
         summary_service: SummaryService | None = None,
+        taxonomy_service: TickerTaxonomyService | None = None,
     ) -> None:
         self.repository = repository
         self.news_service = news_service
         self.summary_service = summary_service
+        self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
     def create_from_support_snapshot(
         self,
@@ -102,6 +105,16 @@ class IndustryContextService:
         linked_macro_themes = event_keys(linked_macro_events)
         linked_industry_themes = self._linked_industry_themes(active_drivers)
         lifecycle_summary = summarize_event_lifecycle(active_drivers, previous_events=previous_drivers)
+        ontology_profile = self.taxonomy_service.get_industry_definition(industry_key or industry_label)
+        sector_definition = self.taxonomy_service.get_sector_definition(ontology_profile.get("sector", ""))
+        ontology_relationships = self.taxonomy_service.list_relationships(industry_key or industry_label, direction="outbound")
+        matched_ontology_relationships = self._matched_ontology_relationships(
+            industry_label,
+            ontology_relationships,
+            news_items,
+            active_drivers,
+            linked_macro_events,
+        )
         feed_errors = list(news_bundle.feed_errors) if news_bundle is not None else []
         primary_source_counts = source_priority_counts(news_items, source_type="news")
         primary_coverage_quality = coverage_quality_label(news_items, source_type="news")
@@ -138,6 +151,7 @@ class IndustryContextService:
             active_drivers,
             lifecycle_summary,
             linked_macro_themes,
+            matched_ontology_relationships,
             news_items,
             supporting_social_items,
         )
@@ -151,6 +165,9 @@ class IndustryContextService:
             supporting_social_items=supporting_social_items,
             primary_coverage_quality=primary_coverage_quality,
             warnings=warnings,
+            ontology_profile=ontology_profile,
+            sector_definition=sector_definition,
+            matched_ontology_relationships=matched_ontology_relationships,
             fallback_summary=fallback_summary,
         )
         summary_text = summary_result.summary or fallback_summary
@@ -180,6 +197,8 @@ class IndustryContextService:
                 "primary_news_source_priorities": summarize_source_priorities(news_items, source_type="news"),
                 "primary_news_publishers": publisher_summary(news_items),
                 "primary_news_coverage_quality": primary_coverage_quality,
+                "ontology_relationship_count": len(ontology_relationships),
+                "matched_ontology_relationship_count": len(matched_ontology_relationships),
                 "upstream": source_breakdown if isinstance(source_breakdown, dict) else {},
             },
             metadata={
@@ -197,6 +216,11 @@ class IndustryContextService:
                 "event_windows": list(lifecycle_summary.get("window_hints", [])),
                 "triaged_primary_evidence": triaged_evidence,
                 "linked_macro_event_labels": top_event_labels(linked_macro_events),
+                "ontology_profile": ontology_profile,
+                "sector_definition": sector_definition,
+                "ontology_relationships": ontology_relationships,
+                "matched_ontology_relationships": matched_ontology_relationships,
+                "taxonomy_source_mode": self.taxonomy_service.taxonomy_overview().get("source_mode"),
                 "context_summary_method": summary_result.method,
                 "context_summary_backend": summary_result.backend,
                 "context_summary_model": summary_result.model,
@@ -240,6 +264,9 @@ class IndustryContextService:
         supporting_social_items: list[object],
         primary_coverage_quality: str,
         warnings: list[str],
+        ontology_profile: dict[str, object],
+        sector_definition: dict[str, object],
+        matched_ontology_relationships: list[dict[str, str]],
         fallback_summary: str,
     ) -> SummaryResult:
         if self.summary_service is None or not active_drivers:
@@ -262,6 +289,9 @@ class IndustryContextService:
             supporting_social_items=supporting_social_items,
             primary_coverage_quality=primary_coverage_quality,
             warnings=warnings,
+            ontology_profile=ontology_profile,
+            sector_definition=sector_definition,
+            matched_ontology_relationships=matched_ontology_relationships,
         )
         return self.summary_service.summarize_prompt(
             prompt,
@@ -287,6 +317,9 @@ class IndustryContextService:
         supporting_social_items: list[object],
         primary_coverage_quality: str,
         warnings: list[str],
+        ontology_profile: dict[str, object],
+        sector_definition: dict[str, object],
+        matched_ontology_relationships: list[dict[str, str]],
     ) -> str:
         driver_lines = []
         for index, event in enumerate(active_drivers[:3], start=1):
@@ -318,6 +351,17 @@ class IndustryContextService:
             f"fading drivers: {', '.join(str(label) for label in lifecycle_summary.get('fading_event_labels', [])) or 'none'}",
             f"contradictory drivers: {', '.join(contradiction_labels) if contradiction_labels else 'none'}",
         ]
+        ontology_lines = [
+            f"sector: {sector_definition.get('label') or ontology_profile.get('sector') or 'none'}",
+            f"peer industries: {', '.join(str(value) for value in ontology_profile.get('peer_industries', [])) or 'none'}",
+            f"risk flags: {', '.join(str(value) for value in ontology_profile.get('risk_flags', [])) or 'none'}",
+            f"transmission channels: {', '.join(str(value) for value in ontology_profile.get('transmission_channels', [])) or 'none'}",
+        ]
+        matched_relationship_lines = [
+            f"- {item.get('type', 'linked_to')} {item.get('target_label', item.get('target', 'unknown target'))} via {item.get('channel', 'unknown channel')} ({item.get('strength', 'unspecified')} strength)"
+            + (f" — {item.get('note')}" if item.get('note') else "")
+            for item in matched_ontology_relationships[:4]
+        ]
         prompt_parts = [
             f"Write a short operator-facing industry context summary for {industry_label} in 2-4 sentences.",
             "Focus on the top salient industry drivers, not just one event.",
@@ -345,6 +389,12 @@ class IndustryContextService:
             "",
             "Linked macro read-through:",
             *(macro_lines or ["none"]),
+            "",
+            "Ontology context:",
+            *ontology_lines,
+            "",
+            "Matched ontology relationships:",
+            *(matched_relationship_lines or ["none"]),
             "",
             "Triaged high-quality source items:",
             *(news_lines or ["none"]),
@@ -394,6 +444,83 @@ class IndustryContextService:
             )
         ranked.sort(key=lambda item: item[0], reverse=True)
         return [item for _, item in ranked[:6]]
+
+    def _matched_ontology_relationships(
+        self,
+        industry_label: str,
+        relationships: list[dict[str, Any]],
+        news_items: list[object],
+        active_drivers: list[dict[str, object]],
+        linked_macro_events: list[dict[str, object]],
+    ) -> list[dict[str, str]]:
+        evidence_text = " ".join(self._item_text(item).lower() for item in news_items if self._item_text(item).strip())
+        active_driver_channels = {
+            str(channel).strip().lower()
+            for event in active_drivers
+            for channel in (event.get("transmission_channels") if isinstance(event.get("transmission_channels"), list) else [])
+            if str(channel).strip()
+        }
+        macro_channels = {
+            str(channel).strip().lower()
+            for event in linked_macro_events
+            for channel in (event.get("transmission_channels") if isinstance(event.get("transmission_channels"), list) else [])
+            if str(channel).strip()
+        }
+        macro_keys = {str(event.get("key", "")).strip().lower() for event in linked_macro_events if str(event.get("key", "")).strip()}
+        matched: list[dict[str, str]] = []
+        for relationship in relationships:
+            if not isinstance(relationship, dict):
+                continue
+            target = str(relationship.get("target", "")).strip()
+            target_kind = str(relationship.get("target_kind", "industry")).strip() or "industry"
+            target_label = target.replace("_", " ")
+            if target_kind == "industry" and target:
+                target_label = self.taxonomy_service.get_industry_definition(target).get("label") or target_label
+            tokens = self._relationship_tokens(relationship, target_label)
+            channel = str(relationship.get("channel", "")).strip()
+            channel_key = channel.lower()
+            target_key = target.lower()
+            relevance_hits = 0
+            if any(token in evidence_text for token in tokens):
+                relevance_hits += 1
+            if channel_key and (channel_key in active_driver_channels or channel_key in macro_channels):
+                relevance_hits += 1
+            if target_key and target_kind != "industry" and target_key in macro_keys:
+                relevance_hits += 1
+            if relevance_hits <= 0:
+                continue
+            matched.append(
+                {
+                    "source": str(relationship.get("source", industry_label)).strip(),
+                    "type": str(relationship.get("type", "linked_to")).strip() or "linked_to",
+                    "target": target,
+                    "target_kind": target_kind,
+                    "target_label": str(target_label).strip() or target,
+                    "channel": channel or "unknown channel",
+                    "strength": str(relationship.get("strength", "")).strip() or "unspecified",
+                    "note": str(relationship.get("note", "")).strip(),
+                }
+            )
+        return matched[:6]
+
+    @staticmethod
+    def _relationship_tokens(relationship: dict[str, Any], target_label: str) -> list[str]:
+        raw_terms = [
+            str(relationship.get("target", "")).replace("_", " "),
+            str(target_label),
+            str(relationship.get("channel", "")).replace("_", " "),
+            str(relationship.get("note", "")),
+        ]
+        tokens: list[str] = []
+        for term in raw_terms:
+            for token in term.lower().replace("/", " ").replace("-", " ").split():
+                cleaned = token.strip()
+                if not cleaned:
+                    continue
+                if len(cleaned) >= 3 or cleaned == "ai":
+                    if cleaned not in tokens:
+                        tokens.append(cleaned)
+        return tokens
 
     @staticmethod
     def _linked_industry_themes(active_drivers: list[dict[str, object]]) -> list[str]:
@@ -478,6 +605,7 @@ class IndustryContextService:
         active_drivers: list[dict[str, object]],
         lifecycle_summary: dict[str, object],
         linked_macro_themes: list[str],
+        matched_ontology_relationships: list[dict[str, str]],
         news_items: list[object],
         social_items: list[object],
     ) -> str:
@@ -488,18 +616,22 @@ class IndustryContextService:
         escalating_labels = list(lifecycle_summary.get("escalating_event_labels", []))
         contradiction_labels = list(lifecycle_summary.get("contradictory_event_labels", []))
         fading_labels = list(lifecycle_summary.get("fading_event_labels", []))
+        relationship_note = ""
+        if matched_ontology_relationships:
+            top_relationship = matched_ontology_relationships[0]
+            relationship_note = f" Ontology read-through most clearly points to {top_relationship.get('type', 'linked_to')} {top_relationship.get('target_label', top_relationship.get('target', 'known transmission path'))} via {top_relationship.get('channel', 'known channel')}."
         if contradiction_labels and driver_labels:
-            return f"{industry_label} remains centered on {focus}, but conflicting industry evidence is visible around {', '.join(contradiction_labels[:2])}."
+            return f"{industry_label} remains centered on {focus}, but conflicting industry evidence is visible around {', '.join(contradiction_labels[:2])}.{relationship_note}"
         if escalating_labels:
-            return f"{industry_label} is led by {focus}, with escalation now most visible in {', '.join(escalating_labels[:2])}; macro read-through still points to {macro}."
+            return f"{industry_label} is led by {focus}, with escalation now most visible in {', '.join(escalating_labels[:2])}; macro read-through still points to {macro}.{relationship_note}"
         if previous and previous.summary_text and new_labels:
-            return f"{industry_label} still leans on {focus}, but fresh attention is shifting toward {', '.join(new_labels[:2])}; macro read-through remains {macro}."
+            return f"{industry_label} still leans on {focus}, but fresh attention is shifting toward {', '.join(new_labels[:2])}; macro read-through remains {macro}.{relationship_note}"
         if fading_labels and driver_labels:
-            return f"{industry_label} context still points to {focus}, but some earlier pressure is fading around {', '.join(fading_labels[:2])}."
+            return f"{industry_label} context still points to {focus}, but some earlier pressure is fading around {', '.join(fading_labels[:2])}.{relationship_note}"
         if driver_labels and news_items:
-            return f"{industry_label} context is led by {focus}, while macro transmission points to {macro}; primary news is carrying most of the evidence in this run."
+            return f"{industry_label} context is led by {focus}, while macro transmission points to {macro}; primary news is carrying most of the evidence in this run.{relationship_note}"
         if driver_labels and social_items:
-            return f"{industry_label} context still points to {focus}, but primary industry news was thin so the run leans more on social confirmation than desired."
+            return f"{industry_label} context still points to {focus}, but primary industry news was thin so the run leans more on social confirmation than desired.{relationship_note}"
         if previous and previous.summary_text:
             return f"{industry_label} context is broadly unchanged, but this run did not surface a clearly dominant fresh driver."
         return f"{industry_label} context is currently light on salient evidence, so the output mainly records continuity and known macro links."

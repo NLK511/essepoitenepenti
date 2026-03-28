@@ -107,6 +107,13 @@ export function ContextSnapshotDetailPage() {
   const linkedMacroLabels = snapshot && isIndustrySnapshot(snapshot)
     ? stringList(snapshot.metadata?.linked_macro_event_labels).concat(snapshot.linked_macro_themes)
     : [];
+  const ontologyProfile = snapshot && isIndustrySnapshot(snapshot) && typeof snapshot.metadata?.ontology_profile === "object" && snapshot.metadata?.ontology_profile !== null
+    ? snapshot.metadata.ontology_profile as Record<string, unknown>
+    : null;
+  const sectorDefinition = snapshot && isIndustrySnapshot(snapshot) && typeof snapshot.metadata?.sector_definition === "object" && snapshot.metadata?.sector_definition !== null
+    ? snapshot.metadata.sector_definition as Record<string, unknown>
+    : null;
+  const ontologyRelationships = snapshot && isIndustrySnapshot(snapshot) ? recordList(snapshot.metadata?.matched_ontology_relationships) : [];
 
   return (
     <>
@@ -247,11 +254,40 @@ export function ContextSnapshotDetailPage() {
               <div className="helper-text top-gap-small">Source priorities: {stringList(snapshot.source_breakdown?.primary_news_source_priorities).join(", ") || "—"}</div>
               {isIndustrySnapshot(snapshot) ? <div className="helper-text top-gap-small">Linked macro themes: {linkedMacroLabels.join(", ") || "—"}</div> : null}
             </Card>
+            {isIndustrySnapshot(snapshot) ? (
+              <Card>
+                <SectionTitle kicker="Ontology" title="Stored industry ontology context" />
+                <div className="summary-grid">
+                  <div className="summary-item"><span className="summary-label">Sector</span><span className="summary-value">{eventLabel(sectorDefinition?.label ?? ontologyProfile?.sector)}</span></div>
+                  <div className="summary-item"><span className="summary-label">Peer industries</span><span className="summary-value">{stringList(ontologyProfile?.peer_industries).join(", ") || "—"}</span></div>
+                  <div className="summary-item"><span className="summary-label">Risk flags</span><span className="summary-value">{stringList(ontologyProfile?.risk_flags).join(", ") || "—"}</span></div>
+                  <div className="summary-item"><span className="summary-label">Taxonomy source</span><span className="summary-value">{eventLabel(snapshot.metadata?.taxonomy_source_mode)}</span></div>
+                </div>
+                <div className="helper-text top-gap-small">Transmission channels: {stringList(ontologyProfile?.transmission_channels).join(", ") || "—"}</div>
+                <div className="helper-text top-gap-small">Matched ontology relationships: {ontologyRelationships.length}</div>
+                {ontologyRelationships.length > 0 ? (
+                  <ul className="list-reset top-gap-small">
+                    {ontologyRelationships.map((relationship, index) => (
+                      <li key={`${index}-${eventLabel(relationship.target)}`} className="list-item compact-item">
+                        {eventLabel(relationship.type)} {eventLabel(relationship.target_label ?? relationship.target)} via {eventLabel(relationship.channel)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </Card>
+            ) : (
+              <Card>
+                <SectionTitle kicker="Diagnostics" title="Stored JSON detail" />
+                <pre className="markdown-code-block">{JSON.stringify({ source_breakdown: snapshot.source_breakdown, metadata: snapshot.metadata }, null, 2)}</pre>
+              </Card>
+            )}
+          </section>
+          {isIndustrySnapshot(snapshot) ? (
             <Card>
               <SectionTitle kicker="Diagnostics" title="Stored JSON detail" />
               <pre className="markdown-code-block">{JSON.stringify({ source_breakdown: snapshot.source_breakdown, metadata: snapshot.metadata }, null, 2)}</pre>
             </Card>
-          </section>
+          ) : null}
         </div>
       ) : null}
     </>

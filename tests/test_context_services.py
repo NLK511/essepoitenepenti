@@ -279,6 +279,10 @@ class ContextServiceTests(unittest.TestCase):
         self.assertGreaterEqual(context.metadata["event_lifecycle_summary"]["new_event_count"], 1)
         self.assertEqual(context.metadata["context_summary_method"], "news_digest")
         self.assertEqual(context.metadata["triaged_primary_evidence"][0]["publisher"], "DigiTimes")
+        self.assertEqual(context.metadata["taxonomy_source_mode"], "split")
+        self.assertEqual(context.metadata["ontology_profile"]["label"], "Semiconductors")
+        self.assertTrue(context.metadata["matched_ontology_relationships"])
+        self.assertTrue(any(item["target"] == "ai_capex" for item in context.metadata["matched_ontology_relationships"]))
         self.assertEqual(news_service.fetch_many_calls, [["NVDA", "AMD"]])
 
     def test_industry_context_uses_llm_summary_when_available(self) -> None:
@@ -354,6 +358,10 @@ class ContextServiceTests(unittest.TestCase):
         self.assertIn("previous linked macro themes: rates, yield_pressure", prompt)
         self.assertIn("previous summary: Prior semiconductor summary about AI demand and rate pressure.", prompt)
         self.assertIn("Change since previous snapshot:", prompt)
+        self.assertIn("Ontology context:", prompt)
+        self.assertIn("Matched ontology relationships:", prompt)
+        self.assertIn("sector: Information Technology", prompt)
+        self.assertTrue(context.metadata["matched_ontology_relationships"])
 
 
 if __name__ == "__main__":
