@@ -56,7 +56,7 @@ Lower-level event identifiers should remain on dedicated event-detail fields suc
 
 The same readability pattern is useful on context-review objects too: event-level `transmission_channels` can be accompanied by `transmission_channel_details` so operator-facing pages are not forced to render raw canonical channel keys.
 
-Likewise, any downstream `transmission_bias` or `context_regime` classification used for analytics or calibration should be derived from the governed transmission object through one shared helper, not reconstructed separately in each reporting service. API-facing outcome and bucket payloads can then layer readable labels such as `transmission_bias_label`, `context_regime_label`, `action_reason_label`, and `slice_label` on top of canonical keys without breaking storage semantics.
+Likewise, any downstream `transmission_bias` or `context_regime` classification used for analytics or calibration should be derived from the governed transmission object through one shared helper, not reconstructed separately in each reporting service. API-facing outcome, event, and bucket payloads can then layer readable labels such as `transmission_bias_label`, `context_regime_label`, `action_reason_label`, `source_priority_detail`, `persistence_state_detail`, `window_hint_detail`, `recency_bucket_detail`, and `slice_label` on top of canonical keys without breaking storage semantics.
 
 ## Transmission pipeline
 

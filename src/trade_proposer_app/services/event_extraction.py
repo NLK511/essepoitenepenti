@@ -6,6 +6,8 @@ import re
 
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
+_TAXONOMY_SERVICE = TickerTaxonomyService()
+
 OFFICIAL_SOURCE_HINTS = (
     "federal reserve",
     "fomc",
@@ -183,6 +185,7 @@ def extract_ranked_events(
                 "unique_evidence_count": len(all_matches),
                 "publisher_count": len({item.get("publisher", "") for item in all_matches if item.get("publisher")}),
                 "source_priority": source_priority,
+                "source_priority_detail": _key_label_detail("source_priority", source_priority),
                 "official_source_count": official_count,
                 "trade_source_count": trade_count,
                 "major_source_count": major_count,
@@ -193,10 +196,13 @@ def extract_ranked_events(
                 "beneficiary_tags": list(definition.beneficiary_tags),
                 "loser_tags": list(definition.loser_tags),
                 "window_hint": definition.window_hint,
+                "window_hint_detail": _key_label_detail("window_hint", definition.window_hint),
                 "latest_published_at": latest_published_at.isoformat() if latest_published_at is not None else None,
                 "recency_bucket": _recency_bucket(latest_published_at),
+                "recency_bucket_detail": _key_label_detail("recency_bucket", _recency_bucket(latest_published_at)),
                 "evidence_direction": evidence_direction,
                 "persistence_state": _persistence_state(previous, event_score, len(all_matches)),
+                "persistence_state_detail": _key_label_detail("persistence_state", _persistence_state(previous, event_score, len(all_matches))),
                 "previous_event_score": _float_value(previous.get("event_score")) if isinstance(previous, dict) else None,
                 "score_change_percent": _score_change_percent(previous, event_score),
                 "contradiction_flag": bool(contradiction_reasons),
@@ -552,18 +558,32 @@ def _contradiction_reasons(matches: list[dict[str, object]], previous: dict[str,
 
 
 def _contradiction_reason_details(reasons: list[str]) -> list[dict[str, str]]:
-    service = TickerTaxonomyService()
     details: list[dict[str, str]] = []
     seen: set[str] = set()
     for reason in reasons:
-        definition = service.get_contradiction_reason_definition(reason)
-        key = str(definition.get("key", reason)).strip() or reason
-        label = str(definition.get("label", reason.replace("_", " "))).strip() or reason.replace("_", " ")
+        detail = _key_label_detail("contradiction_reason", reason)
+        key = str(detail.get("key", reason)).strip() or reason
         if key in seen:
             continue
         seen.add(key)
-        details.append({"key": key, "label": label})
+        details.append({"key": key, "label": str(detail.get("label", reason.replace("_", " "))).strip() or reason.replace("_", " ")})
     return details
+
+
+def _key_label_detail(kind: str, value: str) -> dict[str, str]:
+    if kind == "source_priority":
+        definition = _TAXONOMY_SERVICE.get_event_source_priority_definition(value)
+    elif kind == "persistence_state":
+        definition = _TAXONOMY_SERVICE.get_event_persistence_state_definition(value)
+    elif kind == "window_hint":
+        definition = _TAXONOMY_SERVICE.get_event_window_hint_definition(value)
+    elif kind == "recency_bucket":
+        definition = _TAXONOMY_SERVICE.get_event_recency_bucket_definition(value)
+    else:
+        definition = _TAXONOMY_SERVICE.get_contradiction_reason_definition(value)
+    key = str(definition.get("key", value)).strip() or value
+    label = str(definition.get("label", value.replace("_", " "))).strip() or value.replace("_", " ")
+    return {"key": key, "label": label}
 
 
 def _latest_timestamp(matches: list[dict[str, object]]) -> datetime | None:

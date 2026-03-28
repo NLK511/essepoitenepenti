@@ -248,13 +248,26 @@ export function ContextSnapshotDetailPage() {
                   const row = typeof event === "object" && event !== null ? event as Record<string, unknown> : {};
                   const channels = extractDisplayLabels(row, "transmission_channel_details", "transmission_channels");
                   const contradictionReasons = extractDisplayLabels(row, "contradiction_reason_details", "contradiction_reasons");
+                  const persistenceLabel = typeof (row.persistence_state_detail as { label?: unknown } | undefined)?.label === "string"
+                    ? (row.persistence_state_detail as { label: string }).label
+                    : eventLabel(row.persistence_state);
+                  const sourcePriorityLabel = typeof (row.source_priority_detail as { label?: unknown } | undefined)?.label === "string"
+                    ? (row.source_priority_detail as { label: string }).label
+                    : eventLabel(row.source_priority);
+                  const windowLabel = typeof (row.window_hint_detail as { label?: unknown } | undefined)?.label === "string"
+                    ? (row.window_hint_detail as { label: string }).label
+                    : formatWindow(row.window_hint);
+                  const recencyLabel = typeof (row.recency_bucket_detail as { label?: unknown } | undefined)?.label === "string"
+                    ? (row.recency_bucket_detail as { label: string }).label
+                    : eventLabel(row.recency_bucket);
                   return (
                     <li key={`${index}-${eventLabel(row.key)}`} className="list-item">
                       <div className="cluster">
                         <Badge>{eventLabel(row.label)}</Badge>
-                        <Badge>{eventLabel(row.persistence_state)}</Badge>
-                        <Badge>{eventLabel(row.source_priority)}</Badge>
-                        <Badge>{formatWindow(row.window_hint)}</Badge>
+                        <Badge>{persistenceLabel}</Badge>
+                        <Badge>{sourcePriorityLabel}</Badge>
+                        <Badge>{windowLabel}</Badge>
+                        <Badge>{recencyLabel}</Badge>
                         {typeof row.saliency_weight === "number" ? <Badge>saliency {row.saliency_weight}</Badge> : null}
                       </div>
                       {channels.length > 0 ? <div className="helper-text top-gap-small">Channels: {channels.join(", ")}</div> : null}

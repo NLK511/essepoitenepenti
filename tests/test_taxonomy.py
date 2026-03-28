@@ -25,6 +25,10 @@ from trade_proposer_app.services.taxonomy import (
     CALIBRATION_REASON_CODES_PATH,
     ACTION_REASON_CODES_PATH,
     CONTRADICTION_REASON_CODES_PATH,
+    EVENT_SOURCE_PRIORITIES_PATH,
+    EVENT_PERSISTENCE_STATES_PATH,
+    EVENT_WINDOW_HINTS_PATH,
+    EVENT_RECENCY_BUCKETS_PATH,
     TRANSMISSION_PRIMARY_DRIVERS_PATH,
     TRANSMISSION_TAGS_PATH,
     TickerTaxonomyService,
@@ -63,6 +67,10 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertTrue(CALIBRATION_REASON_CODES_PATH.exists())
         self.assertTrue(ACTION_REASON_CODES_PATH.exists())
         self.assertTrue(CONTRADICTION_REASON_CODES_PATH.exists())
+        self.assertTrue(EVENT_SOURCE_PRIORITIES_PATH.exists())
+        self.assertTrue(EVENT_PERSISTENCE_STATES_PATH.exists())
+        self.assertTrue(EVENT_WINDOW_HINTS_PATH.exists())
+        self.assertTrue(EVENT_RECENCY_BUCKETS_PATH.exists())
         self.assertTrue(RELATIONSHIP_TYPES_PATH.exists())
         self.assertTrue(RELATIONSHIP_TARGET_KINDS_PATH.exists())
 
@@ -85,6 +93,10 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertGreaterEqual(overview["calibration_reason_code_count"], 20)
         self.assertGreaterEqual(overview["action_reason_code_count"], 8)
         self.assertGreaterEqual(overview["contradiction_reason_code_count"], 3)
+        self.assertGreaterEqual(overview["event_source_priority_count"], 4)
+        self.assertGreaterEqual(overview["event_persistence_state_count"], 4)
+        self.assertGreaterEqual(overview["event_window_hint_count"], 4)
+        self.assertGreaterEqual(overview["event_recency_bucket_count"], 4)
         self.assertGreaterEqual(overview["relationship_type_count"], 8)
         self.assertGreaterEqual(overview["relationship_target_kind_count"], 4)
         self.assertGreaterEqual(overview["derived_relationship_count"], 20)
@@ -129,6 +141,10 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertEqual(service.get_calibration_reason_definition("context_regime_underperforming")["label"], "context regime underperforming")
         self.assertEqual(service.get_action_reason_definition("context_transmission_headwind")["label"], "context transmission headwind")
         self.assertEqual(service.get_contradiction_reason_definition("mixed_directional_evidence")["label"], "mixed directional evidence")
+        self.assertEqual(service.get_event_source_priority_definition("official")["label"], "official")
+        self.assertEqual(service.get_event_persistence_state_definition("escalating")["label"], "escalating")
+        self.assertEqual(service.get_event_window_hint_definition("2d_5d")["label"], "2d-5d")
+        self.assertEqual(service.get_event_recency_bucket_definition("fresh")["label"], "fresh")
         self.assertEqual(service.derive_transmission_context_regime({"context_bias": "tailwind", "transmission_tags": ["macro_dominant", "catalyst_active"]}), "context_plus_catalyst")
         self.assertEqual(service.get_analysis_bucket_label("transmission_bias", "tailwind"), "tailwind")
         self.assertIn("consumer_spending", aapl_profile["exposure_channels"])

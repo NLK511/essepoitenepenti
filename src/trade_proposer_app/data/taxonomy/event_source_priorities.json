@@ -1,0 +1,6 @@
+{
+  "official": {"label": "official"},
+  "trade": {"label": "trade"},
+  "major": {"label": "major"},
+  "other": {"label": "other"}
+}

@@ -1,0 +1,6 @@
+{
+  "1d": {"label": "1d"},
+  "2d_5d": {"label": "2d-5d", "aliases": ["2d 5d"]},
+  "1w_plus": {"label": "1w+", "aliases": ["1w plus"]},
+  "unknown": {"label": "unknown"}
+}

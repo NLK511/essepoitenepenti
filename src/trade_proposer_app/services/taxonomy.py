@@ -27,6 +27,10 @@ CALIBRATION_REVIEW_STATUSES_PATH = TAXONOMY_DIR / "calibration_review_statuses.j
 CALIBRATION_REASON_CODES_PATH = TAXONOMY_DIR / "calibration_reason_codes.json"
 ACTION_REASON_CODES_PATH = TAXONOMY_DIR / "action_reason_codes.json"
 CONTRADICTION_REASON_CODES_PATH = TAXONOMY_DIR / "contradiction_reason_codes.json"
+EVENT_SOURCE_PRIORITIES_PATH = TAXONOMY_DIR / "event_source_priorities.json"
+EVENT_PERSISTENCE_STATES_PATH = TAXONOMY_DIR / "event_persistence_states.json"
+EVENT_WINDOW_HINTS_PATH = TAXONOMY_DIR / "event_window_hints.json"
+EVENT_RECENCY_BUCKETS_PATH = TAXONOMY_DIR / "event_recency_buckets.json"
 RELATIONSHIP_TYPES_PATH = TAXONOMY_DIR / "relationship_types.json"
 RELATIONSHIP_TARGET_KINDS_PATH = TAXONOMY_DIR / "relationship_target_kinds.json"
 
@@ -73,6 +77,10 @@ class TickerTaxonomyService:
         self._calibration_reason_codes: dict[str, dict[str, Any]] = payload["calibration_reason_codes"]
         self._action_reason_codes: dict[str, dict[str, Any]] = payload["action_reason_codes"]
         self._contradiction_reason_codes: dict[str, dict[str, Any]] = payload["contradiction_reason_codes"]
+        self._event_source_priorities: dict[str, dict[str, Any]] = payload["event_source_priorities"]
+        self._event_persistence_states: dict[str, dict[str, Any]] = payload["event_persistence_states"]
+        self._event_window_hints: dict[str, dict[str, Any]] = payload["event_window_hints"]
+        self._event_recency_buckets: dict[str, dict[str, Any]] = payload["event_recency_buckets"]
         self._theme_alias_map: dict[str, str] = self._build_alias_map(self._themes)
         self._macro_channel_alias_map: dict[str, str] = self._build_alias_map(self._macro_channels)
         self._transmission_channel_alias_map: dict[str, str] = self._build_alias_map(self._transmission_channels)
@@ -89,6 +97,10 @@ class TickerTaxonomyService:
         self._calibration_reason_code_alias_map: dict[str, str] = self._build_alias_map(self._calibration_reason_codes)
         self._action_reason_code_alias_map: dict[str, str] = self._build_alias_map(self._action_reason_codes)
         self._contradiction_reason_code_alias_map: dict[str, str] = self._build_alias_map(self._contradiction_reason_codes)
+        self._event_source_priority_alias_map: dict[str, str] = self._build_alias_map(self._event_source_priorities)
+        self._event_persistence_state_alias_map: dict[str, str] = self._build_alias_map(self._event_persistence_states)
+        self._event_window_hint_alias_map: dict[str, str] = self._build_alias_map(self._event_window_hints)
+        self._event_recency_bucket_alias_map: dict[str, str] = self._build_alias_map(self._event_recency_buckets)
         self._source_mode: str = payload["source_mode"]
 
     def _load_payload(self) -> dict[str, Any]:
@@ -120,6 +132,10 @@ class TickerTaxonomyService:
         calibration_reason_codes = self._load_registry(self._read_json_file(CALIBRATION_REASON_CODES_PATH))
         action_reason_codes = self._load_registry(self._read_json_file(ACTION_REASON_CODES_PATH))
         contradiction_reason_codes = self._load_registry(self._read_json_file(CONTRADICTION_REASON_CODES_PATH))
+        event_source_priorities = self._load_registry(self._read_json_file(EVENT_SOURCE_PRIORITIES_PATH))
+        event_persistence_states = self._load_registry(self._read_json_file(EVENT_PERSISTENCE_STATES_PATH))
+        event_window_hints = self._load_registry(self._read_json_file(EVENT_WINDOW_HINTS_PATH))
+        event_recency_buckets = self._load_registry(self._read_json_file(EVENT_RECENCY_BUCKETS_PATH))
         relationship_types = self._load_registry(self._read_json_file(RELATIONSHIP_TYPES_PATH))
         relationship_target_kinds = self._load_registry(self._read_json_file(RELATIONSHIP_TARGET_KINDS_PATH))
         self._themes = themes
@@ -136,6 +152,10 @@ class TickerTaxonomyService:
         self._calibration_reason_codes = calibration_reason_codes
         self._action_reason_codes = action_reason_codes
         self._contradiction_reason_codes = contradiction_reason_codes
+        self._event_source_priorities = event_source_priorities
+        self._event_persistence_states = event_persistence_states
+        self._event_window_hints = event_window_hints
+        self._event_recency_buckets = event_recency_buckets
         self._relationship_types = relationship_types
         self._relationship_target_kinds = relationship_target_kinds
         self._theme_alias_map = self._build_alias_map(themes)
@@ -152,6 +172,10 @@ class TickerTaxonomyService:
         self._calibration_reason_code_alias_map = self._build_alias_map(calibration_reason_codes)
         self._action_reason_code_alias_map = self._build_alias_map(action_reason_codes)
         self._contradiction_reason_code_alias_map = self._build_alias_map(contradiction_reason_codes)
+        self._event_source_priority_alias_map = self._build_alias_map(event_source_priorities)
+        self._event_persistence_state_alias_map = self._build_alias_map(event_persistence_states)
+        self._event_window_hint_alias_map = self._build_alias_map(event_window_hints)
+        self._event_recency_bucket_alias_map = self._build_alias_map(event_recency_buckets)
         self._relationship_type_alias_map = self._build_alias_map(relationship_types)
         self._relationship_target_kind_alias_map = self._build_alias_map(relationship_target_kinds)
         return {
@@ -178,12 +202,16 @@ class TickerTaxonomyService:
             "calibration_reason_codes": calibration_reason_codes,
             "action_reason_codes": action_reason_codes,
             "contradiction_reason_codes": contradiction_reason_codes,
+            "event_source_priorities": event_source_priorities,
+            "event_persistence_states": event_persistence_states,
+            "event_window_hints": event_window_hints,
+            "event_recency_buckets": event_recency_buckets,
             "relationship_types": relationship_types,
             "relationship_target_kinds": relationship_target_kinds,
         }
 
     def _load_monolith_payload(self) -> dict[str, Any]:
-        empty = {"tickers": {}, "industries": {}, "sectors": {}, "relationships": [], "event_vocab": {}, "themes": {}, "macro_channels": {}, "transmission_channels": {}, "transmission_tags": {}, "transmission_primary_drivers": {}, "transmission_conflict_flags": {}, "transmission_biases": {}, "transmission_context_regimes": {}, "shortlist_reason_codes": {}, "shortlist_selection_lanes": {}, "calibration_review_statuses": {}, "calibration_reason_codes": {}, "action_reason_codes": {}, "contradiction_reason_codes": {}, "relationship_types": {}, "relationship_target_kinds": {}}
+        empty = {"tickers": {}, "industries": {}, "sectors": {}, "relationships": [], "event_vocab": {}, "themes": {}, "macro_channels": {}, "transmission_channels": {}, "transmission_tags": {}, "transmission_primary_drivers": {}, "transmission_conflict_flags": {}, "transmission_biases": {}, "transmission_context_regimes": {}, "shortlist_reason_codes": {}, "shortlist_selection_lanes": {}, "calibration_review_statuses": {}, "calibration_reason_codes": {}, "action_reason_codes": {}, "contradiction_reason_codes": {}, "event_source_priorities": {}, "event_persistence_states": {}, "event_window_hints": {}, "event_recency_buckets": {}, "relationship_types": {}, "relationship_target_kinds": {}}
         if not TAXONOMY_PATH.exists():
             return empty
         payload = self._read_json_file(TAXONOMY_PATH)
@@ -203,6 +231,10 @@ class TickerTaxonomyService:
         calibration_reason_codes = self._load_registry(payload.get("_calibration_reason_codes"))
         action_reason_codes = self._load_registry(payload.get("_action_reason_codes"))
         contradiction_reason_codes = self._load_registry(payload.get("_contradiction_reason_codes"))
+        event_source_priorities = self._load_registry(payload.get("_event_source_priorities"))
+        event_persistence_states = self._load_registry(payload.get("_event_persistence_states"))
+        event_window_hints = self._load_registry(payload.get("_event_window_hints"))
+        event_recency_buckets = self._load_registry(payload.get("_event_recency_buckets"))
         relationship_types = self._load_registry(payload.get("_relationship_types"))
         relationship_target_kinds = self._load_registry(payload.get("_relationship_target_kinds"))
         self._themes = themes
@@ -219,6 +251,10 @@ class TickerTaxonomyService:
         self._calibration_reason_codes = calibration_reason_codes
         self._action_reason_codes = action_reason_codes
         self._contradiction_reason_codes = contradiction_reason_codes
+        self._event_source_priorities = event_source_priorities
+        self._event_persistence_states = event_persistence_states
+        self._event_window_hints = event_window_hints
+        self._event_recency_buckets = event_recency_buckets
         self._relationship_types = relationship_types
         self._relationship_target_kinds = relationship_target_kinds
         self._theme_alias_map = self._build_alias_map(themes)
@@ -235,6 +271,10 @@ class TickerTaxonomyService:
         self._calibration_reason_code_alias_map = self._build_alias_map(calibration_reason_codes)
         self._action_reason_code_alias_map = self._build_alias_map(action_reason_codes)
         self._contradiction_reason_code_alias_map = self._build_alias_map(contradiction_reason_codes)
+        self._event_source_priority_alias_map = self._build_alias_map(event_source_priorities)
+        self._event_persistence_state_alias_map = self._build_alias_map(event_persistence_states)
+        self._event_window_hint_alias_map = self._build_alias_map(event_window_hints)
+        self._event_recency_bucket_alias_map = self._build_alias_map(event_recency_buckets)
         self._relationship_type_alias_map = self._build_alias_map(relationship_types)
         self._relationship_target_kind_alias_map = self._build_alias_map(relationship_target_kinds)
         return {
@@ -261,6 +301,10 @@ class TickerTaxonomyService:
             "calibration_reason_codes": calibration_reason_codes,
             "action_reason_codes": action_reason_codes,
             "contradiction_reason_codes": contradiction_reason_codes,
+            "event_source_priorities": event_source_priorities,
+            "event_persistence_states": event_persistence_states,
+            "event_window_hints": event_window_hints,
+            "event_recency_buckets": event_recency_buckets,
             "relationship_types": relationship_types,
             "relationship_target_kinds": relationship_target_kinds,
         }
@@ -791,6 +835,10 @@ class TickerTaxonomyService:
             "calibration_reason_code_count": len(self._calibration_reason_codes),
             "action_reason_code_count": len(self._action_reason_codes),
             "contradiction_reason_code_count": len(self._contradiction_reason_codes),
+            "event_source_priority_count": len(self._event_source_priorities),
+            "event_persistence_state_count": len(self._event_persistence_states),
+            "event_window_hint_count": len(self._event_window_hints),
+            "event_recency_bucket_count": len(self._event_recency_buckets),
             "relationship_type_count": len(self._relationship_types),
             "relationship_target_kind_count": len(self._relationship_target_kinds),
             "derived_relationship_count": len(self._derived_relationships()),
@@ -1079,6 +1127,22 @@ class TickerTaxonomyService:
 
     def list_contradiction_reason_definitions(self) -> list[dict[str, Any]]:
         return [self.get_contradiction_reason_definition(key) for key in sorted(self._contradiction_reason_codes)]
+
+    def get_event_source_priority_definition(self, value: str) -> dict[str, Any]:
+        canonical_key = self._event_source_priority_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))
+        return dict(self._event_source_priorities.get(canonical_key, {"key": canonical_key, "label": str(value or "").strip().replace("_", " "), "aliases": []}))
+
+    def get_event_persistence_state_definition(self, value: str) -> dict[str, Any]:
+        canonical_key = self._event_persistence_state_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))
+        return dict(self._event_persistence_states.get(canonical_key, {"key": canonical_key, "label": str(value or "").strip().replace("_", " "), "aliases": []}))
+
+    def get_event_window_hint_definition(self, value: str) -> dict[str, Any]:
+        canonical_key = self._event_window_hint_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))
+        return dict(self._event_window_hints.get(canonical_key, {"key": canonical_key, "label": str(value or "").strip().replace("_", " "), "aliases": []}))
+
+    def get_event_recency_bucket_definition(self, value: str) -> dict[str, Any]:
+        canonical_key = self._event_recency_bucket_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))
+        return dict(self._event_recency_buckets.get(canonical_key, {"key": canonical_key, "label": str(value or "").strip().replace("_", " "), "aliases": []}))
 
     def get_relationship_type_definition(self, value: str) -> dict[str, Any]:
         canonical_key = self._relationship_type_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))

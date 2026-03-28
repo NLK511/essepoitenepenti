@@ -53,6 +53,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 - Carry readable analytics labels on stored latest-outcome payloads and calibration buckets too, so recommendation review pages can show governed bias/regime names instead of raw keys.
 - Carry readable shortlist and calibration explanation labels too, including shortlist reason details, selection-lane labels, calibration review-status labels, and governed calibration reason details.
 - Carry readable action-reason and contradiction-reason labels too, so recommendation-plan and context-detail pages rely less on raw internal codes.
+- Carry readable event lifecycle/status labels too, so context event rows can show governed source priority, persistence state, window, and recency semantics instead of raw keys.
 - Queue macro and industry refresh workflows manually from the operator UI.
 - Execute macro and industry refresh workflows asynchronously through the shared queued run path; immediate `run-now` endpoints still exist in the backend but are no longer the primary operator workflow.
 - Trace which shared artifacts were used by a run or recommendation plan.

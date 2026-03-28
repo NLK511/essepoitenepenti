@@ -168,6 +168,7 @@ Goal: make the ontology behave more like a real market-structure graph.
 - [x] tighten calibration/review payload typing by carrying readable governed labels on outcome-level analytics fields and calibration buckets, not just on aggregate evidence cohorts
 - [x] govern watchlist shortlist reasons, shortlist selection lanes, calibration review statuses, and calibration reason codes through dedicated registries too, so operator review pages stop depending on raw internal reason strings
 - [x] govern recommendation action reasons and event contradiction reasons too, so plan review and context detail pages can carry readable labels instead of hand-humanizing raw internal codes
+- [x] govern event lifecycle display semantics too, including event source priorities, persistence states, window hints, and recency buckets, so stored context-event rows can expose readable labels directly
 - [x] tighten evidence-concentration payload typing by exposing readable governed slice labels alongside canonical slice keys
 - [ ] migrate all remaining ontology relationship/channel fields to governed registries where practical
 
