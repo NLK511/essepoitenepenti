@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson } from "../api";
 import { WorkflowRunResults } from "../components/workflow-run-results";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
+import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { Run, RunDetailResponse } from "../types";
 import { formatDate, formatDuration, jobTypeLabel, runTone } from "../utils";
 
@@ -47,82 +47,117 @@ export function DebuggerPage() {
     void loadDetail();
   }, [searchParams]);
 
+  const runStats = useMemo(() => {
+    const items = runs ?? [];
+    return {
+      total: items.length,
+      failed: items.filter((run) => run.status === "failed").length,
+      warnings: items.filter((run) => run.status === "completed_with_warnings").length,
+      active: items.filter((run) => run.status === "queued" || run.status === "running").length,
+    };
+  }, [runs]);
+
+  const selectedRunId = searchParams.get("run_id");
+
   return (
     <>
       <PageHeader
-        kicker="Problem investigation"
-        title="Inspect degraded or failed runs without leaving the app."
-        subtitle="Pick a recent run, review visible warnings first, and expand raw details only if the higher-level diagnosis is not enough."
+        kicker="Execution diagnostics"
+        title="Run debugger"
+        subtitle="Use debugger mode for fast investigation: select a recent run, review warnings first, and jump to the canonical run page only when you need the full orchestration detail."
       />
       {error ? <ErrorState message={error} /> : null}
-      <section className="two-column debugger-layout">
-        <Card>
-          <SectionTitle kicker="Recent runs" title="Choose a run" />
+
+      <section className="metrics-grid top-gap">
+        <StatCard label="Runs loaded" value={runStats.total} helper="Recent execution records available for inspection" />
+        <StatCard label="Failed" value={runStats.failed} helper="Runs that ended in failure" />
+        <StatCard label="Warnings" value={runStats.warnings} helper="Runs that completed but need review" />
+        <StatCard label="Active" value={runStats.active} helper="Queued or currently running workflows" />
+      </section>
+
+      <section className="two-column debugger-layout top-gap">
+        <Card className="sticky-toolbar">
+          <SectionTitle kicker="Recent runs" title="Choose a run" subtitle="Pick a run from the left, then scan the summary on the right before opening the full run page." />
           {!runs && !error ? <LoadingState message="Loading runs…" /> : null}
           {runs && runs.length === 0 ? <EmptyState message="No runs available." /> : null}
           {runs ? (
-            <ul className="list-reset">
+            <div className="data-stack top-gap-small">
               {runs.map((run) => (
-                <li key={run.id ?? run.created_at} className="list-item">
-                  <div>
-                    <button
-                      type="button"
-                      className="link-button"
-                      onClick={() => run.id && setSearchParams({ run_id: String(run.id) })}
-                    >
-                      Run #{run.id}
-                    </button>
-                    <div className="helper-text">Job {run.job_id} · {jobTypeLabel(run.job_type)} · {formatDate(run.created_at)}</div>
-                    {run.scheduled_for ? <div className="helper-text">Scheduled slot {formatDate(run.scheduled_for)}</div> : null}
+                <button
+                  key={run.id ?? run.created_at}
+                  type="button"
+                  className={`data-card link-button${selectedRunId === String(run.id) ? " is-selected" : ""}`}
+                  onClick={() => run.id && setSearchParams({ run_id: String(run.id) })}
+                >
+                  <div className="data-card-header">
+                    <div>
+                      <div className="data-card-title">Run #{run.id}</div>
+                      <div className="helper-text">{jobTypeLabel(run.job_type)} · job {run.job_id}</div>
+                    </div>
+                    <Badge tone={runTone(run.status)}>{run.status}</Badge>
                   </div>
-                  <Badge tone={runTone(run.status)}>{run.status}</Badge>
-                </li>
+                  <div className="helper-text">Created {formatDate(run.created_at)}</div>
+                  {run.scheduled_for ? <div className="helper-text">Scheduled {formatDate(run.scheduled_for)}</div> : null}
+                </button>
               ))}
-            </ul>
+            </div>
           ) : null}
         </Card>
 
         <div className="stack-page">
           {!detail && !error ? <LoadingState message="Select a run to inspect." /> : null}
           {detail ? (
-            <Card>
-              <SectionTitle kicker="Run review" title={`Run #${detail.run.id}`} />
-              <div className="cluster">
-                <Badge tone={runTone(detail.run.status)}>{detail.run.status}</Badge>
-                <Badge>Job {detail.run.job_id}</Badge>
-                <Badge>{jobTypeLabel(detail.run.job_type)}</Badge>
-                <Badge>{formatDuration(detail.run.duration_seconds)}</Badge>
-                <Link to={`/runs/${detail.run.id}`} className="button-secondary">Open run page</Link>
-              </div>
-              <div className="helper-text">Created {formatDate(detail.run.created_at)}</div>
-              <div className="helper-text">Scheduled slot {formatDate(detail.run.scheduled_for)}</div>
-              <div className="helper-text">Started {formatDate(detail.run.started_at)}</div>
-              <div className="helper-text">Completed {formatDate(detail.run.completed_at)}</div>
-              {detail.run.error_message ? <div className="alert alert-danger top-gap-small">{detail.run.error_message}</div> : null}
-              {detail.run.timing_json ? (
-                <div className="helper-text top-gap-small">Timing data is available but hidden here to avoid repeating run metadata already shown above.</div>
-              ) : null}
-              {detail.run.job_type === "proposal_generation" ? (
-                <div className="stack-page top-gap-small">
-                  <div className="helper-text">
-                    Proposal-generation runs are reviewed through persisted recommendation plans, ticker signals, and outcomes.
-                  </div>
-                  <div className="cluster">
-                    <Badge>{detail.recommendation_plans.length} plan(s)</Badge>
-                    <Link to={`/runs/${detail.run.id}`} className="button-secondary">Review canonical run detail</Link>
-                  </div>
-                  {detail.recommendation_plans.length === 0 ? (
-                    <EmptyState message="This run did not persist recommendation plans. Review run warnings and orchestration metadata on the full run page." />
-                  ) : null}
-                </div>
-              ) : (
-                <WorkflowRunResults
-                  jobType={detail.run.job_type}
-                  summaryJson={detail.run.summary_json}
-                  artifactJson={detail.run.artifact_json}
+            <>
+              <section className="metrics-grid">
+                <StatCard label="Status" value={detail.run.status} helper="Execution health for the selected run" />
+                <StatCard label="Duration" value={formatDuration(detail.run.duration_seconds)} helper="Total runtime" />
+                <StatCard label="Plans written" value={detail.recommendation_plans.length} helper="Canonical plan objects created by this run" />
+                <StatCard label="Signals written" value={detail.ticker_signal_snapshots.length} helper="Signal snapshots available for deeper inspection" />
+              </section>
+
+              <Card>
+                <SectionTitle
+                  kicker="Selected run"
+                  title={`Run #${detail.run.id}`}
+                  actions={<Link to={`/runs/${detail.run.id}`} className="button-secondary">Open full run review</Link>}
                 />
-              )}
-            </Card>
+                <div className="cluster">
+                  <Badge tone={runTone(detail.run.status)}>{detail.run.status}</Badge>
+                  <Badge>Job {detail.run.job_id}</Badge>
+                  <Badge>{jobTypeLabel(detail.run.job_type)}</Badge>
+                  <Badge>{formatDuration(detail.run.duration_seconds)}</Badge>
+                </div>
+                <div className="helper-text top-gap-small">Created {formatDate(detail.run.created_at)} · Started {formatDate(detail.run.started_at)} · Completed {formatDate(detail.run.completed_at)}</div>
+                {detail.run.error_message ? <div className="alert alert-danger top-gap-small">{detail.run.error_message}</div> : null}
+
+                {detail.run.job_type === "proposal_generation" ? (
+                  <div className="insight-grid top-gap">
+                    <div className="data-card">
+                      <h3 className="data-card-title">Proposal-run guidance</h3>
+                      <div className="helper-text top-gap-small">
+                        Proposal-generation runs are reviewed through recommendation plans, ticker signals, and run detail. Use debugger mode only for quick triage.
+                      </div>
+                    </div>
+                    <div className="data-card">
+                      <h3 className="data-card-title">Persisted objects</h3>
+                      <div className="data-points top-gap-small">
+                        <div className="data-point"><span className="data-point-label">plans</span><span className="data-point-value">{detail.recommendation_plans.length}</span></div>
+                        <div className="data-point"><span className="data-point-label">signals</span><span className="data-point-value">{detail.ticker_signal_snapshots.length}</span></div>
+                        <div className="data-point"><span className="data-point-label">context</span><span className="data-point-value">{detail.macro_context_snapshots.length + detail.industry_context_snapshots.length}</span></div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="top-gap">
+                    <WorkflowRunResults
+                      jobType={detail.run.job_type}
+                      summaryJson={detail.run.summary_json}
+                      artifactJson={detail.run.artifact_json}
+                    />
+                  </div>
+                )}
+              </Card>
+            </>
           ) : null}
         </div>
       </section>

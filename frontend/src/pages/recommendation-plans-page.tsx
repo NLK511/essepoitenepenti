@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
+import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import type {
   RecommendationBaselineSummary,
   RecommendationCalibrationSummary,
@@ -158,6 +158,7 @@ export function RecommendationPlansPage() {
   const [evaluationMessage, setEvaluationMessage] = useState<string | null>(null);
   const [evaluating, setEvaluating] = useState(false);
   const [evaluatingPlanId, setEvaluatingPlanId] = useState<number | null>(null);
+  const [reviewSection, setReviewSection] = useState<"overview" | "calibration" | "baselines" | "evidence" | "families">("overview");
 
   useEffect(() => {
     async function load() {
@@ -234,9 +235,9 @@ export function RecommendationPlansPage() {
   return (
     <>
       <PageHeader
-        kicker="Redesign browse"
+        kicker="Recommendation workflow"
         title="Recommendation plans"
-        subtitle="Browse persisted plan outputs outside run detail. This page helps operators review long, short, and no-action decisions produced by the new orchestration layer."
+        subtitle="Use this page as the main decision-review surface: filter plans, inspect calibrated confidence, compare cohorts, and queue evaluation runs without digging through raw run payloads."
         actions={
           <button type="button" className="button" onClick={() => void queueEvaluation()} disabled={evaluating}>
             {evaluating ? "Queueing…" : "Queue plan evaluation"}
@@ -245,8 +246,15 @@ export function RecommendationPlansPage() {
       />
       {error ? <ErrorState message={error} /> : null}
       {evaluationMessage ? <Card><div className="helper-text">{evaluationMessage}</div></Card> : null}
-      <Card>
-        <SectionTitle kicker="Filters" title="Find recommendation plans" />
+      <section className="metrics-grid top-gap">
+        <StatCard label="Loaded plans" value={plans?.length ?? "—"} helper="Current result set under the active filters" />
+        <StatCard label="Resolved outcomes" value={calibration?.resolved_outcomes ?? "—"} helper="Evidence currently available for calibration review" />
+        <StatCard label="Overall win rate" value={`${calibration?.overall_win_rate_percent ?? "—"}${calibration ? "%" : ""}`} helper="Resolved trade-plan win rate across the filtered review set" />
+        <StatCard label="Evidence concentration" value={evidenceConcentration ? (evidenceConcentration.ready_for_expansion ? "Ready" : "Focused") : "—"} helper="Whether the current cohort mix supports broader usage or tighter selectivity" />
+      </section>
+
+      <Card className="sticky-toolbar">
+        <SectionTitle kicker="Filters" title="Find recommendation plans" subtitle="Start with ticker, run, or setup family. Then use the review sections below to judge whether the resulting plans deserve attention." />
         <form className="form-grid" onSubmit={handleSubmit}>
           <label className="form-field"><span>Ticker</span><input name="ticker" defaultValue={searchParams.get("ticker") ?? ""} placeholder="AAPL" /></label>
           <label className="form-field"><span>Action</span><select name="action" defaultValue={searchParams.get("action") ?? ""}><option value="">All</option><option value="long">long</option><option value="short">short</option><option value="no_action">no_action</option></select></label>
@@ -257,6 +265,77 @@ export function RecommendationPlansPage() {
         </form>
       </Card>
 
+      <Card className="top-gap">
+        <SectionTitle
+          kicker="Review workspace"
+          title="Choose what to review"
+          subtitle="Keep one review task visible at a time to reduce noise: start with the overview, then move into calibration, baselines, evidence, or family-specific analysis."
+        />
+        <SegmentedTabs
+          value={reviewSection}
+          onChange={setReviewSection}
+          options={[
+            { value: "overview", label: "Overview" },
+            { value: "calibration", label: "Calibration" },
+            { value: "baselines", label: "Baselines" },
+            { value: "evidence", label: "Evidence" },
+            { value: "families", label: "Setup families" },
+          ]}
+        />
+      </Card>
+
+      {reviewSection === "overview" ? (
+        <Card className="top-gap">
+          <SectionTitle title="Review overview" subtitle="A compact summary of what matters before reading the detailed tables." />
+          <div className="insight-grid top-gap-small">
+            <div className="data-card">
+              <div className="data-card-header">
+                <div>
+                  <h3 className="data-card-title">Calibration posture</h3>
+                  <div className="helper-text">Use this to judge whether current confidence levels deserve trust.</div>
+                </div>
+                <Badge tone={calibration && calibration.resolved_outcomes >= 10 ? "ok" : "warning"}>{calibration?.resolved_outcomes ?? 0} resolved</Badge>
+              </div>
+              <div className="data-points">
+                <div className="data-point"><span className="data-point-label">overall win rate</span><span className="data-point-value">{calibration?.overall_win_rate_percent ?? "—"}%</span></div>
+                <div className="data-point"><span className="data-point-label">wins / losses</span><span className="data-point-value">{calibration ? `${calibration.win_outcomes} / ${calibration.loss_outcomes}` : "—"}</span></div>
+                <div className="data-point"><span className="data-point-label">no_action outcomes</span><span className="data-point-value">{calibration?.no_action_outcomes ?? "—"}</span></div>
+              </div>
+            </div>
+            <div className="data-card">
+              <div className="data-card-header">
+                <div>
+                  <h3 className="data-card-title">Baseline reality check</h3>
+                  <div className="helper-text">Compare actual plan behavior against simpler cohorts before trusting complexity.</div>
+                </div>
+                <Badge tone="info">{baselines?.total_trade_plans_reviewed ?? 0} trades</Badge>
+              </div>
+              <div className="data-points">
+                <div className="data-point"><span className="data-point-label">actual actionable</span><span className="data-point-value">{baselines?.comparisons.find((item) => item.key === "actual_actionable")?.win_rate_percent ?? "—"}%</span></div>
+                <div className="data-point"><span className="data-point-label">high confidence only</span><span className="data-point-value">{baselines?.comparisons.find((item) => item.key === "high_confidence_only")?.win_rate_percent ?? "—"}%</span></div>
+                <div className="data-point"><span className="data-point-label">cheap-scan leaders</span><span className="data-point-value">{baselines?.comparisons.find((item) => item.key === "cheap_scan_attention_leaders")?.win_rate_percent ?? "—"}%</span></div>
+              </div>
+            </div>
+            <div className="data-card">
+              <div className="data-card-header">
+                <div>
+                  <h3 className="data-card-title">Evidence concentration</h3>
+                  <div className="helper-text">Shows whether the app should stay selective or is ready to broaden usage.</div>
+                </div>
+                <Badge tone={evidenceConcentration?.ready_for_expansion ? "ok" : "warning"}>{evidenceConcentration?.ready_for_expansion ? "ready" : "focus"}</Badge>
+              </div>
+              <div className="data-points">
+                <div className="data-point"><span className="data-point-label">overall avg 5d</span><span className="data-point-value">{evidenceConcentration?.overall_average_return_5d ?? "—"}%</span></div>
+                <div className="data-point"><span className="data-point-label">best cohort</span><span className="data-point-value">{evidenceConcentration?.strongest_positive_cohorts[0]?.label ?? "—"}</span></div>
+                <div className="data-point"><span className="data-point-label">weakest cohort</span><span className="data-point-value">{evidenceConcentration?.weakest_cohorts[0]?.label ?? "—"}</span></div>
+              </div>
+              <div className="helper-text top-gap-small">{evidenceConcentration?.focus_message ?? "Loading evidence concentration…"}</div>
+            </div>
+          </div>
+        </Card>
+      ) : null}
+
+      {reviewSection === "calibration" ? (
       <Card className="top-gap">
         <SectionTitle
           title="Calibration snapshot"
@@ -280,7 +359,9 @@ export function RecommendationPlansPage() {
           </>
         ) : null}
       </Card>
+      ) : null}
 
+      {reviewSection === "baselines" ? (
       <Card className="top-gap">
         <SectionTitle
           title="Baseline comparisons"
@@ -356,7 +437,9 @@ export function RecommendationPlansPage() {
           </>
         ) : null}
       </Card>
+      ) : null}
 
+      {reviewSection === "evidence" ? (
       <Card className="top-gap">
         <SectionTitle
           title="Evidence concentration"
@@ -428,7 +511,9 @@ export function RecommendationPlansPage() {
           </>
         ) : null}
       </Card>
+      ) : null}
 
+      {reviewSection === "families" ? (
       <Card className="top-gap">
         <SectionTitle
           title="Setup-family evaluation review"
@@ -457,6 +542,7 @@ export function RecommendationPlansPage() {
           </div>
         ) : null}
       </Card>
+      ) : null}
 
       <Card className="top-gap">
         <SectionTitle title="Results" subtitle={plans ? `${plans.length} recommendation plan(s)` : undefined} />

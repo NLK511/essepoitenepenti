@@ -1,8 +1,8 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson } from "../api";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
+import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { TickerSignalSnapshot } from "../types";
 import { formatDate } from "../utils";
 
@@ -68,16 +68,32 @@ export function TickerSignalsPage() {
     setSearchParams(next);
   }
 
+  const summary = useMemo(() => {
+    const items = signals ?? [];
+    const shortlisted = items.filter((signal) => signal.diagnostics.shortlisted === true).length;
+    const deepAnalysis = items.filter((signal) => signal.diagnostics.mode === "deep_analysis").length;
+    const tailwind = items.filter((signal) => signal.diagnostics.transmission_bias === "tailwind").length;
+    return { total: items.length, shortlisted, deepAnalysis, tailwind };
+  }, [signals]);
+
   return (
     <>
       <PageHeader
-        kicker="Redesign browse"
+        kicker="Recommendation workflow"
         title="Ticker signals"
-        subtitle="Browse cheap-scan and deep-analysis signal snapshots outside the run detail page. Use this view to inspect shortlist inputs, directional bias, and signal quality across runs."
+        subtitle="Use signals to understand the shortlist before reading full recommendation plans. This view emphasizes what was promoted, what was blocked, and which transmission conditions shaped the decision."
       />
       {error ? <ErrorState message={error} /> : null}
-      <Card>
-        <SectionTitle kicker="Filters" title="Find signal snapshots" />
+
+      <section className="metrics-grid top-gap">
+        <StatCard label="Signals loaded" value={signals?.length ?? "—"} helper="Current result set under the active filters" />
+        <StatCard label="Shortlisted" value={summary.shortlisted} helper="Names promoted into deeper review lanes" />
+        <StatCard label="Deep analysis" value={summary.deepAnalysis} helper="Signals enriched beyond the cheap scan" />
+        <StatCard label="Tailwind context" value={summary.tailwind} helper="Signals currently tagged with context tailwinds" />
+      </section>
+
+      <Card className="sticky-toolbar">
+        <SectionTitle kicker="Filters" title="Find signal snapshots" subtitle="Filter by ticker or run, then scan the compact cards below to see shortlist outcome, transmission quality, and cheap-scan composition at a glance." />
         <form className="form-grid" onSubmit={handleSubmit}>
           <label className="form-field"><span>Ticker</span><input name="ticker" defaultValue={searchParams.get("ticker") ?? ""} placeholder="AAPL" /></label>
           <label className="form-field"><span>Run id</span><input name="run_id" defaultValue={searchParams.get("run_id") ?? ""} placeholder="145" /></label>
@@ -91,93 +107,70 @@ export function TickerSignalsPage() {
         {!signals && !error ? <LoadingState message="Loading ticker signals…" /> : null}
         {signals && signals.length === 0 ? <EmptyState message="No ticker signals match the current filters." /> : null}
         {signals ? (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Computed</th>
-                  <th>Ticker</th>
-                  <th>Mode</th>
-                  <th>Direction</th>
-                  <th>Confidence</th>
-                  <th>Attention</th>
-                  <th>Shortlist lane</th>
-                  <th>Transmission</th>
-                  <th>Components</th>
-                  <th>Run</th>
-                </tr>
-              </thead>
-              <tbody>
-                {signals.map((signal) => {
-                  const mode = typeof signal.diagnostics.mode === "string" ? signal.diagnostics.mode : "unknown";
-                  const components = asRecord(signal.diagnostics.cheap_scan_component_scores);
-                  const shortlisted = signal.diagnostics.shortlisted === true;
-                  const shortlistRank = typeof signal.diagnostics.shortlist_rank === "number" ? signal.diagnostics.shortlist_rank : null;
-                  const selectionLane = typeof signal.diagnostics.selection_lane === "string" ? signal.diagnostics.selection_lane : null;
-                  const shortlistReasons = Array.isArray(signal.diagnostics.shortlist_reasons)
-                    ? signal.diagnostics.shortlist_reasons.filter((value): value is string => typeof value === "string")
-                    : [];
-                  const transmissionBias = typeof signal.diagnostics.transmission_bias === "string" ? signal.diagnostics.transmission_bias : "unknown";
-                  const transmissionTags = Array.isArray(signal.diagnostics.transmission_tags)
-                    ? signal.diagnostics.transmission_tags.filter((value): value is string => typeof value === "string")
-                    : [];
-                  const primaryDrivers = Array.isArray(signal.diagnostics.primary_drivers)
-                    ? signal.diagnostics.primary_drivers.filter((value): value is string => typeof value === "string")
-                    : [];
-                  const conflictFlags = Array.isArray(signal.diagnostics.conflict_flags)
-                    ? signal.diagnostics.conflict_flags.filter((value): value is string => typeof value === "string")
-                    : [];
-                  const expectedWindow = typeof signal.diagnostics.expected_transmission_window === "string"
-                    ? signal.diagnostics.expected_transmission_window
-                    : "unknown";
-                  const transmissionAlignment = typeof signal.diagnostics.transmission_alignment_score === "number"
-                    ? signal.diagnostics.transmission_alignment_score
-                    : null;
-                  const catalystProxyScore = typeof signal.diagnostics.catalyst_proxy_score === "number"
-                    ? signal.diagnostics.catalyst_proxy_score
-                    : null;
-                  return (
-                    <tr key={signal.id ?? `${signal.ticker}-${signal.computed_at}`}>
-                      <td>{formatDate(signal.computed_at)}</td>
-                      <td>
-                        <div className="cluster">
-                          <Link to={`/tickers/${signal.ticker}`} className="badge badge-info badge-link">{signal.ticker}</Link>
-                          <Badge tone={signal.warnings.length > 0 ? "warning" : "ok"}>{signal.status}</Badge>
-                        </div>
-                        {signal.warnings.length > 0 ? <div className="helper-text top-gap-small">{signal.warnings.join(" · ")}</div> : null}
-                      </td>
-                      <td>
+          <div className="data-stack top-gap-small">
+            {signals.map((signal) => {
+              const mode = typeof signal.diagnostics.mode === "string" ? signal.diagnostics.mode : "unknown";
+              const components = asRecord(signal.diagnostics.cheap_scan_component_scores);
+              const shortlisted = signal.diagnostics.shortlisted === true;
+              const shortlistRank = typeof signal.diagnostics.shortlist_rank === "number" ? signal.diagnostics.shortlist_rank : null;
+              const selectionLane = typeof signal.diagnostics.selection_lane === "string" ? signal.diagnostics.selection_lane : null;
+              const shortlistReasons = Array.isArray(signal.diagnostics.shortlist_reasons)
+                ? signal.diagnostics.shortlist_reasons.filter((value): value is string => typeof value === "string")
+                : [];
+              const transmissionBias = typeof signal.diagnostics.transmission_bias === "string" ? signal.diagnostics.transmission_bias : "unknown";
+              const transmissionTags = Array.isArray(signal.diagnostics.transmission_tags)
+                ? signal.diagnostics.transmission_tags.filter((value): value is string => typeof value === "string")
+                : [];
+              const primaryDrivers = Array.isArray(signal.diagnostics.primary_drivers)
+                ? signal.diagnostics.primary_drivers.filter((value): value is string => typeof value === "string")
+                : [];
+              const conflictFlags = Array.isArray(signal.diagnostics.conflict_flags)
+                ? signal.diagnostics.conflict_flags.filter((value): value is string => typeof value === "string")
+                : [];
+              const expectedWindow = typeof signal.diagnostics.expected_transmission_window === "string"
+                ? signal.diagnostics.expected_transmission_window
+                : "unknown";
+              const transmissionAlignment = typeof signal.diagnostics.transmission_alignment_score === "number"
+                ? signal.diagnostics.transmission_alignment_score
+                : null;
+              const catalystProxyScore = typeof signal.diagnostics.catalyst_proxy_score === "number"
+                ? signal.diagnostics.catalyst_proxy_score
+                : null;
+              return (
+                <article key={signal.id ?? `${signal.ticker}-${signal.computed_at}`} className="data-card">
+                  <div className="data-card-header">
+                    <div>
+                      <div className="cluster">
+                        <Link to={`/tickers/${signal.ticker}`} className="badge badge-info badge-link">{signal.ticker}</Link>
+                        <Badge tone={signal.warnings.length > 0 ? "warning" : "ok"}>{signal.status}</Badge>
+                        <Badge tone={directionTone(signal.direction)}>{signal.direction}</Badge>
                         <Badge tone={mode === "deep_analysis" ? "info" : "neutral"}>{mode}</Badge>
-                        <div className="helper-text top-gap-small">{signal.horizon}</div>
-                      </td>
-                      <td><Badge tone={directionTone(signal.direction)}>{signal.direction}</Badge></td>
-                      <td>{signal.confidence_percent.toFixed(1)}%</td>
-                      <td>{signal.attention_score.toFixed(1)}</td>
-                      <td>
-                        <Badge tone={shortlisted ? "info" : "neutral"}>{shortlisted ? `shortlisted${shortlistRank !== null ? ` #${shortlistRank}` : ""}` : "not shortlisted"}</Badge>
-                        <div className="helper-text top-gap-small">lane {selectionLane ?? "—"}</div>
-                        <div className="helper-text">{shortlistReasons.length > 0 ? shortlistReasons.join(" · ") : "eligible"}</div>
-                        <div className="helper-text">catalyst proxy {catalystProxyScore !== null ? catalystProxyScore.toFixed(1) : "—"}</div>
-                      </td>
-                      <td>
-                        <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>
-                        <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
-                        <div className="helper-text">window {expectedWindow}</div>
-                        <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
-                        <div className="helper-text">conflicts {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
-                        <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
-                      </td>
-                      <td>
-                        <div className="helper-text">trend {typeof components?.trend_score === "number" ? components.trend_score.toFixed(0) : "—"}</div>
-                        <div className="helper-text">momentum {typeof components?.momentum_score === "number" ? components.momentum_score.toFixed(0) : "—"}</div>
-                        <div className="helper-text">breakout {typeof components?.breakout_score === "number" ? components.breakout_score.toFixed(0) : "—"}</div>
-                      </td>
-                      <td>{signal.run_id ? <Link to={`/runs/${signal.run_id}`}>#{signal.run_id}</Link> : "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      </div>
+                      <h3 className="data-card-title top-gap-small">{signal.confidence_percent.toFixed(1)}% confidence · {signal.attention_score.toFixed(1)} attention</h3>
+                      <div className="helper-text">{formatDate(signal.computed_at)} · horizon {signal.horizon} · run {signal.run_id ? `#${signal.run_id}` : "—"}</div>
+                    </div>
+                    <div className="data-card-meta">
+                      <Badge tone={shortlisted ? "info" : "neutral"}>{shortlisted ? `shortlisted${shortlistRank !== null ? ` #${shortlistRank}` : ""}` : "not shortlisted"}</Badge>
+                      <Badge tone={biasTone(transmissionBias)}>{transmissionBias}</Badge>
+                    </div>
+                  </div>
+
+                  <div className="data-points">
+                    <div className="data-point"><span className="data-point-label">shortlist lane</span><span className="data-point-value">{selectionLane ?? "—"}</span></div>
+                    <div className="data-point"><span className="data-point-label">catalyst proxy</span><span className="data-point-value">{catalystProxyScore !== null ? catalystProxyScore.toFixed(1) : "—"}</span></div>
+                    <div className="data-point"><span className="data-point-label">alignment</span><span className="data-point-value">{transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</span></div>
+                    <div className="data-point"><span className="data-point-label">window</span><span className="data-point-value">{expectedWindow}</span></div>
+                  </div>
+
+                  <div className="helper-text top-gap-small">shortlist reasons: {shortlistReasons.length > 0 ? shortlistReasons.join(" · ") : "eligible"}</div>
+                  <div className="helper-text">drivers: {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
+                  <div className="helper-text">conflicts: {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
+                  <div className="helper-text">tags: {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
+                  <div className="helper-text">cheap scan: trend {typeof components?.trend_score === "number" ? components.trend_score.toFixed(0) : "—"} · momentum {typeof components?.momentum_score === "number" ? components.momentum_score.toFixed(0) : "—"} · breakout {typeof components?.breakout_score === "number" ? components.breakout_score.toFixed(0) : "—"}</div>
+                  {signal.warnings.length > 0 ? <div className="helper-text warning-text top-gap-small">warnings: {signal.warnings.join(" · ")}</div> : null}
+                </article>
+              );
+            })}
           </div>
         ) : null}
       </Card>

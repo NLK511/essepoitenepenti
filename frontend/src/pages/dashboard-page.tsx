@@ -42,19 +42,19 @@ export function DashboardPage() {
   return (
     <>
       <PageHeader
-        kicker="Daily monitoring"
-        title="Review recommendation plans separately from the runs that produced them."
-        subtitle="Runs are execution records for jobs. Recommendation plans are the canonical trade-review objects. The dashboard keeps both views visible without reviving retired legacy recommendation surfaces."
+        kicker="Workspace overview"
+        title="Know what to review next."
+        subtitle="This workspace is built for operator triage: check execution health, inspect the latest context, review recommendation plans, and move quickly to the runs or tickers that need attention."
         actions={
           <>
             <Link to="/jobs" className="button">
-              Create or run jobs
+              Run workflows
             </Link>
-            <Link to="/sentiment" className="button-secondary">
-              Inspect snapshots
+            <Link to="/jobs/recommendation-plans" className="button-secondary">
+              Review plans
             </Link>
             <Link to="/settings" className="button-subtle">
-              Review setup
+              Setup
             </Link>
           </>
         }
@@ -67,49 +67,80 @@ export function DashboardPage() {
         <div className="stack-page">
           <section className="metrics-grid">
             <Card>
-              <div className="metric-label">Latest recommendation plans</div>
+              <div className="metric-label">Plans waiting for review</div>
               <div className="metric-value">{data.recommendation_plans.length}</div>
+              <div className="helper-text">Latest persisted recommendation plans</div>
             </Card>
             <Card>
-              <div className="metric-label">Configured watchlists</div>
+              <div className="metric-label">Active watchlists</div>
               <div className="metric-value">{data.watchlists.length}</div>
+              <div className="helper-text">Reusable universes feeding proposal jobs</div>
             </Card>
             <Card>
               <div className="metric-label">Configured jobs</div>
               <div className="metric-value">{data.jobs.length}</div>
+              <div className="helper-text">Scheduled and manual workflows</div>
             </Card>
             <Card>
               <div className="metric-label">Recent runs</div>
               <div className="metric-value">{data.latest_runs.length}</div>
+              <div className="helper-text">Most recent execution records</div>
             </Card>
             <Card>
-              <div className="metric-label">Latest macro snapshot</div>
+              <div className="metric-label">Macro context freshness</div>
               <div className="metric-value">{latestMacroLabel.split(" · ")[0]}</div>
               <div className="helper-text">{latestMacroLabel}</div>
             </Card>
             <Card>
-              <div className="metric-label">Latest industry snapshot</div>
+              <div className="metric-label">Industry context freshness</div>
               <div className="metric-value">{latestIndustryLabel.split(" · ")[0]}</div>
               <div className="helper-text">{latestIndustryLabel}</div>
+            </Card>
+          </section>
+
+          <section className="card-grid">
+            <Card>
+              <SectionTitle kicker="Start here" title="Run the workflow" subtitle="Best for day-to-day operations." />
+              <div className="helper-text">Open jobs to queue a proposal run, then move into run review or recommendation plans once execution completes.</div>
+              <div className="cluster top-gap-small">
+                <Link to="/jobs" className="button">Open jobs</Link>
+                <Link to="/jobs/debugger" className="button-subtle">Open debugger</Link>
+              </div>
+            </Card>
+            <Card>
+              <SectionTitle kicker="Decision review" title="Inspect plans and signals" subtitle="Best for short-horizon trade framing." />
+              <div className="helper-text">Use recommendation plans for final operator review and ticker signals when you want to understand why a name was promoted or blocked.</div>
+              <div className="cluster top-gap-small">
+                <Link to="/jobs/recommendation-plans" className="button-secondary">Recommendation plans</Link>
+                <Link to="/jobs/ticker-signals" className="button-subtle">Ticker signals</Link>
+              </div>
+            </Card>
+            <Card>
+              <SectionTitle kicker="Context review" title="Check the market backdrop" subtitle="Best for macro and industry awareness." />
+              <div className="helper-text">Review stored context snapshots before over-weighting any one ticker setup. Macro and industry context are saliency-first, not sentiment theater.</div>
+              <div className="cluster top-gap-small">
+                <Link to="/sentiment" className="button-secondary">Context snapshots</Link>
+                <Link to="/docs" className="button-subtle">Docs</Link>
+              </div>
             </Card>
           </section>
 
           <section className="two-column">
             <Card>
               <SectionTitle
-                kicker="Setup path"
-                title="Recommended onboarding flow"
-                subtitle="Settings → watchlists → jobs → first run."
+                kicker="Operator path"
+                title="Recommended workflow"
+                subtitle="Setup → scan → review → evaluate."
               />
               <ol className="checklist">
-                <li>Configure provider credentials and summary backend in Settings.</li>
-                <li>Create reusable ticker groups in Watchlists.</li>
-                <li>Create a job from a watchlist or manual tickers.</li>
-                <li>Run the job to create recommendation plans, then evaluate them later to settle outcomes.</li>
+                <li>Configure providers and defaults in Settings.</li>
+                <li>Create reusable watchlists for the markets you actually monitor.</li>
+                <li>Run jobs to generate ticker signals and recommendation plans.</li>
+                <li>Evaluate plans later so calibration and evidence review stay grounded in outcomes.</li>
               </ol>
             </Card>
             <Card>
-              <SectionTitle kicker="Latest runs" title="Execution triage" />
+              <SectionTitle kicker="Latest runs" title="Execution triage" subtitle="Jump straight into the most recent workflow outputs." />
               {data.latest_runs.length === 0 ? (
                 <EmptyState message="No runs yet." />
               ) : (

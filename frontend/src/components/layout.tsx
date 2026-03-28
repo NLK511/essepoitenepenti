@@ -1,33 +1,60 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth";
-
-const jobsSectionLinks = [
-  { to: "/jobs", label: "Jobs overview", shortLabel: "Jobs", end: true },
-  { to: "/jobs/watchlists", label: "Watchlists", shortLabel: "WL" },
-  { to: "/jobs/ticker-signals", label: "Ticker signals", shortLabel: "Signals" },
-  { to: "/jobs/recommendation-plans", label: "Recommendation plans", shortLabel: "Plans" },
-  { to: "/jobs/debugger", label: "Debugger", shortLabel: "Debug" },
-];
 
 const THEME_KEY = "trade-proposer-theme";
 
 type Theme = "dark" | "light";
 
-type ResponsiveLabelProps = {
-  full: string;
-  short: string;
+type NavItem = {
+  to: string;
+  label: string;
+  shortLabel: string;
+  icon: string;
+  end?: boolean;
+  match?: (pathname: string) => boolean;
 };
 
-function ResponsiveLabel({ full, short }: ResponsiveLabelProps) {
-  return (
-    <>
-      <span className="nav-link-label">{full}</span>
-      <span className="nav-link-label-short">{short}</span>
-    </>
-  );
-}
+type NavSection = {
+  label: string;
+  items: NavItem[];
+};
+
+const navSections: NavSection[] = [
+  {
+    label: "Overview",
+    items: [
+      { to: "/", label: "Dashboard", shortLabel: "Dash", icon: "◌", end: true },
+      { to: "/jobs", label: "Jobs", shortLabel: "Jobs", icon: "▣", end: true },
+      { to: "/jobs/watchlists", label: "Watchlists", shortLabel: "WL", icon: "◎" },
+    ],
+  },
+  {
+    label: "Recommendation workflow",
+    items: [
+      { to: "/jobs/ticker-signals", label: "Ticker signals", shortLabel: "Signals", icon: "≈" },
+      { to: "/jobs/recommendation-plans", label: "Recommendation plans", shortLabel: "Plans", icon: "↗" },
+      { to: "/jobs/debugger", label: "Run debugger", shortLabel: "Debug", icon: "⌘" },
+      { to: "/sentiment", label: "Context snapshots", shortLabel: "Context", icon: "◔" },
+    ],
+  },
+  {
+    label: "Reference",
+    items: [
+      { to: "/settings", label: "Settings", shortLabel: "Set", icon: "⚙" },
+      { to: "/docs", label: "Docs", shortLabel: "Docs", icon: "✦" },
+    ],
+  },
+];
+
+const jobsSectionLinks = [
+  { to: "/jobs", label: "Overview", end: true },
+  { to: "/jobs/watchlists", label: "Watchlists" },
+  { to: "/jobs/ticker-signals", label: "Signals" },
+  { to: "/jobs/recommendation-plans", label: "Plans" },
+  { to: "/jobs/debugger", label: "Debugger" },
+];
 
 function readInitialTheme(): Theme {
   const saved = window.localStorage.getItem(THEME_KEY);
@@ -35,6 +62,101 @@ function readInitialTheme(): Theme {
     return saved;
   }
   return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
+function isItemActive(item: NavItem, pathname: string): boolean {
+  if (item.match) {
+    return item.match(pathname);
+  }
+  if (item.end) {
+    return pathname === item.to;
+  }
+  return pathname === item.to || pathname.startsWith(`${item.to}/`);
+}
+
+function routeMeta(pathname: string): { eyebrow: string; title: string; description: string } {
+  if (pathname === "/") {
+    return {
+      eyebrow: "Workspace overview",
+      title: "Decision-support cockpit",
+      description: "Track runs, context, watchlists, and recommendation plans from one place.",
+    };
+  }
+  if (pathname === "/jobs") {
+    return {
+      eyebrow: "Automation",
+      title: "Jobs and execution",
+      description: "Create repeatable workflows, queue runs, and monitor operational health.",
+    };
+  }
+  if (pathname.startsWith("/jobs/watchlists")) {
+    return {
+      eyebrow: "Automation",
+      title: "Watchlists",
+      description: "Define the universes, default horizons, and scheduling assumptions that shape plan generation.",
+    };
+  }
+  if (pathname.startsWith("/jobs/ticker-signals")) {
+    return {
+      eyebrow: "Recommendation workflow",
+      title: "Ticker signals",
+      description: "Inspect shortlist inputs, cheap-scan ranking, and signal quality before plan promotion.",
+    };
+  }
+  if (pathname.startsWith("/jobs/recommendation-plans")) {
+    return {
+      eyebrow: "Recommendation workflow",
+      title: "Recommendation plans",
+      description: "Review trade plans, calibration state, outcomes, and measured edge in one place.",
+    };
+  }
+  if (pathname.startsWith("/jobs/debugger")) {
+    return {
+      eyebrow: "Recommendation workflow",
+      title: "Run debugger",
+      description: "Trace what each run scanned, shortlisted, persisted, and warned about.",
+    };
+  }
+  if (pathname.startsWith("/runs/")) {
+    return {
+      eyebrow: "Execution detail",
+      title: "Run review",
+      description: "Follow the full execution path from cheap scan to context objects, signals, and plans.",
+    };
+  }
+  if (pathname.startsWith("/tickers/")) {
+    return {
+      eyebrow: "Ticker review",
+      title: "Ticker drill-down",
+      description: "Inspect a ticker’s recent plans, outcomes, and supporting context.",
+    };
+  }
+  if (pathname.startsWith("/sentiment")) {
+    return {
+      eyebrow: "Context",
+      title: "Context snapshots",
+      description: "Review macro and industry context records, saliency, and continuity across runs.",
+    };
+  }
+  if (pathname.startsWith("/settings")) {
+    return {
+      eyebrow: "Reference",
+      title: "Settings",
+      description: "Configure providers, credentials, and operational defaults.",
+    };
+  }
+  if (pathname.startsWith("/docs")) {
+    return {
+      eyebrow: "Reference",
+      title: "Docs",
+      description: "Read product, redesign, and operator guidance without leaving the app.",
+    };
+  }
+  return {
+    eyebrow: "Trade proposer app",
+    title: "Workspace",
+    description: "Navigate the recommendation workflow, supporting context, and system settings.",
+  };
 }
 
 export function AppLayout() {
@@ -63,149 +185,138 @@ export function AppLayout() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const meta = useMemo(() => routeMeta(location.pathname), [location.pathname]);
   const jobsSectionActive = location.pathname === "/jobs" || location.pathname.startsWith("/jobs/");
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="brand-block">
-          <NavLink to="/" className="brand-mark">
+    <div className="workspace-shell">
+      <aside className="sidebar-shell">
+        <div className="sidebar-brand">
+          <NavLink to="/" className="brand-mark brand-mark-large">
             TP
           </NavLink>
-          <div className="brand-text">
-            <div className="brand-title">Trade Proposer App</div>
-            <div className="brand-title-short">TP App</div>
-            <div className="brand-subtitle">React frontend over the existing FastAPI API</div>
-            <div className="brand-subtitle-short">React UI over FastAPI</div>
+          <div className="brand-copy">
+            <div className="brand-title">Trade Proposer</div>
+            <div className="brand-subtitle">Context-first recommendation workspace</div>
           </div>
         </div>
-        <div className="topbar-actions">
-          <button
-            type="button"
-            className="mobile-nav-toggle"
-            aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
-            aria-expanded={mobileNavOpen}
-            onClick={() => setMobileNavOpen((current) => !current)}
-          >
-            ☰
-          </button>
-          <nav className="main-nav" aria-label="Primary navigation">
-            <NavLink to="/" className={({ isActive }) => `nav-link${isActive ? " is-active" : ""}`} end>
-              <ResponsiveLabel full="Dashboard" short="Dash" />
-            </NavLink>
-            <div className="nav-dropdown">
-              <NavLink to="/jobs" className={`nav-link${jobsSectionActive ? " is-active" : ""}`}>
-                <ResponsiveLabel full="Jobs" short="Jobs" />
-                <span aria-hidden="true">▾</span>
-              </NavLink>
-              <div className="nav-dropdown-menu" aria-label="Jobs navigation">
-                {jobsSectionLinks.map((link) => (
+
+        <div className="sidebar-status-card">
+          <div className="kicker">Current mode</div>
+          <h2>Operator copilot</h2>
+          <p>
+            Review watchlists, shortlist candidates, and inspect recommendation plans with outcome-aware evidence.
+          </p>
+          <a href="/api/health" className="button-subtle sidebar-status-link" target="_blank" rel="noreferrer">
+            Open API health
+          </a>
+        </div>
+
+        <nav className="sidebar-nav" aria-label="Primary navigation">
+          {navSections.map((section) => (
+            <div key={section.label} className="sidebar-nav-section">
+              <div className="sidebar-section-label">{section.label}</div>
+              <div className="sidebar-link-list">
+                {section.items.map((item) => (
                   <NavLink
-                    key={link.to}
-                    to={link.to}
-                    className={({ isActive }) => `nav-dropdown-link${isActive ? " is-active" : ""}`}
-                    end={link.end}
+                    key={item.to}
+                    to={item.to}
+                    end={item.end}
+                    className={() => `sidebar-link${isItemActive(item, location.pathname) ? " is-active" : ""}`}
                   >
-                    <ResponsiveLabel full={link.label} short={link.shortLabel} />
+                    <span className="sidebar-link-icon" aria-hidden="true">{item.icon}</span>
+                    <span className="sidebar-link-copy">
+                      <span className="sidebar-link-label">{item.label}</span>
+                      <span className="sidebar-link-short">{item.shortLabel}</span>
+                    </span>
                   </NavLink>
                 ))}
               </div>
             </div>
-            <NavLink to="/sentiment" className={({ isActive }) => `nav-link${isActive ? " is-active" : ""}`}>
-              <ResponsiveLabel full="Sentiment" short="Sent" />
-            </NavLink>
-            <NavLink to="/settings" className={({ isActive }) => `nav-link${isActive ? " is-active" : ""}`}>
-              <ResponsiveLabel full="Settings" short="Set" />
-            </NavLink>
-            <NavLink to="/docs" className={({ isActive }) => `nav-link${isActive ? " is-active" : ""}`}>
-              <ResponsiveLabel full="Docs" short="Docs" />
-            </NavLink>
-            <a href="/api/health" className="nav-link" target="_blank" rel="noreferrer">
-              <ResponsiveLabel full="Health" short="Health" />
-            </a>
-          </nav>
-          <button type="button" className="button-subtle" onClick={logout}>
-            Log out
-          </button>
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
-          >
-            <span aria-hidden="true">◐</span>
-            <span>{theme === "dark" ? "Dark" : "Light"}</span>
-          </button>
-        </div>
-      </header>
+          ))}
+        </nav>
+      </aside>
 
-      <div className={`mobile-nav-panel${mobileNavOpen ? " is-open" : ""}`} aria-hidden={!mobileNavOpen}>
-        <nav aria-label="Mobile navigation">
-          <NavLink
-            to="/"
-            className={({ isActive }) => `nav-link mobile-nav-link${isActive ? " is-active" : ""}`}
-            end
-            onClick={() => setMobileNavOpen(false)}
-          >
-            <ResponsiveLabel full="Dashboard" short="Dash" />
-          </NavLink>
-          <div className="mobile-nav-group">
-            <div className="mobile-nav-group-title">Jobs</div>
+      <div className="content-shell">
+        <header className="content-topbar">
+          <div className="content-topbar-meta">
+            <div className="kicker">{meta.eyebrow}</div>
+            <div className="content-topbar-title">{meta.title}</div>
+            <div className="content-topbar-subtitle">{meta.description}</div>
+          </div>
+          <div className="content-topbar-actions">
+            <button
+              type="button"
+              className="mobile-nav-toggle"
+              aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+              aria-expanded={mobileNavOpen}
+              onClick={() => setMobileNavOpen((current) => !current)}
+            >
+              ☰
+            </button>
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+            >
+              <span aria-hidden="true">◐</span>
+              <span>{theme === "dark" ? "Dark" : "Light"}</span>
+            </button>
+            <button type="button" className="button-subtle" onClick={logout}>
+              Log out
+            </button>
+          </div>
+        </header>
+
+        {jobsSectionActive ? (
+          <div className="section-tabs" aria-label="Jobs section navigation">
             {jobsSectionLinks.map((link) => (
               <NavLink
                 key={link.to}
                 to={link.to}
-                className={({ isActive }) => `nav-link mobile-nav-link${isActive ? " is-active" : ""}`}
                 end={link.end}
-                onClick={() => setMobileNavOpen(false)}
+                className={({ isActive }) => `section-tab${isActive ? " is-active" : ""}`}
               >
-                <ResponsiveLabel full={link.label} short={link.shortLabel} />
+                {link.label}
               </NavLink>
             ))}
           </div>
-          <NavLink
-            to="/sentiment"
-            className={({ isActive }) => `nav-link mobile-nav-link${isActive ? " is-active" : ""}`}
-            onClick={() => setMobileNavOpen(false)}
-          >
-            <ResponsiveLabel full="Sentiment" short="Sent" />
-          </NavLink>
-          <NavLink
-            to="/settings"
-            className={({ isActive }) => `nav-link mobile-nav-link${isActive ? " is-active" : ""}`}
-            onClick={() => setMobileNavOpen(false)}
-          >
-            <ResponsiveLabel full="Settings" short="Set" />
-          </NavLink>
-          <NavLink
-            to="/docs"
-            className={({ isActive }) => `nav-link mobile-nav-link${isActive ? " is-active" : ""}`}
-            onClick={() => setMobileNavOpen(false)}
-          >
-            <ResponsiveLabel full="Docs" short="Docs" />
-          </NavLink>
-          <a
-            href="/api/health"
-            className="nav-link mobile-nav-link"
-            target="_blank"
-            rel="noreferrer"
-            onClick={() => setMobileNavOpen(false)}
-          >
-            <ResponsiveLabel full="Health" short="Health" />
-          </a>
-        </nav>
-      </div>
-      {mobileNavOpen && (
-        <button
-          type="button"
-          className="mobile-nav-backdrop"
-          onClick={() => setMobileNavOpen(false)}
-          aria-hidden="true"
-        />
-      )}
+        ) : null}
 
-      <main className="page-shell">
-        <Outlet />
-      </main>
+        <div className={`mobile-nav-panel${mobileNavOpen ? " is-open" : ""}`} aria-hidden={!mobileNavOpen}>
+          <nav aria-label="Mobile navigation">
+            {navSections.map((section) => (
+              <div key={section.label} className="mobile-nav-group">
+                <div className="mobile-nav-group-title">{section.label}</div>
+                {section.items.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.end}
+                    className={() => `nav-link mobile-nav-link${isItemActive(item, location.pathname) ? " is-active" : ""}`}
+                    onClick={() => setMobileNavOpen(false)}
+                  >
+                    <span aria-hidden="true">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            ))}
+          </nav>
+        </div>
+        {mobileNavOpen && (
+          <button
+            type="button"
+            className="mobile-nav-backdrop"
+            onClick={() => setMobileNavOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        <main className="page-shell">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
