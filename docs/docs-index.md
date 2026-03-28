@@ -50,6 +50,12 @@ These docs define the current product truth.
   - workflow topology
   - operational risks and next moves
 
+### Active implementation tracking
+- `ontology-enrichment-plan.md`
+  - planned expansion of ticker, industry, and relationship coverage
+  - tracking page for ontology work progress
+  - guidance for validation and file structure
+
 ### Setup and operations
 - `getting-started.md`
   - installation
