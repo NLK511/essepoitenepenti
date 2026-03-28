@@ -76,7 +76,11 @@ function normalizeDocPath(path: string): string {
   return segments.join("/");
 }
 
-function resolveInternalDocLink(href: string, currentDocument: DocDocument, documents: DocDocument[]): { slug: string; sectionId?: string } | null {
+function resolveInternalDocTarget(
+  href: string,
+  currentDocument: DocDocument,
+  documents: DocDocument[],
+): { slug: string; sectionId?: string } | null {
   if (!href || href.startsWith("#") || /^[a-z]+:/i.test(href)) {
     return null;
   }
@@ -116,13 +120,27 @@ function inlineNodes(text: string, keyPrefix: string, currentDocument: DocDocume
     }
 
     if (token.startsWith("`") && token.endsWith("`")) {
-      nodes.push(<code key={`${keyPrefix}-code-${index}`}>{token.slice(1, -1)}</code>);
+      const codeText = token.slice(1, -1);
+      const internalTarget = resolveInternalDocTarget(codeText, currentDocument, documents);
+      if (internalTarget) {
+        const params = new URLSearchParams({ doc: internalTarget.slug });
+        if (internalTarget.sectionId) {
+          params.set("section", internalTarget.sectionId);
+        }
+        nodes.push(
+          <Link key={`${keyPrefix}-code-link-${index}`} to={`/docs?${params.toString()}`}>
+            <code>{codeText}</code>
+          </Link>,
+        );
+      } else {
+        nodes.push(<code key={`${keyPrefix}-code-${index}`}>{codeText}</code>);
+      }
     } else if (token.startsWith("[")) {
       const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (linkMatch) {
         const label = linkMatch[1];
         const href = linkMatch[2];
-        const internalTarget = resolveInternalDocLink(href, currentDocument, documents);
+        const internalTarget = resolveInternalDocTarget(href, currentDocument, documents);
         if (internalTarget) {
           const params = new URLSearchParams({ doc: internalTarget.slug });
           if (internalTarget.sectionId) {
