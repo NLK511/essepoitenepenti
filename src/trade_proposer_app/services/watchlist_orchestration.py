@@ -846,7 +846,9 @@ class WatchlistOrchestrationService:
                 "transmission_tags": explicit.get("transmission_tags", []) if isinstance(explicit.get("transmission_tags"), list) else [],
                 "primary_drivers": explicit.get("primary_drivers", []) if isinstance(explicit.get("primary_drivers"), list) else [],
                 "industry_exposure_channels": explicit.get("industry_exposure_channels", []) if isinstance(explicit.get("industry_exposure_channels"), list) else [],
+                "industry_exposure_channel_details": explicit.get("industry_exposure_channel_details", []) if isinstance(explicit.get("industry_exposure_channel_details"), list) else [],
                 "ticker_exposure_channels": explicit.get("ticker_exposure_channels", []) if isinstance(explicit.get("ticker_exposure_channels"), list) else [],
+                "ticker_exposure_channel_details": explicit.get("ticker_exposure_channel_details", []) if isinstance(explicit.get("ticker_exposure_channel_details"), list) else [],
                 "ticker_relationship_edges": explicit.get("ticker_relationship_edges", []) if isinstance(explicit.get("ticker_relationship_edges"), list) else [],
                 "matched_ticker_relationships": explicit.get("matched_ticker_relationships", []) if isinstance(explicit.get("matched_ticker_relationships"), list) else [],
                 "expected_transmission_window": self._string_value(explicit.get("expected_transmission_window"), default=self._fallback_transmission_window(signal)),
@@ -872,7 +874,9 @@ class WatchlistOrchestrationService:
             "transmission_tags": [],
             "primary_drivers": self._fallback_primary_drivers(signal, candidate, bias),
             "industry_exposure_channels": self._fallback_industry_exposure_channels(signal),
+            "industry_exposure_channel_details": self._channel_detail_fallback(self._fallback_industry_exposure_channels(signal)),
             "ticker_exposure_channels": self._fallback_ticker_exposure_channels(signal, candidate),
+            "ticker_exposure_channel_details": self._channel_detail_fallback(self._fallback_ticker_exposure_channels(signal, candidate)),
             "ticker_relationship_edges": [],
             "matched_ticker_relationships": [],
             "expected_transmission_window": self._fallback_transmission_window(signal),
@@ -927,6 +931,14 @@ class WatchlistOrchestrationService:
         if candidate.attention_score >= 70.0:
             channels.append("attention_leader")
         return channels
+
+    @staticmethod
+    def _channel_detail_fallback(channels: list[str]) -> list[dict[str, str]]:
+        return [
+            {"key": str(channel), "label": str(channel).replace("_", " ")}
+            for channel in list(dict.fromkeys(channels))
+            if isinstance(channel, str) and channel.strip()
+        ]
 
     @staticmethod
     def _fallback_transmission_window(signal: TickerSignalSnapshot) -> str:
@@ -1293,9 +1305,9 @@ class WatchlistOrchestrationService:
 
     @staticmethod
     def _relationship_label(relationship: dict[str, object]) -> str | None:
-        relation_type = str(relationship.get("type", "") or "").strip().replace("_", " ")
+        relation_type = str(relationship.get("type_label", relationship.get("type", "")) or "").strip().replace("_", " ")
         target = str(relationship.get("target_label", relationship.get("target", "")) or "").strip()
-        channel = str(relationship.get("channel", "") or "").strip().replace("_", " ")
+        channel = str(relationship.get("channel_label", relationship.get("channel", "")) or "").strip().replace("_", " ")
         if relation_type and target and channel:
             return f"{relation_type} {target} via {channel}"
         if relation_type and target:

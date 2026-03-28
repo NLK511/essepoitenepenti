@@ -93,6 +93,8 @@ Transmission channels are now on the same path. Ticker exposure channels, indust
 
 The same cleanup now applies to ontology relationships themselves. Relationship types and target kinds are governed too, and the taxonomy service now derives extra structural edges such as `belongs_to_sector`, `linked_macro_channel`, and `exposed_to_theme`. That means downstream consumers can reason over a more explicit graph without having to duplicate that structure by hand in every other service.
 
+Ticker deep analysis now pushes that governance a bit further downstream. Exposure-channel summaries now stay closer to actual transmission channels: synthetic keys used by the analysis are explicitly registered, channel-detail payloads carry readable labels, and raw theme / macro-sensitivity tags are no longer dumped into exposure-channel lists as if they were transmission channels.
+
 If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings. Transitional support snapshots still support that shared-artifact layer and freshness reporting.
 
 ### 3. News ingestion and live ticker sentiment

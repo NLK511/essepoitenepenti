@@ -583,6 +583,8 @@ Transmission-channel fields are now being normalized the same way. In practice, 
 
 The same is now true for ontology relationship metadata. Industry relationship payloads can carry readable type, target-kind, and channel labels on top of governed canonical values, and some structural links like sector membership, theme exposure, and macro-channel linkage are now derived automatically from the governed taxonomy instead of being left implicit.
 
+Ticker transmission payloads are also a little cleaner now. Exposure channels can carry readable labels derived from governed channel keys, and those lists should be less polluted by raw theme or macro-sensitivity tags pretending to be transmission channels.
+
 This page is intentionally closer to raw storage than the higher-level review pages.
 
 ---

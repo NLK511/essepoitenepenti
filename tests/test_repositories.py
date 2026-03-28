@@ -767,8 +767,8 @@ class RepositoryTests(unittest.TestCase):
             "expected_transmission_window": "2d_5d",
             "primary_drivers": ["industry_context_support"],
             "matched_ticker_relationships": [
-                {"type": "supplier_to", "target": "TSM", "target_label": "TSM", "channel": "supply_chain"},
-                {"type": "peer_of", "target": "SONY", "target_label": "Sony", "channel": "competitive_position"},
+                {"type": "supplier_to", "type_label": "supplier to", "target": "TSM", "target_label": "TSM", "channel": "supply_chain", "channel_label": "supply chain"},
+                {"type": "peer_of", "type_label": "peer of", "target": "SONY", "target_label": "Sony", "channel": "competitive_position", "channel_label": "competitive position"},
             ],
         }
 

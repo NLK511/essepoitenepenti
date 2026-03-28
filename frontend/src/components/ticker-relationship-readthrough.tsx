@@ -9,13 +9,21 @@ export function relationshipItems(value: unknown): Array<Record<string, unknown>
 }
 
 export function relationshipLabel(item: Record<string, unknown>): string {
-  const relationType = typeof item.type === "string" ? item.type.split("_").join(" ") : "relationship";
-  const target = typeof item.target === "string"
-    ? item.target
-    : typeof item.target_label === "string"
-      ? item.target_label
+  const relationType = typeof item.type_label === "string"
+    ? item.type_label
+    : typeof item.type === "string"
+      ? item.type.split("_").join(" ")
+      : "relationship";
+  const target = typeof item.target_label === "string"
+    ? item.target_label
+    : typeof item.target === "string"
+      ? item.target
       : "target";
-  const channel = typeof item.channel === "string" ? item.channel.split("_").join(" ") : null;
+  const channel = typeof item.channel_label === "string"
+    ? item.channel_label
+    : typeof item.channel === "string"
+      ? item.channel.split("_").join(" ")
+      : null;
   return channel ? `${relationType} · ${target} · ${channel}` : `${relationType} · ${target}`;
 }
 

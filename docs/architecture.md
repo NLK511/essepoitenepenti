@@ -142,9 +142,10 @@ flowchart LR
 11. taxonomy now also loads governed `themes`, `macro_channels`, `transmission_channels`, `relationship_types`, and `relationship_target_kinds` registries, then normalizes ticker / industry / sector values and explicit ontology relationships against them so downstream consumers are not relying only on scattered free-form strings
 12. taxonomy also derives governed `belongs_to_sector`, `linked_macro_channel`, and `exposed_to_theme` edges from industry and sector definitions, which gives downstream services structured ontology links even when those links were not manually duplicated in the stored relationship file
 13. relationship payloads now also carry governed `type_label`, `target_label`, `target_kind_label`, and `channel_label` fields in addition to canonical keys, which helps operator-facing provenance stay readable without losing controlled values underneath
-14. the support-snapshot resolver now backfills baseline industry ontology metadata even when an industry context snapshot is missing, so downstream proposal/ticker analysis code can still see sector and relationship context instead of dropping to a taxonomy-blind fallback
-15. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
-16. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
+14. ticker deep-analysis transmission summaries now emit governed channel-detail arrays for industry and ticker exposure channels, and the service no longer mixes raw theme or macro-sensitivity tags into those channel lists
+15. the support-snapshot resolver now backfills baseline industry ontology metadata even when an industry context snapshot is missing, so downstream proposal/ticker analysis code can still see sector and relationship context instead of dropping to a taxonomy-blind fallback
+16. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
+17. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
 
 ## Runtime components
 

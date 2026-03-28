@@ -35,6 +35,12 @@
       "aluminum_prices"
     ]
   },
+  "attention_leader": {
+    "label": "attention leader",
+    "aliases": [
+      "attention_leader"
+    ]
+  },
   "auto_credit": {
     "label": "auto credit",
     "aliases": [
@@ -139,6 +145,12 @@
     "label": "consumer spending",
     "aliases": [
       "consumer_spending"
+    ]
+  },
+  "context_linked": {
+    "label": "context linked",
+    "aliases": [
+      "context_linked"
     ]
   },
   "copper_prices": {
@@ -249,6 +261,12 @@
       "equipment_cycle"
     ]
   },
+  "event_follow_through": {
+    "label": "event follow through",
+    "aliases": [
+      "event_follow_through"
+    ]
+  },
   "export_controls": {
     "label": "export controls",
     "aliases": [
@@ -323,6 +341,18 @@
       "industrial_production"
     ]
   },
+  "industry_demand": {
+    "label": "industry demand",
+    "aliases": [
+      "industry_demand"
+    ]
+  },
+  "industry_read_through": {
+    "label": "industry read through",
+    "aliases": [
+      "industry_read_through"
+    ]
+  },
   "infrastructure_spend": {
     "label": "infrastructure spend",
     "aliases": [
@@ -367,6 +397,12 @@
       "logistics_demand"
     ]
   },
+  "macro_regime": {
+    "label": "macro regime",
+    "aliases": [
+      "macro_regime"
+    ]
+  },
   "market_volatility": {
     "label": "market volatility",
     "aliases": [
@@ -383,6 +419,12 @@
     "label": "network investment",
     "aliases": [
       "network_investment"
+    ]
+  },
+  "news_catalyst": {
+    "label": "news catalyst",
+    "aliases": [
+      "news_catalyst"
     ]
   },
   "occupancy": {
@@ -541,6 +583,18 @@
       "tenant_health"
     ]
   },
+  "theme_attention": {
+    "label": "theme attention",
+    "aliases": [
+      "theme_attention"
+    ]
+  },
+  "ticker_sentiment": {
+    "label": "ticker sentiment",
+    "aliases": [
+      "ticker_sentiment"
+    ]
+  },
   "trade_policy": {
     "label": "trade policy",
     "aliases": [
@@ -572,6 +626,12 @@
   "utilization": {
     "label": "utilization",
     "aliases": []
+  },
+  "valuation_duration": {
+    "label": "valuation duration",
+    "aliases": [
+      "valuation_duration"
+    ]
   },
   "wealth_flows": {
     "label": "wealth flows",

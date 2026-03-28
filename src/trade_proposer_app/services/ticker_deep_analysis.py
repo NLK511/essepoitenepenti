@@ -544,8 +544,8 @@ class TickerDeepAnalysisService:
         quality_cap = components.get("data_quality_cap", 100.0) / 100.0
         return round(max(0.0, min(95.0, weighted * quality_cap)), 2)
 
-    @staticmethod
     def _build_transmission_analysis(
+        self,
         context: dict[str, Any],
         direction: RecommendationDirection,
     ) -> dict[str, Any]:
@@ -619,6 +619,8 @@ class TickerDeepAnalysisService:
             context=context,
         )
         decay_state = TickerDeepAnalysisService._decay_state(catalyst_intensity, context, macro_events=macro_events, industry_events=industry_events)
+        industry_exposure_channels = self._industry_exposure_channels(macro_score, industry_score, macro_events, industry_events, profile)
+        ticker_exposure_channels = self._ticker_exposure_channels(ticker_score, catalyst_intensity, profile, macro_events, industry_events)
         return {
             "macro_score": round(macro_score, 3),
             "industry_score": round(industry_score, 3),
@@ -632,8 +634,11 @@ class TickerDeepAnalysisService:
             "contradiction_count": contradiction_count,
             "transmission_tags": TickerDeepAnalysisService._transmission_tags(context, macro_score, industry_score, catalyst_intensity, macro_events, industry_events),
             "primary_drivers": primary_drivers,
-            "industry_exposure_channels": TickerDeepAnalysisService._industry_exposure_channels(macro_score, industry_score, macro_events, industry_events, profile),
-            "ticker_exposure_channels": TickerDeepAnalysisService._ticker_exposure_channels(ticker_score, catalyst_intensity, profile, macro_events, industry_events),
+            "primary_driver_labels": [self._label_for_driver(driver) for driver in primary_drivers],
+            "industry_exposure_channels": industry_exposure_channels,
+            "industry_exposure_channel_details": self._channel_details(industry_exposure_channels),
+            "ticker_exposure_channels": ticker_exposure_channels,
+            "ticker_exposure_channel_details": self._channel_details(ticker_exposure_channels),
             "ticker_relationship_edges": profile.get("relationship_edges", []) if isinstance(profile.get("relationship_edges"), list) else [],
             "matched_ticker_relationships": matched_ticker_relationships,
             "expected_transmission_window": TickerDeepAnalysisService._expected_transmission_window(catalyst_intensity, macro_score, industry_score, macro_events, industry_events),
@@ -850,8 +855,8 @@ class TickerDeepAnalysisService:
         ranked = [key for key, score in sorted(candidates, key=lambda item: item[1], reverse=True) if score >= 0.12]
         return ranked[:3]
 
-    @staticmethod
     def _industry_exposure_channels(
+        self,
         macro_score: float,
         industry_score: float,
         macro_events: list[dict[str, Any]],
@@ -871,13 +876,15 @@ class TickerDeepAnalysisService:
                 for channel in raw_channels:
                     if isinstance(channel, str) and channel.strip():
                         channels.append(channel.strip())
-        profile_industry = str(profile.get("industry", "") or "").strip().lower()
-        if profile_industry:
-            channels.append(profile_industry.replace(" ", "_"))
-        return list(dict.fromkeys(channels))[:6]
+        industry_profile = profile.get("industry_profile") if isinstance(profile.get("industry_profile"), dict) else {}
+        raw_industry_channels = industry_profile.get("transmission_channels") if isinstance(industry_profile.get("transmission_channels"), list) else []
+        for channel in raw_industry_channels[:3]:
+            if isinstance(channel, str) and channel.strip():
+                channels.append(channel.strip())
+        return self._canonical_channel_keys(channels)[:6]
 
-    @staticmethod
     def _ticker_exposure_channels(
+        self,
         ticker_score: float,
         catalyst_intensity: float,
         profile: dict[str, Any],
@@ -891,16 +898,38 @@ class TickerDeepAnalysisService:
             channels.append("news_catalyst")
         if catalyst_intensity >= 70.0:
             channels.append("event_follow_through")
-        for key in ("macro_sensitivity", "themes"):
-            raw_values = profile.get(key)
-            if isinstance(raw_values, list):
-                for value in raw_values[:3]:
-                    text = str(value).strip().lower()
-                    if text:
-                        channels.append(text.replace(" ", "_"))
+        relationship_edges = profile.get("relationship_edges") if isinstance(profile.get("relationship_edges"), list) else []
+        for edge in relationship_edges[:5]:
+            if not isinstance(edge, dict):
+                continue
+            channel = str(edge.get("channel", "")).strip()
+            if channel:
+                channels.append(channel)
         if macro_events or industry_events:
             channels.append("context_linked")
-        return list(dict.fromkeys(channels))[:6]
+        return self._canonical_channel_keys(channels)[:6]
+
+    def _canonical_channel_keys(self, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for value in values:
+            definition = self.taxonomy_service.get_transmission_channel_definition(str(value))
+            key = str(definition.get("key", "")).strip() or str(value).strip().lower().replace(" ", "_")
+            if key and key not in normalized:
+                normalized.append(key)
+        return normalized
+
+    def _channel_details(self, values: list[str]) -> list[dict[str, str]]:
+        details: list[dict[str, str]] = []
+        for value in self._canonical_channel_keys(values):
+            definition = self.taxonomy_service.get_transmission_channel_definition(value)
+            key = str(definition.get("key", value)).strip() or value
+            label = str(definition.get("label", key.replace("_", " "))).strip() or key.replace("_", " ")
+            details.append({"key": key, "label": label})
+        return details
+
+    @staticmethod
+    def _label_for_driver(value: str) -> str:
+        return str(value or "").strip().replace("_", " ")
 
     @staticmethod
     def _expected_transmission_window(
