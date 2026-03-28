@@ -393,6 +393,29 @@ html[data-theme="light"] .topbar {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.context-badge-label {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.9;
+}
+
+.context-badge-value {
+  font-weight: 700;
+}
+
+.context-inline-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.context-inline-metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
 .summary-method-block {
   display: flex;
   flex-wrap: wrap;

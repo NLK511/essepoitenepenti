@@ -115,6 +115,27 @@ function docsLink(doc: string, section?: string): string {
 
 const contextReviewDoc = (section?: string) => docsLink("operator-page-field-guide", section);
 
+function LabeledBadge(props: {
+  label: string;
+  value: string;
+  tone?: "ok" | "warning" | "danger" | "neutral" | "info";
+}) {
+  return (
+    <Badge tone={props.tone}>
+      <span className="context-badge-label">{props.label}</span>
+      <span className="context-badge-value">{props.value}</span>
+    </Badge>
+  );
+}
+
+function InlineMetric(props: { label: string; value: string }) {
+  return (
+    <span className="context-inline-metric">
+      <strong>{props.label}:</strong> {props.value}
+    </span>
+  );
+}
+
 export function ContextReviewPage() {
   const { showToast } = useToast();
   const [macro, setMacro] = useState<SupportSnapshot[]>([]);
@@ -366,11 +387,14 @@ function SnapshotList({ snapshots }: { snapshots: SupportSnapshot[] }) {
           <div className="card-headline">
             <div>
               <div className="cluster">
-                <Badge tone="info">{snapshot.subject_label}</Badge>
-                <Badge tone={snapshotTone(snapshot)}>{snapshot.label}</Badge>
-                <Badge tone={snapshot.is_expired ? "danger" : "ok"}>{snapshot.is_expired ? "expired" : "fresh"}</Badge>
+                <LabeledBadge tone="info" label="subject" value={snapshot.subject_label} />
+                <LabeledBadge tone={snapshotTone(snapshot)} label="label" value={snapshot.label} />
+                <LabeledBadge tone={snapshot.is_expired ? "danger" : "ok"} label="freshness" value={snapshot.is_expired ? "expired" : "fresh"} />
               </div>
-              <div className="helper-text">Score {snapshot.score.toFixed(2)} · computed {formatDate(snapshot.computed_at)}</div>
+              <div className="helper-text context-inline-metrics">
+                <InlineMetric label="Score" value={snapshot.score.toFixed(2)} />
+                <InlineMetric label="Computed" value={formatDate(snapshot.computed_at)} />
+              </div>
               {snapshot.expires_at ? <div className="helper-text">Expires {formatDate(snapshot.expires_at)}</div> : null}
               {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
             </div>
@@ -393,12 +417,12 @@ function IndustryContextList({ snapshots }: { snapshots: IndustryContextSnapshot
               <div>
                 <div className="cluster">
                   <Badge tone="info">industry context</Badge>
-                  <Badge tone={contextTone(snapshot)}>{snapshot.status}</Badge>
-                  <Badge>{snapshot.industry_label || snapshot.industry_key}</Badge>
-                  {topDriver ? <Badge>{themeString(topDriver.label)}</Badge> : null}
-                  <Badge tone={provenanceTone(snapshot)}>{provenanceLabel(snapshot)}</Badge>
+                  <LabeledBadge tone={contextTone(snapshot)} label="status" value={snapshot.status} />
+                  <LabeledBadge label="industry" value={snapshot.industry_label || snapshot.industry_key} />
+                  {topDriver ? <LabeledBadge label="driver" value={themeString(topDriver.label)} /> : null}
+                  <LabeledBadge tone={provenanceTone(snapshot)} label="summary" value={provenanceLabel(snapshot)} />
                 </div>
-                <div className="helper-text">Direction {snapshot.direction} · saliency {snapshot.saliency_score.toFixed(2)} · confidence {snapshot.confidence_percent.toFixed(1)}% · computed {formatDate(snapshot.computed_at)}</div>
+                <div className="helper-text context-inline-metrics"><InlineMetric label="Direction" value={snapshot.direction} /><InlineMetric label="Saliency" value={snapshot.saliency_score.toFixed(2)} /><InlineMetric label="Confidence" value={`${snapshot.confidence_percent.toFixed(1)}%`} /><InlineMetric label="Computed" value={formatDate(snapshot.computed_at)} /></div>
                 {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
                 {summaryError(snapshot) ? <div className="helper-text top-gap-small">{summaryError(snapshot)}</div> : null}
               </div>
@@ -425,11 +449,11 @@ function MacroContextList({ snapshots }: { snapshots: MacroContextSnapshot[] }) 
               <div>
                 <div className="cluster">
                   <Badge tone="info">macro context</Badge>
-                  <Badge tone={contextTone(snapshot)}>{snapshot.status}</Badge>
-                  {topTheme ? <Badge>{themeString(topTheme.label)}</Badge> : null}
-                  <Badge tone={provenanceTone(snapshot)}>{provenanceLabel(snapshot)}</Badge>
+                  <LabeledBadge tone={contextTone(snapshot)} label="status" value={snapshot.status} />
+                  {topTheme ? <LabeledBadge label="theme" value={themeString(topTheme.label)} /> : null}
+                  <LabeledBadge tone={provenanceTone(snapshot)} label="summary" value={provenanceLabel(snapshot)} />
                 </div>
-                <div className="helper-text">Saliency {snapshot.saliency_score.toFixed(2)} · confidence {snapshot.confidence_percent.toFixed(1)}% · computed {formatDate(snapshot.computed_at)}</div>
+                <div className="helper-text context-inline-metrics"><InlineMetric label="Saliency" value={snapshot.saliency_score.toFixed(2)} /><InlineMetric label="Confidence" value={`${snapshot.confidence_percent.toFixed(1)}%`} /><InlineMetric label="Computed" value={formatDate(snapshot.computed_at)} /></div>
                 {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
                 {summaryError(snapshot) ? <div className="helper-text top-gap-small">{summaryError(snapshot)}</div> : null}
               </div>
@@ -455,13 +479,13 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
     <div className="stack-page top-gap-small">
       <div className="cluster">
         <Badge tone="info">industry context</Badge>
-        <Badge tone={contextTone(snapshot)}>{snapshot.status}</Badge>
-        <Badge>{snapshot.industry_label || snapshot.industry_key}</Badge>
-        <Badge tone="neutral">direction {snapshot.direction || "—"}</Badge>
-        <Badge tone="neutral">confidence {snapshot.confidence_percent.toFixed(1)}%</Badge>
-        <Badge tone={provenanceTone(snapshot)}>{provenanceLabel(snapshot)}</Badge>
-        {snapshot.warnings.length > 0 ? <Badge tone="warning">warnings {snapshot.warnings.length}</Badge> : null}
-        {snapshot.missing_inputs.length > 0 ? <Badge tone="warning">missing {snapshot.missing_inputs.length}</Badge> : null}
+        <LabeledBadge tone={contextTone(snapshot)} label="status" value={snapshot.status} />
+        <LabeledBadge label="industry" value={snapshot.industry_label || snapshot.industry_key} />
+        <LabeledBadge tone="neutral" label="direction" value={snapshot.direction || "—"} />
+        <LabeledBadge tone="neutral" label="confidence" value={`${snapshot.confidence_percent.toFixed(1)}%`} />
+        <LabeledBadge tone={provenanceTone(snapshot)} label="summary" value={provenanceLabel(snapshot)} />
+        {snapshot.warnings.length > 0 ? <LabeledBadge tone="warning" label="warnings" value={String(snapshot.warnings.length)} /> : null}
+        {snapshot.missing_inputs.length > 0 ? <LabeledBadge tone="warning" label="missing" value={String(snapshot.missing_inputs.length)} /> : null}
       </div>
 
       {snapshot.summary_text ? (
@@ -494,8 +518,11 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
                   <div key={`${themeString(driver.label)}-${index}`} className="data-point">
                     <span className="data-point-label">Driver {index + 1}</span>
                     <span className="data-point-value">{themeString(driver.label)}</span>
-                    <div className="helper-text top-gap-small">window {formatWindow(themeString(driver.window_hint, ""))} · source {themeString(driver.source_priority)}</div>
-                    {channels.length > 0 ? <div className="helper-text">channels {channels.join(" · ")}</div> : null}
+                    <div className="helper-text top-gap-small context-inline-metrics">
+                      <InlineMetric label="Window" value={formatWindow(themeString(driver.window_hint, ""))} />
+                      <InlineMetric label="Source" value={themeString(driver.source_priority)} />
+                    </div>
+                    {channels.length > 0 ? <div className="helper-text context-inline-metrics"><InlineMetric label="Channels" value={channels.join(" · ")} /></div> : null}
                   </div>
                 );
               })}
@@ -552,13 +579,13 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
     <div className="stack-page top-gap-small">
       <div className="cluster">
         <Badge tone="info">macro context</Badge>
-        <Badge tone={contextTone(snapshot)}>{snapshot.status}</Badge>
-        {topTheme ? <Badge>{themeString(topTheme.label)}</Badge> : null}
-        <Badge tone="neutral">confidence {snapshot.confidence_percent.toFixed(1)}%</Badge>
-        <Badge tone="neutral">saliency {snapshot.saliency_score.toFixed(2)}</Badge>
-        <Badge tone={provenanceTone(snapshot)}>{provenanceLabel(snapshot)}</Badge>
-        {snapshot.warnings.length > 0 ? <Badge tone="warning">warnings {snapshot.warnings.length}</Badge> : null}
-        {snapshot.missing_inputs.length > 0 ? <Badge tone="warning">missing {snapshot.missing_inputs.length}</Badge> : null}
+        <LabeledBadge tone={contextTone(snapshot)} label="status" value={snapshot.status} />
+        {topTheme ? <LabeledBadge label="theme" value={themeString(topTheme.label)} /> : null}
+        <LabeledBadge tone="neutral" label="confidence" value={`${snapshot.confidence_percent.toFixed(1)}%`} />
+        <LabeledBadge tone="neutral" label="saliency" value={snapshot.saliency_score.toFixed(2)} />
+        <LabeledBadge tone={provenanceTone(snapshot)} label="summary" value={provenanceLabel(snapshot)} />
+        {snapshot.warnings.length > 0 ? <LabeledBadge tone="warning" label="warnings" value={String(snapshot.warnings.length)} /> : null}
+        {snapshot.missing_inputs.length > 0 ? <LabeledBadge tone="warning" label="missing" value={String(snapshot.missing_inputs.length)} /> : null}
       </div>
 
       {snapshot.summary_text ? (
@@ -591,9 +618,12 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
                   <div key={`${themeString(theme.label)}-${index}`} className="data-point">
                     <span className="data-point-label">Theme {index + 1}</span>
                     <span className="data-point-value">{themeString(theme.label)}</span>
-                    <div className="helper-text top-gap-small">state {themeString(theme.persistence_state)} · window {formatWindow(themeString(theme.window_hint, ""))}</div>
-                    <div className="helper-text">source {themeString(theme.source_priority)}</div>
-                    {channels.length > 0 ? <div className="helper-text">channels {channels.join(" · ")}</div> : null}
+                    <div className="helper-text top-gap-small context-inline-metrics">
+                      <InlineMetric label="State" value={themeString(theme.persistence_state)} />
+                      <InlineMetric label="Window" value={formatWindow(themeString(theme.window_hint, ""))} />
+                    </div>
+                    <div className="helper-text context-inline-metrics"><InlineMetric label="Source" value={themeString(theme.source_priority)} /></div>
+                    {channels.length > 0 ? <div className="helper-text context-inline-metrics"><InlineMetric label="Channels" value={channels.join(" · ")} /></div> : null}
                   </div>
                 );
               })}
