@@ -1,6 +1,6 @@
 """drop legacy recommendations table
 
-Revision ID: 0015_drop_legacy_recommendations_table
+Revision ID: 0015_drop_legacy_recs
 Revises: 0014_recommendation_outcomes
 Create Date: 2026-03-24 06:20:00
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0015_drop_legacy_recommendations_table"
+revision = "0015_drop_legacy_recs"
 down_revision = "0014_recommendation_outcomes"
 branch_labels = None
 depends_on = None

@@ -233,6 +233,7 @@ What this covers:
 - running Alembic migrations to head
 - verifying the main current tables exist
 - verifying the legacy `recommendations` table does not come back
+- verifying the migration chain works with the Postgres-safe Alembic revision ids now used by the repo
 
 Frontend:
 

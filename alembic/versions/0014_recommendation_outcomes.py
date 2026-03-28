@@ -1,7 +1,7 @@
 """add recommendation outcomes
 
 Revision ID: 0014_recommendation_outcomes
-Revises: 0013_context_and_recommendation_models
+Revises: 0013_context_rec_models
 Create Date: 2026-03-24 03:30:00
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "0014_recommendation_outcomes"
-down_revision = "0013_context_and_recommendation_models"
+down_revision = "0013_context_rec_models"
 branch_labels = None
 depends_on = None
 

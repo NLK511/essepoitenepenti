@@ -5,11 +5,39 @@ from sqlalchemy.exc import OperationalError
 
 from trade_proposer_app.config import settings
 
-HEAD_REVISION = "0015_drop_legacy_recommendations_table"
+HEAD_REVISION = "0015_drop_legacy_recs"
+LEGACY_REVISION_MAP = {
+    "0003_recommendation_diagnostics_fields": "0003_rec_diag_fields",
+    "0004_jobs_watchlists_and_run_errors": "0004_jobs_watchlists_run_errs",
+    "0006_recommendation_states_and_summary": "0006_rec_states_summary",
+    "0007_scheduled_runs_idempotency": "0007_sched_runs_idempotency",
+    "0008_job_types_and_run_metadata": "0008_job_types_run_metadata",
+    "0009_recommendation_feature_vectors": "0009_rec_feature_vectors",
+    "0011_sentiment_snapshot_summaries": "0011_snapshot_summaries",
+    "0013_context_and_recommendation_models": "0013_context_rec_models",
+    "0015_drop_legacy_recommendations_table": "0015_drop_legacy_recs",
+}
 
 
 def get_alembic_config() -> Config:
     return Config("alembic.ini")
+
+
+def normalize_alembic_revision_ids() -> bool:
+    engine = create_engine(settings.database_url, future=True)
+    try:
+        with engine.begin() as connection:
+            inspector = inspect(connection)
+            if "alembic_version" not in set(inspector.get_table_names()):
+                return False
+            version = connection.execute(text("SELECT version_num FROM alembic_version LIMIT 1")).scalar_one_or_none()
+            normalized = LEGACY_REVISION_MAP.get(str(version), str(version))
+            if not version or normalized == version:
+                return False
+            connection.execute(text("UPDATE alembic_version SET version_num = :version_num"), {"version_num": normalized})
+            return True
+    finally:
+        engine.dispose()
 
 
 def try_repair_partial_sqlite_schema() -> bool:
@@ -25,7 +53,7 @@ def try_repair_partial_sqlite_schema() -> bool:
                 return False
 
             version = connection.execute(text("SELECT version_num FROM alembic_version LIMIT 1")).scalar_one_or_none()
-            if version != "0003_recommendation_diagnostics_fields":
+            if version not in {"0003_rec_diag_fields", "0003_recommendation_diagnostics_fields"}:
                 return False
 
             job_columns = {column["name"] for column in inspector.get_columns("jobs")}
@@ -68,6 +96,7 @@ def try_repair_partial_sqlite_schema() -> bool:
 
 
 def main() -> None:
+    normalize_alembic_revision_ids()
     try:
         command.upgrade(get_alembic_config(), "head")
     except OperationalError as exc:

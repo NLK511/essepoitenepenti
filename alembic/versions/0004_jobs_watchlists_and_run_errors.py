@@ -1,7 +1,7 @@
 """jobs watchlists and run errors
 
-Revision ID: 0004_jobs_watchlists_and_run_errors
-Revises: 0003_recommendation_diagnostics_fields
+Revision ID: 0004_jobs_watchlists_run_errs
+Revises: 0003_rec_diag_fields
 Create Date: 2026-03-14 01:35:00
 """
 
@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0004_jobs_watchlists_and_run_errors"
-down_revision = "0003_recommendation_diagnostics_fields"
+revision = "0004_jobs_watchlists_run_errs"
+down_revision = "0003_rec_diag_fields"
 branch_labels = None
 depends_on = None
 

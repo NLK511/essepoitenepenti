@@ -1,6 +1,6 @@
 """add snapshot summary text
 
-Revision ID: 0011_sentiment_snapshot_summaries
+Revision ID: 0011_snapshot_summaries
 Revises: 0010_sentiment_snapshots
 Create Date: 2026-03-24 00:00:00
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0011_sentiment_snapshot_summaries"
+revision = "0011_snapshot_summaries"
 down_revision = "0010_sentiment_snapshots"
 branch_labels = None
 depends_on = None

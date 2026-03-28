@@ -1,6 +1,6 @@
 """recommendation diagnostics fields
 
-Revision ID: 0003_recommendation_diagnostics_fields
+Revision ID: 0003_rec_diag_fields
 Revises: 0002_job_last_enqueued_at
 Create Date: 2026-03-14 00:50:00
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0003_recommendation_diagnostics_fields"
+revision = "0003_rec_diag_fields"
 down_revision = "0002_job_last_enqueued_at"
 branch_labels = None
 depends_on = None

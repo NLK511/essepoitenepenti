@@ -1,6 +1,6 @@
 """add context and recommendation models
 
-Revision ID: 0013_context_and_recommendation_models
+Revision ID: 0013_context_rec_models
 Revises: 0012_watchlist_metadata
 Create Date: 2026-03-24 01:20:00
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0013_context_and_recommendation_models"
+revision = "0013_context_rec_models"
 down_revision = "0012_watchlist_metadata"
 branch_labels = None
 depends_on = None

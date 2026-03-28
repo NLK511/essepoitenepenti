@@ -1,7 +1,7 @@
 """add prototype feature vectors
 
-Revision ID: 0009_recommendation_feature_vectors
-Revises: 0008_job_types_and_run_metadata
+Revision ID: 0009_rec_feature_vectors
+Revises: 0008_job_types_run_metadata
 Create Date: 2026-03-15 00:00:00
 """
 
@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0009_recommendation_feature_vectors"
-down_revision = "0008_job_types_and_run_metadata"
+revision = "0009_rec_feature_vectors"
+down_revision = "0008_job_types_run_metadata"
 branch_labels = None
 depends_on = None
 

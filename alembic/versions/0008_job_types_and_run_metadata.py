@@ -1,7 +1,7 @@
 """job types and run metadata
 
-Revision ID: 0008_job_types_and_run_metadata
-Revises: 0007_scheduled_runs_idempotency
+Revision ID: 0008_job_types_run_metadata
+Revises: 0007_sched_runs_idempotency
 Create Date: 2026-03-14 14:30:00
 """
 
@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0008_job_types_and_run_metadata"
-down_revision = "0007_scheduled_runs_idempotency"
+revision = "0008_job_types_run_metadata"
+down_revision = "0007_sched_runs_idempotency"
 branch_labels = None
 depends_on = None
 

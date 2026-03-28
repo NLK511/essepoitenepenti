@@ -35,6 +35,7 @@ Current behavior:
 - Postgres is supported for production-like local runs and deployment
 - the Python dependency set now includes `psycopg[binary]` so Postgres URLs work without extra manual driver installation
 - startup scripts now perform a friendlier connectivity check when `DATABASE_URL` points at Postgres
+- Alembic revision ids were shortened to stay within Postgres `alembic_version.version_num` limits, and the migration entrypoint normalizes older stored revision ids automatically
 
 Database references:
 - current ER diagram: `docs/er-model.md`

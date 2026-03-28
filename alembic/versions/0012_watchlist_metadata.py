@@ -1,7 +1,7 @@
 """add watchlist metadata
 
 Revision ID: 0012_watchlist_metadata
-Revises: 0011_sentiment_snapshot_summaries
+Revises: 0011_snapshot_summaries
 Create Date: 2026-03-24 00:30:00
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "0012_watchlist_metadata"
-down_revision = "0011_sentiment_snapshot_summaries"
+down_revision = "0011_snapshot_summaries"
 branch_labels = None
 depends_on = None
 
