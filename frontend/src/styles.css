@@ -1148,7 +1148,7 @@ details summary {
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid var(--border-strong);
-  background: color-mix(in srgb, var(--panel) 94%, black 6%);
+  background: var(--panel);
   box-shadow: var(--shadow-md);
   color: var(--text);
   font-size: 12px;
