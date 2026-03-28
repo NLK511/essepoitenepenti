@@ -85,7 +85,7 @@ export function ContextSnapshotDetailPage() {
     ? isIndustrySnapshot(snapshot)
       ? `${snapshot.industry_label || snapshot.industry_key} context #${snapshot.id}`
       : `Macro context #${snapshot.id}`
-    : "Context snapshot detail";
+    : "Context detail";
 
   const summaryMethod = typeof snapshot?.metadata?.context_summary_method === "string" ? snapshot.metadata.context_summary_method : "—";
   const summaryBackend = typeof snapshot?.metadata?.context_summary_backend === "string" ? snapshot.metadata.context_summary_backend : "—";
@@ -113,10 +113,10 @@ export function ContextSnapshotDetailPage() {
       <PageHeader
         kicker="Context detail"
         title={title}
-        subtitle="Inspect the stored context summary, summary provenance, top events, lifecycle, source mix, and warnings behind a macro or industry context snapshot."
+        subtitle="Inspect the stored context summary, summary provenance, top events, lifecycle, source mix, and warnings behind a macro or industry context object."
         actions={
           <>
-            <Link to="/context" className="button-secondary">Back to context snapshots</Link>
+            <Link to="/context" className="button-secondary">Back to context review</Link>
             {snapshot?.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">Open source run</Link> : null}
           </>
         }

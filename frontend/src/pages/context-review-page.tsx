@@ -177,7 +177,7 @@ export function ContextReviewPage() {
     <>
       <PageHeader
         kicker="Shared context"
-        title="Inspect context snapshots and the transitional support history."
+        title="Review context objects and transitional support refresh artifacts."
         subtitle="The redesign-native review path is macro and industry context snapshots plus recommendation plans. Support snapshots still exist as transitional refresh artifacts and freshness checks, so this page shows both." 
         actions={
           <>
@@ -188,10 +188,10 @@ export function ContextReviewPage() {
               {busyAction === "macro-now" ? "Running macro refresh…" : "Run macro now"}
             </button>
             <button type="button" className="button" onClick={() => void enqueueRefresh("industry")} disabled={busyAction !== null}>
-              {busyAction === "industry" ? "Queueing industry refresh…" : "Queue industries refresh"}
+              {busyAction === "industry" ? "Queueing industry refresh…" : "Queue industry refresh"}
             </button>
             <button type="button" className="button-secondary" onClick={() => void runRefreshNow("industry")} disabled={busyAction !== null}>
-              {busyAction === "industry-now" ? "Running industry refresh…" : "Run industries now"}
+              {busyAction === "industry-now" ? "Running industry refresh…" : "Run industry now"}
             </button>
             <button type="button" className="button-subtle" onClick={() => void load()} disabled={loading}>
               Reload
@@ -201,7 +201,7 @@ export function ContextReviewPage() {
       />
 
       {error ? <ErrorState message={error} /> : null}
-      {loading ? <LoadingState message="Loading shared snapshots…" /> : null}
+      {loading ? <LoadingState message="Loading shared context and support artifacts…" /> : null}
 
       {!loading ? (
         <div className="stack-page">
@@ -225,7 +225,7 @@ export function ContextReviewPage() {
             <Card>
               <div className="metric-label">Latest macro support snapshot</div>
               <div className="metric-value">{latestMacroSentiment ? latestMacroSentiment.label : "—"}</div>
-              <div className="helper-text">{latestMacroSentiment ? formatDate(latestMacroSentiment.computed_at) : "No macro snapshot yet"}</div>
+              <div className="helper-text">{latestMacroSentiment ? formatDate(latestMacroSentiment.computed_at) : "No macro support artifact yet"}</div>
             </Card>
             <Card>
               <div className="metric-label">Top industry driver</div>
@@ -235,7 +235,7 @@ export function ContextReviewPage() {
             <Card>
               <div className="metric-label">Latest industry support snapshot</div>
               <div className="metric-value">{latestIndustrySentiment ? latestIndustrySentiment.subject_label : "—"}</div>
-              <div className="helper-text">{latestIndustrySentiment ? `${latestIndustrySentiment.label} · ${formatDate(latestIndustrySentiment.computed_at)}` : "No industry snapshot yet"}</div>
+              <div className="helper-text">{latestIndustrySentiment ? `${latestIndustrySentiment.label} · ${formatDate(latestIndustrySentiment.computed_at)}` : "No industry support artifact yet"}</div>
             </Card>
           </section>
 
@@ -290,7 +290,7 @@ function SnapshotList({ snapshots }: { snapshots: SupportSnapshot[] }) {
               {snapshot.expires_at ? <div className="helper-text">Expires {formatDate(snapshot.expires_at)}</div> : null}
               {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
             </div>
-            {snapshot.id ? <Link to={`/context/sentiment/${snapshot.id}`} className="button-subtle">Open</Link> : null}
+            {snapshot.id ? <Link to={`/context/sentiment/${snapshot.id}`} className="button-subtle">Open support detail</Link> : null}
           </div>
         </li>
       ))}
@@ -333,7 +333,7 @@ function SnapshotSummary({ snapshot }: { snapshot: SupportSnapshot }) {
         </div>
       ) : null}
       <div className="helper-text">Run {snapshot.run_id ?? "—"} · Job {snapshot.job_id ?? "—"} · {jobTypeLabel(snapshot.scope === "macro" ? "macro_sentiment_refresh" : "industry_sentiment_refresh")}</div>
-      {snapshot.id ? <Link to={`/context/sentiment/${snapshot.id}`} className="button-subtle">Open snapshot detail</Link> : null}
+      {snapshot.id ? <Link to={`/context/sentiment/${snapshot.id}`} className="button-subtle">Open support detail</Link> : null}
       <pre className="markdown-code-block">{JSON.stringify(snapshot.diagnostics, null, 2)}</pre>
     </div>
   );

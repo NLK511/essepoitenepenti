@@ -217,13 +217,13 @@ export function RunDetailPage() {
             ) : null}
             {artifactSnapshotId ? (
               <div className="top-gap-small">
-                <Link to={`/context/sentiment/${artifactSnapshotId}`} className="button-subtle">Open created snapshot</Link>
+                <Link to={`/context/sentiment/${artifactSnapshotId}`} className="button-subtle">Open created support artifact</Link>
               </div>
             ) : null}
             {artifactSnapshotIds.length > 0 ? (
               <div className="top-gap-small cluster">
                 {artifactSnapshotIds.map((snapshotId) => (
-                  <Link key={snapshotId} to={`/context/sentiment/${snapshotId}`} className="button-subtle">Snapshot #{snapshotId}</Link>
+                  <Link key={snapshotId} to={`/context/sentiment/${snapshotId}`} className="button-subtle">Support #{snapshotId}</Link>
                 ))}
               </div>
             ) : null}

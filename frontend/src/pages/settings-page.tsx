@@ -302,11 +302,11 @@ export function SettingsPage() {
             </Card>
 
             <Card>
-              <SectionTitle kicker="Social signals" title="Nitter-powered macro & industry context" subtitle="Enable the native social pipeline and point it at your Nitter instance so refresh jobs can pull macro/industry posts directly." />
+              <SectionTitle kicker="Social signals" title="Nitter-powered macro & industry context" subtitle="Enable the native social pipeline and point it at your Nitter instance so support/context refresh jobs can pull macro and industry posts directly." />
               <form className="stack-form" onSubmit={saveSocialSettings}>
                 <div className="form-grid">
                   <label className="checkbox-field">
-                    <span>Social sentiment enabled</span>
+                    <span>Social signal stack enabled</span>
                     <input type="checkbox" name="sentiment_enabled" value="true" defaultChecked={settingMap.social_sentiment_enabled === "true"} />
                   </label>
                   <label className="checkbox-field">
@@ -326,7 +326,7 @@ export function SettingsPage() {
                     <input type="checkbox" name="nitter_enable_ticker" value="true" defaultChecked={settingMap.social_nitter_enable_ticker === "true"} />
                   </label>
                 </div>
-                <div className="helper-text">Enable the social signal stack plus the Nitter source, then adjust the timeout, window, and item limits so the refresh jobs can reach your instance reliably. Use the ticker toggle to keep Nitter restricted to macro and industry support snapshots when you do not want it influencing live ticker sentiment.</div>
+                <div className="helper-text">Enable the social signal stack plus the Nitter source, then adjust the timeout, window, and item limits so support/context refresh jobs can reach your instance reliably. Use the ticker toggle to keep Nitter restricted to macro and industry support snapshots when you do not want it influencing live ticker sentiment.</div>
                 <button className="button" type="submit" disabled={saving === "social"}>{saving === "social" ? "Saving…" : "Save social settings"}</button>
               </form>
             </Card>

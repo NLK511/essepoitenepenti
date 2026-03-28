@@ -45,10 +45,10 @@ export function SupportSnapshotDetailPage() {
       <PageHeader
         kicker="Support snapshot detail"
         title={snapshot ? `${snapshot.subject_label} snapshot #${snapshot.id}` : "Support snapshot detail"}
-        subtitle="Inspect the stored transitional support snapshot used for refresh auditing, freshness checks, and compatibility with the context-first workflow."
+        subtitle="Inspect the stored transitional support artifact used for refresh auditing, freshness checks, and compatibility with the context-first workflow."
         actions={
           <>
-            <Link to="/context" className="button-secondary">Back to context snapshots</Link>
+            <Link to="/context" className="button-secondary">Back to context review</Link>
             {snapshot?.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">Open source run</Link> : null}
           </>
         }
