@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { deleteJson, getJson } from "../api";
 import { WorkflowRunResults } from "../components/workflow-run-results";
 import { useToast } from "../components/toast";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
+import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import type { Job, RunDetailResponse, WatchlistEvaluationPolicy } from "../types";
 import { formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, runTone } from "../utils";
 
@@ -49,6 +49,7 @@ export function RunDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [reviewSection, setReviewSection] = useState<"overview" | "shortlist" | "signals" | "plans" | "context">("overview");
 
   useEffect(() => {
     async function load() {
@@ -133,9 +134,9 @@ export function RunDetailPage() {
   return (
     <>
       <PageHeader
-        kicker="Run detail"
+        kicker="Execution review"
         title={detail ? `Run #${detail.run.id}` : "Run detail"}
-        subtitle="A run is one job execution. This page focuses on execution state and the recommendation plans produced by that run, not on treating the run itself as the trade output."
+        subtitle="Use run review to understand what the workflow scanned, shortlisted, persisted, and warned about. Recommendation plans remain the canonical trade objects; this page explains how they were produced."
         actions={
           <>
             <Link to="/jobs/debugger" className="button-secondary">Back to debugger</Link>
@@ -158,6 +159,13 @@ export function RunDetailPage() {
       {!detail && !error ? <LoadingState message="Loading run detail…" /> : null}
       {detail ? (
         <div className="stack-page">
+          <section className="metrics-grid">
+            <StatCard label="Run status" value={detail.run.status} helper="Execution health for this workflow run" />
+            <StatCard label="Signals written" value={detail.ticker_signal_snapshots.length} helper="Ticker signal snapshots captured by the run" />
+            <StatCard label="Plans written" value={detail.recommendation_plans.length} helper="Recommendation plans produced by this run" />
+            <StatCard label="Context objects" value={detail.macro_context_snapshots.length + detail.industry_context_snapshots.length} helper="Macro and industry context snapshots stored here" />
+          </section>
+
           <Card>
             <div className="cluster">
               <Badge tone={runTone(detail.run.status)}>{detail.run.status}</Badge>
@@ -192,7 +200,7 @@ export function RunDetailPage() {
               <SectionTitle
                 kicker="Redesign orchestration"
                 title="Cheap scan, shortlist, deep analysis, and plan outputs"
-                subtitle="These persisted redesign objects show what the orchestration layer scanned, shortlisted, and converted into actionable or no-action plans."
+                subtitle="Review one stage at a time so the execution story stays understandable."
                 actions={
                   <>
                     <Link to={detail.run.id ? `/jobs/ticker-signals?run_id=${detail.run.id}` : "/jobs/ticker-signals"} className="button-subtle">Browse ticker signals</Link>
@@ -200,8 +208,19 @@ export function RunDetailPage() {
                   </>
                 }
               />
-              <div className="stack-page">
-                {orchestrationSourceKind || orchestrationExecutionPath || orchestrationEffectiveHorizon || manualJobDefaults ? (
+              <SegmentedTabs
+                value={reviewSection}
+                onChange={setReviewSection}
+                options={[
+                  { value: "overview", label: "Overview" },
+                  { value: "shortlist", label: "Shortlist" },
+                  { value: "signals", label: "Signals" },
+                  { value: "plans", label: "Plans" },
+                  { value: "context", label: "Context" },
+                ]}
+              />
+              <div className="stack-page top-gap-small">
+                {reviewSection === "overview" && (orchestrationSourceKind || orchestrationExecutionPath || orchestrationEffectiveHorizon || manualJobDefaults) ? (
                   <section>
                     <div className="section-heading">
                       <strong>Execution source</strong>
@@ -242,7 +261,7 @@ export function RunDetailPage() {
                   </section>
                 ) : null}
 
-                {watchlistPolicy ? (
+                {reviewSection === "overview" && watchlistPolicy ? (
                   <section>
                     <div className="section-heading">
                       <strong>Watchlist policy</strong>
@@ -270,7 +289,7 @@ export function RunDetailPage() {
                   </section>
                 ) : null}
 
-                {shortlistRules || shortlistDecisions.length > 0 ? (
+                {reviewSection === "shortlist" && (shortlistRules || shortlistDecisions.length > 0) ? (
                   <section>
                     <div className="section-heading">
                       <strong>Shortlist reasoning</strong>
@@ -331,7 +350,7 @@ export function RunDetailPage() {
                   </section>
                 ) : null}
 
-                {detail.ticker_signal_snapshots.length > 0 ? (
+                {reviewSection === "signals" && detail.ticker_signal_snapshots.length > 0 ? (
                   <section>
                     <div className="section-heading">
                       <strong>Ticker signal snapshots</strong>
@@ -436,7 +455,7 @@ export function RunDetailPage() {
                   </section>
                 ) : null}
 
-                {detail.recommendation_plans.length > 0 ? (
+                {reviewSection === "plans" && detail.recommendation_plans.length > 0 ? (
                   <section>
                     <div className="section-heading">
                       <strong>Recommendation plans</strong>
@@ -561,7 +580,7 @@ export function RunDetailPage() {
                   </section>
                 ) : null}
 
-                {detail.macro_context_snapshots.length > 0 || detail.industry_context_snapshots.length > 0 ? (
+                {reviewSection === "context" && (detail.macro_context_snapshots.length > 0 || detail.industry_context_snapshots.length > 0) ? (
                   <section>
                     <div className="section-heading">
                       <strong>Context objects written by this run</strong>

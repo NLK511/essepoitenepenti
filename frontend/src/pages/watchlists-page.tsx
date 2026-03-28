@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import { getJson, postForm } from "../api";
-import { Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, Badge } from "../components/ui";
+import { Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, Badge, StatCard } from "../components/ui";
 import type { Watchlist, WatchlistEvaluationPolicy } from "../types";
 import { tickerTone } from "../utils";
 
@@ -64,14 +64,20 @@ export function WatchlistsPage() {
   return (
     <>
       <PageHeader
-        kicker="Setup journey"
-        title="Create reusable watchlists before automating jobs."
-        subtitle="Watchlists can now store region, exchange, horizon, shorting, and timing preferences so later analysis can be scheduled more efficiently, with operator-visible derived policy details."
+        kicker="Automation"
+        title="Watchlists"
+        subtitle="Define the universes the app should monitor. Each watchlist carries market metadata, scheduling assumptions, and evaluation policy context so later recommendation runs remain interpretable."
       />
       {error ? <ErrorState message={error} /> : null}
-      <section className="two-column">
-        <Card>
-          <SectionTitle kicker="Create" title="New watchlist" />
+      <section className="metrics-grid top-gap">
+        <StatCard label="Watchlists" value={watchlists?.length ?? "—"} helper="Reusable universes currently stored" />
+        <StatCard label="Tickers tracked" value={watchlists ? watchlists.reduce((count, item) => count + item.tickers.length, 0) : "—"} helper="Total ticker slots across all watchlists" />
+        <StatCard label="Shorts enabled" value={watchlists ? watchlists.filter((item) => item.allow_shorts).length : "—"} helper="Watchlists that allow short recommendations" />
+        <StatCard label="Timing optimized" value={watchlists ? watchlists.filter((item) => item.optimize_evaluation_timing).length : "—"} helper="Watchlists using evaluation-timing optimization" />
+      </section>
+      <section className="two-column top-gap">
+        <Card className="sticky-toolbar">
+          <SectionTitle kicker="Create" title="New watchlist" subtitle="Keep the metadata practical: only enter region, exchange, and timezone details that actually improve scheduling or review quality." />
           <form className="stack-form" onSubmit={handleSubmit}>
             <label className="form-field">
               <span>Name</span>
@@ -123,61 +129,57 @@ export function WatchlistsPage() {
           </form>
         </Card>
         <Card>
-          <SectionTitle kicker="Review" title="Saved watchlists" />
+          <SectionTitle kicker="Review" title="Saved watchlists" subtitle="Scan market metadata, policy assumptions, and ticker membership without leaving the page." />
           {!watchlists && !error ? <LoadingState message="Loading watchlists…" /> : null}
           {watchlists && watchlists.length === 0 ? <EmptyState message="No watchlists created yet." /> : null}
           {watchlists ? (
-            <ul className="list-reset">
+            <div className="data-stack top-gap-small">
               {watchlists.map((watchlist) => {
                 const policy = watchlist.id ? policies[watchlist.id] : undefined;
                 return (
-                  <li key={watchlist.id ?? watchlist.name} className="list-item compact-item">
-                    <div>
-                      <strong>{watchlist.name}</strong>
-                      {watchlist.description ? <div className="helper-text">{watchlist.description}</div> : null}
-                      <div className="badge-row">
-                        {watchlist.region ? <Badge tone="info">region: {watchlist.region}</Badge> : null}
-                        {watchlist.exchange ? <Badge tone="info">exchange: {watchlist.exchange}</Badge> : null}
-                        {watchlist.timezone ? <Badge tone="info">tz: {watchlist.timezone}</Badge> : null}
-                        <Badge tone="info">horizon: {watchlist.default_horizon}</Badge>
-                        <Badge tone={watchlist.allow_shorts ? "warning" : "neutral"}>
-                          {watchlist.allow_shorts ? "shorts on" : "shorts off"}
-                        </Badge>
-                        {watchlist.optimize_evaluation_timing ? <Badge tone="ok">timing optimized</Badge> : null}
+                  <article key={watchlist.id ?? watchlist.name} className="data-card">
+                    <div className="data-card-header">
+                      <div>
+                        <h3 className="data-card-title">{watchlist.name}</h3>
+                        {watchlist.description ? <div className="helper-text">{watchlist.description}</div> : null}
                       </div>
-                      {policy ? (
-                        <div className="top-gap-small">
-                          <div className="badge-row">
-                            <Badge tone="info">schedule: {policy.schedule_source}</Badge>
-                            <Badge tone={policy.primary_cron ? "ok" : "neutral"}>
-                              cron: {policy.primary_cron ?? "none"}
-                            </Badge>
-                            <Badge tone="info">strategy: {policy.shortlist_strategy}</Badge>
-                          </div>
-                          <div className="helper-text">Primary window: {policy.primary_window_label || "—"}</div>
-                          {policy.secondary_window_label ? (
-                            <div className="helper-text">Secondary window: {policy.secondary_window_label}</div>
-                          ) : null}
-                          {policy.warnings.length > 0 ? (
-                            <div className="badge-row top-gap-small">
-                              {policy.warnings.map((warning) => (
-                                <Badge key={`${watchlist.name}-${warning}`} tone="warning">{warning}</Badge>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
+                      <Badge>{watchlist.tickers.length} ticker(s)</Badge>
+                    </div>
+                    <div className="data-points">
+                      <div className="data-point"><span className="data-point-label">region</span><span className="data-point-value">{watchlist.region || "—"}</span></div>
+                      <div className="data-point"><span className="data-point-label">exchange</span><span className="data-point-value">{watchlist.exchange || "—"}</span></div>
+                      <div className="data-point"><span className="data-point-label">timezone</span><span className="data-point-value">{watchlist.timezone || "—"}</span></div>
+                      <div className="data-point"><span className="data-point-label">default horizon</span><span className="data-point-value">{watchlist.default_horizon}</span></div>
+                    </div>
+                    <div className="badge-row top-gap-small">
+                      <Badge tone={watchlist.allow_shorts ? "warning" : "neutral"}>{watchlist.allow_shorts ? "shorts on" : "shorts off"}</Badge>
+                      <Badge tone={watchlist.optimize_evaluation_timing ? "ok" : "neutral"}>{watchlist.optimize_evaluation_timing ? "timing optimized" : "timing standard"}</Badge>
+                      {policy ? <Badge tone="info">schedule: {policy.schedule_source}</Badge> : null}
+                      {policy ? <Badge tone={policy.primary_cron ? "ok" : "neutral"}>cron: {policy.primary_cron ?? "none"}</Badge> : null}
+                      {policy ? <Badge tone="info">strategy: {policy.shortlist_strategy}</Badge> : null}
+                    </div>
+                    {policy ? (
+                      <div className="helper-text top-gap-small">
+                        Primary window: {policy.primary_window_label || "—"}
+                        {policy.secondary_window_label ? ` · Secondary window: ${policy.secondary_window_label}` : ""}
+                      </div>
+                    ) : null}
+                    {policy && policy.warnings.length > 0 ? (
                       <div className="badge-row top-gap-small">
-                        {watchlist.tickers.map((ticker) => (
-                          <Badge key={`${watchlist.name}-${ticker}`} tone={tickerTone()}>{ticker}</Badge>
+                        {policy.warnings.map((warning) => (
+                          <Badge key={`${watchlist.name}-${warning}`} tone="warning">{warning}</Badge>
                         ))}
                       </div>
+                    ) : null}
+                    <div className="badge-row top-gap-small">
+                      {watchlist.tickers.map((ticker) => (
+                        <Badge key={`${watchlist.name}-${ticker}`} tone={tickerTone()}>{ticker}</Badge>
+                      ))}
                     </div>
-                    <Badge>{watchlist.tickers.length} ticker(s)</Badge>
-                  </li>
+                  </article>
                 );
               })}
-            </ul>
+            </div>
           ) : null}
         </Card>
       </section>
