@@ -58,6 +58,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 - Use narrower frontend recommendation-plan and ticker-signal typing for governed diagnostics/evidence substructures too, reducing UI dependence on loosely typed payload blobs.
 - Preserve those same governed recommendation/ticker substructures as typed backend payloads too, so persisted plans and signal snapshots round-trip with readable labels and more explicit nested semantics.
 - Render governed transmission-window labels on recommendation and ticker review pages too, replacing raw values like `2d_5d` with readable registry-backed labels like `2d-5d` where available.
+- Render governed latest-outcome analytics labels on ticker/run/recommendation review pages too, so bias/regime summaries can rely on structured detail objects rather than only raw stored keys.
 - Queue macro and industry refresh workflows manually from the operator UI.
 - Execute macro and industry refresh workflows asynchronously through the shared queued run path; immediate `run-now` endpoints still exist in the backend but are no longer the primary operator workflow.
 - Trace which shared artifacts were used by a run or recommendation plan.

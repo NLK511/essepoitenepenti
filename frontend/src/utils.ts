@@ -249,12 +249,12 @@ export function extractKeyLabelDetails(value: unknown): KeyLabelDetail[] {
   return details;
 }
 
-export function detailLabel(detail: unknown, fallback?: string | null): string | null {
+export function detailLabel(detail: unknown, fallback?: string | null, humanizeFallback = true): string | null {
   if (isRecord(detail) && typeof detail.label === "string" && detail.label.trim()) {
     return detail.label.trim();
   }
   if (typeof fallback === "string" && fallback.trim()) {
-    return humanizeKey(fallback.trim());
+    return humanizeFallback ? humanizeKey(fallback.trim()) : fallback.trim();
   }
   return null;
 }

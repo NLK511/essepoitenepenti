@@ -995,7 +995,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(plans.json()[0]["latest_outcome"]["outcome"], "win")
         self.assertEqual(plans.json()[0]["latest_outcome"]["setup_family"], "continuation")
         self.assertEqual(plans.json()[0]["latest_outcome"]["transmission_bias_label"], "tailwind")
+        self.assertEqual(plans.json()[0]["latest_outcome"]["transmission_bias_detail"]["label"], "tailwind")
         self.assertEqual(plans.json()[0]["latest_outcome"]["context_regime_label"], "context + catalyst")
+        self.assertEqual(plans.json()[0]["latest_outcome"]["context_regime_detail"]["label"], "context + catalyst")
 
     async def test_run_detail_and_filtered_redesign_routes_expose_orchestration_results(self) -> None:
         run_id = self.seed_run_with_diagnostics()
@@ -1017,7 +1019,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail_payload["ticker_signal_snapshots"][0]["diagnostics"]["mode"], "deep_analysis")
         self.assertEqual(detail_payload["recommendation_plans"][0]["action"], "long")
         self.assertEqual(detail_payload["recommendation_plans"][0]["latest_outcome"]["outcome"], "win")
+        self.assertEqual(detail_payload["recommendation_plans"][0]["latest_outcome"]["transmission_bias_detail"]["label"], "tailwind")
         self.assertEqual(detail_payload["recommendation_plans"][0]["latest_outcome"]["context_regime_label"], "context + catalyst")
+        self.assertEqual(detail_payload["recommendation_plans"][0]["latest_outcome"]["context_regime_detail"]["label"], "context + catalyst")
         self.assertEqual(macro.status_code, 200)
         self.assertEqual(industry.status_code, 200)
         self.assertEqual(ticker_signals.status_code, 200)

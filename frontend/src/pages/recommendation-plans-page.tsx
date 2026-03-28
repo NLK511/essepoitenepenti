@@ -751,7 +751,7 @@ export function RecommendationPlansPage() {
                               <span className="helper-text">{plan.latest_outcome.status}</span>
                             </div>
                             <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}%</div>
-                            <div className="helper-text">bias {plan.latest_outcome.transmission_bias_label ?? plan.latest_outcome.transmission_bias ?? "—"} · regime {plan.latest_outcome.context_regime_label ?? plan.latest_outcome.context_regime ?? "—"}</div>
+                            <div className="helper-text">bias {detailLabel(plan.latest_outcome.transmission_bias_detail, plan.latest_outcome.transmission_bias_label ?? plan.latest_outcome.transmission_bias, false) ?? "—"} · regime {detailLabel(plan.latest_outcome.context_regime_detail, plan.latest_outcome.context_regime_label ?? plan.latest_outcome.context_regime, false) ?? "—"}</div>
                             <div className="helper-text top-gap-small">MFE {plan.latest_outcome.max_favorable_excursion ?? "—"}% · MAE {plan.latest_outcome.max_adverse_excursion ?? "—"}%</div>
                           </>
                         ) : (

@@ -392,8 +392,10 @@ export interface RecommendationPlanOutcome {
   horizon: string | null;
   transmission_bias: string | null;
   transmission_bias_label: string | null;
+  transmission_bias_detail: KeyLabelDetail | null;
   context_regime: string | null;
   context_regime_label: string | null;
+  context_regime_detail: KeyLabelDetail | null;
   notes: string;
   run_id: number | null;
 }

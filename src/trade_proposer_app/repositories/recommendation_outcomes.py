@@ -3,7 +3,7 @@ import json
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.models import RecommendationPlanOutcome
+from trade_proposer_app.domain.models import KeyLabelDetail, RecommendationPlanOutcome
 from trade_proposer_app.persistence.models import RecommendationOutcomeRecord, RecommendationPlanRecord
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
@@ -121,9 +121,19 @@ class RecommendationOutcomeRepository:
         model.horizon = plan_record.horizon
         transmission_summary = self._transmission_summary(plan_record)
         model.transmission_bias = self.taxonomy_service.derive_transmission_bias(transmission_summary)
-        model.transmission_bias_label = self.taxonomy_service.get_transmission_bias_definition(model.transmission_bias).get("label", model.transmission_bias)
+        transmission_bias_definition = self.taxonomy_service.get_transmission_bias_definition(model.transmission_bias)
+        model.transmission_bias_label = transmission_bias_definition.get("label", model.transmission_bias)
+        model.transmission_bias_detail = KeyLabelDetail(
+            key=str(transmission_bias_definition.get("key", model.transmission_bias)).strip() or str(model.transmission_bias or "unknown"),
+            label=str(transmission_bias_definition.get("label", model.transmission_bias)).strip() or str(model.transmission_bias or "unknown"),
+        )
         model.context_regime = self._context_regime(transmission_summary)
-        model.context_regime_label = self.taxonomy_service.get_transmission_context_regime_definition(model.context_regime).get("label", model.context_regime)
+        context_regime_definition = self.taxonomy_service.get_transmission_context_regime_definition(model.context_regime)
+        model.context_regime_label = context_regime_definition.get("label", model.context_regime)
+        model.context_regime_detail = KeyLabelDetail(
+            key=str(context_regime_definition.get("key", model.context_regime)).strip() or str(model.context_regime or "mixed_context"),
+            label=str(context_regime_definition.get("label", model.context_regime)).strip() or str(model.context_regime or "mixed_context"),
+        )
         return model
 
     @staticmethod

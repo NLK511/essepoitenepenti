@@ -10,7 +10,7 @@ import {
 } from "../components/ticker-relationship-readthrough";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import type { TickerAnalysisPage as TickerAnalysisPageData } from "../types";
-import { formatDate } from "../utils";
+import { detailLabel, formatDate } from "../utils";
 
 export function TickerPage() {
   const { ticker } = useParams<{ ticker: string }>();
@@ -37,6 +37,12 @@ export function TickerPage() {
   const latestPlan = useMemo(() => data?.recommendation_plans[0] ?? null, [data]);
   const latestMatchedTickerRelationships = latestPlan ? matchedRelationshipsFromPlan(latestPlan) : [];
   const latestTickerRelationshipEdges = latestPlan ? storedRelationshipEdgesFromPlan(latestPlan) : [];
+  const latestOutcomeBias = latestPlan?.latest_outcome
+    ? detailLabel(latestPlan.latest_outcome.transmission_bias_detail, latestPlan.latest_outcome.transmission_bias_label ?? latestPlan.latest_outcome.transmission_bias, false) ?? "—"
+    : "—";
+  const latestOutcomeRegime = latestPlan?.latest_outcome
+    ? detailLabel(latestPlan.latest_outcome.context_regime_detail, latestPlan.latest_outcome.context_regime_label ?? latestPlan.latest_outcome.context_regime, false) ?? "—"
+    : "—";
 
   return (
     <>
@@ -108,7 +114,7 @@ export function TickerPage() {
                     <div className="helper-text">Entry {latestPlan.entry_price_low ?? latestPlan.entry_price_high ?? "—"} · Stop {latestPlan.stop_loss ?? "—"} · Take profit {latestPlan.take_profit ?? "—"}</div>
                     <div className="helper-text">Ticker relationships {relationshipSummary(latestPlan ?? {})}</div>
                     <div className="helper-text">Latest outcome {latestPlan.latest_outcome?.outcome ?? "open"}</div>
-                    <div className="helper-text">Bias {latestPlan.latest_outcome?.transmission_bias_label ?? latestPlan.latest_outcome?.transmission_bias ?? "—"} · Regime {latestPlan.latest_outcome?.context_regime_label ?? latestPlan.latest_outcome?.context_regime ?? "—"}</div>
+                    <div className="helper-text">Bias {latestOutcomeBias} · Regime {latestOutcomeRegime}</div>
                   </div>
                 ) : (
                   <EmptyState message="No plans stored for this ticker yet." />
@@ -132,8 +138,14 @@ export function TickerPage() {
               {data.recommendation_plans.length === 0 ? <EmptyState message="No recommendation plans are stored for this ticker yet." /> : (
                 <div className="data-stack top-gap-small">
                   {data.recommendation_plans.map((item) => {
-                    const setupFamily = typeof item.signal_breakdown === "object" && item.signal_breakdown !== null && !Array.isArray(item.signal_breakdown) && typeof (item.signal_breakdown as Record<string, unknown>).setup_family === "string"
-                      ? (item.signal_breakdown as Record<string, unknown>).setup_family as string
+                    const setupFamily = typeof item.signal_breakdown?.setup_family === "string"
+                      ? item.signal_breakdown.setup_family
+                      : "—";
+                    const outcomeBias = item.latest_outcome
+                      ? detailLabel(item.latest_outcome.transmission_bias_detail, item.latest_outcome.transmission_bias_label ?? item.latest_outcome.transmission_bias, false) ?? "—"
+                      : "—";
+                    const outcomeRegime = item.latest_outcome
+                      ? detailLabel(item.latest_outcome.context_regime_detail, item.latest_outcome.context_regime_label ?? item.latest_outcome.context_regime, false) ?? "—"
                       : "—";
                     return (
                       <article key={`${item.id}-${item.computed_at}`} className="data-card">
@@ -160,7 +172,7 @@ export function TickerPage() {
                           <div className="data-point"><span className="data-point-label">stop</span><span className="data-point-value">{item.stop_loss ?? "—"}</span></div>
                           <div className="data-point"><span className="data-point-label">take profit</span><span className="data-point-value">{item.take_profit ?? "—"}</span></div>
                           <div className="data-point"><span className="data-point-label">outcome note</span><span className="data-point-value">{item.latest_outcome?.notes || (item.warnings.length > 0 ? `${item.warnings.length} warning(s)` : "—")}</span></div>
-                          <div className="data-point"><span className="data-point-label">analytics</span><span className="data-point-value">{item.latest_outcome ? `${item.latest_outcome.transmission_bias_label ?? item.latest_outcome.transmission_bias ?? "—"} · ${item.latest_outcome.context_regime_label ?? item.latest_outcome.context_regime ?? "—"}` : "—"}</span></div>
+                          <div className="data-point"><span className="data-point-label">analytics</span><span className="data-point-value">{item.latest_outcome ? `${outcomeBias} · ${outcomeRegime}` : "—"}</span></div>
                         </div>
                       </article>
                     );

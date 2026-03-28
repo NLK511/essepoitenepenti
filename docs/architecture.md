@@ -165,7 +165,8 @@ flowchart LR
 33. backend recommendation-plan and ticker-signal domain models now mirror those governed substructures too, using typed nested models that still behave like mapping payloads where legacy callers expect `.get(...)`, `[...]`, or membership checks
 34. recommendation/context repositories now serialize nested Pydantic payloads safely when persisting JSON blobs, so those richer typed substructures can round-trip through storage without regressing API compatibility
 35. transmission-window semantics are now also registry-backed, allowing deep-analysis, ticker-signal, and recommendation-plan payloads to carry `expected_transmission_window_detail` objects alongside canonical window keys
-36. evidence-concentration cohorts now expose a readable `slice_label` alongside the canonical `slice_name`, so API consumers and operator pages can render cohort families without hand-humanizing backend keys
+36. latest recommendation outcomes now also carry `transmission_bias_detail` and `context_regime_detail`, so ticker pages, run detail, and recommendation-plan review can prefer stable governed analytics labels instead of ad hoc fallbacks
+37. evidence-concentration cohorts now expose a readable `slice_label` alongside the canonical `slice_name`, so API consumers and operator pages can render cohort families without hand-humanizing backend keys
 25. the support-snapshot resolver now backfills baseline industry ontology metadata even when an industry context snapshot is missing, so downstream proposal/ticker analysis code can still see sector and relationship context instead of dropping to a taxonomy-blind fallback
 26. refresh services still persist transitional `SupportSnapshot` records first and then materialize redesign-native macro or industry context snapshots from the same run
 27. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer

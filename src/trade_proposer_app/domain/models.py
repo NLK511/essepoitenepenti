@@ -469,8 +469,10 @@ class RecommendationPlanOutcome(BaseModel):
     horizon: str | None = None
     transmission_bias: str | None = None
     transmission_bias_label: str | None = None
+    transmission_bias_detail: KeyLabelDetail | None = None
     context_regime: str | None = None
     context_regime_label: str | None = None
+    context_regime_detail: KeyLabelDetail | None = None
     notes: str = ""
     run_id: int | None = None
 

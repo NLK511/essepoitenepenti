@@ -586,7 +586,9 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(plans[0].latest_outcome.outcome, "loss")
         self.assertEqual(plans[0].latest_outcome.setup_family, "macro_beneficiary_loser")
         self.assertEqual(plans[0].latest_outcome.transmission_bias_label, "unknown")
+        self.assertEqual(plans[0].latest_outcome.transmission_bias_detail["label"], "unknown")
         self.assertEqual(plans[0].latest_outcome.context_regime_label, "mixed context")
+        self.assertEqual(plans[0].latest_outcome.context_regime_detail["label"], "mixed context")
 
     def test_job_execution_enqueues_and_processes_run(self) -> None:
         session = create_session()
