@@ -1,8 +1,36 @@
 from datetime import datetime, timezone
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from trade_proposer_app.domain.enums import JobType, RecommendationDirection, RecommendationState, RunStatus, StrategyHorizon
+
+
+class DictLikeModel(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    def _mapping(self) -> dict[str, object]:
+        values = dict(self.__dict__)
+        if self.model_extra:
+            values.update(self.model_extra)
+        return values
+
+    def __getitem__(self, key: str) -> object:
+        return self._mapping()[key]
+
+    def get(self, key: str, default: object | None = None) -> object | None:
+        return self._mapping().get(key, default)
+
+    def __contains__(self, key: object) -> bool:
+        return key in self._mapping()
+
+    def keys(self):
+        return self._mapping().keys()
+
+    def items(self):
+        return self._mapping().items()
+
+    def values(self):
+        return self._mapping().values()
 
 
 class NewsArticle(BaseModel):
@@ -276,6 +304,122 @@ class IndustryContextSnapshot(BaseModel):
     job_id: int | None = None
 
 
+class KeyLabelDetail(DictLikeModel):
+    key: str
+    label: str
+
+
+class RecommendationTransmissionSummary(DictLikeModel):
+    alignment_percent: float | None = None
+    context_bias: str | None = None
+    transmission_bias: str | None = None
+    catalyst_intensity_percent: float | None = None
+    context_strength_percent: float | None = None
+    context_event_relevance_percent: float | None = None
+    contradiction_count: int | None = None
+    transmission_tags: list[str] = Field(default_factory=list)
+    transmission_tag_details: list[KeyLabelDetail] = Field(default_factory=list)
+    primary_drivers: list[str] = Field(default_factory=list)
+    primary_driver_details: list[KeyLabelDetail] = Field(default_factory=list)
+    industry_exposure_channels: list[str] = Field(default_factory=list)
+    industry_exposure_channel_details: list[KeyLabelDetail] = Field(default_factory=list)
+    ticker_exposure_channels: list[str] = Field(default_factory=list)
+    ticker_exposure_channel_details: list[KeyLabelDetail] = Field(default_factory=list)
+    expected_transmission_window: str | None = None
+    conflict_flags: list[str] = Field(default_factory=list)
+    conflict_flag_details: list[KeyLabelDetail] = Field(default_factory=list)
+    decay_state: str | None = None
+    transmission_confidence_adjustment: float | None = None
+    lane_hint: str | None = None
+    ticker_relationship_edges: list[dict[str, object]] = Field(default_factory=list)
+    matched_ticker_relationships: list[dict[str, object]] = Field(default_factory=list)
+    transmission_alignment_score: float | None = None
+
+
+class RecommendationCalibrationReview(DictLikeModel):
+    enabled: bool | None = None
+    review_status: str | None = None
+    review_status_label: str | None = None
+    raw_confidence_percent: float | None = None
+    calibrated_confidence_percent: float | None = None
+    confidence_adjustment: float | None = None
+    base_confidence_threshold: float | None = None
+    effective_confidence_threshold: float | None = None
+    threshold_adjustment: float | None = None
+    overall_win_rate_percent: float | None = None
+    setup_family: "RecommendationCalibrationBucket | dict[str, object] | None" = None
+    confidence_bucket: "RecommendationCalibrationBucket | dict[str, object] | None" = None
+    horizon: "RecommendationCalibrationBucket | dict[str, object] | None" = None
+    transmission_bias: "RecommendationCalibrationBucket | dict[str, object] | None" = None
+    context_regime: "RecommendationCalibrationBucket | dict[str, object] | None" = None
+    horizon_setup_family: "RecommendationCalibrationBucket | dict[str, object] | None" = None
+    reasons: list[str] = Field(default_factory=list)
+    reason_details: list[KeyLabelDetail] = Field(default_factory=list)
+
+
+class RecommendationPlanEvidenceSummary(DictLikeModel):
+    summary: str = ""
+    setup_family: str | None = None
+    action_reason: str | None = None
+    action_reason_label: str | None = None
+    action_reason_detail: str | None = None
+    confidence_components: dict[str, float] = Field(default_factory=dict)
+    raw_confidence_percent: float | None = None
+    calibrated_confidence_percent: float | None = None
+    confidence_adjustment: float | None = None
+    calibration_review: RecommendationCalibrationReview | None = None
+    transmission_summary: RecommendationTransmissionSummary | None = None
+    entry_style: str | None = None
+    stop_style: str | None = None
+    target_style: str | None = None
+    timing_expectation: str | None = None
+    evaluation_focus: list[str] = Field(default_factory=list)
+    invalidation_summary: str | None = None
+
+
+class RecommendationPlanSignalBreakdown(DictLikeModel):
+    attention_score: float | None = None
+    macro_exposure_score: float | None = None
+    industry_alignment_score: float | None = None
+    ticker_sentiment_score: float | None = None
+    technical_setup_score: float | None = None
+    catalyst_score: float | None = None
+    expected_move_score: float | None = None
+    execution_quality_score: float | None = None
+    setup_family: str | None = None
+    confidence_components: dict[str, float] = Field(default_factory=dict)
+    raw_confidence_percent: float | None = None
+    calibrated_confidence_percent: float | None = None
+    confidence_bucket: str | None = None
+    calibration_review: RecommendationCalibrationReview | None = None
+    transmission_summary: RecommendationTransmissionSummary | None = None
+    mode: str | None = None
+
+
+class TickerSignalSourceBreakdown(RecommendationTransmissionSummary):
+    cheap_scan_summary: str | None = None
+    cheap_scan_model: str | None = None
+    deep_analysis_available: bool | None = None
+    deep_analysis_model: str | None = None
+    summary_method: str | None = None
+    base_confidence_percent: float | None = None
+
+
+class TickerSignalDiagnostics(RecommendationTransmissionSummary):
+    mode: str | None = None
+    shortlisted: bool | None = None
+    shortlist_rank: int | None = None
+    shortlist_reasons: list[str] = Field(default_factory=list)
+    shortlist_reason_details: list[KeyLabelDetail] = Field(default_factory=list)
+    shortlist_eligible: bool | None = None
+    selection_lane: str | None = None
+    selection_lane_label: str | None = None
+    cheap_scan_confidence_percent: float | None = None
+    cheap_scan_directional_score: float | None = None
+    catalyst_proxy_score: float | None = None
+    cheap_scan_component_scores: dict[str, object] = Field(default_factory=dict)
+
+
 class TickerSignalSnapshot(BaseModel):
     id: int | None = None
     ticker: str
@@ -295,8 +439,8 @@ class TickerSignalSnapshot(BaseModel):
     execution_quality_score: float = 0.0
     warnings: list[str] = Field(default_factory=list)
     missing_inputs: list[str] = Field(default_factory=list)
-    source_breakdown: dict[str, object] = Field(default_factory=dict)
-    diagnostics: dict[str, object] = Field(default_factory=dict)
+    source_breakdown: TickerSignalSourceBreakdown = Field(default_factory=TickerSignalSourceBreakdown)
+    diagnostics: TickerSignalDiagnostics = Field(default_factory=TickerSignalDiagnostics)
     run_id: int | None = None
     job_id: int | None = None
 
@@ -348,8 +492,8 @@ class RecommendationPlan(BaseModel):
     risks: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     missing_inputs: list[str] = Field(default_factory=list)
-    evidence_summary: dict[str, object] = Field(default_factory=dict)
-    signal_breakdown: dict[str, object] = Field(default_factory=dict)
+    evidence_summary: RecommendationPlanEvidenceSummary = Field(default_factory=RecommendationPlanEvidenceSummary)
+    signal_breakdown: RecommendationPlanSignalBreakdown = Field(default_factory=RecommendationPlanSignalBreakdown)
     computed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     run_id: int | None = None
     job_id: int | None = None
@@ -358,7 +502,7 @@ class RecommendationPlan(BaseModel):
     latest_outcome: RecommendationPlanOutcome | None = None
 
 
-class RecommendationCalibrationBucket(BaseModel):
+class RecommendationCalibrationBucket(DictLikeModel):
     key: str
     label: str
     slice_name: str = ""

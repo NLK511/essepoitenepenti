@@ -171,6 +171,7 @@ Goal: make the ontology behave more like a real market-structure graph.
 - [x] govern event lifecycle display semantics too, including event source priorities, persistence states, window hints, and recency buckets, so stored context-event rows can expose readable labels directly
 - [x] tighten frontend context-event typing so review pages can rely less on loose record casting when rendering governed lifecycle/detail fields
 - [x] tighten frontend recommendation-plan and ticker-signal payload typing around stable governed substructures like transmission summaries, calibration reviews, evidence summaries, and diagnostics
+- [x] tighten backend recommendation-plan and ticker-signal domain models around those same governed substructures so repositories and APIs preserve typed nested payloads end-to-end
 - [x] tighten evidence-concentration payload typing by exposing readable governed slice labels alongside canonical slice keys
 - [ ] migrate all remaining ontology relationship/channel fields to governed registries where practical
 

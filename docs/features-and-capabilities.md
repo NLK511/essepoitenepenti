@@ -56,6 +56,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 - Carry readable event lifecycle/status labels too, so context event rows can show governed source priority, persistence state, window, and recency semantics instead of raw keys.
 - Use narrower frontend context-event typing on review pages too, reducing dependence on ad hoc record casting when rendering governed event metadata.
 - Use narrower frontend recommendation-plan and ticker-signal typing for governed diagnostics/evidence substructures too, reducing UI dependence on loosely typed payload blobs.
+- Preserve those same governed recommendation/ticker substructures as typed backend payloads too, so persisted plans and signal snapshots round-trip with readable labels and more explicit nested semantics.
 - Queue macro and industry refresh workflows manually from the operator UI.
 - Execute macro and industry refresh workflows asynchronously through the shared queued run path; immediate `run-now` endpoints still exist in the backend but are no longer the primary operator workflow.
 - Trace which shared artifacts were used by a run or recommendation plan.

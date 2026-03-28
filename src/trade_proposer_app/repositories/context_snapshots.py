@@ -1,6 +1,7 @@
 import json
 from typing import Any
 
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -161,8 +162,14 @@ class ContextSnapshotRepository:
         return [self._to_ticker_signal_model(row) for row in rows]
 
     @staticmethod
-    def _dump(value: Any) -> str:
-        return json.dumps(value)
+    def _json_default(value: Any) -> Any:
+        if isinstance(value, BaseModel):
+            return value.model_dump(mode="json")
+        raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+    @classmethod
+    def _dump(cls, value: Any) -> str:
+        return json.dumps(value, default=cls._json_default)
 
     @staticmethod
     def _load(value: str | None, default: Any) -> Any:

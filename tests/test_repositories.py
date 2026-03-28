@@ -12,11 +12,16 @@ from trade_proposer_app.domain.models import (
     MacroContextSnapshot,
     Recommendation,
     RecommendationPlan,
+    RecommendationPlanEvidenceSummary,
     RecommendationPlanOutcome,
+    RecommendationPlanSignalBreakdown,
+    RecommendationTransmissionSummary,
     RunDiagnostics,
     RunOutput,
     SupportSnapshot,
+    TickerSignalDiagnostics,
     TickerSignalSnapshot,
+    TickerSignalSourceBreakdown,
 )
 from trade_proposer_app.persistence.models import Base, JobRecord, ProviderCredentialRecord, RunRecord
 from trade_proposer_app.repositories.jobs import JobRepository
@@ -683,9 +688,12 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(action_map["MSFT"], "no_action")
         self.assertEqual(action_map["TSLA"], "no_action")
         plan_map = {plan.ticker: plan for plan in plans}
+        self.assertIsInstance(plan_map["AAPL"].signal_breakdown, RecommendationPlanSignalBreakdown)
+        self.assertIsInstance(plan_map["AAPL"].signal_breakdown.get("transmission_summary"), RecommendationTransmissionSummary)
         self.assertEqual(plan_map["AAPL"].signal_breakdown["setup_family"], "breakout")
         self.assertEqual(plan_map["AAPL"].signal_breakdown["confidence_bucket"], "65_to_79")
         self.assertIn("confidence_components", plan_map["AAPL"].signal_breakdown)
+        self.assertIsInstance(plan_map["AAPL"].evidence_summary, RecommendationPlanEvidenceSummary)
         self.assertEqual(plan_map["AAPL"].evidence_summary["entry_style"], "break_or_retest")
         self.assertEqual(plan_map["AAPL"].evidence_summary["stop_style"], "below_break_level_with_buffer")
         self.assertEqual(plan_map["AAPL"].evidence_summary["target_style"], "measured_move_or_next_resistance")
@@ -697,6 +705,8 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("did not clear shortlist competition", plan_map["TSLA"].evidence_summary["action_reason_detail"])
         diagnostics_map = {item.ticker: item.diagnostics for item in ticker_signals}
         source_breakdown_map = {item.ticker: item.source_breakdown for item in ticker_signals}
+        self.assertIsInstance(diagnostics_map["AAPL"], TickerSignalDiagnostics)
+        self.assertIsInstance(source_breakdown_map["AAPL"], TickerSignalSourceBreakdown)
         self.assertEqual(diagnostics_map["AAPL"]["mode"], "deep_analysis")
         self.assertEqual(diagnostics_map["AAPL"]["shortlist_reasons"], [])
         self.assertEqual(diagnostics_map["AAPL"]["shortlist_reason_details"], [])
