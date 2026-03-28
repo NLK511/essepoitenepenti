@@ -1,5 +1,5 @@
 import mermaid from "mermaid";
-import { ChangeEvent, ReactNode, createElement, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, ReactNode, createElement, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson } from "../api";
@@ -384,6 +384,7 @@ export function DocsPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [expandedDocuments, setExpandedDocuments] = useState<Record<string, boolean>>({});
+  const articleRef = useRef<HTMLElement | null>(null);
 
   const query = searchParams.get("q") ?? "";
   const selectedSlug = searchParams.get("doc") ?? "";
@@ -428,13 +429,24 @@ export function DocsPage() {
   }, [filteredDocuments, selectedSlug]);
 
   useEffect(() => {
-    if (!selectedSectionId) {
+    if (!selectedDocument) {
       return;
     }
-    const element = window.document.getElementById(selectedSectionId);
-    if (element) {
-      element.scrollIntoView({ block: "start", behavior: "smooth" });
-    }
+
+    const scrollTarget = () => {
+      if (selectedSectionId) {
+        const element = window.document.getElementById(selectedSectionId);
+        if (element) {
+          element.scrollIntoView({ block: "start", behavior: "smooth" });
+          return;
+        }
+      }
+
+      articleRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    };
+
+    const frame = window.requestAnimationFrame(scrollTarget);
+    return () => window.cancelAnimationFrame(frame);
   }, [selectedDocument, selectedSectionId]);
 
   useEffect(() => {
@@ -596,7 +608,7 @@ export function DocsPage() {
           </Card>
           <Card className="docs-content-panel">
             {selectedDocument ? (
-              <article className="docs-article markdown-viewer">
+              <article ref={articleRef} className="docs-article markdown-viewer">
                 <div className="docs-article-header">
                   <div>
                     <div className="kicker">{selectedDocument.path}</div>
