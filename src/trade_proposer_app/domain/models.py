@@ -119,21 +119,6 @@ class RunOutput(BaseModel):
     diagnostics: RunDiagnostics = Field(default_factory=RunDiagnostics)
 
 
-class PrototypeTradeLogEntry(BaseModel):
-    id: int
-    timestamp: str
-    ticker: str
-    direction: str
-    entry_price: float
-    stop_loss: float
-    take_profit: float
-    confidence: float | None = None
-    status: RecommendationState
-    close_timestamp: str | None = None
-    duration_days: float | None = None
-    analysis_json: str | None = None
-
-
 class TickerPerformanceSummary(BaseModel):
     ticker: str
     app_plan_count: int = 0
@@ -147,22 +132,12 @@ class TickerPerformanceSummary(BaseModel):
     loss_plan_count: int = 0
     warning_plan_count: int = 0
     average_confidence: float | None = None
-    prototype_trade_log_path: str = ""
-    prototype_trade_log_available: bool = False
-    prototype_trade_count: int = 0
-    resolved_trade_count: int = 0
-    win_count: int = 0
-    loss_count: int = 0
-    pending_trade_count: int = 0
-    win_rate_percent: float | None = None
-    average_resolved_duration_days: float | None = None
 
 
 class TickerAnalysisPage(BaseModel):
     ticker: str
     performance: TickerPerformanceSummary
     recommendation_plans: list["RecommendationPlan"] = Field(default_factory=list)
-    prototype_trades: list[PrototypeTradeLogEntry] = Field(default_factory=list)
 
 
 class EvaluationRunResult(BaseModel):

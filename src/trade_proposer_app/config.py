@@ -9,8 +9,7 @@ class AppSettings(BaseSettings):
     database_url: str = "sqlite:///./trade_proposer.db"
     redis_url: str = "redis://localhost:6379/0"
     secret_key: str = "change-me"
-    prototype_repo_path: str = "/home/aurelio/workspace/pi-mono"
-    prototype_python_executable: str = "python3"
+    weights_file_path: str = ""
     single_user_auth_enabled: bool = True
     single_user_auth_token: str = "change-me"
     single_user_auth_allowlist_paths: str | None = None

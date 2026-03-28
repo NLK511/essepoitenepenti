@@ -118,12 +118,15 @@ APP_PORT=8000
 DATABASE_URL=sqlite:///./trade_proposer.db
 REDIS_URL=redis://localhost:6379/0
 SECRET_KEY=replace-this-with-a-long-random-secret
+WEIGHTS_FILE_PATH=
 SINGLE_USER_AUTH_ENABLED=true
 SINGLE_USER_AUTH_TOKEN=
 SINGLE_USER_AUTH_ALLOWLIST_PATHS=/api/health,/api/health/preflight
 SINGLE_USER_AUTH_USERNAME=admin
 SINGLE_USER_AUTH_PASSWORD=change-me
 ```
+
+`WEIGHTS_FILE_PATH` is optional. Leave it blank to use the app-managed default at `src/trade_proposer_app/data/weights.json`, or point it at another writable `weights.json` location if you want optimization runs to manage a different file.
 
 ## Single-user authentication
 

@@ -84,21 +84,6 @@ export interface Run {
   timing_json: string | null;
 }
 
-export interface PrototypeTradeLogEntry {
-  id: number;
-  timestamp: string;
-  ticker: string;
-  direction: string;
-  entry_price: number;
-  stop_loss: number;
-  take_profit: number;
-  confidence: number | null;
-  status: string;
-  close_timestamp: string | null;
-  duration_days: number | null;
-  analysis_json: string | null;
-}
-
 export interface TickerPerformanceSummary {
   ticker: string;
   app_plan_count: number;
@@ -112,22 +97,12 @@ export interface TickerPerformanceSummary {
   loss_plan_count: number;
   warning_plan_count: number;
   average_confidence: number | null;
-  prototype_trade_log_path: string;
-  prototype_trade_log_available: boolean;
-  prototype_trade_count: number;
-  resolved_trade_count: number;
-  win_count: number;
-  loss_count: number;
-  pending_trade_count: number;
-  win_rate_percent: number | null;
-  average_resolved_duration_days: number | null;
 }
 
 export interface TickerAnalysisPage {
   ticker: string;
   performance: TickerPerformanceSummary;
   recommendation_plans: RecommendationPlan[];
-  prototype_trades: PrototypeTradeLogEntry[];
 }
 
 export interface AppSetting {

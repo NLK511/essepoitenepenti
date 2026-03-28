@@ -1,4 +1,3 @@
-import sqlite3
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -67,9 +66,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             pool_reset_on_return=None,
         )
         Base.metadata.create_all(bind=self.engine)
-        self.prototype_root = tempfile.TemporaryDirectory()
-        self.original_prototype_repo_path = settings.prototype_repo_path
-        settings.prototype_repo_path = self.prototype_root.name
+        self.weights_root = tempfile.TemporaryDirectory()
+        self.original_weights_file_path = settings.weights_file_path
+        settings.weights_file_path = str(Path(self.weights_root.name) / "weights.json")
 
         def override_db_session():
             session = Session(bind=self.engine)
@@ -88,13 +87,13 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         self.health_preflight_patcher.stop()
         app.dependency_overrides.clear()
-        settings.prototype_repo_path = self.original_prototype_repo_path
+        settings.weights_file_path = self.original_weights_file_path
         settings.single_user_auth_enabled = self._previous_single_user_auth_enabled
         settings.single_user_auth_token = self._previous_single_user_auth_token
         settings.single_user_auth_allowlist_paths = self._previous_single_user_auth_allowlist_paths
         settings.single_user_auth_username = self._previous_single_user_auth_username
         settings.single_user_auth_password = self._previous_single_user_auth_password
-        self.prototype_root.cleanup()
+        self.weights_root.cleanup()
 
     def seed_run_with_diagnostics(self) -> int:
         session = Session(bind=self.engine)
@@ -153,7 +152,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             RunRepository(session).update_status(
                 run.id or 0,
                 "failed",
-                error_message="prototype dependency missing: No module named 'yfinance'",
+                error_message="dependency missing: No module named 'yfinance'",
                 timing={
                     "queue_wait_seconds": 0.0,
                     "resolve_tickers_seconds": 0.01,
@@ -291,103 +290,6 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             return [macro.id or 0, industry.id or 0]
         finally:
             session.close()
-
-    def seed_prototype_trade_log(self) -> None:
-        db_path = Path(self.prototype_root.name) / ".pi" / "skills" / "trade-proposer" / "data" / "trade_log.db"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(db_path)
-        try:
-            connection.execute(
-                """
-                CREATE TABLE trades (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TEXT,
-                    ticker TEXT,
-                    direction TEXT,
-                    entry_price REAL,
-                    stop_loss REAL,
-                    take_profit REAL,
-                    sentiment REAL,
-                    rsi REAL,
-                    price_above_sma50 INTEGER,
-                    price_above_sma200 INTEGER,
-                    atr_pct REAL,
-                    confidence REAL,
-                    status TEXT DEFAULT 'PENDING',
-                    close_timestamp TEXT,
-                    duration_days REAL,
-                    analysis_json TEXT
-                )
-                """
-            )
-            connection.executemany(
-                """
-                INSERT INTO trades (
-                    timestamp, ticker, direction, entry_price, stop_loss, take_profit,
-                    sentiment, rsi, price_above_sma50, price_above_sma200, atr_pct,
-                    confidence, status, close_timestamp, duration_days, analysis_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                [
-                    (
-                        "2026-03-01 09:30:00",
-                        "AAPL",
-                        "LONG",
-                        100.0,
-                        95.0,
-                        110.0,
-                        0.2,
-                        55.0,
-                        1,
-                        1,
-                        2.5,
-                        80.0,
-                        "WIN",
-                        "2026-03-05 10:00:00",
-                        4.02,
-                        '{"aggregations": {"direction_score": 0.72}}',
-                    ),
-                    (
-                        "2026-03-08 09:30:00",
-                        "AAPL",
-                        "SHORT",
-                        104.0,
-                        108.0,
-                        96.0,
-                        -0.1,
-                        48.0,
-                        0,
-                        1,
-                        2.2,
-                        62.0,
-                        "LOSS",
-                        "2026-03-10 11:00:00",
-                        2.06,
-                        '{"aggregations": {"direction_score": 0.41}}',
-                    ),
-                    (
-                        "2026-03-11 09:30:00",
-                        "AAPL",
-                        "LONG",
-                        102.0,
-                        98.0,
-                        112.0,
-                        0.15,
-                        53.0,
-                        1,
-                        1,
-                        2.1,
-                        70.0,
-                        "PENDING",
-                        None,
-                        None,
-                        '{"aggregations": {"direction_score": 0.65}}',
-                    ),
-                ],
-            )
-            connection.commit()
-        finally:
-            connection.close()
 
     async def test_health_endpoint(self) -> None:
         transport = httpx.ASGITransport(app=app)
@@ -929,10 +831,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["latest_runs"][0]["id"], high_run.id)
         self.assertEqual(len(payload["recommendation_plans"]), 2)
 
-    async def test_ticker_api_aggregates_plan_history_and_prototype_trade_log(self) -> None:
+    async def test_ticker_api_aggregates_recommendation_plan_history(self) -> None:
         self.seed_run_with_diagnostics()
         self.seed_context_and_recommendation_plan_data()
-        self.seed_prototype_trade_log()
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             response = await client.get("/api/tickers/AAPL")
@@ -944,17 +845,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["performance"]["actionable_plan_count"], 2)
         self.assertEqual(payload["performance"]["win_plan_count"], 1)
         self.assertEqual(payload["performance"]["open_plan_count"], 1)
-        self.assertEqual(payload["performance"]["prototype_trade_count"], 3)
-        self.assertEqual(payload["performance"]["resolved_trade_count"], 2)
-        self.assertEqual(payload["performance"]["win_count"], 1)
-        self.assertEqual(payload["performance"]["loss_count"], 1)
-        self.assertEqual(payload["performance"]["pending_trade_count"], 1)
-        self.assertEqual(payload["performance"]["win_rate_percent"], 50.0)
-        self.assertTrue(payload["performance"]["prototype_trade_log_available"])
         self.assertEqual(len(payload["recommendation_plans"]), 2)
         self.assertEqual(payload["recommendation_plans"][0]["latest_outcome"]["outcome"], "win")
-        self.assertEqual(len(payload["prototype_trades"]), 3)
-        self.assertEqual(payload["prototype_trades"][0]["status"], "PENDING")
+        self.assertNotIn("prototype_trades", payload)
 
     async def test_failed_run_is_apparent_in_api(self) -> None:
         run_id = self.seed_failed_run()
@@ -974,7 +867,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(dashboard.json()["latest_runs"], [])
 
     async def test_settings_api_round_trip(self) -> None:
-        weights_path = Path(self.prototype_root.name) / ".pi" / "skills" / "trade-proposer" / "data" / "weights.json"
+        weights_path = Path(settings.weights_file_path)
         weights_path.parent.mkdir(parents=True, exist_ok=True)
         weights_path.write_text('{"alpha": 1}')
 
@@ -1284,9 +1177,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(macro.json()["artifact"]["snapshot_id"], 99)
 
     async def test_settings_rollback_restores_latest_weights_backup(self) -> None:
-        data_dir = Path(self.prototype_root.name) / ".pi" / "skills" / "trade-proposer" / "data"
+        weights_path = Path(settings.weights_file_path)
+        data_dir = weights_path.parent
         data_dir.mkdir(parents=True, exist_ok=True)
-        weights_path = data_dir / "weights.json"
         weights_path.write_text('{"alpha": 9}')
         backup_dir = data_dir / "weight_backups"
         backup_dir.mkdir(parents=True, exist_ok=True)
@@ -1304,9 +1197,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(weights_path.read_text(), '{"alpha": 1}')
 
     async def test_settings_rollback_can_restore_selected_backup_path(self) -> None:
-        data_dir = Path(self.prototype_root.name) / ".pi" / "skills" / "trade-proposer" / "data"
+        weights_path = Path(settings.weights_file_path)
+        data_dir = weights_path.parent
         data_dir.mkdir(parents=True, exist_ok=True)
-        weights_path = data_dir / "weights.json"
         weights_path.write_text('{"alpha": 9}')
         backup_dir = data_dir / "weight_backups"
         backup_dir.mkdir(parents=True, exist_ok=True)

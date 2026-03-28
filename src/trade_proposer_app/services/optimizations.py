@@ -32,25 +32,14 @@ class WeightOptimizationService:
         return self.weights_path.parent / "weight_backups"
 
     @staticmethod
-    def _prototype_weights_path() -> Path:
-        return (
-            Path(settings.prototype_repo_path)
-            / ".pi"
-            / "skills"
-            / "trade-proposer"
-            / "data"
-            / "weights.json"
-        )
-
-    @staticmethod
     def _app_weights_path() -> Path:
+        configured_path = settings.weights_file_path.strip()
+        if configured_path:
+            return Path(configured_path)
         return Path(__file__).resolve().parents[1] / "data" / "weights.json"
 
     @classmethod
     def _default_weights_path(cls) -> Path:
-        prototype_path = cls._prototype_weights_path()
-        if prototype_path.exists():
-            return prototype_path
         return cls._app_weights_path()
 
     def execute(self) -> tuple[dict[str, object], dict[str, object]]:
