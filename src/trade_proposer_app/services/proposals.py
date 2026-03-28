@@ -200,8 +200,8 @@ class ProposalService:
             direction,
             context["sentiment_score"],
             context.get("enhanced_sentiment_score", context["sentiment_score"]),
-            context.get("macro_sentiment_score", 0.0),
-            context.get("industry_sentiment_score", 0.0),
+            self._macro_support_score(context),
+            self._industry_support_score(context),
             context.get("ticker_sentiment_score", 0.0),
             context["rsi"],
             context["price_above_sma50"],
@@ -327,8 +327,8 @@ class ProposalService:
                 "snapshot_id": context.get("macro_snapshot_id"),
                 "subject_key": context.get("macro_snapshot_subject_key", "global_macro"),
                 "subject_label": context.get("macro_snapshot_subject_label", "Global Macro"),
-                "score": context.get("macro_sentiment_score", 0.0),
-                "label": context.get("macro_sentiment_label", "NEUTRAL"),
+                "score": self._macro_support_score(context),
+                "label": self._macro_support_label(context),
                 "coverage_insights": context.get("macro_coverage_insights", []),
                 "coverage": context.get("macro_snapshot_coverage", {}),
                 "drivers": context.get("macro_snapshot_drivers", []),
@@ -351,8 +351,8 @@ class ProposalService:
                 "snapshot_id": context.get("industry_snapshot_id"),
                 "subject_key": context.get("industry_snapshot_subject_key"),
                 "subject_label": context.get("industry_snapshot_subject_label", context.get("ticker_profile", {}).get("industry", "")),
-                "score": context.get("industry_sentiment_score", 0.0),
-                "label": context.get("industry_sentiment_label", "NEUTRAL"),
+                "score": self._industry_support_score(context),
+                "label": self._industry_support_label(context),
                 "coverage_insights": context.get("industry_coverage_insights", []),
                 "coverage": context.get("industry_snapshot_coverage", {}),
                 "drivers": context.get("industry_snapshot_drivers", []),
@@ -703,10 +703,14 @@ class ProposalService:
             "social_item_count": 0,
             "macro_sentiment_score": 0.0,
             "macro_sentiment_label": "NEUTRAL",
+            "macro_support_score": 0.0,
+            "macro_support_label": "NEUTRAL",
             "macro_coverage_insights": [],
             "macro_item_count": 0,
             "industry_sentiment_score": 0.0,
             "industry_sentiment_label": "NEUTRAL",
+            "industry_support_score": 0.0,
+            "industry_support_label": "NEUTRAL",
             "industry_coverage_insights": [],
             "industry_item_count": 0,
             "ticker_sentiment_score": 0.0,
@@ -757,7 +761,7 @@ class ProposalService:
         news_score = float(context.get("news_sentiment_score", 0.0) or 0.0)
         social_score = float(context.get("social_sentiment_score", 0.0) or 0.0)
         social_count = int(context.get("social_item_count", 0) or 0)
-        macro_score = float(context.get("macro_sentiment_score", 0.0) or 0.0)
+        macro_score = self._macro_support_score(context)
         ticker_score = float(context.get("ticker_sentiment_score", 0.0) or 0.0)
         signals: list[str] = []
         if social_count > 0 and abs(news_score - social_score) >= 0.45:
@@ -869,10 +873,14 @@ class ProposalService:
             "industry_social_item_count": industry_social_count,
             "macro_sentiment_score": macro_score,
             "macro_sentiment_label": self._label_sentiment(macro_score),
+            "macro_support_score": macro_score,
+            "macro_support_label": self._label_sentiment(macro_score),
             "macro_item_count": int(news_scopes["macro_news_item_count"]) + macro_social_count,
             "macro_coverage_insights": list(dict.fromkeys(list(news_scopes["macro_news_coverage_insights"]) + (["macro: no social macro items matched."] if macro_social_count == 0 else []))),
             "industry_sentiment_score": industry_score,
             "industry_sentiment_label": self._label_sentiment(industry_score),
+            "industry_support_score": industry_score,
+            "industry_support_label": self._label_sentiment(industry_score),
             "industry_item_count": int(news_scopes["industry_news_item_count"]) + industry_social_count,
             "industry_coverage_insights": list(dict.fromkeys(list(news_scopes["industry_news_coverage_insights"]) + (["industry: no social industry items matched."] if industry_social_count == 0 else []))),
             "ticker_sentiment_score": ticker_score,
@@ -889,6 +897,22 @@ class ProposalService:
         if score < -0.15:
             return "NEGATIVE"
         return "NEUTRAL"
+
+    @staticmethod
+    def _macro_support_score(context: dict[str, Any]) -> float:
+        return float(context.get("macro_support_score", context.get("macro_sentiment_score", 0.0)) or 0.0)
+
+    @staticmethod
+    def _industry_support_score(context: dict[str, Any]) -> float:
+        return float(context.get("industry_support_score", context.get("industry_sentiment_score", 0.0)) or 0.0)
+
+    @staticmethod
+    def _macro_support_label(context: dict[str, Any]) -> str:
+        return str(context.get("macro_support_label", context.get("macro_sentiment_label", "NEUTRAL")) or "NEUTRAL")
+
+    @staticmethod
+    def _industry_support_label(context: dict[str, Any]) -> str:
+        return str(context.get("industry_support_label", context.get("industry_sentiment_label", "NEUTRAL")) or "NEUTRAL")
 
     def _score_summary_text(self, text: str) -> float:
         tokens = self._tokenize_text(text)
@@ -1007,6 +1031,8 @@ class ProposalService:
                 {
                     "macro_sentiment_score": float(macro_snapshot.get("score", 0.0) or 0.0),
                     "macro_sentiment_label": macro_snapshot.get("label", "NEUTRAL"),
+                    "macro_support_score": float(macro_snapshot.get("score", 0.0) or 0.0),
+                    "macro_support_label": macro_snapshot.get("label", "NEUTRAL"),
                     "macro_snapshot_id": macro_snapshot.get("snapshot_id"),
                     "macro_snapshot_subject_key": macro_snapshot.get("subject_key"),
                     "macro_snapshot_subject_label": macro_snapshot.get("subject_label"),
@@ -1039,6 +1065,8 @@ class ProposalService:
                 {
                     "industry_sentiment_score": float(industry_snapshot.get("score", 0.0) or 0.0),
                     "industry_sentiment_label": industry_snapshot.get("label", "NEUTRAL"),
+                    "industry_support_score": float(industry_snapshot.get("score", 0.0) or 0.0),
+                    "industry_support_label": industry_snapshot.get("label", "NEUTRAL"),
                     "industry_snapshot_id": industry_snapshot.get("snapshot_id"),
                     "industry_snapshot_subject_key": industry_snapshot.get("subject_key"),
                     "industry_snapshot_subject_label": industry_snapshot.get("subject_label"),
@@ -1068,8 +1096,8 @@ class ProposalService:
         ticker_sentiment_score = float(hierarchical.get("ticker_sentiment_score", 0.0) or 0.0)
         ticker_sentiment_label = hierarchical.get("ticker_sentiment_label")
         overall_base_score = self._clamp_value(
-            (float(hierarchical.get("macro_sentiment_score", 0.0)) * 0.2)
-            + (float(hierarchical.get("industry_sentiment_score", 0.0)) * 0.3)
+            (float(hierarchical.get("macro_support_score", hierarchical.get("macro_sentiment_score", 0.0))) * 0.2)
+            + (float(hierarchical.get("industry_support_score", hierarchical.get("industry_sentiment_score", 0.0))) * 0.3)
             + (ticker_sentiment_score * 0.5)
         )
         enhanced = self._compute_enhanced_sentiment(

@@ -91,25 +91,25 @@ async def list_industry_snapshots(limit: int = 20, session: Session = Depends(ge
 @router.post("/refresh/macro")
 async def enqueue_macro_snapshot_refresh(session: Session = Depends(get_db_session)) -> Run:
     service = _create_job_execution_service(session)
-    job = JobRepository(session).get_or_create_system_job("manual macro context refresh", JobType.MACRO_SENTIMENT_REFRESH)
+    job = JobRepository(session).get_or_create_system_job("manual macro context refresh", JobType.MACRO_CONTEXT_REFRESH)
     return service.enqueue_job(job.id or 0)
 
 
 @router.post("/refresh/macro/run-now")
 async def run_macro_snapshot_refresh_now(session: Session = Depends(get_db_session)) -> dict[str, object]:
-    return _run_snapshot_refresh_now(session, "manual macro context refresh", JobType.MACRO_SENTIMENT_REFRESH)
+    return _run_snapshot_refresh_now(session, "manual macro context refresh", JobType.MACRO_CONTEXT_REFRESH)
 
 
 @router.post("/refresh/industry")
 async def enqueue_industry_snapshot_refresh(session: Session = Depends(get_db_session)) -> Run:
     service = _create_job_execution_service(session)
-    job = JobRepository(session).get_or_create_system_job("manual industry context refresh", JobType.INDUSTRY_SENTIMENT_REFRESH)
+    job = JobRepository(session).get_or_create_system_job("manual industry context refresh", JobType.INDUSTRY_CONTEXT_REFRESH)
     return service.enqueue_job(job.id or 0)
 
 
 @router.post("/refresh/industry/run-now")
 async def run_industry_snapshot_refresh_now(session: Session = Depends(get_db_session)) -> dict[str, object]:
-    return _run_snapshot_refresh_now(session, "manual industry context refresh", JobType.INDUSTRY_SENTIMENT_REFRESH)
+    return _run_snapshot_refresh_now(session, "manual industry context refresh", JobType.INDUSTRY_CONTEXT_REFRESH)
 
 
 @router.get("/{snapshot_id}")

@@ -14,8 +14,10 @@ class JobType(StrEnum):
     PROPOSAL_GENERATION = "proposal_generation"
     RECOMMENDATION_EVALUATION = "recommendation_evaluation"
     WEIGHT_OPTIMIZATION = "weight_optimization"
-    MACRO_SENTIMENT_REFRESH = "macro_sentiment_refresh"
-    INDUSTRY_SENTIMENT_REFRESH = "industry_sentiment_refresh"
+    MACRO_CONTEXT_REFRESH = "macro_sentiment_refresh"
+    INDUSTRY_CONTEXT_REFRESH = "industry_sentiment_refresh"
+    MACRO_SENTIMENT_REFRESH = MACRO_CONTEXT_REFRESH
+    INDUSTRY_SENTIMENT_REFRESH = INDUSTRY_CONTEXT_REFRESH
 
 
 class RecommendationDirection(StrEnum):

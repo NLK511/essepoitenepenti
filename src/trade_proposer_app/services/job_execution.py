@@ -69,9 +69,9 @@ class JobExecutionService:
             return self._execute_evaluation_run(run)
         if run.job_type == JobType.WEIGHT_OPTIMIZATION:
             return self._execute_optimization_run(run)
-        if run.job_type == JobType.MACRO_SENTIMENT_REFRESH:
+        if run.job_type == JobType.MACRO_CONTEXT_REFRESH:
             return self._execute_macro_sentiment_run(run)
-        if run.job_type == JobType.INDUSTRY_SENTIMENT_REFRESH:
+        if run.job_type == JobType.INDUSTRY_CONTEXT_REFRESH:
             return self._execute_industry_sentiment_run(run)
         raise RuntimeError(f"unsupported job_type execution: {run.job_type.value}")
 

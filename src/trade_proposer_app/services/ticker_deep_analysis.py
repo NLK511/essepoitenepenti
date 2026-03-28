@@ -49,6 +49,7 @@ class TickerDeepAnalysisService:
             enriched = self._enrich_history(history)
             context = self._build_context(enriched)
             context = self._apply_context_enrichment(context, normalized_ticker)
+            context = self._apply_support_aliases(context)
             context = self._apply_taxonomy_profile(context, normalized_ticker)
             feature_vector = self._build_feature_vector(context)
             column_ranges = self._compute_column_ranges(enriched)
@@ -135,6 +136,15 @@ class TickerDeepAnalysisService:
         if callable(apply_news_context):
             return apply_news_context(context, ticker)
         return context
+
+    @staticmethod
+    def _apply_support_aliases(context: dict[str, Any]) -> dict[str, Any]:
+        enriched = dict(context)
+        enriched["macro_support_score"] = enriched.get("macro_sentiment_score", enriched.get("macro_support_score", 0.0))
+        enriched["macro_support_label"] = enriched.get("macro_sentiment_label", enriched.get("macro_support_label", "NEUTRAL"))
+        enriched["industry_support_score"] = enriched.get("industry_sentiment_score", enriched.get("industry_support_score", 0.0))
+        enriched["industry_support_label"] = enriched.get("industry_sentiment_label", enriched.get("industry_support_label", "NEUTRAL"))
+        return enriched
 
     def _apply_taxonomy_profile(self, context: dict[str, Any], ticker: str) -> dict[str, Any]:
         profile = context.get("ticker_profile") if isinstance(context.get("ticker_profile"), dict) else {}
@@ -290,10 +300,14 @@ class TickerDeepAnalysisService:
             "social_sentiment_score": 0.0,
             "macro_sentiment_score": 0.0,
             "macro_sentiment_label": "NEUTRAL",
+            "macro_support_score": 0.0,
+            "macro_support_label": "NEUTRAL",
             "macro_item_count": 0,
             "macro_coverage_insights": [],
             "industry_sentiment_score": 0.0,
             "industry_sentiment_label": "NEUTRAL",
+            "industry_support_score": 0.0,
+            "industry_support_label": "NEUTRAL",
             "industry_item_count": 0,
             "industry_coverage_insights": [],
             "ticker_sentiment_score": 0.0,
@@ -473,8 +487,8 @@ class TickerDeepAnalysisService:
     ) -> dict[str, float]:
         directional_multiplier = 1.0 if direction == RecommendationDirection.LONG else -1.0
         context_confidence = self._scale_signed(
-            (float(context.get("macro_sentiment_score", 0.0) or 0.0) * 0.45)
-            + (float(context.get("industry_sentiment_score", 0.0) or 0.0) * 0.55),
+            (TickerDeepAnalysisService._macro_support_score(context) * 0.45)
+            + (TickerDeepAnalysisService._industry_support_score(context) * 0.55),
             directional_multiplier=directional_multiplier,
         )
         directional_confidence = self._scale_signed(
@@ -534,8 +548,8 @@ class TickerDeepAnalysisService:
         context: dict[str, Any],
         direction: RecommendationDirection,
     ) -> dict[str, Any]:
-        macro_score = float(context.get("macro_sentiment_score", 0.0) or 0.0)
-        industry_score = float(context.get("industry_sentiment_score", 0.0) or 0.0)
+        macro_score = TickerDeepAnalysisService._macro_support_score(context)
+        industry_score = TickerDeepAnalysisService._industry_support_score(context)
         ticker_score = float(context.get("ticker_sentiment_score", 0.0) or 0.0)
         profile = context.get("ticker_profile") if isinstance(context.get("ticker_profile"), dict) else {}
         macro_events = TickerDeepAnalysisService._context_events(context.get("macro_context_events"))
@@ -923,8 +937,8 @@ class TickerDeepAnalysisService:
         momentum_short = float(context.get("momentum_short", 0.0) or 0.0)
         rsi = float(context.get("rsi", 50.0) or 50.0)
         news_count = int(context.get("news_item_count", 0) or 0)
-        macro_score = float(context.get("macro_sentiment_score", 0.0) or 0.0)
-        industry_score = float(context.get("industry_sentiment_score", 0.0) or 0.0)
+        macro_score = TickerDeepAnalysisService._macro_support_score(context)
+        industry_score = TickerDeepAnalysisService._industry_support_score(context)
         direction_score = float(aggregations.get("direction_score", 0.5) or 0.5)
 
         if news_count >= 4 and abs(float(context.get("ticker_sentiment_score", 0.0) or 0.0)) >= 0.2:
@@ -954,6 +968,22 @@ class TickerDeepAnalysisService:
         except json.JSONDecodeError:
             return None
         return payload if isinstance(payload, dict) else None
+
+    @staticmethod
+    def _macro_support_score(context: dict[str, Any]) -> float:
+        return float(context.get("macro_support_score", context.get("macro_sentiment_score", 0.0)) or 0.0)
+
+    @staticmethod
+    def _industry_support_score(context: dict[str, Any]) -> float:
+        return float(context.get("industry_support_score", context.get("industry_sentiment_score", 0.0)) or 0.0)
+
+    @staticmethod
+    def _macro_support_label(context: dict[str, Any]) -> str:
+        return str(context.get("macro_support_label", context.get("macro_sentiment_label", "NEUTRAL")) or "NEUTRAL")
+
+    @staticmethod
+    def _industry_support_label(context: dict[str, Any]) -> str:
+        return str(context.get("industry_support_label", context.get("industry_sentiment_label", "NEUTRAL")) or "NEUTRAL")
 
     @staticmethod
     def _build_indicator_summary(context: dict[str, Any], setup_family: str) -> str:
@@ -1012,13 +1042,13 @@ class TickerDeepAnalysisService:
                 "score": context.get("sentiment_score", 0.0),
                 "label": context.get("sentiment_label"),
                 "macro": {
-                    "score": context.get("macro_sentiment_score", 0.0),
-                    "label": context.get("macro_sentiment_label", "NEUTRAL"),
+                    "score": TickerDeepAnalysisService._macro_support_score(context),
+                    "label": TickerDeepAnalysisService._macro_support_label(context),
                     "coverage_insights": context.get("macro_coverage_insights", []),
                 },
                 "industry": {
-                    "score": context.get("industry_sentiment_score", 0.0),
-                    "label": context.get("industry_sentiment_label", "NEUTRAL"),
+                    "score": TickerDeepAnalysisService._industry_support_score(context),
+                    "label": TickerDeepAnalysisService._industry_support_label(context),
                     "coverage_insights": context.get("industry_coverage_insights", []),
                 },
                 "ticker": {
