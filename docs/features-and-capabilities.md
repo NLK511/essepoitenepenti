@@ -33,6 +33,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 
 ### Shared context workflow
 - Persist shared macro and industry support snapshots plus redesign-native macro and industry context snapshots.
+- Seed industry refresh from a richer taxonomy layer that now includes per-ticker profiles, explicit industry definitions, and first-pass relationship edges.
 - Inspect recent context snapshots from the Context review page and open detail views for macro or industry context objects.
 - Queue or run macro and industry refresh workflows manually.
 - Trace which shared artifacts were used by a run or recommendation plan.

@@ -68,6 +68,13 @@ The app stores broader reusable context by scope:
 
 This lets multiple recommendations share the same broader context window and link back to the exact artifacts they used.
 
+Industry scope is no longer only a ticker-to-industry label shortcut. The taxonomy layer now carries:
+- per-ticker profiles
+- explicit industry definitions
+- first-pass relationship edges such as `benefits_from`, `hurt_by`, and `sensitive_to`
+
+That gives industry refresh and query generation a better base for broader coverage and clearer transmission framing.
+
 If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings. Transitional support snapshots still support that shared-artifact layer and freshness reporting.
 
 ### 3. News ingestion and live ticker sentiment

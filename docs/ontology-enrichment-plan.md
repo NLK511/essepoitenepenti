@@ -50,27 +50,27 @@ That is enough for a basic start, but not enough for broad multi-industry contex
 Goal: make the app aware of a practical starter universe of industries and representative tickers.
 
 #### Tasks
-- [ ] Expand `src/trade_proposer_app/data/ticker_taxonomy.json` beyond the current starter set.
-- [ ] Add representative tickers for these industry groups:
-  - [ ] Semiconductors
-  - [ ] Software
-  - [ ] Cloud / internet platforms
-  - [ ] Consumer internet / digital ads
-  - [ ] Banks
-  - [ ] Payments
-  - [ ] Energy
-  - [ ] Industrials
-  - [ ] Airlines
-  - [ ] Autos / EV
-  - [ ] Healthcare / pharma
-  - [ ] Managed care
-  - [ ] Retail
-  - [ ] Consumer discretionary
-  - [ ] REITs / rate-sensitive real estate
-  - [ ] Utilities
-  - [ ] Materials / metals / mining
-- [ ] Make sure each new ticker has a sensible `sector` and `industry`.
-- [ ] Make sure each industry has enough ticker coverage that the grouping is not effectively single-name.
+- [x] Expand `src/trade_proposer_app/data/ticker_taxonomy.json` beyond the current starter set.
+- [x] Add representative tickers for these industry groups:
+  - [x] Semiconductors
+  - [x] Software
+  - [x] Cloud / internet platforms
+  - [x] Consumer internet / digital ads
+  - [x] Banks
+  - [x] Payments
+  - [x] Energy
+  - [x] Industrials
+  - [x] Airlines
+  - [x] Autos / EV
+  - [x] Healthcare / pharma
+  - [x] Managed care
+  - [x] Retail
+  - [x] Consumer discretionary
+  - [x] REITs / rate-sensitive real estate
+  - [x] Utilities
+  - [x] Materials / metals / mining
+- [x] Make sure each new ticker has a sensible `sector` and `industry`.
+- [x] Make sure each industry has enough ticker coverage that the grouping is not effectively single-name.
 
 #### Exit criteria
 - Industry refresh produces multiple distinct industries.
@@ -82,16 +82,16 @@ Goal: make the app aware of a practical starter universe of industries and repre
 Goal: make each ticker entry more useful for search, grouping, and transmission logic.
 
 #### Proposed additions per ticker
-- [ ] `subindustry`
-- [ ] `region`
+- [x] `subindustry`
+- [x] `region`
 - [ ] `exchange`
-- [ ] `market_cap_bucket`
-- [ ] `peers`
-- [ ] `suppliers`
-- [ ] `customers`
-- [ ] `exposure_channels`
-- [ ] `factor_tags`
-- [ ] `event_vocab`
+- [x] `market_cap_bucket`
+- [x] `peers`
+- [x] `suppliers`
+- [x] `customers`
+- [x] `exposure_channels`
+- [x] `factor_tags`
+- [x] `event_vocab`
 
 #### Guidance
 - Keep `ticker_keywords` focused on queryable names and common references.
@@ -108,16 +108,16 @@ Goal: make each ticker entry more useful for search, grouping, and transmission 
 Goal: stop relying only on ticker-derived industry labels and add explicit industry objects.
 
 #### Proposed industry fields
-- [ ] canonical key
-- [ ] label
-- [ ] parent sector
-- [ ] industry keywords
-- [ ] themes
-- [ ] macro sensitivity
-- [ ] transmission channels
-- [ ] peer industries
-- [ ] risk flags
-- [ ] event vocabulary
+- [x] canonical key
+- [x] label
+- [x] parent sector
+- [x] industry keywords
+- [x] themes
+- [x] macro sensitivity
+- [x] transmission channels
+- [x] peer industries
+- [x] risk flags
+- [x] event vocabulary
 
 #### Example uses
 - better industry refresh queries
@@ -139,9 +139,9 @@ Goal: make the ontology behave more like a real market-structure graph.
 - [ ] `peer_of`
 - [ ] `supplier_to`
 - [ ] `customer_of`
-- [ ] `benefits_from`
-- [ ] `hurt_by`
-- [ ] `sensitive_to`
+- [x] `benefits_from`
+- [x] `hurt_by`
+- [x] `sensitive_to`
 - [ ] `exposed_to_theme`
 - [ ] `linked_macro_channel`
 
@@ -176,25 +176,25 @@ Goal: make maintenance easier as the ontology grows.
 Goal: make ontology growth safer.
 
 #### Validation rules
-- [ ] Every ticker must have:
-  - [ ] `ticker`
-  - [ ] `company_name`
-  - [ ] `sector`
-  - [ ] `industry`
-  - [ ] `ticker_keywords`
-- [ ] Every industry must have:
-  - [ ] canonical key
-  - [ ] label
-  - [ ] sector
-  - [ ] query keywords
-  - [ ] transmission channels
-- [ ] Canonical keys should use one normalized style such as `consumer_electronics`.
-- [ ] Duplicate aliases and contradictory mappings should be flagged.
-- [ ] Very noisy or overly broad search keywords should be reviewable.
+- [x] Every ticker must have:
+  - [x] `ticker`
+  - [x] `company_name`
+  - [x] `sector`
+  - [x] `industry`
+  - [x] `ticker_keywords`
+- [x] Every industry must have:
+  - [x] canonical key
+  - [x] label
+  - [x] sector
+  - [x] query keywords
+  - [x] transmission channels
+- [x] Canonical keys should use one normalized style such as `consumer_electronics`.
+- [x] Duplicate aliases and contradictory mappings should be flagged.
+- [x] Very noisy or overly broad search keywords should be reviewable.
 
 #### Tooling ideas
-- [ ] Add a validation script.
-- [ ] Add unit tests for taxonomy integrity.
+- [x] Add a validation script.
+- [x] Add unit tests for taxonomy integrity.
 - [ ] Add a lightweight review report showing industries, tickers, missing fields, and possible noisy keywords.
 
 #### Exit criteria
@@ -263,10 +263,12 @@ These are sensible early additions.
 Use this section to note concrete shipped steps.
 
 - [x] Created this tracking page.
-- [ ] Expanded starter ticker coverage.
-- [ ] Added industry-level ontology objects.
-- [ ] Added ontology validation tooling.
-- [ ] Added relationship modeling.
+- [x] Expanded starter ticker coverage with a pragmatic multi-region large-cap universe across the U.S., Europe, and Asia-Pacific.
+- [x] Added richer ticker metadata fields to the live taxonomy service and data file: `subindustry`, `region`, `domicile`, `market_cap_bucket`, `peers`, `suppliers`, `customers`, `exposure_channels`, `factor_tags`, and `event_vocab`.
+- [x] Added explicit industry objects in `src/trade_proposer_app/data/ticker_taxonomy.json` under `_industries`, then wired `src/trade_proposer_app/services/taxonomy.py` so industry refresh and query generation can use them directly instead of relying only on ticker-derived labels.
+- [x] Added first-pass relationship modeling in `src/trade_proposer_app/data/ticker_taxonomy.json` under `_relationships` for `benefits_from`, `hurt_by`, and `sensitive_to` edges.
+- [x] Added baseline taxonomy integrity tests for breadth, multi-region coverage, industry grouping behavior, explicit industry definitions, and relationship availability.
+- [x] Added a validation script at `scripts/validate_taxonomy.py`.
 - [ ] Split the ontology into multiple files.
 
 ## Maintenance rule
@@ -283,6 +285,8 @@ When ontology-related work ships:
 - `src/trade_proposer_app/services/industry_context.py`
 - `src/trade_proposer_app/services/industry_support.py`
 - `src/trade_proposer_app/services/macro_context.py`
+- `scripts/validate_taxonomy.py`
+- `tests/test_taxonomy.py`
 
 ## See also
 
