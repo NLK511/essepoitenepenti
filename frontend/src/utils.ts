@@ -7,7 +7,7 @@ import type {
   RunStatus,
 } from "./types";
 
-export interface SentimentSnapshotReference {
+export interface SupportSnapshotReference {
   scope: string;
   snapshotId: number;
   subjectKey: string | null;
@@ -16,6 +16,10 @@ export interface SentimentSnapshotReference {
   label: string | null;
   score: number | null;
 }
+
+export type SentimentSnapshotReference = SupportSnapshotReference;
+
+export const extractSentimentSnapshotReferences = extractSupportSnapshotReferences;
 
 export function formatDate(value: string | null): string {
   if (!value) {
@@ -188,13 +192,13 @@ export function parseJsonRecord(value: string | null): Record<string, unknown> |
   }
 }
 
-export function extractSentimentSnapshotReferences(value: string | null): SentimentSnapshotReference[] {
+export function extractSupportSnapshotReferences(value: string | null): SupportSnapshotReference[] {
   const parsed = parseJsonRecord(value);
   const sentiment = parsed && isRecord(parsed.sentiment) ? parsed.sentiment : null;
   if (!sentiment) {
     return [];
   }
-  const references: SentimentSnapshotReference[] = [];
+  const references: SupportSnapshotReference[] = [];
   for (const scope of ["macro", "industry"]) {
     const section = sentiment[scope];
     if (!isRecord(section)) {

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { DashboardResponse, SentimentSnapshotListResponse } from "../types";
+import type { DashboardResponse, SupportSnapshotListResponse } from "../types";
 import { directionTone, formatDate, formatDuration, jobTypeLabel, recommendationStateTone, runTone, tickerTone } from "../utils";
 
 export function DashboardPage() {
@@ -18,8 +18,8 @@ export function DashboardPage() {
         setError(null);
         const [dashboard, macroSnapshots, industrySnapshots] = await Promise.all([
           getJson<DashboardResponse>("/api/dashboard"),
-          getJson<SentimentSnapshotListResponse>("/api/sentiment-snapshots/macro?limit=1"),
-          getJson<SentimentSnapshotListResponse>("/api/sentiment-snapshots/industry?limit=1"),
+          getJson<SupportSnapshotListResponse>("/api/sentiment-snapshots/macro?limit=1"),
+          getJson<SupportSnapshotListResponse>("/api/sentiment-snapshots/industry?limit=1"),
         ]);
         setData(dashboard);
         setLatestMacroLabel(

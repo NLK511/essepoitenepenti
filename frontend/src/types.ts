@@ -137,7 +137,7 @@ export interface DashboardResponse {
   recommendation_plans: RecommendationPlan[];
 }
 
-export interface SentimentSnapshot {
+export interface SupportSnapshot {
   id: number | null;
   scope: "macro" | "industry" | string;
   subject_key: string;
@@ -158,11 +158,14 @@ export interface SentimentSnapshot {
   run_id: number | null;
 }
 
-export interface SentimentSnapshotListResponse {
-  snapshots: SentimentSnapshot[];
+export interface SupportSnapshotListResponse {
+  snapshots: SupportSnapshot[];
   scope: string | null;
   limit: number;
 }
+
+export type SentimentSnapshot = SupportSnapshot;
+export type SentimentSnapshotListResponse = SupportSnapshotListResponse;
 
 export interface MacroContextSnapshot {
   id: number | null;

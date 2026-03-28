@@ -4,10 +4,10 @@ import { Link } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { IndustryContextSnapshot, MacroContextSnapshot, Run, SentimentSnapshot, SentimentSnapshotListResponse } from "../types";
+import type { IndustryContextSnapshot, MacroContextSnapshot, Run, SupportSnapshot, SupportSnapshotListResponse } from "../types";
 import { formatDate, jobTypeLabel } from "../utils";
 
-function snapshotTone(snapshot: SentimentSnapshot): "ok" | "warning" | "danger" | "neutral" {
+function snapshotTone(snapshot: SupportSnapshot): "ok" | "warning" | "danger" | "neutral" {
   if (snapshot.is_expired) {
     return "danger";
   }
@@ -93,10 +93,10 @@ function provenanceLabel(snapshot: { metadata?: Record<string, unknown> }): stri
   return `fallback · ${summaryBackend(snapshot)}`;
 }
 
-export function SentimentSnapshotsPage() {
+export function ContextReviewPage() {
   const { showToast } = useToast();
-  const [macro, setMacro] = useState<SentimentSnapshot[]>([]);
-  const [industry, setIndustry] = useState<SentimentSnapshot[]>([]);
+  const [macro, setMacro] = useState<SupportSnapshot[]>([]);
+  const [industry, setIndustry] = useState<SupportSnapshot[]>([]);
   const [macroContexts, setMacroContexts] = useState<MacroContextSnapshot[]>([]);
   const [industryContexts, setIndustryContexts] = useState<IndustryContextSnapshot[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -108,8 +108,8 @@ export function SentimentSnapshotsPage() {
       setLoading(true);
       setError(null);
       const [macroResponse, industryResponse, macroContextResponse, industryContextResponse] = await Promise.all([
-        getJson<SentimentSnapshotListResponse>("/api/sentiment-snapshots/macro?limit=6"),
-        getJson<SentimentSnapshotListResponse>("/api/sentiment-snapshots/industry?limit=12"),
+        getJson<SupportSnapshotListResponse>("/api/sentiment-snapshots/macro?limit=6"),
+        getJson<SupportSnapshotListResponse>("/api/sentiment-snapshots/industry?limit=12"),
         getJson<MacroContextSnapshot[]>("/api/context/macro?limit=6"),
         getJson<IndustryContextSnapshot[]>("/api/context/industry?limit=12"),
       ]);
@@ -274,7 +274,7 @@ export function SentimentSnapshotsPage() {
   );
 }
 
-function SnapshotList({ snapshots }: { snapshots: SentimentSnapshot[] }) {
+function SnapshotList({ snapshots }: { snapshots: SupportSnapshot[] }) {
   return (
     <ul className="list-reset">
       {snapshots.map((snapshot) => (
@@ -298,7 +298,7 @@ function SnapshotList({ snapshots }: { snapshots: SentimentSnapshot[] }) {
   );
 }
 
-function SnapshotSummary({ snapshot }: { snapshot: SentimentSnapshot }) {
+function SnapshotSummary({ snapshot }: { snapshot: SupportSnapshot }) {
   const socialCount = Number(snapshot.coverage.social_count ?? 0);
   const queryCount = Number(snapshot.coverage.query_count ?? 0);
   const trackedTickers = Array.isArray(snapshot.coverage.tracked_tickers) ? snapshot.coverage.tracked_tickers.length : 0;
@@ -534,3 +534,5 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
     </div>
   );
 }
+
+export const SentimentSnapshotsPage = ContextReviewPage;

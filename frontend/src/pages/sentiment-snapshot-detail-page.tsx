@@ -3,10 +3,10 @@ import { Link, useParams } from "react-router-dom";
 
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { SentimentSnapshot } from "../types";
+import type { SupportSnapshot } from "../types";
 import { formatDate } from "../utils";
 
-function snapshotTone(snapshot: SentimentSnapshot): "ok" | "warning" | "danger" | "neutral" {
+function snapshotTone(snapshot: SupportSnapshot): "ok" | "warning" | "danger" | "neutral" {
   if (snapshot.is_expired) {
     return "danger";
   }
@@ -19,9 +19,9 @@ function snapshotTone(snapshot: SentimentSnapshot): "ok" | "warning" | "danger" 
   return "warning";
 }
 
-export function SentimentSnapshotDetailPage() {
+export function SupportSnapshotDetailPage() {
   const { snapshotId } = useParams<{ snapshotId: string }>();
-  const [snapshot, setSnapshot] = useState<SentimentSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<SupportSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,7 +32,7 @@ export function SentimentSnapshotDetailPage() {
       }
       try {
         setError(null);
-        setSnapshot(await getJson<SentimentSnapshot>(`/api/sentiment-snapshots/${snapshotId}`));
+        setSnapshot(await getJson<SupportSnapshot>(`/api/sentiment-snapshots/${snapshotId}`));
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load support snapshot");
       }
@@ -111,3 +111,5 @@ export function SentimentSnapshotDetailPage() {
     </>
   );
 }
+
+export const SentimentSnapshotDetailPage = SupportSnapshotDetailPage;
