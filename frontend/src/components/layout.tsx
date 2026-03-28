@@ -36,7 +36,7 @@ const navSections: NavSection[] = [
       { to: "/jobs/ticker-signals", label: "Ticker signals", shortLabel: "Signals", icon: "≈" },
       { to: "/jobs/recommendation-plans", label: "Recommendation plans", shortLabel: "Plans", icon: "↗" },
       { to: "/jobs/debugger", label: "Run debugger", shortLabel: "Debug", icon: "⌘" },
-      { to: "/sentiment", label: "Context snapshots", shortLabel: "Context", icon: "◔" },
+      { to: "/context", label: "Context snapshots", shortLabel: "Context", icon: "◔" },
     ],
   },
   {
@@ -131,7 +131,7 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
       description: "Inspect a ticker’s recent plans, outcomes, and supporting context.",
     };
   }
-  if (pathname.startsWith("/sentiment") || pathname.startsWith("/context/")) {
+  if (pathname.startsWith("/context") || pathname.startsWith("/sentiment")) {
     return {
       eyebrow: "Context",
       title: "Context snapshots",

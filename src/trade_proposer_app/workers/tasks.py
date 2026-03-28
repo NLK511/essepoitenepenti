@@ -28,7 +28,6 @@ def process_once() -> bool:
         service = JobExecutionService(
             jobs=JobRepository(session),
             runs=RunRepository(session),
-            proposals=proposal_service,
             evaluations=EvaluationExecutionService(
                 recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
             ),

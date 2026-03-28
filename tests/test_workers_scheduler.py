@@ -143,9 +143,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         runs.enqueue(already_active.id or 0)
 
         scheduled_now = datetime(2026, 3, 14, 10, 0, tzinfo=timezone.utc)
-        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.services.runs.create_proposal_service", return_value=StubProposalService()
-        ):
+        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session):
             count = enqueue_enabled_jobs(now=scheduled_now)
 
         self.assertEqual(count, 1)
@@ -164,9 +162,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         scheduled = jobs.create("Scheduled", ["AAPL"], "0 * * * *")
         scheduled_now = datetime(2026, 3, 14, 10, 0, tzinfo=timezone.utc)
 
-        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.services.runs.create_proposal_service", return_value=StubProposalService()
-        ):
+        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session):
             first_count = enqueue_enabled_jobs(now=scheduled_now)
             second_count = enqueue_enabled_jobs(now=scheduled_now)
 
@@ -183,9 +179,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         jobs.create("Scheduled", ["AAPL"], "0 * * * *")
         not_due_now = datetime(2026, 3, 14, 10, 17, tzinfo=timezone.utc)
 
-        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.services.runs.create_proposal_service", return_value=StubProposalService()
-        ):
+        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session):
             count = enqueue_enabled_jobs(now=not_due_now)
 
         self.assertEqual(count, 0)
@@ -211,9 +205,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         scheduled_eval = datetime(2026, 3, 14, 18, 0, tzinfo=timezone.utc)
         scheduled_opt = datetime(2026, 3, 15, 2, 0, tzinfo=timezone.utc)
 
-        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.services.runs.create_proposal_service", return_value=StubProposalService()
-        ):
+        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session):
             eval_count = enqueue_enabled_jobs(now=scheduled_eval)
             opt_count = enqueue_enabled_jobs(now=scheduled_opt)
 
@@ -241,9 +233,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         scheduled = jobs.create("Optimized US Swing", [], None, watchlist_id=watchlist.id)
         scheduled_now = datetime(2026, 3, 16, 13, 20, tzinfo=timezone.utc)
 
-        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.services.runs.create_proposal_service", return_value=StubProposalService()
-        ):
+        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session):
             count = enqueue_enabled_jobs(now=scheduled_now)
 
         self.assertEqual(count, 1)
@@ -266,9 +256,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         jobs.create("Broken Job", [], None, watchlist_id=watchlist.id)
         scheduled_now = datetime(2026, 3, 16, 13, 20, tzinfo=timezone.utc)
 
-        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.services.runs.create_proposal_service", return_value=StubProposalService()
-        ):
+        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session):
             count = enqueue_enabled_jobs(now=scheduled_now)
 
         self.assertEqual(count, 0)
@@ -434,9 +422,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         runs.enqueue(first.id or 0)
         scheduled_now = datetime(2026, 3, 15, 2, 0, tzinfo=timezone.utc)
 
-        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session), patch(
-            "trade_proposer_app.services.runs.create_proposal_service", return_value=StubProposalService()
-        ):
+        with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session):
             count = enqueue_enabled_jobs(now=scheduled_now)
 
         self.assertEqual(count, 0)

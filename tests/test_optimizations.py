@@ -15,7 +15,6 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.optimizations import WeightOptimizationError, WeightOptimizationService
-from trade_proposer_app.services.proposals import ProposalService
 
 
 def create_session() -> Session:
@@ -174,7 +173,6 @@ class WeightOptimizationServiceTests(unittest.TestCase):
             service = JobExecutionService(
                 jobs=self.jobs,
                 runs=self.runs,
-                proposals=ProposalService(),
                 optimizations=WeightOptimizationService(
                     session=self.session,
                     minimum_resolved_trades=3,

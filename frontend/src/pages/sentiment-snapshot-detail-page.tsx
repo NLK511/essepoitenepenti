@@ -45,10 +45,10 @@ export function SentimentSnapshotDetailPage() {
       <PageHeader
         kicker="Sentiment snapshot detail"
         title={snapshot ? `${snapshot.subject_label} snapshot #${snapshot.id}` : "Sentiment snapshot detail"}
-        subtitle="Inspect the exact stored shared snapshot reused by proposal analysis so operators can audit freshness, score, and underlying diagnostics."
+        subtitle="Inspect the stored transitional sentiment snapshot used for refresh auditing, freshness checks, and compatibility with the context-first workflow."
         actions={
           <>
-            <Link to="/sentiment" className="button-secondary">Back to snapshots</Link>
+            <Link to="/context" className="button-secondary">Back to context snapshots</Link>
             {snapshot?.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">Open source run</Link> : null}
           </>
         }

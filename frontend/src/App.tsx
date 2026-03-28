@@ -39,9 +39,11 @@ export default function App() {
           <Route path="ticker-signals" element={<Navigate to="/jobs/ticker-signals" replace />} />
           <Route path="recommendation-plans" element={<Navigate to="/jobs/recommendation-plans" replace />} />
           <Route path="debugger" element={<Navigate to="/jobs/debugger" replace />} />
-          <Route path="sentiment" element={<SentimentSnapshotsPage />} />
-          <Route path="sentiment/:snapshotId" element={<SentimentSnapshotDetailPage />} />
+          <Route path="context" element={<SentimentSnapshotsPage />} />
+          <Route path="context/sentiment/:snapshotId" element={<SentimentSnapshotDetailPage />} />
           <Route path="context/:scope/:snapshotId" element={<ContextSnapshotDetailPage />} />
+          <Route path="sentiment" element={<Navigate to="/context" replace />} />
+          <Route path="sentiment/:snapshotId" element={<SentimentSnapshotDetailPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="docs" element={<DocsPage />} />
           <Route path="runs/:runId" element={<RunDetailPage />} />

@@ -7,7 +7,6 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.runs import RunRepository
-from trade_proposer_app.services.builders import create_proposal_service
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.optimizations import WeightOptimizationService
@@ -59,7 +58,6 @@ def create_evaluation_job_execution_service(session: Session) -> JobExecutionSer
     return JobExecutionService(
         jobs=JobRepository(session),
         runs=RunRepository(session),
-        proposals=create_proposal_service(session),
         evaluations=EvaluationExecutionService(
             recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
         ),

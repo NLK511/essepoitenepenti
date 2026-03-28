@@ -9,8 +9,7 @@ from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.industry_sentiment import IndustrySentimentService
 from trade_proposer_app.services.macro_sentiment import MacroSentimentService
-from trade_proposer_app.services.optimizations import WeightOptimizationError, WeightOptimizationService
-from trade_proposer_app.services.proposals import ProposalExecutionError, ProposalService
+from trade_proposer_app.services.optimizations import WeightOptimizationService
 
 
 class RunExecutionFailed(Exception):
@@ -25,7 +24,6 @@ class JobExecutionService:
         self,
         jobs: JobRepository,
         runs: RunRepository,
-        proposals: ProposalService,
         evaluations: EvaluationExecutionService | None = None,
         optimizations: WeightOptimizationService | None = None,
         macro_sentiment: MacroSentimentService | None = None,
@@ -37,7 +35,6 @@ class JobExecutionService:
     ) -> None:
         self.jobs = jobs
         self.runs = runs
-        self.proposals = proposals
         self.evaluations = evaluations
         self.optimizations = optimizations
         self.macro_sentiment = macro_sentiment
@@ -96,70 +93,35 @@ class JobExecutionService:
         watchlist = self._resolve_execution_watchlist(job, tickers)
         timing["resolve_tickers_seconds"] = round(perf_counter() - resolve_started, 6)
 
-        generated: list[RunOutput] = []
         warnings_found = False
         generation_started = perf_counter()
 
         try:
             ticker_generation = self._get_ticker_generation_list(timing)
-            if watchlist is not None and self.watchlist_orchestration is not None:
-                orchestration = self.watchlist_orchestration.execute(
-                    watchlist,
-                    tickers,
-                    job_id=run.job_id,
-                    run_id=run.id,
-                )
-                ticker_generation.extend(orchestration.get("ticker_generation", []))
-                warnings_found = bool(orchestration.get("warnings_found"))
-                generated = []
-                summary = orchestration.get("summary")
-                artifact = orchestration.get("artifact")
-                if isinstance(summary, dict):
-                    self._annotate_orchestration_payload(summary, watchlist, job)
-                    self.runs.set_summary(run.id or 0, summary)
-                if isinstance(artifact, dict):
-                    self._annotate_orchestration_payload(artifact, watchlist, job)
-                    self.runs.set_artifact(run.id or 0, artifact)
-            else:
-                for ticker in tickers:
-                    ticker_started = perf_counter()
-                    try:
-                        output = self.proposals.generate(ticker)
-                    except ProposalExecutionError as exc:
-                        ticker_generation.append(
-                            {
-                                "ticker": ticker,
-                                "duration_seconds": round(perf_counter() - ticker_started, 6),
-                                "status": "failed",
-                                "error_message": str(exc),
-                            }
-                        )
-                        warnings_found = True
-                        continue
-                    except Exception as exc:
-                        ticker_generation.append(
-                            {
-                                "ticker": ticker,
-                                "duration_seconds": round(perf_counter() - ticker_started, 6),
-                                "status": "failed",
-                                "error_message": str(exc),
-                            }
-                        )
-                        raise
-                    ticker_duration = round(perf_counter() - ticker_started, 6)
-                    ticker_generation.append(
-                        {
-                            "ticker": ticker,
-                            "duration_seconds": ticker_duration,
-                            "status": "completed",
-                        }
-                    )
-                    if output.diagnostics.warnings:
-                        warnings_found = True
-                    generated.append(output)
+            if self.watchlist_orchestration is None:
+                raise RuntimeError("proposal_generation runs require the redesign watchlist orchestration service")
+            orchestration = self.watchlist_orchestration.execute(
+                watchlist,
+                tickers,
+                job_id=run.job_id,
+                run_id=run.id,
+            )
+            ticker_generation.extend(orchestration.get("ticker_generation", []))
+            warnings_found = bool(orchestration.get("warnings_found"))
+            summary = orchestration.get("summary")
+            artifact = orchestration.get("artifact")
+            if isinstance(summary, dict):
+                self._annotate_orchestration_payload(summary, watchlist, job)
+                self.runs.set_summary(run.id or 0, summary)
+            if isinstance(artifact, dict):
+                self._annotate_orchestration_payload(artifact, watchlist, job)
+                self.runs.set_artifact(run.id or 0, artifact)
             timing["recommendation_generation_seconds"] = round(perf_counter() - generation_started, 6)
         except Exception as exc:
             timing["recommendation_generation_seconds"] = round(perf_counter() - generation_started, 6)
+            partial_ticker_generation = getattr(exc, "ticker_generation", None)
+            if isinstance(partial_ticker_generation, list):
+                self._get_ticker_generation_list(timing).extend(partial_ticker_generation)
             timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
             raise RunExecutionFailed(exc, timing) from exc
 

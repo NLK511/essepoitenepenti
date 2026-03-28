@@ -116,7 +116,7 @@ export function ContextSnapshotDetailPage() {
         subtitle="Inspect the stored context summary, summary provenance, top events, lifecycle, source mix, and warnings behind a macro or industry context snapshot."
         actions={
           <>
-            <Link to="/sentiment" className="button-secondary">Back to context snapshots</Link>
+            <Link to="/context" className="button-secondary">Back to context snapshots</Link>
             {snapshot?.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">Open source run</Link> : null}
           </>
         }

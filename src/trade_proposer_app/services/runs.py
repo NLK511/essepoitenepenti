@@ -10,7 +10,6 @@ from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.builders import (
     create_industry_context_service,
     create_macro_context_service,
-    create_proposal_service,
     create_watchlist_orchestration_service,
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
@@ -38,7 +37,6 @@ def enqueue_enabled_jobs(now: datetime | None = None) -> int:
         service = JobExecutionService(
             jobs=jobs_repository,
             runs=runs_repository,
-            proposals=create_proposal_service(session),
             evaluations=EvaluationExecutionService(
                 recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
             ),

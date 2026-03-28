@@ -290,7 +290,7 @@ function SnapshotList({ snapshots }: { snapshots: SentimentSnapshot[] }) {
               {snapshot.expires_at ? <div className="helper-text">Expires {formatDate(snapshot.expires_at)}</div> : null}
               {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
             </div>
-            {snapshot.id ? <Link to={`/sentiment/${snapshot.id}`} className="button-subtle">Open</Link> : null}
+            {snapshot.id ? <Link to={`/context/sentiment/${snapshot.id}`} className="button-subtle">Open</Link> : null}
           </div>
         </li>
       ))}
@@ -333,7 +333,7 @@ function SnapshotSummary({ snapshot }: { snapshot: SentimentSnapshot }) {
         </div>
       ) : null}
       <div className="helper-text">Run {snapshot.run_id ?? "—"} · Job {snapshot.job_id ?? "—"} · {jobTypeLabel(snapshot.scope === "macro" ? "macro_sentiment_refresh" : "industry_sentiment_refresh")}</div>
-      {snapshot.id ? <Link to={`/sentiment/${snapshot.id}`} className="button-subtle">Open snapshot detail</Link> : null}
+      {snapshot.id ? <Link to={`/context/sentiment/${snapshot.id}`} className="button-subtle">Open snapshot detail</Link> : null}
       <pre className="markdown-code-block">{JSON.stringify(snapshot.diagnostics, null, 2)}</pre>
     </div>
   );

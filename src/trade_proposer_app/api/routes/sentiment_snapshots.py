@@ -17,7 +17,6 @@ from trade_proposer_app.services.builders import (
     create_industry_sentiment_service,
     create_macro_context_service,
     create_macro_sentiment_service,
-    create_proposal_service,
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.job_execution import JobExecutionService
@@ -33,7 +32,6 @@ def _create_job_execution_service(session: Session) -> JobExecutionService:
     return JobExecutionService(
         jobs=JobRepository(session),
         runs=RunRepository(session),
-        proposals=create_proposal_service(session),
         evaluations=EvaluationExecutionService(
             recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
         ),

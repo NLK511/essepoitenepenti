@@ -31,7 +31,6 @@ from trade_proposer_app.services.evaluation_execution import EvaluationExecution
 from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.macro_context import MacroContextService
-from trade_proposer_app.services.proposals import ProposalService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
 from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
@@ -43,31 +42,61 @@ def create_session() -> Session:
     return Session(bind=engine)
 
 
-class FailingProposalService:
-    def generate(self, ticker: str) -> RunOutput:
-        raise RuntimeError(f"boom: {ticker}")
+class StubWatchlistOrchestrationService:
+    def execute(self, watchlist, tickers, *, job_id=None, run_id=None):
+        return {
+            "summary": {
+                "mode": "watchlist_orchestration",
+                "ticker_count": len(tickers),
+            },
+            "artifact": {
+                "mode": "watchlist_orchestration",
+            },
+            "ticker_generation": [
+                {
+                    "ticker": ticker,
+                    "status": "cheap_scan_only",
+                    "shortlisted": False,
+                }
+                for ticker in tickers
+            ],
+            "warnings_found": False,
+        }
 
 
-class FailOnSecondTickerProposalService:
-    def __init__(self) -> None:
-        self.calls = 0
+class FailingWatchlistOrchestrationService:
+    def execute(self, watchlist, tickers, *, job_id=None, run_id=None):
+        failing = tickers[0] if tickers else "unknown"
+        raise RuntimeError(f"boom: {failing}")
 
-    def generate(self, ticker: str) -> RunOutput:
-        self.calls += 1
-        if self.calls == 2:
-            raise RuntimeError(f"ticker not found: {ticker}")
-        return RunOutput(
-            recommendation=Recommendation(
-                ticker=ticker,
-                direction=RecommendationDirection.LONG,
-                confidence=75.0,
-                entry_price=100.0,
-                stop_loss=95.0,
-                take_profit=110.0,
-                indicator_summary="Above SMA200 · RSI 55.0",
-            ),
-            diagnostics=RunDiagnostics(),
-        )
+
+class FailOnSecondTickerWatchlistOrchestrationService:
+    def execute(self, watchlist, tickers, *, job_id=None, run_id=None):
+        ticker_generation = []
+        for index, ticker in enumerate(tickers, start=1):
+            if index == 2:
+                ticker_generation.append(
+                    {
+                        "ticker": ticker,
+                        "status": "failed",
+                        "error_message": f"ticker not found: {ticker}",
+                    }
+                )
+                error = RuntimeError(f"ticker not found: {ticker}")
+                error.ticker_generation = ticker_generation
+                raise error
+            ticker_generation.append(
+                {
+                    "ticker": ticker,
+                    "status": "completed",
+                }
+            )
+        return {
+            "summary": {"mode": "watchlist_orchestration", "ticker_count": len(tickers)},
+            "artifact": {"mode": "watchlist_orchestration"},
+            "ticker_generation": ticker_generation,
+            "warnings_found": False,
+        }
 
 
 class StubEvaluationExecutionService(EvaluationExecutionService):
@@ -519,7 +548,11 @@ class RepositoryTests(unittest.TestCase):
         runs = RunRepository(session)
         job = jobs.create("Morning", ["NVDA", "TSLA"], None)
 
-        service = JobExecutionService(jobs=jobs, runs=runs, proposals=ProposalService())
+        service = JobExecutionService(
+            jobs=jobs,
+            runs=runs,
+            watchlist_orchestration=StubWatchlistOrchestrationService(),
+        )
         queued_run = service.enqueue_job(job.id or 0)
         self.assertEqual(queued_run.status, "queued")
 
@@ -566,7 +599,6 @@ class RepositoryTests(unittest.TestCase):
         service = JobExecutionService(
             jobs=jobs,
             runs=runs,
-            proposals=ProposalService(),
             watchlist_orchestration=orchestration,
         )
 
@@ -651,7 +683,6 @@ class RepositoryTests(unittest.TestCase):
         service = JobExecutionService(
             jobs=jobs,
             runs=runs,
-            proposals=ProposalService(),
             watchlist_orchestration=orchestration,
         )
 
@@ -809,7 +840,6 @@ class RepositoryTests(unittest.TestCase):
         service = JobExecutionService(
             jobs=jobs,
             runs=runs,
-            proposals=ProposalService(),
             evaluations=StubEvaluationExecutionService(),
         )
         queued_run = service.enqueue_job(job.id or 0)
@@ -838,7 +868,6 @@ class RepositoryTests(unittest.TestCase):
         service = JobExecutionService(
             jobs=jobs,
             runs=runs,
-            proposals=ProposalService(),
             optimizations=StubOptimizationService(),
         )
         queued_run = service.enqueue_job(job.id or 0)
@@ -868,7 +897,6 @@ class RepositoryTests(unittest.TestCase):
         service = JobExecutionService(
             jobs=jobs,
             runs=runs,
-            proposals=ProposalService(),
             macro_sentiment=macro_service,
             macro_context=MacroContextService(ContextSnapshotRepository(session)),
         )
@@ -907,7 +935,6 @@ class RepositoryTests(unittest.TestCase):
         service = JobExecutionService(
             jobs=jobs,
             runs=runs,
-            proposals=ProposalService(),
             industry_sentiment=industry_service,
             industry_context=IndustryContextService(ContextSnapshotRepository(session)),
         )
@@ -942,7 +969,7 @@ class RepositoryTests(unittest.TestCase):
             None,
             job_type=JobType.WEIGHT_OPTIMIZATION,
         )
-        service = JobExecutionService(jobs=jobs, runs=runs, proposals=ProposalService())
+        service = JobExecutionService(jobs=jobs, runs=runs)
         first = service.enqueue_job(job.id or 0)
         second = service.enqueue_job(job.id or 0)
         self.assertEqual(first.id, second.id)
@@ -952,7 +979,11 @@ class RepositoryTests(unittest.TestCase):
         jobs = JobRepository(session)
         runs = RunRepository(session)
         job = jobs.create("Failure Case", ["AAPL"], None)
-        service = JobExecutionService(jobs=jobs, runs=runs, proposals=FailingProposalService())
+        service = JobExecutionService(
+            jobs=jobs,
+            runs=runs,
+            watchlist_orchestration=FailingWatchlistOrchestrationService(),
+        )
         queued_run = service.enqueue_job(job.id or 0)
 
         with self.assertRaises(RuntimeError):
@@ -974,7 +1005,11 @@ class RepositoryTests(unittest.TestCase):
         jobs = JobRepository(session)
         runs = RunRepository(session)
         job = jobs.create("Failure Mid Run", ["AAPL", "MISSING", "MSFT"], None)
-        service = JobExecutionService(jobs=jobs, runs=runs, proposals=FailOnSecondTickerProposalService())
+        service = JobExecutionService(
+            jobs=jobs,
+            runs=runs,
+            watchlist_orchestration=FailOnSecondTickerWatchlistOrchestrationService(),
+        )
         queued_run = service.enqueue_job(job.id or 0)
 
         with self.assertRaises(RuntimeError):

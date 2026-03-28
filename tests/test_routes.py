@@ -424,7 +424,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
     async def test_spa_shell_routes_render(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            for path in ("/", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/sentiment", "/sentiment/1", "/runs/1", "/recommendation-plans", "/tickers/AAPL"):
+            for path in ("/", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/context", "/context/sentiment/1", "/context/macro/1", "/sentiment", "/sentiment/1", "/runs/1", "/recommendation-plans", "/tickers/AAPL"):
                 response = await client.get(path)
                 self.assertEqual(response.status_code, 200)
                 self.assertIn("<title>Trade Proposer App</title>", response.text)

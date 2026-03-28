@@ -119,7 +119,7 @@ export function DashboardPage() {
               <SectionTitle kicker="Context review" title="Check the market backdrop" subtitle="Best for macro and industry awareness." />
               <div className="helper-text">Review stored context snapshots before over-weighting any one ticker setup. Macro and industry context are saliency-first, not sentiment theater.</div>
               <div className="cluster top-gap-small">
-                <Link to="/sentiment" className="button-secondary">Context snapshots</Link>
+                <Link to="/context" className="button-secondary">Context snapshots</Link>
                 <Link to="/docs" className="button-subtle">Docs</Link>
               </div>
             </Card>
