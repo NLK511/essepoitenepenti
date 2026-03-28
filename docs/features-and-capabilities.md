@@ -20,7 +20,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 
 ### Workflow operations
 - Create, edit, delete, and execute jobs.
-- Run proposal generation, recommendation evaluation, weight optimization, and macro/industry refresh jobs through the same run system.
+- Run proposal generation, recommendation evaluation, weight optimization, and macro/industry context refresh jobs through the same run system.
 - Convert proposal jobs into watchlists and schedule them.
 - Inspect queued, running, completed, failed, cancelled, and warning-heavy runs from the debugger and run detail pages.
 
@@ -33,7 +33,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 
 ### Shared context workflow
 - Persist shared macro and industry support snapshots plus redesign-native macro and industry context snapshots.
-- Inspect recent context snapshots from the Context snapshots page and open detail views for macro or industry context objects.
+- Inspect recent context snapshots from the Context review page and open detail views for macro or industry context objects.
 - Queue or run macro and industry refresh workflows manually.
 - Trace which shared artifacts were used by a run or recommendation plan.
 - See support-snapshot freshness in `/api/health` and `/api/health/preflight`; context objects are reviewable through the context APIs and UI.
@@ -54,7 +54,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 
 ### Diagnostics and docs
 - Inspect structured `analysis_json` sections in the UI.
-- Review news coverage, sentiment/context coverage, feature vectors, aggregations, weights, warnings, and timing metadata.
+- Review news coverage, support/context coverage, feature vectors, aggregations, weights, warnings, and timing metadata.
 - Browse markdown docs in-app.
 - Configure summarization and providers from the settings page.
 
@@ -66,7 +66,7 @@ These parts of the product are already in place and connected:
 - redesign-native signal and plan storage
 - recommendation-plan outcome evaluation
 - weight optimization inside the app
-- shared snapshots reused across runs
+- shared support snapshots and context snapshots reused across runs
 - operator-visible shortlist reasoning
 - in-app docs and settings
 

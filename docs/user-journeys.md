@@ -91,7 +91,7 @@ The self-improvement loop runs entirely inside the product with auditable record
 Operator responsible for keeping macro and industry context fresh.
 
 ### Steps
-1. User opens the Context snapshots page.
+1. User opens the Context review page.
 2. User reviews recent macro and industry context snapshots plus the supporting refresh history.
 3. User notices freshness warnings or missing coverage.
 4. User queues a refresh or uses the run-now action.

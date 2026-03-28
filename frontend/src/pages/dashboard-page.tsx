@@ -175,7 +175,7 @@ export function DashboardPage() {
                 {latestIndustryContext ? <Badge tone={contextProvenanceTone(latestIndustryContext)}>industry {contextProvenanceLabel(latestIndustryContext)}</Badge> : null}
               </div>
               <div className="cluster top-gap-small">
-                <Link to="/sentiment" className="button-secondary">Context snapshots</Link>
+                <Link to="/context" className="button-secondary">Context review</Link>
                 <Link to="/docs" className="button-subtle">Docs</Link>
               </div>
             </Card>

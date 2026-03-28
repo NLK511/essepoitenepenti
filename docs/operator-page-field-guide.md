@@ -34,7 +34,7 @@ The app is easiest to use if you separate pages into three roles:
 3. **Investigate execution and context**
    - Run debugger
    - Run detail
-   - Context snapshots
+   - Context review
    - Snapshot detail
 
 A simple way to think about it is:
@@ -42,7 +42,7 @@ A simple way to think about it is:
 - **Recommendation plans** show the actual trade plans
 - **Ticker signals** show why a ticker was promoted, deprioritized, or blocked
 - **Run detail** shows how the workflow got there
-- **Context snapshots** show the broader market backdrop the app reused
+- **Context review** shows the broader market backdrop the app reused
 
 ---
 
@@ -133,7 +133,7 @@ Typical cards include:
 - **Macro context freshness** / **Industry context freshness**: quick read on whether shared context is likely trustworthy
 
 ### How to use it
-If freshness looks degraded, go to **Context snapshots** or **Settings/preflight** before over-trusting new plans.
+If freshness looks degraded, go to **Context review** or **Settings/preflight** before over-trusting new plans.
 If there are recent warning-heavy runs, go to **Run debugger**.
 If plans are present and health looks fine, go to **Recommendation plans**.
 
@@ -501,11 +501,11 @@ Common fields include:
 
 ---
 
-## 8. Context snapshots
+## 8. Context review
 
 **Best use cases**
 - inspect reusable macro and industry backdrop
-- trigger the shared macro/industry refresh jobs manually
+- trigger the shared macro/industry context refresh jobs manually
 - decide whether proposal outputs are being produced on stale foundations
 
 ### Main sections
@@ -702,7 +702,7 @@ Use docs when you are confused about behavior, and use page-level workflows when
 3. Run detail for execution context
 
 ### I suspect the market backdrop is stale or misleading.
-1. Context snapshots
+1. Context review
 2. Snapshot detail
 3. Settings/preflight
 
@@ -749,7 +749,7 @@ Those are valid successful outputs, not just failed recommendations.
 6. Queue evaluation later to keep outcome review current
 
 ### Morning context-first loop
-1. Open Context snapshots
+1. Open Context review
 2. Refresh macro or industry if stale
 3. Open Jobs and enqueue proposal generation
 4. Review plans

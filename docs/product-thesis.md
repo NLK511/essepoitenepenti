@@ -61,7 +61,7 @@ The project should prioritize work in this order:
    Do not expand provider surface area faster than secret handling and auth maturity.
 
 4. **Evidence of recommendation quality**
-   Measure whether changes in sentiment, context, and weights actually improve outcomes.
+   Measure whether changes in support/context signals, ticker analysis, and weights actually improve outcomes.
 
 5. **Feature expansion**
    Add more providers or broader product scope only after the above are in better shape.

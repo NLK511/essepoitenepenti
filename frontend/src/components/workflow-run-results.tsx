@@ -261,7 +261,7 @@ export function WorkflowRunResults({ jobType, summaryJson, artifactJson }: { job
   }
   return (
     <div className="stack-page">
-      <div className="helper-text">This run is a {jobTypeLabel(jobType).toLowerCase()} workflow. It stores summary and artifact metadata on the run instead of recommendation rows.</div>
+      <div className="helper-text">This run is a {jobTypeLabel(jobType).toLowerCase()} workflow. It stores summary and artifact metadata on the run instead of legacy recommendation rows.</div>
       <GenericWorkflowResultView rawSummary={summaryJson} rawArtifact={artifactJson} />
     </div>
   );
