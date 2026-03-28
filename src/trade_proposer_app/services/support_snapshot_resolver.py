@@ -66,6 +66,10 @@ class SupportSnapshotResolver:
             else None
         )
         if snapshot is None and context_snapshot is None:
+            resolution_mode = str(industry_profile.get("resolution_mode", "derived") or "derived")
+            warning = f"industry snapshot unavailable for {industry_profile['subject_label']}; using neutral fallback"
+            if resolution_mode == "sector_fallback":
+                warning = f"industry snapshot unavailable for {industry_profile['subject_label']}; using sector-level fallback and neutral score"
             return {
                 "score": 0.0,
                 "label": "NEUTRAL",
@@ -76,11 +80,7 @@ class SupportSnapshotResolver:
                 "coverage": {},
                 "source_breakdown": {},
                 "drivers": [],
-                "diagnostics": {
-                    "warnings": [
-                        f"industry snapshot unavailable for {industry_profile['subject_label']}; using neutral fallback"
-                    ]
-                },
+                "diagnostics": {"warnings": [warning]},
             }
         payload = self._snapshot_payload(snapshot) if snapshot is not None else {
             "score": 0.0,

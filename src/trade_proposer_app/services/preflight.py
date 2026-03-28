@@ -55,7 +55,7 @@ class AppPreflightService:
                     if taxonomy_exists
                     else f"ticker taxonomy not found yet: expected {TICKERS_PATH} or {TAXONOMY_PATH}"
                 ),
-                details=[f"taxonomy directory: {TAXONOMY_DIR}"] if taxonomy_exists else None,
+                details=[f"taxonomy directory: {TAXONOMY_DIR}"] if taxonomy_exists else [],
             )
         )
         checks.append(self._check_nitter())
