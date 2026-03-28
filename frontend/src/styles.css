@@ -1166,6 +1166,68 @@ details summary {
   transform: translateY(0);
 }
 
+.help-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.help-hint {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-subtle);
+  text-decoration: none;
+  outline: none;
+}
+
+.help-hint:hover,
+.help-hint:focus-visible {
+  color: var(--accent);
+}
+
+.help-hint-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-soft);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.help-hint-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  z-index: 20;
+  width: min(280px, 70vw);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.help-hint:hover .help-hint-tooltip,
+.help-hint:focus-visible .help-hint-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 .markdown-paragraph {
   margin: 0 0 14px;
   line-height: 1.7;

@@ -1,4 +1,5 @@
 import type { PropsWithChildren, ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 export function PageHeader(props: {
   kicker: string;
@@ -90,5 +91,18 @@ export function SegmentedTabs<T extends string>(props: {
         </button>
       ))}
     </div>
+  );
+}
+
+export function HelpHint(props: { tooltip: string; to: string; ariaLabel?: string }) {
+  return (
+    <Link
+      to={props.to}
+      className="help-hint"
+      aria-label={props.ariaLabel ?? `${props.tooltip}. Open related documentation.`}
+    >
+      <span className="help-hint-icon" aria-hidden="true">?</span>
+      <span className="help-hint-tooltip" role="tooltip">{props.tooltip}</span>
+    </Link>
   );
 }
