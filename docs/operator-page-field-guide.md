@@ -579,6 +579,8 @@ The ticker page and run-detail plan review now also show dedicated relationship 
 
 Behind the scenes, theme and macro-channel fields are now being normalized against governed registries. That should reduce drift in wording over time even if not every ontology field has been fully moved onto governed lists yet.
 
+Transmission-channel fields are now being normalized the same way. In practice, that means you may see human-readable channel labels in operator surfaces even though the underlying stored values are now being pulled toward one controlled registry.
+
 This page is intentionally closer to raw storage than the higher-level review pages.
 
 ---

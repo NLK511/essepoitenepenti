@@ -59,7 +59,8 @@ Important stored fields include:
 - the same ticker relationship fields now also propagate into recommendation-plan `signal_breakdown.transmission_summary` when deep analysis produced them
 - matched relationship summaries can indirectly affect stored recommendation-plan explanation fields such as `action_reason_detail`, `rationale_summary`, `invalidation_summary`, and `risks`
 - frontend relationship read-through cards are rendered from the same recommendation-plan transmission payload fields rather than from a separate backend endpoint
-- governed taxonomy registries now live in `src/trade_proposer_app/data/taxonomy/themes.json` and `src/trade_proposer_app/data/taxonomy/macro_channels.json`
+- governed taxonomy registries now live in `src/trade_proposer_app/data/taxonomy/themes.json`, `src/trade_proposer_app/data/taxonomy/macro_channels.json`, and `src/trade_proposer_app/data/taxonomy/transmission_channels.json`
+- relationship payloads can now include readable labels like `target_label` and `channel_label` while still preserving governed canonical keys underneath
 - ticker transmission fields such as `context_strength_percent`, `context_event_relevance_percent`, `contradiction_count`, `decay_state`, and `transmission_confidence_adjustment`
 - recommendation-plan calibration fields such as `raw_confidence_percent`, `calibrated_confidence_percent`, `confidence_adjustment`, `effective_confidence_threshold`, and sample-status snapshots inside `calibration_review`
 - recommendation-plan action reasons such as `context_transmission_headwind` and `context_transmission_contradiction`

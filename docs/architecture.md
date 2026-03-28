@@ -139,9 +139,10 @@ flowchart LR
 8. watchlist orchestration now carries matched ticker relationships forward into stored `RecommendationPlan.signal_breakdown.transmission_summary`, which lets operator review pages surface them without re-reading the full deep-analysis JSON blob
 9. watchlist plan-construction logic now also uses matched ticker relationships when writing rationale, action-reason detail, invalidation text, and risk framing, but only as secondary read-through grounded in the active transmission payload
 10. frontend review surfaces now share a dedicated ticker-relationship read-through component so ticker and run-detail pages can show the matched edges themselves instead of only a one-line summary
-11. taxonomy now also loads governed `themes` and `macro_channels` registries, then normalizes ticker / industry / sector values against them so ontology consumers are not relying only on scattered free-form strings
-12. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
-13. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
+11. taxonomy now also loads governed `themes`, `macro_channels`, and `transmission_channels` registries, then normalizes ticker / industry / sector values against them so ontology consumers are not relying only on scattered free-form strings
+12. relationship payloads now also carry governed channel labels in addition to canonical channel keys, which helps operator-facing provenance stay readable without losing controlled values underneath
+13. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
+14. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
 
 ## Runtime components
 

@@ -13,6 +13,7 @@ from trade_proposer_app.services.taxonomy import (
     TICKERS_PATH,
     THEMES_PATH,
     MACRO_CHANNELS_PATH,
+    TRANSMISSION_CHANNELS_PATH,
     TickerTaxonomyService,
 )
 
@@ -37,6 +38,7 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertTrue(EVENT_VOCAB_PATH.exists())
         self.assertTrue(THEMES_PATH.exists())
         self.assertTrue(MACRO_CHANNELS_PATH.exists())
+        self.assertTrue(TRANSMISSION_CHANNELS_PATH.exists())
 
         service = TickerTaxonomyService()
         overview = service.taxonomy_overview()
@@ -45,6 +47,7 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertGreaterEqual(overview["event_vocab_group_count"], 12)
         self.assertGreaterEqual(overview["theme_count"], 40)
         self.assertGreaterEqual(overview["macro_channel_count"], 20)
+        self.assertGreaterEqual(overview["transmission_channel_count"], 30)
 
     def test_query_profile_and_industry_profile_use_explicit_industry_definitions(self) -> None:
         service = TickerTaxonomyService()
@@ -69,8 +72,10 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
 
         aapl_profile = service.get_ticker_profile("AAPL")
         self.assertIn("consumer spending", aapl_profile["macro_sensitivity"])
-        self.assertEqual(service.get_theme_definition("consumer spend")["key"], "consumer_spending")
         self.assertIn("consumer spending", service.build_query_profile("AAPL")["macro_queries"])
+        self.assertEqual(service.get_theme_definition("consumer spend")["key"], "consumer_spending")
+        self.assertEqual(service.get_transmission_channel_definition("supply_chain")["key"], "supply_chain")
+        self.assertIn("consumer_spending", aapl_profile["exposure_channels"])
 
     def test_list_industry_profiles_groups_multiple_tickers_and_relationships(self) -> None:
         service = TickerTaxonomyService()
@@ -121,6 +126,7 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertTrue(any(item["target"] == "oil_and_gas" and item["type"] == "hurt_by" for item in relationships))
         self.assertTrue(any(item["target"] == "consumer_spending" and item["target_kind"] == "macro_channel" for item in relationships))
         self.assertTrue(any(item["target"] == "consumer_spending" and item.get("target_label") == "consumer spending" for item in relationships))
+        self.assertTrue(any(item.get("channel") == "travel_demand" and item.get("channel_label") == "travel demand" for item in relationships))
 
         ticker_relationships = service.get_ticker_relationships("AAPL")
         self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "SONY" for item in ticker_relationships))

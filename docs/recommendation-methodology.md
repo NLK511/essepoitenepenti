@@ -89,6 +89,8 @@ Operator review surfaces now also have a dedicated relationship read-through pre
 
 Under the hood, taxonomy themes and macro-sensitivity values are now normalized against governed registries. That is a step toward fully governed ontology values rather than letting those fields drift as scattered free-form strings.
 
+Transmission channels are now on the same path. Ticker exposure channels, industry transmission channels, and relationship channels are normalized against a governed registry too, while operator-facing displays can still use readable labels derived from that controlled vocabulary.
+
 If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings. Transitional support snapshots still support that shared-artifact layer and freshness reporting.
 
 ### 3. News ingestion and live ticker sentiment

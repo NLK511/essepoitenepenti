@@ -148,8 +148,9 @@ Goal: make the ontology behave more like a real market-structure graph.
 #### Governed value registries
 - [x] add governed `themes.json`
 - [x] add governed `macro_channels.json`
+- [x] add governed `transmission_channels.json`
 - [x] normalize ticker / industry / sector taxonomy values against those registries inside the taxonomy service
-- [x] validate that taxonomy themes and macro-channel references resolve to governed values
+- [x] validate that taxonomy themes, macro-channel references, and transmission-channel references resolve to governed values
 - [ ] migrate all remaining ontology relationship/channel fields to governed registries where practical
 
 #### Example relationships
@@ -280,7 +281,8 @@ Use this section to note concrete shipped steps.
 - [x] Started using matched ticker relationships inside watchlist plan explanations so rationale, action-reason detail, invalidation text, and risk framing can mention supplier / customer / peer read-through when it actually matched the active evidence.
 - [x] Added a reusable frontend ticker relationship read-through component and promoted matched relationship cards onto ticker and run-detail review surfaces so operators can inspect the actual relationship provenance more directly.
 - [x] Added governed registry files at `src/trade_proposer_app/data/taxonomy/themes.json` and `src/trade_proposer_app/data/taxonomy/macro_channels.json`, then normalized taxonomy values against them in `src/trade_proposer_app/services/taxonomy.py`.
-- [x] Updated taxonomy validation so ticker, industry, sector, and relationship macro-channel references are checked against the governed registries.
+- [x] Added a governed `src/trade_proposer_app/data/taxonomy/transmission_channels.json` registry and normalized ticker exposure channels, industry transmission channels, and relationship channels against it.
+- [x] Updated taxonomy validation so ticker, industry, sector, and relationship macro-channel / transmission-channel references are checked against the governed registries.
 - [x] Split the active ontology into `src/trade_proposer_app/data/taxonomy/` with separate `tickers.json`, `industries.json`, `sectors.json`, `relationships.json`, and `event_vocab.json` files while keeping `ticker_taxonomy.json` as a backward-compatible fallback.
 - [x] Added baseline taxonomy integrity tests for breadth, multi-region coverage, industry grouping behavior, explicit industry definitions, split-file loading, relationship availability, relationship-aware context behavior, and ticker-level relationship edges.
 - [x] Added a validation script at `scripts/validate_taxonomy.py`.
@@ -300,6 +302,9 @@ When ontology-related work ships:
 - `src/trade_proposer_app/data/taxonomy/sectors.json`
 - `src/trade_proposer_app/data/taxonomy/relationships.json`
 - `src/trade_proposer_app/data/taxonomy/event_vocab.json`
+- `src/trade_proposer_app/data/taxonomy/themes.json`
+- `src/trade_proposer_app/data/taxonomy/macro_channels.json`
+- `src/trade_proposer_app/data/taxonomy/transmission_channels.json`
 - `src/trade_proposer_app/data/ticker_taxonomy.json` (fallback compatibility file)
 - `src/trade_proposer_app/services/taxonomy.py`
 - `src/trade_proposer_app/services/industry_context.py`

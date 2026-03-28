@@ -15,6 +15,7 @@ RELATIONSHIPS_PATH = TAXONOMY_DIR / "relationships.json"
 EVENT_VOCAB_PATH = TAXONOMY_DIR / "event_vocab.json"
 THEMES_PATH = TAXONOMY_DIR / "themes.json"
 MACRO_CHANNELS_PATH = TAXONOMY_DIR / "macro_channels.json"
+TRANSMISSION_CHANNELS_PATH = TAXONOMY_DIR / "transmission_channels.json"
 
 SECTOR_ALIASES = {
     "technology": "information_technology",
@@ -45,8 +46,10 @@ class TickerTaxonomyService:
         self._event_vocab: dict[str, list[str]] = payload["event_vocab"]
         self._themes: dict[str, dict[str, Any]] = payload["themes"]
         self._macro_channels: dict[str, dict[str, Any]] = payload["macro_channels"]
+        self._transmission_channels: dict[str, dict[str, Any]] = payload["transmission_channels"]
         self._theme_alias_map: dict[str, str] = self._build_alias_map(self._themes)
         self._macro_channel_alias_map: dict[str, str] = self._build_alias_map(self._macro_channels)
+        self._transmission_channel_alias_map: dict[str, str] = self._build_alias_map(self._transmission_channels)
         self._source_mode: str = payload["source_mode"]
 
     def _load_payload(self) -> dict[str, Any]:
@@ -76,10 +79,11 @@ class TickerTaxonomyService:
             "event_vocab": self._load_event_vocab(self._read_json_file(EVENT_VOCAB_PATH)),
             "themes": self._load_registry(self._read_json_file(THEMES_PATH)),
             "macro_channels": self._load_registry(self._read_json_file(MACRO_CHANNELS_PATH)),
+            "transmission_channels": self._load_registry(self._read_json_file(TRANSMISSION_CHANNELS_PATH)),
         }
 
     def _load_monolith_payload(self) -> dict[str, Any]:
-        empty = {"tickers": {}, "industries": {}, "sectors": {}, "relationships": [], "event_vocab": {}, "themes": {}, "macro_channels": {}}
+        empty = {"tickers": {}, "industries": {}, "sectors": {}, "relationships": [], "event_vocab": {}, "themes": {}, "macro_channels": {}, "transmission_channels": {}}
         if not TAXONOMY_PATH.exists():
             return empty
         payload = self._read_json_file(TAXONOMY_PATH)
@@ -97,6 +101,7 @@ class TickerTaxonomyService:
             "event_vocab": self._load_event_vocab(payload.get("_event_vocab")),
             "themes": self._load_registry(payload.get("_themes")),
             "macro_channels": self._load_registry(payload.get("_macro_channels")),
+            "transmission_channels": self._load_registry(payload.get("_transmission_channels")),
         }
 
     @staticmethod
@@ -207,7 +212,7 @@ class TickerTaxonomyService:
         profile["peers"] = self._normalize_ticker_list(profile.get("peers"))
         profile["suppliers"] = self._normalize_ticker_list(profile.get("suppliers"))
         profile["customers"] = self._normalize_ticker_list(profile.get("customers"))
-        profile["exposure_channels"] = self._normalize_string_list(profile.get("exposure_channels"))
+        profile["exposure_channels"] = self._normalize_transmission_channel_values(profile.get("exposure_channels"))
         profile["factor_tags"] = self._normalize_string_list(profile.get("factor_tags"))
         profile["event_vocab"] = self._normalize_string_list(profile.get("event_vocab"))
         return profile
@@ -298,8 +303,8 @@ class TickerTaxonomyService:
             ),
             "transmission_channels": list(
                 dict.fromkeys(
-                    self._normalize_string_list(explicit_definition.get("transmission_channels"))
-                    + self._normalize_string_list(ticker_profile.get("exposure_channels"))
+                    self._normalize_transmission_channel_values(explicit_definition.get("transmission_channels"))
+                    + self._normalize_transmission_channel_values(ticker_profile.get("exposure_channels"))
                 )
             ),
             "peer_industries": self._normalize_string_list(explicit_definition.get("peer_industries")),
@@ -346,7 +351,7 @@ class TickerTaxonomyService:
                 "queries": list(dict.fromkeys(self._normalize_string_list(sector_definition.get("queries")) + self._normalize_string_list(definition.get("queries")))),
                 "themes": list(dict.fromkeys(self._normalize_string_list(sector_definition.get("themes")) + self._normalize_string_list(definition.get("themes")))),
                 "macro_sensitivity": list(dict.fromkeys(self._normalize_string_list(sector_definition.get("macro_sensitivity")) + self._normalize_string_list(definition.get("macro_sensitivity")))),
-                "transmission_channels": self._normalize_string_list(definition.get("transmission_channels")),
+                "transmission_channels": self._normalize_transmission_channel_values(definition.get("transmission_channels")),
                 "peer_industries": self._normalize_string_list(definition.get("peer_industries")),
                 "risk_flags": self._normalize_string_list(definition.get("risk_flags")),
                 "event_vocab": list(dict.fromkeys(self._normalize_string_list(definition.get("event_vocab")) + self._event_vocab.get(subject_key, []))),
@@ -411,6 +416,9 @@ class TickerTaxonomyService:
             definition = self.get_industry_definition(str(enriched.get("target", "")))
             if definition.get("label"):
                 enriched["target_label"] = definition.get("label")
+        channel_definition = self.get_transmission_channel_definition(str(enriched.get("channel", "")))
+        if channel_definition.get("label"):
+            enriched["channel_label"] = channel_definition.get("label")
         return enriched
 
     def get_ticker_relationships(self, ticker: str) -> list[dict[str, str]]:
@@ -450,6 +458,7 @@ class TickerTaxonomyService:
             "event_vocab_group_count": len(self._event_vocab),
             "theme_count": len(self._themes),
             "macro_channel_count": len(self._macro_channels),
+            "transmission_channel_count": len(self._transmission_channels),
         }
 
     def _fetch_external_profile(self, ticker: str) -> dict[str, Any]:
@@ -510,7 +519,7 @@ class TickerTaxonomyService:
             "queries": self._normalize_string_list(payload.get("queries") or payload.get("industry_keywords")),
             "themes": self._normalize_theme_values(payload.get("themes")),
             "macro_sensitivity": self._normalize_macro_channel_values(payload.get("macro_sensitivity")),
-            "transmission_channels": self._normalize_string_list(payload.get("transmission_channels")),
+            "transmission_channels": self._normalize_transmission_channel_values(payload.get("transmission_channels")),
             "peer_industries": [self._normalize_subject_key(value) for value in self._normalize_string_list(payload.get("peer_industries"))],
             "risk_flags": self._normalize_string_list(payload.get("risk_flags")),
             "event_vocab": self._normalize_string_list(payload.get("event_vocab")),
@@ -551,6 +560,18 @@ class TickerTaxonomyService:
     def _normalize_macro_channel_values(self, values: object) -> list[str]:
         return self._normalize_registry_values(values, self._macro_channel_alias_map if hasattr(self, "_macro_channel_alias_map") else {}, self._macro_channels if hasattr(self, "_macro_channels") else {})
 
+    def _normalize_transmission_channel_values(self, values: object) -> list[str]:
+        raw_values = self._normalize_string_list(values)
+        normalized: list[str] = []
+        for value in raw_values:
+            canonical_key = self._transmission_channel_alias_map.get(self._normalize_subject_key(value)) if hasattr(self, "_transmission_channel_alias_map") else None
+            if canonical_key and canonical_key not in normalized:
+                normalized.append(canonical_key)
+                continue
+            if value not in normalized:
+                normalized.append(value)
+        return normalized
+
     def _macro_channel_query_terms(self, values: object) -> list[str]:
         terms: list[str] = []
         for value in self._normalize_string_list(values):
@@ -581,6 +602,13 @@ class TickerTaxonomyService:
 
     def list_macro_channel_definitions(self) -> list[dict[str, Any]]:
         return [self.get_macro_channel_definition(key) for key in sorted(self._macro_channels)]
+
+    def get_transmission_channel_definition(self, value: str) -> dict[str, Any]:
+        canonical_key = self._transmission_channel_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))
+        return dict(self._transmission_channels.get(canonical_key, {"key": canonical_key, "label": str(value or "").strip().replace("_", " "), "aliases": []}))
+
+    def list_transmission_channel_definitions(self) -> list[dict[str, Any]]:
+        return [self.get_transmission_channel_definition(key) for key in sorted(self._transmission_channels)]
 
     @staticmethod
     def _normalize_string_list(values: object) -> list[str]:
