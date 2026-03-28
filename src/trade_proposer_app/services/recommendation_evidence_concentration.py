@@ -7,11 +7,13 @@ from trade_proposer_app.domain.models import (
 )
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
+from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
 class RecommendationEvidenceConcentrationService:
-    def __init__(self, outcomes: RecommendationOutcomeRepository) -> None:
-        self.calibration = RecommendationPlanCalibrationService(outcomes)
+    def __init__(self, outcomes: RecommendationOutcomeRepository, taxonomy_service: TickerTaxonomyService | None = None) -> None:
+        self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
+        self.calibration = RecommendationPlanCalibrationService(outcomes, taxonomy_service=self.taxonomy_service)
 
     def summarize(
         self,
@@ -79,6 +81,7 @@ class RecommendationEvidenceConcentrationService:
         score = max(0.0, (edge_win or 0.0) * sample_multiplier) + max(0.0, (edge_return or 0.0) * 10.0 * sample_multiplier)
         return RecommendationEvidenceConcentrationCohort(
             slice_name=slice_name,
+            slice_label=self.taxonomy_service.get_analysis_slice_label(slice_name),
             key=bucket.key,
             label=bucket.label,
             sample_status=bucket.sample_status,
@@ -105,20 +108,22 @@ class RecommendationEvidenceConcentrationService:
             return None
         return round(weighted_sum / count, 3)
 
-    @staticmethod
     def _interpretation(
+        self,
         slice_name: str,
         bucket: RecommendationCalibrationBucket,
         edge_win: float | None,
         edge_return: float | None,
     ) -> str:
+        slice_label = self.taxonomy_service.get_analysis_slice_label(slice_name)
+        cohort_label = bucket.label or bucket.key.replace("_", " ")
         if bucket.sample_status in {"insufficient", "limited"}:
-            return f"{slice_name} cohort is visible but still too thin for strong trust."
+            return f"{slice_label} cohort '{cohort_label}' is visible but still too thin for strong trust."
         if (edge_win or 0.0) >= 8.0 and (edge_return or 0.0) >= 0.5:
-            return f"{slice_name} cohort is one of the strongest places to concentrate operator attention."
+            return f"{slice_label} cohort '{cohort_label}' is one of the strongest places to concentrate operator attention."
         if (edge_win or 0.0) <= -8.0:
-            return f"{slice_name} cohort is currently underperforming the overall book and should stay constrained."
-        return f"{slice_name} cohort is measurable, but edge concentration remains modest."
+            return f"{slice_label} cohort '{cohort_label}' is currently underperforming the overall book and should stay constrained."
+        return f"{slice_label} cohort '{cohort_label}' is measurable, but edge concentration remains modest."
 
     @staticmethod
     def _focus_message(
@@ -131,4 +136,5 @@ class RecommendationEvidenceConcentrationService:
         if not positive_usable:
             return "No cohort has yet separated cleanly enough to justify stronger concentration; keep the system conservative."
         weakest_label = weakest[0].label if weakest else "the weaker slices"
-        return f"Concentrate review on the strongest usable cohorts first and keep {weakest_label} constrained until the evidence improves."
+        weakest_slice = weakest[0].slice_label if weakest and weakest[0].slice_label else "weaker slices"
+        return f"Concentrate review on the strongest usable cohorts first and keep {weakest_slice} cohort '{weakest_label}' constrained until the evidence improves."

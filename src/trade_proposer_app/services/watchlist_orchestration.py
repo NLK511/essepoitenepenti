@@ -1667,13 +1667,8 @@ class WatchlistOrchestrationService:
             return "heuristic_limited"
         return "heuristic_limited"
 
-    @staticmethod
-    def _calibration_transmission_bias(transmission_summary: dict[str, object] | None) -> str:
-        if isinstance(transmission_summary, dict):
-            value = transmission_summary.get("context_bias")
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-        return "unknown"
+    def _calibration_transmission_bias(self, transmission_summary: dict[str, object] | None) -> str:
+        return self.taxonomy_service.derive_transmission_bias(transmission_summary)
 
     def _calibration_context_regime(self, transmission_summary: dict[str, object] | None) -> str:
         return self.taxonomy_service.derive_transmission_context_regime(transmission_summary)

@@ -368,6 +368,7 @@ export interface RecommendationSetupFamilyReviewSummary {
 
 export interface RecommendationEvidenceConcentrationCohort {
   slice_name: string;
+  slice_label: string;
   key: string;
   label: string;
   sample_status: string;

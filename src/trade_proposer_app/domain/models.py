@@ -395,6 +395,7 @@ class RecommendationCalibrationSummary(BaseModel):
 
 class RecommendationEvidenceConcentrationCohort(BaseModel):
     slice_name: str
+    slice_label: str = ""
     key: str
     label: str
     sample_status: str = "insufficient"

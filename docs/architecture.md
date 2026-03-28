@@ -150,7 +150,9 @@ flowchart LR
 19. macro and industry context snapshots now also persist labeled `transmission_channel_details` on stored event rows, and industry ontology metadata carries the same pattern for profile-level transmission channels
 20. context snapshot detail views now prefer those labeled transmission-channel details when rendering event rows and industry ontology sections
 21. analytics-facing `context_regime` semantics are now governed through a dedicated registry too, and derivation has been centralized in taxonomy-backed helpers so outcome persistence, calibration slices, and setup-family reviews do not drift apart
-22. recommendation calibration and setup-family review buckets now reuse those governed context-regime labels instead of only humanizing raw derived keys
+22. analytics-facing `transmission_bias` semantics are now governed through the same taxonomy layer instead of relying on raw `context_bias` strings to survive unchanged downstream
+23. recommendation calibration and setup-family review buckets now reuse governed analytics labels for both transmission bias and context regime instead of only humanizing raw derived keys
+24. evidence-concentration cohorts now expose a readable `slice_label` alongside the canonical `slice_name`, so API consumers and operator pages can render cohort families without hand-humanizing backend keys
 23. the support-snapshot resolver now backfills baseline industry ontology metadata even when an industry context snapshot is missing, so downstream proposal/ticker analysis code can still see sector and relationship context instead of dropping to a taxonomy-blind fallback
 24. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
 25. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer

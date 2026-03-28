@@ -545,7 +545,7 @@ export function RecommendationPlansPage() {
                 <tbody>
                   {evidenceConcentration.strongest_positive_cohorts.map((item) => (
                     <tr key={`${item.slice_name}-${item.key}`}>
-                      <td>{item.label}<div className="helper-text top-gap-small">{item.slice_name}</div></td>
+                      <td>{item.label}<div className="helper-text top-gap-small">{item.slice_label || item.slice_name}</div></td>
                       <td><Badge tone={sampleTone(item.sample_status)}>{item.sample_status}</Badge><div className="helper-text top-gap-small">n={item.resolved_count} / min {item.min_required_resolved_count}</div></td>
                       <td>{item.edge_vs_overall_win_rate_percent ?? "—"} pts</td>
                       <td>{item.edge_vs_overall_return_5d ?? "—"}%</td>
@@ -572,7 +572,7 @@ export function RecommendationPlansPage() {
                 <tbody>
                   {evidenceConcentration.weakest_cohorts.map((item) => (
                     <tr key={`${item.slice_name}-${item.key}`}>
-                      <td>{item.label}<div className="helper-text top-gap-small">{item.slice_name}</div></td>
+                      <td>{item.label}<div className="helper-text top-gap-small">{item.slice_label || item.slice_name}</div></td>
                       <td><Badge tone={sampleTone(item.sample_status)}>{item.sample_status}</Badge><div className="helper-text top-gap-small">n={item.resolved_count} / min {item.min_required_resolved_count}</div></td>
                       <td>{item.edge_vs_overall_win_rate_percent ?? "—"} pts</td>
                       <td>{item.edge_vs_overall_return_5d ?? "—"}%</td>

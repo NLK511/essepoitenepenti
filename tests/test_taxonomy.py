@@ -17,6 +17,7 @@ from trade_proposer_app.services.taxonomy import (
     RELATIONSHIP_TYPES_PATH,
     TRANSMISSION_CHANNELS_PATH,
     TRANSMISSION_CONFLICT_FLAGS_PATH,
+    TRANSMISSION_BIASES_PATH,
     TRANSMISSION_CONTEXT_REGIMES_PATH,
     TRANSMISSION_PRIMARY_DRIVERS_PATH,
     TRANSMISSION_TAGS_PATH,
@@ -48,6 +49,7 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertTrue(TRANSMISSION_TAGS_PATH.exists())
         self.assertTrue(TRANSMISSION_PRIMARY_DRIVERS_PATH.exists())
         self.assertTrue(TRANSMISSION_CONFLICT_FLAGS_PATH.exists())
+        self.assertTrue(TRANSMISSION_BIASES_PATH.exists())
         self.assertTrue(TRANSMISSION_CONTEXT_REGIMES_PATH.exists())
         self.assertTrue(RELATIONSHIP_TYPES_PATH.exists())
         self.assertTrue(RELATIONSHIP_TARGET_KINDS_PATH.exists())
@@ -63,6 +65,7 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertGreaterEqual(overview["transmission_tag_count"], 3)
         self.assertGreaterEqual(overview["transmission_primary_driver_count"], 8)
         self.assertGreaterEqual(overview["transmission_conflict_flag_count"], 5)
+        self.assertGreaterEqual(overview["transmission_bias_count"], 4)
         self.assertGreaterEqual(overview["transmission_context_regime_count"], 6)
         self.assertGreaterEqual(overview["relationship_type_count"], 8)
         self.assertGreaterEqual(overview["relationship_target_kind_count"], 4)
@@ -99,8 +102,11 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertEqual(service.get_transmission_tag_definition("macro_dominant")["key"], "macro_dominant")
         self.assertEqual(service.get_transmission_primary_driver_definition("industry_context_support")["key"], "industry_context_support")
         self.assertEqual(service.get_transmission_conflict_flag_definition("timing_conflict")["key"], "timing_conflict")
+        self.assertEqual(service.get_transmission_bias_definition("supportive")["key"], "tailwind")
+        self.assertEqual(service.derive_transmission_bias({"context_bias": "supportive"}), "tailwind")
         self.assertEqual(service.get_transmission_context_regime_definition("context_plus_catalyst")["key"], "context_plus_catalyst")
         self.assertEqual(service.derive_transmission_context_regime({"context_bias": "tailwind", "transmission_tags": ["macro_dominant", "catalyst_active"]}), "context_plus_catalyst")
+        self.assertEqual(service.get_analysis_bucket_label("transmission_bias", "tailwind"), "tailwind")
         self.assertIn("consumer_spending", aapl_profile["exposure_channels"])
 
     def test_list_industry_profiles_groups_multiple_tickers_and_relationships(self) -> None:

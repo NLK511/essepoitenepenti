@@ -30,6 +30,7 @@ def main() -> int:
     print(f"- transmission tags: {overview['transmission_tag_count']}")
     print(f"- transmission primary drivers: {overview['transmission_primary_driver_count']}")
     print(f"- transmission conflict flags: {overview['transmission_conflict_flag_count']}")
+    print(f"- transmission biases: {overview['transmission_bias_count']}")
     print(f"- transmission context regimes: {overview['transmission_context_regime_count']}")
     print(f"- relationship types: {overview['relationship_type_count']}")
     print(f"- relationship target kinds: {overview['relationship_target_kind_count']}")

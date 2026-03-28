@@ -48,6 +48,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 - Render governed labels for transmission tags, drivers, conflicts, and exposure channels on ticker-signal, recommendation-plan, and run-detail pages so operators can review readable summaries without opening raw JSON.
 - Render governed transmission-channel labels on context snapshot detail pages too, including stored event rows and industry ontology profile channels.
 - Use governed context-regime semantics in recommendation analytics slices too, so calibration and setup-family review cohorts rely less on duplicated ad hoc derivation.
+- Govern transmission-bias analytics semantics too, and expose readable evidence-concentration slice labels so operator review surfaces rely less on raw backend keys.
 - Queue or run macro and industry refresh workflows manually.
 - Trace which shared artifacts were used by a run or recommendation plan.
 - See support-snapshot freshness in `/api/health` and `/api/health/preflight`; context objects are reviewable through the context APIs and UI.

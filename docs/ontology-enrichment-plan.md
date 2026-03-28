@@ -164,6 +164,8 @@ Goal: make the ontology behave more like a real market-structure graph.
 - [x] update context snapshot detail views to prefer labeled transmission channels on stored events and industry ontology profiles
 - [x] govern analytics-facing transmission context-regime semantics through a dedicated registry instead of deriving/reporting them only as scattered ad hoc strings
 - [x] centralize context-regime derivation in taxonomy-backed helpers so recommendation outcomes, calibration, and setup-family review slices use the same governed semantics
+- [x] govern analytics-facing transmission bias semantics through a dedicated registry too, so review/calibration buckets stop relying on raw free-form `context_bias` strings
+- [x] tighten evidence-concentration payload typing by exposing readable governed slice labels alongside canonical slice keys
 - [ ] migrate all remaining ontology relationship/channel fields to governed registries where practical
 
 #### Example relationships

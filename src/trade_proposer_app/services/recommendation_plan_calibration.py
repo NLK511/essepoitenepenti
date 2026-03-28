@@ -64,7 +64,7 @@ class RecommendationPlanCalibrationService:
             raw = getattr(item, group_by, "")
             key = str(raw or default_key).strip() or default_key
             grouped[key].append(item)
-        return self._build_bucket_list(grouped, min_required_resolved_count=self.MIN_RESOLVED_COUNTS.get(group_by, 0))
+        return self._build_bucket_list(grouped, min_required_resolved_count=self.MIN_RESOLVED_COUNTS.get(group_by, 0), group_by=group_by)
 
     def _combined_summary(
         self,
@@ -80,13 +80,14 @@ class RecommendationPlanCalibrationService:
             left = str(getattr(item, left_key, None) or default_left).strip() or default_left
             right = str(getattr(item, right_key, None) or default_right).strip() or default_right
             grouped[f"{left}__{right}"].append(item)
-        return self._build_bucket_list(grouped, min_required_resolved_count=self.MIN_RESOLVED_COUNTS.get("horizon_setup_family", 0))
+        return self._build_bucket_list(grouped, min_required_resolved_count=self.MIN_RESOLVED_COUNTS.get("horizon_setup_family", 0), group_by="horizon_setup_family")
 
     def _build_bucket_list(
         self,
         grouped: dict[str, list[RecommendationPlanOutcome]],
         *,
         min_required_resolved_count: int,
+        group_by: str,
     ) -> list[RecommendationCalibrationBucket]:
         results: list[RecommendationCalibrationBucket] = []
         for key, items in grouped.items():
@@ -95,7 +96,7 @@ class RecommendationPlanCalibrationService:
             results.append(
                 RecommendationCalibrationBucket(
                     key=key,
-                    label=self._bucket_label(key),
+                    label=self._bucket_label(key, group_by=group_by),
                     total_count=len(items),
                     resolved_count=resolved_count,
                     win_count=sum(1 for item in items if item.outcome == "win"),
@@ -116,13 +117,8 @@ class RecommendationPlanCalibrationService:
         results.sort(key=lambda item: (item.resolved_count, item.total_count, item.win_count), reverse=True)
         return results
 
-    def _bucket_label(self, key: str) -> str:
-        if "__" in key:
-            return key.replace("__", " / ").replace("_", " ")
-        regime_definition = self.taxonomy_service.get_transmission_context_regime_definition(key)
-        if regime_definition.get("key") in self.taxonomy_service._transmission_context_regimes:
-            return str(regime_definition.get("label", key.replace("_", " ")))
-        return key.replace("_", " ")
+    def _bucket_label(self, key: str, group_by: str = "") -> str:
+        return self.taxonomy_service.get_analysis_bucket_label(group_by, key)
 
     @staticmethod
     def _sample_status(resolved_count: int, min_required_resolved_count: int) -> str:

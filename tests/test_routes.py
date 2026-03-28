@@ -1086,6 +1086,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(horizon_map["1w"]["resolved_count"], 2)
         transmission_map = {item["key"]: item for item in summary.json()["by_transmission_bias"]}
         self.assertEqual(transmission_map["tailwind"]["win_count"], 1)
+        self.assertEqual(transmission_map["tailwind"]["label"], "tailwind")
         self.assertEqual(transmission_map["headwind"]["loss_count"], 1)
         regime_map = {item["key"]: item for item in summary.json()["by_context_regime"]}
         self.assertEqual(regime_map["context_plus_catalyst"]["win_count"], 1)
@@ -1101,6 +1102,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(evidence_concentration.status_code, 200)
         self.assertEqual(evidence_concentration.json()["resolved_outcomes_reviewed"], 2)
         self.assertIn("strongest_positive_cohorts", evidence_concentration.json())
+        self.assertIn("slice_label", evidence_concentration.json()["strongest_positive_cohorts"][0])
         self.assertEqual(filtered_plans.status_code, 200)
         self.assertEqual(len(filtered_plans.json()), 1)
         self.assertEqual(filtered_plans.json()[0]["ticker"], "AAPL")

@@ -91,13 +91,14 @@ class RecommendationSetupFamilyReviewService:
             key = str(getattr(item, group_by, None) or default_key).strip() or default_key
             grouped[key].append(item)
         min_required = RecommendationPlanCalibrationService.MIN_RESOLVED_COUNTS.get(group_by, 0)
-        return self._build_bucket_list(grouped, min_required_resolved_count=min_required)
+        return self._build_bucket_list(grouped, min_required_resolved_count=min_required, group_by=group_by)
 
     def _build_bucket_list(
         self,
         grouped: dict[str, list[RecommendationPlanOutcome]],
         *,
         min_required_resolved_count: int,
+        group_by: str,
     ) -> list[RecommendationCalibrationBucket]:
         results: list[RecommendationCalibrationBucket] = []
         for key, items in grouped.items():
@@ -106,7 +107,7 @@ class RecommendationSetupFamilyReviewService:
             results.append(
                 RecommendationCalibrationBucket(
                     key=key,
-                    label=self._bucket_label(key),
+                    label=self._bucket_label(key, group_by=group_by),
                     total_count=len(items),
                     resolved_count=resolved_count,
                     win_count=sum(1 for item in items if item.outcome == "win"),
@@ -130,13 +131,8 @@ class RecommendationSetupFamilyReviewService:
         results.sort(key=lambda item: (item.resolved_count, item.total_count, item.win_count), reverse=True)
         return results
 
-    def _bucket_label(self, key: str) -> str:
-        if "__" in key:
-            return key.replace("__", " / ").replace("_", " ")
-        regime_definition = self.taxonomy_service.get_transmission_context_regime_definition(key)
-        if regime_definition.get("key") in self.taxonomy_service._transmission_context_regimes:
-            return str(regime_definition.get("label", key.replace("_", " ")))
-        return key.replace("_", " ")
+    def _bucket_label(self, key: str, group_by: str = "") -> str:
+        return self.taxonomy_service.get_analysis_bucket_label(group_by, key)
 
     @staticmethod
     def _win_rate(items: list[RecommendationPlanOutcome]) -> float | None:

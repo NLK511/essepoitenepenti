@@ -120,7 +120,7 @@ class RecommendationOutcomeRepository:
         model.action = plan_record.action
         model.horizon = plan_record.horizon
         transmission_summary = self._transmission_summary(plan_record)
-        model.transmission_bias = self._string_value(transmission_summary.get("context_bias"), default="unknown")
+        model.transmission_bias = self.taxonomy_service.derive_transmission_bias(transmission_summary)
         model.context_regime = self._context_regime(transmission_summary)
         return model
 
