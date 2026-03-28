@@ -15,7 +15,7 @@ Detailed completed-phase history is in `archive/roadmap-history.md`.
 
 Trade Proposer App already has its core workflow in place:
 - watchlists, jobs, runs, settings, support snapshots, ticker signals, recommendation plans, and recommendation-plan outcomes all persist inside one app-owned schema
-- the React/Vite operator UI supports dashboard, watchlists, jobs, debugger, run detail, context snapshots, ticker signals, recommendation plans, ticker drill-down, settings, and docs browsing
+- the React/Vite operator UI supports dashboard, watchlists, jobs, debugger, run detail, context review, ticker signals, recommendation plans, ticker drill-down, settings, and docs browsing
 - proposal generation, evaluation, optimization, and macro/industry refresh runs all execute inside this repository through the worker-backed run system
 - recommendation review is now centered on redesign-native objects: `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`
 - health and preflight surface degraded dependencies and snapshot freshness rather than hiding them

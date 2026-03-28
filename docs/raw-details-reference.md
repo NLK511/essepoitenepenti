@@ -26,11 +26,11 @@ The main sections are:
 - `diagnostics`: problems, provider failures, and summary errors
 
 ### `analysis_json.sentiment`
-This section mixes live and snapshot-backed inputs.
+This section mixes live ticker sentiment with shared support-snapshot inputs.
 
 Typical shape:
-- `macro`: shared macro sentiment with fields such as `snapshot_id`, `subject_key`, `label`, `score`, and freshness/source metadata; when available it may also carry `context_snapshot_id`, `context_summary`, `context_events`, `context_lifecycle`, and contradiction labels from the redesign-native macro context object
-- `industry`: shared industry sentiment with the same kind of fields and optional context-object metadata
+- `macro`: shared macro support snapshot data with fields such as `snapshot_id`, `subject_key`, `label`, `score`, and freshness/source metadata; when available it may also carry `context_snapshot_id`, `context_summary`, `context_events`, `context_lifecycle`, and contradiction labels from the redesign-native macro context object
+- `industry`: shared industry support snapshot data with the same kind of fields and optional context-object metadata
 - `ticker`: live per-proposal ticker sentiment
 - `enhanced`: the fused sentiment result used by scoring, plus component contributions
 - `coverage_insights` / `keyword_hits`: transparency fields for sparse or neutral coverage

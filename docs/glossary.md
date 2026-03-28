@@ -457,7 +457,7 @@ The core product rule that missing, stale, or degraded inputs must remain visibl
 A structured plan-level explanation of how component signals and context contributed to the final plan.
 
 ### Snapshot
-A stored reusable artifact representing market context or sentiment at a particular time.
+A stored reusable artifact representing market context, support state, or other reusable analysis state at a particular time.
 
 ### Source breakdown
 A structured summary of which sources contributed to an output and in what proportions or counts.

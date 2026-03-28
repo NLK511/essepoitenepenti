@@ -525,7 +525,7 @@ You usually see:
 - latest transitional support-snapshot status
 
 #### History lists
-Recent macro and industry context snapshots, plus the transitional macro/industry support history, with links to detail pages.
+Recent macro and industry context snapshots, plus the transitional macro/industry support-refresh history, with links to detail pages.
 
 ### Important snapshot fields
 - **Label**: high-level polarity or state
@@ -537,7 +537,7 @@ Recent macro and industry context snapshots, plus the transitional macro/industr
 - **Diagnostics**: provider errors, warnings, or source notes
 
 ### How to use it
-If plans look plausible but market backdrop feels wrong, inspect context snapshots first.
+If plans look plausible but market backdrop feels wrong, inspect context review first.
 If the supporting refresh snapshots are stale, refresh them before generating too many new plans.
 
 ### Suggested use cases
