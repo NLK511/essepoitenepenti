@@ -73,6 +73,7 @@ Important stored fields include:
 - recommendation-plan evidence summaries can now carry `action_reason_label` alongside canonical `action_reason`
 - extracted context-event rows can now carry `contradiction_reason_details` alongside canonical `contradiction_reasons`
 - extracted context-event rows can now also carry `source_priority_detail`, `persistence_state_detail`, `window_hint_detail`, and `recency_bucket_detail` alongside their canonical lifecycle/status keys
+- frontend context-review code now treats those event rows more explicitly through a `ContextEventRow` type instead of only generic record casting
 - run summaries can now include `shortlist_rejection_details` rows with readable labels and counts in addition to raw `shortlist_rejections` maps
 - evidence-concentration cohorts can now include `slice_label` alongside canonical `slice_name`, plus the existing cohort `key` and `label`
 - event-key detail still persists separately via fields like `macro_event_keys` and `industry_event_keys` instead of being overloaded into governed tag/driver lists

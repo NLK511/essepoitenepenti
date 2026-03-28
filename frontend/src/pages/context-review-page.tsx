@@ -4,8 +4,8 @@ import { Link } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
-import type { IndustryContextSnapshot, MacroContextSnapshot, Run } from "../types";
-import { formatDate } from "../utils";
+import type { ContextEventRow, IndustryContextSnapshot, MacroContextSnapshot, Run } from "../types";
+import { extractDisplayLabels, formatDate } from "../utils";
 
 function contextTone(snapshot: { status: string; warnings: string[] }): "ok" | "warning" | "danger" | "neutral" {
   if (snapshot.status === "failed") {
@@ -17,37 +17,30 @@ function contextTone(snapshot: { status: string; warnings: string[] }): "ok" | "
   return "ok";
 }
 
-function topMacroTheme(snapshot: MacroContextSnapshot): Record<string, unknown> | null {
-  const top = snapshot.active_themes[0];
-  return top && typeof top === "object" ? top : null;
+function topMacroTheme(snapshot: MacroContextSnapshot): ContextEventRow | null {
+  return snapshot.active_themes[0] ?? null;
 }
 
-function topIndustryDriver(snapshot: IndustryContextSnapshot): Record<string, unknown> | null {
-  const top = snapshot.active_drivers[0];
-  return top && typeof top === "object" ? top : null;
+function topIndustryDriver(snapshot: IndustryContextSnapshot): ContextEventRow | null {
+  return snapshot.active_drivers[0] ?? null;
 }
 
 function themeString(value: unknown, fallback = "—"): string {
   return typeof value === "string" && value.trim() ? value : fallback;
 }
 
-function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+function detailLabel(detail: unknown, fallback: unknown, empty = "—"): string {
+  if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+    const label = (detail as { label?: unknown }).label;
+    if (typeof label === "string" && label.trim()) {
+      return label;
+    }
+  }
+  return themeString(fallback, empty);
 }
 
-function formatWindow(window: string): string {
-  switch (window) {
-    case "1d":
-      return "1 day";
-    case "2d_5d":
-      return "2–5 days";
-    case "1w_plus":
-      return "1 week+";
-    case "intraday":
-      return "intraday";
-    default:
-      return window || "—";
-  }
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
 }
 
 function summaryMethod(snapshot: { metadata?: Record<string, unknown> }): string {
@@ -496,8 +489,8 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
 
       <div className="data-points">
         <div className="data-point"><span className="data-point-label">Top driver</span><span className="data-point-value">{topDriver ? themeString(topDriver.label) : "—"}</span></div>
-        <div className="data-point"><span className="data-point-label">Window</span><span className="data-point-value">{topDriver ? formatWindow(themeString(topDriver.window_hint, "")) : "—"}</span></div>
-        <div className="data-point"><span className="data-point-label">Source quality</span><span className="data-point-value">{topDriver ? themeString(topDriver.source_priority) : "—"}</span></div>
+        <div className="data-point"><span className="data-point-label">Window</span><span className="data-point-value">{topDriver ? detailLabel(topDriver.window_hint_detail, topDriver.window_hint) : "—"}</span></div>
+        <div className="data-point"><span className="data-point-label">Source quality</span><span className="data-point-value">{topDriver ? detailLabel(topDriver.source_priority_detail, topDriver.source_priority) : "—"}</span></div>
         <div className="data-point"><span className="data-point-label">Saliency</span><span className="data-point-value">{snapshot.saliency_score.toFixed(2)}</span></div>
         <div className="data-point"><span className="data-point-label">Computed</span><span className="data-point-value">{formatDate(snapshot.computed_at)}</span></div>
         <div className="data-point"><span className="data-point-label">Run / job</span><span className="data-point-value">{snapshot.run_id ?? "—"} / {snapshot.job_id ?? "—"}</span></div>
@@ -513,14 +506,14 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
           {drivers.length > 0 ? (
             <div className="data-stack">
               {drivers.map((driver, index) => {
-                const channels = stringList(driver.transmission_channels).slice(0, 4);
+                const channels = extractDisplayLabels(driver, "transmission_channel_details", "transmission_channels").slice(0, 4);
                 return (
                   <div key={`${themeString(driver.label)}-${index}`} className="data-point">
                     <span className="data-point-label">Driver {index + 1}</span>
                     <span className="data-point-value">{themeString(driver.label)}</span>
                     <div className="helper-text top-gap-small context-inline-metrics">
-                      <InlineMetric label="Window" value={formatWindow(themeString(driver.window_hint, ""))} />
-                      <InlineMetric label="Source" value={themeString(driver.source_priority)} />
+                      <InlineMetric label="Window" value={detailLabel(driver.window_hint_detail, driver.window_hint)} />
+                      <InlineMetric label="Source" value={detailLabel(driver.source_priority_detail, driver.source_priority)} />
                     </div>
                     {channels.length > 0 ? <div className="helper-text context-inline-metrics"><InlineMetric label="Channels" value={channels.join(" · ")} /></div> : null}
                   </div>
@@ -596,9 +589,9 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
 
       <div className="data-points">
         <div className="data-point"><span className="data-point-label">Top event</span><span className="data-point-value">{topTheme ? themeString(topTheme.label) : "—"}</span></div>
-        <div className="data-point"><span className="data-point-label">State</span><span className="data-point-value">{topTheme ? themeString(topTheme.persistence_state) : "—"}</span></div>
-        <div className="data-point"><span className="data-point-label">Window</span><span className="data-point-value">{topTheme ? formatWindow(themeString(topTheme.window_hint, "")) : "—"}</span></div>
-        <div className="data-point"><span className="data-point-label">Source quality</span><span className="data-point-value">{topTheme ? themeString(topTheme.source_priority) : "—"}</span></div>
+        <div className="data-point"><span className="data-point-label">State</span><span className="data-point-value">{topTheme ? detailLabel(topTheme.persistence_state_detail, topTheme.persistence_state) : "—"}</span></div>
+        <div className="data-point"><span className="data-point-label">Window</span><span className="data-point-value">{topTheme ? detailLabel(topTheme.window_hint_detail, topTheme.window_hint) : "—"}</span></div>
+        <div className="data-point"><span className="data-point-label">Source quality</span><span className="data-point-value">{topTheme ? detailLabel(topTheme.source_priority_detail, topTheme.source_priority) : "—"}</span></div>
         <div className="data-point"><span className="data-point-label">Computed</span><span className="data-point-value">{formatDate(snapshot.computed_at)}</span></div>
         <div className="data-point"><span className="data-point-label">Run / job</span><span className="data-point-value">{snapshot.run_id ?? "—"} / {snapshot.job_id ?? "—"}</span></div>
       </div>
@@ -613,16 +606,16 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
           {themes.length > 0 ? (
             <div className="data-stack">
               {themes.map((theme, index) => {
-                const channels = stringList(theme.transmission_channels).slice(0, 4);
+                const channels = extractDisplayLabels(theme, "transmission_channel_details", "transmission_channels").slice(0, 4);
                 return (
                   <div key={`${themeString(theme.label)}-${index}`} className="data-point">
                     <span className="data-point-label">Theme {index + 1}</span>
                     <span className="data-point-value">{themeString(theme.label)}</span>
                     <div className="helper-text top-gap-small context-inline-metrics">
-                      <InlineMetric label="State" value={themeString(theme.persistence_state)} />
-                      <InlineMetric label="Window" value={formatWindow(themeString(theme.window_hint, ""))} />
+                      <InlineMetric label="State" value={detailLabel(theme.persistence_state_detail, theme.persistence_state)} />
+                      <InlineMetric label="Window" value={detailLabel(theme.window_hint_detail, theme.window_hint)} />
                     </div>
-                    <div className="helper-text context-inline-metrics"><InlineMetric label="Source" value={themeString(theme.source_priority)} /></div>
+                    <div className="helper-text context-inline-metrics"><InlineMetric label="Source" value={detailLabel(theme.source_priority_detail, theme.source_priority)} /></div>
                     {channels.length > 0 ? <div className="helper-text context-inline-metrics"><InlineMetric label="Channels" value={channels.join(" · ")} /></div> : null}
                   </div>
                 );

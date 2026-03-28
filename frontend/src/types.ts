@@ -165,6 +165,29 @@ export interface SupportSnapshotListResponse {
 }
 
 
+export interface KeyLabelDetail {
+  key: string;
+  label: string;
+}
+
+export interface ContextEventRow {
+  key?: string;
+  label?: string;
+  source_priority?: string;
+  source_priority_detail?: KeyLabelDetail;
+  persistence_state?: string;
+  persistence_state_detail?: KeyLabelDetail;
+  window_hint?: string;
+  window_hint_detail?: KeyLabelDetail;
+  recency_bucket?: string;
+  recency_bucket_detail?: KeyLabelDetail;
+  transmission_channels?: string[];
+  transmission_channel_details?: KeyLabelDetail[];
+  contradiction_reasons?: string[];
+  contradiction_reason_details?: KeyLabelDetail[];
+  [key: string]: unknown;
+}
+
 export interface MacroContextSnapshot {
   id: number | null;
   computed_at: string;
@@ -172,7 +195,7 @@ export interface MacroContextSnapshot {
   summary_text: string;
   saliency_score: number;
   confidence_percent: number;
-  active_themes: Array<Record<string, unknown>>;
+  active_themes: ContextEventRow[];
   regime_tags: string[];
   warnings: string[];
   missing_inputs: string[];
@@ -192,7 +215,7 @@ export interface IndustryContextSnapshot {
   direction: string;
   saliency_score: number;
   confidence_percent: number;
-  active_drivers: Array<Record<string, unknown>>;
+  active_drivers: ContextEventRow[];
   linked_macro_themes: string[];
   linked_industry_themes: string[];
   warnings: string[];
