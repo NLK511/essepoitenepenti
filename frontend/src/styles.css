@@ -1148,8 +1148,8 @@ details summary {
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid var(--border-strong);
-  background: var(--panel);
-  box-shadow: var(--shadow-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
   color: var(--text);
   font-size: 12px;
   line-height: 1.5;
