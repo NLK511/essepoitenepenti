@@ -13,6 +13,7 @@ from trade_proposer_app.persistence.models import (
     RecommendationOutcomeRecord,
     RecommendationPlanRecord,
     RunRecord,
+    SupportSnapshotRecord,
     TickerSignalSnapshotRecord,
 )
 
@@ -234,6 +235,7 @@ class RunRepository:
         self.session.execute(delete(TickerSignalSnapshotRecord).where(TickerSignalSnapshotRecord.run_id == run_id))
         self.session.execute(delete(MacroContextSnapshotRecord).where(MacroContextSnapshotRecord.run_id == run_id))
         self.session.execute(delete(IndustryContextSnapshotRecord).where(IndustryContextSnapshotRecord.run_id == run_id))
+        self.session.execute(delete(SupportSnapshotRecord).where(SupportSnapshotRecord.run_id == run_id))
         self.session.delete(record)
         self.session.commit()
 

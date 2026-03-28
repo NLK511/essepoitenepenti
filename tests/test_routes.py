@@ -138,6 +138,13 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     job_id=job.id,
                 )
             )
+            SupportSnapshotRepository(session).create_snapshot(
+                scope="macro",
+                subject_key="global",
+                subject_label="Global Macro",
+                job_id=job.id,
+                run_id=run.id,
+            )
             return run.id or 0
         finally:
             session.close()

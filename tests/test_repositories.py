@@ -1146,11 +1146,41 @@ class RepositoryTests(unittest.TestCase):
                 job_id=job.id,
             )
         )
+        SupportSnapshotRepository(session).create_snapshot(
+            scope="macro",
+            subject_key="global",
+            subject_label="Global Macro",
+            job_id=job.id,
+            run_id=run.id,
+        )
 
         jobs.delete(job.id or 0)
 
         self.assertIsNone(session.get(JobRecord, job.id or 0))
         self.assertIsNone(session.get(RunRecord, run.id or 0))
+        self.assertEqual(SupportSnapshotRepository(session).list_recent_snapshots(), [])
+
+    def test_run_repository_delete_removes_support_snapshots(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create("Delete Run", ["AAPL"], None)
+        run = runs.enqueue(job.id or 0)
+        claimed = runs.claim_next_queued_run()
+        assert claimed is not None
+        runs.update_status(run.id or 0, "completed")
+        SupportSnapshotRepository(session).create_snapshot(
+            scope="macro",
+            subject_key="global",
+            subject_label="Global Macro",
+            job_id=job.id,
+            run_id=run.id,
+        )
+
+        runs.delete_run(run.id or 0)
+
+        self.assertIsNone(session.get(RunRecord, run.id or 0))
+        self.assertEqual(SupportSnapshotRepository(session).list_recent_snapshots(), [])
 
     def test_settings_repository_defaults_summary_backend_to_pi_agent(self) -> None:
         session = create_session()
