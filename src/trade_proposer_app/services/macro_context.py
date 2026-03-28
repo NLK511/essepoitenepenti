@@ -195,6 +195,7 @@ class MacroContextService:
         )
         fallback_summary = self._fallback_summary_text(previous, active_themes, lifecycle_summary, news_items, supporting_social_items, warnings)
         summary_result = self._summarize_context(
+            previous=previous,
             active_themes=active_themes,
             lifecycle_summary=lifecycle_summary,
             news_items=news_items,
@@ -400,6 +401,7 @@ class MacroContextService:
     def _summarize_context(
         self,
         *,
+        previous: MacroContextSnapshot | None,
         active_themes: list[dict[str, object]],
         lifecycle_summary: dict[str, object],
         news_items: list[object],
@@ -419,6 +421,7 @@ class MacroContextService:
                 duration_seconds=None,
             )
         prompt = self._build_context_summary_prompt(
+            previous=previous,
             active_themes=active_themes,
             lifecycle_summary=lifecycle_summary,
             news_items=news_items,
@@ -439,6 +442,7 @@ class MacroContextService:
     def _build_context_summary_prompt(
         self,
         *,
+        previous: MacroContextSnapshot | None,
         active_themes: list[dict[str, object]],
         lifecycle_summary: dict[str, object],
         news_items: list[object],
@@ -460,11 +464,23 @@ class MacroContextService:
                 + (f" — {item['summary']}" if item['summary'] else "")
             )
         contradiction_labels = list(lifecycle_summary.get("contradictory_event_labels", []))
+        previous_top_labels = top_event_labels(previous.active_themes) if previous is not None else []
+        previous_regime_tags = previous.regime_tags if previous is not None else []
+        previous_summary = ""
+        if previous is not None and isinstance(previous.summary_text, str):
+            previous_summary = previous.summary_text.strip()[:320]
+        delta_lines = [
+            f"new events: {', '.join(str(label) for label in lifecycle_summary.get('new_event_labels', [])) or 'none'}",
+            f"escalating events: {', '.join(str(label) for label in lifecycle_summary.get('escalating_event_labels', [])) or 'none'}",
+            f"fading events: {', '.join(str(label) for label in lifecycle_summary.get('fading_event_labels', [])) or 'none'}",
+            f"contradictory events: {', '.join(contradiction_labels) if contradiction_labels else 'none'}",
+        ]
         prompt_parts = [
             "Write a short operator-facing macro market summary in 2-4 sentences.",
             "Focus on the top salient events, not just one event.",
             "Ground the summary in the highest-quality fetched sources first. Use social evidence only as secondary support.",
             "Say what the main macro events are, why they matter, and what short-horizon transmission window they imply.",
+            "Use the previous snapshot only to explain continuity or change. Do not let old framing override current evidence.",
             "If evidence is contradictory or degraded, say that plainly.",
             "Do not use hype. Do not invent facts beyond the evidence below.",
             "",
@@ -472,6 +488,14 @@ class MacroContextService:
             f"Warnings: {'; '.join(warnings) if warnings else 'none'}",
             f"Contradictions: {', '.join(contradiction_labels) if contradiction_labels else 'none'}",
             f"Supporting social item count: {len(supporting_social_items)}",
+            "",
+            "Previous snapshot context:",
+            f"previous top events: {', '.join(previous_top_labels) if previous_top_labels else 'none'}",
+            f"previous regime tags: {', '.join(str(tag) for tag in previous_regime_tags) if previous_regime_tags else 'none'}",
+            f"previous summary: {previous_summary or 'none'}",
+            "",
+            "Change since previous snapshot:",
+            *delta_lines,
             "",
             "Top salient events:",
             *top_events,

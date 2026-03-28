@@ -151,7 +151,14 @@ class ContextServiceTests(unittest.TestCase):
 
     def test_macro_context_uses_llm_summary_when_available(self) -> None:
         repository = MagicMock()
-        repository.get_latest_macro_context_snapshot.return_value = None
+        repository.get_latest_macro_context_snapshot.return_value = MacroContextSnapshot(
+            summary_text="Prior macro summary about rates and yields.",
+            active_themes=[
+                {"key": "bond_yields", "label": "Bond yields", "event_score": 0.8},
+                {"key": "us_monetary_policy", "label": "U.S. monetary policy", "event_score": 0.7},
+            ],
+            regime_tags=["rates", "risk_off"],
+        )
         repository.create_macro_context_snapshot.side_effect = lambda context: context
         news_bundle = NewsBundle(
             ticker="Global Macro",
@@ -204,6 +211,12 @@ class ContextServiceTests(unittest.TestCase):
         self.assertEqual(context.metadata["context_summary_method"], "llm_summary")
         self.assertEqual(context.metadata["context_summary_backend"], "pi_agent")
         summary_service.summarize_prompt.assert_called_once()
+        prompt = summary_service.summarize_prompt.call_args.args[0]
+        self.assertIn("Previous snapshot context:", prompt)
+        self.assertIn("previous top events: Bond yields, U.S. monetary policy", prompt)
+        self.assertIn("previous regime tags: rates, risk_off", prompt)
+        self.assertIn("previous summary: Prior macro summary about rates and yields.", prompt)
+        self.assertIn("Change since previous snapshot:", prompt)
 
     def test_industry_context_uses_tracked_ticker_news_first(self) -> None:
         repository = MagicMock()
@@ -270,7 +283,16 @@ class ContextServiceTests(unittest.TestCase):
 
     def test_industry_context_uses_llm_summary_when_available(self) -> None:
         repository = MagicMock()
-        repository.get_latest_industry_context_snapshot.return_value = None
+        repository.get_latest_industry_context_snapshot.return_value = IndustryContextSnapshot(
+            industry_key="semiconductors",
+            industry_label="Semiconductors",
+            summary_text="Prior semiconductor summary about AI demand and rate pressure.",
+            active_drivers=[
+                {"key": "ai_theme", "label": "AI theme", "event_score": 0.9},
+                {"key": "demand", "label": "Demand", "event_score": 0.7},
+            ],
+            linked_macro_themes=["rates", "yield_pressure"],
+        )
         repository.create_industry_context_snapshot.side_effect = lambda context: context
         news_bundle = NewsBundle(
             ticker="NVDA, AMD",
@@ -326,6 +348,12 @@ class ContextServiceTests(unittest.TestCase):
         self.assertEqual(context.metadata["context_summary_model"], "test-model")
         self.assertTrue(context.metadata["triaged_primary_evidence"])
         summary_service.summarize_prompt.assert_called_once()
+        prompt = summary_service.summarize_prompt.call_args.args[0]
+        self.assertIn("Previous snapshot context:", prompt)
+        self.assertIn("previous top drivers: AI theme, Demand", prompt)
+        self.assertIn("previous linked macro themes: rates, yield_pressure", prompt)
+        self.assertIn("previous summary: Prior semiconductor summary about AI demand and rate pressure.", prompt)
+        self.assertIn("Change since previous snapshot:", prompt)
 
 
 if __name__ == "__main__":

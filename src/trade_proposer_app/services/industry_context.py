@@ -142,6 +142,7 @@ class IndustryContextService:
             supporting_social_items,
         )
         summary_result = self._summarize_context(
+            previous=previous,
             industry_label=industry_label,
             active_drivers=active_drivers,
             linked_macro_events=linked_macro_events,
@@ -230,6 +231,7 @@ class IndustryContextService:
     def _summarize_context(
         self,
         *,
+        previous: IndustryContextSnapshot | None,
         industry_label: str,
         active_drivers: list[dict[str, object]],
         linked_macro_events: list[dict[str, object]],
@@ -251,6 +253,7 @@ class IndustryContextService:
                 duration_seconds=None,
             )
         prompt = self._build_context_summary_prompt(
+            previous=previous,
             industry_label=industry_label,
             active_drivers=active_drivers,
             linked_macro_events=linked_macro_events,
@@ -275,6 +278,7 @@ class IndustryContextService:
     def _build_context_summary_prompt(
         self,
         *,
+        previous: IndustryContextSnapshot | None,
         industry_label: str,
         active_drivers: list[dict[str, object]],
         linked_macro_events: list[dict[str, object]],
@@ -303,11 +307,23 @@ class IndustryContextService:
                 + (f" — {item['summary']}" if item['summary'] else "")
             )
         contradiction_labels = list(lifecycle_summary.get("contradictory_event_labels", []))
+        previous_top_labels = top_event_labels(previous.active_drivers) if previous is not None else []
+        previous_macro_links = previous.linked_macro_themes if previous is not None else []
+        previous_summary = ""
+        if previous is not None and isinstance(previous.summary_text, str):
+            previous_summary = previous.summary_text.strip()[:320]
+        delta_lines = [
+            f"new drivers: {', '.join(str(label) for label in lifecycle_summary.get('new_event_labels', [])) or 'none'}",
+            f"escalating drivers: {', '.join(str(label) for label in lifecycle_summary.get('escalating_event_labels', [])) or 'none'}",
+            f"fading drivers: {', '.join(str(label) for label in lifecycle_summary.get('fading_event_labels', [])) or 'none'}",
+            f"contradictory drivers: {', '.join(contradiction_labels) if contradiction_labels else 'none'}",
+        ]
         prompt_parts = [
             f"Write a short operator-facing industry context summary for {industry_label} in 2-4 sentences.",
             "Focus on the top salient industry drivers, not just one event.",
             "Ground the summary in the highest-quality fetched sources first. Use social evidence only as secondary support.",
             "Say what the main drivers are, how they matter over the next few trading days to weeks, and whether macro read-through is reinforcing or offsetting them.",
+            "Use the previous snapshot only to explain continuity or change. Do not let old framing override current evidence.",
             "If evidence is contradictory or degraded, say that plainly.",
             "Do not use hype. Do not invent facts beyond the evidence below.",
             "",
@@ -315,6 +331,14 @@ class IndustryContextService:
             f"Warnings: {'; '.join(warnings) if warnings else 'none'}",
             f"Contradictions: {', '.join(contradiction_labels) if contradiction_labels else 'none'}",
             f"Supporting social item count: {len(supporting_social_items)}",
+            "",
+            "Previous snapshot context:",
+            f"previous top drivers: {', '.join(previous_top_labels) if previous_top_labels else 'none'}",
+            f"previous linked macro themes: {', '.join(str(label) for label in previous_macro_links) if previous_macro_links else 'none'}",
+            f"previous summary: {previous_summary or 'none'}",
+            "",
+            "Change since previous snapshot:",
+            *delta_lines,
             "",
             "Top industry drivers:",
             *(driver_lines or ["none"]),
