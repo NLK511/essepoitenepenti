@@ -1,6 +1,6 @@
 import mermaid from "mermaid";
 import { ChangeEvent, ReactNode, createElement, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson } from "../api";
 import { Card, EmptyState, ErrorState, LoadingState, PageHeader } from "../components/ui";
@@ -61,7 +61,45 @@ const DOC_GROUP_LOOKUP = new Map(
 
 let mermaidDiagramCounter = 0;
 
-function inlineNodes(text: string, keyPrefix: string): ReactNode[] {
+function normalizeDocPath(path: string): string {
+  const segments: string[] = [];
+  for (const part of path.split("/")) {
+    if (!part || part === ".") {
+      continue;
+    }
+    if (part === "..") {
+      segments.pop();
+      continue;
+    }
+    segments.push(part);
+  }
+  return segments.join("/");
+}
+
+function resolveInternalDocLink(href: string, currentDocument: DocDocument, documents: DocDocument[]): { slug: string; sectionId?: string } | null {
+  if (!href || href.startsWith("#") || /^[a-z]+:/i.test(href)) {
+    return null;
+  }
+
+  const [rawPath, rawHash] = href.split("#", 2);
+  if (!rawPath.endsWith(".md")) {
+    return null;
+  }
+
+  const currentDir = currentDocument.path.includes("/")
+    ? currentDocument.path.slice(0, currentDocument.path.lastIndexOf("/") + 1)
+    : "";
+  const resolvedPath = normalizeDocPath(rawPath.startsWith("/") ? rawPath.slice(1) : `${currentDir}${rawPath}`);
+  const match = documents.find((document) => document.path === resolvedPath);
+  if (!match) {
+    return null;
+  }
+
+  const sectionId = rawHash ? rawHash.trim() : undefined;
+  return { slug: match.slug, sectionId };
+}
+
+function inlineNodes(text: string, keyPrefix: string, currentDocument: DocDocument, documents: DocDocument[]): ReactNode[] {
   const tokenPattern = /(`[^`]+`|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|\*[^*]+\*)/g;
   const matches = Array.from(text.matchAll(tokenPattern));
   if (matches.length === 0) {
@@ -82,11 +120,26 @@ function inlineNodes(text: string, keyPrefix: string): ReactNode[] {
     } else if (token.startsWith("[")) {
       const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (linkMatch) {
-        nodes.push(
-          <a key={`${keyPrefix}-link-${index}`} href={linkMatch[2]} target="_blank" rel="noreferrer">
-            {linkMatch[1]}
-          </a>,
-        );
+        const label = linkMatch[1];
+        const href = linkMatch[2];
+        const internalTarget = resolveInternalDocLink(href, currentDocument, documents);
+        if (internalTarget) {
+          const params = new URLSearchParams({ doc: internalTarget.slug });
+          if (internalTarget.sectionId) {
+            params.set("section", internalTarget.sectionId);
+          }
+          nodes.push(
+            <Link key={`${keyPrefix}-link-${index}`} to={`/docs?${params.toString()}`}>
+              {label}
+            </Link>,
+          );
+        } else {
+          nodes.push(
+            <a key={`${keyPrefix}-link-${index}`} href={href} target="_blank" rel="noreferrer">
+              {label}
+            </a>,
+          );
+        }
       } else {
         nodes.push(token);
       }
@@ -168,7 +221,7 @@ function MermaidDiagram(props: { chart: string }) {
   return <div className="mermaid-diagram" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
-function renderMarkdown(document: DocDocument, activeSectionId: string): ReactNode[] {
+function renderMarkdown(document: DocDocument, activeSectionId: string, documents: DocDocument[]): ReactNode[] {
   const lines = document.content.split(/\r?\n/);
   const nodes: ReactNode[] = [];
   let index = 0;
@@ -221,7 +274,7 @@ function renderMarkdown(document: DocDocument, activeSectionId: string): ReactNo
             id: headingId,
             className: `markdown-heading markdown-heading-${level}${activeSectionId === headingId ? " is-active-target" : ""}`,
           },
-          inlineNodes(text, `heading-${nodes.length}`),
+          inlineNodes(text, `heading-${nodes.length}`, document, documents),
         ),
       );
       index += 1;
@@ -243,7 +296,7 @@ function renderMarkdown(document: DocDocument, activeSectionId: string): ReactNo
           listTag,
           { key: `list-${nodes.length}`, className: "markdown-list" },
           items.map((item, itemIndex) => (
-            <li key={`list-item-${nodes.length}-${itemIndex}`}>{inlineNodes(item, `list-${nodes.length}-${itemIndex}`)}</li>
+            <li key={`list-item-${nodes.length}-${itemIndex}`}>{inlineNodes(item, `list-${nodes.length}-${itemIndex}`, document, documents)}</li>
           )),
         ),
       );
@@ -258,7 +311,7 @@ function renderMarkdown(document: DocDocument, activeSectionId: string): ReactNo
     }
     nodes.push(
       <p key={`paragraph-${nodes.length}`} className="markdown-paragraph">
-        {inlineNodes(paragraphLines.join(" "), `paragraph-${nodes.length}`)}
+        {inlineNodes(paragraphLines.join(" "), `paragraph-${nodes.length}`, document, documents)}
       </p>,
     );
   }
@@ -532,7 +585,7 @@ export function DocsPage() {
                     <h2 className="section-title">{selectedDocument.title}</h2>
                   </div>
                 </div>
-                <div className="markdown-content">{renderMarkdown(selectedDocument, selectedSectionId)}</div>
+                <div className="markdown-content">{renderMarkdown(selectedDocument, selectedSectionId, documents)}</div>
               </article>
             ) : (
               <EmptyState message="Select a document to read." />
