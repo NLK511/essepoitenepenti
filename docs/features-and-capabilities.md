@@ -38,6 +38,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 - Review stored industry ontology context in detail views, including sector, peer-industry framing, risk flags, and matched transmission edges.
 - Store ticker-level relationship provenance in deep-analysis diagnostics so peer, supplier, and customer read-through is available in raw trade-review payloads.
 - Surface matched ticker relationships on recommendation-review pages so operators can see supplier, customer, or peer read-through without opening raw JSON first.
+- Use matched ticker relationships inside stored plan explanation text so operator-facing rationale and risk framing can reflect ticker-specific read-through when the current evidence supports it.
 - Queue or run macro and industry refresh workflows manually.
 - Trace which shared artifacts were used by a run or recommendation plan.
 - See support-snapshot freshness in `/api/health` and `/api/health/preflight`; context objects are reviewable through the context APIs and UI.

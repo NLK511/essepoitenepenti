@@ -573,6 +573,8 @@ Note: ticker deep-analysis payloads now also carry derived ticker relationship e
 
 Recommendation plan lists, run detail plan review, and ticker history now surface a compact ticker-relationship line from the stored transmission summary. Treat it as read-through/provenance, not as standalone evidence.
 
+Some recommendation-plan explanation fields now also fold in that matched relationship read-through. When you see supplier, customer, or peer wording in rationale or risk text, it should mean the stored relationship matched the current transmission evidence rather than merely existing in taxonomy data.
+
 This page is intentionally closer to raw storage than the higher-level review pages.
 
 ---

@@ -183,6 +183,30 @@ class DeepAnalysisProposalService:
                 "ticker": {"score": 0.4},
             },
             "news": {"item_count": 3},
+            "ticker_deep_analysis": {
+                "transmission_analysis": {
+                    "alignment_percent": 72.0,
+                    "context_bias": "tailwind" if ticker == "AAPL" else "headwind",
+                    "catalyst_intensity_percent": 68.0,
+                    "context_strength_percent": 70.0,
+                    "context_event_relevance_percent": 66.0,
+                    "contradiction_count": 0,
+                    "transmission_tags": ["industry_dominant", "catalyst_active"],
+                    "primary_drivers": ["industry_context_support", "ticker_sentiment_confirmation"],
+                    "industry_exposure_channels": ["industry_demand"],
+                    "ticker_exposure_channels": ["ticker_sentiment", "news_catalyst"],
+                    "ticker_relationship_edges": [
+                        {"type": "supplier_to", "target": "TSM", "channel": "supply_chain"},
+                        {"type": "peer_of", "target": "SONY", "channel": "competitive_position"},
+                    ],
+                    "matched_ticker_relationships": [
+                        {"type": "supplier_to", "target": "TSM", "target_label": "TSM", "channel": "supply_chain", "relevance_hits": 2},
+                    ],
+                    "expected_transmission_window": "2d_5d",
+                    "conflict_flags": [],
+                    "decay_state": "fresh",
+                }
+            },
         }
         return RunOutput(
             recommendation=Recommendation(
@@ -728,6 +752,45 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(orchestration._minimum_shortlist_confidence(StrategyHorizon.ONE_DAY, 4), 52.0)
         self.assertEqual(orchestration._minimum_shortlist_confidence(StrategyHorizon.ONE_WEEK, 12), 53.0)
         self.assertEqual(orchestration._minimum_shortlist_attention(StrategyHorizon.ONE_MONTH, 24), 52.0)
+
+    def test_watchlist_orchestration_uses_matched_relationships_in_plan_explanation_text(self) -> None:
+        session = create_session()
+        orchestration = WatchlistOrchestrationService(
+            context_snapshots=ContextSnapshotRepository(session),
+            recommendation_plans=RecommendationPlanRepository(session),
+            cheap_scan_service=CheapScanProposalService(),
+            deep_analysis_service=TickerDeepAnalysisService(DeepAnalysisProposalService()),
+            confidence_threshold=60.0,
+        )
+        transmission_summary = {
+            "context_bias": "tailwind",
+            "expected_transmission_window": "2d_5d",
+            "primary_drivers": ["industry_context_support"],
+            "matched_ticker_relationships": [
+                {"type": "supplier_to", "target": "TSM", "target_label": "TSM", "channel": "supply_chain"},
+                {"type": "peer_of", "target": "SONY", "target_label": "Sony", "channel": "competitive_position"},
+            ],
+        }
+
+        self.assertIn("supplier to TSM via supply chain", orchestration._action_reason_detail("breakout", "actionable_setup", transmission_summary=transmission_summary))
+        candidate = type(
+            "Candidate",
+            (),
+            {
+                "indicator_summary": "cheap scan",
+                "attention_score": 74.0,
+                "confidence_percent": 78.0,
+            },
+        )()
+        self.assertIn("supplier to TSM via supply chain", orchestration._rationale_summary(
+            TickerSignalSnapshot(ticker="AAPL", horizon="1w", attention_score=74.0, confidence_percent=78.0),
+            candidate,
+            "breakout",
+            transmission_summary=transmission_summary,
+        ))
+        self.assertIn("supplier to TSM via supply chain", orchestration._actionable_thesis("long", "breakout", transmission_summary=transmission_summary))
+        self.assertIn("supplier to TSM via supply chain", orchestration._invalidation_summary("breakout", transmission_summary=transmission_summary))
+        self.assertIn("ticker relationship read-through can break if peer, supplier, or customer confirmation fades", orchestration._plan_risks([], "breakout", "long", transmission_summary))
 
     def test_watchlist_orchestration_uses_catalyst_lane_to_preserve_event_candidate(self) -> None:
         session = create_session()

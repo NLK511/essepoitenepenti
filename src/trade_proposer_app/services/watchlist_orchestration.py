@@ -1027,9 +1027,31 @@ class WatchlistOrchestrationService:
             primary_drivers = transmission_summary.get("primary_drivers")
             if isinstance(primary_drivers, list) and primary_drivers:
                 components.append(f"driver {str(primary_drivers[0]).replace('_', ' ')}")
+            relationship_summary = WatchlistOrchestrationService._relationship_summary(transmission_summary)
+            if relationship_summary:
+                components.append(f"relationship {relationship_summary}")
         components.append(f"attention {signal.attention_score:.1f}")
         components.append(f"confidence {signal.confidence_percent:.1f}")
         return " · ".join(component for component in components if component)
+
+    @staticmethod
+    def _relationship_summary(transmission_summary: dict[str, object] | None) -> str:
+        if not isinstance(transmission_summary, dict):
+            return ""
+        matched = transmission_summary.get("matched_ticker_relationships")
+        if not isinstance(matched, list) or not matched:
+            return ""
+        labels: list[str] = []
+        for item in matched[:2]:
+            if not isinstance(item, dict):
+                continue
+            relation = str(item.get("type", "")).strip().replace("_", " ")
+            target = str(item.get("target_label") or item.get("target") or "").strip()
+            if relation and target:
+                labels.append(f"{relation} {target}")
+            elif target:
+                labels.append(target)
+        return ", ".join(labels)
 
     def _evidence_summary(
         self,
@@ -1069,6 +1091,8 @@ class WatchlistOrchestrationService:
         transmission_summary: dict[str, object] | None = None,
     ) -> str:
         setup_label = setup_family.replace("_", " ") if setup_family else "uncategorized"
+        relationship_summary = self._relationship_summary(transmission_summary)
+        relationship_suffix = f" Read-through to watch: {relationship_summary}." if relationship_summary else ""
         if action_reason in {"below_action_confidence_threshold", "below_calibrated_action_threshold"}:
             family_text = {
                 "breakout": "the breakout lacked enough confirmed follow-through",
@@ -1078,11 +1102,11 @@ class WatchlistOrchestrationService:
                 "catalyst_follow_through": "the catalyst impulse was not strong enough to trust",
                 "macro_beneficiary_loser": "the macro transmission case was not strong enough to express",
             }.get(setup_family, "conviction was too weak")
-            return f"Detected a {setup_label} candidate, but {family_text} for an actionable trade plan."
+            return f"Detected a {setup_label} candidate, but {family_text} for an actionable trade plan.{relationship_suffix}"
         if action_reason == "shorts_disabled":
-            return f"Detected a {setup_label} candidate, but the watchlist policy does not permit the required short expression."
+            return f"Detected a {setup_label} candidate, but the watchlist policy does not permit the required short expression.{relationship_suffix}"
         if action_reason == "direction_not_actionable":
-            return f"Detected a {setup_label} structure, but direction remained too ambiguous for a trade plan."
+            return f"Detected a {setup_label} structure, but direction remained too ambiguous for a trade plan.{relationship_suffix}"
         if action_reason == "not_shortlisted":
             family_text = {
                 "breakout": "the breakout was not clean enough relative to stronger shortlist candidates",
@@ -1092,14 +1116,14 @@ class WatchlistOrchestrationService:
                 "catalyst_follow_through": "the catalyst lane found stronger event continuation candidates",
                 "macro_beneficiary_loser": "macro transmission existed but did not rank highly enough for escalation",
             }.get(setup_family, "it did not rank highly enough for escalation")
-            return f"Detected a {setup_label} structure, but {family_text}."
+            return f"Detected a {setup_label} structure, but {family_text}.{relationship_suffix}"
         if action_reason == "context_transmission_headwind":
             driver = self._primary_driver_label(transmission_summary)
-            return f"Detected a {setup_label} structure, but macro and industry transmission remained a headwind to the proposed trade direction{f' ({driver})' if driver else ''}."
+            return f"Detected a {setup_label} structure, but macro and industry transmission remained a headwind to the proposed trade direction{f' ({driver})' if driver else ''}.{relationship_suffix}"
         if action_reason == "context_transmission_contradiction":
             driver = self._primary_driver_label(transmission_summary)
-            return f"Detected a {setup_label} structure, but active context evidence was internally contradictory{f' around {driver}' if driver else ''}, so the trade case was not clean enough to promote."
-        return "Signal quality was insufficient for an actionable trade plan."
+            return f"Detected a {setup_label} structure, but active context evidence was internally contradictory{f' around {driver}' if driver else ''}, so the trade case was not clean enough to promote.{relationship_suffix}"
+        return f"Signal quality was insufficient for an actionable trade plan.{relationship_suffix}".strip()
 
     def _actionable_thesis(
         self,
@@ -1111,6 +1135,7 @@ class WatchlistOrchestrationService:
         direction = "bullish" if action == "long" else "bearish"
         setup_label = setup_family.replace("_", " ") if setup_family else "uncategorized"
         driver = self._primary_driver_label(transmission_summary)
+        relationship_summary = self._relationship_summary(transmission_summary)
         entry_style = self._entry_style(setup_family).replace("_", " ")
         timing = self._timing_expectation(setup_family, transmission_summary=transmission_summary)
         family_text = {
@@ -1121,8 +1146,12 @@ class WatchlistOrchestrationService:
             "catalyst_follow_through": f"Actionable {direction} catalyst follow-through setup while event pressure remains active",
             "macro_beneficiary_loser": f"Actionable {direction} macro beneficiary / loser setup tied to broader context transmission",
         }.get(setup_family, f"Actionable {direction} {setup_label} setup identified")
+        if driver and relationship_summary:
+            return f"{family_text}; entry style is {entry_style}, expected window is {timing}, the primary driver is {driver}, and ticker read-through is supported by {relationship_summary}."
         if driver:
             return f"{family_text}; entry style is {entry_style}, expected window is {timing}, and the primary driver is {driver}."
+        if relationship_summary:
+            return f"{family_text}; entry style is {entry_style}, expected window is {timing}, and ticker read-through is supported by {relationship_summary}."
         return f"{family_text}; entry style is {entry_style} and expected window is {timing}."
 
     @staticmethod
@@ -1198,24 +1227,26 @@ class WatchlistOrchestrationService:
         transmission_summary: dict[str, object] | None = None,
     ) -> str:
         driver = self._primary_driver_label(transmission_summary)
+        relationship_summary = self._relationship_summary(transmission_summary)
+        relationship_suffix = f" Relationship read-through: {relationship_summary}." if relationship_summary else ""
         family_label = setup_family.replace("_", " ") if setup_family else "setup"
         if action_reason == "actionable_setup":
-            return f"Promoted because the {family_label} structure met the current execution and confidence requirements."
+            return f"Promoted because the {family_label} structure met the current execution and confidence requirements.{relationship_suffix}"
         if action_reason == "not_shortlisted":
-            return f"Observed a potential {family_label} structure, but it did not clear shortlist competition for deep analysis."
+            return f"Observed a potential {family_label} structure, but it did not clear shortlist competition for deep analysis.{relationship_suffix}"
         if action_reason in {"below_action_confidence_threshold", "below_calibrated_action_threshold"}:
-            return f"The {family_label} structure remained visible, but conviction and execution clarity were not strong enough to justify promotion."
+            return f"The {family_label} structure remained visible, but conviction and execution clarity were not strong enough to justify promotion.{relationship_suffix}"
         if action_reason == "shorts_disabled":
-            return "The required short expression was blocked by watchlist policy."
+            return f"The required short expression was blocked by watchlist policy.{relationship_suffix}".strip()
         if action_reason == "direction_not_actionable":
-            return f"The {family_label} structure did not resolve into a tradeable direction."
+            return f"The {family_label} structure did not resolve into a tradeable direction.{relationship_suffix}"
         if action_reason == "deep_analysis_unavailable":
-            return f"Cheap scan detected a possible {family_label} case, but deep analysis did not complete cleanly enough to frame a trade plan."
+            return f"Cheap scan detected a possible {family_label} case, but deep analysis did not complete cleanly enough to frame a trade plan.{relationship_suffix}"
         if action_reason == "context_transmission_headwind":
-            return f"Broader context remained a headwind to the setup{f' via {driver}' if driver else ''}."
+            return f"Broader context remained a headwind to the setup{f' via {driver}' if driver else ''}.{relationship_suffix}"
         if action_reason == "context_transmission_contradiction":
-            return f"Broader context evidence remained too contradictory to trust the setup cleanly{f' around {driver}' if driver else ''}."
-        return f"The {family_label} setup was reviewed but did not earn promotion."
+            return f"Broader context evidence remained too contradictory to trust the setup cleanly{f' around {driver}' if driver else ''}.{relationship_suffix}"
+        return f"The {family_label} setup was reviewed but did not earn promotion.{relationship_suffix}"
 
     def _invalidation_summary(
         self,
@@ -1224,6 +1255,7 @@ class WatchlistOrchestrationService:
         transmission_summary: dict[str, object] | None = None,
     ) -> str:
         driver = self._primary_driver_label(transmission_summary)
+        relationship_summary = self._relationship_summary(transmission_summary)
         base = {
             "continuation": "invalidate if the trend pullback breaks and continuation structure fails",
             "breakout": "invalidate if the breakout loses the breakout level or fails its retest",
@@ -1232,8 +1264,12 @@ class WatchlistOrchestrationService:
             "catalyst_follow_through": "invalidate if the catalyst impulse loses confirmation or post-event continuation stalls",
             "macro_beneficiary_loser": "invalidate if the broader context transmission weakens or sector sympathy breaks",
         }.get(setup_family, "invalidate if the setup loses its defining structure")
+        if driver and relationship_summary:
+            return f"{base}; primary driver to monitor is {driver}; ticker read-through to monitor is {relationship_summary}"
         if driver:
             return f"{base}; primary driver to monitor is {driver}"
+        if relationship_summary:
+            return f"{base}; ticker read-through to monitor is {relationship_summary}"
         return base
 
     @staticmethod
@@ -1245,6 +1281,39 @@ class WatchlistOrchestrationService:
             return None
         first = drivers[0]
         return str(first).replace("_", " ") if isinstance(first, str) and first else None
+
+    @staticmethod
+    def _matched_ticker_relationships(transmission_summary: dict[str, object] | None) -> list[dict[str, object]]:
+        if not isinstance(transmission_summary, dict):
+            return []
+        raw = transmission_summary.get("matched_ticker_relationships")
+        if not isinstance(raw, list):
+            return []
+        return [item for item in raw if isinstance(item, dict)]
+
+    @staticmethod
+    def _relationship_label(relationship: dict[str, object]) -> str | None:
+        relation_type = str(relationship.get("type", "") or "").strip().replace("_", " ")
+        target = str(relationship.get("target_label", relationship.get("target", "")) or "").strip()
+        channel = str(relationship.get("channel", "") or "").strip().replace("_", " ")
+        if relation_type and target and channel:
+            return f"{relation_type} {target} via {channel}"
+        if relation_type and target:
+            return f"{relation_type} {target}"
+        if target:
+            return target
+        return None
+
+    @classmethod
+    def _relationship_summary(cls, transmission_summary: dict[str, object] | None) -> str | None:
+        labels = [
+            cls._relationship_label(item)
+            for item in cls._matched_ticker_relationships(transmission_summary)[:2]
+        ]
+        labels = [label for label in labels if label]
+        if not labels:
+            return None
+        return " and ".join(labels)
 
     def _family_adjusted_trade_levels(
         self,
@@ -1302,6 +1371,8 @@ class WatchlistOrchestrationService:
             decay_state = transmission_summary.get("decay_state")
             if decay_state == "fading":
                 risks.append("context support may already be fading for this horizon")
+            if WatchlistOrchestrationService._relationship_summary(transmission_summary):
+                risks.append("ticker relationship read-through can break if peer, supplier, or customer confirmation fades")
         if action in {"long", "short"} and warnings == []:
             risks.append("macro/industry transmission should keep confirming the trade after entry")
         if action == "short":

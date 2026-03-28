@@ -83,6 +83,8 @@ Ticker deep analysis also derives ticker-level `peer_of`, `supplier_to`, and `cu
 
 Watchlist orchestration now carries the matched ticker relationships into stored recommendation-plan transmission summaries. In practice that means plan review surfaces can show ticker-specific read-through like supplier dependence or peer confirmation without forcing the operator to open raw diagnostics first.
 
+The same matched relationship set now feeds plan explanation text too. Rationale, action-reason detail, invalidation, and risk text can mention ticker relationship read-through, but only when the relationship was actually matched against the active evidence rather than just existing in the stored taxonomy.
+
 If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings. Transitional support snapshots still support that shared-artifact layer and freshness reporting.
 
 ### 3. News ingestion and live ticker sentiment
