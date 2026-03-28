@@ -37,7 +37,7 @@ Usage: scripts/start-dev.sh [options]
 
 Options:
   --run-scheduler-once        Run the scheduler enqueue pass before starting services
-  --allow-degraded-preflight  Allow startup even if the internal pipeline preflight reports failure (alias --allow-degraded-prototype)
+  --allow-degraded-preflight  Allow startup even if the internal pipeline preflight reports failure (legacy alias --allow-degraded-prototype)
   --backend-only              Start only the API and worker, not the Vite frontend dev server
   --host <host>               Host for uvicorn (default: APP_HOST or 0.0.0.0)
   --port <port>               Port for uvicorn (default: APP_PORT or 8000)

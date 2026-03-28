@@ -11,11 +11,11 @@ APP_PORT="${APP_PORT:-8000}"
 APP_HOST="${APP_HOST:-0.0.0.0}"
 DATABASE_URL_DEFAULT="sqlite:///./trade_proposer.db"
 REDIS_URL_DEFAULT="redis://localhost:6379/0"
-PROTOTYPE_REPO_PATH_DEFAULT="${PROTOTYPE_REPO_PATH:-}"
-PROTOTYPE_PYTHON_EXECUTABLE_DEFAULT="${PROTOTYPE_PYTHON_EXECUTABLE:-}"
 FORCE_ENV_WRITE="false"
-SKIP_PROTOTYPE_DEPS="false"
 SKIP_FRONTEND_DEPS="false"
+INSTALL_DEV_DEPS="false"
+INSTALL_OPENAI_DEPS="false"
+LEGACY_PROTOTYPE_PATH="${PROTOTYPE_REPO_PATH:-}"
 
 log() {
   printf '[setup] %s\n' "$1"
@@ -33,16 +33,16 @@ Usage: scripts/setup.sh [options]
 Options:
   --force-env            Overwrite .env with generated local defaults
   --python <binary>      Python executable to use (default: python3)
-  --prototype <path>     Path to pi-mono repository
-  --skip-prototype-deps  Skip installing prototype requirements into the app venv
   --skip-frontend-deps   Skip installing frontend npm dependencies
+  --with-dev-deps        Install Python developer dependencies (pytest, ruff, mypy)
+  --with-openai          Install optional OpenAI dependency for summary integrations
   --help                 Show this help
 
-What this script does:
+What this script does for the redesigned app:
   1. Creates .venv if needed
   2. Installs the Python app in editable mode
-  3. Installs frontend npm dependencies unless skipped
-  4. Installs prototype requirements into the same venv when available
+  3. Optionally installs dev/OpenAI extras
+  4. Installs frontend npm dependencies unless skipped
   5. Creates or updates local .env defaults
   6. Generates a random SECRET_KEY if writing .env
   7. Defaults to SQLite for easiest first run
@@ -62,18 +62,16 @@ while [[ $# -gt 0 ]]; do
       PYTHON_BIN="$1"
       shift
       ;;
-    --prototype)
-      shift
-      [[ $# -gt 0 ]] || fail "missing value for --prototype"
-      PROTOTYPE_REPO_PATH_DEFAULT="$1"
-      shift
-      ;;
-    --skip-prototype-deps)
-      SKIP_PROTOTYPE_DEPS="true"
-      shift
-      ;;
     --skip-frontend-deps)
       SKIP_FRONTEND_DEPS="true"
+      shift
+      ;;
+    --with-dev-deps)
+      INSTALL_DEV_DEPS="true"
+      shift
+      ;;
+    --with-openai)
+      INSTALL_OPENAI_DEPS="true"
       shift
       ;;
     --help)
@@ -104,14 +102,6 @@ case "$PYTHON_VERSION" in
     ;;
 esac
 
-if [[ -z "$PROTOTYPE_REPO_PATH_DEFAULT" ]]; then
-  if [[ -d "${ROOT_DIR}/../pi-mono" ]]; then
-    PROTOTYPE_REPO_PATH_DEFAULT="$(cd "${ROOT_DIR}/../pi-mono" && pwd)"
-  elif [[ -d "/home/aurelio/workspace/pi-mono" ]]; then
-    PROTOTYPE_REPO_PATH_DEFAULT="/home/aurelio/workspace/pi-mono"
-  fi
-fi
-
 log "repo root: ${ROOT_DIR}"
 log "using python: ${PYTHON_BIN}"
 
@@ -128,12 +118,18 @@ VENV_PIP="${VENV_DIR}/bin/pip"
 [[ -x "$VENV_PYTHON" ]] || fail "virtualenv python not found at ${VENV_PYTHON}"
 [[ -x "$VENV_PIP" ]] || fail "virtualenv pip not found at ${VENV_PIP}"
 
-if [[ -z "$PROTOTYPE_PYTHON_EXECUTABLE_DEFAULT" ]]; then
-  PROTOTYPE_PYTHON_EXECUTABLE_DEFAULT="$VENV_PYTHON"
+log "installing base project dependencies"
+"$VENV_PIP" install -e "$ROOT_DIR"
+
+if [[ "$INSTALL_DEV_DEPS" == "true" ]]; then
+  log "installing Python developer dependencies"
+  "$VENV_PIP" install -e "$ROOT_DIR[dev]"
 fi
 
-log "installing project dependencies"
-"$VENV_PIP" install -e "$ROOT_DIR[prototype]"
+if [[ "$INSTALL_OPENAI_DEPS" == "true" ]]; then
+  log "installing optional OpenAI integration dependencies"
+  "$VENV_PIP" install -e "$ROOT_DIR[prototype]"
+fi
 
 if [[ "$SKIP_FRONTEND_DEPS" == "true" ]]; then
   log "skipping frontend dependency installation"
@@ -142,23 +138,6 @@ elif [[ -d "$FRONTEND_DIR" ]]; then
   npm --prefix "$FRONTEND_DIR" install
 else
   fail "missing frontend directory: ${FRONTEND_DIR}"
-fi
-
-PROTOTYPE_REQUIREMENTS_FILE=""
-if [[ -n "$PROTOTYPE_REPO_PATH_DEFAULT" ]]; then
-  candidate_requirements="${PROTOTYPE_REPO_PATH_DEFAULT}/.pi/skills/trade-proposer/requirements.txt"
-  if [[ -f "$candidate_requirements" ]]; then
-    PROTOTYPE_REQUIREMENTS_FILE="$candidate_requirements"
-  fi
-fi
-
-if [[ "$SKIP_PROTOTYPE_DEPS" == "true" ]]; then
-  log "skipping prototype dependency installation"
-elif [[ -n "$PROTOTYPE_REQUIREMENTS_FILE" ]]; then
-  log "installing prototype dependencies from ${PROTOTYPE_REQUIREMENTS_FILE}"
-  "$VENV_PIP" install -r "$PROTOTYPE_REQUIREMENTS_FILE"
-else
-  log "prototype requirements file not found; skipping prototype dependency installation"
 fi
 
 write_env_file() {
@@ -172,8 +151,8 @@ APP_PORT=${APP_PORT}
 DATABASE_URL=${DATABASE_URL_DEFAULT}
 REDIS_URL=${REDIS_URL_DEFAULT}
 SECRET_KEY=${secret_key}
-PROTOTYPE_REPO_PATH=${PROTOTYPE_REPO_PATH_DEFAULT}
-PROTOTYPE_PYTHON_EXECUTABLE=${PROTOTYPE_PYTHON_EXECUTABLE_DEFAULT}
+PROTOTYPE_REPO_PATH=
+PROTOTYPE_PYTHON_EXECUTABLE=${VENV_PYTHON}
 SINGLE_USER_AUTH_ENABLED=true
 SINGLE_USER_AUTH_TOKEN=change-me
 SINGLE_USER_AUTH_ALLOWLIST_PATHS=/api/health,/api/health/preflight,/api/health/prototype
@@ -210,9 +189,8 @@ if [[ ! -f "$ENV_FILE" || "$FORCE_ENV_WRITE" == "true" ]]; then
   log "writing ${ENV_FILE}"
   write_env_file
 else
-  log ".env already exists, updating prototype defaults"
-  update_or_append_env_setting "PROTOTYPE_REPO_PATH" "$PROTOTYPE_REPO_PATH_DEFAULT"
-  update_or_append_env_setting "PROTOTYPE_PYTHON_EXECUTABLE" "$PROTOTYPE_PYTHON_EXECUTABLE_DEFAULT"
+  log ".env already exists, updating local execution defaults"
+  update_or_append_env_setting "PROTOTYPE_PYTHON_EXECUTABLE" "$VENV_PYTHON"
 fi
 
 [[ -f "$ENV_EXAMPLE_FILE" ]] || fail "missing ${ENV_EXAMPLE_FILE}"
@@ -224,16 +202,14 @@ log "running database migrations"
 )
 
 MANUAL_TASKS=()
-if [[ -z "$PROTOTYPE_REPO_PATH_DEFAULT" ]]; then
-  MANUAL_TASKS+=("set PROTOTYPE_REPO_PATH in .env to your local pi-mono checkout")
-elif [[ ! -f "${PROTOTYPE_REPO_PATH_DEFAULT}/.pi/skills/trade-proposer/scripts/propose_trade.py" ]]; then
-  MANUAL_TASKS+=("verify PROTOTYPE_REPO_PATH in .env because the trade-proposer prototype script was not found there")
-fi
-if [[ -z "$PROTOTYPE_REQUIREMENTS_FILE" && "$SKIP_PROTOTYPE_DEPS" != "true" ]]; then
-  MANUAL_TASKS+=("install prototype dependencies manually because .pi/skills/trade-proposer/requirements.txt was not found")
-fi
 if [[ "$SKIP_FRONTEND_DEPS" == "true" ]]; then
   MANUAL_TASKS+=("run npm --prefix frontend install before starting the React frontend")
+fi
+if [[ "$INSTALL_OPENAI_DEPS" != "true" ]]; then
+  MANUAL_TASKS+=("install optional summary-provider dependencies later with ./scripts/setup.sh --with-openai if you want OpenAI-backed summaries")
+fi
+if [[ -n "$LEGACY_PROTOTYPE_PATH" ]]; then
+  MANUAL_TASKS+=("legacy PROTOTYPE_REPO_PATH was detected in your environment; the redesigned app no longer requires an external prototype checkout for normal operation")
 fi
 
 log "setup complete"
@@ -244,6 +220,7 @@ printf '\n'
 printf 'Primary local URLs after startup:\n'
 printf '  frontend: http://localhost:5173/\n'
 printf '  api:      http://localhost:%s/api/health\n' "$APP_PORT"
+printf '  preflight: http://localhost:%s/api/health/preflight\n' "$APP_PORT"
 printf '\n'
 
 if [[ ${#MANUAL_TASKS[@]} -gt 0 ]]; then
@@ -254,7 +231,7 @@ if [[ ${#MANUAL_TASKS[@]} -gt 0 ]]; then
   printf '\n'
 else
   printf 'Manual tasks remaining:\n'
-  printf '  - verify the prototype environment can run recommendation generation\n'
-  printf '  - optionally add provider credentials in /settings\n'
+  printf '  - optionally add provider credentials in /settings for NewsAPI, Finnhub, or summary backends\n'
+  printf '  - create a watchlist and run a proposal job to exercise the redesign path\n'
   printf '\n'
 fi

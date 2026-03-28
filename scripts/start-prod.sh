@@ -12,6 +12,7 @@ SCHEDULER_PID_FILE="${STATE_DIR}/scheduler.pid"
 META_FILE="${STATE_DIR}/meta.env"
 
 SKIP_FRONTEND_BUILD="false"
+ALLOW_DEGRADED_PREFLIGHT="false"
 START_HOST=""
 START_PORT=""
 
@@ -32,6 +33,7 @@ Options:
   --host <host>               Host for uvicorn (default: APP_HOST or 0.0.0.0)
   --port <port>               Port for uvicorn (default: APP_PORT or 8000)
   --skip-frontend-build       Assume frontend assets are already built
+  --allow-degraded-preflight  Start even if preflight fails
   --help                      Show this help message
 EOF
 }
@@ -59,10 +61,26 @@ load_env_file() {
   done < "$path"
 }
 
+read_pid_file() {
+  local path="$1"
+  if [[ -f "$path" ]]; then
+    tr -d '[:space:]' < "$path"
+  fi
+}
+
+is_running_pid() {
+  local pid="$1"
+  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-frontend-build)
       SKIP_FRONTEND_BUILD="true"
+      shift
+      ;;
+    --allow-degraded-preflight)
+      ALLOW_DEGRADED_PREFLIGHT="true"
       shift
       ;;
     --host)
@@ -102,6 +120,14 @@ START_PORT="${START_PORT:-${APP_PORT:-8000}}"
 VENV_PYTHON="${VENV_DIR}/bin/python"
 [[ -x "$VENV_PYTHON" ]] || fail "missing ${VENV_PYTHON}; run ./scripts/setup.sh first"
 
+mkdir -p "$STATE_DIR"
+existing_api_pid="$(read_pid_file "$API_PID_FILE")"
+existing_worker_pid="$(read_pid_file "$WORKER_PID_FILE")"
+existing_scheduler_pid="$(read_pid_file "$SCHEDULER_PID_FILE")"
+if is_running_pid "$existing_api_pid" || is_running_pid "$existing_worker_pid" || is_running_pid "$existing_scheduler_pid"; then
+  fail "services already appear to be running; use ./scripts/stop-prod.sh first"
+fi
+
 if [[ -d "$FRONTEND_DIR" && "$SKIP_FRONTEND_BUILD" != "true" ]]; then
   command -v npm >/dev/null 2>&1 || fail "npm is required to build the frontend"
   log "installing frontend dependencies"
@@ -115,7 +141,7 @@ if [[ -d "$FRONTEND_DIR" && "$SKIP_FRONTEND_BUILD" != "true" ]]; then
     NODE_ENV=production npm run build
   )
 elif [[ "$SKIP_FRONTEND_BUILD" != "true" ]]; then
-  fail "missing ${FRONTEND_DIR}; can\'t build frontend"
+  fail "missing ${FRONTEND_DIR}; can't build frontend"
 else
   log "skipping frontend build (assumed already built)"
 fi
@@ -130,7 +156,29 @@ log "applying database migrations"
   "$VENV_PYTHON" -m trade_proposer_app.migrations
 )
 
-mkdir -p "$STATE_DIR"
+log "running internal pipeline preflight"
+PRECHECK_OUTPUT="$(
+  cd "$ROOT_DIR"
+  "$VENV_PYTHON" - <<'PY'
+from trade_proposer_app.services.preflight import AppPreflightService
+report = AppPreflightService().run()
+print(report.status)
+for check in report.checks:
+    print(f"{check.status}|{check.name}|{check.message}")
+PY
+)"
+PRECHECK_STATUS="$(printf '%s\n' "$PRECHECK_OUTPUT" | head -n 1)"
+printf '%s\n' "$PRECHECK_OUTPUT" | tail -n +2 | while IFS='|' read -r check_status check_name check_message; do
+  [[ -n "$check_name" ]] || continue
+  log "preflight ${check_status}: ${check_name}: ${check_message}"
+done
+if [[ "$PRECHECK_STATUS" == "failed" && "$ALLOW_DEGRADED_PREFLIGHT" != "true" ]]; then
+  fail "internal pipeline preflight failed; fix the reported issues or rerun with --allow-degraded-preflight"
+fi
+if [[ "$PRECHECK_STATUS" == "failed" && "$ALLOW_DEGRADED_PREFLIGHT" == "true" ]]; then
+  log "continuing despite failed internal pipeline preflight because --allow-degraded-preflight was set"
+fi
+
 rm -f "$API_PID_FILE" "$WORKER_PID_FILE" "$SCHEDULER_PID_FILE" "$META_FILE"
 
 API_PID=""
@@ -156,6 +204,7 @@ cleanup() {
     wait "$API_PID" 2>/dev/null || true
   fi
   rm -f "$API_PID_FILE" "$WORKER_PID_FILE" "$SCHEDULER_PID_FILE" "$META_FILE"
+  rmdir "$STATE_DIR" 2>/dev/null || true
   exit "$exit_code"
 }
 
@@ -185,15 +234,27 @@ log "starting scheduler"
 SCHEDULER_PID=$!
 echo "$SCHEDULER_PID" > "$SCHEDULER_PID_FILE"
 
+cat > "$META_FILE" <<EOF
+HOST=${START_HOST}
+PORT=${START_PORT}
+SKIP_FRONTEND_BUILD=${SKIP_FRONTEND_BUILD}
+ALLOW_DEGRADED_PREFLIGHT=${ALLOW_DEGRADED_PREFLIGHT}
+API_PID=${API_PID}
+WORKER_PID=${WORKER_PID}
+SCHEDULER_PID=${SCHEDULER_PID}
+EOF
+
 log "services started"
 printf '\n'
-printf 'API:     http://%s:%s/api/health\n' "$START_HOST" "$START_PORT"
-printf 'Frontend: served from the API at http://%s:%s/ (assets under frontend/dist)\n' "$START_HOST" "$START_PORT"
-printf 'Worker:   running in background (pid %s)\n' "$WORKER_PID"
+printf 'API:       http://%s:%s/api/health\n' "$START_HOST" "$START_PORT"
+printf 'Frontend:  served from the API at http://%s:%s/ (assets under frontend/dist)\n' "$START_HOST" "$START_PORT"
+printf 'Preflight: http://%s:%s/api/health/preflight\n' "$START_HOST" "$START_PORT"
+printf 'Worker:    running in background (pid %s)\n' "$WORKER_PID"
 printf 'Scheduler: running in background (pid %s)\n' "$SCHEDULER_PID"
 printf 'State dir: %s\n' "$STATE_DIR"
 printf '\n'
-printf 'Press Ctrl+C to stop both processes.\n'
+printf 'Use ./scripts/stop-prod.sh to stop these processes from another terminal.\n'
+printf 'Press Ctrl+C to stop all started processes here as well.\n'
 
 while true; do
   if ! kill -0 "$API_PID" 2>/dev/null; then
