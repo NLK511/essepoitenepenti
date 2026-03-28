@@ -648,7 +648,9 @@ export function RecommendationPlansPage() {
                   const transmissionSummary = asRecord(signalBreakdown?.transmission_summary) ?? asRecord(evidenceSummary?.transmission_summary);
                   const calibrationReview = asRecord(signalBreakdown?.calibration_review) ?? asRecord(evidenceSummary?.calibration_review);
                   const setupFamily = typeof signalBreakdown?.setup_family === "string" ? signalBreakdown.setup_family : "—";
-                  const actionReason = typeof evidenceSummary?.action_reason === "string" ? evidenceSummary.action_reason : "—";
+                  const actionReason = typeof evidenceSummary?.action_reason_label === "string" && evidenceSummary.action_reason_label
+                    ? evidenceSummary.action_reason_label
+                    : typeof evidenceSummary?.action_reason === "string" ? evidenceSummary.action_reason : "—";
                   const actionReasonDetail = typeof evidenceSummary?.action_reason_detail === "string" ? evidenceSummary.action_reason_detail : "—";
                   const entryStyle = typeof evidenceSummary?.entry_style === "string" ? evidenceSummary.entry_style : "—";
                   const stopStyle = typeof evidenceSummary?.stop_style === "string" ? evidenceSummary.stop_style : "—";

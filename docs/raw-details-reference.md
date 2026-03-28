@@ -70,6 +70,8 @@ Important stored fields include:
 - calibration and setup-family-review bucket rows can now carry `slice_name` and `slice_label` alongside `key` and `label`
 - shortlist-decision payloads can now carry `reason_details` and `selection_lane_label`, while signal diagnostics can carry `shortlist_reason_details` and `selection_lane_label`
 - calibration-review payloads can now carry `review_status_label` and `reason_details` alongside canonical review status/reason codes
+- recommendation-plan evidence summaries can now carry `action_reason_label` alongside canonical `action_reason`
+- extracted context-event rows can now carry `contradiction_reason_details` alongside canonical `contradiction_reasons`
 - run summaries can now include `shortlist_rejection_details` rows with readable labels and counts in addition to raw `shortlist_rejections` maps
 - evidence-concentration cohorts can now include `slice_label` alongside canonical `slice_name`, plus the existing cohort `key` and `label`
 - event-key detail still persists separately via fields like `macro_event_keys` and `industry_event_keys` instead of being overloaded into governed tag/driver lists

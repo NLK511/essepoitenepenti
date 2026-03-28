@@ -157,7 +157,9 @@ flowchart LR
 25. calibration/review buckets now also carry `slice_name` and `slice_label`, so API-facing analytics objects preserve both canonical grouping semantics and readable labels consistently
 26. shortlist decisions and diagnostics now also carry governed `reason_details` / `shortlist_reason_details` plus `selection_lane_label`, so watchlist review pages do not have to render raw shortlist reason codes and lane keys directly
 27. calibration reviews now also carry governed `review_status_label` and `reason_details`, while run summaries can expose counted shortlist-rejection detail rows for readable execution triage
-28. evidence-concentration cohorts now expose a readable `slice_label` alongside the canonical `slice_name`, so API consumers and operator pages can render cohort families without hand-humanizing backend keys
+28. recommendation-plan evidence summaries now also carry governed `action_reason_label`, so plan-review pages do not have to render raw action-reason codes directly
+29. extracted context-event rows can now also carry governed `contradiction_reason_details`, so context-detail pages can explain contradiction state without hand-humanizing raw contradiction codes
+30. evidence-concentration cohorts now expose a readable `slice_label` alongside the canonical `slice_name`, so API consumers and operator pages can render cohort families without hand-humanizing backend keys
 25. the support-snapshot resolver now backfills baseline industry ontology metadata even when an industry context snapshot is missing, so downstream proposal/ticker analysis code can still see sector and relationship context instead of dropping to a taxonomy-blind fallback
 26. refresh services still persist transitional `SupportSnapshot` records first and then materialize redesign-native macro or industry context snapshots from the same run
 27. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer

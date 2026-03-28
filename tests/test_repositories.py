@@ -693,6 +693,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("follow_through_speed", plan_map["AAPL"].evidence_summary["evaluation_focus"])
         self.assertIn("breakout", plan_map["AAPL"].evidence_summary["invalidation_summary"])
         self.assertEqual(plan_map["TSLA"].evidence_summary["action_reason"], "not_shortlisted")
+        self.assertEqual(plan_map["TSLA"].evidence_summary["action_reason_label"], "not shortlisted")
         self.assertIn("did not clear shortlist competition", plan_map["TSLA"].evidence_summary["action_reason_detail"])
         diagnostics_map = {item.ticker: item.diagnostics for item in ticker_signals}
         source_breakdown_map = {item.ticker: item.source_breakdown for item in ticker_signals}
@@ -908,6 +909,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(result["summary"]["calibration_enabled"], True)
         self.assertEqual(plan_map["AAPL"].action, "long")
         self.assertEqual(plan_map["AAPL"].evidence_summary["action_reason"], "actionable_setup")
+        self.assertEqual(plan_map["AAPL"].evidence_summary["action_reason_label"], "actionable setup")
         calibration_review = plan_map["AAPL"].signal_breakdown["calibration_review"]
         self.assertEqual(calibration_review["enabled"], True)
         self.assertEqual(calibration_review["review_status"], "usable_for_gating")

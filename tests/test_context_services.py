@@ -147,6 +147,9 @@ class ContextServiceTests(unittest.TestCase):
         energy = next(theme for theme in context.active_themes if theme["key"] == "energy_oil")
         self.assertTrue(energy["contradiction_flag"])
         self.assertIn(energy["persistence_state"], {"persistent", "escalating"})
+        contradiction_reason_map = {item["key"]: item for item in energy["contradiction_reason_details"]}
+        self.assertTrue(set(contradiction_reason_map).issubset({"mixed_directional_evidence", "ambiguous_evidence_text", "direction_changed_vs_previous_snapshot"}))
+        self.assertGreaterEqual(len(contradiction_reason_map), 1)
         self.assertTrue(any(item["key"] == "commodity_input_costs" for item in energy["transmission_channel_details"]))
         self.assertIn("Oil and energy", context.metadata["event_lifecycle_summary"]["contradictory_event_labels"])
         self.assertTrue(any("contradictory evidence" in warning for warning in context.warnings))

@@ -25,6 +25,8 @@ SHORTLIST_REASON_CODES_PATH = TAXONOMY_DIR / "shortlist_reason_codes.json"
 SHORTLIST_SELECTION_LANES_PATH = TAXONOMY_DIR / "shortlist_selection_lanes.json"
 CALIBRATION_REVIEW_STATUSES_PATH = TAXONOMY_DIR / "calibration_review_statuses.json"
 CALIBRATION_REASON_CODES_PATH = TAXONOMY_DIR / "calibration_reason_codes.json"
+ACTION_REASON_CODES_PATH = TAXONOMY_DIR / "action_reason_codes.json"
+CONTRADICTION_REASON_CODES_PATH = TAXONOMY_DIR / "contradiction_reason_codes.json"
 RELATIONSHIP_TYPES_PATH = TAXONOMY_DIR / "relationship_types.json"
 RELATIONSHIP_TARGET_KINDS_PATH = TAXONOMY_DIR / "relationship_target_kinds.json"
 
@@ -69,6 +71,8 @@ class TickerTaxonomyService:
         self._shortlist_selection_lanes: dict[str, dict[str, Any]] = payload["shortlist_selection_lanes"]
         self._calibration_review_statuses: dict[str, dict[str, Any]] = payload["calibration_review_statuses"]
         self._calibration_reason_codes: dict[str, dict[str, Any]] = payload["calibration_reason_codes"]
+        self._action_reason_codes: dict[str, dict[str, Any]] = payload["action_reason_codes"]
+        self._contradiction_reason_codes: dict[str, dict[str, Any]] = payload["contradiction_reason_codes"]
         self._theme_alias_map: dict[str, str] = self._build_alias_map(self._themes)
         self._macro_channel_alias_map: dict[str, str] = self._build_alias_map(self._macro_channels)
         self._transmission_channel_alias_map: dict[str, str] = self._build_alias_map(self._transmission_channels)
@@ -83,6 +87,8 @@ class TickerTaxonomyService:
         self._shortlist_selection_lane_alias_map: dict[str, str] = self._build_alias_map(self._shortlist_selection_lanes)
         self._calibration_review_status_alias_map: dict[str, str] = self._build_alias_map(self._calibration_review_statuses)
         self._calibration_reason_code_alias_map: dict[str, str] = self._build_alias_map(self._calibration_reason_codes)
+        self._action_reason_code_alias_map: dict[str, str] = self._build_alias_map(self._action_reason_codes)
+        self._contradiction_reason_code_alias_map: dict[str, str] = self._build_alias_map(self._contradiction_reason_codes)
         self._source_mode: str = payload["source_mode"]
 
     def _load_payload(self) -> dict[str, Any]:
@@ -112,6 +118,8 @@ class TickerTaxonomyService:
         shortlist_selection_lanes = self._load_registry(self._read_json_file(SHORTLIST_SELECTION_LANES_PATH))
         calibration_review_statuses = self._load_registry(self._read_json_file(CALIBRATION_REVIEW_STATUSES_PATH))
         calibration_reason_codes = self._load_registry(self._read_json_file(CALIBRATION_REASON_CODES_PATH))
+        action_reason_codes = self._load_registry(self._read_json_file(ACTION_REASON_CODES_PATH))
+        contradiction_reason_codes = self._load_registry(self._read_json_file(CONTRADICTION_REASON_CODES_PATH))
         relationship_types = self._load_registry(self._read_json_file(RELATIONSHIP_TYPES_PATH))
         relationship_target_kinds = self._load_registry(self._read_json_file(RELATIONSHIP_TARGET_KINDS_PATH))
         self._themes = themes
@@ -126,6 +134,8 @@ class TickerTaxonomyService:
         self._shortlist_selection_lanes = shortlist_selection_lanes
         self._calibration_review_statuses = calibration_review_statuses
         self._calibration_reason_codes = calibration_reason_codes
+        self._action_reason_codes = action_reason_codes
+        self._contradiction_reason_codes = contradiction_reason_codes
         self._relationship_types = relationship_types
         self._relationship_target_kinds = relationship_target_kinds
         self._theme_alias_map = self._build_alias_map(themes)
@@ -140,6 +150,8 @@ class TickerTaxonomyService:
         self._shortlist_selection_lane_alias_map = self._build_alias_map(shortlist_selection_lanes)
         self._calibration_review_status_alias_map = self._build_alias_map(calibration_review_statuses)
         self._calibration_reason_code_alias_map = self._build_alias_map(calibration_reason_codes)
+        self._action_reason_code_alias_map = self._build_alias_map(action_reason_codes)
+        self._contradiction_reason_code_alias_map = self._build_alias_map(contradiction_reason_codes)
         self._relationship_type_alias_map = self._build_alias_map(relationship_types)
         self._relationship_target_kind_alias_map = self._build_alias_map(relationship_target_kinds)
         return {
@@ -164,12 +176,14 @@ class TickerTaxonomyService:
             "shortlist_selection_lanes": shortlist_selection_lanes,
             "calibration_review_statuses": calibration_review_statuses,
             "calibration_reason_codes": calibration_reason_codes,
+            "action_reason_codes": action_reason_codes,
+            "contradiction_reason_codes": contradiction_reason_codes,
             "relationship_types": relationship_types,
             "relationship_target_kinds": relationship_target_kinds,
         }
 
     def _load_monolith_payload(self) -> dict[str, Any]:
-        empty = {"tickers": {}, "industries": {}, "sectors": {}, "relationships": [], "event_vocab": {}, "themes": {}, "macro_channels": {}, "transmission_channels": {}, "transmission_tags": {}, "transmission_primary_drivers": {}, "transmission_conflict_flags": {}, "transmission_biases": {}, "transmission_context_regimes": {}, "shortlist_reason_codes": {}, "shortlist_selection_lanes": {}, "calibration_review_statuses": {}, "calibration_reason_codes": {}, "relationship_types": {}, "relationship_target_kinds": {}}
+        empty = {"tickers": {}, "industries": {}, "sectors": {}, "relationships": [], "event_vocab": {}, "themes": {}, "macro_channels": {}, "transmission_channels": {}, "transmission_tags": {}, "transmission_primary_drivers": {}, "transmission_conflict_flags": {}, "transmission_biases": {}, "transmission_context_regimes": {}, "shortlist_reason_codes": {}, "shortlist_selection_lanes": {}, "calibration_review_statuses": {}, "calibration_reason_codes": {}, "action_reason_codes": {}, "contradiction_reason_codes": {}, "relationship_types": {}, "relationship_target_kinds": {}}
         if not TAXONOMY_PATH.exists():
             return empty
         payload = self._read_json_file(TAXONOMY_PATH)
@@ -187,6 +201,8 @@ class TickerTaxonomyService:
         shortlist_selection_lanes = self._load_registry(payload.get("_shortlist_selection_lanes"))
         calibration_review_statuses = self._load_registry(payload.get("_calibration_review_statuses"))
         calibration_reason_codes = self._load_registry(payload.get("_calibration_reason_codes"))
+        action_reason_codes = self._load_registry(payload.get("_action_reason_codes"))
+        contradiction_reason_codes = self._load_registry(payload.get("_contradiction_reason_codes"))
         relationship_types = self._load_registry(payload.get("_relationship_types"))
         relationship_target_kinds = self._load_registry(payload.get("_relationship_target_kinds"))
         self._themes = themes
@@ -201,6 +217,8 @@ class TickerTaxonomyService:
         self._shortlist_selection_lanes = shortlist_selection_lanes
         self._calibration_review_statuses = calibration_review_statuses
         self._calibration_reason_codes = calibration_reason_codes
+        self._action_reason_codes = action_reason_codes
+        self._contradiction_reason_codes = contradiction_reason_codes
         self._relationship_types = relationship_types
         self._relationship_target_kinds = relationship_target_kinds
         self._theme_alias_map = self._build_alias_map(themes)
@@ -215,6 +233,8 @@ class TickerTaxonomyService:
         self._shortlist_selection_lane_alias_map = self._build_alias_map(shortlist_selection_lanes)
         self._calibration_review_status_alias_map = self._build_alias_map(calibration_review_statuses)
         self._calibration_reason_code_alias_map = self._build_alias_map(calibration_reason_codes)
+        self._action_reason_code_alias_map = self._build_alias_map(action_reason_codes)
+        self._contradiction_reason_code_alias_map = self._build_alias_map(contradiction_reason_codes)
         self._relationship_type_alias_map = self._build_alias_map(relationship_types)
         self._relationship_target_kind_alias_map = self._build_alias_map(relationship_target_kinds)
         return {
@@ -239,6 +259,8 @@ class TickerTaxonomyService:
             "shortlist_selection_lanes": shortlist_selection_lanes,
             "calibration_review_statuses": calibration_review_statuses,
             "calibration_reason_codes": calibration_reason_codes,
+            "action_reason_codes": action_reason_codes,
+            "contradiction_reason_codes": contradiction_reason_codes,
             "relationship_types": relationship_types,
             "relationship_target_kinds": relationship_target_kinds,
         }
@@ -767,6 +789,8 @@ class TickerTaxonomyService:
             "shortlist_selection_lane_count": len(self._shortlist_selection_lanes),
             "calibration_review_status_count": len(self._calibration_review_statuses),
             "calibration_reason_code_count": len(self._calibration_reason_codes),
+            "action_reason_code_count": len(self._action_reason_codes),
+            "contradiction_reason_code_count": len(self._contradiction_reason_codes),
             "relationship_type_count": len(self._relationship_types),
             "relationship_target_kind_count": len(self._relationship_target_kinds),
             "derived_relationship_count": len(self._derived_relationships()),
@@ -1041,6 +1065,20 @@ class TickerTaxonomyService:
 
     def list_calibration_reason_definitions(self) -> list[dict[str, Any]]:
         return [self.get_calibration_reason_definition(key) for key in sorted(self._calibration_reason_codes)]
+
+    def get_action_reason_definition(self, value: str) -> dict[str, Any]:
+        canonical_key = self._action_reason_code_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))
+        return dict(self._action_reason_codes.get(canonical_key, {"key": canonical_key, "label": str(value or "").strip().replace("_", " "), "aliases": []}))
+
+    def list_action_reason_definitions(self) -> list[dict[str, Any]]:
+        return [self.get_action_reason_definition(key) for key in sorted(self._action_reason_codes)]
+
+    def get_contradiction_reason_definition(self, value: str) -> dict[str, Any]:
+        canonical_key = self._contradiction_reason_code_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))
+        return dict(self._contradiction_reason_codes.get(canonical_key, {"key": canonical_key, "label": str(value or "").strip().replace("_", " "), "aliases": []}))
+
+    def list_contradiction_reason_definitions(self) -> list[dict[str, Any]]:
+        return [self.get_contradiction_reason_definition(key) for key in sorted(self._contradiction_reason_codes)]
 
     def get_relationship_type_definition(self, value: str) -> dict[str, Any]:
         canonical_key = self._relationship_type_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))

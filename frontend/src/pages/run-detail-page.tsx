@@ -543,7 +543,9 @@ export function RunDetailPage() {
                               ? transmissionSummary.expected_transmission_window
                               : "unknown";
                             const setupFamily = typeof signalBreakdown?.setup_family === "string" ? signalBreakdown.setup_family : null;
-                            const actionReason = typeof evidenceSummary?.action_reason === "string" ? evidenceSummary.action_reason : null;
+                            const actionReason = typeof evidenceSummary?.action_reason_label === "string" && evidenceSummary.action_reason_label
+                              ? evidenceSummary.action_reason_label
+                              : typeof evidenceSummary?.action_reason === "string" ? evidenceSummary.action_reason : null;
                             const actionReasonDetail = typeof evidenceSummary?.action_reason_detail === "string" ? evidenceSummary.action_reason_detail : null;
                             const entryStyle = typeof evidenceSummary?.entry_style === "string" ? evidenceSummary.entry_style : null;
                             const stopStyle = typeof evidenceSummary?.stop_style === "string" ? evidenceSummary.stop_style : null;

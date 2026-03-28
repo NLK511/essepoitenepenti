@@ -27,6 +27,8 @@ from trade_proposer_app.services.taxonomy import (  # noqa: E402
     SHORTLIST_SELECTION_LANES_PATH,
     CALIBRATION_REVIEW_STATUSES_PATH,
     CALIBRATION_REASON_CODES_PATH,
+    ACTION_REASON_CODES_PATH,
+    CONTRADICTION_REASON_CODES_PATH,
     TRANSMISSION_PRIMARY_DRIVERS_PATH,
     TRANSMISSION_TAGS_PATH,
     TAXONOMY_DIR,
@@ -44,7 +46,7 @@ def main() -> int:
     service = TickerTaxonomyService()
     alias_to_tickers: dict[str, set[str]] = {}
 
-    expected_paths = [TICKERS_PATH, INDUSTRIES_PATH, SECTORS_PATH, RELATIONSHIPS_PATH, EVENT_VOCAB_PATH, THEMES_PATH, MACRO_CHANNELS_PATH, TRANSMISSION_CHANNELS_PATH, TRANSMISSION_TAGS_PATH, TRANSMISSION_PRIMARY_DRIVERS_PATH, TRANSMISSION_CONFLICT_FLAGS_PATH, TRANSMISSION_BIASES_PATH, TRANSMISSION_CONTEXT_REGIMES_PATH, SHORTLIST_REASON_CODES_PATH, SHORTLIST_SELECTION_LANES_PATH, CALIBRATION_REVIEW_STATUSES_PATH, CALIBRATION_REASON_CODES_PATH, RELATIONSHIP_TYPES_PATH, RELATIONSHIP_TARGET_KINDS_PATH]
+    expected_paths = [TICKERS_PATH, INDUSTRIES_PATH, SECTORS_PATH, RELATIONSHIPS_PATH, EVENT_VOCAB_PATH, THEMES_PATH, MACRO_CHANNELS_PATH, TRANSMISSION_CHANNELS_PATH, TRANSMISSION_TAGS_PATH, TRANSMISSION_PRIMARY_DRIVERS_PATH, TRANSMISSION_CONFLICT_FLAGS_PATH, TRANSMISSION_BIASES_PATH, TRANSMISSION_CONTEXT_REGIMES_PATH, SHORTLIST_REASON_CODES_PATH, SHORTLIST_SELECTION_LANES_PATH, CALIBRATION_REVIEW_STATUSES_PATH, CALIBRATION_REASON_CODES_PATH, ACTION_REASON_CODES_PATH, CONTRADICTION_REASON_CODES_PATH, RELATIONSHIP_TYPES_PATH, RELATIONSHIP_TARGET_KINDS_PATH]
     split_mode = all(path.exists() for path in expected_paths)
     if not split_mode and not TAXONOMY_PATH.exists():
         errors.append(f"no taxonomy source found; expected split files in {TAXONOMY_DIR} or fallback file {TAXONOMY_PATH}")
@@ -188,6 +190,8 @@ def main() -> int:
     print(f"Shortlist selection lanes: {overview['shortlist_selection_lane_count']}")
     print(f"Calibration review statuses: {overview['calibration_review_status_count']}")
     print(f"Calibration reason codes: {overview['calibration_reason_code_count']}")
+    print(f"Action reason codes: {overview['action_reason_code_count']}")
+    print(f"Contradiction reason codes: {overview['contradiction_reason_code_count']}")
     print(f"Relationship types: {overview['relationship_type_count']}")
     print(f"Relationship target kinds: {overview['relationship_target_kind_count']}")
     print(f"Derived relationships: {overview['derived_relationship_count']}")

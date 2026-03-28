@@ -247,6 +247,7 @@ export function ContextSnapshotDetailPage() {
                 {eventRows.map((event, index) => {
                   const row = typeof event === "object" && event !== null ? event as Record<string, unknown> : {};
                   const channels = extractDisplayLabels(row, "transmission_channel_details", "transmission_channels");
+                  const contradictionReasons = extractDisplayLabels(row, "contradiction_reason_details", "contradiction_reasons");
                   return (
                     <li key={`${index}-${eventLabel(row.key)}`} className="list-item">
                       <div className="cluster">
@@ -257,6 +258,7 @@ export function ContextSnapshotDetailPage() {
                         {typeof row.saliency_weight === "number" ? <Badge>saliency {row.saliency_weight}</Badge> : null}
                       </div>
                       {channels.length > 0 ? <div className="helper-text top-gap-small">Channels: {channels.join(", ")}</div> : null}
+                      {contradictionReasons.length > 0 ? <div className="helper-text top-gap-small">Contradiction reasons: {contradictionReasons.join(", ")}</div> : null}
                       {Array.isArray(row.evidence_samples) && row.evidence_samples.length > 0 ? (
                         <div className="helper-text top-gap-small">Evidence: {row.evidence_samples.slice(0, 3).join(" | ")}</div>
                       ) : null}

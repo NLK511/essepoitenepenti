@@ -486,6 +486,8 @@ This is like a run-scoped version of the recommendation plans page.
 Use it when you want to answer:
 > what plans did this run actually create, and how were they framed?
 
+The page now prefers governed action-reason labels and calibration reason labels when those fields are present.
+
 ### Context tab fields
 Shows macro and industry context objects created by the run.
 Common fields include:
@@ -589,9 +591,9 @@ Transmission summary tags, primary drivers, and conflict flags are now moving in
 
 On newer review pages, the UI should prefer the labeled detail arrays when they are available. That means operator-facing transmission rows increasingly show readable labels for drivers, conflicts, tags, and industry/ticker exposure channels instead of raw canonical keys.
 
-That same pattern now extends into context snapshot detail pages: stored macro/industry event rows and industry ontology-profile transmission channels should increasingly display readable governed labels instead of raw channel keys.
+That same pattern now extends into context snapshot detail pages: stored macro/industry event rows and industry ontology-profile transmission channels should increasingly display readable governed labels instead of raw channel keys. Contradiction reasons on stored event rows can now follow that same detail-array pattern too.
 
-The same governance push is now affecting analytics pages indirectly too. Calibration and setup-family review slices that use `context_regime` should become more stable over time because that regime is now derived from a governed helper instead of repeated ad hoc logic in multiple places. `transmission_bias` is now moving onto the same governed footing, evidence-concentration cohorts can carry a readable `slice_label`, latest stored outcomes can now expose readable bias/regime labels, and calibration-review payloads can now carry governed status/reason labels too so review tables are not forced to show raw analytics keys.
+The same governance push is now affecting analytics pages indirectly too. Calibration and setup-family review slices that use `context_regime` should become more stable over time because that regime is now derived from a governed helper instead of repeated ad hoc logic in multiple places. `transmission_bias` is now moving onto the same governed footing, evidence-concentration cohorts can carry a readable `slice_label`, latest stored outcomes can now expose readable bias/regime labels, recommendation plans can expose governed `action_reason_label`, and calibration-review payloads can now carry governed status/reason labels too so review tables are not forced to show raw analytics keys.
 
 This page is intentionally closer to raw storage than the higher-level review pages.
 

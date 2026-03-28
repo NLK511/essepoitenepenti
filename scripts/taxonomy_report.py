@@ -36,6 +36,8 @@ def main() -> int:
     print(f"- shortlist selection lanes: {overview['shortlist_selection_lane_count']}")
     print(f"- calibration review statuses: {overview['calibration_review_status_count']}")
     print(f"- calibration reason codes: {overview['calibration_reason_code_count']}")
+    print(f"- action reason codes: {overview['action_reason_code_count']}")
+    print(f"- contradiction reason codes: {overview['contradiction_reason_code_count']}")
     print(f"- relationship types: {overview['relationship_type_count']}")
     print(f"- relationship target kinds: {overview['relationship_target_kind_count']}")
     print(f"- derived relationships: {overview['derived_relationship_count']}")

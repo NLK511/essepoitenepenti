@@ -52,6 +52,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 - Govern transmission-bias analytics semantics too, and expose readable evidence-concentration slice labels so operator review surfaces rely less on raw backend keys.
 - Carry readable analytics labels on stored latest-outcome payloads and calibration buckets too, so recommendation review pages can show governed bias/regime names instead of raw keys.
 - Carry readable shortlist and calibration explanation labels too, including shortlist reason details, selection-lane labels, calibration review-status labels, and governed calibration reason details.
+- Carry readable action-reason and contradiction-reason labels too, so recommendation-plan and context-detail pages rely less on raw internal codes.
 - Queue macro and industry refresh workflows manually from the operator UI.
 - Execute macro and industry refresh workflows asynchronously through the shared queued run path; immediate `run-now` endpoints still exist in the backend but are no longer the primary operator workflow.
 - Trace which shared artifacts were used by a run or recommendation plan.

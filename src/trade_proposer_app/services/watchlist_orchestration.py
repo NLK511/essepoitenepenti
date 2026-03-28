@@ -1059,6 +1059,10 @@ class WatchlistOrchestrationService:
         definition = self.taxonomy_service.get_calibration_review_status_definition(value)
         return str(definition.get("label", value.replace("_", " "))).strip() or value.replace("_", " ")
 
+    def _action_reason_label(self, value: str) -> str:
+        definition = self.taxonomy_service.get_action_reason_definition(value)
+        return str(definition.get("label", value.replace("_", " "))).strip() or value.replace("_", " ")
+
     @staticmethod
     def _fallback_transmission_window(signal: TickerSignalSnapshot) -> str:
         if signal.catalyst_score >= 70.0:
@@ -1199,6 +1203,7 @@ class WatchlistOrchestrationService:
             "summary": summary_text,
             "setup_family": setup_family,
             "action_reason": action_reason,
+            "action_reason_label": self._action_reason_label(action_reason),
             "action_reason_detail": self._action_reason_detail(setup_family, action_reason, transmission_summary=transmission_summary),
             "confidence_components": confidence_components,
             "raw_confidence_percent": calibration.get("raw_confidence_percent"),

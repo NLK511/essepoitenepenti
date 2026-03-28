@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import re
 
+from trade_proposer_app.services.taxonomy import TickerTaxonomyService
+
 OFFICIAL_SOURCE_HINTS = (
     "federal reserve",
     "fomc",
@@ -200,6 +202,7 @@ def extract_ranked_events(
                 "contradiction_flag": bool(contradiction_reasons),
                 "contradiction_count": len(contradiction_reasons),
                 "contradiction_reasons": contradiction_reasons,
+                "contradiction_reason_details": _contradiction_reason_details(contradiction_reasons),
                 "evidence_samples": evidence_samples,
             }
         )
@@ -546,6 +549,21 @@ def _contradiction_reasons(matches: list[dict[str, object]], previous: dict[str,
     if previous_direction in {"positive", "negative"} and current_direction in {"positive", "negative"} and previous_direction != current_direction:
         reasons.append("direction_changed_vs_previous_snapshot")
     return list(dict.fromkeys(reasons))
+
+
+def _contradiction_reason_details(reasons: list[str]) -> list[dict[str, str]]:
+    service = TickerTaxonomyService()
+    details: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for reason in reasons:
+        definition = service.get_contradiction_reason_definition(reason)
+        key = str(definition.get("key", reason)).strip() or reason
+        label = str(definition.get("label", reason.replace("_", " "))).strip() or reason.replace("_", " ")
+        if key in seen:
+            continue
+        seen.add(key)
+        details.append({"key": key, "label": label})
+    return details
 
 
 def _latest_timestamp(matches: list[dict[str, object]]) -> datetime | None:

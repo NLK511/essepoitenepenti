@@ -1,0 +1,11 @@
+{
+  "actionable_setup": {"label": "actionable setup"},
+  "not_shortlisted": {"label": "not shortlisted"},
+  "below_action_confidence_threshold": {"label": "below action confidence threshold"},
+  "below_calibrated_action_threshold": {"label": "below calibrated action threshold"},
+  "shorts_disabled": {"label": "shorts disabled"},
+  "direction_not_actionable": {"label": "direction not actionable"},
+  "deep_analysis_unavailable": {"label": "deep analysis unavailable"},
+  "context_transmission_headwind": {"label": "context transmission headwind"},
+  "context_transmission_contradiction": {"label": "context transmission contradiction"}
+}
