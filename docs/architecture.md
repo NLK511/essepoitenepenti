@@ -161,7 +161,8 @@ flowchart LR
 29. extracted context-event rows can now also carry governed `contradiction_reason_details`, so context-detail pages can explain contradiction state without hand-humanizing raw contradiction codes
 30. extracted context-event rows now also carry governed detail objects for `source_priority`, `persistence_state`, `window_hint`, and `recency_bucket`, so event-lifecycle badges can remain readable without dropping canonical keys
 31. frontend context snapshots now also use a narrower `ContextEventRow` type instead of only loose record casting, which makes context-review rendering more explicit about governed lifecycle/detail fields
-32. evidence-concentration cohorts now expose a readable `slice_label` alongside the canonical `slice_name`, so API consumers and operator pages can render cohort families without hand-humanizing backend keys
+32. frontend recommendation-plan and ticker-signal types now also model stable governed substructures such as transmission summaries, calibration reviews, evidence summaries, signal breakdowns, and diagnostics more explicitly instead of leaving those surfaces as broad `Record<string, unknown>` blobs everywhere
+33. evidence-concentration cohorts now expose a readable `slice_label` alongside the canonical `slice_name`, so API consumers and operator pages can render cohort families without hand-humanizing backend keys
 25. the support-snapshot resolver now backfills baseline industry ontology metadata even when an industry context snapshot is missing, so downstream proposal/ticker analysis code can still see sector and relationship context instead of dropping to a taxonomy-blind fallback
 26. refresh services still persist transitional `SupportSnapshot` records first and then materialize redesign-native macro or industry context snapshots from the same run
 27. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer

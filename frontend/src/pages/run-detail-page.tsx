@@ -520,18 +520,10 @@ export function RunDetailPage() {
                         </thead>
                         <tbody>
                           {detail.recommendation_plans.map((plan) => {
-                            const signalBreakdown = isRecord(plan.signal_breakdown) ? plan.signal_breakdown : null;
-                            const evidenceSummary = isRecord(plan.evidence_summary) ? plan.evidence_summary : null;
-                            const transmissionSummary = isRecord(signalBreakdown?.transmission_summary)
-                              ? signalBreakdown.transmission_summary as Record<string, unknown>
-                              : isRecord(evidenceSummary?.transmission_summary)
-                                ? evidenceSummary.transmission_summary as Record<string, unknown>
-                                : null;
-                            const calibrationReview = isRecord(signalBreakdown?.calibration_review)
-                              ? signalBreakdown.calibration_review as Record<string, unknown>
-                              : isRecord(evidenceSummary?.calibration_review)
-                                ? evidenceSummary.calibration_review as Record<string, unknown>
-                                : null;
+                            const signalBreakdown = plan.signal_breakdown;
+                            const evidenceSummary = plan.evidence_summary;
+                            const transmissionSummary = signalBreakdown.transmission_summary ?? evidenceSummary.transmission_summary ?? null;
+                            const calibrationReview = signalBreakdown.calibration_review ?? evidenceSummary.calibration_review ?? null;
                             const transmissionBias = typeof transmissionSummary?.context_bias === "string" ? transmissionSummary.context_bias : "unknown";
                             const transmissionAlignment = typeof transmissionSummary?.alignment_percent === "number" ? transmissionSummary.alignment_percent : null;
                             const transmissionTags = extractDisplayLabels(transmissionSummary, "transmission_tag_details", "transmission_tags");

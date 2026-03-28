@@ -55,8 +55,9 @@ function sampleTone(status: string): "ok" | "warning" | "neutral" {
   return "neutral";
 }
 
-function calibrationSliceSummary(calibrationReview: Record<string, unknown> | null, key: string): string {
-  const item = asRecord(calibrationReview?.[key]);
+function calibrationSliceSummary(calibrationReview: unknown, key: string): string {
+  const review = asRecord(calibrationReview);
+  const item = asRecord(review?.[key]);
   if (!item) {
     return "—";
   }
@@ -643,10 +644,10 @@ export function RecommendationPlansPage() {
               </thead>
               <tbody>
                 {plans.map((plan) => {
-                  const signalBreakdown = asRecord(plan.signal_breakdown);
-                  const evidenceSummary = asRecord(plan.evidence_summary);
-                  const transmissionSummary = asRecord(signalBreakdown?.transmission_summary) ?? asRecord(evidenceSummary?.transmission_summary);
-                  const calibrationReview = asRecord(signalBreakdown?.calibration_review) ?? asRecord(evidenceSummary?.calibration_review);
+                  const signalBreakdown = plan.signal_breakdown;
+                  const evidenceSummary = plan.evidence_summary;
+                  const transmissionSummary = signalBreakdown.transmission_summary ?? evidenceSummary.transmission_summary ?? null;
+                  const calibrationReview = signalBreakdown.calibration_review ?? evidenceSummary.calibration_review ?? null;
                   const setupFamily = typeof signalBreakdown?.setup_family === "string" ? signalBreakdown.setup_family : "—";
                   const actionReason = typeof evidenceSummary?.action_reason_label === "string" && evidenceSummary.action_reason_label
                     ? evidenceSummary.action_reason_label

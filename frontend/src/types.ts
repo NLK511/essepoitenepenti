@@ -226,6 +226,123 @@ export interface IndustryContextSnapshot {
   job_id: number | null;
 }
 
+export interface RecommendationTransmissionSummary {
+  alignment_percent?: number;
+  context_bias?: string;
+  transmission_bias?: string;
+  transmission_alignment_score?: number;
+  catalyst_intensity_percent?: number;
+  context_strength_percent?: number;
+  context_event_relevance_percent?: number;
+  contradiction_count?: number;
+  transmission_tags?: string[];
+  transmission_tag_details?: KeyLabelDetail[];
+  primary_drivers?: string[];
+  primary_driver_details?: KeyLabelDetail[];
+  industry_exposure_channels?: string[];
+  industry_exposure_channel_details?: KeyLabelDetail[];
+  ticker_exposure_channels?: string[];
+  ticker_exposure_channel_details?: KeyLabelDetail[];
+  expected_transmission_window?: string;
+  conflict_flags?: string[];
+  conflict_flag_details?: KeyLabelDetail[];
+  decay_state?: string;
+  transmission_confidence_adjustment?: number;
+  lane_hint?: string;
+  ticker_relationship_edges?: Array<Record<string, unknown>>;
+  matched_ticker_relationships?: Array<Record<string, unknown>>;
+  [key: string]: unknown;
+}
+
+export interface RecommendationCalibrationReview {
+  enabled?: boolean;
+  review_status?: string;
+  review_status_label?: string;
+  raw_confidence_percent?: number;
+  calibrated_confidence_percent?: number;
+  confidence_adjustment?: number;
+  base_confidence_threshold?: number;
+  effective_confidence_threshold?: number;
+  threshold_adjustment?: number;
+  overall_win_rate_percent?: number;
+  setup_family?: RecommendationCalibrationBucket | Record<string, unknown>;
+  confidence_bucket?: RecommendationCalibrationBucket | Record<string, unknown>;
+  horizon?: RecommendationCalibrationBucket | Record<string, unknown>;
+  transmission_bias?: RecommendationCalibrationBucket | Record<string, unknown>;
+  context_regime?: RecommendationCalibrationBucket | Record<string, unknown>;
+  horizon_setup_family?: RecommendationCalibrationBucket | Record<string, unknown>;
+  reasons?: string[];
+  reason_details?: KeyLabelDetail[];
+  [key: string]: unknown;
+}
+
+export interface RecommendationPlanEvidenceSummary {
+  summary?: string;
+  setup_family?: string;
+  action_reason?: string;
+  action_reason_label?: string;
+  action_reason_detail?: string;
+  confidence_components?: Record<string, number>;
+  raw_confidence_percent?: number;
+  calibrated_confidence_percent?: number;
+  confidence_adjustment?: number;
+  calibration_review?: RecommendationCalibrationReview;
+  transmission_summary?: RecommendationTransmissionSummary;
+  entry_style?: string;
+  stop_style?: string;
+  target_style?: string;
+  timing_expectation?: string;
+  evaluation_focus?: string[];
+  invalidation_summary?: string;
+  [key: string]: unknown;
+}
+
+export interface RecommendationPlanSignalBreakdown {
+  attention_score?: number;
+  macro_exposure_score?: number;
+  industry_alignment_score?: number;
+  ticker_sentiment_score?: number;
+  technical_setup_score?: number;
+  catalyst_score?: number;
+  expected_move_score?: number;
+  execution_quality_score?: number;
+  setup_family?: string;
+  confidence_components?: Record<string, number>;
+  raw_confidence_percent?: number;
+  calibrated_confidence_percent?: number;
+  confidence_bucket?: string;
+  calibration_review?: RecommendationCalibrationReview;
+  transmission_summary?: RecommendationTransmissionSummary;
+  mode?: string;
+  [key: string]: unknown;
+}
+
+export interface TickerSignalDiagnostics extends RecommendationTransmissionSummary {
+  mode?: string;
+  shortlisted?: boolean;
+  shortlist_rank?: number;
+  shortlist_reasons?: string[];
+  shortlist_reason_details?: KeyLabelDetail[];
+  shortlist_eligible?: boolean;
+  selection_lane?: string;
+  selection_lane_label?: string;
+  cheap_scan_confidence_percent?: number;
+  cheap_scan_directional_score?: number;
+  catalyst_proxy_score?: number;
+  cheap_scan_component_scores?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface TickerSignalSourceBreakdown extends RecommendationTransmissionSummary {
+  cheap_scan_summary?: string;
+  cheap_scan_model?: string | null;
+  deep_analysis_available?: boolean;
+  deep_analysis_model?: string | null;
+  summary_method?: string | null;
+  base_confidence_percent?: number;
+  [key: string]: unknown;
+}
+
 export interface TickerSignalSnapshot {
   id: number | null;
   ticker: string;
@@ -245,8 +362,8 @@ export interface TickerSignalSnapshot {
   execution_quality_score: number;
   warnings: string[];
   missing_inputs: string[];
-  source_breakdown: Record<string, unknown>;
-  diagnostics: Record<string, unknown>;
+  source_breakdown: TickerSignalSourceBreakdown;
+  diagnostics: TickerSignalDiagnostics;
   run_id: number | null;
   job_id: number | null;
 }
@@ -298,8 +415,8 @@ export interface RecommendationPlan {
   risks: string[];
   warnings: string[];
   missing_inputs: string[];
-  evidence_summary: Record<string, unknown>;
-  signal_breakdown: Record<string, unknown>;
+  evidence_summary: RecommendationPlanEvidenceSummary;
+  signal_breakdown: RecommendationPlanSignalBreakdown;
   computed_at: string;
   run_id: number | null;
   job_id: number | null;
