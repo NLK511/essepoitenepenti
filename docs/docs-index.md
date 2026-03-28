@@ -85,6 +85,11 @@ These are useful after you already understand the product shape.
   - shared context and transitional support-snapshot payloads
   - diagnostics and timing
 
+### Database structure
+- `er-model.md`
+  - current entity-relationship diagram for the live app schema
+  - main foreign-key links between watchlists, jobs, runs, snapshots, plans, and outcomes
+
 ### Redesign specs still useful as active reference
 - `redesign/README.md`
   - overview of active redesign docs
