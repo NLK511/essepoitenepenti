@@ -62,7 +62,10 @@ The redesign is already the active product path, but it still needs deeper evide
 
 Still needed:
 - continue improving ticker-analysis quality without reopening generic legacy patterns
-- decide the long-term role of the remaining support-snapshot refresh layer now that richer context objects exist
+- retire the legacy support-snapshot dependency once backend flow is ready:
+  - make macro/industry refresh jobs produce context snapshots as the primary object rather than deriving context from support snapshots
+  - migrate proposal and ticker-context resolution off `SupportSnapshotResolver` onto context-native reads
+  - remove operator-facing support-snapshot surfaces after refresh, health, and scoring paths no longer depend on them
 - keep recommendation-plan review as the clear canonical workflow
 - avoid reintroducing duplicate legacy-vs-redesign terminology
 
