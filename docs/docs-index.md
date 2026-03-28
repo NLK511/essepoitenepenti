@@ -62,6 +62,8 @@ These docs define the current product truth.
   - startup
   - authentication basics
   - first-run troubleshooting
+  - validation commands
+  - optional Postgres integration-test workflow
 
 ### Current roadmap
 - `roadmap.md`

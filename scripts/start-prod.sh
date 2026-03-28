@@ -25,6 +25,37 @@ fail() {
   exit 1
 }
 
+ensure_database_connection() {
+  local database_url="$1"
+  if [[ "$database_url" == sqlite:* ]]; then
+    log "using SQLite database: ${database_url}"
+    return 0
+  fi
+  if [[ "$database_url" != postgresql* && "$database_url" != postgres:* ]]; then
+    fail "unsupported DATABASE_URL backend: ${database_url}"
+  fi
+  log "checking PostgreSQL connectivity"
+  if ! DATABASE_URL_TO_CHECK="$database_url" "$VENV_PYTHON" - <<'PY'
+import os
+import sys
+from sqlalchemy import create_engine, text
+
+url = os.environ["DATABASE_URL_TO_CHECK"]
+engine = create_engine(url, future=True)
+try:
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+except Exception as exc:  # pragma: no cover - script path
+    print(exc, file=sys.stderr)
+    sys.exit(1)
+finally:
+    engine.dispose()
+PY
+  then
+    fail "could not connect to PostgreSQL. Ensure the configured database is reachable before starting production-style services."
+  fi
+}
+
 usage() {
   cat <<EOF
 Usage: scripts/start-prod.sh [options]
@@ -119,6 +150,7 @@ START_PORT="${START_PORT:-${APP_PORT:-8000}}"
 [[ -d "$VENV_DIR" ]] || fail "missing ${VENV_DIR}; run ./scripts/setup.sh first"
 VENV_PYTHON="${VENV_DIR}/bin/python"
 [[ -x "$VENV_PYTHON" ]] || fail "missing ${VENV_PYTHON}; run ./scripts/setup.sh first"
+DATABASE_URL_VALUE="${DATABASE_URL:-postgresql+psycopg://postgres:postgres@localhost:5432/trade_proposer}"
 
 mkdir -p "$STATE_DIR"
 existing_api_pid="$(read_pid_file "$API_PID_FILE")"
@@ -149,6 +181,8 @@ fi
 if [[ "$SKIP_FRONTEND_BUILD" != "true" ]]; then
   log "frontend assets available in ${FRONTEND_DIR}/dist"
 fi
+
+ensure_database_connection "$DATABASE_URL_VALUE"
 
 log "applying database migrations"
 (

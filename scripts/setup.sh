@@ -9,7 +9,9 @@ ENV_EXAMPLE_FILE="${ROOT_DIR}/.env.example"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 APP_PORT="${APP_PORT:-8000}"
 APP_HOST="${APP_HOST:-0.0.0.0}"
-DATABASE_URL_DEFAULT="sqlite:///./trade_proposer.db"
+DATABASE_BACKEND="sqlite"
+SQLITE_DATABASE_URL_DEFAULT="sqlite:///./trade_proposer.db"
+POSTGRES_DATABASE_URL_DEFAULT="postgresql+psycopg://postgres:postgres@localhost:5432/trade_proposer"
 REDIS_URL_DEFAULT="redis://localhost:6379/0"
 FORCE_ENV_WRITE="false"
 SKIP_FRONTEND_DEPS="false"
@@ -31,12 +33,14 @@ usage() {
 Usage: scripts/setup.sh [options]
 
 Options:
-  --force-env            Overwrite .env with generated local defaults
-  --python <binary>      Python executable to use (default: python3)
-  --skip-frontend-deps   Skip installing frontend npm dependencies
-  --with-dev-deps        Install Python developer dependencies (pytest, ruff, mypy)
-  --with-openai          Install optional OpenAI dependency for summary integrations
-  --help                 Show this help
+  --force-env                 Overwrite .env with generated local defaults
+  --python <binary>           Python executable to use (default: python3)
+  --database <postgres|sqlite>
+                              Database backend to generate in .env (default: sqlite)
+  --skip-frontend-deps        Skip installing frontend npm dependencies
+  --with-dev-deps             Install Python developer dependencies (pytest, ruff, mypy)
+  --with-openai               Install optional OpenAI dependency for summary integrations
+  --help                      Show this help
 
 What this script does for the redesigned app:
   1. Creates .venv if needed
@@ -45,9 +49,83 @@ What this script does for the redesigned app:
   4. Installs frontend npm dependencies unless skipped
   5. Creates or updates local .env defaults
   6. Generates a random SECRET_KEY if writing .env
-  7. Defaults to SQLite for easiest first run
+  7. Defaults local startup to SQLite for easiest first run
   8. Runs database migrations
 EOF
+}
+
+build_database_url() {
+  local backend="$1"
+  case "$backend" in
+    postgres)
+      printf '%s' "$POSTGRES_DATABASE_URL_DEFAULT"
+      ;;
+    sqlite)
+      printf '%s' "$SQLITE_DATABASE_URL_DEFAULT"
+      ;;
+    *)
+      fail "unsupported database backend: ${backend}"
+      ;;
+  esac
+}
+
+database_backend_from_url() {
+  local value="$1"
+  case "$value" in
+    sqlite:*)
+      printf 'sqlite'
+      ;;
+    postgresql*|postgres:*)
+      printf 'postgres'
+      ;;
+    *)
+      printf 'unknown'
+      ;;
+  esac
+}
+
+read_env_setting() {
+  local key="$1"
+  local path="$2"
+  [[ -f "$path" ]] || return 0
+  local line
+  line="$(grep -E "^${key}=" "$path" | tail -n 1 || true)"
+  printf '%s' "${line#*=}"
+}
+
+ensure_database_connection() {
+  local backend="$1"
+  local database_url="$2"
+
+  if [[ "$backend" == "sqlite" ]]; then
+    log "using SQLite database: ${database_url}"
+    return 0
+  fi
+
+  if [[ "$backend" != "postgres" ]]; then
+    fail "unsupported DATABASE_URL backend in ${ENV_FILE}: ${database_url}"
+  fi
+
+  log "checking PostgreSQL connectivity"
+  if ! DATABASE_URL_TO_CHECK="$database_url" "$VENV_PYTHON" - <<'PY'
+import os
+import sys
+from sqlalchemy import create_engine, text
+
+url = os.environ["DATABASE_URL_TO_CHECK"]
+engine = create_engine(url, future=True)
+try:
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+except Exception as exc:  # pragma: no cover - script path
+    print(exc, file=sys.stderr)
+    sys.exit(1)
+finally:
+    engine.dispose()
+PY
+  then
+    fail "could not connect to PostgreSQL using DATABASE_URL=${database_url}. Start local services with 'docker compose up -d postgres redis' or rerun setup with '--database sqlite' for a no-service local fallback."
+  fi
 }
 
 while [[ $# -gt 0 ]]; do
@@ -60,6 +138,12 @@ while [[ $# -gt 0 ]]; do
       shift
       [[ $# -gt 0 ]] || fail "missing value for --python"
       PYTHON_BIN="$1"
+      shift
+      ;;
+    --database)
+      shift
+      [[ $# -gt 0 ]] || fail "missing value for --database"
+      DATABASE_BACKEND="$1"
       shift
       ;;
     --skip-frontend-deps)
@@ -84,6 +168,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+case "$DATABASE_BACKEND" in
+  postgres|sqlite)
+    ;;
+  *)
+    fail "--database must be 'postgres' or 'sqlite'"
+    ;;
+esac
+
 require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"
 }
@@ -104,6 +196,7 @@ esac
 
 log "repo root: ${ROOT_DIR}"
 log "using python: ${PYTHON_BIN}"
+log "requested database backend: ${DATABASE_BACKEND}"
 
 if [[ ! -d "$VENV_DIR" ]]; then
   log "creating virtual environment"
@@ -142,13 +235,15 @@ fi
 
 write_env_file() {
   local secret_key
+  local database_url
   secret_key="$($VENV_PYTHON -c 'import secrets; print(secrets.token_urlsafe(32))')"
+  database_url="$(build_database_url "$DATABASE_BACKEND")"
   cat > "$ENV_FILE" <<EOF
 APP_NAME=Trade Proposer App
 APP_ENV=development
 APP_HOST=${APP_HOST}
 APP_PORT=${APP_PORT}
-DATABASE_URL=${DATABASE_URL_DEFAULT}
+DATABASE_URL=${database_url}
 REDIS_URL=${REDIS_URL_DEFAULT}
 SECRET_KEY=${secret_key}
 PROTOTYPE_REPO_PATH=
@@ -189,11 +284,18 @@ if [[ ! -f "$ENV_FILE" || "$FORCE_ENV_WRITE" == "true" ]]; then
   log "writing ${ENV_FILE}"
   write_env_file
 else
-  log ".env already exists, updating local execution defaults"
+  log ".env already exists, preserving DATABASE_URL and updating local execution defaults"
   update_or_append_env_setting "PROTOTYPE_PYTHON_EXECUTABLE" "$VENV_PYTHON"
 fi
 
 [[ -f "$ENV_EXAMPLE_FILE" ]] || fail "missing ${ENV_EXAMPLE_FILE}"
+
+CURRENT_DATABASE_URL="$(read_env_setting DATABASE_URL "$ENV_FILE")"
+if [[ -z "$CURRENT_DATABASE_URL" ]]; then
+  CURRENT_DATABASE_URL="$(build_database_url "$DATABASE_BACKEND")"
+fi
+CURRENT_DATABASE_BACKEND="$(database_backend_from_url "$CURRENT_DATABASE_URL")"
+ensure_database_connection "$CURRENT_DATABASE_BACKEND" "$CURRENT_DATABASE_URL"
 
 log "running database migrations"
 (
@@ -210,6 +312,9 @@ if [[ "$INSTALL_OPENAI_DEPS" != "true" ]]; then
 fi
 if [[ -n "$LEGACY_PROTOTYPE_PATH" ]]; then
   MANUAL_TASKS+=("legacy PROTOTYPE_REPO_PATH was detected in your environment; the redesigned app no longer requires an external prototype checkout for normal operation")
+fi
+if [[ "$CURRENT_DATABASE_BACKEND" == "postgres" ]]; then
+  MANUAL_TASKS+=("keep PostgreSQL and Redis running for local startup, e.g. docker compose up -d postgres redis")
 fi
 
 log "setup complete"

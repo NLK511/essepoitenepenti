@@ -16,14 +16,49 @@ Trade Proposer App is a deployable application for systematic short-horizon trad
 ./scripts/start-dev.sh
 ```
 
+SQLite remains the default local development database for the easiest first run. If you want a Postgres-backed local environment, start local services with `docker compose up -d postgres redis` and run `./scripts/setup.sh --force-env --database postgres`.
+
 Useful setup options:
 - `./scripts/setup.sh --with-dev-deps`
 - `./scripts/setup.sh --with-openai`
 - `./scripts/setup.sh --skip-frontend-deps`
+- `./scripts/setup.sh --database postgres`
 
 - **Frontend**: `http://localhost:5173/`
 - **API Health**: `http://localhost:8000/api/health`
 - **Preflight**: `http://localhost:8000/api/health/preflight`
+
+## Database and migration notes
+
+Current behavior:
+- SQLite is the default local development database
+- Postgres is supported for production-like local runs and deployment
+- the Python dependency set now includes `psycopg[binary]` so Postgres URLs work without extra manual driver installation
+- startup scripts now perform a friendlier connectivity check when `DATABASE_URL` points at Postgres
+
+Database references:
+- current ER diagram: `docs/er-model.md`
+- migration entrypoint: `python -m trade_proposer_app.migrations`
+- generated local environment template: `.env.example`
+
+## Postgres integration test
+
+The repo now includes an optional Postgres migration smoke test:
+- test file: `tests/test_postgres_integration.py`
+- required env var: `POSTGRES_TEST_DATABASE_URL`
+
+Run it locally with something like:
+
+```bash
+docker compose up -d postgres
+POSTGRES_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/trade_proposer_test \
+  .venv/bin/python -m unittest tests.test_postgres_integration -v
+```
+
+GitHub workflow:
+- workflow file: `.github/workflows/postgres-integration.yml`
+- status: kept in the repo but not enabled for automatic runs
+- trigger mode: manual `workflow_dispatch` only
 
 ## Production deployment
 
@@ -70,7 +105,7 @@ Canonical current-state docs:
 Historical and archived material is now grouped under `docs/archive/` so it does not clutter the main reading path.
 
 ## Tech Stack
-- **Backend**: Python, FastAPI, SQLAlchemy (SQLite/Postgres).
+- **Backend**: Python, FastAPI, SQLAlchemy (SQLite by default for local dev, Postgres supported).
 - **Frontend**: React, TypeScript, Vite.
 - **Background**: Custom worker and scheduler.
 - **Dependencies**: `pandas`, `yfinance`, and standard packages for the internal scoring pipeline.

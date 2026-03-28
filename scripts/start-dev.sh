@@ -31,6 +31,37 @@ fail() {
   exit 1
 }
 
+ensure_database_connection() {
+  local database_url="$1"
+  if [[ "$database_url" == sqlite:* ]]; then
+    log "using SQLite database: ${database_url}"
+    return 0
+  fi
+  if [[ "$database_url" != postgresql* && "$database_url" != postgres:* ]]; then
+    fail "unsupported DATABASE_URL backend: ${database_url}"
+  fi
+  log "checking PostgreSQL connectivity"
+  if ! DATABASE_URL_TO_CHECK="$database_url" "$VENV_PYTHON" - <<'PY'
+import os
+import sys
+from sqlalchemy import create_engine, text
+
+url = os.environ["DATABASE_URL_TO_CHECK"]
+engine = create_engine(url, future=True)
+try:
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+except Exception as exc:  # pragma: no cover - script path
+    print(exc, file=sys.stderr)
+    sys.exit(1)
+finally:
+    engine.dispose()
+PY
+  then
+    fail "could not connect to PostgreSQL. Start local services with 'docker compose up -d postgres redis' or switch DATABASE_URL to a SQLite URL for no-service local mode."
+  fi
+}
+
 usage() {
   cat <<EOF
 Usage: scripts/start-dev.sh [options]
@@ -125,6 +156,7 @@ PY
 
 VENV_PYTHON="${VENV_DIR}/bin/python"
 [[ -x "$VENV_PYTHON" ]] || fail "missing ${VENV_PYTHON}; run ./scripts/setup.sh first"
+DATABASE_URL_VALUE="$(read_env_value DATABASE_URL "$ENV_FILE")"
 FILE_AUTH_TOKEN="$(read_env_value SINGLE_USER_AUTH_TOKEN "$ENV_FILE")"
 FRONTEND_AUTH_TOKEN="${VITE_API_AUTH_TOKEN:-${SINGLE_USER_AUTH_TOKEN:-$FILE_AUTH_TOKEN}}"
 
@@ -185,6 +217,8 @@ cleanup() {
 }
 
 trap cleanup EXIT INT TERM
+
+ensure_database_connection "$DATABASE_URL_VALUE"
 
 log "applying database migrations"
 (

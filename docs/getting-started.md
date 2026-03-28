@@ -46,7 +46,8 @@ What these scripts do:
   - installs frontend dependencies in `frontend/`
   - creates or refreshes `.env`
   - generates a random `SECRET_KEY`
-  - defaults local startup to SQLite
+  - defaults local startup to SQLite for easiest first run
+  - keeps PostgreSQL available through `--database postgres` when you want a production-like local database
   - runs migrations
 - `start-dev.sh`
   - runs migrations again for safety
@@ -60,6 +61,8 @@ Useful options:
 ./scripts/setup.sh --help
 ./scripts/setup.sh --python python3.12
 ./scripts/setup.sh --force-env
+./scripts/setup.sh --database sqlite
+./scripts/setup.sh --database postgres
 ./scripts/setup.sh --skip-frontend-deps
 ./scripts/setup.sh --with-dev-deps
 ./scripts/setup.sh --with-openai
@@ -124,6 +127,16 @@ SINGLE_USER_AUTH_TOKEN=
 SINGLE_USER_AUTH_ALLOWLIST_PATHS=/api/health,/api/health/preflight
 SINGLE_USER_AUTH_USERNAME=admin
 SINGLE_USER_AUTH_PASSWORD=change-me
+```
+
+If you want a production-like local database instead, start local services and switch `DATABASE_URL` to Postgres:
+
+```bash
+docker compose up -d postgres redis
+```
+
+```env
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/trade_proposer
 ```
 
 `WEIGHTS_FILE_PATH` is optional. Leave it blank to use the app-managed default at `src/trade_proposer_app/data/weights.json`, or point it at another writable `weights.json` location if you want optimization runs to manage a different file.
@@ -207,13 +220,52 @@ python3 -m compileall src tests alembic
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
+Optional Postgres migration integration test:
+
+```bash
+docker compose up -d postgres
+POSTGRES_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/trade_proposer_test \
+  .venv/bin/python -m unittest tests.test_postgres_integration -v
+```
+
+What this covers:
+- bootstrapping an empty Postgres schema
+- running Alembic migrations to head
+- verifying the main current tables exist
+- verifying the legacy `recommendations` table does not come back
+
 Frontend:
 
 ```bash
 npm --prefix frontend run check
 ```
 
+## Manual GitHub workflow for the Postgres integration test
+
+The repo includes a GitHub Actions workflow at:
+- `.github/workflows/postgres-integration.yml`
+
+Current status:
+- kept in the repo as operational reference
+- disabled for automatic `push` / `pull_request` runs
+- available only through manual `workflow_dispatch`
+
 ## Common first-run issues
+
+### `setup.sh` or `start-dev.sh` cannot connect to PostgreSQL
+This only applies when you intentionally selected Postgres with `--database postgres` or set a Postgres `DATABASE_URL` yourself.
+
+Start local dependencies first:
+
+```bash
+docker compose up -d postgres redis
+```
+
+If you want to avoid local services entirely, regenerate `.env` with SQLite instead:
+
+```bash
+./scripts/setup.sh --force-env --database sqlite
+```
 
 ### `start-dev.sh` refuses to start because preflight failed
 Inspect `/api/health/preflight`, rerun `./scripts/setup.sh`, and fix dependency issues. Use `--allow-degraded-preflight` only as a temporary override.
