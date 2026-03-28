@@ -50,7 +50,7 @@ class AppPreflightService:
                 name="ticker_taxonomy",
                 status="ok" if taxonomy_exists else "warning",
                 message=(
-                    "ticker taxonomy available for future macro/industry sentiment work"
+                    "ticker taxonomy available for macro/industry context and refresh workflows"
                     if taxonomy_exists
                     else f"ticker taxonomy not found yet: {TAXONOMY_PATH}"
                 ),

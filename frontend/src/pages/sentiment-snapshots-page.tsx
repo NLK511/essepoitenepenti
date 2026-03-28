@@ -118,7 +118,7 @@ export function SentimentSnapshotsPage() {
       setMacroContexts(macroContextResponse);
       setIndustryContexts(industryContextResponse);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Failed to load sentiment snapshots");
+      setError(loadError instanceof Error ? loadError.message : "Failed to load context review data");
     } finally {
       setLoading(false);
     }
@@ -178,7 +178,7 @@ export function SentimentSnapshotsPage() {
       <PageHeader
         kicker="Shared context"
         title="Inspect context snapshots and the transitional sentiment trail."
-        subtitle="The redesign-native review path is macro and industry context snapshots plus recommendation plans. Sentiment snapshots still exist as transitional refresh artifacts and freshness checks, so this page shows both." 
+        subtitle="The redesign-native review path is macro and industry context snapshots plus recommendation plans. Support snapshots still exist as transitional refresh artifacts and freshness checks, so this page shows both." 
         actions={
           <>
             <button type="button" className="button" onClick={() => void enqueueRefresh("macro")} disabled={busyAction !== null}>
@@ -223,7 +223,7 @@ export function SentimentSnapshotsPage() {
               ) : null}
             </Card>
             <Card>
-              <div className="metric-label">Latest macro sentiment snapshot</div>
+              <div className="metric-label">Latest macro support snapshot</div>
               <div className="metric-value">{latestMacroSentiment ? latestMacroSentiment.label : "—"}</div>
               <div className="helper-text">{latestMacroSentiment ? formatDate(latestMacroSentiment.computed_at) : "No macro snapshot yet"}</div>
             </Card>
@@ -233,7 +233,7 @@ export function SentimentSnapshotsPage() {
               <div className="helper-text">{latestIndustryContext ? `${latestIndustryContext.industry_label} · ${formatDate(latestIndustryContext.computed_at)}` : "No industry context yet"}</div>
             </Card>
             <Card>
-              <div className="metric-label">Latest industry sentiment snapshot</div>
+              <div className="metric-label">Latest industry support snapshot</div>
               <div className="metric-value">{latestIndustrySentiment ? latestIndustrySentiment.subject_label : "—"}</div>
               <div className="helper-text">{latestIndustrySentiment ? `${latestIndustrySentiment.label} · ${formatDate(latestIndustrySentiment.computed_at)}` : "No industry snapshot yet"}</div>
             </Card>
@@ -260,12 +260,12 @@ export function SentimentSnapshotsPage() {
               {industryContexts.length === 0 ? <EmptyState message="No industry context snapshots stored yet." /> : <IndustryContextList snapshots={industryContexts} />}
             </Card>
             <Card>
-              <SectionTitle kicker="Macro sentiment history" title="Recent macro sentiment snapshots" />
-              {macro.length === 0 ? <EmptyState message="No macro sentiment snapshots stored yet." /> : <SnapshotList snapshots={macro} />}
+              <SectionTitle kicker="Macro support history" title="Recent macro support snapshots" />
+              {macro.length === 0 ? <EmptyState message="No macro support snapshots stored yet." /> : <SnapshotList snapshots={macro} />}
             </Card>
             <Card>
-              <SectionTitle kicker="Industry sentiment history" title="Recent industry sentiment snapshots" />
-              {industry.length === 0 ? <EmptyState message="No industry snapshots stored yet." /> : <SnapshotList snapshots={industry} />}
+              <SectionTitle kicker="Industry support history" title="Recent industry support snapshots" />
+              {industry.length === 0 ? <EmptyState message="No industry support snapshots stored yet." /> : <SnapshotList snapshots={industry} />}
             </Card>
           </section>
         </div>

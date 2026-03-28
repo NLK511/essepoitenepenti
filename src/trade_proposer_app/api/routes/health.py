@@ -34,7 +34,7 @@ def _augment_report_with_snapshot_checks(report: AppPreflightReport, session: Se
                 PreflightCheck(
                     name=name,
                     status="warning",
-                    message=f"No {label} sentiment snapshot has been computed yet",
+                    message=f"No {label} support snapshot has been computed yet",
                 )
             )
             continue
@@ -43,7 +43,7 @@ def _augment_report_with_snapshot_checks(report: AppPreflightReport, session: Se
                 PreflightCheck(
                     name=name,
                     status="warning",
-                    message=f"Latest {label} sentiment snapshot is expired",
+                    message=f"Latest {label} support snapshot is expired",
                     details=[
                         f"snapshot_id={snapshot.id}",
                         f"computed_at={snapshot.computed_at.isoformat()}",
@@ -56,7 +56,7 @@ def _augment_report_with_snapshot_checks(report: AppPreflightReport, session: Se
             PreflightCheck(
                 name=name,
                 status="ok",
-                message=f"Latest {label} sentiment snapshot is fresh",
+                message=f"Latest {label} support snapshot is fresh",
                 details=[
                     f"snapshot_id={snapshot.id}",
                     f"computed_at={snapshot.computed_at.isoformat()}",

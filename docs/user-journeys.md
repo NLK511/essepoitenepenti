@@ -47,7 +47,7 @@ User sees that a recommendation plan came from a warning-heavy or partially degr
 ### Steps
 1. User opens the recommendation-plan browser or run detail redesign section first.
 2. User reviews the trade-ready object and stored diagnostics.
-3. User checks linked shared context objects first, then the supporting sentiment snapshots when present.
+3. User checks linked shared context objects first, then the supporting refresh snapshots when present.
 4. User follows the link back to the source run.
 5. User reviews structured diagnostics to determine whether the issue came from missing providers, poor news coverage, stale snapshots, summary failure, or data retrieval problems.
 6. User decides whether the trade output is still usable.
@@ -92,13 +92,13 @@ Operator responsible for keeping macro and industry context fresh.
 
 ### Steps
 1. User opens the Context snapshots page.
-2. User reviews recent macro and industry context snapshots plus the supporting sentiment history.
+2. User reviews recent macro and industry context snapshots plus the supporting refresh history.
 3. User notices freshness warnings or missing coverage.
 4. User queues a refresh or uses the run-now action.
-5. User opens context detail pages, sentiment snapshot detail pages, or related runs when investigating quality problems.
+5. User opens context detail pages, support snapshot detail pages, or related runs when investigating quality problems.
 
 ### Success outcome
-Shared context becomes an inspectable system artifact rather than hidden background state, while the transitional sentiment layer remains auditable.
+Shared context becomes an inspectable system artifact rather than hidden background state, while the transitional support-snapshot layer remains auditable.
 
 ## Journey 7: Operating the deployment
 

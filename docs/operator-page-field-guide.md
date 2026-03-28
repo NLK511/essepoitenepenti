@@ -522,10 +522,10 @@ You usually see:
 - latest macro context or top macro event
 - macro freshness / confidence signals
 - latest industry context or top industry driver
-- latest transitional sentiment snapshot status
+- latest transitional support-snapshot status
 
 #### History lists
-Recent macro and industry context snapshots, plus the transitional macro/industry sentiment history, with links to detail pages.
+Recent macro and industry context snapshots, plus the transitional macro/industry support history, with links to detail pages.
 
 ### Important snapshot fields
 - **Label**: high-level polarity or state
@@ -538,7 +538,7 @@ Recent macro and industry context snapshots, plus the transitional macro/industr
 
 ### How to use it
 If plans look plausible but market backdrop feels wrong, inspect context snapshots first.
-If the supporting sentiment snapshots are stale, refresh them before generating too many new plans.
+If the supporting refresh snapshots are stale, refresh them before generating too many new plans.
 
 ### Suggested use cases
 - morning macro refresh before proposal generation

@@ -14,7 +14,7 @@ Detailed completed-phase history is in `archive/roadmap-history.md`.
 ## Current shipped baseline
 
 Trade Proposer App already has its core workflow in place:
-- watchlists, jobs, runs, settings, sentiment snapshots, ticker signals, recommendation plans, and recommendation-plan outcomes all persist inside one app-owned schema
+- watchlists, jobs, runs, settings, support snapshots, ticker signals, recommendation plans, and recommendation-plan outcomes all persist inside one app-owned schema
 - the React/Vite operator UI supports dashboard, watchlists, jobs, debugger, run detail, context snapshots, ticker signals, recommendation plans, ticker drill-down, settings, and docs browsing
 - proposal generation, evaluation, optimization, and macro/industry refresh runs all execute inside this repository through the worker-backed run system
 - recommendation review is now centered on redesign-native objects: `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`
@@ -62,7 +62,7 @@ The redesign is already the active product path, but it still needs deeper evide
 
 Still needed:
 - continue improving ticker-analysis quality without reopening generic legacy patterns
-- decide the long-term role of the remaining sentiment-snapshot refresh layer now that richer context objects exist
+- decide the long-term role of the remaining support-snapshot refresh layer now that richer context objects exist
 - keep recommendation-plan review as the clear canonical workflow
 - avoid reintroducing duplicate legacy-vs-redesign terminology
 

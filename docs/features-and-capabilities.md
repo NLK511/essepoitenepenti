@@ -32,11 +32,11 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 - Use ticker drill-down pages to review plan history and latest outcomes for a single name.
 
 ### Shared context workflow
-- Persist shared macro and industry sentiment snapshots plus redesign-native macro and industry context snapshots.
+- Persist shared macro and industry support snapshots plus redesign-native macro and industry context snapshots.
 - Inspect recent context snapshots from the Context snapshots page and open detail views for macro or industry context objects.
 - Queue or run macro and industry refresh workflows manually.
 - Trace which shared artifacts were used by a run or recommendation plan.
-- See sentiment-snapshot freshness in `/api/health` and `/api/health/preflight`; context objects are reviewable through the context APIs and UI.
+- See support-snapshot freshness in `/api/health` and `/api/health/preflight`; context objects are reviewable through the context APIs and UI.
 - Optionally use Nitter as supporting social input for macro and industry context.
 
 ### Watchlist workflow

@@ -245,7 +245,7 @@ Return measured after a fixed elapsed period such as 1 day, 3 days, or 5 days.
 Reusable broader context for a sector or industry, combining macro spillover with industry-native developments.
 
 ### Industry snapshot
-A shared stored artifact representing the latest industry sentiment/context state for a given subject.
+A shared stored artifact representing the latest industry support state for a given subject. In the current app it is transitional and mainly supports refresh auditing, freshness checks, and compatibility with context-first review.
 
 ### Invalidation
 The condition or reasoning that would make the trade thesis no longer credible.
@@ -264,8 +264,8 @@ Common job types:
 - proposal generation
 - recommendation evaluation
 - weight optimization
-- macro sentiment refresh
-- industry sentiment refresh
+- macro context refresh
+- industry context refresh
 
 ---
 
@@ -292,7 +292,7 @@ A narrative summary produced by a configured summary backend, such as OpenAI or 
 Reusable broader market context intended to capture important market-moving developments.
 
 ### Macro snapshot
-A shared stored artifact representing the latest macro sentiment/context state.
+A shared stored artifact representing the latest macro support state. In the current app it is transitional and mainly supports refresh auditing, freshness checks, and compatibility with context-first review.
 
 ### Manual tickers
 A directly specified ticker list used by a proposal job instead of a watchlist.
@@ -384,7 +384,7 @@ The redesign-native trade object storing action, confidence, entry, stop, target
 The redesign-native evaluation object storing what happened after a plan was produced.
 
 ### Refresh
-A workflow that recomputes shared context or sentiment snapshots.
+A workflow that recomputes shared context or transitional support snapshots.
 
 ### Risk-reward ratio
 The implied reward relative to defined downside, based on target and stop placement.

@@ -66,7 +66,7 @@ Examples:
 - proposal generation: recommendation summaries and diagnostics
 - evaluation: evaluation scope and result summary
 - optimization: before/after fingerprint and backup metadata
-- sentiment refresh: created `snapshot_id` or `snapshot_ids`, scope, refresh summary, and any derived context snapshot ids
+- context refresh: created `snapshot_id` or `snapshot_ids`, scope, refresh summary, and any derived context snapshot ids
 
 The run detail page uses these artifacts to render workflow-specific cards or link directly to created snapshots.
 
@@ -90,7 +90,7 @@ Shared macro and industry refresh workflows persist `SentimentSnapshot` records 
 - `job_id`
 - `run_id`
 
-These records are both reusable cache and audit object.
+These records are both reusable support-cache artifacts and audit objects.
 
 ## Diagnostics and timing fields
 
@@ -106,7 +106,7 @@ Common stored diagnostic fields include:
 ## Operational reference notes
 
 - `weights.json` lives in `src/trade_proposer_app/data/` and is used for scoring runs.
-- `/api/health/preflight` reports dependency readiness and shared sentiment-snapshot freshness.
+- `/api/health/preflight` reports dependency readiness and shared support-snapshot freshness.
 - operators configure the summary backend via `/settings` using `news_digest`, `openai_api`, or `pi_agent`.
 - the same stored payloads support the debugger, run detail pages, recommendation-plan pages, ticker pages, and health views.
 

@@ -39,7 +39,7 @@ These docs define the current product truth.
 ### Recommendation logic
 - `recommendation-methodology.md`
   - how the app-native scoring and planning pipeline works
-  - sentiment and context layers
+  - context and support-snapshot layers
   - scoring and risk logic
   - methodology limits
 

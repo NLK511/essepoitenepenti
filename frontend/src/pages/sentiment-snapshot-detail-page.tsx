@@ -34,7 +34,7 @@ export function SentimentSnapshotDetailPage() {
         setError(null);
         setSnapshot(await getJson<SentimentSnapshot>(`/api/sentiment-snapshots/${snapshotId}`));
       } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : "Failed to load sentiment snapshot");
+        setError(loadError instanceof Error ? loadError.message : "Failed to load support snapshot");
       }
     }
     void load();
@@ -43,9 +43,9 @@ export function SentimentSnapshotDetailPage() {
   return (
     <>
       <PageHeader
-        kicker="Sentiment snapshot detail"
-        title={snapshot ? `${snapshot.subject_label} snapshot #${snapshot.id}` : "Sentiment snapshot detail"}
-        subtitle="Inspect the stored transitional sentiment snapshot used for refresh auditing, freshness checks, and compatibility with the context-first workflow."
+        kicker="Support snapshot detail"
+        title={snapshot ? `${snapshot.subject_label} snapshot #${snapshot.id}` : "Support snapshot detail"}
+        subtitle="Inspect the stored transitional support snapshot used for refresh auditing, freshness checks, and compatibility with the context-first workflow."
         actions={
           <>
             <Link to="/context" className="button-secondary">Back to context snapshots</Link>
@@ -54,7 +54,7 @@ export function SentimentSnapshotDetailPage() {
         }
       />
       {error ? <ErrorState message={error} /> : null}
-      {!snapshot && !error ? <LoadingState message="Loading sentiment snapshot…" /> : null}
+      {!snapshot && !error ? <LoadingState message="Loading support snapshot…" /> : null}
       {snapshot ? (
         <div className="stack-page">
           <Card>
