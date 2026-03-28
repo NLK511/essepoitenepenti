@@ -11,6 +11,8 @@ from trade_proposer_app.services.taxonomy import (
     RELATIONSHIPS_PATH,
     SECTORS_PATH,
     TICKERS_PATH,
+    THEMES_PATH,
+    MACRO_CHANNELS_PATH,
     TickerTaxonomyService,
 )
 
@@ -33,12 +35,16 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertTrue(SECTORS_PATH.exists())
         self.assertTrue(RELATIONSHIPS_PATH.exists())
         self.assertTrue(EVENT_VOCAB_PATH.exists())
+        self.assertTrue(THEMES_PATH.exists())
+        self.assertTrue(MACRO_CHANNELS_PATH.exists())
 
         service = TickerTaxonomyService()
         overview = service.taxonomy_overview()
         self.assertEqual(overview["source_mode"], "split")
         self.assertGreaterEqual(overview["sector_count"], 8)
         self.assertGreaterEqual(overview["event_vocab_group_count"], 12)
+        self.assertGreaterEqual(overview["theme_count"], 40)
+        self.assertGreaterEqual(overview["macro_channel_count"], 20)
 
     def test_query_profile_and_industry_profile_use_explicit_industry_definitions(self) -> None:
         service = TickerTaxonomyService()
@@ -61,6 +67,11 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertIn("fab_capex", asml_industry_profile["transmission_channels"])
         self.assertIn("Information Technology", asml_industry_profile["sector_definition"]["label"])
 
+        aapl_profile = service.get_ticker_profile("AAPL")
+        self.assertIn("consumer spending", aapl_profile["macro_sensitivity"])
+        self.assertEqual(service.get_theme_definition("consumer spend")["key"], "consumer_spending")
+        self.assertIn("consumer spending", service.build_query_profile("AAPL")["macro_queries"])
+
     def test_list_industry_profiles_groups_multiple_tickers_and_relationships(self) -> None:
         service = TickerTaxonomyService()
         profiles = {profile["subject_key"]: profile for profile in service.list_industry_profiles()}
@@ -68,12 +79,36 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertIn("consumer_electronics", profiles)
         self.assertIn("semiconductors", profiles)
         self.assertIn("software", profiles)
+        self.assertIn("information_technology", profiles)
         self.assertGreaterEqual(len(profiles["consumer_electronics"]["tickers"]), 2)
         self.assertGreaterEqual(len(profiles["semiconductors"]["tickers"]), 4)
         self.assertIn("NVDA", profiles["semiconductors"]["tickers"])
         self.assertIn("TSM", profiles["semiconductors"]["tickers"])
         self.assertIn("ai capex", profiles["semiconductors"]["macro_sensitivity"])
         self.assertTrue(any(item["type"] == "hurt_by" for item in profiles["airlines"]["relationships"]))
+
+    def test_unknown_ticker_can_fall_back_to_external_sector_metadata(self) -> None:
+        service = TickerTaxonomyService(
+            metadata_provider=lambda ticker: {
+                "company_name": "Acme Cloud",
+                "sector": "Technology",
+                "industry": "Software - Infrastructure",
+                "region": "US",
+                "domicile": "US",
+            } if ticker == "ZZZZ" else {},
+        )
+
+        ticker_profile = service.get_ticker_profile("ZZZZ")
+        industry_profile = service.get_industry_profile("ZZZZ")
+
+        self.assertEqual(ticker_profile["company_name"], "Acme Cloud")
+        self.assertEqual(ticker_profile["sector"], "Technology")
+        self.assertEqual(ticker_profile["industry"], "Software - Infrastructure")
+        self.assertEqual(industry_profile["subject_key"], "information_technology")
+        self.assertEqual(industry_profile["subject_label"], "Information Technology")
+        self.assertEqual(industry_profile["resolution_mode"], "sector_fallback")
+        self.assertIn("Software - Infrastructure", industry_profile["queries"])
+        self.assertIn("Technology", industry_profile["queries"])
 
     def test_explicit_industry_definitions_and_relationships_are_available(self) -> None:
         service = TickerTaxonomyService()
@@ -85,6 +120,7 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         relationships = service.list_relationships("airlines", direction="outbound")
         self.assertTrue(any(item["target"] == "oil_and_gas" and item["type"] == "hurt_by" for item in relationships))
         self.assertTrue(any(item["target"] == "consumer_spending" and item["target_kind"] == "macro_channel" for item in relationships))
+        self.assertTrue(any(item["target"] == "consumer_spending" and item.get("target_label") == "consumer spending" for item in relationships))
 
         ticker_relationships = service.get_ticker_relationships("AAPL")
         self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "SONY" for item in ticker_relationships))

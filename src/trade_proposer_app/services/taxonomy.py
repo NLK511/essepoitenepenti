@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -12,17 +13,40 @@ INDUSTRIES_PATH = TAXONOMY_DIR / "industries.json"
 SECTORS_PATH = TAXONOMY_DIR / "sectors.json"
 RELATIONSHIPS_PATH = TAXONOMY_DIR / "relationships.json"
 EVENT_VOCAB_PATH = TAXONOMY_DIR / "event_vocab.json"
+THEMES_PATH = TAXONOMY_DIR / "themes.json"
+MACRO_CHANNELS_PATH = TAXONOMY_DIR / "macro_channels.json"
+
+SECTOR_ALIASES = {
+    "technology": "information_technology",
+    "tech": "information_technology",
+    "financial_services": "financials",
+    "financial_service": "financials",
+    "healthcare": "health_care",
+    "consumer_defensive": "consumer_staples",
+    "basic_materials": "materials",
+}
 
 
 class TickerTaxonomyService:
-    def __init__(self, taxonomy_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        taxonomy_path: Path | None = None,
+        *,
+        metadata_provider: Callable[[str], dict[str, Any] | None] | None = None,
+    ) -> None:
         self.taxonomy_path = taxonomy_path or TICKERS_PATH
+        self._metadata_provider = metadata_provider
+        self._external_profile_cache: dict[str, dict[str, Any]] = {}
         payload = self._load_payload()
         self._taxonomy: dict[str, dict[str, Any]] = payload["tickers"]
         self._industries: dict[str, dict[str, Any]] = payload["industries"]
         self._sectors: dict[str, dict[str, Any]] = payload["sectors"]
         self._relationships: list[dict[str, Any]] = payload["relationships"]
         self._event_vocab: dict[str, list[str]] = payload["event_vocab"]
+        self._themes: dict[str, dict[str, Any]] = payload["themes"]
+        self._macro_channels: dict[str, dict[str, Any]] = payload["macro_channels"]
+        self._theme_alias_map: dict[str, str] = self._build_alias_map(self._themes)
+        self._macro_channel_alias_map: dict[str, str] = self._build_alias_map(self._macro_channels)
         self._source_mode: str = payload["source_mode"]
 
     def _load_payload(self) -> dict[str, Any]:
@@ -50,10 +74,12 @@ class TickerTaxonomyService:
             "sectors": self._load_sectors(self._read_json_file(SECTORS_PATH)),
             "relationships": self._load_relationships(self._read_json_file(RELATIONSHIPS_PATH)),
             "event_vocab": self._load_event_vocab(self._read_json_file(EVENT_VOCAB_PATH)),
+            "themes": self._load_registry(self._read_json_file(THEMES_PATH)),
+            "macro_channels": self._load_registry(self._read_json_file(MACRO_CHANNELS_PATH)),
         }
 
     def _load_monolith_payload(self) -> dict[str, Any]:
-        empty = {"tickers": {}, "industries": {}, "sectors": {}, "relationships": [], "event_vocab": {}}
+        empty = {"tickers": {}, "industries": {}, "sectors": {}, "relationships": [], "event_vocab": {}, "themes": {}, "macro_channels": {}}
         if not TAXONOMY_PATH.exists():
             return empty
         payload = self._read_json_file(TAXONOMY_PATH)
@@ -69,6 +95,8 @@ class TickerTaxonomyService:
             "sectors": self._load_sectors(payload.get("_sectors")),
             "relationships": self._load_relationships(payload.get("_relationships")),
             "event_vocab": self._load_event_vocab(payload.get("_event_vocab")),
+            "themes": self._load_registry(payload.get("_themes")),
+            "macro_channels": self._load_registry(payload.get("_macro_channels")),
         }
 
     @staticmethod
@@ -101,8 +129,8 @@ class TickerTaxonomyService:
                 "key": sector_key,
                 "label": str(value.get("label", self._label_from_subject_key(sector_key))).strip() or self._label_from_subject_key(sector_key),
                 "queries": self._normalize_string_list(value.get("queries")),
-                "themes": self._normalize_string_list(value.get("themes")),
-                "macro_sensitivity": self._normalize_string_list(value.get("macro_sensitivity")),
+                "themes": self._normalize_theme_values(value.get("themes")),
+                "macro_sensitivity": self._normalize_macro_channel_values(value.get("macro_sensitivity")),
             }
         return sectors
 
@@ -114,6 +142,23 @@ class TickerTaxonomyService:
             normalized_key = self._normalize_subject_key(key)
             vocab[normalized_key] = self._normalize_string_list(value)
         return vocab
+
+    def _load_registry(self, payload: object) -> dict[str, dict[str, Any]]:
+        if not isinstance(payload, dict):
+            return {}
+        registry: dict[str, dict[str, Any]] = {}
+        for key, value in payload.items():
+            if not isinstance(value, dict):
+                continue
+            canonical_key = self._normalize_subject_key(key)
+            label = str(value.get("label", canonical_key.replace("_", " "))).strip() or canonical_key.replace("_", " ")
+            aliases = self._normalize_string_list(value.get("aliases"))
+            registry[canonical_key] = {
+                "key": canonical_key,
+                "label": label,
+                "aliases": aliases,
+            }
+        return registry
 
     def _load_relationships(self, payload: object) -> list[dict[str, Any]]:
         if not isinstance(payload, list):
@@ -143,6 +188,8 @@ class TickerTaxonomyService:
     def get_ticker_profile(self, ticker: str) -> dict[str, Any]:
         normalized = ticker.upper()
         profile = dict(self._taxonomy.get(normalized, {}))
+        if not profile:
+            profile.update(self._fetch_external_profile(normalized))
         profile["ticker"] = normalized
         profile["company_name"] = str(profile.get("company_name") or normalized).strip() or normalized
         profile["aliases"] = self._normalize_string_list(profile.get("aliases")) or [normalized]
@@ -152,8 +199,8 @@ class TickerTaxonomyService:
         profile["region"] = str(profile.get("region", "")).strip()
         profile["domicile"] = str(profile.get("domicile", "")).strip()
         profile["market_cap_bucket"] = str(profile.get("market_cap_bucket", "")).strip()
-        profile["themes"] = self._normalize_string_list(profile.get("themes"))
-        profile["macro_sensitivity"] = self._normalize_string_list(profile.get("macro_sensitivity"))
+        profile["themes"] = self._normalize_theme_values(profile.get("themes"))
+        profile["macro_sensitivity"] = self._normalize_macro_channel_values(profile.get("macro_sensitivity"))
         profile["industry_keywords"] = self._normalize_string_list(profile.get("industry_keywords"))
         profile["ticker_keywords"] = self._normalize_string_list(profile.get("ticker_keywords")) or [f"${normalized}", normalized]
         profile["exclude_keywords"] = [value.lower() for value in self._normalize_string_list(profile.get("exclude_keywords"))]
@@ -175,8 +222,8 @@ class TickerTaxonomyService:
         industry_queries = [str(value).strip() for value in industry_profile.get("queries", []) if str(value).strip()]
         macro_queries = list(
             dict.fromkeys(
-                [str(value).strip() for value in profile.get("macro_sensitivity", []) if str(value).strip()]
-                + [str(value).strip() for value in industry_profile.get("macro_sensitivity", []) if str(value).strip()]
+                self._macro_channel_query_terms(profile.get("macro_sensitivity"))
+                + self._macro_channel_query_terms(industry_profile.get("macro_sensitivity"))
             )
         )
         return {
@@ -187,8 +234,11 @@ class TickerTaxonomyService:
         }
 
     def get_sector_definition(self, sector: str) -> dict[str, Any]:
-        sector_key = self._normalize_subject_key(sector)
-        return dict(self._sectors.get(sector_key, {"key": sector_key, "label": self._label_from_subject_key(sector_key), "queries": [], "themes": [], "macro_sensitivity": []}))
+        sector_key = self._resolve_sector_key(sector)
+        definition = dict(self._sectors.get(sector_key, {"key": sector_key, "label": self._label_from_subject_key(sector_key), "queries": [], "themes": [], "macro_sensitivity": []}))
+        definition["themes"] = self._normalize_theme_values(definition.get("themes"))
+        definition["macro_sensitivity"] = self._normalize_macro_channel_values(definition.get("macro_sensitivity"))
+        return definition
 
     def get_industry_definition(self, subject: str) -> dict[str, Any]:
         subject_key = self._subject_key_for_input(subject)
@@ -200,10 +250,20 @@ class TickerTaxonomyService:
         industry = str(ticker_profile.get("industry", "")).strip()
         sector = str(ticker_profile.get("sector", "")).strip()
         subindustry = str(ticker_profile.get("subindustry", "")).strip()
-        subject_key = self._normalize_subject_key(industry or sector or ticker_profile.get("ticker", ticker))
-        subject_label = industry or sector or str(ticker_profile.get("ticker", ticker)).upper()
-        explicit_definition = self.get_industry_definition(subject_key)
+        base_subject_key = self._normalize_subject_key(industry or sector or ticker_profile.get("ticker", ticker))
+        base_subject_label = industry or sector or str(ticker_profile.get("ticker", ticker)).upper()
+        explicit_definition = self.get_industry_definition(base_subject_key)
+        has_explicit_industry = base_subject_key in self._industries
         sector_definition = self.get_sector_definition(explicit_definition.get("sector") or sector)
+
+        subject_key = base_subject_key
+        subject_label = explicit_definition.get("label") or base_subject_label
+        resolution_mode = "taxonomy" if has_explicit_industry else "derived"
+        if not has_explicit_industry and sector_definition.get("key") not in {"", "unknown"}:
+            subject_key = str(sector_definition.get("key") or base_subject_key)
+            subject_label = str(sector_definition.get("label") or sector or base_subject_label)
+            resolution_mode = "sector_fallback" if industry else "sector_only"
+
         themes = self._normalize_string_list(ticker_profile.get("themes"))
         industry_keywords = self._normalize_string_list(ticker_profile.get("industry_keywords"))
         event_vocab = self._normalize_string_list(explicit_definition.get("event_vocab")) + self._normalize_string_list(ticker_profile.get("event_vocab")) + self._event_vocab.get(subject_key, [])
@@ -211,9 +271,9 @@ class TickerTaxonomyService:
         relationships = self.list_relationships(subject_key, direction="outbound")
         return {
             "subject_key": subject_key,
-            "subject_label": explicit_definition.get("label") or subject_label,
+            "subject_label": subject_label,
             "industry": industry,
-            "sector": explicit_definition.get("sector") or sector,
+            "sector": explicit_definition.get("sector") or sector_definition.get("label") or sector,
             "sector_definition": sector_definition,
             "queries": list(
                 dict.fromkeys(
@@ -249,10 +309,32 @@ class TickerTaxonomyService:
             "domiciles": list(dict.fromkeys([value for value in [ticker_profile.get("domicile")] if value])),
             "relationships": relationships,
             "ticker": ticker_profile.get("ticker", ticker).upper(),
+            "resolution_mode": resolution_mode,
         }
 
     def list_industry_profiles(self) -> list[dict[str, Any]]:
         profiles: dict[str, dict[str, Any]] = {}
+        for sector_key, definition in self._sectors.items():
+            profiles[sector_key] = {
+                "subject_key": sector_key,
+                "subject_label": definition.get("label") or self._label_from_subject_key(sector_key),
+                "industry": "",
+                "sector": definition.get("label") or self._label_from_subject_key(sector_key),
+                "sector_definition": definition,
+                "queries": self._normalize_string_list(definition.get("queries")),
+                "themes": self._normalize_string_list(definition.get("themes")),
+                "macro_sensitivity": self._normalize_string_list(definition.get("macro_sensitivity")),
+                "transmission_channels": [],
+                "peer_industries": [],
+                "risk_flags": [],
+                "event_vocab": list(dict.fromkeys(self._event_vocab.get(sector_key, []))),
+                "tickers": [],
+                "regions": [],
+                "domiciles": [],
+                "companies": [],
+                "relationships": self.list_relationships(sector_key, direction="outbound"),
+                "resolution_mode": "sector_seed",
+            }
         for subject_key, definition in self._industries.items():
             sector_definition = self.get_sector_definition(definition.get("sector", ""))
             profiles[subject_key] = {
@@ -310,7 +392,7 @@ class TickerTaxonomyService:
 
     def list_relationships(self, subject_key: str | None = None, *, direction: str = "any") -> list[dict[str, Any]]:
         normalized = self._normalize_subject_key(subject_key) if subject_key else None
-        relationships = self._relationships
+        relationships = [self._enrich_relationship(relationship) for relationship in self._relationships]
         if normalized is None:
             return list(relationships)
         if direction == "outbound":
@@ -318,6 +400,18 @@ class TickerTaxonomyService:
         if direction == "inbound":
             return [relationship for relationship in relationships if relationship.get("target") == normalized]
         return [relationship for relationship in relationships if relationship.get("source") == normalized or relationship.get("target") == normalized]
+
+    def _enrich_relationship(self, relationship: dict[str, Any]) -> dict[str, Any]:
+        enriched = dict(relationship)
+        if enriched.get("target_kind") == "macro_channel":
+            definition = self.get_macro_channel_definition(str(enriched.get("target", "")))
+            if definition.get("label"):
+                enriched["target_label"] = definition.get("label")
+        elif enriched.get("target_kind") == "industry":
+            definition = self.get_industry_definition(str(enriched.get("target", "")))
+            if definition.get("label"):
+                enriched["target_label"] = definition.get("label")
+        return enriched
 
     def get_ticker_relationships(self, ticker: str) -> list[dict[str, str]]:
         profile = self.get_ticker_profile(ticker)
@@ -354,7 +448,52 @@ class TickerTaxonomyService:
             "sector_count": len(self._sectors),
             "relationship_count": len(self._relationships),
             "event_vocab_group_count": len(self._event_vocab),
+            "theme_count": len(self._themes),
+            "macro_channel_count": len(self._macro_channels),
         }
+
+    def _fetch_external_profile(self, ticker: str) -> dict[str, Any]:
+        cached = self._external_profile_cache.get(ticker)
+        if cached is not None:
+            return dict(cached)
+        if self._metadata_provider is not None:
+            payload = self._metadata_provider(ticker) or {}
+            normalized = payload if isinstance(payload, dict) else {}
+            self._external_profile_cache[ticker] = dict(normalized)
+            return dict(normalized)
+        try:
+            import yfinance as yf
+
+            info = yf.Ticker(ticker).info
+        except Exception:
+            self._external_profile_cache[ticker] = {}
+            return {}
+        if not isinstance(info, dict):
+            self._external_profile_cache[ticker] = {}
+            return {}
+        profile = {
+            "company_name": str(info.get("longName") or info.get("shortName") or ticker).strip() or ticker,
+            "sector": str(info.get("sectorDisp") or info.get("sector") or "").strip(),
+            "industry": str(info.get("industryDisp") or info.get("industry") or "").strip(),
+            "region": str(info.get("region") or info.get("country") or "").strip(),
+            "domicile": str(info.get("country") or "").strip(),
+        }
+        self._external_profile_cache[ticker] = dict(profile)
+        return profile
+
+    def _resolve_sector_key(self, sector: str) -> str:
+        normalized = self._normalize_subject_key(sector)
+        if normalized in self._sectors:
+            return normalized
+        alias = SECTOR_ALIASES.get(normalized)
+        if alias and alias in self._sectors:
+            return alias
+        normalized_tokens = set(normalized.split("_"))
+        for sector_key, definition in self._sectors.items():
+            label_tokens = set(self._normalize_subject_key(definition.get("label", "")).split("_"))
+            if normalized_tokens and (normalized_tokens <= label_tokens or label_tokens <= normalized_tokens):
+                return sector_key
+        return normalized
 
     def _subject_key_for_input(self, subject: str) -> str:
         normalized_ticker = str(subject or "").strip().upper()
@@ -369,8 +508,8 @@ class TickerTaxonomyService:
             "label": str(payload.get("label", self._label_from_subject_key(subject_key))).strip() or self._label_from_subject_key(subject_key),
             "sector": str(payload.get("sector", "")).strip(),
             "queries": self._normalize_string_list(payload.get("queries") or payload.get("industry_keywords")),
-            "themes": self._normalize_string_list(payload.get("themes")),
-            "macro_sensitivity": self._normalize_string_list(payload.get("macro_sensitivity")),
+            "themes": self._normalize_theme_values(payload.get("themes")),
+            "macro_sensitivity": self._normalize_macro_channel_values(payload.get("macro_sensitivity")),
             "transmission_channels": self._normalize_string_list(payload.get("transmission_channels")),
             "peer_industries": [self._normalize_subject_key(value) for value in self._normalize_string_list(payload.get("peer_industries"))],
             "risk_flags": self._normalize_string_list(payload.get("risk_flags")),
@@ -380,6 +519,68 @@ class TickerTaxonomyService:
             "domiciles": self._normalize_string_list(payload.get("domiciles")),
             "companies": self._normalize_string_list(payload.get("companies")),
         }
+
+    @staticmethod
+    def _build_alias_map(registry: dict[str, dict[str, Any]]) -> dict[str, str]:
+        alias_map: dict[str, str] = {}
+        for key, definition in registry.items():
+            aliases = [key, str(definition.get("label", "")).strip(), *[str(value).strip() for value in definition.get("aliases", []) if str(value).strip()]]
+            for alias in aliases:
+                normalized_alias = TickerTaxonomyService._normalize_subject_key(alias)
+                if normalized_alias and normalized_alias != "unknown":
+                    alias_map[normalized_alias] = key
+        return alias_map
+
+    def _normalize_registry_values(self, values: object, alias_map: dict[str, str], registry: dict[str, dict[str, Any]]) -> list[str]:
+        raw_values = self._normalize_string_list(values)
+        normalized: list[str] = []
+        for value in raw_values:
+            canonical_key = alias_map.get(self._normalize_subject_key(value))
+            if canonical_key and canonical_key in registry:
+                label = str(registry[canonical_key].get("label", value)).strip() or value
+                if label not in normalized:
+                    normalized.append(label)
+                continue
+            if value not in normalized:
+                normalized.append(value)
+        return normalized
+
+    def _normalize_theme_values(self, values: object) -> list[str]:
+        return self._normalize_registry_values(values, self._theme_alias_map if hasattr(self, "_theme_alias_map") else {}, self._themes if hasattr(self, "_themes") else {})
+
+    def _normalize_macro_channel_values(self, values: object) -> list[str]:
+        return self._normalize_registry_values(values, self._macro_channel_alias_map if hasattr(self, "_macro_channel_alias_map") else {}, self._macro_channels if hasattr(self, "_macro_channels") else {})
+
+    def _macro_channel_query_terms(self, values: object) -> list[str]:
+        terms: list[str] = []
+        for value in self._normalize_string_list(values):
+            canonical_key = self._macro_channel_alias_map.get(self._normalize_subject_key(value))
+            if canonical_key and canonical_key in self._macro_channels:
+                definition = self._macro_channels[canonical_key]
+                candidates = [definition.get("label", ""), *definition.get("aliases", [])]
+                for candidate in candidates:
+                    text = str(candidate).strip().replace("_", " ")
+                    if text and text not in terms:
+                        terms.append(text)
+                continue
+            text = str(value).strip()
+            if text and text not in terms:
+                terms.append(text)
+        return terms
+
+    def get_theme_definition(self, value: str) -> dict[str, Any]:
+        canonical_key = self._theme_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))
+        return dict(self._themes.get(canonical_key, {"key": canonical_key, "label": str(value or "").strip(), "aliases": []}))
+
+    def list_theme_definitions(self) -> list[dict[str, Any]]:
+        return [self.get_theme_definition(key) for key in sorted(self._themes)]
+
+    def get_macro_channel_definition(self, value: str) -> dict[str, Any]:
+        canonical_key = self._macro_channel_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))
+        return dict(self._macro_channels.get(canonical_key, {"key": canonical_key, "label": str(value or "").strip().replace("_", " "), "aliases": []}))
+
+    def list_macro_channel_definitions(self) -> list[dict[str, Any]]:
+        return [self.get_macro_channel_definition(key) for key in sorted(self._macro_channels)]
 
     @staticmethod
     def _normalize_string_list(values: object) -> list[str]:

@@ -15,6 +15,8 @@ from trade_proposer_app.services.taxonomy import (  # noqa: E402
     RELATIONSHIPS_PATH,
     SECTORS_PATH,
     TICKERS_PATH,
+    THEMES_PATH,
+    MACRO_CHANNELS_PATH,
     TAXONOMY_DIR,
     TAXONOMY_PATH,
     TickerTaxonomyService,
@@ -42,7 +44,7 @@ def main() -> int:
     service = TickerTaxonomyService()
     alias_to_tickers: dict[str, set[str]] = {}
 
-    expected_paths = [TICKERS_PATH, INDUSTRIES_PATH, SECTORS_PATH, RELATIONSHIPS_PATH, EVENT_VOCAB_PATH]
+    expected_paths = [TICKERS_PATH, INDUSTRIES_PATH, SECTORS_PATH, RELATIONSHIPS_PATH, EVENT_VOCAB_PATH, THEMES_PATH, MACRO_CHANNELS_PATH]
     split_mode = all(path.exists() for path in expected_paths)
     if not split_mode and not TAXONOMY_PATH.exists():
         errors.append(f"no taxonomy source found; expected split files in {TAXONOMY_DIR} or fallback file {TAXONOMY_PATH}")
@@ -62,6 +64,15 @@ def main() -> int:
             text = str(keyword).strip()
             if len(text) < 2:
                 warnings.append(f"ticker {ticker} has very short keyword: {text!r}")
+        raw_profile = service._taxonomy.get(ticker, {})
+        for raw_theme in raw_profile.get("themes", []):
+            definition = service.get_theme_definition(str(raw_theme))
+            if not definition.get("label") or definition.get("key") not in service._themes:
+                errors.append(f"ticker {ticker} uses ungoverned theme {raw_theme!r}")
+        for raw_macro in raw_profile.get("macro_sensitivity", []):
+            definition = service.get_macro_channel_definition(str(raw_macro))
+            if not definition.get("label") or definition.get("key") not in service._macro_channels:
+                errors.append(f"ticker {ticker} uses ungoverned macro channel {raw_macro!r}")
 
     for alias, tickers in sorted(alias_to_tickers.items()):
         if len(tickers) > 1:
@@ -86,6 +97,14 @@ def main() -> int:
         for peer in definition.get("peer_industries", []):
             if peer not in service._industries:
                 warnings.append(f"industry {subject_key} references peer industry {peer!r} that is not explicitly defined")
+        for raw_theme in (service._industries.get(subject_key, {}) or {}).get("themes", []):
+            theme_definition = service.get_theme_definition(str(raw_theme))
+            if theme_definition.get("key") not in service._themes:
+                errors.append(f"industry {subject_key} uses ungoverned theme {raw_theme!r}")
+        for raw_macro in (service._industries.get(subject_key, {}) or {}).get("macro_sensitivity", []):
+            macro_definition = service.get_macro_channel_definition(str(raw_macro))
+            if macro_definition.get("key") not in service._macro_channels:
+                errors.append(f"industry {subject_key} uses ungoverned macro channel {raw_macro!r}")
 
     for sector_key, definition in sorted(service._sectors.items()):
         normalized_key = service._normalize_subject_key(sector_key)
@@ -105,6 +124,8 @@ def main() -> int:
             errors.append(f"relationship #{index} source {source!r} is not a defined industry key")
         if target_kind == "industry" and target not in industry_keys:
             errors.append(f"relationship #{index} target {target!r} is not a defined industry key")
+        if target_kind == "macro_channel" and target not in service._macro_channels:
+            errors.append(f"relationship #{index} target {target!r} is not a governed macro channel")
         if not relation_type:
             errors.append(f"relationship #{index} missing type")
 
@@ -123,6 +144,8 @@ def main() -> int:
     print(f"Sectors: {overview['sector_count']}")
     print(f"Relationships: {overview['relationship_count']}")
     print(f"Event vocab groups: {overview['event_vocab_group_count']}")
+    print(f"Themes: {overview['theme_count']}")
+    print(f"Macro channels: {overview['macro_channel_count']}")
     if warnings:
         print("Warnings:")
         for warning in warnings:

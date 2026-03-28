@@ -145,6 +145,13 @@ Goal: make the ontology behave more like a real market-structure graph.
 - [ ] `exposed_to_theme`
 - [ ] `linked_macro_channel`
 
+#### Governed value registries
+- [x] add governed `themes.json`
+- [x] add governed `macro_channels.json`
+- [x] normalize ticker / industry / sector taxonomy values against those registries inside the taxonomy service
+- [x] validate that taxonomy themes and macro-channel references resolve to governed values
+- [ ] migrate all remaining ontology relationship/channel fields to governed registries where practical
+
 #### Example relationships
 - Airlines → hurt by → oil
 - REITs → sensitive to → long rates
@@ -272,6 +279,8 @@ Use this section to note concrete shipped steps.
 - [x] Propagated ticker relationship provenance into watchlist/recommendation transmission payloads so recommendation review surfaces can show matched ticker relationships instead of keeping them buried only in raw analysis JSON.
 - [x] Started using matched ticker relationships inside watchlist plan explanations so rationale, action-reason detail, invalidation text, and risk framing can mention supplier / customer / peer read-through when it actually matched the active evidence.
 - [x] Added a reusable frontend ticker relationship read-through component and promoted matched relationship cards onto ticker and run-detail review surfaces so operators can inspect the actual relationship provenance more directly.
+- [x] Added governed registry files at `src/trade_proposer_app/data/taxonomy/themes.json` and `src/trade_proposer_app/data/taxonomy/macro_channels.json`, then normalized taxonomy values against them in `src/trade_proposer_app/services/taxonomy.py`.
+- [x] Updated taxonomy validation so ticker, industry, sector, and relationship macro-channel references are checked against the governed registries.
 - [x] Split the active ontology into `src/trade_proposer_app/data/taxonomy/` with separate `tickers.json`, `industries.json`, `sectors.json`, `relationships.json`, and `event_vocab.json` files while keeping `ticker_taxonomy.json` as a backward-compatible fallback.
 - [x] Added baseline taxonomy integrity tests for breadth, multi-region coverage, industry grouping behavior, explicit industry definitions, split-file loading, relationship availability, relationship-aware context behavior, and ticker-level relationship edges.
 - [x] Added a validation script at `scripts/validate_taxonomy.py`.

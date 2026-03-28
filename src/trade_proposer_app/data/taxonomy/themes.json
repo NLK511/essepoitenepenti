@@ -1,0 +1,528 @@
+{
+  "accelerators": {
+    "label": "accelerators",
+    "aliases": []
+  },
+  "aerospace": {
+    "label": "aerospace",
+    "aliases": []
+  },
+  "aftermarket": {
+    "label": "aftermarket",
+    "aliases": []
+  },
+  "agriculture": {
+    "label": "agriculture",
+    "aliases": []
+  },
+  "ai": {
+    "label": "ai",
+    "aliases": []
+  },
+  "ai_assistants": {
+    "label": "ai assistants",
+    "aliases": []
+  },
+  "ai_capex": {
+    "label": "ai capex",
+    "aliases": []
+  },
+  "ai_compute": {
+    "label": "ai compute",
+    "aliases": []
+  },
+  "ai_tools": {
+    "label": "ai tools",
+    "aliases": []
+  },
+  "aircraft": {
+    "label": "aircraft",
+    "aliases": []
+  },
+  "airlines": {
+    "label": "airlines",
+    "aliases": []
+  },
+  "aluminum": {
+    "label": "aluminum",
+    "aliases": []
+  },
+  "apparel": {
+    "label": "apparel",
+    "aliases": []
+  },
+  "asset_management": {
+    "label": "asset management",
+    "aliases": []
+  },
+  "athleisure": {
+    "label": "athleisure",
+    "aliases": []
+  },
+  "autos": {
+    "label": "autos",
+    "aliases": []
+  },
+  "aviation": {
+    "label": "aviation",
+    "aliases": []
+  },
+  "banking": {
+    "label": "banking",
+    "aliases": []
+  },
+  "battery": {
+    "label": "battery",
+    "aliases": []
+  },
+  "benefits": {
+    "label": "benefits",
+    "aliases": []
+  },
+  "biologics": {
+    "label": "biologics",
+    "aliases": []
+  },
+  "biotech_readthrough": {
+    "label": "biotech readthrough",
+    "aliases": []
+  },
+  "brand": {
+    "label": "brand",
+    "aliases": []
+  },
+  "capacity": {
+    "label": "capacity",
+    "aliases": []
+  },
+  "capital_markets": {
+    "label": "capital markets",
+    "aliases": []
+  },
+  "checkout": {
+    "label": "checkout",
+    "aliases": []
+  },
+  "china": {
+    "label": "china",
+    "aliases": []
+  },
+  "china_consumer": {
+    "label": "china consumer",
+    "aliases": []
+  },
+  "cloud": {
+    "label": "cloud",
+    "aliases": []
+  },
+  "cloud_infrastructure": {
+    "label": "cloud infrastructure",
+    "aliases": []
+  },
+  "cloud_transition": {
+    "label": "cloud transition",
+    "aliases": []
+  },
+  "commercial_lending": {
+    "label": "commercial lending",
+    "aliases": []
+  },
+  "construction": {
+    "label": "construction",
+    "aliases": []
+  },
+  "consumer": {
+    "label": "consumer",
+    "aliases": []
+  },
+  "consumer_banking": {
+    "label": "consumer banking",
+    "aliases": []
+  },
+  "consumer_electronics": {
+    "label": "consumer electronics",
+    "aliases": []
+  },
+  "consumer_finance": {
+    "label": "consumer finance",
+    "aliases": []
+  },
+  "consumer_internet": {
+    "label": "consumer internet",
+    "aliases": []
+  },
+  "consumer_spending": {
+    "label": "consumer spend",
+    "aliases": [
+      "consumer spending"
+    ]
+  },
+  "consumer_staples": {
+    "label": "consumer staples",
+    "aliases": []
+  },
+  "content": {
+    "label": "content",
+    "aliases": []
+  },
+  "copper": {
+    "label": "copper",
+    "aliases": []
+  },
+  "creative_software": {
+    "label": "creative software",
+    "aliases": []
+  },
+  "crm": {
+    "label": "crm",
+    "aliases": []
+  },
+  "custom_silicon": {
+    "label": "custom silicon",
+    "aliases": []
+  },
+  "data_center": {
+    "label": "data center",
+    "aliases": []
+  },
+  "database": {
+    "label": "database",
+    "aliases": []
+  },
+  "defense": {
+    "label": "defense",
+    "aliases": []
+  },
+  "devices": {
+    "label": "devices",
+    "aliases": []
+  },
+  "diabetes": {
+    "label": "diabetes",
+    "aliases": []
+  },
+  "digital_ads": {
+    "label": "advertising",
+    "aliases": [
+      "digital ads"
+    ]
+  },
+  "digital_documents": {
+    "label": "digital documents",
+    "aliases": []
+  },
+  "digital_payments": {
+    "label": "digital payments",
+    "aliases": []
+  },
+  "discount_retail": {
+    "label": "discount retail",
+    "aliases": []
+  },
+  "domestic_demand": {
+    "label": "domestic demand",
+    "aliases": []
+  },
+  "drug_pipeline": {
+    "label": "drug pipeline",
+    "aliases": []
+  },
+  "e_commerce": {
+    "label": "e-commerce",
+    "aliases": []
+  },
+  "engines": {
+    "label": "engines",
+    "aliases": []
+  },
+  "enterprise_software": {
+    "label": "enterprise software",
+    "aliases": []
+  },
+  "erp": {
+    "label": "erp",
+    "aliases": []
+  },
+  "ev": {
+    "label": "ev",
+    "aliases": []
+  },
+  "ev_transition": {
+    "label": "ev transition",
+    "aliases": []
+  },
+  "fab_buildout": {
+    "label": "fab buildout",
+    "aliases": []
+  },
+  "foundry": {
+    "label": "foundry",
+    "aliases": []
+  },
+  "gaming": {
+    "label": "gaming",
+    "aliases": []
+  },
+  "general_merchandise": {
+    "label": "general merchandise",
+    "aliases": []
+  },
+  "global_manufacturing": {
+    "label": "global manufacturing",
+    "aliases": []
+  },
+  "grid": {
+    "label": "grid",
+    "aliases": []
+  },
+  "grocery": {
+    "label": "grocery",
+    "aliases": []
+  },
+  "housing": {
+    "label": "housing",
+    "aliases": []
+  },
+  "hybrids": {
+    "label": "hybrids",
+    "aliases": []
+  },
+  "income": {
+    "label": "income",
+    "aliases": []
+  },
+  "industrial_metals": {
+    "label": "industrial metals",
+    "aliases": []
+  },
+  "infrastructure": {
+    "label": "infrastructure",
+    "aliases": []
+  },
+  "integrated_energy": {
+    "label": "integrated energy",
+    "aliases": []
+  },
+  "international": {
+    "label": "international",
+    "aliases": []
+  },
+  "investment_banking": {
+    "label": "investment banking",
+    "aliases": []
+  },
+  "leading_edge_nodes": {
+    "label": "leading-edge nodes",
+    "aliases": []
+  },
+  "lithography": {
+    "label": "lithography",
+    "aliases": []
+  },
+  "lng": {
+    "label": "lng",
+    "aliases": []
+  },
+  "logistics": {
+    "label": "logistics",
+    "aliases": []
+  },
+  "machinery": {
+    "label": "machinery",
+    "aliases": []
+  },
+  "malls": {
+    "label": "malls",
+    "aliases": []
+  },
+  "managed_care": {
+    "label": "managed care",
+    "aliases": []
+  },
+  "manufacturing": {
+    "label": "manufacturing",
+    "aliases": []
+  },
+  "markets": {
+    "label": "markets",
+    "aliases": []
+  },
+  "materials": {
+    "label": "materials",
+    "aliases": []
+  },
+  "medical_costs": {
+    "label": "medical costs",
+    "aliases": []
+  },
+  "membership": {
+    "label": "membership",
+    "aliases": []
+  },
+  "mining": {
+    "label": "mining",
+    "aliases": []
+  },
+  "mobile": {
+    "label": "mobile",
+    "aliases": []
+  },
+  "net_lease": {
+    "label": "net lease",
+    "aliases": []
+  },
+  "networking": {
+    "label": "networking",
+    "aliases": []
+  },
+  "obesity_drugs": {
+    "label": "obesity drugs",
+    "aliases": []
+  },
+  "oil": {
+    "label": "oil",
+    "aliases": []
+  },
+  "oncology": {
+    "label": "oncology",
+    "aliases": []
+  },
+  "payments": {
+    "label": "payments",
+    "aliases": []
+  },
+  "pc": {
+    "label": "pc",
+    "aliases": []
+  },
+  "pc_cycle": {
+    "label": "pc cycle",
+    "aliases": []
+  },
+  "pharma": {
+    "label": "pharma",
+    "aliases": []
+  },
+  "pharmacy": {
+    "label": "pharmacy",
+    "aliases": []
+  },
+  "power_demand": {
+    "label": "power demand",
+    "aliases": []
+  },
+  "precision_farming": {
+    "label": "precision farming",
+    "aliases": []
+  },
+  "premium_demand": {
+    "label": "premium demand",
+    "aliases": []
+  },
+  "real_estate": {
+    "label": "real estate",
+    "aliases": []
+  },
+  "refining": {
+    "label": "refining",
+    "aliases": []
+  },
+  "regulated_power": {
+    "label": "regulated power",
+    "aliases": []
+  },
+  "reimbursement": {
+    "label": "reimbursement",
+    "aliases": []
+  },
+  "renewables": {
+    "label": "renewables",
+    "aliases": []
+  },
+  "repair_and_remodel": {
+    "label": "repair and remodel",
+    "aliases": []
+  },
+  "restaurants": {
+    "label": "restaurants",
+    "aliases": []
+  },
+  "retail": {
+    "label": "retail",
+    "aliases": []
+  },
+  "retail_real_estate": {
+    "label": "retail real estate",
+    "aliases": []
+  },
+  "search": {
+    "label": "search",
+    "aliases": []
+  },
+  "semiconductor_equipment": {
+    "label": "semiconductor equipment",
+    "aliases": []
+  },
+  "semiconductors": {
+    "label": "semiconductors",
+    "aliases": []
+  },
+  "services": {
+    "label": "services",
+    "aliases": []
+  },
+  "social_media": {
+    "label": "social media",
+    "aliases": [
+      "social platforms"
+    ]
+  },
+  "software": {
+    "label": "software",
+    "aliases": []
+  },
+  "steel": {
+    "label": "steel",
+    "aliases": []
+  },
+  "trading": {
+    "label": "trading",
+    "aliases": []
+  },
+  "traffic": {
+    "label": "traffic",
+    "aliases": []
+  },
+  "travel": {
+    "label": "travel",
+    "aliases": []
+  },
+  "trucks": {
+    "label": "trucks",
+    "aliases": []
+  },
+  "upstream": {
+    "label": "upstream",
+    "aliases": []
+  },
+  "utilities": {
+    "label": "utilities",
+    "aliases": []
+  },
+  "vaccines": {
+    "label": "vaccines",
+    "aliases": []
+  },
+  "warehousing": {
+    "label": "warehousing",
+    "aliases": []
+  },
+  "wealth": {
+    "label": "wealth",
+    "aliases": []
+  },
+  "wealth_management": {
+    "label": "wealth management",
+    "aliases": []
+  }
+}

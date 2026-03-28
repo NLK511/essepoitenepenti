@@ -577,6 +577,8 @@ Some recommendation-plan explanation fields now also fold in that matched relati
 
 The ticker page and run-detail plan review now also show dedicated relationship read-through cards. Use those cards when you want to inspect which exact edges matched, how many were merely stored, and any attached notes or strength labels.
 
+Behind the scenes, theme and macro-channel fields are now being normalized against governed registries. That should reduce drift in wording over time even if not every ontology field has been fully moved onto governed lists yet.
+
 This page is intentionally closer to raw storage than the higher-level review pages.
 
 ---

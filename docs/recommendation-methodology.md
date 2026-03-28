@@ -87,6 +87,8 @@ The same matched relationship set now feeds plan explanation text too. Rationale
 
 Operator review surfaces now also have a dedicated relationship read-through presentation path. Instead of only seeing a compact helper-text line, the ticker page and run-detail plan review can show the matched relationships themselves, with stored-edge fallback when nothing matched strongly enough.
 
+Under the hood, taxonomy themes and macro-sensitivity values are now normalized against governed registries. That is a step toward fully governed ontology values rather than letting those fields drift as scattered free-form strings.
+
 If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings. Transitional support snapshots still support that shared-artifact layer and freshness reporting.
 
 ### 3. News ingestion and live ticker sentiment
