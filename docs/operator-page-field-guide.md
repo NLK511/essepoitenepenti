@@ -635,13 +635,11 @@ This is one of the first places to look when startup or run quality seems off.
 **Best use cases**
 - answer “is this ticker worth repeated attention?”
 - review plan history for one ticker
-- compare current app-side behavior with legacy prototype trade history
+- inspect whether the latest plan mix and outcome pattern justify continued operator focus
 
 ### Main sections
 - **Overview**
 - **Plans**
-- **Prototype trades**
-- **Raw payloads**
 
 ### Important overview fields
 - **Stored plans**: all recommendation plans recorded for the ticker
@@ -649,7 +647,6 @@ This is one of the first places to look when startup or run quality seems off.
 - **Win / loss**: resolved plan outcomes
 - **Open plans**: not yet resolved
 - **Avg confidence**: average plan confidence for the ticker
-- **Prototype trades**: historical reference-only legacy data
 
 ### Plan history fields
 - action

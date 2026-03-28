@@ -12,7 +12,6 @@ from trade_proposer_app.config import AppSettings
 _DEFAULT_ALLOWLIST_PATHS = (
     "/api/health",
     "/api/health/preflight",
-    "/api/health/prototype",
     "/api/login",
 )
 

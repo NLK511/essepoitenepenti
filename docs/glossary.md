@@ -490,7 +490,7 @@ The chart- and market-structure side of the trade idea.
 The compact explanation of why the trade might work.
 
 ### Ticker drill-down
-The page focused on one ticker’s plan history, outcomes, and reference trade history.
+The page focused on one ticker’s recommendation-plan history, outcomes, and latest review context.
 
 ### Ticker signal snapshot
 The redesign-native stored per-ticker signal object that captures triage, directional, and shortlist-related information.

@@ -411,16 +411,6 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(check["name"] == "module:pandas" for check in payload["checks"]))
         self.assertTrue(any(check["name"] == "sentiment_snapshot:macro" for check in payload["checks"]))
 
-    async def test_legacy_prototype_health_route(self) -> None:
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            response = await client.get("/api/health/prototype")
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["status"], "warning")
-        self.assertEqual(payload["engine"], "internal_price_pipeline")
-        self.assertTrue(any(check["name"] == "weights_file" for check in payload["checks"]))
-
     async def test_spa_shell_routes_render(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:

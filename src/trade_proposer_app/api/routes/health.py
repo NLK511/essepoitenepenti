@@ -104,7 +104,3 @@ async def health(session: Session = Depends(get_db_session)) -> dict[str, object
 async def preflight_health(session: Session = Depends(get_db_session)) -> AppPreflightReport:
     return _augment_report_with_snapshot_checks(_create_preflight_service(session).run(), session)
 
-
-@router.get("/health/prototype")
-async def prototype_health(session: Session = Depends(get_db_session)) -> AppPreflightReport:
-    return _augment_report_with_snapshot_checks(_create_preflight_service(session).run(), session)

@@ -22,18 +22,20 @@ The main rule is signal integrity:
 ## Pipeline overview
 
 ### Current production pipeline
-`ProposalService` orchestrates recommendation generation for one or more tickers in a run.
+`WatchlistOrchestrationService` is the active proposal-generation execution path.
 
-For each ticker, the pipeline:
-1. fetches recent OHLC price history through `yfinance`
-2. computes technical indicators with `pandas`
-3. builds raw and normalized feature vectors
-4. loads the latest valid shared macro artifact
-5. loads the latest valid shared industry artifact for the ticker’s mapped industry
-6. computes live ticker sentiment from current news input
-7. applies weights from `src/trade_proposer_app/data/weights.json`
-8. emits direction, confidence, entry, stop-loss, take-profit, and diagnostics
-9. persists structured outputs and audit payloads
+For each proposal run, the pipeline:
+1. resolves the effective watchlist or manual ticker wrapper
+2. runs cheap scan across the candidate set
+3. selects a shortlist using explicit attention/confidence/catalyst rules
+4. runs `TickerDeepAnalysisService` for shortlisted names
+5. fetches recent OHLC price history through `yfinance`
+6. computes technical indicators and context-enriched features with `pandas`
+7. loads the latest valid shared macro and industry artifacts for the ticker’s mapped profile
+8. builds recommendation plans, diagnostics, and structured audit payloads
+9. persists ticker signals, recommendation plans, run summaries, and run artifacts
+
+`ProposalService` still exists as a lower-level analysis helper and compatibility layer, but it is no longer the main proposal-run execution path.
 
 If an input is unavailable, the system stores that fact and falls back to warnings or neutral values.
 
@@ -62,11 +64,11 @@ That data is used both for proposal generation and later evaluation, which keeps
 The app stores broader reusable context by scope:
 - macro
 - industry
-- ticker
+- ticker signal snapshots for per-run triage state
 
 This lets multiple recommendations share the same broader context window and link back to the exact artifacts they used.
 
-If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings.
+If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings. Transitional sentiment snapshots still support that shared-artifact layer and freshness reporting.
 
 ### 3. News ingestion and live ticker sentiment
 `NewsIngestionService` fetches provider-backed articles, deduplicates them, normalizes them, and records feed usage and feed failures.

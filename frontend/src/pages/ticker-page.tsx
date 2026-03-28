@@ -4,13 +4,13 @@ import { Link, useParams } from "react-router-dom";
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import type { TickerAnalysisPage as TickerAnalysisPageData } from "../types";
-import { directionTone, formatDate, normalizeAnalysisJsonForDisplay, tradeOutcomeTone } from "../utils";
+import { formatDate } from "../utils";
 
 export function TickerPage() {
   const { ticker } = useParams<{ ticker: string }>();
   const [data, setData] = useState<TickerAnalysisPageData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [section, setSection] = useState<"overview" | "plans" | "prototype" | "raw">("overview");
+  const [section, setSection] = useState<"overview" | "plans">("overview");
 
   useEffect(() => {
     async function load() {
@@ -35,7 +35,7 @@ export function TickerPage() {
       <PageHeader
         kicker="Ticker drill-down"
         title={data ? `${data.ticker} review` : "Ticker analysis"}
-        subtitle="This page is optimized for one question: should this ticker earn more operator attention? Review plan history, outcome mix, and prototype behavior without wading through redundant run-level detail."
+        subtitle="This page is optimized for one question: should this ticker earn more operator attention? Review plan history, outcome mix, and the latest plan context without wading through redundant run-level detail."
         actions={
           <>
             <Link to="/jobs/recommendation-plans" className="button-secondary">Back to plans</Link>
@@ -53,19 +53,16 @@ export function TickerPage() {
             <StatCard label="Win / loss" value={`${data.performance.win_plan_count} / ${data.performance.loss_plan_count}`} helper="Resolved plan outcomes" />
             <StatCard label="Open plans" value={data.performance.open_plan_count} helper="Plans still awaiting resolution" />
             <StatCard label="Avg confidence" value={data.performance.average_confidence !== null ? `${data.performance.average_confidence}%` : "—"} helper="Mean stored plan confidence" />
-            <StatCard label="Prototype trades" value={data.performance.resolved_trade_count} helper="Resolved legacy trade-log entries for comparison" />
           </section>
 
           <Card>
-            <SectionTitle kicker="Navigation" title="Ticker review sections" subtitle="Keep one task visible at a time: overview for the big picture, plans for operator history, prototype for comparison, raw only when you need internals." />
+            <SectionTitle kicker="Navigation" title="Ticker review sections" subtitle="Keep one task visible at a time: overview for the big picture, plans for the full recommendation-plan history." />
             <SegmentedTabs
               value={section}
               onChange={setSection}
               options={[
                 { value: "overview", label: "Overview" },
                 { value: "plans", label: "Plans" },
-                { value: "prototype", label: "Prototype trades" },
-                { value: "raw", label: "Raw payloads" },
               ]}
             />
           </Card>
@@ -76,8 +73,8 @@ export function TickerPage() {
                 <SectionTitle kicker="Interpretation" title="How to read this ticker" />
                 <ul className="checklist">
                   <li>Recommendation plans and plan outcomes are the canonical app-side review objects.</li>
-                  <li>Prototype trade-log stats are reference-only and should not override plan-outcome evaluation.</li>
                   <li>Use plan mix and recent outcome state to decide whether this ticker deserves repeated operator attention.</li>
+                  <li>Prefer run detail only when you need execution provenance that the ticker page does not summarize.</li>
                 </ul>
               </Card>
               <Card>
@@ -88,7 +85,6 @@ export function TickerPage() {
                   <div className="data-point"><span className="data-point-label">no_action</span><span className="data-point-value">{data.performance.no_action_plan_count}</span></div>
                   <div className="data-point"><span className="data-point-label">watchlist</span><span className="data-point-value">{data.performance.watchlist_plan_count}</span></div>
                   <div className="data-point"><span className="data-point-label">warnings</span><span className="data-point-value">{data.performance.warning_plan_count}</span></div>
-                  <div className="data-point"><span className="data-point-label">prototype available</span><span className="data-point-value">{data.performance.prototype_trade_log_available ? "yes" : "no"}</span></div>
                 </div>
               </Card>
               <Card>
@@ -151,66 +147,6 @@ export function TickerPage() {
             </Card>
           ) : null}
 
-          {section === "prototype" ? (
-            <Card>
-              <SectionTitle kicker="Prototype comparison" title="Legacy trade-log behavior" subtitle="Useful as historical context only. These entries do not replace plan outcomes as the canonical review path." />
-              {data.prototype_trades.length === 0 ? <EmptyState message="No prototype trade-log entries were found for this ticker." /> : (
-                <div className="data-stack top-gap-small">
-                  {data.prototype_trades.map((trade) => (
-                    <article key={trade.id} className="data-card">
-                      <div className="data-card-header">
-                        <div>
-                          <div className="cluster">
-                            <Badge tone={tradeOutcomeTone(trade.status)}>{trade.status}</Badge>
-                            <Badge tone={directionTone(trade.direction)}>{trade.direction}</Badge>
-                          </div>
-                          <h3 className="data-card-title top-gap-small">Opened {formatDate(trade.timestamp)}</h3>
-                          <div className="helper-text">Closed {formatDate(trade.close_timestamp)} · Duration {trade.duration_days !== null ? `${trade.duration_days.toFixed(2)}d` : "—"}</div>
-                        </div>
-                        <div className="data-card-meta">
-                          <Badge>{trade.confidence !== null ? `${trade.confidence}%` : "—"}</Badge>
-                        </div>
-                      </div>
-                      <div className="data-points">
-                        <div className="data-point"><span className="data-point-label">entry</span><span className="data-point-value">{trade.entry_price}</span></div>
-                        <div className="data-point"><span className="data-point-label">stop</span><span className="data-point-value">{trade.stop_loss}</span></div>
-                        <div className="data-point"><span className="data-point-label">take profit</span><span className="data-point-value">{trade.take_profit}</span></div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </Card>
-          ) : null}
-
-          {section === "raw" ? (
-            <Card>
-              <SectionTitle kicker="Raw data" title="Prototype analysis payloads" subtitle="Only open this section when the summarized plan and outcome views are not enough." />
-              {data.prototype_trades.length === 0 ? <EmptyState message="No prototype raw payloads are available for this ticker." /> : (
-                <div className="data-stack top-gap-small">
-                  {data.prototype_trades.map((trade) => {
-                    const normalizedAnalysisJson = normalizeAnalysisJsonForDisplay(trade.analysis_json);
-                    return (
-                      <article key={`raw-${trade.id}`} className="data-card">
-                        <div className="data-card-header">
-                          <div>
-                            <div className="cluster">
-                              <div className="kicker">Trade #{trade.id}</div>
-                              <Badge tone={directionTone(trade.direction)}>{trade.direction}</Badge>
-                            </div>
-                            <h3 className="data-card-title top-gap-small">{trade.status}</h3>
-                          </div>
-                          <Badge tone={tradeOutcomeTone(trade.status)}>{trade.status}</Badge>
-                        </div>
-                        <div className="helper-text">Opened {formatDate(trade.timestamp)} · Closed {formatDate(trade.close_timestamp)}</div>
-                        {normalizedAnalysisJson ? <pre>{normalizedAnalysisJson}</pre> : <div className="helper-text">No analysis payload stored for this trade.</div>}
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-            </Card>
-          ) : null}
         </div>
       ) : null}
     </>

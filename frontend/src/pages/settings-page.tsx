@@ -359,7 +359,7 @@ export function SettingsPage() {
           </Card>
 
           <Card key={`providers-${dataVersion}`}>
-            <SectionTitle kicker="Provider credentials" title="Encrypted credential storage" subtitle="These values are stored encrypted at rest and injected into the prototype subprocess when relevant." />
+            <SectionTitle kicker="Provider credentials" title="Encrypted credential storage" subtitle="These values are stored encrypted at rest and supplied to the app’s provider clients only when relevant." />
             <div className="stack-page">
               {data.providers.map((provider) => (
                 <form key={provider.provider} className="provider-form" onSubmit={(event) => void saveProvider(event, provider.provider)}>

@@ -120,7 +120,7 @@ REDIS_URL=redis://localhost:6379/0
 SECRET_KEY=replace-this-with-a-long-random-secret
 SINGLE_USER_AUTH_ENABLED=true
 SINGLE_USER_AUTH_TOKEN=
-SINGLE_USER_AUTH_ALLOWLIST_PATHS=/api/health,/api/health/preflight,/api/health/prototype
+SINGLE_USER_AUTH_ALLOWLIST_PATHS=/api/health,/api/health/preflight
 SINGLE_USER_AUTH_USERNAME=admin
 SINGLE_USER_AUTH_PASSWORD=change-me
 ```
@@ -136,7 +136,6 @@ You should:
 Every `/api` request must carry `Authorization: Bearer <token>`, except for allowlisted paths such as:
 - `/api/health`
 - `/api/health/preflight`
-- `/api/health/prototype`
 - `/api/login`
 
 The React UI routes unauthenticated visitors to `/login`. The login page exchanges the configured username/password for the same bearer token and stores it locally for future API requests.
