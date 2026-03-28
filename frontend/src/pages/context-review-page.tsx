@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
+import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
 import type { IndustryContextSnapshot, MacroContextSnapshot, Run, SupportSnapshot, SupportSnapshotListResponse } from "../types";
-import { formatDate, jobTypeLabel } from "../utils";
+import { formatDate } from "../utils";
 
 function snapshotTone(snapshot: SupportSnapshot): "ok" | "warning" | "danger" | "neutral" {
   if (snapshot.is_expired) {
@@ -42,6 +42,10 @@ function topIndustryDriver(snapshot: IndustryContextSnapshot): Record<string, un
 
 function themeString(value: unknown, fallback = "—"): string {
   return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
 }
 
 function formatWindow(window: string): string {
@@ -93,6 +97,25 @@ function provenanceLabel(snapshot: { metadata?: Record<string, unknown> }): stri
   return `fallback · ${summaryBackend(snapshot)}`;
 }
 
+function contradictoryMacroThemes(snapshot: MacroContextSnapshot): string[] {
+  return stringList(snapshot.metadata?.contradictory_event_labels);
+}
+
+function actionLabel(scope: "macro" | "industry"): string {
+  return scope === "macro" ? "Macro" : "Industry";
+}
+
+function docsLink(doc: string, section?: string): string {
+  const params = new URLSearchParams({ doc });
+  if (section) {
+    params.set("section", section);
+  }
+  return `/docs?${params.toString()}`;
+}
+
+const contextReviewDoc = (section?: string) => docsLink("operator-page-field-guide", section);
+const glossaryDoc = (section?: string) => docsLink("glossary", section);
+
 export function ContextReviewPage() {
   const { showToast } = useToast();
   const [macro, setMacro] = useState<SupportSnapshot[]>([]);
@@ -102,6 +125,7 @@ export function ContextReviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<"macro" | "industry" | "macro-now" | "industry-now" | null>(null);
+  const [activeTab, setActiveTab] = useState<"macro" | "industry">("macro");
 
   async function load() {
     try {
@@ -134,7 +158,7 @@ export function ContextReviewPage() {
       setError(null);
       const run = await postForm<Run>(`/api/support-snapshots/refresh/${scope}`, {});
       showToast({
-        message: `${scope === "macro" ? "Macro" : "Industry"} refresh queued as run #${run.id}`,
+        message: `${actionLabel(scope)} refresh queued as run #${run.id}`,
         tone: "success",
       });
     } catch (actionError) {
@@ -148,14 +172,11 @@ export function ContextReviewPage() {
     try {
       setBusyAction(scope === "macro" ? "macro-now" : "industry-now");
       setError(null);
-      const response = await postForm<{ run: Run; executed: boolean; reason?: string; artifact?: Record<string, unknown> }>(
-        `/api/support-snapshots/refresh/${scope}/run-now`,
-        {},
-      );
+      const response = await postForm<{ run: Run; executed: boolean }>(`/api/support-snapshots/refresh/${scope}/run-now`, {});
       showToast({
         message: response.executed
-          ? `${scope === "macro" ? "Macro" : "Industry"} refresh finished in run #${response.run.id}`
-          : `${scope === "macro" ? "Macro" : "Industry"} refresh reused existing run #${response.run.id}`,
+          ? `${actionLabel(scope)} refresh finished in run #${response.run.id}`
+          : `${actionLabel(scope)} refresh reused existing run #${response.run.id}`,
         tone: response.executed ? "success" : "warning",
       });
       await load();
@@ -170,28 +191,74 @@ export function ContextReviewPage() {
   const latestIndustrySentiment = industry[0] ?? null;
   const latestMacroContext = macroContexts[0] ?? null;
   const latestIndustryContext = industryContexts[0] ?? null;
-  const topTheme = latestMacroContext ? topMacroTheme(latestMacroContext) : null;
-  const topDriver = latestIndustryContext ? topIndustryDriver(latestIndustryContext) : null;
+
+  const headerMetrics = useMemo(() => {
+    if (activeTab === "macro") {
+      const topTheme = latestMacroContext ? topMacroTheme(latestMacroContext) : null;
+      return [
+        {
+          label: "Top macro event",
+          value: topTheme ? themeString(topTheme.label) : "—",
+          helper: latestMacroContext ? formatDate(latestMacroContext.computed_at) : "No macro context yet",
+        },
+        {
+          label: "Confidence",
+          value: latestMacroContext ? `${latestMacroContext.confidence_percent.toFixed(1)}%` : "—",
+          helper: latestMacroContext ? `Saliency ${latestMacroContext.saliency_score.toFixed(2)}` : "No macro context yet",
+        },
+        {
+          label: "Summary provenance",
+          value: latestMacroContext ? provenanceLabel(latestMacroContext) : "—",
+          helper: latestMacroContext && summaryError(latestMacroContext) ? "fallback reason stored" : "Narrative source for this snapshot",
+        },
+        {
+          label: "Support artifact",
+          value: latestMacroSentiment ? latestMacroSentiment.label : "—",
+          helper: latestMacroSentiment ? formatDate(latestMacroSentiment.computed_at) : "No macro support artifact yet",
+        },
+      ];
+    }
+
+    const topDriver = latestIndustryContext ? topIndustryDriver(latestIndustryContext) : null;
+    return [
+      {
+        label: "Top industry driver",
+        value: topDriver ? themeString(topDriver.label) : "—",
+        helper: latestIndustryContext ? `${latestIndustryContext.industry_label} · ${formatDate(latestIndustryContext.computed_at)}` : "No industry context yet",
+      },
+      {
+        label: "Direction",
+        value: latestIndustryContext ? latestIndustryContext.direction : "—",
+        helper: latestIndustryContext ? `Confidence ${latestIndustryContext.confidence_percent.toFixed(1)}%` : "No industry context yet",
+      },
+      {
+        label: "Summary provenance",
+        value: latestIndustryContext ? provenanceLabel(latestIndustryContext) : "—",
+        helper: latestIndustryContext && summaryError(latestIndustryContext) ? "fallback reason stored" : "Narrative source for this snapshot",
+      },
+      {
+        label: "Support artifact",
+        value: latestIndustrySentiment ? latestIndustrySentiment.subject_label : "—",
+        helper: latestIndustrySentiment ? `${latestIndustrySentiment.label} · ${formatDate(latestIndustrySentiment.computed_at)}` : "No industry support artifact yet",
+      },
+    ];
+  }, [activeTab, latestIndustryContext, latestIndustrySentiment, latestMacroContext, latestMacroSentiment]);
+
+  const activeScope = activeTab;
 
   return (
     <>
       <PageHeader
         kicker="Shared context"
-        title="Review context objects and transitional support refresh artifacts."
-        subtitle="The redesign-native review path is macro and industry context snapshots plus recommendation plans. Support snapshots still exist as transitional refresh artifacts and freshness checks, so this page shows both." 
+        title="Context review"
+        subtitle="Review macro and industry context in dedicated tabs, with the latest context snapshots shown first and support artifacts kept nearby for freshness and refresh auditing."
         actions={
           <>
-            <button type="button" className="button" onClick={() => void enqueueRefresh("macro")} disabled={busyAction !== null}>
-              {busyAction === "macro" ? "Queueing macro refresh…" : "Queue macro refresh"}
+            <button type="button" className="button" onClick={() => void enqueueRefresh(activeScope)} disabled={busyAction !== null}>
+              {busyAction === activeScope ? `Queueing ${activeScope} refresh…` : `Queue ${activeScope} refresh`}
             </button>
-            <button type="button" className="button-secondary" onClick={() => void runRefreshNow("macro")} disabled={busyAction !== null}>
-              {busyAction === "macro-now" ? "Running macro refresh…" : "Run macro now"}
-            </button>
-            <button type="button" className="button" onClick={() => void enqueueRefresh("industry")} disabled={busyAction !== null}>
-              {busyAction === "industry" ? "Queueing industry refresh…" : "Queue industry refresh"}
-            </button>
-            <button type="button" className="button-secondary" onClick={() => void runRefreshNow("industry")} disabled={busyAction !== null}>
-              {busyAction === "industry-now" ? "Running industry refresh…" : "Run industry now"}
+            <button type="button" className="button-secondary" onClick={() => void runRefreshNow(activeScope)} disabled={busyAction !== null}>
+              {busyAction === `${activeScope}-now` ? `Running ${activeScope} refresh…` : `Run ${activeScope} now`}
             </button>
             <button type="button" className="button-subtle" onClick={() => void load()} disabled={loading}>
               Reload
@@ -206,71 +273,111 @@ export function ContextReviewPage() {
       {!loading ? (
         <div className="stack-page">
           <section className="metrics-grid">
-            <Card>
-              <div className="metric-label">Top macro event</div>
-              <div className="metric-value">{topTheme ? themeString(topTheme.label) : "—"}</div>
-              <div className="helper-text">{latestMacroContext ? formatDate(latestMacroContext.computed_at) : "No macro context yet"}</div>
-            </Card>
-            <Card>
-              <div className="metric-label">Macro context confidence</div>
-              <div className="metric-value">{latestMacroContext ? `${latestMacroContext.confidence_percent.toFixed(1)}%` : "—"}</div>
-              <div className="helper-text">{latestMacroContext ? `Saliency ${latestMacroContext.saliency_score.toFixed(2)}` : "No macro context yet"}</div>
-              {latestMacroContext ? (
-                <div className="top-gap-small cluster">
-                  <Badge tone={provenanceTone(latestMacroContext)}>{provenanceLabel(latestMacroContext)}</Badge>
-                  {summaryError(latestMacroContext) ? <Badge tone="warning">summary warning</Badge> : null}
-                </div>
-              ) : null}
-            </Card>
-            <Card>
-              <div className="metric-label">Latest macro support snapshot</div>
-              <div className="metric-value">{latestMacroSentiment ? latestMacroSentiment.label : "—"}</div>
-              <div className="helper-text">{latestMacroSentiment ? formatDate(latestMacroSentiment.computed_at) : "No macro support artifact yet"}</div>
-            </Card>
-            <Card>
-              <div className="metric-label">Top industry driver</div>
-              <div className="metric-value">{topDriver ? themeString(topDriver.label) : "—"}</div>
-              <div className="helper-text">{latestIndustryContext ? `${latestIndustryContext.industry_label} · ${formatDate(latestIndustryContext.computed_at)}` : "No industry context yet"}</div>
-            </Card>
-            <Card>
-              <div className="metric-label">Latest industry support snapshot</div>
-              <div className="metric-value">{latestIndustrySentiment ? latestIndustrySentiment.subject_label : "—"}</div>
-              <div className="helper-text">{latestIndustrySentiment ? `${latestIndustrySentiment.label} · ${formatDate(latestIndustrySentiment.computed_at)}` : "No industry support artifact yet"}</div>
-            </Card>
+            {headerMetrics.map((item) => (
+              <Card key={item.label}>
+                <div className="metric-label">{item.label}</div>
+                <div className="metric-value">{item.value}</div>
+                <div className="helper-text">{item.helper}</div>
+              </Card>
+            ))}
           </section>
 
-          <section className="two-column">
-            <Card>
-              <SectionTitle kicker="Macro context" title="Current saliency-first macro overview" />
-              {latestMacroContext ? <MacroContextSummary snapshot={latestMacroContext} /> : <EmptyState message="No macro context snapshots available yet." />}
-            </Card>
-            <Card>
-              <SectionTitle kicker="Industry context" title="Current industry transmission overview" />
-              {latestIndustryContext ? <IndustryContextSummary snapshot={latestIndustryContext} /> : <EmptyState message="No industry context snapshots available yet." />}
-            </Card>
-          </section>
+          <Card>
+            <SectionTitle title="Choose context scope" actions={<HelpHint tooltip="Switch between macro and industry review so one shared context layer stays in focus at a time." to={contextReviewDoc("context-review")} />} />
+            <SegmentedTabs
+              value={activeTab}
+              onChange={setActiveTab}
+              options={[
+                { value: "macro", label: "Macro" },
+                { value: "industry", label: "Industry" },
+              ]}
+            />
+          </Card>
 
-          <section className="card-grid">
-            <Card>
-              <SectionTitle kicker="Macro context history" title="Recent macro context snapshots" />
-              {macroContexts.length === 0 ? <EmptyState message="No macro context snapshots stored yet." /> : <MacroContextList snapshots={macroContexts} />}
-            </Card>
-            <Card>
-              <SectionTitle kicker="Industry context history" title="Recent industry context snapshots" />
-              {industryContexts.length === 0 ? <EmptyState message="No industry context snapshots stored yet." /> : <IndustryContextList snapshots={industryContexts} />}
-            </Card>
-            <Card>
-              <SectionTitle kicker="Macro support history" title="Recent macro support snapshots" />
-              {macro.length === 0 ? <EmptyState message="No macro support snapshots stored yet." /> : <SnapshotList snapshots={macro} />}
-            </Card>
-            <Card>
-              <SectionTitle kicker="Industry support history" title="Recent industry support snapshots" />
-              {industry.length === 0 ? <EmptyState message="No industry support snapshots stored yet." /> : <SnapshotList snapshots={industry} />}
-            </Card>
-          </section>
+          {activeTab === "macro" ? (
+            <MacroContextTab snapshot={latestMacroContext} history={macroContexts} supportHistory={macro} />
+          ) : (
+            <IndustryContextTab snapshot={latestIndustryContext} history={industryContexts} supportHistory={industry} />
+          )}
         </div>
       ) : null}
     </>
+  );
+}
+
+function MacroContextTab(props: {
+  snapshot: MacroContextSnapshot | null;
+  history: MacroContextSnapshot[];
+  supportHistory: SupportSnapshot[];
+}) {
+  const snapshot = props.snapshot;
+
+  return (
+    <div className="stack-page">
+      <Card>
+        <SectionTitle
+          kicker="Macro context"
+          title="Current macro context"
+          actions={snapshot ? (
+            <div className="cluster">
+              <HelpHint tooltip="Review the latest macro context snapshot first when checking whether the broad market backdrop is supportive or contradictory." to={contextReviewDoc("context-review")} />
+              {snapshot.id ? <Link to={`/context/macro/${snapshot.id}`} className="button-subtle">Open context detail</Link> : null}
+              {snapshot.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">Open source run</Link> : null}
+            </div>
+          ) : <HelpHint tooltip="Review the latest macro context snapshot first when checking whether the broad market backdrop is supportive or contradictory." to={contextReviewDoc("context-review")} />}
+        />
+        {snapshot ? <MacroContextSummary snapshot={snapshot} /> : <EmptyState message="No macro context snapshots available yet." />}
+      </Card>
+
+      <section className="card-grid context-review-history-grid">
+        <Card>
+          <SectionTitle kicker="Macro context history" title="Recent macro context snapshots" actions={<HelpHint tooltip="Recent macro context snapshots show how the shared backdrop changed over time." to={contextReviewDoc("history-lists")} />} />
+          {props.history.length === 0 ? <EmptyState message="No macro context snapshots stored yet." /> : <MacroContextList snapshots={props.history} />}
+        </Card>
+        <Card>
+          <SectionTitle kicker="Macro support history" title="Recent macro support snapshots" actions={<HelpHint tooltip="Support snapshots are transitional refresh artifacts used for freshness checks and audit trails." to={contextReviewDoc("important-snapshot-fields")} />} />
+          {props.supportHistory.length === 0 ? <EmptyState message="No macro support snapshots stored yet." /> : <SnapshotList snapshots={props.supportHistory} />}
+        </Card>
+      </section>
+    </div>
+  );
+}
+
+function IndustryContextTab(props: {
+  snapshot: IndustryContextSnapshot | null;
+  history: IndustryContextSnapshot[];
+  supportHistory: SupportSnapshot[];
+}) {
+  const snapshot = props.snapshot;
+
+  return (
+    <div className="stack-page">
+      <Card>
+        <SectionTitle
+          kicker="Industry context"
+          title="Current industry context"
+          actions={snapshot ? (
+            <div className="cluster">
+              <HelpHint tooltip="Use industry context to check whether sector-specific transmission supports or fights the current trade ideas." to={contextReviewDoc("context-review")} />
+              {snapshot.id ? <Link to={`/context/industry/${snapshot.id}`} className="button-subtle">Open context detail</Link> : null}
+              {snapshot.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">Open source run</Link> : null}
+            </div>
+          ) : <HelpHint tooltip="Use industry context to check whether sector-specific transmission supports or fights the current trade ideas." to={contextReviewDoc("context-review")} />}
+        />
+        {snapshot ? <IndustryContextSummary snapshot={snapshot} /> : <EmptyState message="No industry context snapshots available yet." />}
+      </Card>
+
+      <section className="card-grid context-review-history-grid">
+        <Card>
+          <SectionTitle kicker="Industry context history" title="Recent industry context snapshots" actions={<HelpHint tooltip="Recent industry context snapshots help you see whether the sector backdrop is stable, shifting, or degraded." to={contextReviewDoc("history-lists")} />} />
+          {props.history.length === 0 ? <EmptyState message="No industry context snapshots stored yet." /> : <IndustryContextList snapshots={props.history} />}
+        </Card>
+        <Card>
+          <SectionTitle kicker="Industry support history" title="Recent industry support snapshots" actions={<HelpHint tooltip="Support snapshots keep the older refresh artifact path visible for freshness checks and source auditability." to={contextReviewDoc("important-snapshot-fields")} />} />
+          {props.supportHistory.length === 0 ? <EmptyState message="No industry support snapshots stored yet." /> : <SnapshotList snapshots={props.supportHistory} />}
+        </Card>
+      </section>
+    </div>
   );
 }
 
@@ -298,47 +405,6 @@ function SnapshotList({ snapshots }: { snapshots: SupportSnapshot[] }) {
   );
 }
 
-function SnapshotSummary({ snapshot }: { snapshot: SupportSnapshot }) {
-  const socialCount = Number(snapshot.coverage.social_count ?? 0);
-  const queryCount = Number(snapshot.coverage.query_count ?? 0);
-  const trackedTickers = Array.isArray(snapshot.coverage.tracked_tickers) ? snapshot.coverage.tracked_tickers.length : 0;
-  return (
-    <div className="stack-page">
-      <div className="cluster">
-        <Badge tone="info">{snapshot.subject_label}</Badge>
-        <Badge tone={snapshotTone(snapshot)}>{snapshot.label}</Badge>
-        <Badge tone={snapshot.is_expired ? "danger" : "ok"}>{snapshot.is_expired ? "expired" : "fresh"}</Badge>
-      </div>
-      <div className="summary-grid">
-        <div className="summary-item"><span className="summary-label">Score</span><span className="summary-value">{snapshot.score.toFixed(2)}</span></div>
-        <div className="summary-item"><span className="summary-label">Computed</span><span className="summary-value">{formatDate(snapshot.computed_at)}</span></div>
-        <div className="summary-item"><span className="summary-label">Expires</span><span className="summary-value">{snapshot.expires_at ? formatDate(snapshot.expires_at) : "—"}</span></div>
-        <div className="summary-item"><span className="summary-label">Social items</span><span className="summary-value">{socialCount}</span></div>
-        <div className="summary-item"><span className="summary-label">Queries</span><span className="summary-value">{queryCount || "—"}</span></div>
-        <div className="summary-item"><span className="summary-label">Tracked tickers</span><span className="summary-value">{trackedTickers || "—"}</span></div>
-      </div>
-      {snapshot.summary_text ? (
-        <div className="summary-text-block top-gap-small">
-          <p>{snapshot.summary_text}</p>
-        </div>
-      ) : null}
-      {snapshot.drivers.length > 0 ? (
-        <div>
-          <div className="section-heading"><strong>Drivers</strong></div>
-          <ul className="list-reset">
-            {snapshot.drivers.map((driver) => (
-              <li key={driver} className="list-item compact-item">{driver}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      <div className="helper-text">Run {snapshot.run_id ?? "—"} · Job {snapshot.job_id ?? "—"} · {jobTypeLabel(snapshot.scope === "macro" ? "macro_sentiment_refresh" : "industry_sentiment_refresh")}</div>
-      {snapshot.id ? <Link to={`/context/sentiment/${snapshot.id}`} className="button-subtle">Open support detail</Link> : null}
-      <pre className="markdown-code-block">{JSON.stringify(snapshot.diagnostics, null, 2)}</pre>
-    </div>
-  );
-}
-
 function IndustryContextList({ snapshots }: { snapshots: IndustryContextSnapshot[] }) {
   return (
     <ul className="list-reset">
@@ -353,13 +419,11 @@ function IndustryContextList({ snapshots }: { snapshots: IndustryContextSnapshot
                   <Badge tone={contextTone(snapshot)}>{snapshot.status}</Badge>
                   <Badge>{snapshot.industry_label || snapshot.industry_key}</Badge>
                   {topDriver ? <Badge>{themeString(topDriver.label)}</Badge> : null}
+                  <Badge tone={provenanceTone(snapshot)}>{provenanceLabel(snapshot)}</Badge>
                 </div>
                 <div className="helper-text">Direction {snapshot.direction} · saliency {snapshot.saliency_score.toFixed(2)} · confidence {snapshot.confidence_percent.toFixed(1)}% · computed {formatDate(snapshot.computed_at)}</div>
-                <div className="top-gap-small cluster">
-                  <Badge tone={provenanceTone(snapshot)}>{provenanceLabel(snapshot)}</Badge>
-                  {summaryError(snapshot) ? <Badge tone="warning">fallback reason stored</Badge> : null}
-                </div>
                 {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
+                {summaryError(snapshot) ? <div className="helper-text top-gap-small">{summaryError(snapshot)}</div> : null}
               </div>
               <div className="cluster">
                 {snapshot.id ? <Link to={`/context/industry/${snapshot.id}`} className="button-subtle">Open detail</Link> : null}
@@ -386,12 +450,9 @@ function MacroContextList({ snapshots }: { snapshots: MacroContextSnapshot[] }) 
                   <Badge tone="info">macro context</Badge>
                   <Badge tone={contextTone(snapshot)}>{snapshot.status}</Badge>
                   {topTheme ? <Badge>{themeString(topTheme.label)}</Badge> : null}
+                  <Badge tone={provenanceTone(snapshot)}>{provenanceLabel(snapshot)}</Badge>
                 </div>
                 <div className="helper-text">Saliency {snapshot.saliency_score.toFixed(2)} · confidence {snapshot.confidence_percent.toFixed(1)}% · computed {formatDate(snapshot.computed_at)}</div>
-                <div className="top-gap-small cluster">
-                  <Badge tone={provenanceTone(snapshot)}>{provenanceLabel(snapshot)}</Badge>
-                  {summaryError(snapshot) ? <Badge tone="warning">fallback reason stored</Badge> : null}
-                </div>
                 {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
                 {summaryError(snapshot) ? <div className="helper-text top-gap-small">{summaryError(snapshot)}</div> : null}
               </div>
@@ -409,62 +470,96 @@ function MacroContextList({ snapshots }: { snapshots: MacroContextSnapshot[] }) 
 
 function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapshot }) {
   const topDriver = topIndustryDriver(snapshot);
-  const linkedMacroThemes = snapshot.linked_macro_themes.slice(0, 3);
-  const linkedIndustryThemes = snapshot.linked_industry_themes.slice(0, 3);
+  const linkedMacroThemes = snapshot.linked_macro_themes.slice(0, 6);
+  const linkedIndustryThemes = snapshot.linked_industry_themes.slice(0, 6);
+  const drivers = snapshot.active_drivers.slice(0, 4);
 
   return (
-    <div className="stack-page">
+    <div className="stack-page top-gap-small">
       <div className="cluster">
         <Badge tone="info">industry context</Badge>
         <Badge tone={contextTone(snapshot)}>{snapshot.status}</Badge>
         <Badge>{snapshot.industry_label || snapshot.industry_key}</Badge>
-        {topDriver ? <Badge>{themeString(topDriver.label)}</Badge> : null}
-      </div>
-      <div className="summary-grid">
-        <div className="summary-item"><span className="summary-label">Top driver</span><span className="summary-value">{topDriver ? themeString(topDriver.label) : "—"}</span></div>
-        <div className="summary-item"><span className="summary-label">Direction</span><span className="summary-value">{snapshot.direction || "—"}</span></div>
-        <div className="summary-item"><span className="summary-label">Window</span><span className="summary-value">{topDriver ? formatWindow(themeString(topDriver.window_hint, "")) : "—"}</span></div>
-        <div className="summary-item"><span className="summary-label">Source quality</span><span className="summary-value">{topDriver ? themeString(topDriver.source_priority) : "—"}</span></div>
-        <div className="summary-item"><span className="summary-label">Saliency</span><span className="summary-value">{snapshot.saliency_score.toFixed(2)}</span></div>
-        <div className="summary-item"><span className="summary-label">Confidence</span><span className="summary-value">{snapshot.confidence_percent.toFixed(1)}%</span></div>
-      </div>
-      <div className="top-gap-small cluster">
+        <Badge tone="neutral">direction {snapshot.direction || "—"}</Badge>
+        <Badge tone="neutral">confidence {snapshot.confidence_percent.toFixed(1)}%</Badge>
         <Badge tone={provenanceTone(snapshot)}>{provenanceLabel(snapshot)}</Badge>
-        {summaryError(snapshot) ? <Badge tone="warning">fallback reason stored</Badge> : null}
+        {snapshot.warnings.length > 0 ? <Badge tone="warning">warnings {snapshot.warnings.length}</Badge> : null}
+        {snapshot.missing_inputs.length > 0 ? <Badge tone="warning">missing {snapshot.missing_inputs.length}</Badge> : null}
       </div>
+
       {snapshot.summary_text ? (
-        <div className="summary-text-block top-gap-small">
+        <div className="summary-text-block">
           <p>{snapshot.summary_text}</p>
         </div>
       ) : null}
-      {linkedMacroThemes.length > 0 ? (
-        <div>
-          <div className="section-heading"><strong>Linked macro themes</strong></div>
-          <div className="cluster">
-            {linkedMacroThemes.map((theme) => <Badge key={theme}>{theme}</Badge>)}
+
+      <div className="data-points">
+        <div className="data-point"><span className="data-point-label">Top driver</span><span className="data-point-value">{topDriver ? themeString(topDriver.label) : "—"}</span></div>
+        <div className="data-point"><span className="data-point-label">Window</span><span className="data-point-value">{topDriver ? formatWindow(themeString(topDriver.window_hint, "")) : "—"}</span></div>
+        <div className="data-point"><span className="data-point-label">Source quality</span><span className="data-point-value">{topDriver ? themeString(topDriver.source_priority) : "—"}</span></div>
+        <div className="data-point"><span className="data-point-label">Saliency</span><span className="data-point-value">{snapshot.saliency_score.toFixed(2)}</span></div>
+        <div className="data-point"><span className="data-point-label">Computed</span><span className="data-point-value">{formatDate(snapshot.computed_at)}</span></div>
+        <div className="data-point"><span className="data-point-label">Run / job</span><span className="data-point-value">{snapshot.run_id ?? "—"} / {snapshot.job_id ?? "—"}</span></div>
+      </div>
+
+      <div className="context-review-main-grid">
+        <div className="data-card">
+          <div className="data-card-header">
+            <div>
+              <h3 className="data-card-title">Active drivers</h3>
+            </div>
           </div>
+          {drivers.length > 0 ? (
+            <div className="data-stack">
+              {drivers.map((driver, index) => {
+                const channels = stringList(driver.transmission_channels).slice(0, 4);
+                return (
+                  <div key={`${themeString(driver.label)}-${index}`} className="data-point">
+                    <span className="data-point-label">Driver {index + 1}</span>
+                    <span className="data-point-value">{themeString(driver.label)}</span>
+                    <div className="helper-text top-gap-small">window {formatWindow(themeString(driver.window_hint, ""))} · source {themeString(driver.source_priority)}</div>
+                    {channels.length > 0 ? <div className="helper-text">channels {channels.join(" · ")}</div> : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState message="No active drivers stored for this industry snapshot." />
+          )}
         </div>
-      ) : null}
-      {linkedIndustryThemes.length > 0 ? (
-        <div>
-          <div className="section-heading"><strong>Industry-native themes</strong></div>
-          <div className="cluster">
-            {linkedIndustryThemes.map((theme) => <Badge key={theme}>{theme}</Badge>)}
+
+        <div className="data-card">
+          <div className="data-card-header">
+            <div>
+              <h3 className="data-card-title">Theme links and caveats</h3>
+            </div>
           </div>
+          {linkedMacroThemes.length > 0 ? (
+            <div>
+              <div className="section-heading"><strong>Linked macro themes</strong></div>
+              <div className="cluster">{linkedMacroThemes.map((theme) => <Badge key={theme}>{theme}</Badge>)}</div>
+            </div>
+          ) : null}
+          {linkedIndustryThemes.length > 0 ? (
+            <div className="top-gap-small">
+              <div className="section-heading"><strong>Industry-native themes</strong></div>
+              <div className="cluster">{linkedIndustryThemes.map((theme) => <Badge key={theme}>{theme}</Badge>)}</div>
+            </div>
+          ) : null}
+          {snapshot.warnings.length > 0 ? (
+            <div className="top-gap-small">
+              <div className="section-heading"><strong>Warnings</strong></div>
+              <ul className="list-reset">{snapshot.warnings.map((warning) => <li key={warning} className="list-item compact-item">{warning}</li>)}</ul>
+            </div>
+          ) : null}
+          {snapshot.missing_inputs.length > 0 ? (
+            <div className="top-gap-small">
+              <div className="section-heading"><strong>Missing inputs</strong></div>
+              <ul className="list-reset">{snapshot.missing_inputs.map((item) => <li key={item} className="list-item compact-item">{item}</li>)}</ul>
+            </div>
+          ) : null}
+          {summaryError(snapshot) ? <div className="helper-text top-gap-small">Summary fallback reason: {summaryError(snapshot)}</div> : null}
         </div>
-      ) : null}
-      {snapshot.warnings.length > 0 ? (
-        <div>
-          <div className="section-heading"><strong>Warnings</strong></div>
-          <ul className="list-reset">
-            {snapshot.warnings.map((warning) => <li key={warning} className="list-item compact-item">{warning}</li>)}
-          </ul>
-        </div>
-      ) : null}
-      <div className="helper-text">Run {snapshot.run_id ?? "—"} · Job {snapshot.job_id ?? "—"}</div>
-      <div className="cluster">
-        {snapshot.id ? <Link to={`/context/industry/${snapshot.id}`} className="button-subtle">Open context detail</Link> : null}
-        {snapshot.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">Open source run</Link> : null}
       </div>
     </div>
   );
@@ -472,66 +567,104 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
 
 function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
   const topTheme = topMacroTheme(snapshot);
-  const contradictory = Array.isArray(snapshot.metadata?.contradictory_event_labels)
-    ? snapshot.metadata.contradictory_event_labels.filter((value): value is string => typeof value === "string")
-    : [];
-  const topChannels = Array.isArray(topTheme?.transmission_channels)
-    ? topTheme.transmission_channels.filter((value): value is string => typeof value === "string").slice(0, 2)
-    : [];
+  const topChannels = stringList(topTheme?.transmission_channels).slice(0, 6);
+  const contradictory = contradictoryMacroThemes(snapshot);
+  const themes = snapshot.active_themes.slice(0, 4);
 
   return (
-    <div className="stack-page">
+    <div className="stack-page top-gap-small">
       <div className="cluster">
         <Badge tone="info">macro context</Badge>
         <Badge tone={contextTone(snapshot)}>{snapshot.status}</Badge>
         {topTheme ? <Badge>{themeString(topTheme.label)}</Badge> : null}
-      </div>
-      <div className="summary-grid">
-        <div className="summary-item"><span className="summary-label">Top event</span><span className="summary-value">{topTheme ? themeString(topTheme.label) : "—"}</span></div>
-        <div className="summary-item"><span className="summary-label">State</span><span className="summary-value">{topTheme ? themeString(topTheme.persistence_state) : "—"}</span></div>
-        <div className="summary-item"><span className="summary-label">Window</span><span className="summary-value">{topTheme ? formatWindow(themeString(topTheme.window_hint, "")) : "—"}</span></div>
-        <div className="summary-item"><span className="summary-label">Source quality</span><span className="summary-value">{topTheme ? themeString(topTheme.source_priority) : "—"}</span></div>
-        <div className="summary-item"><span className="summary-label">Saliency</span><span className="summary-value">{snapshot.saliency_score.toFixed(2)}</span></div>
-        <div className="summary-item"><span className="summary-label">Confidence</span><span className="summary-value">{snapshot.confidence_percent.toFixed(1)}%</span></div>
-      </div>
-      <div className="top-gap-small cluster">
+        <Badge tone="neutral">confidence {snapshot.confidence_percent.toFixed(1)}%</Badge>
+        <Badge tone="neutral">saliency {snapshot.saliency_score.toFixed(2)}</Badge>
         <Badge tone={provenanceTone(snapshot)}>{provenanceLabel(snapshot)}</Badge>
-        {summaryError(snapshot) ? <Badge tone="warning">fallback reason stored</Badge> : null}
+        {snapshot.warnings.length > 0 ? <Badge tone="warning">warnings {snapshot.warnings.length}</Badge> : null}
+        {snapshot.missing_inputs.length > 0 ? <Badge tone="warning">missing {snapshot.missing_inputs.length}</Badge> : null}
       </div>
+
       {snapshot.summary_text ? (
-        <div className="summary-text-block top-gap-small">
+        <div className="summary-text-block">
           <p>{snapshot.summary_text}</p>
         </div>
       ) : null}
-      {topChannels.length > 0 ? (
-        <div>
-          <div className="section-heading"><strong>Main transmission channels</strong></div>
-          <div className="cluster">
-            {topChannels.map((channel) => <Badge key={channel}>{channel}</Badge>)}
+
+      <div className="data-points">
+        <div className="data-point"><span className="data-point-label">Top event</span><span className="data-point-value">{topTheme ? themeString(topTheme.label) : "—"}</span></div>
+        <div className="data-point"><span className="data-point-label">State</span><span className="data-point-value">{topTheme ? themeString(topTheme.persistence_state) : "—"}</span></div>
+        <div className="data-point"><span className="data-point-label">Window</span><span className="data-point-value">{topTheme ? formatWindow(themeString(topTheme.window_hint, "")) : "—"}</span></div>
+        <div className="data-point"><span className="data-point-label">Source quality</span><span className="data-point-value">{topTheme ? themeString(topTheme.source_priority) : "—"}</span></div>
+        <div className="data-point"><span className="data-point-label">Computed</span><span className="data-point-value">{formatDate(snapshot.computed_at)}</span></div>
+        <div className="data-point"><span className="data-point-label">Run / job</span><span className="data-point-value">{snapshot.run_id ?? "—"} / {snapshot.job_id ?? "—"}</span></div>
+      </div>
+
+      <div className="context-review-main-grid">
+        <div className="data-card">
+          <div className="data-card-header">
+            <div>
+              <h3 className="data-card-title">Active themes</h3>
+            </div>
           </div>
+          {themes.length > 0 ? (
+            <div className="data-stack">
+              {themes.map((theme, index) => {
+                const channels = stringList(theme.transmission_channels).slice(0, 4);
+                return (
+                  <div key={`${themeString(theme.label)}-${index}`} className="data-point">
+                    <span className="data-point-label">Theme {index + 1}</span>
+                    <span className="data-point-value">{themeString(theme.label)}</span>
+                    <div className="helper-text top-gap-small">state {themeString(theme.persistence_state)} · window {formatWindow(themeString(theme.window_hint, ""))}</div>
+                    <div className="helper-text">source {themeString(theme.source_priority)}</div>
+                    {channels.length > 0 ? <div className="helper-text">channels {channels.join(" · ")}</div> : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState message="No active macro themes stored yet." />
+          )}
         </div>
-      ) : null}
-      {contradictory.length > 0 ? (
-        <div>
-          <div className="section-heading"><strong>Contradictions</strong></div>
-          <div className="helper-text">{contradictory.join(", ")}</div>
+
+        <div className="data-card">
+          <div className="data-card-header">
+            <div>
+              <h3 className="data-card-title">Transmission and caveats</h3>
+            </div>
+          </div>
+          {topChannels.length > 0 ? (
+            <div>
+              <div className="section-heading"><strong>Main transmission channels</strong></div>
+              <div className="cluster">{topChannels.map((channel) => <Badge key={channel}>{channel}</Badge>)}</div>
+            </div>
+          ) : null}
+          {snapshot.regime_tags.length > 0 ? (
+            <div className="top-gap-small">
+              <div className="section-heading"><strong>Regime tags</strong></div>
+              <div className="cluster">{snapshot.regime_tags.map((tag) => <Badge key={tag}>{tag}</Badge>)}</div>
+            </div>
+          ) : null}
+          {contradictory.length > 0 ? (
+            <div className="top-gap-small">
+              <div className="section-heading"><strong>Contradictions</strong></div>
+              <div className="helper-text">{contradictory.join(" · ")}</div>
+            </div>
+          ) : null}
+          {snapshot.warnings.length > 0 ? (
+            <div className="top-gap-small">
+              <div className="section-heading"><strong>Warnings</strong></div>
+              <ul className="list-reset">{snapshot.warnings.map((warning) => <li key={warning} className="list-item compact-item">{warning}</li>)}</ul>
+            </div>
+          ) : null}
+          {snapshot.missing_inputs.length > 0 ? (
+            <div className="top-gap-small">
+              <div className="section-heading"><strong>Missing inputs</strong></div>
+              <ul className="list-reset">{snapshot.missing_inputs.map((item) => <li key={item} className="list-item compact-item">{item}</li>)}</ul>
+            </div>
+          ) : null}
+          {summaryError(snapshot) ? <div className="helper-text top-gap-small">Summary fallback reason: {summaryError(snapshot)}</div> : null}
         </div>
-      ) : null}
-      {snapshot.warnings.length > 0 ? (
-        <div>
-          <div className="section-heading"><strong>Warnings</strong></div>
-          <ul className="list-reset">
-            {snapshot.warnings.map((warning) => <li key={warning} className="list-item compact-item">{warning}</li>)}
-          </ul>
-        </div>
-      ) : null}
-      {summaryError(snapshot) ? <div className="helper-text top-gap-small">Summary fallback reason: {summaryError(snapshot)}</div> : null}
-      <div className="helper-text">Run {snapshot.run_id ?? "—"} · Job {snapshot.job_id ?? "—"}</div>
-      <div className="cluster">
-        {snapshot.id ? <Link to={`/context/macro/${snapshot.id}`} className="button-subtle">Open context detail</Link> : null}
-        {snapshot.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">Open source run</Link> : null}
       </div>
     </div>
   );
 }
-

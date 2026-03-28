@@ -383,6 +383,16 @@ html[data-theme="light"] .topbar {
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
+.context-review-main-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.context-review-history-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .summary-method-block {
   display: flex;
   flex-wrap: wrap;
@@ -1282,7 +1292,9 @@ details summary {
   }
 
   .two-column,
-  .docs-layout {
+  .docs-layout,
+  .context-review-main-grid,
+  .context-review-history-grid {
     grid-template-columns: 1fr;
   }
 
