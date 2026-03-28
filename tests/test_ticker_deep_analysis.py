@@ -132,6 +132,7 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["conflict_flag_details"], [])
         self.assertNotIn("ai", payload["ticker_deep_analysis"]["transmission_analysis"]["ticker_exposure_channels"])
         self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["expected_transmission_window"], "2d_5d")
+        self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["expected_transmission_window_detail"]["label"], "2d-5d")
         self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["decay_state"], "fresh")
         self.assertEqual(payload["summary"]["method"], "digest")
         self.assertEqual(payload["news"]["feeds_used"], ["stub_news"])

@@ -32,6 +32,7 @@ def main() -> int:
     print(f"- transmission conflict flags: {overview['transmission_conflict_flag_count']}")
     print(f"- transmission biases: {overview['transmission_bias_count']}")
     print(f"- transmission context regimes: {overview['transmission_context_regime_count']}")
+    print(f"- transmission windows: {overview['transmission_window_count']}")
     print(f"- shortlist reason codes: {overview['shortlist_reason_code_count']}")
     print(f"- shortlist selection lanes: {overview['shortlist_selection_lane_count']}")
     print(f"- calibration review statuses: {overview['calibration_review_status_count']}")

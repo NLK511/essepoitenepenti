@@ -77,6 +77,7 @@ Important stored fields include:
 - frontend recommendation-plan and ticker-signal code now also treats stable governed substructures such as transmission summaries, calibration reviews, evidence summaries, signal breakdowns, and diagnostics more explicitly instead of only broad record blobs
 - backend domain models now also represent those same recommendation-plan and ticker-signal substructures explicitly, while preserving dict-like access patterns for existing callers and tests
 - repositories now serialize nested typed JSON payload models safely when storing recommendation-plan and ticker-signal blobs
+- transmission summaries/diagnostics can now carry `expected_transmission_window_detail` beside `expected_transmission_window`, enabling review pages to prefer readable registry-backed timing labels over raw canonical keys
 - run summaries can now include `shortlist_rejection_details` rows with readable labels and counts in addition to raw `shortlist_rejections` maps
 - evidence-concentration cohorts can now include `slice_label` alongside canonical `slice_name`, plus the existing cohort `key` and `label`
 - event-key detail still persists separately via fields like `macro_event_keys` and `industry_event_keys` instead of being overloaded into governed tag/driver lists

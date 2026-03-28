@@ -12,7 +12,7 @@ import { WorkflowRunResults } from "../components/workflow-run-results";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import type { Job, RunDetailResponse, WatchlistEvaluationPolicy } from "../types";
-import { extractDisplayLabels, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, runTone } from "../utils";
+import { detailLabel, extractDisplayLabels, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, runTone } from "../utils";
 
 function scoreColor(value: number, min = -1, max = 1) {
   if (!Number.isFinite(value) || max <= min) {
@@ -445,9 +445,10 @@ export function RunDetailPage() {
                             const conflictFlags = extractDisplayLabels(item.diagnostics, "conflict_flag_details", "conflict_flags");
                             const industryExposureChannels = extractDisplayLabels(item.diagnostics, "industry_exposure_channel_details", "industry_exposure_channels");
                             const tickerExposureChannels = extractDisplayLabels(item.diagnostics, "ticker_exposure_channel_details", "ticker_exposure_channels");
-                            const expectedWindow = typeof item.diagnostics.expected_transmission_window === "string"
-                              ? item.diagnostics.expected_transmission_window
-                              : "unknown";
+                            const expectedWindow = detailLabel(
+                              item.diagnostics.expected_transmission_window_detail,
+                              typeof item.diagnostics.expected_transmission_window === "string" ? item.diagnostics.expected_transmission_window : "unknown",
+                            ) ?? "unknown";
                             const catalystProxyScore = typeof item.diagnostics.catalyst_proxy_score === "number"
                               ? item.diagnostics.catalyst_proxy_score
                               : null;
@@ -531,9 +532,10 @@ export function RunDetailPage() {
                             const conflictFlags = extractDisplayLabels(transmissionSummary, "conflict_flag_details", "conflict_flags");
                             const industryExposureChannels = extractDisplayLabels(transmissionSummary, "industry_exposure_channel_details", "industry_exposure_channels");
                             const tickerExposureChannels = extractDisplayLabels(transmissionSummary, "ticker_exposure_channel_details", "ticker_exposure_channels");
-                            const expectedWindow = typeof transmissionSummary?.expected_transmission_window === "string"
-                              ? transmissionSummary.expected_transmission_window
-                              : "unknown";
+                            const expectedWindow = detailLabel(
+                              transmissionSummary?.expected_transmission_window_detail,
+                              typeof transmissionSummary?.expected_transmission_window === "string" ? transmissionSummary.expected_transmission_window : "unknown",
+                            ) ?? "unknown";
                             const setupFamily = typeof signalBreakdown?.setup_family === "string" ? signalBreakdown.setup_family : null;
                             const actionReason = typeof evidenceSummary?.action_reason_label === "string" && evidenceSummary.action_reason_label
                               ? evidenceSummary.action_reason_label

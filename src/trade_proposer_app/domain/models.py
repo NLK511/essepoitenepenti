@@ -326,6 +326,7 @@ class RecommendationTransmissionSummary(DictLikeModel):
     ticker_exposure_channels: list[str] = Field(default_factory=list)
     ticker_exposure_channel_details: list[KeyLabelDetail] = Field(default_factory=list)
     expected_transmission_window: str | None = None
+    expected_transmission_window_detail: KeyLabelDetail | None = None
     conflict_flags: list[str] = Field(default_factory=list)
     conflict_flag_details: list[KeyLabelDetail] = Field(default_factory=list)
     decay_state: str | None = None

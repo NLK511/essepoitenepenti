@@ -409,6 +409,7 @@ class WatchlistOrchestrationService:
         primary_drivers = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "primary_drivers") or []
         primary_driver_details = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "primary_driver_details") or []
         expected_transmission_window = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "expected_transmission_window") or self._fallback_transmission_window_placeholder(watchlist.default_horizon)
+        expected_transmission_window_detail = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "expected_transmission_window_detail") or self._transmission_window_detail(expected_transmission_window)
         conflict_flags = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "conflict_flags") or []
         conflict_flag_details = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "conflict_flag_details") or []
         transmission_tags = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "transmission_tags") or []
@@ -479,6 +480,7 @@ class WatchlistOrchestrationService:
                 "ticker_exposure_channels": ticker_exposure_channels,
                 "ticker_exposure_channel_details": ticker_exposure_channel_details,
                 "expected_transmission_window": expected_transmission_window,
+                "expected_transmission_window_detail": expected_transmission_window_detail,
                 "conflict_flags": conflict_flags,
                 "conflict_flag_details": conflict_flag_details,
                 "base_confidence_percent": base_confidence,
@@ -516,6 +518,7 @@ class WatchlistOrchestrationService:
                 "ticker_exposure_channels": ticker_exposure_channels,
                 "ticker_exposure_channel_details": ticker_exposure_channel_details,
                 "expected_transmission_window": expected_transmission_window,
+                "expected_transmission_window_detail": expected_transmission_window_detail,
                 "conflict_flags": conflict_flags,
                 "conflict_flag_details": conflict_flag_details,
             },
@@ -908,6 +911,7 @@ class WatchlistOrchestrationService:
                 "ticker_relationship_edges": explicit.get("ticker_relationship_edges", []) if isinstance(explicit.get("ticker_relationship_edges"), list) else [],
                 "matched_ticker_relationships": explicit.get("matched_ticker_relationships", []) if isinstance(explicit.get("matched_ticker_relationships"), list) else [],
                 "expected_transmission_window": self._string_value(explicit.get("expected_transmission_window"), default=self._fallback_transmission_window(signal)),
+                "expected_transmission_window_detail": explicit.get("expected_transmission_window_detail") if isinstance(explicit.get("expected_transmission_window_detail"), dict) else self._transmission_window_detail(self._string_value(explicit.get("expected_transmission_window"), default=self._fallback_transmission_window(signal))),
                 "conflict_flags": conflict_flags,
                 "conflict_flag_details": conflict_flag_details or self._detail_fallback(conflict_flags),
                 "decay_state": self._string_value(explicit.get("decay_state"), default=self._fallback_decay_state(signal)),
@@ -939,6 +943,7 @@ class WatchlistOrchestrationService:
             "ticker_relationship_edges": [],
             "matched_ticker_relationships": [],
             "expected_transmission_window": self._fallback_transmission_window(signal),
+            "expected_transmission_window_detail": self._transmission_window_detail(self._fallback_transmission_window(signal)),
             "conflict_flags": self._fallback_conflict_flags(signal, candidate, bias),
             "conflict_flag_details": self._detail_fallback(self._fallback_conflict_flags(signal, candidate, bias)),
             "decay_state": self._fallback_decay_state(signal),
@@ -999,6 +1004,16 @@ class WatchlistOrchestrationService:
             for channel in list(dict.fromkeys(channels))
             if isinstance(channel, str) and channel.strip()
         ]
+
+    def _transmission_window_detail(self, value: str | None) -> dict[str, str] | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        definition = self.taxonomy_service.get_transmission_window_definition(value)
+        key = str(definition.get("key", value)).strip()
+        label = str(definition.get("label", value.replace("_", " "))).strip() or value.replace("_", " ")
+        if not key:
+            return None
+        return {"key": key, "label": label}
 
     @staticmethod
     def _detail_fallback(values: list[str]) -> list[dict[str, str]]:

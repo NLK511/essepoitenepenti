@@ -21,6 +21,7 @@ TRANSMISSION_PRIMARY_DRIVERS_PATH = TAXONOMY_DIR / "transmission_primary_drivers
 TRANSMISSION_CONFLICT_FLAGS_PATH = TAXONOMY_DIR / "transmission_conflict_flags.json"
 TRANSMISSION_BIASES_PATH = TAXONOMY_DIR / "transmission_biases.json"
 TRANSMISSION_CONTEXT_REGIMES_PATH = TAXONOMY_DIR / "transmission_context_regimes.json"
+TRANSMISSION_WINDOWS_PATH = TAXONOMY_DIR / "transmission_windows.json"
 SHORTLIST_REASON_CODES_PATH = TAXONOMY_DIR / "shortlist_reason_codes.json"
 SHORTLIST_SELECTION_LANES_PATH = TAXONOMY_DIR / "shortlist_selection_lanes.json"
 CALIBRATION_REVIEW_STATUSES_PATH = TAXONOMY_DIR / "calibration_review_statuses.json"
@@ -71,6 +72,7 @@ class TickerTaxonomyService:
         self._transmission_conflict_flags: dict[str, dict[str, Any]] = payload["transmission_conflict_flags"]
         self._transmission_biases: dict[str, dict[str, Any]] = payload["transmission_biases"]
         self._transmission_context_regimes: dict[str, dict[str, Any]] = payload["transmission_context_regimes"]
+        self._transmission_windows: dict[str, dict[str, Any]] = payload["transmission_windows"]
         self._shortlist_reason_codes: dict[str, dict[str, Any]] = payload["shortlist_reason_codes"]
         self._shortlist_selection_lanes: dict[str, dict[str, Any]] = payload["shortlist_selection_lanes"]
         self._calibration_review_statuses: dict[str, dict[str, Any]] = payload["calibration_review_statuses"]
@@ -91,6 +93,7 @@ class TickerTaxonomyService:
         self._transmission_conflict_flag_alias_map: dict[str, str] = self._build_alias_map(self._transmission_conflict_flags)
         self._transmission_bias_alias_map: dict[str, str] = self._build_alias_map(self._transmission_biases)
         self._transmission_context_regime_alias_map: dict[str, str] = self._build_alias_map(self._transmission_context_regimes)
+        self._transmission_window_alias_map: dict[str, str] = self._build_alias_map(self._transmission_windows)
         self._shortlist_reason_code_alias_map: dict[str, str] = self._build_alias_map(self._shortlist_reason_codes)
         self._shortlist_selection_lane_alias_map: dict[str, str] = self._build_alias_map(self._shortlist_selection_lanes)
         self._calibration_review_status_alias_map: dict[str, str] = self._build_alias_map(self._calibration_review_statuses)
@@ -126,6 +129,7 @@ class TickerTaxonomyService:
         transmission_conflict_flags = self._load_registry(self._read_json_file(TRANSMISSION_CONFLICT_FLAGS_PATH))
         transmission_biases = self._load_registry(self._read_json_file(TRANSMISSION_BIASES_PATH))
         transmission_context_regimes = self._load_registry(self._read_json_file(TRANSMISSION_CONTEXT_REGIMES_PATH))
+        transmission_windows = self._load_registry(self._read_json_file(TRANSMISSION_WINDOWS_PATH))
         shortlist_reason_codes = self._load_registry(self._read_json_file(SHORTLIST_REASON_CODES_PATH))
         shortlist_selection_lanes = self._load_registry(self._read_json_file(SHORTLIST_SELECTION_LANES_PATH))
         calibration_review_statuses = self._load_registry(self._read_json_file(CALIBRATION_REVIEW_STATUSES_PATH))
@@ -146,6 +150,7 @@ class TickerTaxonomyService:
         self._transmission_conflict_flags = transmission_conflict_flags
         self._transmission_biases = transmission_biases
         self._transmission_context_regimes = transmission_context_regimes
+        self._transmission_windows = transmission_windows
         self._shortlist_reason_codes = shortlist_reason_codes
         self._shortlist_selection_lanes = shortlist_selection_lanes
         self._calibration_review_statuses = calibration_review_statuses
@@ -166,6 +171,7 @@ class TickerTaxonomyService:
         self._transmission_conflict_flag_alias_map = self._build_alias_map(transmission_conflict_flags)
         self._transmission_bias_alias_map = self._build_alias_map(transmission_biases)
         self._transmission_context_regime_alias_map = self._build_alias_map(transmission_context_regimes)
+        self._transmission_window_alias_map = self._build_alias_map(transmission_windows)
         self._shortlist_reason_code_alias_map = self._build_alias_map(shortlist_reason_codes)
         self._shortlist_selection_lane_alias_map = self._build_alias_map(shortlist_selection_lanes)
         self._calibration_review_status_alias_map = self._build_alias_map(calibration_review_statuses)
@@ -196,6 +202,7 @@ class TickerTaxonomyService:
             "transmission_conflict_flags": transmission_conflict_flags,
             "transmission_biases": transmission_biases,
             "transmission_context_regimes": transmission_context_regimes,
+            "transmission_windows": transmission_windows,
             "shortlist_reason_codes": shortlist_reason_codes,
             "shortlist_selection_lanes": shortlist_selection_lanes,
             "calibration_review_statuses": calibration_review_statuses,
@@ -211,7 +218,7 @@ class TickerTaxonomyService:
         }
 
     def _load_monolith_payload(self) -> dict[str, Any]:
-        empty = {"tickers": {}, "industries": {}, "sectors": {}, "relationships": [], "event_vocab": {}, "themes": {}, "macro_channels": {}, "transmission_channels": {}, "transmission_tags": {}, "transmission_primary_drivers": {}, "transmission_conflict_flags": {}, "transmission_biases": {}, "transmission_context_regimes": {}, "shortlist_reason_codes": {}, "shortlist_selection_lanes": {}, "calibration_review_statuses": {}, "calibration_reason_codes": {}, "action_reason_codes": {}, "contradiction_reason_codes": {}, "event_source_priorities": {}, "event_persistence_states": {}, "event_window_hints": {}, "event_recency_buckets": {}, "relationship_types": {}, "relationship_target_kinds": {}}
+        empty = {"tickers": {}, "industries": {}, "sectors": {}, "relationships": [], "event_vocab": {}, "themes": {}, "macro_channels": {}, "transmission_channels": {}, "transmission_tags": {}, "transmission_primary_drivers": {}, "transmission_conflict_flags": {}, "transmission_biases": {}, "transmission_context_regimes": {}, "transmission_windows": {}, "shortlist_reason_codes": {}, "shortlist_selection_lanes": {}, "calibration_review_statuses": {}, "calibration_reason_codes": {}, "action_reason_codes": {}, "contradiction_reason_codes": {}, "event_source_priorities": {}, "event_persistence_states": {}, "event_window_hints": {}, "event_recency_buckets": {}, "relationship_types": {}, "relationship_target_kinds": {}}
         if not TAXONOMY_PATH.exists():
             return empty
         payload = self._read_json_file(TAXONOMY_PATH)
@@ -225,6 +232,7 @@ class TickerTaxonomyService:
         transmission_conflict_flags = self._load_registry(payload.get("_transmission_conflict_flags"))
         transmission_biases = self._load_registry(payload.get("_transmission_biases"))
         transmission_context_regimes = self._load_registry(payload.get("_transmission_context_regimes"))
+        transmission_windows = self._load_registry(payload.get("_transmission_windows"))
         shortlist_reason_codes = self._load_registry(payload.get("_shortlist_reason_codes"))
         shortlist_selection_lanes = self._load_registry(payload.get("_shortlist_selection_lanes"))
         calibration_review_statuses = self._load_registry(payload.get("_calibration_review_statuses"))
@@ -245,6 +253,7 @@ class TickerTaxonomyService:
         self._transmission_conflict_flags = transmission_conflict_flags
         self._transmission_biases = transmission_biases
         self._transmission_context_regimes = transmission_context_regimes
+        self._transmission_windows = transmission_windows
         self._shortlist_reason_codes = shortlist_reason_codes
         self._shortlist_selection_lanes = shortlist_selection_lanes
         self._calibration_review_statuses = calibration_review_statuses
@@ -265,6 +274,7 @@ class TickerTaxonomyService:
         self._transmission_conflict_flag_alias_map = self._build_alias_map(transmission_conflict_flags)
         self._transmission_bias_alias_map = self._build_alias_map(transmission_biases)
         self._transmission_context_regime_alias_map = self._build_alias_map(transmission_context_regimes)
+        self._transmission_window_alias_map = self._build_alias_map(transmission_windows)
         self._shortlist_reason_code_alias_map = self._build_alias_map(shortlist_reason_codes)
         self._shortlist_selection_lane_alias_map = self._build_alias_map(shortlist_selection_lanes)
         self._calibration_review_status_alias_map = self._build_alias_map(calibration_review_statuses)
@@ -295,6 +305,7 @@ class TickerTaxonomyService:
             "transmission_conflict_flags": transmission_conflict_flags,
             "transmission_biases": transmission_biases,
             "transmission_context_regimes": transmission_context_regimes,
+            "transmission_windows": transmission_windows,
             "shortlist_reason_codes": shortlist_reason_codes,
             "shortlist_selection_lanes": shortlist_selection_lanes,
             "calibration_review_statuses": calibration_review_statuses,
@@ -829,6 +840,7 @@ class TickerTaxonomyService:
             "transmission_conflict_flag_count": len(self._transmission_conflict_flags),
             "transmission_bias_count": len(self._transmission_biases),
             "transmission_context_regime_count": len(self._transmission_context_regimes),
+            "transmission_window_count": len(self._transmission_windows),
             "shortlist_reason_code_count": len(self._shortlist_reason_codes),
             "shortlist_selection_lane_count": len(self._shortlist_selection_lanes),
             "calibration_review_status_count": len(self._calibration_review_statuses),
@@ -1032,6 +1044,13 @@ class TickerTaxonomyService:
 
     def list_transmission_context_regime_definitions(self) -> list[dict[str, Any]]:
         return [self.get_transmission_context_regime_definition(key) for key in sorted(self._transmission_context_regimes)]
+
+    def get_transmission_window_definition(self, value: str) -> dict[str, Any]:
+        canonical_key = self._transmission_window_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))
+        return dict(self._transmission_windows.get(canonical_key, {"key": canonical_key, "label": str(value or "").strip().replace("_", " "), "aliases": []}))
+
+    def list_transmission_window_definitions(self) -> list[dict[str, Any]]:
+        return [self.get_transmission_window_definition(key) for key in sorted(self._transmission_windows)]
 
     def derive_transmission_context_regime(self, transmission_summary: dict[str, Any] | None) -> str:
         if not isinstance(transmission_summary, dict):

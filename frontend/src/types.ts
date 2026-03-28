@@ -244,6 +244,7 @@ export interface RecommendationTransmissionSummary {
   ticker_exposure_channels?: string[];
   ticker_exposure_channel_details?: KeyLabelDetail[];
   expected_transmission_window?: string;
+  expected_transmission_window_detail?: KeyLabelDetail;
   conflict_flags?: string[];
   conflict_flag_details?: KeyLabelDetail[];
   decay_state?: string;

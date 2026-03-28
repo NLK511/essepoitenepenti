@@ -14,7 +14,7 @@ import type {
   RecommendationSetupFamilyReviewSummary,
   Run,
 } from "../types";
-import { extractDisplayLabels, formatDate } from "../utils";
+import { detailLabel, extractDisplayLabels, formatDate } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams): string {
   const query = searchParams.toString();
@@ -668,9 +668,10 @@ export function RecommendationPlansPage() {
                   const conflictFlags = extractDisplayLabels(transmissionSummary, "conflict_flag_details", "conflict_flags");
                   const industryExposureChannels = extractDisplayLabels(transmissionSummary, "industry_exposure_channel_details", "industry_exposure_channels");
                   const tickerExposureChannels = extractDisplayLabels(transmissionSummary, "ticker_exposure_channel_details", "ticker_exposure_channels");
-                  const expectedWindow = typeof transmissionSummary?.expected_transmission_window === "string"
-                    ? transmissionSummary.expected_transmission_window
-                    : "unknown";
+                  const expectedWindow = detailLabel(
+                    transmissionSummary?.expected_transmission_window_detail,
+                    typeof transmissionSummary?.expected_transmission_window === "string" ? transmissionSummary.expected_transmission_window : "unknown",
+                  ) ?? "unknown";
                   const effectiveThreshold = typeof calibrationReview?.effective_confidence_threshold === "number"
                     ? calibrationReview.effective_confidence_threshold
                     : null;

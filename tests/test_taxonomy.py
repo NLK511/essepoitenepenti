@@ -19,6 +19,7 @@ from trade_proposer_app.services.taxonomy import (
     TRANSMISSION_CONFLICT_FLAGS_PATH,
     TRANSMISSION_BIASES_PATH,
     TRANSMISSION_CONTEXT_REGIMES_PATH,
+    TRANSMISSION_WINDOWS_PATH,
     SHORTLIST_REASON_CODES_PATH,
     SHORTLIST_SELECTION_LANES_PATH,
     CALIBRATION_REVIEW_STATUSES_PATH,
@@ -61,6 +62,7 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertTrue(TRANSMISSION_CONFLICT_FLAGS_PATH.exists())
         self.assertTrue(TRANSMISSION_BIASES_PATH.exists())
         self.assertTrue(TRANSMISSION_CONTEXT_REGIMES_PATH.exists())
+        self.assertTrue(TRANSMISSION_WINDOWS_PATH.exists())
         self.assertTrue(SHORTLIST_REASON_CODES_PATH.exists())
         self.assertTrue(SHORTLIST_SELECTION_LANES_PATH.exists())
         self.assertTrue(CALIBRATION_REVIEW_STATUSES_PATH.exists())
@@ -87,6 +89,7 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertGreaterEqual(overview["transmission_conflict_flag_count"], 5)
         self.assertGreaterEqual(overview["transmission_bias_count"], 4)
         self.assertGreaterEqual(overview["transmission_context_regime_count"], 6)
+        self.assertGreaterEqual(overview["transmission_window_count"], 5)
         self.assertGreaterEqual(overview["shortlist_reason_code_count"], 6)
         self.assertGreaterEqual(overview["shortlist_selection_lane_count"], 2)
         self.assertGreaterEqual(overview["calibration_review_status_count"], 5)
@@ -135,6 +138,7 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertEqual(service.get_transmission_bias_definition("supportive")["key"], "tailwind")
         self.assertEqual(service.derive_transmission_bias({"context_bias": "supportive"}), "tailwind")
         self.assertEqual(service.get_transmission_context_regime_definition("context_plus_catalyst")["key"], "context_plus_catalyst")
+        self.assertEqual(service.get_transmission_window_definition("2d_5d")["label"], "2d-5d")
         self.assertEqual(service.get_shortlist_reason_definition("below_confidence_threshold")["label"], "below confidence threshold")
         self.assertEqual(service.get_shortlist_selection_lane_definition("catalyst")["key"], "catalyst")
         self.assertEqual(service.get_calibration_review_status_definition("usable_for_gating")["label"], "usable for gating")

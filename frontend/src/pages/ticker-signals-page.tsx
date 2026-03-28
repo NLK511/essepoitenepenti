@@ -4,7 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { TickerSignalSnapshot } from "../types";
-import { extractDisplayLabels, formatDate } from "../utils";
+import { detailLabel, extractDisplayLabels, formatDate } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams): string {
   const query = searchParams.toString();
@@ -123,9 +123,10 @@ export function TickerSignalsPage() {
               const conflictFlags = extractDisplayLabels(signal.diagnostics, "conflict_flag_details", "conflict_flags");
               const industryExposureChannels = extractDisplayLabels(signal.diagnostics, "industry_exposure_channel_details", "industry_exposure_channels");
               const tickerExposureChannels = extractDisplayLabels(signal.diagnostics, "ticker_exposure_channel_details", "ticker_exposure_channels");
-              const expectedWindow = typeof signal.diagnostics.expected_transmission_window === "string"
-                ? signal.diagnostics.expected_transmission_window
-                : "unknown";
+              const expectedWindow = detailLabel(
+                signal.diagnostics.expected_transmission_window_detail,
+                typeof signal.diagnostics.expected_transmission_window === "string" ? signal.diagnostics.expected_transmission_window : "unknown",
+              ) ?? "unknown";
               const transmissionAlignment = typeof signal.diagnostics.transmission_alignment_score === "number"
                 ? signal.diagnostics.transmission_alignment_score
                 : null;

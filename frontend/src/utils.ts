@@ -249,6 +249,16 @@ export function extractKeyLabelDetails(value: unknown): KeyLabelDetail[] {
   return details;
 }
 
+export function detailLabel(detail: unknown, fallback?: string | null): string | null {
+  if (isRecord(detail) && typeof detail.label === "string" && detail.label.trim()) {
+    return detail.label.trim();
+  }
+  if (typeof fallback === "string" && fallback.trim()) {
+    return humanizeKey(fallback.trim());
+  }
+  return null;
+}
+
 export function extractDisplayLabels(
   source: Record<string, unknown> | null | undefined,
   detailKey: string,

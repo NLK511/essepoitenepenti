@@ -719,6 +719,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("ticker_exposure_channel_details", diagnostics_map["AAPL"])
         self.assertIn("transmission_confidence_adjustment", diagnostics_map["AAPL"])
         self.assertEqual(diagnostics_map["AAPL"]["expected_transmission_window"], "2d_5d")
+        self.assertEqual(diagnostics_map["AAPL"]["expected_transmission_window_detail"]["label"], "2d-5d")
         self.assertEqual(diagnostics_map["TSLA"]["mode"], "cheap_scan_only")
         self.assertEqual(diagnostics_map["TSLA"]["shortlist_reasons"], ["below_confidence_threshold", "below_attention_threshold", "below_catalyst_lane_threshold"])
         self.assertEqual(diagnostics_map["TSLA"]["shortlist_reason_details"][0]["label"], "below confidence threshold")

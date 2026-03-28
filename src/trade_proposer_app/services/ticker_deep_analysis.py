@@ -649,6 +649,9 @@ class TickerDeepAnalysisService:
             "ticker_relationship_edges": profile.get("relationship_edges", []) if isinstance(profile.get("relationship_edges"), list) else [],
             "matched_ticker_relationships": matched_ticker_relationships,
             "expected_transmission_window": TickerDeepAnalysisService._expected_transmission_window(catalyst_intensity, macro_score, industry_score, macro_events, industry_events),
+            "expected_transmission_window_detail": self.taxonomy_service.get_transmission_window_definition(
+                TickerDeepAnalysisService._expected_transmission_window(catalyst_intensity, macro_score, industry_score, macro_events, industry_events)
+            ),
             "conflict_flags": conflict_flags,
             "conflict_flag_details": self._conflict_flag_details(conflict_flags),
             "decay_state": decay_state,
