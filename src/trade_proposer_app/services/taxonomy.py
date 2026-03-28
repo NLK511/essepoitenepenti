@@ -319,6 +319,33 @@ class TickerTaxonomyService:
             return [relationship for relationship in relationships if relationship.get("target") == normalized]
         return [relationship for relationship in relationships if relationship.get("source") == normalized or relationship.get("target") == normalized]
 
+    def get_ticker_relationships(self, ticker: str) -> list[dict[str, str]]:
+        profile = self.get_ticker_profile(ticker)
+        relationships: list[dict[str, str]] = []
+        mapping = (
+            ("peers", "peer_of", "competitive_position", "peer read-through and competitive positioning"),
+            ("suppliers", "supplier_to", "supply_chain", "supplier and component dependency"),
+            ("customers", "customer_of", "customer_demand", "customer demand read-through"),
+        )
+        for field, relation_type, channel, note in mapping:
+            for target in self._normalize_ticker_list(profile.get(field)):
+                target_profile = self.get_ticker_profile(target)
+                relationships.append(
+                    {
+                        "source": profile["ticker"],
+                        "source_label": profile.get("company_name", profile["ticker"]),
+                        "type": relation_type,
+                        "target": target,
+                        "target_kind": "ticker",
+                        "target_label": target_profile.get("company_name", target),
+                        "target_industry": target_profile.get("industry", ""),
+                        "channel": channel,
+                        "strength": "medium",
+                        "note": note,
+                    }
+                )
+        return relationships
+
     def taxonomy_overview(self) -> dict[str, Any]:
         return {
             "source_mode": self._source_mode,

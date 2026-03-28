@@ -55,6 +55,7 @@ The redesign path persists these main trade-review objects:
 Important stored fields include:
 - context lifecycle metadata such as `event_lifecycle_summary`, `contradictory_event_labels`, and per-event `persistence_state` / `window_hint`
 - industry-context ontology metadata such as `ontology_profile`, `sector_definition`, `ontology_relationships`, `matched_ontology_relationships`, and `taxonomy_source_mode`
+- ticker-level relationship diagnostics such as `ticker_relationship_edges` and `matched_ticker_relationships` inside deep-analysis `transmission_analysis`
 - ticker transmission fields such as `context_strength_percent`, `context_event_relevance_percent`, `contradiction_count`, `decay_state`, and `transmission_confidence_adjustment`
 - recommendation-plan calibration fields such as `raw_confidence_percent`, `calibrated_confidence_percent`, `confidence_adjustment`, `effective_confidence_threshold`, and sample-status snapshots inside `calibration_review`
 - recommendation-plan action reasons such as `context_transmission_headwind` and `context_transmission_contradiction`

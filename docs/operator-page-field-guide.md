@@ -569,6 +569,8 @@ Industry refresh now pulls from a broader ontology than the old one-name starter
 - **Ontology context**: stored sector/peer/risk/relationship framing for industry snapshots
 - **Diagnostics**: what may have gone wrong or degraded quality
 
+Note: ticker deep-analysis payloads now also carry derived ticker relationship edges such as peers, suppliers, and customers inside the stored transmission diagnostics, even though those are still mainly a raw-detail view rather than a separate top-level card.
+
 This page is intentionally closer to raw storage than the higher-level review pages.
 
 ---

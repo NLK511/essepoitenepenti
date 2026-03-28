@@ -86,6 +86,10 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertTrue(any(item["target"] == "oil_and_gas" and item["type"] == "hurt_by" for item in relationships))
         self.assertTrue(any(item["target"] == "consumer_spending" and item["target_kind"] == "macro_channel" for item in relationships))
 
+        ticker_relationships = service.get_ticker_relationships("AAPL")
+        self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "SONY" for item in ticker_relationships))
+        self.assertTrue(any(item["type"] == "supplier_to" and item["target"] == "TSM" for item in ticker_relationships))
+
     def test_validation_and_report_scripts_pass(self) -> None:
         root = Path(__file__).resolve().parents[1]
         validate = subprocess.run(

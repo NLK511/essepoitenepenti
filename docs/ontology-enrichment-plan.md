@@ -136,9 +136,9 @@ Goal: make the ontology behave more like a real market-structure graph.
 #### Relationship types to support
 - [ ] `belongs_to_sector`
 - [ ] `belongs_to_industry`
-- [ ] `peer_of`
-- [ ] `supplier_to`
-- [ ] `customer_of`
+- [x] `peer_of`
+- [x] `supplier_to`
+- [x] `customer_of`
 - [x] `benefits_from`
 - [x] `hurt_by`
 - [x] `sensitive_to`
@@ -268,8 +268,9 @@ Use this section to note concrete shipped steps.
 - [x] Added explicit industry objects in the ontology data layer, then wired `src/trade_proposer_app/services/taxonomy.py` so industry refresh and query generation can use them directly instead of relying only on ticker-derived labels.
 - [x] Added first-pass relationship modeling for `benefits_from`, `hurt_by`, and `sensitive_to` edges.
 - [x] Started using ontology relationships directly inside `src/trade_proposer_app/services/industry_context.py` so industry context snapshots now store ontology profile metadata, matched transmission edges, taxonomy source mode, and relationship-aware prompt context.
+- [x] Added derived ticker-level relationship edges from ticker profiles in `src/trade_proposer_app/services/taxonomy.py` for `peer_of`, `supplier_to`, and `customer_of`, then surfaced them in ticker deep-analysis transmission diagnostics.
 - [x] Split the active ontology into `src/trade_proposer_app/data/taxonomy/` with separate `tickers.json`, `industries.json`, `sectors.json`, `relationships.json`, and `event_vocab.json` files while keeping `ticker_taxonomy.json` as a backward-compatible fallback.
-- [x] Added baseline taxonomy integrity tests for breadth, multi-region coverage, industry grouping behavior, explicit industry definitions, split-file loading, relationship availability, and relationship-aware context behavior.
+- [x] Added baseline taxonomy integrity tests for breadth, multi-region coverage, industry grouping behavior, explicit industry definitions, split-file loading, relationship availability, relationship-aware context behavior, and ticker-level relationship edges.
 - [x] Added a validation script at `scripts/validate_taxonomy.py`.
 - [x] Added a lightweight review report at `scripts/taxonomy_report.py`.
 

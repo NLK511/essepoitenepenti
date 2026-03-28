@@ -79,6 +79,8 @@ That gives industry refresh and query generation a better base for broader cover
 
 Industry context snapshots now also persist matched ontology relationships in their metadata so operator-facing summaries and detail views can show which stored transmission edges were actually relevant to the current evidence.
 
+Ticker deep analysis also derives ticker-level `peer_of`, `supplier_to`, and `customer_of` edges from the taxonomy profile. Those edges are stored in transmission diagnostics so trade review can show more than just abstract macro/industry pressure.
+
 If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings. Transitional support snapshots still support that shared-artifact layer and freshness reporting.
 
 ### 3. News ingestion and live ticker sentiment

@@ -149,6 +149,7 @@ class TickerDeepAnalysisService:
     def _apply_taxonomy_profile(self, context: dict[str, Any], ticker: str) -> dict[str, Any]:
         profile = context.get("ticker_profile") if isinstance(context.get("ticker_profile"), dict) else {}
         merged = {**self.taxonomy_service.get_ticker_profile(ticker), **profile}
+        merged["relationship_edges"] = self.taxonomy_service.get_ticker_relationships(ticker)
         context["ticker_profile"] = merged
         return context
 
@@ -578,6 +579,7 @@ class TickerDeepAnalysisService:
             keywords=TickerDeepAnalysisService._profile_industry_keywords(profile),
         )
         contradiction_count = TickerDeepAnalysisService._context_contradiction_count(context, macro_events, industry_events)
+        matched_ticker_relationships = TickerDeepAnalysisService._matched_ticker_relationships(context, profile, macro_events, industry_events)
         freshness_bonus = TickerDeepAnalysisService._freshness_bonus(macro_events, industry_events)
         contradiction_penalty = min(12.0, contradiction_count * 4.0)
         alignment_percent = max(
@@ -632,6 +634,8 @@ class TickerDeepAnalysisService:
             "primary_drivers": primary_drivers,
             "industry_exposure_channels": TickerDeepAnalysisService._industry_exposure_channels(macro_score, industry_score, macro_events, industry_events, profile),
             "ticker_exposure_channels": TickerDeepAnalysisService._ticker_exposure_channels(ticker_score, catalyst_intensity, profile, macro_events, industry_events),
+            "ticker_relationship_edges": profile.get("relationship_edges", []) if isinstance(profile.get("relationship_edges"), list) else [],
+            "matched_ticker_relationships": matched_ticker_relationships,
             "expected_transmission_window": TickerDeepAnalysisService._expected_transmission_window(catalyst_intensity, macro_score, industry_score, macro_events, industry_events),
             "conflict_flags": conflict_flags,
             "decay_state": decay_state,
@@ -728,6 +732,60 @@ class TickerDeepAnalysisService:
             elif recency == "recent":
                 bonus += 1.0
         return min(8.0, bonus)
+
+    @staticmethod
+    def _matched_ticker_relationships(
+        context: dict[str, Any],
+        profile: dict[str, Any],
+        macro_events: list[dict[str, Any]],
+        industry_events: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        raw_edges = profile.get("relationship_edges") if isinstance(profile.get("relationship_edges"), list) else []
+        if not raw_edges:
+            return []
+        active_channels = {
+            str(channel).strip().lower()
+            for event in macro_events + industry_events
+            for channel in (event.get("transmission_channels") if isinstance(event.get("transmission_channels"), list) else [])
+            if str(channel).strip()
+        }
+        ontology_relationships = (
+            context.get("industry_context_metadata", {}).get("matched_ontology_relationships", [])
+            if isinstance(context.get("industry_context_metadata"), dict)
+            else []
+        )
+        ontology_channels = {
+            str(item.get("channel", "")).strip().lower()
+            for item in ontology_relationships
+            if isinstance(item, dict) and str(item.get("channel", "")).strip()
+        }
+        evidence_text = " ".join(
+            str(item.get("title", "") or "") + " " + str(item.get("summary", "") or "")
+            for item in (context.get("news_items") if isinstance(context.get("news_items"), list) else [])
+            if isinstance(item, dict)
+        ).lower()
+        matched: list[dict[str, Any]] = []
+        for edge in raw_edges:
+            if not isinstance(edge, dict):
+                continue
+            channel = str(edge.get("channel", "")).strip().lower()
+            target = str(edge.get("target", "")).strip().lower()
+            target_label = str(edge.get("target_label", "")).strip().lower()
+            target_industry = str(edge.get("target_industry", "")).strip().lower()
+            relevance = 0
+            if channel and (channel in active_channels or channel in ontology_channels):
+                relevance += 1
+            if target and target in evidence_text:
+                relevance += 1
+            if target_label and target_label in evidence_text:
+                relevance += 1
+            if target_industry and target_industry in evidence_text:
+                relevance += 1
+            if relevance <= 0:
+                continue
+            matched.append({**edge, "relevance_hits": relevance})
+        matched.sort(key=lambda item: int(item.get("relevance_hits", 0)), reverse=True)
+        return matched[:6]
 
     @staticmethod
     def _transmission_tags(

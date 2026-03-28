@@ -39,7 +39,7 @@ class StubProposalService:
             "problems": [],
             "summary_text": "AI demand and momentum remain supportive.",
             "summary_method": "digest",
-            "news_items": [{"title": "AI demand supports the group"}],
+            "news_items": [{"title": "AI demand supports the group while suppliers keep the supply chain tight"}],
             "news_feeds_used": ["stub_news"],
             "source_count": 1,
             "news_point_count": 4,
@@ -81,7 +81,7 @@ class StubProposalService:
                     "persistence_state": "escalating",
                     "recency_bucket": "fresh",
                     "window_hint": "2d_5d",
-                    "transmission_channels": ["theme_attention", "compute_demand"],
+                    "transmission_channels": ["theme_attention", "compute_demand", "supply_chain"],
                     "regime_tags": ["industry_dominant"],
                     "contradiction_flag": False,
                 }
@@ -112,6 +112,11 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         self.assertIn("conflict_flags", payload["ticker_deep_analysis"]["transmission_analysis"])
         self.assertIn("context_strength_percent", payload["ticker_deep_analysis"]["transmission_analysis"])
         self.assertIn("context_event_relevance_percent", payload["ticker_deep_analysis"]["transmission_analysis"])
+        self.assertIn("ticker_relationship_edges", payload["ticker_deep_analysis"]["transmission_analysis"])
+        self.assertIn("matched_ticker_relationships", payload["ticker_deep_analysis"]["transmission_analysis"])
+        self.assertTrue(payload["ticker_deep_analysis"]["transmission_analysis"]["ticker_relationship_edges"])
+        self.assertTrue(payload["ticker_deep_analysis"]["transmission_analysis"]["matched_ticker_relationships"])
+        self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["matched_ticker_relationships"][0]["type"], "supplier_to")
         self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["expected_transmission_window"], "2d_5d")
         self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["decay_state"], "fresh")
         self.assertEqual(payload["summary"]["method"], "digest")
