@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { deleteJson, getJson } from "../api";
+import {
+  matchedRelationshipsFromPlan,
+  relationshipSummary,
+  storedRelationshipEdgesFromPlan,
+  TickerRelationshipReadthroughCard,
+} from "../components/ticker-relationship-readthrough";
 import { WorkflowRunResults } from "../components/workflow-run-results";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
@@ -72,21 +78,6 @@ function contextProvenanceLabel(metadata: unknown): string {
     return `LLM · ${contextSummaryBackend(metadata)}${model !== "—" ? ` · ${model}` : ""}`;
   }
   return `fallback · ${contextSummaryBackend(metadata)}`;
-}
-
-function relationshipItems(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => isRecord(item)) : [];
-}
-
-function relationshipLabel(item: Record<string, unknown>): string {
-  const relationType = typeof item.type === "string" ? item.type.split("_").join(" ") : "relationship";
-  const target = typeof item.target === "string"
-    ? item.target
-    : typeof item.target_label === "string"
-      ? item.target_label
-      : "target";
-  const channel = typeof item.channel === "string" ? item.channel.split("_").join(" ") : null;
-  return channel ? `${relationType} · ${target} · ${channel}` : `${relationType} · ${target}`;
 }
 
 export function RunDetailPage() {
@@ -551,8 +542,6 @@ export function RunDetailPage() {
                             const expectedWindow = typeof transmissionSummary?.expected_transmission_window === "string"
                               ? transmissionSummary.expected_transmission_window
                               : "unknown";
-                            const matchedTickerRelationships = relationshipItems(transmissionSummary?.matched_ticker_relationships);
-                            const tickerRelationshipEdges = relationshipItems(transmissionSummary?.ticker_relationship_edges);
                             const setupFamily = typeof signalBreakdown?.setup_family === "string" ? signalBreakdown.setup_family : null;
                             const actionReason = typeof evidenceSummary?.action_reason === "string" ? evidenceSummary.action_reason : null;
                             const actionReasonDetail = typeof evidenceSummary?.action_reason_detail === "string" ? evidenceSummary.action_reason_detail : null;
@@ -602,7 +591,7 @@ export function RunDetailPage() {
                                   <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
                                   <div className="helper-text">window {expectedWindow}</div>
                                   <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
-                                  <div className="helper-text">ticker relationships {matchedTickerRelationships.length > 0 ? matchedTickerRelationships.slice(0, 2).map((item) => relationshipLabel(item)).join(" · ") : tickerRelationshipEdges.length > 0 ? `${tickerRelationshipEdges.length} stored` : "none"}</div>
+                                  <div className="helper-text">ticker relationships {relationshipSummary(plan)}</div>
                                   <div className="helper-text">conflicts {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
                                   <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
                                 </td>
@@ -629,6 +618,23 @@ export function RunDetailPage() {
                         </tbody>
                       </table>
                     </div>
+                    {detail.recommendation_plans.some((plan) => matchedRelationshipsFromPlan(plan).length > 0 || storedRelationshipEdgesFromPlan(plan).length > 0) ? (
+                      <div className="insight-grid top-gap-small">
+                        {detail.recommendation_plans
+                          .filter((plan) => matchedRelationshipsFromPlan(plan).length > 0 || storedRelationshipEdgesFromPlan(plan).length > 0)
+                          .slice(0, 3)
+                          .map((plan) => (
+                            <TickerRelationshipReadthroughCard
+                              key={`relationship-${plan.id ?? `${plan.ticker}-${plan.computed_at}`}`}
+                              title={`${plan.ticker} read-through`}
+                              subtitle={`${plan.action} · ${plan.horizon} · ${relationshipSummary(plan)}`}
+                              matched={matchedRelationshipsFromPlan(plan)}
+                              storedEdges={storedRelationshipEdgesFromPlan(plan)}
+                              emptyMessage="No ticker relationship read-through was stored for this plan."
+                            />
+                          ))}
+                      </div>
+                    ) : null}
                   </section>
                 ) : null}
 

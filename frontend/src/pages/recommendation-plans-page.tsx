@@ -2,7 +2,8 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
+import { relationshipSummary } from "../components/ticker-relationship-readthrough";
+import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import type {
   IndustryContextSnapshot,
   MacroContextSnapshot,
@@ -54,21 +55,6 @@ function sampleTone(status: string): "ok" | "warning" | "neutral" {
   return "neutral";
 }
 
-function relationshipItems(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => !!item && typeof item === "object" && !Array.isArray(item)) : [];
-}
-
-function relationshipLabel(item: Record<string, unknown>): string {
-  const relationType = typeof item.type === "string" ? item.type.split("_").join(" ") : "relationship";
-  const target = typeof item.target === "string"
-    ? item.target
-    : typeof item.target_label === "string"
-      ? item.target_label
-      : "target";
-  const channel = typeof item.channel === "string" ? item.channel.split("_").join(" ") : null;
-  return channel ? `${relationType} · ${target} · ${channel}` : `${relationType} · ${target}`;
-}
-
 function calibrationSliceSummary(calibrationReview: Record<string, unknown> | null, key: string): string {
   const item = asRecord(calibrationReview?.[key]);
   if (!item) {
@@ -115,10 +101,27 @@ function contextProvenanceLabel(snapshot: MacroContextSnapshot | IndustryContext
   return `fallback · ${contextSummaryBackend(snapshot)}`;
 }
 
+function docsLink(doc: string, section?: string): string {
+  const params = new URLSearchParams({ doc });
+  if (section) {
+    params.set("section", section);
+  }
+  return `/docs?${params.toString()}`;
+}
+
+function HelpLabel({ label, tooltip, to }: { label: string; tooltip: string; to: string }) {
+  return (
+    <span className="help-label">
+      <span>{label}</span>
+      <HelpHint tooltip={tooltip} to={to} ariaLabel={`${label}. ${tooltip}. Open documentation.`} />
+    </span>
+  );
+}
+
 function CalibrationBucketTable({ title, buckets }: { title: string; buckets: RecommendationCalibrationSummary["by_confidence_bucket"] }) {
   return (
     <div className="top-gap">
-      <SectionTitle title={title} />
+      <SectionTitle title={title} actions={<HelpHint tooltip="Grouped calibration view for this slice: sample size, win rate, and average 5-day return." to={docsLink("glossary")} />} />
       <div className="table-wrap">
         <table>
           <thead>
@@ -323,7 +326,7 @@ export function RecommendationPlansPage() {
       </section>
 
       <Card className="sticky-toolbar">
-        <SectionTitle kicker="Filters" title="Find recommendation plans" subtitle="Start with ticker, run, or setup family. Then use the review sections below to judge whether the resulting plans deserve attention." />
+        <SectionTitle kicker="Filters" title="Find recommendation plans" subtitle="Start with ticker, run, or setup family. Then use the review sections below to judge whether the resulting plans deserve attention." actions={<HelpHint tooltip="Use filters to narrow the recommendation-plan review set before comparing calibration, baselines, and evidence." to={docsLink("operator-page-field-guide")} />} />
         <form className="form-grid" onSubmit={handleSubmit}>
           <label className="form-field"><span>Ticker</span><input name="ticker" defaultValue={searchParams.get("ticker") ?? ""} placeholder="AAPL" /></label>
           <label className="form-field"><span>Action</span><select name="action" defaultValue={searchParams.get("action") ?? ""}><option value="">All</option><option value="long">long</option><option value="short">short</option><option value="no_action">no_action</option></select></label>
@@ -339,6 +342,7 @@ export function RecommendationPlansPage() {
           kicker="Review workspace"
           title="Choose what to review"
           subtitle="Keep one review task visible at a time to reduce noise: start with the overview, then move into calibration, baselines, evidence, or family-specific analysis."
+          actions={<HelpHint tooltip="Each tab answers a different operator question: trust, comparison, evidence concentration, or family-specific behavior." to={docsLink("operator-page-field-guide")} />}
         />
         <SegmentedTabs
           value={reviewSection}
@@ -355,12 +359,12 @@ export function RecommendationPlansPage() {
 
       {reviewSection === "overview" ? (
         <Card className="top-gap">
-          <SectionTitle title="Review overview" subtitle="A compact summary of what matters before reading the detailed tables." />
+          <SectionTitle title="Review overview" subtitle="A compact summary of what matters before reading the detailed tables." actions={<HelpHint tooltip="High-level posture for recommendation plans: calibration trust, baseline comparisons, and where evidence is strongest or weakest." to={docsLink("operator-page-field-guide")} />} />
           <div className="insight-grid top-gap-small">
             <div className="data-card">
               <div className="data-card-header">
                 <div>
-                  <h3 className="data-card-title">Calibration posture</h3>
+                  <h3 className="data-card-title"><HelpLabel label="Calibration posture" tooltip="Shows whether stored outcomes are sufficient to trust current confidence and threshold behavior." to={docsLink("glossary")} /></h3>
                   <div className="helper-text">Use this to judge whether current confidence levels deserve trust.</div>
                 </div>
                 <Badge tone={calibration && calibration.resolved_outcomes >= 10 ? "ok" : "warning"}>{calibration?.resolved_outcomes ?? 0} resolved</Badge>
@@ -374,7 +378,7 @@ export function RecommendationPlansPage() {
             <div className="data-card">
               <div className="data-card-header">
                 <div>
-                  <h3 className="data-card-title">Baseline reality check</h3>
+                  <h3 className="data-card-title"><HelpLabel label="Baseline reality check" tooltip="Compares actual recommendation-plan outcomes against simpler cohorts to see whether added complexity is helping." to={docsLink("operator-page-field-guide")} /></h3>
                   <div className="helper-text">Compare actual plan behavior against simpler cohorts before trusting complexity.</div>
                 </div>
                 <Badge tone="info">{baselines?.total_trade_plans_reviewed ?? 0} trades</Badge>
@@ -388,7 +392,7 @@ export function RecommendationPlansPage() {
             <div className="data-card">
               <div className="data-card-header">
                 <div>
-                  <h3 className="data-card-title">Evidence concentration</h3>
+                  <h3 className="data-card-title"><HelpLabel label="Evidence concentration" tooltip="Shows where measured edge is concentrated so operators know whether to stay selective or broaden usage." to={docsLink("glossary")} /></h3>
                   <div className="helper-text">Shows whether the app should stay selective or is ready to broaden usage.</div>
                 </div>
                 <Badge tone={evidenceConcentration?.ready_for_expansion ? "ok" : "warning"}>{evidenceConcentration?.ready_for_expansion ? "ready" : "focus"}</Badge>
@@ -409,6 +413,7 @@ export function RecommendationPlansPage() {
         <SectionTitle
           title="Calibration snapshot"
           subtitle={calibration ? `Resolved ${calibration.resolved_outcomes} of ${calibration.total_outcomes} stored outcome(s)` : undefined}
+          actions={<HelpHint tooltip="Review how confidence buckets and slices have actually behaved after outcomes resolved." to={docsLink("recommendation-methodology")} />}
         />
         {!calibration && !error ? <LoadingState message="Loading calibration summary…" /> : null}
         {calibration ? (
@@ -435,6 +440,7 @@ export function RecommendationPlansPage() {
         <SectionTitle
           title="Baseline comparisons"
           subtitle={baselines ? `Reviewed ${baselines.total_trade_plans_reviewed} trade plan(s) across ${baselines.total_plans_reviewed} total plan(s)` : undefined}
+          actions={<HelpHint tooltip="Compare live plan behavior against simpler heuristic cohorts before trusting the full workflow." to={docsLink("operator-page-field-guide")} />}
         />
         {!baselines && !error ? <LoadingState message="Loading baseline comparisons…" /> : null}
         {baselines ? (
@@ -471,6 +477,7 @@ export function RecommendationPlansPage() {
             <SectionTitle
               title="Setup-family cohorts"
               subtitle="Directly compare breakout, continuation, mean-reversion, breakdown, catalyst, and macro cohorts without relying only on shared calibration slices."
+              actions={<HelpHint tooltip="Family-specific cohorts help show whether one setup type is carrying most of the measured performance." to={docsLink("glossary")} />}
             />
             <div className="table-wrap top-gap-small">
               <table>
@@ -513,6 +520,7 @@ export function RecommendationPlansPage() {
         <SectionTitle
           title="Evidence concentration"
           subtitle={evidenceConcentration ? `Resolved ${evidenceConcentration.resolved_outcomes_reviewed} of ${evidenceConcentration.total_outcomes_reviewed} reviewed outcomes` : undefined}
+          actions={<HelpHint tooltip="Shows where measured results are concentrated so operators can see which cohorts deserve the most trust." to={docsLink("glossary")} />}
         />
         {!evidenceConcentration && !error ? <LoadingState message="Loading evidence concentration…" /> : null}
         {evidenceConcentration ? (
@@ -523,7 +531,7 @@ export function RecommendationPlansPage() {
               <Card><strong>{evidenceConcentration.ready_for_expansion ? "yes" : "not yet"}</strong><div className="helper-text">ready for broader concentration</div></Card>
             </div>
             <div className="helper-text top-gap-small">{evidenceConcentration.focus_message}</div>
-            <SectionTitle title="Strongest positive cohorts" />
+            <SectionTitle title="Strongest positive cohorts" actions={<HelpHint tooltip="These are the best-performing measured cohorts versus the overall review set." to={docsLink("recommendation-methodology")} />} />
             <div className="table-wrap top-gap-small">
               <table>
                 <thead>
@@ -550,7 +558,7 @@ export function RecommendationPlansPage() {
                 </tbody>
               </table>
             </div>
-            <SectionTitle title="Weakest cohorts" />
+            <SectionTitle title="Weakest cohorts" actions={<HelpHint tooltip="These cohorts have the weakest measured results and often deserve stricter skepticism or gating." to={docsLink("recommendation-methodology")} />} />
             <div className="table-wrap top-gap-small">
               <table>
                 <thead>
@@ -587,6 +595,7 @@ export function RecommendationPlansPage() {
         <SectionTitle
           title="Setup-family evaluation review"
           subtitle={familyReview ? `Built from ${familyReview.total_outcomes_reviewed} stored outcome(s) across the current filters` : undefined}
+          actions={<HelpHint tooltip="Breaks evaluation down by setup family so you can see whether breakout, continuation, catalyst, or other families behave differently." to={docsLink("operator-page-field-guide")} />}
         />
         {!familyReview && !error ? <LoadingState message="Loading setup-family review…" /> : null}
         {familyReview ? (
@@ -614,7 +623,7 @@ export function RecommendationPlansPage() {
       ) : null}
 
       <Card className="top-gap">
-        <SectionTitle title="Results" subtitle={plans ? `${plans.length} recommendation plan(s)` : undefined} />
+        <SectionTitle title="Results" subtitle={plans ? `${plans.length} recommendation plan(s)` : undefined} actions={<HelpHint tooltip="The main recommendation-plan table: review action, confidence, execution framing, transmission, outcomes, and thesis together." to={docsLink("operator-page-field-guide")} />} />
         {!plans && !error ? <LoadingState message="Loading recommendation plans…" /> : null}
         {plans && plans.length === 0 ? <EmptyState message="No recommendation plans match the current filters." /> : null}
         {plans ? (
@@ -622,15 +631,15 @@ export function RecommendationPlansPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Computed</th>
-                  <th>Ticker</th>
-                  <th>Action</th>
-                  <th>Confidence</th>
-                  <th>Execution</th>
-                  <th>Transmission</th>
-                  <th>Latest outcome</th>
-                  <th>Thesis</th>
-                  <th>Run</th>
+                  <th><HelpLabel label="Computed" tooltip="When this recommendation plan was persisted." to={docsLink("glossary")} /></th>
+                  <th><HelpLabel label="Ticker" tooltip="The instrument the plan is about, along with status, horizon, and setup family context." to={docsLink("operator-page-field-guide")} /></th>
+                  <th><HelpLabel label="Action" tooltip="The final recommendation state: long, short, watchlist, or no_action." to={docsLink("glossary")} /></th>
+                  <th><HelpLabel label="Confidence" tooltip="Evidence-weighted plan trust, including raw confidence, calibration adjustment, and gating threshold." to={docsLink("glossary")} /></th>
+                  <th><HelpLabel label="Execution" tooltip="How the trade is framed: entry zone, stop, take profit, and timing expectations." to={docsLink("operator-page-field-guide")} /></th>
+                  <th><HelpLabel label="Transmission" tooltip="How macro and industry context is expected to carry through to this ticker setup." to={docsLink("glossary")} /></th>
+                  <th><HelpLabel label="Latest outcome" tooltip="The most recent stored evaluation result for this plan, if one exists." to={docsLink("operator-page-field-guide")} /></th>
+                  <th><HelpLabel label="Thesis" tooltip="The summary of why the plan exists, what could invalidate it, and what to focus on during review." to={docsLink("recommendation-methodology")} /></th>
+                  <th><HelpLabel label="Run" tooltip="The workflow run that produced this plan." to={docsLink("operator-page-field-guide")} /></th>
                 </tr>
               </thead>
               <tbody>
@@ -664,8 +673,6 @@ export function RecommendationPlansPage() {
                   const expectedWindow = typeof transmissionSummary?.expected_transmission_window === "string"
                     ? transmissionSummary.expected_transmission_window
                     : "unknown";
-                  const matchedTickerRelationships = relationshipItems(transmissionSummary?.matched_ticker_relationships);
-                  const tickerRelationshipEdges = relationshipItems(transmissionSummary?.ticker_relationship_edges);
                   const effectiveThreshold = typeof calibrationReview?.effective_confidence_threshold === "number"
                     ? calibrationReview.effective_confidence_threshold
                     : null;
@@ -731,7 +738,7 @@ export function RecommendationPlansPage() {
                         <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
                         <div className="helper-text">window {expectedWindow}</div>
                         <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
-                        <div className="helper-text">ticker relationships {matchedTickerRelationships.length > 0 ? matchedTickerRelationships.slice(0, 2).map((item) => relationshipLabel(item)).join(" · ") : tickerRelationshipEdges.length > 0 ? `${tickerRelationshipEdges.length} stored` : "none"}</div>
+                        <div className="helper-text">ticker relationships {relationshipSummary(plan)}</div>
                         <div className="helper-text">conflicts {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
                         <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
                       </td>

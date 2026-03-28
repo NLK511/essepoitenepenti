@@ -85,6 +85,8 @@ Watchlist orchestration now carries the matched ticker relationships into stored
 
 The same matched relationship set now feeds plan explanation text too. Rationale, action-reason detail, invalidation, and risk text can mention ticker relationship read-through, but only when the relationship was actually matched against the active evidence rather than just existing in the stored taxonomy.
 
+Operator review surfaces now also have a dedicated relationship read-through presentation path. Instead of only seeing a compact helper-text line, the ticker page and run-detail plan review can show the matched relationships themselves, with stored-edge fallback when nothing matched strongly enough.
+
 If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings. Transitional support snapshots still support that shared-artifact layer and freshness reporting.
 
 ### 3. News ingestion and live ticker sentiment

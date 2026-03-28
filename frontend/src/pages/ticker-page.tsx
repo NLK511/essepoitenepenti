@@ -2,28 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { getJson } from "../api";
+import {
+  matchedRelationshipsFromPlan,
+  relationshipSummary,
+  storedRelationshipEdgesFromPlan,
+  TickerRelationshipReadthroughCard,
+} from "../components/ticker-relationship-readthrough";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import type { TickerAnalysisPage as TickerAnalysisPageData } from "../types";
 import { formatDate } from "../utils";
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
-}
-
-function relationshipItems(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => !!item && typeof item === "object" && !Array.isArray(item)) : [];
-}
-
-function relationshipLabel(item: Record<string, unknown>): string {
-  const relationType = typeof item.type === "string" ? item.type.split("_").join(" ") : "relationship";
-  const target = typeof item.target === "string"
-    ? item.target
-    : typeof item.target_label === "string"
-      ? item.target_label
-      : "target";
-  const channel = typeof item.channel === "string" ? item.channel.split("_").join(" ") : null;
-  return channel ? `${relationType} · ${target} · ${channel}` : `${relationType} · ${target}`;
-}
 
 export function TickerPage() {
   const { ticker } = useParams<{ ticker: string }>();
@@ -48,11 +35,8 @@ export function TickerPage() {
   }, [ticker]);
 
   const latestPlan = useMemo(() => data?.recommendation_plans[0] ?? null, [data]);
-  const latestSignalBreakdown = asRecord(latestPlan?.signal_breakdown);
-  const latestEvidenceSummary = asRecord(latestPlan?.evidence_summary);
-  const latestTransmissionSummary = asRecord(latestSignalBreakdown?.transmission_summary) ?? asRecord(latestEvidenceSummary?.transmission_summary);
-  const latestMatchedTickerRelationships = relationshipItems(latestTransmissionSummary?.matched_ticker_relationships);
-  const latestTickerRelationshipEdges = relationshipItems(latestTransmissionSummary?.ticker_relationship_edges);
+  const latestMatchedTickerRelationships = latestPlan ? matchedRelationshipsFromPlan(latestPlan) : [];
+  const latestTickerRelationshipEdges = latestPlan ? storedRelationshipEdgesFromPlan(latestPlan) : [];
 
   return (
     <>
@@ -122,13 +106,22 @@ export function TickerPage() {
                     </div>
                     <div className="helper-text">{latestPlan.thesis_summary || latestPlan.rationale_summary || "No thesis summary stored."}</div>
                     <div className="helper-text">Entry {latestPlan.entry_price_low ?? latestPlan.entry_price_high ?? "—"} · Stop {latestPlan.stop_loss ?? "—"} · Take profit {latestPlan.take_profit ?? "—"}</div>
-                    <div className="helper-text">Ticker relationships {latestMatchedTickerRelationships.length > 0 ? latestMatchedTickerRelationships.slice(0, 2).map((item) => relationshipLabel(item)).join(" · ") : latestTickerRelationshipEdges.length > 0 ? `${latestTickerRelationshipEdges.length} stored` : "none"}</div>
+                    <div className="helper-text">Ticker relationships {relationshipSummary(latestPlan ?? {})}</div>
                     <div className="helper-text">Latest outcome {latestPlan.latest_outcome?.outcome ?? "open"}</div>
                   </div>
                 ) : (
                   <EmptyState message="No plans stored for this ticker yet." />
                 )}
               </Card>
+              {latestPlan ? (
+                <TickerRelationshipReadthroughCard
+                  title="Latest matched ticker relationships"
+                  subtitle="Use this as secondary read-through. It should explain why peer, supplier, or customer structure mattered for the latest stored plan."
+                  matched={latestMatchedTickerRelationships}
+                  storedEdges={latestTickerRelationshipEdges}
+                  emptyMessage="No ticker relationship read-through was stored for the latest plan yet."
+                />
+              ) : null}
             </section>
           ) : null}
 
@@ -138,12 +131,9 @@ export function TickerPage() {
               {data.recommendation_plans.length === 0 ? <EmptyState message="No recommendation plans are stored for this ticker yet." /> : (
                 <div className="data-stack top-gap-small">
                   {data.recommendation_plans.map((item) => {
-                    const signalBreakdown = asRecord(item.signal_breakdown);
-                    const evidenceSummary = asRecord(item.evidence_summary);
-                    const transmissionSummary = asRecord(signalBreakdown?.transmission_summary) ?? asRecord(evidenceSummary?.transmission_summary);
-                    const matchedTickerRelationships = relationshipItems(transmissionSummary?.matched_ticker_relationships);
-                    const tickerRelationshipEdges = relationshipItems(transmissionSummary?.ticker_relationship_edges);
-                    const setupFamily = typeof signalBreakdown?.setup_family === "string" ? signalBreakdown.setup_family : "—";
+                    const setupFamily = typeof item.signal_breakdown === "object" && item.signal_breakdown !== null && !Array.isArray(item.signal_breakdown) && typeof (item.signal_breakdown as Record<string, unknown>).setup_family === "string"
+                      ? (item.signal_breakdown as Record<string, unknown>).setup_family as string
+                      : "—";
                     return (
                       <article key={`${item.id}-${item.computed_at}`} className="data-card">
                         <div className="data-card-header">
@@ -163,7 +153,7 @@ export function TickerPage() {
                           </div>
                         </div>
                         <div className="helper-text">{item.thesis_summary || item.rationale_summary || "No thesis summary stored."}</div>
-                        <div className="helper-text top-gap-small">ticker relationships {matchedTickerRelationships.length > 0 ? matchedTickerRelationships.slice(0, 2).map((relationship) => relationshipLabel(relationship)).join(" · ") : tickerRelationshipEdges.length > 0 ? `${tickerRelationshipEdges.length} stored` : "none"}</div>
+                        <div className="helper-text top-gap-small">ticker relationships {relationshipSummary(item)}</div>
                         <div className="data-points top-gap-small">
                           <div className="data-point"><span className="data-point-label">entry</span><span className="data-point-value">{item.entry_price_low ?? item.entry_price_high ?? "—"}{item.entry_price_high && item.entry_price_low && item.entry_price_high !== item.entry_price_low ? ` to ${item.entry_price_high}` : ""}</span></div>
                           <div className="data-point"><span className="data-point-label">stop</span><span className="data-point-value">{item.stop_loss ?? "—"}</span></div>
