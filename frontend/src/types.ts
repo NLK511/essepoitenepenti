@@ -250,7 +250,9 @@ export interface RecommendationPlanOutcome {
   setup_family: string;
   horizon: string | null;
   transmission_bias: string | null;
+  transmission_bias_label: string | null;
   context_regime: string | null;
+  context_regime_label: string | null;
   notes: string;
   run_id: number | null;
 }
@@ -286,6 +288,8 @@ export interface RecommendationPlan {
 export interface RecommendationCalibrationBucket {
   key: string;
   label: string;
+  slice_name: string;
+  slice_label: string;
   total_count: number;
   resolved_count: number;
   win_count: number;

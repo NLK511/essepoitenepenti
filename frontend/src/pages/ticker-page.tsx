@@ -108,6 +108,7 @@ export function TickerPage() {
                     <div className="helper-text">Entry {latestPlan.entry_price_low ?? latestPlan.entry_price_high ?? "—"} · Stop {latestPlan.stop_loss ?? "—"} · Take profit {latestPlan.take_profit ?? "—"}</div>
                     <div className="helper-text">Ticker relationships {relationshipSummary(latestPlan ?? {})}</div>
                     <div className="helper-text">Latest outcome {latestPlan.latest_outcome?.outcome ?? "open"}</div>
+                    <div className="helper-text">Bias {latestPlan.latest_outcome?.transmission_bias_label ?? latestPlan.latest_outcome?.transmission_bias ?? "—"} · Regime {latestPlan.latest_outcome?.context_regime_label ?? latestPlan.latest_outcome?.context_regime ?? "—"}</div>
                   </div>
                 ) : (
                   <EmptyState message="No plans stored for this ticker yet." />
@@ -159,6 +160,7 @@ export function TickerPage() {
                           <div className="data-point"><span className="data-point-label">stop</span><span className="data-point-value">{item.stop_loss ?? "—"}</span></div>
                           <div className="data-point"><span className="data-point-label">take profit</span><span className="data-point-value">{item.take_profit ?? "—"}</span></div>
                           <div className="data-point"><span className="data-point-label">outcome note</span><span className="data-point-value">{item.latest_outcome?.notes || (item.warnings.length > 0 ? `${item.warnings.length} warning(s)` : "—")}</span></div>
+                          <div className="data-point"><span className="data-point-label">analytics</span><span className="data-point-value">{item.latest_outcome ? `${item.latest_outcome.transmission_bias_label ?? item.latest_outcome.transmission_bias ?? "—"} · ${item.latest_outcome.context_regime_label ?? item.latest_outcome.context_regime ?? "—"}` : "—"}</span></div>
                         </div>
                       </article>
                     );

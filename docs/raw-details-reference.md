@@ -66,6 +66,8 @@ Important stored fields include:
 - watchlist ticker-signal diagnostics and source-breakdown payloads can now also carry those governed detail arrays, plus `industry_exposure_channel_details` and `ticker_exposure_channel_details`, so frontend views do not have to guess labels from raw keys
 - macro and industry context event rows can now also carry `transmission_channel_details`, and industry `ontology_profile` metadata can carry profile-level `transmission_channel_details` too
 - recommendation outcome analytics now also rely on governed transmission-bias and transmission-context-regime registries when deriving fields like `transmission_bias` and `context_regime` for calibration and setup-family review slices
+- stored `RecommendationPlanOutcome` payloads can now also carry `transmission_bias_label` and `context_regime_label` alongside canonical analytics keys
+- calibration and setup-family-review bucket rows can now carry `slice_name` and `slice_label` alongside `key` and `label`
 - evidence-concentration cohorts can now include `slice_label` alongside canonical `slice_name`, plus the existing cohort `key` and `label`
 - event-key detail still persists separately via fields like `macro_event_keys` and `industry_event_keys` instead of being overloaded into governed tag/driver lists
 - industry snapshot resolution can now backfill baseline taxonomy metadata such as `ontology_profile`, `sector_definition`, and `ontology_relationships` even when no fresh industry context snapshot is available yet

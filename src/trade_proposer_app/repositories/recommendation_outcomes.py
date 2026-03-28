@@ -121,7 +121,9 @@ class RecommendationOutcomeRepository:
         model.horizon = plan_record.horizon
         transmission_summary = self._transmission_summary(plan_record)
         model.transmission_bias = self.taxonomy_service.derive_transmission_bias(transmission_summary)
+        model.transmission_bias_label = self.taxonomy_service.get_transmission_bias_definition(model.transmission_bias).get("label", model.transmission_bias)
         model.context_regime = self._context_regime(transmission_summary)
+        model.context_regime_label = self.taxonomy_service.get_transmission_context_regime_definition(model.context_regime).get("label", model.context_regime)
         return model
 
     @staticmethod

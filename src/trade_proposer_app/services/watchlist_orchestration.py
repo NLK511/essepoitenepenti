@@ -1648,6 +1648,9 @@ class WatchlistOrchestrationService:
     def _bucket_snapshot(self, key: str, bucket: object | None) -> dict[str, object]:
         return {
             "key": key,
+            "label": str(getattr(bucket, "label", key.replace("_", " ")) or key.replace("_", " ")) if bucket is not None else key.replace("_", " "),
+            "slice_name": str(getattr(bucket, "slice_name", "") or "") if bucket is not None else "",
+            "slice_label": str(getattr(bucket, "slice_label", "") or "") if bucket is not None else "",
             "resolved_count": int(getattr(bucket, "resolved_count", 0) or 0) if bucket is not None else 0,
             "win_rate_percent": self._safe_rate(getattr(bucket, "win_rate_percent", None)) if bucket is not None else None,
             "sample_status": str(getattr(bucket, "sample_status", "insufficient") or "insufficient") if bucket is not None else "insufficient",

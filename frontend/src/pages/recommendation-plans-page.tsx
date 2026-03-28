@@ -61,10 +61,11 @@ function calibrationSliceSummary(calibrationReview: Record<string, unknown> | nu
     return "—";
   }
   const sliceKey = typeof item.key === "string" ? item.key : key;
+  const sliceLabel = typeof item.label === "string" && item.label ? item.label : sliceKey;
   const sampleStatus = typeof item.sample_status === "string" ? item.sample_status : "unknown";
   const resolvedCount = typeof item.resolved_count === "number" ? item.resolved_count : 0;
   const winRate = typeof item.win_rate_percent === "number" ? `${item.win_rate_percent}%` : "—";
-  return `${sliceKey} · ${sampleStatus} · n=${resolvedCount} · win ${winRate}`;
+  return `${sliceLabel} · ${sampleStatus} · n=${resolvedCount} · win ${winRate}`;
 }
 
 function contextSummaryMethod(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null | undefined): string {
@@ -746,6 +747,7 @@ export function RecommendationPlansPage() {
                               <span className="helper-text">{plan.latest_outcome.status}</span>
                             </div>
                             <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}%</div>
+                            <div className="helper-text">bias {plan.latest_outcome.transmission_bias_label ?? plan.latest_outcome.transmission_bias ?? "—"} · regime {plan.latest_outcome.context_regime_label ?? plan.latest_outcome.context_regime ?? "—"}</div>
                             <div className="helper-text top-gap-small">MFE {plan.latest_outcome.max_favorable_excursion ?? "—"}% · MAE {plan.latest_outcome.max_adverse_excursion ?? "—"}%</div>
                           </>
                         ) : (

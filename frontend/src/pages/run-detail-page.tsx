@@ -605,6 +605,7 @@ export function RunDetailPage() {
                                     <>
                                       <Badge tone={plan.latest_outcome.outcome === "win" ? "ok" : plan.latest_outcome.outcome === "loss" ? "danger" : "neutral"}>{plan.latest_outcome.outcome}</Badge>
                                       <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}%</div>
+                                      <div className="helper-text">bias {plan.latest_outcome.transmission_bias_label ?? plan.latest_outcome.transmission_bias ?? "—"} · regime {plan.latest_outcome.context_regime_label ?? plan.latest_outcome.context_regime ?? "—"}</div>
                                     </>
                                   ) : "—"}
                                 </td>

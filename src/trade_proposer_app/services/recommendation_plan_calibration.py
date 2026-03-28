@@ -97,6 +97,8 @@ class RecommendationPlanCalibrationService:
                 RecommendationCalibrationBucket(
                     key=key,
                     label=self._bucket_label(key, group_by=group_by),
+                    slice_name=group_by,
+                    slice_label=self.taxonomy_service.get_analysis_slice_label(group_by),
                     total_count=len(items),
                     resolved_count=resolved_count,
                     win_count=sum(1 for item in items if item.outcome == "win"),

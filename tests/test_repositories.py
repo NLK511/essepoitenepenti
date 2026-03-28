@@ -580,6 +580,8 @@ class RepositoryTests(unittest.TestCase):
         self.assertIsNotNone(plans[0].latest_outcome)
         self.assertEqual(plans[0].latest_outcome.outcome, "loss")
         self.assertEqual(plans[0].latest_outcome.setup_family, "macro_beneficiary_loser")
+        self.assertEqual(plans[0].latest_outcome.transmission_bias_label, "unknown")
+        self.assertEqual(plans[0].latest_outcome.context_regime_label, "mixed context")
 
     def test_job_execution_enqueues_and_processes_run(self) -> None:
         session = create_session()
@@ -905,8 +907,11 @@ class RepositoryTests(unittest.TestCase):
         self.assertLess(plan_map["AAPL"].confidence_percent, calibration_review["raw_confidence_percent"])
         self.assertEqual(calibration_review["horizon"]["key"], "1w")
         self.assertEqual(calibration_review["transmission_bias"]["key"], "tailwind")
+        self.assertEqual(calibration_review["transmission_bias"]["label"], "tailwind")
+        self.assertEqual(calibration_review["transmission_bias"]["slice_label"], "transmission bias")
         self.assertEqual(calibration_review["transmission_bias"]["sample_status"], "usable")
         self.assertEqual(calibration_review["context_regime"]["key"], "tailwind_without_dominant_tag")
+        self.assertEqual(calibration_review["context_regime"]["label"], "tailwind without dominant tag")
         self.assertEqual(calibration_review["horizon_setup_family"]["key"], "1w__breakout")
         self.assertIn("setup_family_underperforming", calibration_review["reasons"])
         self.assertIn("confidence_bucket_underperforming", calibration_review["reasons"])
