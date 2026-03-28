@@ -669,7 +669,9 @@ textarea:focus {
 }
 
 .table-wrap {
+  position: relative;
   overflow-x: auto;
+  overflow-y: visible;
 }
 
 table {
@@ -1204,8 +1206,8 @@ details summary {
 .help-hint-tooltip {
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 10px);
-  z-index: 20;
+  top: calc(100% + 10px);
+  z-index: 200;
   width: min(280px, 70vw);
   padding: 10px 12px;
   border-radius: 12px;
@@ -1217,7 +1219,7 @@ details summary {
   line-height: 1.5;
   white-space: normal;
   opacity: 0;
-  transform: translate(-50%, 4px);
+  transform: translate(-50%, -4px);
   pointer-events: none;
   transition: opacity 120ms ease, transform 120ms ease;
 }
