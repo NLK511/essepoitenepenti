@@ -10,6 +10,7 @@ from trade_proposer_app.domain.models import (
 )
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
+from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
 class RecommendationSetupFamilyReviewService:
@@ -22,8 +23,9 @@ class RecommendationSetupFamilyReviewService:
         "macro_beneficiary_loser": "Macro beneficiary / loser",
     }
 
-    def __init__(self, outcomes: RecommendationOutcomeRepository) -> None:
+    def __init__(self, outcomes: RecommendationOutcomeRepository, taxonomy_service: TickerTaxonomyService | None = None) -> None:
         self.outcomes = outcomes
+        self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
     def summarize(
         self,
@@ -104,7 +106,7 @@ class RecommendationSetupFamilyReviewService:
             results.append(
                 RecommendationCalibrationBucket(
                     key=key,
-                    label=key.replace("__", " / ").replace("_", " "),
+                    label=self._bucket_label(key),
                     total_count=len(items),
                     resolved_count=resolved_count,
                     win_count=sum(1 for item in items if item.outcome == "win"),
@@ -127,6 +129,14 @@ class RecommendationSetupFamilyReviewService:
             )
         results.sort(key=lambda item: (item.resolved_count, item.total_count, item.win_count), reverse=True)
         return results
+
+    def _bucket_label(self, key: str) -> str:
+        if "__" in key:
+            return key.replace("__", " / ").replace("_", " ")
+        regime_definition = self.taxonomy_service.get_transmission_context_regime_definition(key)
+        if regime_definition.get("key") in self.taxonomy_service._transmission_context_regimes:
+            return str(regime_definition.get("label", key.replace("_", " ")))
+        return key.replace("_", " ")
 
     @staticmethod
     def _win_rate(items: list[RecommendationPlanOutcome]) -> float | None:

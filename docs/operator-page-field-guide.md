@@ -591,6 +591,8 @@ On newer review pages, the UI should prefer the labeled detail arrays when they 
 
 That same pattern now extends into context snapshot detail pages: stored macro/industry event rows and industry ontology-profile transmission channels should increasingly display readable governed labels instead of raw channel keys.
 
+The same governance push is now affecting analytics pages indirectly too. Calibration and setup-family review slices that use `context_regime` should become more stable over time because that regime is now derived from a governed helper instead of repeated ad hoc logic in multiple places.
+
 This page is intentionally closer to raw storage than the higher-level review pages.
 
 ---

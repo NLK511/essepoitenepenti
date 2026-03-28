@@ -48,12 +48,15 @@ Every redesign-native ticker analysis should derive a structured transmission ob
 - `conflict_flags`: list of governed explicit-conflict keys
 - `conflict_flag_details`: optional labeled detail array for operator/UI display
 - `decay_state`: `fresh | active | fading | stale | unknown`
+- downstream analytics may also derive a governed `context_regime` key from the transmission object for calibration and review slicing
 
 The app may persist more fields, but these fields are the minimum redesign-native contract.
 
 Lower-level event identifiers should remain on dedicated event-detail fields such as `macro_event_keys` and `industry_event_keys`; they should not be overloaded into the governed summary-tag or primary-driver lists.
 
 The same readability pattern is useful on context-review objects too: event-level `transmission_channels` can be accompanied by `transmission_channel_details` so operator-facing pages are not forced to render raw canonical channel keys.
+
+Likewise, any downstream `context_regime` classification used for analytics or calibration should be derived from the governed transmission object through one shared helper, not reconstructed separately in each reporting service.
 
 ## Transmission pipeline
 

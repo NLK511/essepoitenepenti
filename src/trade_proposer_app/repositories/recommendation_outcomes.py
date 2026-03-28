@@ -5,11 +5,13 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import RecommendationPlanOutcome
 from trade_proposer_app.persistence.models import RecommendationOutcomeRecord, RecommendationPlanRecord
+from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
 class RecommendationOutcomeRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, taxonomy_service: TickerTaxonomyService | None = None) -> None:
         self.session = session
+        self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
     def upsert_outcome(self, outcome: RecommendationPlanOutcome) -> RecommendationPlanOutcome:
         record = self.session.scalar(
@@ -148,25 +150,4 @@ class RecommendationOutcomeRepository:
         return default
 
     def _context_regime(self, transmission_summary: dict[str, object]) -> str:
-        tags = transmission_summary.get("transmission_tags")
-        if isinstance(tags, list):
-            normalized = [str(item).strip() for item in tags if str(item).strip()]
-        else:
-            normalized = []
-        unique = set(normalized)
-        if "catalyst_active" in unique and ("macro_dominant" in unique or "industry_dominant" in unique):
-            return "context_plus_catalyst"
-        if "macro_dominant" in unique and "industry_dominant" in unique:
-            return "macro_and_industry"
-        if "macro_dominant" in unique:
-            return "macro_dominant"
-        if "industry_dominant" in unique:
-            return "industry_dominant"
-        if "catalyst_active" in unique:
-            return "catalyst_active"
-        bias = self._string_value(transmission_summary.get("context_bias"), default="mixed")
-        if bias == "tailwind":
-            return "tailwind_without_dominant_tag"
-        if bias == "headwind":
-            return "headwind_without_dominant_tag"
-        return "mixed_context"
+        return self.taxonomy_service.derive_transmission_context_regime(transmission_summary)

@@ -162,6 +162,8 @@ Goal: make the ontology behave more like a real market-structure graph.
 - [x] update operator-facing run, plan, and signal pages to prefer governed transmission labels and exposure-channel labels when present
 - [x] carry governed transmission-channel detail arrays into macro/industry context snapshots and industry taxonomy metadata so context review surfaces can render labels instead of raw channel keys
 - [x] update context snapshot detail views to prefer labeled transmission channels on stored events and industry ontology profiles
+- [x] govern analytics-facing transmission context-regime semantics through a dedicated registry instead of deriving/reporting them only as scattered ad hoc strings
+- [x] centralize context-regime derivation in taxonomy-backed helpers so recommendation outcomes, calibration, and setup-family review slices use the same governed semantics
 - [ ] migrate all remaining ontology relationship/channel fields to governed registries where practical
 
 #### Example relationships

@@ -10,6 +10,7 @@ from trade_proposer_app.domain.models import RecommendationPlan, RunOutput, Tick
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
+from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal, CheapScanSignalService
 
 
@@ -36,6 +37,7 @@ class WatchlistOrchestrationService:
         deep_analysis_service,
         confidence_threshold: float = 60.0,
         calibration_service: RecommendationPlanCalibrationService | None = None,
+        taxonomy_service: TickerTaxonomyService | None = None,
     ) -> None:
         self.context_snapshots = context_snapshots
         self.recommendation_plans = recommendation_plans
@@ -43,6 +45,7 @@ class WatchlistOrchestrationService:
         self.deep_analysis_service = deep_analysis_service
         self.confidence_threshold = confidence_threshold
         self.calibration_service = calibration_service
+        self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
     def execute(
         self,
@@ -1673,26 +1676,7 @@ class WatchlistOrchestrationService:
         return "unknown"
 
     def _calibration_context_regime(self, transmission_summary: dict[str, object] | None) -> str:
-        if not isinstance(transmission_summary, dict):
-            return "mixed_context"
-        tags = transmission_summary.get("transmission_tags")
-        normalized_tags = {str(item).strip() for item in tags} if isinstance(tags, list) else set()
-        if "catalyst_active" in normalized_tags and ("macro_dominant" in normalized_tags or "industry_dominant" in normalized_tags):
-            return "context_plus_catalyst"
-        if "macro_dominant" in normalized_tags and "industry_dominant" in normalized_tags:
-            return "macro_and_industry"
-        if "macro_dominant" in normalized_tags:
-            return "macro_dominant"
-        if "industry_dominant" in normalized_tags:
-            return "industry_dominant"
-        if "catalyst_active" in normalized_tags:
-            return "catalyst_active"
-        bias = self._calibration_transmission_bias(transmission_summary)
-        if bias == "tailwind":
-            return "tailwind_without_dominant_tag"
-        if bias == "headwind":
-            return "headwind_without_dominant_tag"
-        return "mixed_context"
+        return self.taxonomy_service.derive_transmission_context_regime(transmission_summary)
 
     @staticmethod
     def _safe_rate(value: object) -> float | None:

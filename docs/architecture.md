@@ -149,9 +149,11 @@ flowchart LR
 18. operator-facing run-detail, recommendation-plan, and ticker-signal pages now prefer those detail arrays so they render stable readable labels for drivers, tags, conflicts, and exposure channels instead of mostly raw canonical keys
 19. macro and industry context snapshots now also persist labeled `transmission_channel_details` on stored event rows, and industry ontology metadata carries the same pattern for profile-level transmission channels
 20. context snapshot detail views now prefer those labeled transmission-channel details when rendering event rows and industry ontology sections
-21. the support-snapshot resolver now backfills baseline industry ontology metadata even when an industry context snapshot is missing, so downstream proposal/ticker analysis code can still see sector and relationship context instead of dropping to a taxonomy-blind fallback
-22. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
-23. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
+21. analytics-facing `context_regime` semantics are now governed through a dedicated registry too, and derivation has been centralized in taxonomy-backed helpers so outcome persistence, calibration slices, and setup-family reviews do not drift apart
+22. recommendation calibration and setup-family review buckets now reuse those governed context-regime labels instead of only humanizing raw derived keys
+23. the support-snapshot resolver now backfills baseline industry ontology metadata even when an industry context snapshot is missing, so downstream proposal/ticker analysis code can still see sector and relationship context instead of dropping to a taxonomy-blind fallback
+24. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
+25. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
 
 ## Runtime components
 

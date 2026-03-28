@@ -111,6 +111,7 @@ class RecommendationSetupFamilyReviewServiceTests(unittest.TestCase):
         self.assertEqual(family_map["breakout"].by_horizon[0].key, "1w")
         self.assertEqual(family_map["breakout"].by_transmission_bias[0].key, "tailwind")
         self.assertEqual(family_map["breakout"].by_context_regime[0].key, "context_plus_catalyst")
+        self.assertEqual(family_map["breakout"].by_context_regime[0].label, "context + catalyst")
         self.assertEqual(family_map["continuation"].loss_outcomes, 1)
         self.assertEqual(family_map["mean_reversion"].open_outcomes, 1)
         self.assertEqual(family_map["mean_reversion"].resolved_outcomes, 0)
