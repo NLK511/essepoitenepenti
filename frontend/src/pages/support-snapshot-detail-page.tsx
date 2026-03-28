@@ -112,4 +112,3 @@ export function SupportSnapshotDetailPage() {
   );
 }
 
-export const SentimentSnapshotDetailPage = SupportSnapshotDetailPage;

@@ -76,7 +76,7 @@ These are useful after you already understand the product shape.
 - `raw-details-reference.md`
   - field-level reference for structured payloads
   - run artifacts
-  - shared context and transitional sentiment snapshot payloads
+  - shared context and transitional support-snapshot payloads
   - diagnostics and timing
 
 ### Redesign specs still useful as active reference

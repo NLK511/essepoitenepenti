@@ -59,7 +59,8 @@ def normalize_job_type(job_type: str | None) -> JobType:
             status_code=400,
             detail=(
                 "invalid job_type: use proposal_generation, recommendation_evaluation, "
-                "weight_optimization, macro_sentiment_refresh, or industry_sentiment_refresh"
+                "weight_optimization, macro_sentiment_refresh (macro context refresh), or "
+                "industry_sentiment_refresh (industry context refresh)"
             ),
         ) from exc
 

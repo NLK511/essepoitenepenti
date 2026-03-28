@@ -68,7 +68,7 @@ The app stores broader reusable context by scope:
 
 This lets multiple recommendations share the same broader context window and link back to the exact artifacts they used.
 
-If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings. Transitional sentiment snapshots still support that shared-artifact layer and freshness reporting.
+If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings. Transitional support snapshots still support that shared-artifact layer and freshness reporting.
 
 ### 3. News ingestion and live ticker sentiment
 `NewsIngestionService` fetches provider-backed articles, deduplicates them, normalizes them, and records feed usage and feed failures.

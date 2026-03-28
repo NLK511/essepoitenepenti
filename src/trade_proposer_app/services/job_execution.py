@@ -70,9 +70,9 @@ class JobExecutionService:
         if run.job_type == JobType.WEIGHT_OPTIMIZATION:
             return self._execute_optimization_run(run)
         if run.job_type == JobType.MACRO_CONTEXT_REFRESH:
-            return self._execute_macro_sentiment_run(run)
+            return self._execute_macro_support_run(run)
         if run.job_type == JobType.INDUSTRY_CONTEXT_REFRESH:
-            return self._execute_industry_sentiment_run(run)
+            return self._execute_industry_support_run(run)
         raise RuntimeError(f"unsupported job_type execution: {run.job_type.value}")
 
     def _execute_proposal_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
@@ -201,7 +201,7 @@ class JobExecutionService:
         self._finalize_success(run.id or 0, final_status, timing, execution_started)
         return [], timing
 
-    def _execute_macro_sentiment_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
+    def _execute_macro_support_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
         if self.macro_support is None:
             raise RuntimeError("macro support execution service is not configured")
 
@@ -248,7 +248,7 @@ class JobExecutionService:
         self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
         return [], timing
 
-    def _execute_industry_sentiment_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
+    def _execute_industry_support_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
         if self.industry_support is None:
             raise RuntimeError("industry support execution service is not configured")
 

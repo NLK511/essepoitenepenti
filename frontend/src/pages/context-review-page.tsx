@@ -177,7 +177,7 @@ export function ContextReviewPage() {
     <>
       <PageHeader
         kicker="Shared context"
-        title="Inspect context snapshots and the transitional sentiment trail."
+        title="Inspect context snapshots and the transitional support history."
         subtitle="The redesign-native review path is macro and industry context snapshots plus recommendation plans. Support snapshots still exist as transitional refresh artifacts and freshness checks, so this page shows both." 
         actions={
           <>
@@ -535,4 +535,3 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
   );
 }
 
-export const SentimentSnapshotsPage = ContextReviewPage;

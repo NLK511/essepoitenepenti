@@ -119,10 +119,3 @@ def create_industry_context_service(session: Session) -> IndustryContextService:
     )
     return IndustryContextService(ContextSnapshotRepository(session), news_service=news_service, summary_service=summary_service)
 
-
-def create_macro_sentiment_service(session: Session) -> MacroSupportRefreshService:
-    return create_macro_support_service(session)
-
-
-def create_industry_sentiment_service(session: Session) -> IndustrySupportRefreshService:
-    return create_industry_support_service(session)

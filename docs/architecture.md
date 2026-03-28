@@ -20,7 +20,7 @@ This only works if it keeps three things true:
 - worker and scheduler entrypoints
 - repository-based persistence access
 - app-native proposal, evaluation, optimization, and macro/industry refresh workflows
-- shared sentiment snapshot storage plus redesign-native macro/industry/ticker context persistence
+- shared support-snapshot storage plus redesign-native macro/industry/ticker context persistence
 - snapshot-aware health/preflight reporting
 
 ### Target deployment runtime
@@ -44,7 +44,7 @@ flowchart LR
 
     subgraph Backend[Backend API / Web]
         FastAPI[FastAPI app\n/api routes + SPA entry serving]
-        APIRoutes[API routes\ndashboard, jobs, runs, watchlists, docs, health, context, sentiment snapshots]
+        APIRoutes[API routes\ndashboard, jobs, runs, watchlists, docs, health, context, support snapshots]
         WebEntry[SPA entry / built asset serving]
     end
 
@@ -58,7 +58,7 @@ flowchart LR
 
     subgraph Storage[Persistence]
         DB[(SQLite local dev\nPostgres target)]
-        Snapshots[(shared sentiment snapshots\n+ context snapshots)]
+        Snapshots[(shared support snapshots\n+ context snapshots)]
     end
 
     subgraph Pipeline[App-native analysis pipeline]
@@ -180,7 +180,7 @@ Stored entities today:
 - watchlists
 - jobs
 - runs
-- sentiment snapshots
+- support snapshots
 - macro/industry/ticker context or signal objects on the redesign path
 - recommendation plans and recommendation-plan outcomes on the redesign path
 - app settings

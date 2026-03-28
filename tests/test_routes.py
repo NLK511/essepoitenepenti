@@ -251,7 +251,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         finally:
             session.close()
 
-    def seed_sentiment_snapshots(self) -> list[int]:
+    def seed_support_snapshots(self) -> list[int]:
         session = Session(bind=self.engine)
         try:
             repository = SupportSnapshotRepository(session)
@@ -299,8 +299,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         payload = response.json()
         self.assertEqual(payload["status"], "degraded")
         self.assertEqual(payload["preflight"]["status"], "warning")
-        self.assertEqual(payload["sentiment_snapshots"]["macro"]["status"], "warning")
-        self.assertEqual(payload["sentiment_snapshots"]["industry"]["status"], "warning")
+        self.assertEqual(payload["support_snapshots"]["macro"]["status"], "warning")
+        self.assertEqual(payload["support_snapshots"]["industry"]["status"], "warning")
 
     async def test_preflight_health_endpoint(self) -> None:
         transport = httpx.ASGITransport(app=app)
@@ -311,7 +311,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["status"], "warning")
         self.assertEqual(payload["engine"], "internal_price_pipeline")
         self.assertTrue(any(check["name"] == "module:pandas" for check in payload["checks"]))
-        self.assertTrue(any(check["name"] == "sentiment_snapshot:macro" for check in payload["checks"]))
+        self.assertTrue(any(check["name"] == "support_snapshot:macro" for check in payload["checks"]))
 
     async def test_spa_shell_routes_render(self) -> None:
         transport = httpx.ASGITransport(app=app)
@@ -931,7 +931,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["optimization"]["weights_path"], str(weights_path))
 
     async def test_sentiment_snapshot_routes_list_and_detail(self) -> None:
-        snapshot_ids = self.seed_sentiment_snapshots()
+        snapshot_ids = self.seed_support_snapshots()
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             listed = await client.get("/api/support-snapshots")
@@ -1123,11 +1123,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             response = await client.get("/api/support-snapshots/9999")
-            legacy = await client.get("/api/sentiment-snapshots/9999")
 
         self.assertEqual(response.status_code, 404)
         self.assertIn("not found", response.text.lower())
-        self.assertEqual(legacy.status_code, 404)
 
     async def test_sentiment_snapshot_manual_refresh_routes_queue_runs(self) -> None:
         transport = httpx.ASGITransport(app=app)

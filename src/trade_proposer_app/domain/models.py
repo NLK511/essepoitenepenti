@@ -238,9 +238,6 @@ class SupportSnapshot(BaseModel):
     run_id: int | None = None
 
 
-SentimentSnapshot = SupportSnapshot
-
-
 class MacroContextSnapshot(BaseModel):
     id: int | None = None
     computed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

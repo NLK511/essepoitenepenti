@@ -9,8 +9,8 @@ import { ContextSnapshotDetailPage } from "./pages/context-snapshot-detail-page"
 import { JobsPage } from "./pages/jobs-page";
 import { RecommendationPlansPage } from "./pages/recommendation-plans-page";
 import { RunDetailPage } from "./pages/run-detail-page";
-import { SupportSnapshotDetailPage } from "./pages/sentiment-snapshot-detail-page";
-import { ContextReviewPage } from "./pages/sentiment-snapshots-page";
+import { ContextReviewPage } from "./pages/context-review-page";
+import { SupportSnapshotDetailPage } from "./pages/support-snapshot-detail-page";
 import { SettingsPage } from "./pages/settings-page";
 import { TickerPage } from "./pages/ticker-page";
 import { TickerSignalsPage } from "./pages/ticker-signals-page";

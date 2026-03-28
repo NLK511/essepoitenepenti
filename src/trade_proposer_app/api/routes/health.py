@@ -26,8 +26,8 @@ def _augment_report_with_snapshot_checks(report: AppPreflightReport, session: Se
     extra_checks: list[PreflightCheck] = []
 
     for name, label, snapshot in (
-        ("sentiment_snapshot:macro", "macro", latest_macro),
-        ("sentiment_snapshot:industry", "industry", latest_industry),
+        ("support_snapshot:macro", "macro", latest_macro),
+        ("support_snapshot:industry", "industry", latest_industry),
     ):
         if snapshot is None:
             extra_checks.append(
@@ -83,7 +83,7 @@ def _augment_report_with_snapshot_checks(report: AppPreflightReport, session: Se
 async def health(session: Session = Depends(get_db_session)) -> dict[str, object]:
     report = _augment_report_with_snapshot_checks(_create_preflight_service(session).run(), session)
     status = "ok" if report.status == "ok" else "degraded"
-    snapshot_checks = {check.name: check for check in report.checks if check.name.startswith("sentiment_snapshot:")}
+    snapshot_checks = {check.name: check for check in report.checks if check.name.startswith("support_snapshot:")}
     return {
         "status": status,
         "app": settings.app_name,
@@ -93,9 +93,9 @@ async def health(session: Session = Depends(get_db_session)) -> dict[str, object
             "engine": report.engine,
             "checked_at": report.checked_at.isoformat(),
         },
-        "sentiment_snapshots": {
-            "macro": snapshot_checks.get("sentiment_snapshot:macro").model_dump() if snapshot_checks.get("sentiment_snapshot:macro") else None,
-            "industry": snapshot_checks.get("sentiment_snapshot:industry").model_dump() if snapshot_checks.get("sentiment_snapshot:industry") else None,
+        "support_snapshots": {
+            "macro": snapshot_checks.get("support_snapshot:macro").model_dump() if snapshot_checks.get("support_snapshot:macro") else None,
+            "industry": snapshot_checks.get("support_snapshot:industry").model_dump() if snapshot_checks.get("support_snapshot:industry") else None,
         },
     }
 

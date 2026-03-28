@@ -17,10 +17,6 @@ export interface SupportSnapshotReference {
   score: number | null;
 }
 
-export type SentimentSnapshotReference = SupportSnapshotReference;
-
-export const extractSentimentSnapshotReferences = extractSupportSnapshotReferences;
-
 export function formatDate(value: string | null): string {
   if (!value) {
     return "—";

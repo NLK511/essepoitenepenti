@@ -164,8 +164,6 @@ export interface SupportSnapshotListResponse {
   limit: number;
 }
 
-export type SentimentSnapshot = SupportSnapshot;
-export type SentimentSnapshotListResponse = SupportSnapshotListResponse;
 
 export interface MacroContextSnapshot {
   id: number | null;
