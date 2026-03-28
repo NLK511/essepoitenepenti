@@ -361,8 +361,8 @@ Each card usually shows:
 - **Attention score**: triage importance
 - **Shortlisted**: whether the ticker advanced into a deeper lane
 - **Shortlist rank**: relative standing among candidates
-- **Selection lane**: which path promoted it, such as a main technical lane or catalyst/event lane
-- **Shortlist reasons**: explicit reasons for promotion or eligibility
+- **Selection lane**: which path promoted it, such as a main technical lane or catalyst/event lane; the UI now prefers governed lane labels over raw internal keys
+- **Shortlist reasons**: explicit reasons for promotion or eligibility; the UI now prefers governed reason labels over raw reason codes when detail arrays are present
 - **Catalyst proxy**: rough event/catalyst intensity estimate
 - **Alignment**: context-to-ticker fit
 - **Expected window**: anticipated timing of context transmission
@@ -461,7 +461,7 @@ Shows:
 - **Minimum attention score**: minimum triage importance to advance
 - **Minimum catalyst proxy score**: catalyst floor for event lane consideration
 - **Allow shorts**: whether negative-direction names were allowed
-- **Rejections**: grouped reasons names were excluded
+- **Rejections**: grouped reasons names were excluded; run detail now prefers counted readable rejection labels when the stored summary includes governed detail rows
 
 #### Shortlist decision table
 Useful fields:
@@ -591,7 +591,7 @@ On newer review pages, the UI should prefer the labeled detail arrays when they 
 
 That same pattern now extends into context snapshot detail pages: stored macro/industry event rows and industry ontology-profile transmission channels should increasingly display readable governed labels instead of raw channel keys.
 
-The same governance push is now affecting analytics pages indirectly too. Calibration and setup-family review slices that use `context_regime` should become more stable over time because that regime is now derived from a governed helper instead of repeated ad hoc logic in multiple places. `transmission_bias` is now moving onto the same governed footing, evidence-concentration cohorts can carry a readable `slice_label`, and latest stored outcomes can now expose readable bias/regime labels too so review tables are not forced to show raw analytics keys.
+The same governance push is now affecting analytics pages indirectly too. Calibration and setup-family review slices that use `context_regime` should become more stable over time because that regime is now derived from a governed helper instead of repeated ad hoc logic in multiple places. `transmission_bias` is now moving onto the same governed footing, evidence-concentration cohorts can carry a readable `slice_label`, latest stored outcomes can now expose readable bias/regime labels, and calibration-review payloads can now carry governed status/reason labels too so review tables are not forced to show raw analytics keys.
 
 This page is intentionally closer to raw storage than the higher-level review pages.
 

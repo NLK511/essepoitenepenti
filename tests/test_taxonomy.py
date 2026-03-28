@@ -19,6 +19,10 @@ from trade_proposer_app.services.taxonomy import (
     TRANSMISSION_CONFLICT_FLAGS_PATH,
     TRANSMISSION_BIASES_PATH,
     TRANSMISSION_CONTEXT_REGIMES_PATH,
+    SHORTLIST_REASON_CODES_PATH,
+    SHORTLIST_SELECTION_LANES_PATH,
+    CALIBRATION_REVIEW_STATUSES_PATH,
+    CALIBRATION_REASON_CODES_PATH,
     TRANSMISSION_PRIMARY_DRIVERS_PATH,
     TRANSMISSION_TAGS_PATH,
     TickerTaxonomyService,
@@ -51,6 +55,10 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertTrue(TRANSMISSION_CONFLICT_FLAGS_PATH.exists())
         self.assertTrue(TRANSMISSION_BIASES_PATH.exists())
         self.assertTrue(TRANSMISSION_CONTEXT_REGIMES_PATH.exists())
+        self.assertTrue(SHORTLIST_REASON_CODES_PATH.exists())
+        self.assertTrue(SHORTLIST_SELECTION_LANES_PATH.exists())
+        self.assertTrue(CALIBRATION_REVIEW_STATUSES_PATH.exists())
+        self.assertTrue(CALIBRATION_REASON_CODES_PATH.exists())
         self.assertTrue(RELATIONSHIP_TYPES_PATH.exists())
         self.assertTrue(RELATIONSHIP_TARGET_KINDS_PATH.exists())
 
@@ -67,6 +75,10 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertGreaterEqual(overview["transmission_conflict_flag_count"], 5)
         self.assertGreaterEqual(overview["transmission_bias_count"], 4)
         self.assertGreaterEqual(overview["transmission_context_regime_count"], 6)
+        self.assertGreaterEqual(overview["shortlist_reason_code_count"], 6)
+        self.assertGreaterEqual(overview["shortlist_selection_lane_count"], 2)
+        self.assertGreaterEqual(overview["calibration_review_status_count"], 5)
+        self.assertGreaterEqual(overview["calibration_reason_code_count"], 20)
         self.assertGreaterEqual(overview["relationship_type_count"], 8)
         self.assertGreaterEqual(overview["relationship_target_kind_count"], 4)
         self.assertGreaterEqual(overview["derived_relationship_count"], 20)
@@ -105,6 +117,10 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertEqual(service.get_transmission_bias_definition("supportive")["key"], "tailwind")
         self.assertEqual(service.derive_transmission_bias({"context_bias": "supportive"}), "tailwind")
         self.assertEqual(service.get_transmission_context_regime_definition("context_plus_catalyst")["key"], "context_plus_catalyst")
+        self.assertEqual(service.get_shortlist_reason_definition("below_confidence_threshold")["label"], "below confidence threshold")
+        self.assertEqual(service.get_shortlist_selection_lane_definition("catalyst")["key"], "catalyst")
+        self.assertEqual(service.get_calibration_review_status_definition("usable_for_gating")["label"], "usable for gating")
+        self.assertEqual(service.get_calibration_reason_definition("context_regime_underperforming")["label"], "context regime underperforming")
         self.assertEqual(service.derive_transmission_context_regime({"context_bias": "tailwind", "transmission_tags": ["macro_dominant", "catalyst_active"]}), "context_plus_catalyst")
         self.assertEqual(service.get_analysis_bucket_label("transmission_bias", "tailwind"), "tailwind")
         self.assertIn("consumer_spending", aapl_profile["exposure_channels"])

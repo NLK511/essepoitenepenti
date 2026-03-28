@@ -113,10 +113,10 @@ export function TickerSignalsPage() {
               const components = asRecord(signal.diagnostics.cheap_scan_component_scores);
               const shortlisted = signal.diagnostics.shortlisted === true;
               const shortlistRank = typeof signal.diagnostics.shortlist_rank === "number" ? signal.diagnostics.shortlist_rank : null;
-              const selectionLane = typeof signal.diagnostics.selection_lane === "string" ? signal.diagnostics.selection_lane : null;
-              const shortlistReasons = Array.isArray(signal.diagnostics.shortlist_reasons)
-                ? signal.diagnostics.shortlist_reasons.filter((value): value is string => typeof value === "string")
-                : [];
+              const selectionLane = typeof signal.diagnostics.selection_lane_label === "string" && signal.diagnostics.selection_lane_label
+                ? signal.diagnostics.selection_lane_label
+                : typeof signal.diagnostics.selection_lane === "string" ? signal.diagnostics.selection_lane : null;
+              const shortlistReasons = extractDisplayLabels(signal.diagnostics, "shortlist_reason_details", "shortlist_reasons");
               const transmissionBias = typeof signal.diagnostics.transmission_bias === "string" ? signal.diagnostics.transmission_bias : "unknown";
               const transmissionTags = extractDisplayLabels(signal.diagnostics, "transmission_tag_details", "transmission_tags");
               const primaryDrivers = extractDisplayLabels(signal.diagnostics, "primary_driver_details", "primary_drivers");

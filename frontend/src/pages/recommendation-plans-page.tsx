@@ -680,12 +680,12 @@ export function RecommendationPlansPage() {
                   const confidenceAdjustment = typeof calibrationReview?.confidence_adjustment === "number"
                     ? calibrationReview.confidence_adjustment
                     : null;
-                  const calibrationReviewStatus = typeof calibrationReview?.review_status === "string"
-                    ? calibrationReview.review_status
-                    : "disabled";
-                  const calibrationReasons = Array.isArray(calibrationReview?.reasons)
-                    ? calibrationReview.reasons.filter((value): value is string => typeof value === "string")
-                    : [];
+                  const calibrationReviewStatus = typeof calibrationReview?.review_status_label === "string" && calibrationReview.review_status_label
+                    ? calibrationReview.review_status_label
+                    : typeof calibrationReview?.review_status === "string"
+                      ? calibrationReview.review_status
+                      : "disabled";
+                  const calibrationReasons = extractDisplayLabels(calibrationReview, "reason_details", "reasons");
                   const macroContext = plan.run_id ? macroContextByRun[plan.run_id] : null;
                   const industryContext = plan.run_id ? industryContextByRun[plan.run_id] : null;
                   return (

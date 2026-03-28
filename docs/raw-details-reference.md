@@ -68,6 +68,9 @@ Important stored fields include:
 - recommendation outcome analytics now also rely on governed transmission-bias and transmission-context-regime registries when deriving fields like `transmission_bias` and `context_regime` for calibration and setup-family review slices
 - stored `RecommendationPlanOutcome` payloads can now also carry `transmission_bias_label` and `context_regime_label` alongside canonical analytics keys
 - calibration and setup-family-review bucket rows can now carry `slice_name` and `slice_label` alongside `key` and `label`
+- shortlist-decision payloads can now carry `reason_details` and `selection_lane_label`, while signal diagnostics can carry `shortlist_reason_details` and `selection_lane_label`
+- calibration-review payloads can now carry `review_status_label` and `reason_details` alongside canonical review status/reason codes
+- run summaries can now include `shortlist_rejection_details` rows with readable labels and counts in addition to raw `shortlist_rejections` maps
 - evidence-concentration cohorts can now include `slice_label` alongside canonical `slice_name`, plus the existing cohort `key` and `label`
 - event-key detail still persists separately via fields like `macro_event_keys` and `industry_event_keys` instead of being overloaded into governed tag/driver lists
 - industry snapshot resolution can now backfill baseline taxonomy metadata such as `ontology_profile`, `sector_definition`, and `ontology_relationships` even when no fresh industry context snapshot is available yet

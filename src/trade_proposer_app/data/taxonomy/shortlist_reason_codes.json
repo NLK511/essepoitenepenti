@@ -1,0 +1,8 @@
+{
+  "cheap_scan_error": {"label": "cheap scan error"},
+  "shorts_disabled": {"label": "shorts disabled"},
+  "below_confidence_threshold": {"label": "below confidence threshold"},
+  "below_attention_threshold": {"label": "below attention threshold"},
+  "outside_shortlist_limit": {"label": "outside shortlist limit"},
+  "below_catalyst_lane_threshold": {"label": "below catalyst lane threshold"}
+}

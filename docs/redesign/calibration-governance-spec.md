@@ -158,14 +158,18 @@ If a plan is blocked due to calibration, the operator should be able to tell whe
 - weak confidence bucket behavior
 - mixed signals across multiple slices
 
+Those explanation reasons should travel as governed canonical codes plus readable `reason_details`, not as UI-only humanized strings reconstructed separately per page.
+
 ## Review statuses
 
-Every calibration review should include one of:
+Every calibration review should include one of these governed canonical keys:
 - `disabled`
 - `insufficient_data`
 - `heuristic_limited`
 - `usable_for_gating`
 - `strong_for_gating`
+
+API-facing review payloads should also carry a readable `review_status_label` so operator pages do not have to humanize raw keys themselves.
 
 Suggested interpretation:
 - `disabled`: no calibration summary available

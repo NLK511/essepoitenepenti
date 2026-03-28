@@ -165,6 +165,7 @@ class WatchlistOrchestrationService:
             "no_action_plan_count": len([plan for plan in stored_plans if plan.action == "no_action"]),
             "shortlist_rules": shortlist_evaluation["rules"],
             "shortlist_rejections": shortlist_evaluation["rejection_counts"],
+            "shortlist_rejection_details": self._counted_shortlist_reason_details(shortlist_evaluation["rejection_counts"]),
             "calibration_enabled": calibration_summary is not None,
             "warnings_found": warnings_found,
         }
@@ -319,6 +320,7 @@ class WatchlistOrchestrationService:
             deduped_reasons = list(dict.fromkeys(reasons))
             for reason in deduped_reasons:
                 rejection_counts[reason] = rejection_counts.get(reason, 0) + 1
+            lane = selection_lane.get(candidate.ticker)
             decisions.append(
                 {
                     "ticker": candidate.ticker,
@@ -329,8 +331,10 @@ class WatchlistOrchestrationService:
                     "catalyst_proxy_score": self._catalyst_shortlist_score(candidate),
                     "shortlisted": shortlisted,
                     "shortlist_rank": shortlist.index(candidate.ticker) + 1 if shortlisted else None,
-                    "selection_lane": selection_lane.get(candidate.ticker),
+                    "selection_lane": lane,
+                    "selection_lane_label": self._shortlist_selection_lane_label(lane),
                     "reasons": deduped_reasons,
+                    "reason_details": self._shortlist_reason_details(deduped_reasons),
                     "eligible": eligible,
                     "error_message": candidate.error_message,
                 }
@@ -485,8 +489,10 @@ class WatchlistOrchestrationService:
                 "shortlisted": shortlisted,
                 "shortlist_rank": shortlist_rank,
                 "shortlist_reasons": list(shortlist_decision.get("reasons", [])) if isinstance(shortlist_decision, dict) and isinstance(shortlist_decision.get("reasons"), list) else [],
+                "shortlist_reason_details": list(shortlist_decision.get("reason_details", [])) if isinstance(shortlist_decision, dict) and isinstance(shortlist_decision.get("reason_details"), list) else [],
                 "shortlist_eligible": bool(shortlist_decision.get("eligible")) if isinstance(shortlist_decision, dict) and shortlist_decision.get("eligible") is not None else shortlisted,
                 "selection_lane": shortlist_decision.get("selection_lane") if isinstance(shortlist_decision, dict) else None,
+                "selection_lane_label": shortlist_decision.get("selection_lane_label") if isinstance(shortlist_decision, dict) else None,
                 "cheap_scan_confidence_percent": candidate.confidence_percent,
                 "cheap_scan_directional_score": candidate.cheap_scan_signal.directional_score if candidate.cheap_scan_signal is not None else None,
                 "cheap_scan_component_scores": {
@@ -1002,6 +1008,57 @@ class WatchlistOrchestrationService:
             if isinstance(value, str) and value.strip()
         ]
 
+    def _shortlist_reason_details(self, values: list[str]) -> list[dict[str, str]]:
+        details: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for value in values:
+            if not isinstance(value, str) or not value.strip():
+                continue
+            definition = self.taxonomy_service.get_shortlist_reason_definition(value)
+            key = str(definition.get("key", value)).strip()
+            label = str(definition.get("label", value.replace("_", " "))).strip() or value.replace("_", " ")
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            details.append({"key": key, "label": label})
+        return details
+
+    def _shortlist_selection_lane_label(self, value: object) -> str | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        definition = self.taxonomy_service.get_shortlist_selection_lane_definition(value)
+        return str(definition.get("label", value.replace("_", " "))).strip() or value.replace("_", " ")
+
+    def _counted_shortlist_reason_details(self, counts: dict[str, int]) -> list[dict[str, object]]:
+        details: list[dict[str, object]] = []
+        for key, count in counts.items():
+            definition = self.taxonomy_service.get_shortlist_reason_definition(key)
+            details.append({
+                "key": str(definition.get("key", key)).strip() or key,
+                "label": str(definition.get("label", key.replace("_", " "))).strip() or key.replace("_", " "),
+                "count": int(count or 0),
+            })
+        return details
+
+    def _calibration_reason_details(self, values: list[str]) -> list[dict[str, str]]:
+        details: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for value in values:
+            if not isinstance(value, str) or not value.strip():
+                continue
+            definition = self.taxonomy_service.get_calibration_reason_definition(value)
+            key = str(definition.get("key", value)).strip()
+            label = str(definition.get("label", value.replace("_", " "))).strip() or value.replace("_", " ")
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            details.append({"key": key, "label": label})
+        return details
+
+    def _calibration_review_status_label(self, value: str) -> str:
+        definition = self.taxonomy_service.get_calibration_review_status_definition(value)
+        return str(definition.get("label", value.replace("_", " "))).strip() or value.replace("_", " ")
+
     @staticmethod
     def _fallback_transmission_window(signal: TickerSignalSnapshot) -> str:
         if signal.catalyst_score >= 70.0:
@@ -1499,6 +1556,7 @@ class WatchlistOrchestrationService:
             return {
                 "enabled": False,
                 "review_status": "disabled",
+                "review_status_label": self._calibration_review_status_label("disabled"),
                 "raw_confidence_percent": round(confidence_percent, 2),
                 "calibrated_confidence_percent": round(confidence_percent, 2),
                 "confidence_adjustment": 0.0,
@@ -1506,6 +1564,7 @@ class WatchlistOrchestrationService:
                 "effective_confidence_threshold": round(self.confidence_threshold, 2),
                 "threshold_adjustment": 0.0,
                 "reasons": [],
+                "reason_details": [],
             }
         bucket_key = self._confidence_bucket(confidence_percent)
         base_threshold = float(self.confidence_threshold)
@@ -1580,6 +1639,8 @@ class WatchlistOrchestrationService:
             "context_regime": self._bucket_snapshot(context_regime, context_regime_bucket),
             "horizon_setup_family": self._bucket_snapshot(horizon_setup_key, horizon_setup_bucket),
             "reasons": list(dict.fromkeys(reasons)),
+            "reason_details": self._calibration_reason_details(reasons),
+            "review_status_label": self._calibration_review_status_label(review_status),
         }
 
     @staticmethod

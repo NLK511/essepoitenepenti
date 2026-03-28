@@ -147,6 +147,9 @@ export function RunDetailPage() {
   const artifactSnapshotId = typeof runArtifact?.snapshot_id === "number" ? runArtifact.snapshot_id : null;
   const shortlistRules = isRecord(runSummary?.shortlist_rules) ? runSummary.shortlist_rules : null;
   const shortlistRejections = isRecord(runSummary?.shortlist_rejections) ? runSummary.shortlist_rejections : null;
+  const shortlistRejectionDetails = Array.isArray(runSummary?.shortlist_rejection_details)
+    ? runSummary.shortlist_rejection_details.filter((item): item is Record<string, unknown> => isRecord(item))
+    : [];
   const shortlistDecisions = Array.isArray(runArtifact?.shortlist_decisions)
     ? runArtifact.shortlist_decisions.filter((item): item is Record<string, unknown> => isRecord(item))
     : [];
@@ -347,7 +350,10 @@ export function RunDetailPage() {
                     ) : null}
                     {shortlistRejections ? (
                       <div className="top-gap-small helper-text">
-                        Rejections: {Object.entries(shortlistRejections).map(([reason, count]) => `${reason} ${count}`).join(" · ") || "none"}
+                        Rejections: {(shortlistRejectionDetails.length > 0
+                          ? shortlistRejectionDetails.map((item) => `${typeof item.label === "string" ? item.label : typeof item.key === "string" ? item.key : "reason"} ${typeof item.count === "number" ? item.count : "—"}`)
+                          : Object.entries(shortlistRejections).map(([reason, count]) => `${reason} ${count}`)
+                        ).join(" · ") || "none"}
                       </div>
                     ) : null}
                     {shortlistDecisions.length > 0 ? (
@@ -369,12 +375,12 @@ export function RunDetailPage() {
                             {shortlistDecisions.map((decision, index) => {
                               const ticker = typeof decision.ticker === "string" ? decision.ticker : `ticker-${index}`;
                               const shortlisted = decision.shortlisted === true;
-                              const reasons = Array.isArray(decision.reasons) ? decision.reasons.filter((value): value is string => typeof value === "string") : [];
+                              const reasons = extractDisplayLabels(isRecord(decision) ? decision : null, "reason_details", "reasons");
                               return (
                                 <tr key={`${ticker}-${index}`}>
                                   <td><Link to={`/tickers/${ticker}`} className="badge badge-info badge-link">{ticker}</Link></td>
                                   <td><Badge tone={shortlisted ? "info" : "neutral"}>{shortlisted ? `shortlisted #${typeof decision.shortlist_rank === "number" ? decision.shortlist_rank : "—"}` : "rejected"}</Badge></td>
-                                  <td>{typeof decision.selection_lane === "string" ? decision.selection_lane : "—"}</td>
+                                  <td>{typeof decision.selection_lane_label === "string" && decision.selection_lane_label ? decision.selection_lane_label : typeof decision.selection_lane === "string" ? decision.selection_lane : "—"}</td>
                                   <td>{typeof decision.rank === "number" ? decision.rank : "—"}</td>
                                   <td>{typeof decision.confidence_percent === "number" ? `${decision.confidence_percent.toFixed(1)}%` : "—"}</td>
                                   <td>{typeof decision.attention_score === "number" ? decision.attention_score.toFixed(1) : "—"}</td>
@@ -426,10 +432,10 @@ export function RunDetailPage() {
                             const directionalScore = typeof item.diagnostics.cheap_scan_directional_score === "number"
                               ? item.diagnostics.cheap_scan_directional_score
                               : null;
-                            const shortlistReasons = Array.isArray(item.diagnostics.shortlist_reasons)
-                              ? item.diagnostics.shortlist_reasons.filter((value): value is string => typeof value === "string")
-                              : [];
-                            const selectionLane = typeof item.diagnostics.selection_lane === "string" ? item.diagnostics.selection_lane : null;
+                            const shortlistReasons = extractDisplayLabels(item.diagnostics, "shortlist_reason_details", "shortlist_reasons");
+                            const selectionLane = typeof item.diagnostics.selection_lane_label === "string" && item.diagnostics.selection_lane_label
+                              ? item.diagnostics.selection_lane_label
+                              : typeof item.diagnostics.selection_lane === "string" ? item.diagnostics.selection_lane : null;
                             const transmissionBias = typeof item.diagnostics.transmission_bias === "string" ? item.diagnostics.transmission_bias : "unknown";
                             const transmissionAlignment = typeof item.diagnostics.transmission_alignment_score === "number"
                               ? item.diagnostics.transmission_alignment_score
@@ -550,12 +556,12 @@ export function RunDetailPage() {
                             const effectiveThreshold = typeof calibrationReview?.effective_confidence_threshold === "number"
                               ? calibrationReview.effective_confidence_threshold
                               : null;
-                            const calibrationReviewStatus = typeof calibrationReview?.review_status === "string"
-                              ? calibrationReview.review_status
-                              : "disabled";
-                            const calibrationReasons = Array.isArray(calibrationReview?.reasons)
-                              ? calibrationReview.reasons.filter((value): value is string => typeof value === "string")
-                              : [];
+                            const calibrationReviewStatus = typeof calibrationReview?.review_status_label === "string" && calibrationReview.review_status_label
+                              ? calibrationReview.review_status_label
+                              : typeof calibrationReview?.review_status === "string"
+                                ? calibrationReview.review_status
+                                : "disabled";
+                            const calibrationReasons = extractDisplayLabels(calibrationReview, "reason_details", "reasons");
                             return (
                               <tr key={plan.id ?? `${plan.ticker}-${plan.computed_at}`}>
                                 <td>
