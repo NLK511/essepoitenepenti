@@ -1,0 +1,30 @@
+{
+  "context_contradiction": {
+    "label": "context contradiction",
+    "aliases": ["context_contradiction"]
+  },
+  "context_quality_conflict": {
+    "label": "context quality conflict",
+    "aliases": ["context_quality_conflict"]
+  },
+  "directional_conflict": {
+    "label": "directional conflict",
+    "aliases": ["directional_conflict"]
+  },
+  "industry_ticker_conflict": {
+    "label": "industry ticker conflict",
+    "aliases": ["industry_ticker_conflict"]
+  },
+  "macro_industry_conflict": {
+    "label": "macro industry conflict",
+    "aliases": ["macro_industry_conflict"]
+  },
+  "technical_context_conflict": {
+    "label": "technical context conflict",
+    "aliases": ["technical_context_conflict"]
+  },
+  "timing_conflict": {
+    "label": "timing conflict",
+    "aliases": ["timing_conflict"]
+  }
+}

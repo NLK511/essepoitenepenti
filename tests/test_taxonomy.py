@@ -16,6 +16,9 @@ from trade_proposer_app.services.taxonomy import (
     RELATIONSHIP_TARGET_KINDS_PATH,
     RELATIONSHIP_TYPES_PATH,
     TRANSMISSION_CHANNELS_PATH,
+    TRANSMISSION_CONFLICT_FLAGS_PATH,
+    TRANSMISSION_PRIMARY_DRIVERS_PATH,
+    TRANSMISSION_TAGS_PATH,
     TickerTaxonomyService,
 )
 
@@ -41,6 +44,9 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertTrue(THEMES_PATH.exists())
         self.assertTrue(MACRO_CHANNELS_PATH.exists())
         self.assertTrue(TRANSMISSION_CHANNELS_PATH.exists())
+        self.assertTrue(TRANSMISSION_TAGS_PATH.exists())
+        self.assertTrue(TRANSMISSION_PRIMARY_DRIVERS_PATH.exists())
+        self.assertTrue(TRANSMISSION_CONFLICT_FLAGS_PATH.exists())
         self.assertTrue(RELATIONSHIP_TYPES_PATH.exists())
         self.assertTrue(RELATIONSHIP_TARGET_KINDS_PATH.exists())
 
@@ -52,6 +58,9 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertGreaterEqual(overview["theme_count"], 40)
         self.assertGreaterEqual(overview["macro_channel_count"], 20)
         self.assertGreaterEqual(overview["transmission_channel_count"], 30)
+        self.assertGreaterEqual(overview["transmission_tag_count"], 3)
+        self.assertGreaterEqual(overview["transmission_primary_driver_count"], 8)
+        self.assertGreaterEqual(overview["transmission_conflict_flag_count"], 5)
         self.assertGreaterEqual(overview["relationship_type_count"], 8)
         self.assertGreaterEqual(overview["relationship_target_kind_count"], 4)
         self.assertGreaterEqual(overview["derived_relationship_count"], 20)
@@ -84,6 +93,9 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertEqual(service.get_transmission_channel_definition("supply_chain")["key"], "supply_chain")
         self.assertEqual(service.get_relationship_type_definition("macro_link")["key"], "linked_macro_channel")
         self.assertEqual(service.get_relationship_target_kind_definition("macro")["key"], "macro_channel")
+        self.assertEqual(service.get_transmission_tag_definition("macro_dominant")["key"], "macro_dominant")
+        self.assertEqual(service.get_transmission_primary_driver_definition("industry_context_support")["key"], "industry_context_support")
+        self.assertEqual(service.get_transmission_conflict_flag_definition("timing_conflict")["key"], "timing_conflict")
         self.assertIn("consumer_spending", aapl_profile["exposure_channels"])
 
     def test_list_industry_profiles_groups_multiple_tickers_and_relationships(self) -> None:

@@ -598,16 +598,21 @@ class TickerDeepAnalysisService:
             bias = "headwind"
         else:
             bias = "mixed"
-        primary_drivers = TickerDeepAnalysisService._primary_transmission_drivers(
-            macro_events=macro_events,
-            industry_events=industry_events,
+        transmission_tags = self._transmission_tags(
+            macro_score=macro_score,
+            industry_score=industry_score,
+            catalyst_intensity=catalyst_intensity,
+        )
+        primary_drivers = self._primary_transmission_drivers(
+            macro_event_strength=macro_event_strength,
+            industry_event_strength=industry_event_strength,
             macro_score=macro_score,
             industry_score=industry_score,
             ticker_score=ticker_score,
             catalyst_intensity=catalyst_intensity,
             bias=bias,
         )
-        conflict_flags = TickerDeepAnalysisService._transmission_conflict_flags(
+        conflict_flags = self._transmission_conflict_flags(
             macro_score=macro_score,
             industry_score=industry_score,
             ticker_score=ticker_score,
@@ -632,9 +637,11 @@ class TickerDeepAnalysisService:
             "context_strength_percent": round(max(0.0, min(100.0, (macro_event_strength * 45.0) + (industry_event_strength * 55.0))), 1),
             "context_event_relevance_percent": round(max(0.0, min(100.0, (macro_event_strength * 100.0 + industry_event_strength * 100.0) / 2.0)), 1),
             "contradiction_count": contradiction_count,
-            "transmission_tags": TickerDeepAnalysisService._transmission_tags(context, macro_score, industry_score, catalyst_intensity, macro_events, industry_events),
+            "transmission_tags": transmission_tags,
+            "transmission_tag_details": self._transmission_tag_details(transmission_tags),
             "primary_drivers": primary_drivers,
             "primary_driver_labels": [self._label_for_driver(driver) for driver in primary_drivers],
+            "primary_driver_details": self._primary_driver_details(primary_drivers),
             "industry_exposure_channels": industry_exposure_channels,
             "industry_exposure_channel_details": self._channel_details(industry_exposure_channels),
             "ticker_exposure_channels": ticker_exposure_channels,
@@ -643,6 +650,7 @@ class TickerDeepAnalysisService:
             "matched_ticker_relationships": matched_ticker_relationships,
             "expected_transmission_window": TickerDeepAnalysisService._expected_transmission_window(catalyst_intensity, macro_score, industry_score, macro_events, industry_events),
             "conflict_flags": conflict_flags,
+            "conflict_flag_details": self._conflict_flag_details(conflict_flags),
             "decay_state": decay_state,
             "macro_event_keys": [str(item.get("key", "")) for item in macro_events if str(item.get("key", "")).strip()][:5],
             "industry_event_keys": [str(item.get("key", "")) for item in industry_events if str(item.get("key", "")).strip()][:5],
@@ -794,12 +802,10 @@ class TickerDeepAnalysisService:
 
     @staticmethod
     def _transmission_tags(
-        context: dict[str, Any],
+        *,
         macro_score: float,
         industry_score: float,
         catalyst_intensity: float,
-        macro_events: list[dict[str, Any]],
-        industry_events: list[dict[str, Any]],
     ) -> list[str]:
         tags: list[str] = []
         if abs(macro_score) >= 0.25:
@@ -808,52 +814,29 @@ class TickerDeepAnalysisService:
             tags.append("industry_dominant")
         if catalyst_intensity >= 65.0:
             tags.append("catalyst_active")
-        for raw in (context.get("macro_context_regime_tags"), context.get("industry_context_regime_tags")):
-            if isinstance(raw, list):
-                for item in raw:
-                    if isinstance(item, str) and item.strip():
-                        tags.append(item.strip())
-        for event in macro_events[:2] + industry_events[:2]:
-            key = str(event.get("key", "")).strip()
-            if key:
-                tags.append(key)
         return list(dict.fromkeys(tags))
 
     @staticmethod
     def _primary_transmission_drivers(
         *,
-        macro_events: list[dict[str, Any]],
-        industry_events: list[dict[str, Any]],
+        macro_event_strength: float,
+        industry_event_strength: float,
         macro_score: float,
         industry_score: float,
         ticker_score: float,
         catalyst_intensity: float,
         bias: str,
     ) -> list[str]:
-        ranked_events: list[tuple[str, float]] = []
-        for event in macro_events[:3] + industry_events[:3]:
-            key = str(event.get("key", "")).strip()
-            score = float(event.get("event_score", 0.0) or 0.0)
-            if key:
-                ranked_events.append((key, score))
-        if ranked_events:
-            labels = [key for key, _ in sorted(ranked_events, key=lambda item: item[1], reverse=True)[:3]]
-            if bias == "headwind":
-                return [f"{label}_headwind" for label in labels]
-            return labels
         candidates = [
-            ("macro_context_support", abs(macro_score)),
-            ("industry_context_support", abs(industry_score)),
-            ("ticker_sentiment_confirmation", abs(ticker_score)),
+            (("macro_context_headwind" if bias == "headwind" else "macro_context_support"), abs(macro_score)),
+            (("industry_context_headwind" if bias == "headwind" else "industry_context_support"), abs(industry_score)),
+            (("ticker_sentiment_conflict" if bias == "headwind" else "ticker_sentiment_confirmation"), abs(ticker_score)),
             ("fresh_catalyst_pressure", catalyst_intensity / 100.0),
+            (("macro_event_cluster_headwind" if bias == "headwind" else "macro_event_cluster"), macro_event_strength),
+            (("industry_event_cluster_headwind" if bias == "headwind" else "industry_event_cluster"), industry_event_strength),
         ]
-        if bias == "headwind":
-            candidates = [
-                (key.replace("support", "headwind").replace("confirmation", "conflict"), score)
-                for key, score in candidates
-            ]
         ranked = [key for key, score in sorted(candidates, key=lambda item: item[1], reverse=True) if score >= 0.12]
-        return ranked[:3]
+        return list(dict.fromkeys(ranked))[:3]
 
     def _industry_exposure_channels(
         self,
@@ -927,9 +910,36 @@ class TickerDeepAnalysisService:
             details.append({"key": key, "label": label})
         return details
 
-    @staticmethod
-    def _label_for_driver(value: str) -> str:
-        return str(value or "").strip().replace("_", " ")
+    def _transmission_tag_details(self, values: list[str]) -> list[dict[str, str]]:
+        details: list[dict[str, str]] = []
+        for value in values:
+            definition = self.taxonomy_service.get_transmission_tag_definition(value)
+            key = str(definition.get("key", value)).strip() or value
+            label = str(definition.get("label", key.replace("_", " "))).strip() or key.replace("_", " ")
+            details.append({"key": key, "label": label})
+        return details
+
+    def _primary_driver_details(self, values: list[str]) -> list[dict[str, str]]:
+        details: list[dict[str, str]] = []
+        for value in values:
+            definition = self.taxonomy_service.get_transmission_primary_driver_definition(value)
+            key = str(definition.get("key", value)).strip() or value
+            label = str(definition.get("label", key.replace("_", " "))).strip() or key.replace("_", " ")
+            details.append({"key": key, "label": label})
+        return details
+
+    def _conflict_flag_details(self, values: list[str]) -> list[dict[str, str]]:
+        details: list[dict[str, str]] = []
+        for value in values:
+            definition = self.taxonomy_service.get_transmission_conflict_flag_definition(value)
+            key = str(definition.get("key", value)).strip() or value
+            label = str(definition.get("label", key.replace("_", " "))).strip() or key.replace("_", " ")
+            details.append({"key": key, "label": label})
+        return details
+
+    def _label_for_driver(self, value: str) -> str:
+        definition = self.taxonomy_service.get_transmission_primary_driver_definition(value)
+        return str(definition.get("label", str(value or "").strip().replace("_", " "))).strip() or str(value or "").strip().replace("_", " ")
 
     @staticmethod
     def _expected_transmission_window(

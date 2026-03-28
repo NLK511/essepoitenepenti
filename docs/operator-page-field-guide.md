@@ -585,6 +585,8 @@ The same is now true for ontology relationship metadata. Industry relationship p
 
 Ticker transmission payloads are also a little cleaner now. Exposure channels can carry readable labels derived from governed channel keys, and those lists should be less polluted by raw theme or macro-sensitivity tags pretending to be transmission channels.
 
+Transmission summary tags, primary drivers, and conflict flags are now moving in the same direction. Expect more stable wording there over time because those keys are being governed separately from the lower-level event-key details.
+
 This page is intentionally closer to raw storage than the higher-level review pages.
 
 ---

@@ -155,6 +155,9 @@ Goal: make the ontology behave more like a real market-structure graph.
 - [x] validate that taxonomy themes, macro-channel references, transmission-channel references, relationship types, and relationship target kinds resolve to governed values
 - [x] move deep-analysis synthetic transmission-channel values used in exposure summaries onto the governed transmission-channel registry
 - [x] stop mixing theme / macro-sensitivity tags into ticker exposure-channel payloads; keep those payloads closer to actual transmission channels and relationship channels
+- [x] govern redesign transmission tags, primary-driver keys, and conflict-flag keys through dedicated registries
+- [x] stop mixing raw event keys and regime tags into `transmission_tags`; keep event keys on their dedicated fields and transmission tags on controlled summary semantics
+- [x] stop using raw event keys as `primary_drivers`; keep event-key detail on `macro_event_keys` / `industry_event_keys` and use governed summary driver keys instead
 - [ ] migrate all remaining ontology relationship/channel fields to governed registries where practical
 
 #### Example relationships
@@ -289,7 +292,9 @@ Use this section to note concrete shipped steps.
 - [x] Added governed `src/trade_proposer_app/data/taxonomy/relationship_types.json` and `src/trade_proposer_app/data/taxonomy/relationship_target_kinds.json` registries, then normalized stored ontology relationships against them.
 - [x] Added derived industry and sector ontology edges for `belongs_to_sector`, `linked_macro_channel`, and `exposed_to_theme` so downstream consumers can use governed relationship semantics even when the source data only stored broader industry definitions.
 - [x] Extended the governed transmission-channel registry to cover synthetic deep-analysis exposure keys such as macro-regime, ticker-sentiment, news-catalyst, event-follow-through, context-linked, and valuation-duration labels instead of leaving them as untracked ad hoc strings.
+- [x] Added governed registries for redesign transmission summary semantics at `src/trade_proposer_app/data/taxonomy/transmission_tags.json`, `src/trade_proposer_app/data/taxonomy/transmission_primary_drivers.json`, and `src/trade_proposer_app/data/taxonomy/transmission_conflict_flags.json`.
 - [x] Removed theme and macro-sensitivity spillover from ticker transmission-channel summaries in `src/trade_proposer_app/services/ticker_deep_analysis.py`, so those payloads stay closer to true transmission channels and relationship-channel provenance.
+- [x] Removed raw event-key and regime-tag spillover from governed transmission-summary tag/driver fields, keeping detailed event keys on dedicated `macro_event_keys` / `industry_event_keys` fields instead.
 - [x] Updated taxonomy validation so ticker, industry, sector, and relationship macro-channel / transmission-channel references are checked against the governed registries, and explicit relationship type / target-kind values now also fail validation if they are not governed.
 - [x] Split the active ontology into `src/trade_proposer_app/data/taxonomy/` with separate `tickers.json`, `industries.json`, `sectors.json`, `relationships.json`, and `event_vocab.json` files while keeping `ticker_taxonomy.json` as a backward-compatible fallback.
 - [x] Added baseline taxonomy integrity tests for breadth, multi-region coverage, industry grouping behavior, explicit industry definitions, split-file loading, relationship availability, relationship-aware context behavior, and ticker-level relationship edges.

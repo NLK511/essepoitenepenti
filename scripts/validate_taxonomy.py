@@ -20,6 +20,9 @@ from trade_proposer_app.services.taxonomy import (  # noqa: E402
     RELATIONSHIP_TARGET_KINDS_PATH,
     RELATIONSHIP_TYPES_PATH,
     TRANSMISSION_CHANNELS_PATH,
+    TRANSMISSION_CONFLICT_FLAGS_PATH,
+    TRANSMISSION_PRIMARY_DRIVERS_PATH,
+    TRANSMISSION_TAGS_PATH,
     TAXONOMY_DIR,
     TAXONOMY_PATH,
     TickerTaxonomyService,
@@ -35,7 +38,7 @@ def main() -> int:
     service = TickerTaxonomyService()
     alias_to_tickers: dict[str, set[str]] = {}
 
-    expected_paths = [TICKERS_PATH, INDUSTRIES_PATH, SECTORS_PATH, RELATIONSHIPS_PATH, EVENT_VOCAB_PATH, THEMES_PATH, MACRO_CHANNELS_PATH, TRANSMISSION_CHANNELS_PATH, RELATIONSHIP_TYPES_PATH, RELATIONSHIP_TARGET_KINDS_PATH]
+    expected_paths = [TICKERS_PATH, INDUSTRIES_PATH, SECTORS_PATH, RELATIONSHIPS_PATH, EVENT_VOCAB_PATH, THEMES_PATH, MACRO_CHANNELS_PATH, TRANSMISSION_CHANNELS_PATH, TRANSMISSION_TAGS_PATH, TRANSMISSION_PRIMARY_DRIVERS_PATH, TRANSMISSION_CONFLICT_FLAGS_PATH, RELATIONSHIP_TYPES_PATH, RELATIONSHIP_TARGET_KINDS_PATH]
     split_mode = all(path.exists() for path in expected_paths)
     if not split_mode and not TAXONOMY_PATH.exists():
         errors.append(f"no taxonomy source found; expected split files in {TAXONOMY_DIR} or fallback file {TAXONOMY_PATH}")
@@ -170,6 +173,9 @@ def main() -> int:
     print(f"Themes: {overview['theme_count']}")
     print(f"Macro channels: {overview['macro_channel_count']}")
     print(f"Transmission channels: {overview['transmission_channel_count']}")
+    print(f"Transmission tags: {overview['transmission_tag_count']}")
+    print(f"Transmission primary drivers: {overview['transmission_primary_driver_count']}")
+    print(f"Transmission conflict flags: {overview['transmission_conflict_flag_count']}")
     print(f"Relationship types: {overview['relationship_type_count']}")
     print(f"Relationship target kinds: {overview['relationship_target_kind_count']}")
     print(f"Derived relationships: {overview['derived_relationship_count']}")

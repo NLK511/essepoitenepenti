@@ -95,6 +95,8 @@ The same cleanup now applies to ontology relationships themselves. Relationship 
 
 Ticker deep analysis now pushes that governance a bit further downstream. Exposure-channel summaries now stay closer to actual transmission channels: synthetic keys used by the analysis are explicitly registered, channel-detail payloads carry readable labels, and raw theme / macro-sensitivity tags are no longer dumped into exposure-channel lists as if they were transmission channels.
 
+The same cleanup now applies to summary semantics inside the transmission payload. Transmission tags, primary-driver keys, and conflict flags are governed too. Detailed event keys still exist, but they now live on dedicated fields like `macro_event_keys` and `industry_event_keys` instead of leaking into the governed summary-tag or driver lists.
+
 If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings. Transitional support snapshots still support that shared-artifact layer and freshness reporting.
 
 ### 3. News ingestion and live ticker sentiment

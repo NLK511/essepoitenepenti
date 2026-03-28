@@ -1,0 +1,50 @@
+{
+  "attention_leader": {
+    "label": "attention leader",
+    "aliases": ["attention_leader"]
+  },
+  "fresh_catalyst_pressure": {
+    "label": "fresh catalyst pressure",
+    "aliases": ["fresh_catalyst_pressure"]
+  },
+  "industry_context_headwind": {
+    "label": "industry context headwind",
+    "aliases": ["industry_context_headwind"]
+  },
+  "industry_context_support": {
+    "label": "industry context support",
+    "aliases": ["industry_context_support"]
+  },
+  "industry_event_cluster": {
+    "label": "industry event cluster",
+    "aliases": ["industry_event_cluster"]
+  },
+  "industry_event_cluster_headwind": {
+    "label": "industry event cluster headwind",
+    "aliases": ["industry_event_cluster_headwind"]
+  },
+  "macro_context_headwind": {
+    "label": "macro context headwind",
+    "aliases": ["macro_context_headwind"]
+  },
+  "macro_context_support": {
+    "label": "macro context support",
+    "aliases": ["macro_context_support"]
+  },
+  "macro_event_cluster": {
+    "label": "macro event cluster",
+    "aliases": ["macro_event_cluster"]
+  },
+  "macro_event_cluster_headwind": {
+    "label": "macro event cluster headwind",
+    "aliases": ["macro_event_cluster_headwind"]
+  },
+  "ticker_sentiment_conflict": {
+    "label": "ticker sentiment conflict",
+    "aliases": ["ticker_sentiment_conflict"]
+  },
+  "ticker_sentiment_confirmation": {
+    "label": "ticker sentiment confirmation",
+    "aliases": ["ticker_sentiment_confirmation"]
+  }
+}

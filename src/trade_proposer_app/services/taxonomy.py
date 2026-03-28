@@ -16,6 +16,9 @@ EVENT_VOCAB_PATH = TAXONOMY_DIR / "event_vocab.json"
 THEMES_PATH = TAXONOMY_DIR / "themes.json"
 MACRO_CHANNELS_PATH = TAXONOMY_DIR / "macro_channels.json"
 TRANSMISSION_CHANNELS_PATH = TAXONOMY_DIR / "transmission_channels.json"
+TRANSMISSION_TAGS_PATH = TAXONOMY_DIR / "transmission_tags.json"
+TRANSMISSION_PRIMARY_DRIVERS_PATH = TAXONOMY_DIR / "transmission_primary_drivers.json"
+TRANSMISSION_CONFLICT_FLAGS_PATH = TAXONOMY_DIR / "transmission_conflict_flags.json"
 RELATIONSHIP_TYPES_PATH = TAXONOMY_DIR / "relationship_types.json"
 RELATIONSHIP_TARGET_KINDS_PATH = TAXONOMY_DIR / "relationship_target_kinds.json"
 
@@ -51,11 +54,17 @@ class TickerTaxonomyService:
         self._transmission_channels: dict[str, dict[str, Any]] = payload["transmission_channels"]
         self._relationship_types: dict[str, dict[str, Any]] = payload["relationship_types"]
         self._relationship_target_kinds: dict[str, dict[str, Any]] = payload["relationship_target_kinds"]
+        self._transmission_tags: dict[str, dict[str, Any]] = payload["transmission_tags"]
+        self._transmission_primary_drivers: dict[str, dict[str, Any]] = payload["transmission_primary_drivers"]
+        self._transmission_conflict_flags: dict[str, dict[str, Any]] = payload["transmission_conflict_flags"]
         self._theme_alias_map: dict[str, str] = self._build_alias_map(self._themes)
         self._macro_channel_alias_map: dict[str, str] = self._build_alias_map(self._macro_channels)
         self._transmission_channel_alias_map: dict[str, str] = self._build_alias_map(self._transmission_channels)
         self._relationship_type_alias_map: dict[str, str] = self._build_alias_map(self._relationship_types)
         self._relationship_target_kind_alias_map: dict[str, str] = self._build_alias_map(self._relationship_target_kinds)
+        self._transmission_tag_alias_map: dict[str, str] = self._build_alias_map(self._transmission_tags)
+        self._transmission_primary_driver_alias_map: dict[str, str] = self._build_alias_map(self._transmission_primary_drivers)
+        self._transmission_conflict_flag_alias_map: dict[str, str] = self._build_alias_map(self._transmission_conflict_flags)
         self._source_mode: str = payload["source_mode"]
 
     def _load_payload(self) -> dict[str, Any]:
@@ -76,16 +85,25 @@ class TickerTaxonomyService:
         themes = self._load_registry(self._read_json_file(THEMES_PATH))
         macro_channels = self._load_registry(self._read_json_file(MACRO_CHANNELS_PATH))
         transmission_channels = self._load_registry(self._read_json_file(TRANSMISSION_CHANNELS_PATH))
+        transmission_tags = self._load_registry(self._read_json_file(TRANSMISSION_TAGS_PATH))
+        transmission_primary_drivers = self._load_registry(self._read_json_file(TRANSMISSION_PRIMARY_DRIVERS_PATH))
+        transmission_conflict_flags = self._load_registry(self._read_json_file(TRANSMISSION_CONFLICT_FLAGS_PATH))
         relationship_types = self._load_registry(self._read_json_file(RELATIONSHIP_TYPES_PATH))
         relationship_target_kinds = self._load_registry(self._read_json_file(RELATIONSHIP_TARGET_KINDS_PATH))
         self._themes = themes
         self._macro_channels = macro_channels
         self._transmission_channels = transmission_channels
+        self._transmission_tags = transmission_tags
+        self._transmission_primary_drivers = transmission_primary_drivers
+        self._transmission_conflict_flags = transmission_conflict_flags
         self._relationship_types = relationship_types
         self._relationship_target_kinds = relationship_target_kinds
         self._theme_alias_map = self._build_alias_map(themes)
         self._macro_channel_alias_map = self._build_alias_map(macro_channels)
         self._transmission_channel_alias_map = self._build_alias_map(transmission_channels)
+        self._transmission_tag_alias_map = self._build_alias_map(transmission_tags)
+        self._transmission_primary_driver_alias_map = self._build_alias_map(transmission_primary_drivers)
+        self._transmission_conflict_flag_alias_map = self._build_alias_map(transmission_conflict_flags)
         self._relationship_type_alias_map = self._build_alias_map(relationship_types)
         self._relationship_target_kind_alias_map = self._build_alias_map(relationship_target_kinds)
         return {
@@ -101,12 +119,15 @@ class TickerTaxonomyService:
             "themes": themes,
             "macro_channels": macro_channels,
             "transmission_channels": transmission_channels,
+            "transmission_tags": transmission_tags,
+            "transmission_primary_drivers": transmission_primary_drivers,
+            "transmission_conflict_flags": transmission_conflict_flags,
             "relationship_types": relationship_types,
             "relationship_target_kinds": relationship_target_kinds,
         }
 
     def _load_monolith_payload(self) -> dict[str, Any]:
-        empty = {"tickers": {}, "industries": {}, "sectors": {}, "relationships": [], "event_vocab": {}, "themes": {}, "macro_channels": {}, "transmission_channels": {}, "relationship_types": {}, "relationship_target_kinds": {}}
+        empty = {"tickers": {}, "industries": {}, "sectors": {}, "relationships": [], "event_vocab": {}, "themes": {}, "macro_channels": {}, "transmission_channels": {}, "transmission_tags": {}, "transmission_primary_drivers": {}, "transmission_conflict_flags": {}, "relationship_types": {}, "relationship_target_kinds": {}}
         if not TAXONOMY_PATH.exists():
             return empty
         payload = self._read_json_file(TAXONOMY_PATH)
@@ -115,16 +136,25 @@ class TickerTaxonomyService:
         themes = self._load_registry(payload.get("_themes"))
         macro_channels = self._load_registry(payload.get("_macro_channels"))
         transmission_channels = self._load_registry(payload.get("_transmission_channels"))
+        transmission_tags = self._load_registry(payload.get("_transmission_tags"))
+        transmission_primary_drivers = self._load_registry(payload.get("_transmission_primary_drivers"))
+        transmission_conflict_flags = self._load_registry(payload.get("_transmission_conflict_flags"))
         relationship_types = self._load_registry(payload.get("_relationship_types"))
         relationship_target_kinds = self._load_registry(payload.get("_relationship_target_kinds"))
         self._themes = themes
         self._macro_channels = macro_channels
         self._transmission_channels = transmission_channels
+        self._transmission_tags = transmission_tags
+        self._transmission_primary_drivers = transmission_primary_drivers
+        self._transmission_conflict_flags = transmission_conflict_flags
         self._relationship_types = relationship_types
         self._relationship_target_kinds = relationship_target_kinds
         self._theme_alias_map = self._build_alias_map(themes)
         self._macro_channel_alias_map = self._build_alias_map(macro_channels)
         self._transmission_channel_alias_map = self._build_alias_map(transmission_channels)
+        self._transmission_tag_alias_map = self._build_alias_map(transmission_tags)
+        self._transmission_primary_driver_alias_map = self._build_alias_map(transmission_primary_drivers)
+        self._transmission_conflict_flag_alias_map = self._build_alias_map(transmission_conflict_flags)
         self._relationship_type_alias_map = self._build_alias_map(relationship_types)
         self._relationship_target_kind_alias_map = self._build_alias_map(relationship_target_kinds)
         return {
@@ -140,6 +170,9 @@ class TickerTaxonomyService:
             "themes": themes,
             "macro_channels": macro_channels,
             "transmission_channels": transmission_channels,
+            "transmission_tags": transmission_tags,
+            "transmission_primary_drivers": transmission_primary_drivers,
+            "transmission_conflict_flags": transmission_conflict_flags,
             "relationship_types": relationship_types,
             "relationship_target_kinds": relationship_target_kinds,
         }
@@ -659,6 +692,9 @@ class TickerTaxonomyService:
             "theme_count": len(self._themes),
             "macro_channel_count": len(self._macro_channels),
             "transmission_channel_count": len(self._transmission_channels),
+            "transmission_tag_count": len(self._transmission_tags),
+            "transmission_primary_driver_count": len(self._transmission_primary_drivers),
+            "transmission_conflict_flag_count": len(self._transmission_conflict_flags),
             "relationship_type_count": len(self._relationship_types),
             "relationship_target_kind_count": len(self._relationship_target_kinds),
             "derived_relationship_count": len(self._derived_relationships()),
@@ -812,6 +848,27 @@ class TickerTaxonomyService:
 
     def list_transmission_channel_definitions(self) -> list[dict[str, Any]]:
         return [self.get_transmission_channel_definition(key) for key in sorted(self._transmission_channels)]
+
+    def get_transmission_tag_definition(self, value: str) -> dict[str, Any]:
+        canonical_key = self._transmission_tag_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))
+        return dict(self._transmission_tags.get(canonical_key, {"key": canonical_key, "label": str(value or "").strip().replace("_", " "), "aliases": []}))
+
+    def list_transmission_tag_definitions(self) -> list[dict[str, Any]]:
+        return [self.get_transmission_tag_definition(key) for key in sorted(self._transmission_tags)]
+
+    def get_transmission_primary_driver_definition(self, value: str) -> dict[str, Any]:
+        canonical_key = self._transmission_primary_driver_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))
+        return dict(self._transmission_primary_drivers.get(canonical_key, {"key": canonical_key, "label": str(value or "").strip().replace("_", " "), "aliases": []}))
+
+    def list_transmission_primary_driver_definitions(self) -> list[dict[str, Any]]:
+        return [self.get_transmission_primary_driver_definition(key) for key in sorted(self._transmission_primary_drivers)]
+
+    def get_transmission_conflict_flag_definition(self, value: str) -> dict[str, Any]:
+        canonical_key = self._transmission_conflict_flag_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))
+        return dict(self._transmission_conflict_flags.get(canonical_key, {"key": canonical_key, "label": str(value or "").strip().replace("_", " "), "aliases": []}))
+
+    def list_transmission_conflict_flag_definitions(self) -> list[dict[str, Any]]:
+        return [self.get_transmission_conflict_flag_definition(key) for key in sorted(self._transmission_conflict_flags)]
 
     def get_relationship_type_definition(self, value: str) -> dict[str, Any]:
         canonical_key = self._relationship_type_alias_map.get(self._normalize_subject_key(value), self._normalize_subject_key(value))

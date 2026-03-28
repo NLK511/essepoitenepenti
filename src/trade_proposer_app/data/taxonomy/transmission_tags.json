@@ -1,0 +1,14 @@
+{
+  "catalyst_active": {
+    "label": "catalyst active",
+    "aliases": ["catalyst_active"]
+  },
+  "industry_dominant": {
+    "label": "industry dominant",
+    "aliases": ["industry_dominant"]
+  },
+  "macro_dominant": {
+    "label": "macro dominant",
+    "aliases": ["macro_dominant"]
+  }
+}

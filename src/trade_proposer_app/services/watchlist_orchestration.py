@@ -400,9 +400,12 @@ class WatchlistOrchestrationService:
             transmission_alignment_score = round((macro_exposure_score * 0.45) + (industry_alignment_score * 0.55), 2)
             transmission_bias = self._bias_from_alignment(transmission_alignment_score)
         primary_drivers = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "primary_drivers") or []
+        primary_driver_details = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "primary_driver_details") or []
         expected_transmission_window = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "expected_transmission_window") or self._fallback_transmission_window_placeholder(watchlist.default_horizon)
         conflict_flags = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "conflict_flags") or []
+        conflict_flag_details = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "conflict_flag_details") or []
         transmission_tags = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "transmission_tags") or []
+        transmission_tag_details = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "transmission_tag_details") or []
         transmission_effect = self._transmission_confidence_adjustment(analysis, transmission_bias=transmission_bias, alignment_score=transmission_alignment_score)
         base_confidence = round(float(deep_recommendation.confidence if deep_recommendation is not None else candidate.confidence_percent), 2)
         adjusted_confidence = round(max(0.0, min(95.0, base_confidence + transmission_effect)), 2)
@@ -414,10 +417,16 @@ class WatchlistOrchestrationService:
                     "fresh_catalyst_pressure" if self._catalyst_score(analysis) >= 45.0 else None,
                 ] if isinstance(item, str)
             ]
+        if not isinstance(primary_driver_details, list) or not primary_driver_details:
+            primary_driver_details = self._detail_fallback(primary_drivers)
         if not isinstance(conflict_flags, list):
             conflict_flags = []
+        if not isinstance(conflict_flag_details, list) or not conflict_flag_details:
+            conflict_flag_details = self._detail_fallback(conflict_flags)
         if not isinstance(transmission_tags, list):
             transmission_tags = []
+        if not isinstance(transmission_tag_details, list) or not transmission_tag_details:
+            transmission_tag_details = self._detail_fallback(transmission_tags)
         return TickerSignalSnapshot(
             ticker=candidate.ticker,
             horizon=watchlist.default_horizon,
@@ -443,9 +452,12 @@ class WatchlistOrchestrationService:
                 "summary_method": getattr(deep_output.diagnostics, "summary_method", None) if deep_output is not None else None,
                 "transmission_bias": transmission_bias,
                 "transmission_tags": transmission_tags,
+                "transmission_tag_details": transmission_tag_details,
                 "primary_drivers": primary_drivers,
+                "primary_driver_details": primary_driver_details,
                 "expected_transmission_window": expected_transmission_window,
                 "conflict_flags": conflict_flags,
+                "conflict_flag_details": conflict_flag_details,
                 "base_confidence_percent": base_confidence,
                 "transmission_confidence_adjustment": transmission_effect,
             },
@@ -471,9 +483,12 @@ class WatchlistOrchestrationService:
                 "transmission_alignment_score": transmission_alignment_score,
                 "transmission_bias": transmission_bias,
                 "transmission_tags": transmission_tags,
+                "transmission_tag_details": transmission_tag_details,
                 "primary_drivers": primary_drivers,
+                "primary_driver_details": primary_driver_details,
                 "expected_transmission_window": expected_transmission_window,
                 "conflict_flags": conflict_flags,
+                "conflict_flag_details": conflict_flag_details,
             },
             job_id=job_id,
             run_id=run_id,
@@ -844,7 +859,9 @@ class WatchlistOrchestrationService:
                 "context_event_relevance_percent": round(float(explicit.get("context_event_relevance_percent", 0.0)), 2) if self._is_number(explicit.get("context_event_relevance_percent")) else 0.0,
                 "contradiction_count": int(float(explicit.get("contradiction_count", 0.0))) if self._is_number(explicit.get("contradiction_count")) else 0,
                 "transmission_tags": explicit.get("transmission_tags", []) if isinstance(explicit.get("transmission_tags"), list) else [],
+                "transmission_tag_details": explicit.get("transmission_tag_details", []) if isinstance(explicit.get("transmission_tag_details"), list) else [],
                 "primary_drivers": explicit.get("primary_drivers", []) if isinstance(explicit.get("primary_drivers"), list) else [],
+                "primary_driver_details": explicit.get("primary_driver_details", []) if isinstance(explicit.get("primary_driver_details"), list) else [],
                 "industry_exposure_channels": explicit.get("industry_exposure_channels", []) if isinstance(explicit.get("industry_exposure_channels"), list) else [],
                 "industry_exposure_channel_details": explicit.get("industry_exposure_channel_details", []) if isinstance(explicit.get("industry_exposure_channel_details"), list) else [],
                 "ticker_exposure_channels": explicit.get("ticker_exposure_channels", []) if isinstance(explicit.get("ticker_exposure_channels"), list) else [],
@@ -853,6 +870,7 @@ class WatchlistOrchestrationService:
                 "matched_ticker_relationships": explicit.get("matched_ticker_relationships", []) if isinstance(explicit.get("matched_ticker_relationships"), list) else [],
                 "expected_transmission_window": self._string_value(explicit.get("expected_transmission_window"), default=self._fallback_transmission_window(signal)),
                 "conflict_flags": explicit.get("conflict_flags", []) if isinstance(explicit.get("conflict_flags"), list) else [],
+                "conflict_flag_details": explicit.get("conflict_flag_details", []) if isinstance(explicit.get("conflict_flag_details"), list) else [],
                 "decay_state": self._string_value(explicit.get("decay_state"), default=self._fallback_decay_state(signal)),
                 "transmission_confidence_adjustment": round(float(signal.diagnostics.get("transmission_confidence_adjustment", 0.0)), 2) if self._is_number(signal.diagnostics.get("transmission_confidence_adjustment")) else 0.0,
                 "lane_hint": "event" if bias == "tailwind" and signal.catalyst_score >= 65.0 else "technical",
@@ -872,7 +890,9 @@ class WatchlistOrchestrationService:
             "context_event_relevance_percent": round((signal.macro_exposure_score * 0.35) + (signal.industry_alignment_score * 0.35) + (signal.catalyst_score * 0.3), 2),
             "contradiction_count": 1 if "context_contradiction" in self._fallback_conflict_flags(signal, candidate, bias) else 0,
             "transmission_tags": [],
+            "transmission_tag_details": [],
             "primary_drivers": self._fallback_primary_drivers(signal, candidate, bias),
+            "primary_driver_details": self._detail_fallback(self._fallback_primary_drivers(signal, candidate, bias)),
             "industry_exposure_channels": self._fallback_industry_exposure_channels(signal),
             "industry_exposure_channel_details": self._channel_detail_fallback(self._fallback_industry_exposure_channels(signal)),
             "ticker_exposure_channels": self._fallback_ticker_exposure_channels(signal, candidate),
@@ -881,6 +901,7 @@ class WatchlistOrchestrationService:
             "matched_ticker_relationships": [],
             "expected_transmission_window": self._fallback_transmission_window(signal),
             "conflict_flags": self._fallback_conflict_flags(signal, candidate, bias),
+            "conflict_flag_details": self._detail_fallback(self._fallback_conflict_flags(signal, candidate, bias)),
             "decay_state": self._fallback_decay_state(signal),
             "transmission_confidence_adjustment": round(float(signal.diagnostics.get("transmission_confidence_adjustment", 0.0)), 2) if self._is_number(signal.diagnostics.get("transmission_confidence_adjustment")) else 0.0,
             "lane_hint": "event" if signal.catalyst_score >= 65.0 else "technical",
@@ -938,6 +959,14 @@ class WatchlistOrchestrationService:
             {"key": str(channel), "label": str(channel).replace("_", " ")}
             for channel in list(dict.fromkeys(channels))
             if isinstance(channel, str) and channel.strip()
+        ]
+
+    @staticmethod
+    def _detail_fallback(values: list[str]) -> list[dict[str, str]]:
+        return [
+            {"key": str(value), "label": str(value).replace("_", " ")}
+            for value in list(dict.fromkeys(values))
+            if isinstance(value, str) and value.strip()
         ]
 
     @staticmethod
@@ -1036,9 +1065,9 @@ class WatchlistOrchestrationService:
             window = transmission_summary.get("expected_transmission_window")
             if isinstance(window, str) and window and window != "unknown":
                 components.append(f"window {window}")
-            primary_drivers = transmission_summary.get("primary_drivers")
-            if isinstance(primary_drivers, list) and primary_drivers:
-                components.append(f"driver {str(primary_drivers[0]).replace('_', ' ')}")
+            driver_label = WatchlistOrchestrationService._primary_driver_label(transmission_summary)
+            if driver_label:
+                components.append(f"driver {driver_label}")
             relationship_summary = WatchlistOrchestrationService._relationship_summary(transmission_summary)
             if relationship_summary:
                 components.append(f"relationship {relationship_summary}")
@@ -1288,6 +1317,13 @@ class WatchlistOrchestrationService:
     def _primary_driver_label(transmission_summary: dict[str, object] | None) -> str | None:
         if not isinstance(transmission_summary, dict):
             return None
+        details = transmission_summary.get("primary_driver_details")
+        if isinstance(details, list) and details:
+            first = details[0]
+            if isinstance(first, dict):
+                label = first.get("label")
+                if isinstance(label, str) and label.strip():
+                    return label.strip()
         drivers = transmission_summary.get("primary_drivers")
         if not isinstance(drivers, list) or not drivers:
             return None
