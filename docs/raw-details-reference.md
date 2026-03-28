@@ -72,7 +72,7 @@ The run detail page uses these artifacts to render workflow-specific cards or li
 
 ## Sentiment snapshot records
 
-Shared macro and industry refresh workflows persist `SentimentSnapshot` records with fields such as:
+Shared macro and industry refresh workflows persist `SupportSnapshot` records with fields such as:
 - `id`
 - `scope`
 - `subject_key`

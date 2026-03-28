@@ -30,7 +30,7 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
-from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
+from trade_proposer_app.repositories.support_snapshots import SupportSnapshotRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 
@@ -254,7 +254,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
     def seed_sentiment_snapshots(self) -> list[int]:
         session = Session(bind=self.engine)
         try:
-            repository = SentimentSnapshotRepository(session)
+            repository = SupportSnapshotRepository(session)
             macro = repository.create_snapshot(
                 scope="macro",
                 subject_key="global_macro",

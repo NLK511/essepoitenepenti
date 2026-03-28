@@ -15,7 +15,7 @@ from trade_proposer_app.domain.models import (
     RecommendationPlanOutcome,
     RunDiagnostics,
     RunOutput,
-    SentimentSnapshot,
+    SupportSnapshot,
     TickerSignalSnapshot,
 )
 from trade_proposer_app.persistence.models import Base, JobRecord, ProviderCredentialRecord, RunRecord
@@ -24,7 +24,7 @@ from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
-from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
+from trade_proposer_app.repositories.support_snapshots import SupportSnapshotRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
@@ -220,13 +220,13 @@ class StubOptimizationService:
         )
 
 
-class StubMacroSentimentService:
+class StubMacroSupportRefreshService:
     def __init__(self) -> None:
         self.calls: list[tuple[int | None, int | None]] = []
 
     def refresh(self, *, job_id: int | None = None, run_id: int | None = None) -> dict[str, object]:
         self.calls.append((job_id, run_id))
-        snapshot = SentimentSnapshot(
+        snapshot = SupportSnapshot(
             id=7,
             scope="macro",
             subject_key="global_macro",
@@ -247,14 +247,14 @@ class StubMacroSentimentService:
         }
 
 
-class StubIndustrySentimentService:
+class StubIndustrySupportRefreshService:
     def __init__(self) -> None:
         self.calls: list[tuple[int | None, int | None]] = []
 
     def refresh_all(self, *, job_id: int | None = None, run_id: int | None = None) -> dict[str, object]:
         self.calls.append((job_id, run_id))
         snapshots = [
-            SentimentSnapshot(
+            SupportSnapshot(
                 id=12,
                 scope="industry",
                 subject_key="consumer_electronics",
@@ -394,7 +394,7 @@ class RepositoryTests(unittest.TestCase):
 
     def test_sentiment_snapshot_repository_returns_latest_valid_snapshot(self) -> None:
         session = create_session()
-        repository = SentimentSnapshotRepository(session)
+        repository = SupportSnapshotRepository(session)
         now = datetime(2026, 3, 22, 12, 0, tzinfo=timezone.utc)
 
         repository.create_snapshot(
@@ -429,7 +429,7 @@ class RepositoryTests(unittest.TestCase):
 
     def test_sentiment_snapshot_repository_ignores_expired_snapshot(self) -> None:
         session = create_session()
-        repository = SentimentSnapshotRepository(session)
+        repository = SupportSnapshotRepository(session)
         snapshot = repository.create_snapshot(
             scope="macro",
             subject_key="global_macro",
@@ -893,11 +893,11 @@ class RepositoryTests(unittest.TestCase):
             "0 */6 * * *",
             job_type=JobType.MACRO_SENTIMENT_REFRESH,
         )
-        macro_service = StubMacroSentimentService()
+        macro_service = StubMacroSupportRefreshService()
         service = JobExecutionService(
             jobs=jobs,
             runs=runs,
-            macro_sentiment=macro_service,
+            macro_support=macro_service,
             macro_context=MacroContextService(ContextSnapshotRepository(session)),
         )
         queued_run = service.enqueue_job(job.id or 0)
@@ -931,11 +931,11 @@ class RepositoryTests(unittest.TestCase):
             "0 */8 * * *",
             job_type=JobType.INDUSTRY_SENTIMENT_REFRESH,
         )
-        industry_service = StubIndustrySentimentService()
+        industry_service = StubIndustrySupportRefreshService()
         service = JobExecutionService(
             jobs=jobs,
             runs=runs,
-            industry_sentiment=industry_service,
+            industry_support=industry_service,
             industry_context=IndustryContextService(ContextSnapshotRepository(session)),
         )
         queued_run = service.enqueue_job(job.id or 0)

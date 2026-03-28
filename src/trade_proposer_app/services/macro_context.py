@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from trade_proposer_app.domain.models import MacroContextSnapshot, SentimentSnapshot
+from trade_proposer_app.domain.models import MacroContextSnapshot, SupportSnapshot
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.services.event_extraction import (
     EventDefinition,
@@ -134,9 +134,9 @@ class MacroContextService:
         self.news_service = news_service
         self.summary_service = summary_service
 
-    def create_from_sentiment_snapshot(
+    def create_from_support_snapshot(
         self,
-        snapshot: SentimentSnapshot,
+        snapshot: SupportSnapshot,
         *,
         job_id: int | None = None,
         run_id: int | None = None,
@@ -257,6 +257,15 @@ class MacroContextService:
             job_id=job_id,
         )
         return self.repository.create_macro_context_snapshot(context)
+
+    def create_from_sentiment_snapshot(
+        self,
+        snapshot: SupportSnapshot,
+        *,
+        job_id: int | None = None,
+        run_id: int | None = None,
+    ) -> MacroContextSnapshot:
+        return self.create_from_support_snapshot(snapshot, job_id=job_id, run_id=run_id)
 
     def _load_news_evidence(self) -> tuple[object | None, dict[str, object]]:
         if self.news_service is None:

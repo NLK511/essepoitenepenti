@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import AppPreflightReport, PreflightCheck
-from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
+from trade_proposer_app.repositories.support_snapshots import SupportSnapshotRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.preflight import AppPreflightService
 
@@ -20,7 +20,7 @@ def _create_preflight_service(session: Session) -> AppPreflightService:
 
 
 def _augment_report_with_snapshot_checks(report: AppPreflightReport, session: Session) -> AppPreflightReport:
-    repository = SentimentSnapshotRepository(session)
+    repository = SupportSnapshotRepository(session)
     latest_macro = repository.get_latest_snapshot("macro", "global_macro")
     latest_industry = next(iter(repository.list_recent_snapshots(scope="industry", limit=1)), None)
     extra_checks: list[PreflightCheck] = []

@@ -3,17 +3,17 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
-from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
+from trade_proposer_app.repositories.support_snapshots import SupportSnapshotRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.industry_context import IndustryContextService
-from trade_proposer_app.services.industry_sentiment import IndustrySentimentService
+from trade_proposer_app.services.industry_support import IndustrySupportRefreshService
 from trade_proposer_app.services.macro_context import MacroContextService
-from trade_proposer_app.services.macro_sentiment import MacroSentimentService
+from trade_proposer_app.services.macro_support import MacroSupportRefreshService
 from trade_proposer_app.services.news import NewsIngestionService
 from trade_proposer_app.services.proposals import ProposalService
 from trade_proposer_app.services.signals import SignalIngestionService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
-from trade_proposer_app.services.snapshot_resolver import SentimentSnapshotResolver
+from trade_proposer_app.services.support_snapshot_resolver import SupportSnapshotResolver
 from trade_proposer_app.services.social import SocialIngestionService
 from trade_proposer_app.services.summary import SummaryService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
@@ -34,8 +34,8 @@ def create_proposal_service(session: Session) -> ProposalService:
         provider_credentials=credentials,
     )
     taxonomy_service = TickerTaxonomyService()
-    snapshot_resolver = SentimentSnapshotResolver(
-        SentimentSnapshotRepository(session),
+    snapshot_resolver = SupportSnapshotResolver(
+        SupportSnapshotRepository(session),
         taxonomy_service=taxonomy_service,
         context_repository=ContextSnapshotRepository(session),
     )
@@ -77,13 +77,13 @@ def create_watchlist_orchestration_service(
     )
 
 
-def create_macro_sentiment_service(session: Session) -> MacroSentimentService:
+def create_macro_support_service(session: Session) -> MacroSupportRefreshService:
     repository = SettingsRepository(session)
     credentials = repository.get_provider_credential_map()
     news_service = NewsIngestionService.from_provider_credentials(credentials)
     social_service = SocialIngestionService.from_settings(repository.get_social_settings())
-    snapshot_repository = SentimentSnapshotRepository(session)
-    return MacroSentimentService(snapshot_repository, social_service=social_service, news_service=news_service)
+    snapshot_repository = SupportSnapshotRepository(session)
+    return MacroSupportRefreshService(snapshot_repository, social_service=social_service, news_service=news_service)
 
 
 def create_macro_context_service(session: Session) -> MacroContextService:
@@ -97,12 +97,12 @@ def create_macro_context_service(session: Session) -> MacroContextService:
     return MacroContextService(ContextSnapshotRepository(session), news_service=news_service, summary_service=summary_service)
 
 
-def create_industry_sentiment_service(session: Session) -> IndustrySentimentService:
+def create_industry_support_service(session: Session) -> IndustrySupportRefreshService:
     repository = SettingsRepository(session)
     social_service = SocialIngestionService.from_settings(repository.get_social_settings())
-    snapshot_repository = SentimentSnapshotRepository(session)
+    snapshot_repository = SupportSnapshotRepository(session)
     taxonomy_service = TickerTaxonomyService()
-    return IndustrySentimentService(
+    return IndustrySupportRefreshService(
         snapshot_repository,
         social_service=social_service,
         taxonomy_service=taxonomy_service,
@@ -118,3 +118,11 @@ def create_industry_context_service(session: Session) -> IndustryContextService:
         provider_credentials=credentials,
     )
     return IndustryContextService(ContextSnapshotRepository(session), news_service=news_service, summary_service=summary_service)
+
+
+def create_macro_sentiment_service(session: Session) -> MacroSupportRefreshService:
+    return create_macro_support_service(session)
+
+
+def create_industry_sentiment_service(session: Session) -> IndustrySupportRefreshService:
+    return create_industry_support_service(session)

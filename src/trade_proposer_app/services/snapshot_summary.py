@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from trade_proposer_app.domain.models import SentimentSnapshot
+from trade_proposer_app.domain.models import SupportSnapshot
 
 
 @dataclass(frozen=True)
@@ -15,7 +15,7 @@ class SnapshotSummaryContext:
     label: str
     drivers: list[str]
     coverage_insights: list[str]
-    previous_snapshot: SentimentSnapshot | None = None
+    previous_snapshot: SupportSnapshot | None = None
 
 
 def build_snapshot_summary(context: SnapshotSummaryContext) -> str:

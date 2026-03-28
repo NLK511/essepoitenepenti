@@ -218,7 +218,7 @@ class AppSetting(BaseModel):
     value: str
 
 
-class SentimentSnapshot(BaseModel):
+class SupportSnapshot(BaseModel):
     id: int | None = None
     scope: str
     subject_key: str
@@ -236,6 +236,9 @@ class SentimentSnapshot(BaseModel):
     summary_text: str = ""
     job_id: int | None = None
     run_id: int | None = None
+
+
+SentimentSnapshot = SupportSnapshot
 
 
 class MacroContextSnapshot(BaseModel):

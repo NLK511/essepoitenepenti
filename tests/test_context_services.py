@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import MagicMock
 
-from trade_proposer_app.domain.models import IndustryContextSnapshot, MacroContextSnapshot, NewsArticle, NewsBundle, SentimentSnapshot
+from trade_proposer_app.domain.models import IndustryContextSnapshot, MacroContextSnapshot, NewsArticle, NewsBundle, SupportSnapshot
 from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.summary import SummaryResult
@@ -57,7 +57,7 @@ class ContextServiceTests(unittest.TestCase):
                 "coverage_insights": [],
             },
         )
-        snapshot = SentimentSnapshot(
+        snapshot = SupportSnapshot(
             id=7,
             scope="macro",
             subject_key="global_macro",
@@ -75,7 +75,7 @@ class ContextServiceTests(unittest.TestCase):
             source_breakdown_json=json.dumps({"social": {"item_count": 1}}),
         )
 
-        context = MacroContextService(repository, news_service=news_service).create_from_sentiment_snapshot(snapshot)
+        context = MacroContextService(repository, news_service=news_service).create_from_support_snapshot(snapshot)
 
         self.assertEqual(context.source_breakdown["primary_news_item_count"], 1)
         self.assertNotIn("primary_news_evidence", context.missing_inputs)
@@ -129,7 +129,7 @@ class ContextServiceTests(unittest.TestCase):
                 "coverage_insights": [],
             },
         )
-        snapshot = SentimentSnapshot(
+        snapshot = SupportSnapshot(
             id=8,
             scope="macro",
             subject_key="global_macro",
@@ -141,7 +141,7 @@ class ContextServiceTests(unittest.TestCase):
             source_breakdown_json=json.dumps({}),
         )
 
-        context = MacroContextService(repository, news_service=news_service).create_from_sentiment_snapshot(snapshot)
+        context = MacroContextService(repository, news_service=news_service).create_from_support_snapshot(snapshot)
 
         energy = next(theme for theme in context.active_themes if theme["key"] == "energy_oil")
         self.assertTrue(energy["contradiction_flag"])
@@ -186,7 +186,7 @@ class ContextServiceTests(unittest.TestCase):
             metadata={"summary_kind": "macro_context"},
             duration_seconds=0.2,
         )
-        snapshot = SentimentSnapshot(
+        snapshot = SupportSnapshot(
             id=9,
             scope="macro",
             subject_key="global_macro",
@@ -198,7 +198,7 @@ class ContextServiceTests(unittest.TestCase):
             source_breakdown_json=json.dumps({}),
         )
 
-        context = MacroContextService(repository, news_service=news_service, summary_service=summary_service).create_from_sentiment_snapshot(snapshot)
+        context = MacroContextService(repository, news_service=news_service, summary_service=summary_service).create_from_support_snapshot(snapshot)
 
         self.assertEqual(context.summary_text, summary_service.summarize_prompt.return_value.summary)
         self.assertEqual(context.metadata["context_summary_method"], "llm_summary")
@@ -234,7 +234,7 @@ class ContextServiceTests(unittest.TestCase):
                 "coverage_insights": [],
             },
         )
-        snapshot = SentimentSnapshot(
+        snapshot = SupportSnapshot(
             id=12,
             scope="industry",
             subject_key="semiconductors",
@@ -253,7 +253,7 @@ class ContextServiceTests(unittest.TestCase):
             source_breakdown_json=json.dumps({"social": {"item_count": 1}}),
         )
 
-        context = IndustryContextService(repository, news_service=news_service).create_from_sentiment_snapshot(snapshot)
+        context = IndustryContextService(repository, news_service=news_service).create_from_support_snapshot(snapshot)
 
         self.assertEqual(context.source_breakdown["primary_news_item_count"], 1)
         self.assertNotIn("primary_industry_news_evidence", context.missing_inputs)
@@ -305,7 +305,7 @@ class ContextServiceTests(unittest.TestCase):
             metadata={"summary_kind": "industry_context"},
             duration_seconds=0.2,
         )
-        snapshot = SentimentSnapshot(
+        snapshot = SupportSnapshot(
             id=13,
             scope="industry",
             subject_key="semiconductors",
@@ -318,7 +318,7 @@ class ContextServiceTests(unittest.TestCase):
             source_breakdown_json=json.dumps({}),
         )
 
-        context = IndustryContextService(repository, news_service=news_service, summary_service=summary_service).create_from_sentiment_snapshot(snapshot)
+        context = IndustryContextService(repository, news_service=news_service, summary_service=summary_service).create_from_support_snapshot(snapshot)
 
         self.assertEqual(context.summary_text, summary_service.summarize_prompt.return_value.summary)
         self.assertEqual(context.metadata["context_summary_method"], "llm_summary")

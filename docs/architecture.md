@@ -51,7 +51,7 @@ flowchart LR
     subgraph Core[Backend core modules]
         Domain[domain\ntyped models and enums]
         Repositories[repositories\nDB translation and queries]
-        Services[services\njob execution, proposals, preflight, scheduler, sentiment refresh]
+        Services[services\njob execution, proposals, preflight, scheduler, support refresh]
         Workers[worker\nqueued run processor]
         Scheduler[scheduler\nenqueue pass for scheduled jobs]
     end
@@ -63,11 +63,11 @@ flowchart LR
 
     subgraph Pipeline[App-native analysis pipeline]
         ProposalService[ProposalService\nfetches data, builds features, applies weights]
-        SnapshotResolver[SentimentSnapshotResolver\nloads latest macro + industry snapshots]
+        SnapshotResolver[SupportSnapshotResolver\nloads latest macro + industry snapshots]
         NewsIngestionService[NewsIngestionService\nfetches news + sentiment signals]
         FeatureEngine[Feature engineering &\nnormalization]
         Weights[weights.json\ninternal scoring weights]
-        RefreshServices[MacroSentimentService +\nIndustrySentimentService]
+        RefreshServices[MacroSupportRefreshService +\nIndustrySupportRefreshService]
     end
 
     subgraph External[External services]
@@ -126,7 +126,7 @@ flowchart LR
 1. scheduler or operator triggers macro or industry refresh
 2. backend enqueues a refresh run
 3. worker claims the run, or the operator uses the `run-now` endpoint for immediate execution
-4. refresh services persist transitional `SentimentSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
+4. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
 5. health/preflight currently reports freshness for the shared sentiment snapshots that still gate the transitional refresh layer
 
 ## Runtime components
@@ -195,7 +195,7 @@ Owns core models and typed contracts.
 Owns persistence translation between SQLAlchemy records and domain models.
 
 ### `services`
-Owns proposal generation, sentiment refresh, job execution, scheduling, and preflight logic.
+Owns proposal generation, support refresh, job execution, scheduling, and preflight logic.
 
 ### `api`
 Owns machine-facing routes. The React frontend should use these routes instead of duplicating backend logic.

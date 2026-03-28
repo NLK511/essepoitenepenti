@@ -7,16 +7,16 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import JobType
-from trade_proposer_app.domain.models import Run, SentimentSnapshot
+from trade_proposer_app.domain.models import Run, SupportSnapshot
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
-from trade_proposer_app.repositories.sentiment_snapshots import SentimentSnapshotRepository
+from trade_proposer_app.repositories.support_snapshots import SupportSnapshotRepository
 from trade_proposer_app.services.builders import (
     create_industry_context_service,
-    create_industry_sentiment_service,
+    create_industry_support_service,
     create_macro_context_service,
-    create_macro_sentiment_service,
+    create_macro_support_service,
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.job_execution import JobExecutionService
@@ -39,8 +39,8 @@ def _create_job_execution_service(session: Session) -> JobExecutionService:
             session=session,
             minimum_resolved_trades=settings_repository.get_optimization_minimum_resolved_trades(),
         ),
-        macro_sentiment=create_macro_sentiment_service(session),
-        industry_sentiment=create_industry_sentiment_service(session),
+        macro_support=create_macro_support_service(session),
+        industry_support=create_industry_support_service(session),
         macro_context=create_macro_context_service(session),
         industry_context=create_industry_context_service(session),
         recommendation_plans=RecommendationPlanRepository(session),
@@ -53,7 +53,7 @@ async def list_sentiment_snapshots(
     limit: int = 20,
     session: Session = Depends(get_db_session),
 ) -> dict[str, object]:
-    repository = SentimentSnapshotRepository(session)
+    repository = SupportSnapshotRepository(session)
     normalized_scope = (scope or "").strip().lower() or None
     normalized_limit = max(1, min(limit, 100))
     snapshots = repository.list_recent_snapshots(scope=normalized_scope, limit=normalized_limit)
@@ -66,7 +66,7 @@ async def list_sentiment_snapshots(
 
 @router.get("/macro")
 async def list_macro_snapshots(limit: int = 20, session: Session = Depends(get_db_session)) -> dict[str, object]:
-    repository = SentimentSnapshotRepository(session)
+    repository = SupportSnapshotRepository(session)
     normalized_limit = max(1, min(limit, 100))
     snapshots = repository.list_recent_snapshots(scope="macro", limit=normalized_limit)
     return {
@@ -78,7 +78,7 @@ async def list_macro_snapshots(limit: int = 20, session: Session = Depends(get_d
 
 @router.get("/industry")
 async def list_industry_snapshots(limit: int = 20, session: Session = Depends(get_db_session)) -> dict[str, object]:
-    repository = SentimentSnapshotRepository(session)
+    repository = SupportSnapshotRepository(session)
     normalized_limit = max(1, min(limit, 100))
     snapshots = repository.list_recent_snapshots(scope="industry", limit=normalized_limit)
     return {
@@ -114,7 +114,7 @@ async def run_industry_snapshot_refresh_now(session: Session = Depends(get_db_se
 
 @router.get("/{snapshot_id}")
 async def get_sentiment_snapshot(snapshot_id: int, session: Session = Depends(get_db_session)) -> dict[str, Any]:
-    repository = SentimentSnapshotRepository(session)
+    repository = SupportSnapshotRepository(session)
     snapshot = repository.get_snapshot(snapshot_id)
     if snapshot is None:
         raise HTTPException(status_code=404, detail=f"Sentiment snapshot {snapshot_id} not found")
@@ -147,7 +147,7 @@ def _run_snapshot_refresh_now(session: Session, job_name: str, job_type: JobType
     return payload
 
 
-def _serialize_snapshot(snapshot: SentimentSnapshot) -> dict[str, Any]:
+def _serialize_snapshot(snapshot: SupportSnapshot) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     expires_at = snapshot.expires_at
     is_expired = expires_at is not None and expires_at < now

@@ -82,7 +82,7 @@ class ProviderCredentialRecord(Base, TimestampMixin):
     api_secret: Mapped[str] = mapped_column(Text, default="")
 
 
-class SentimentSnapshotRecord(Base, TimestampMixin):
+class SupportSnapshotRecord(Base, TimestampMixin):
     __tablename__ = "sentiment_snapshots"
     __table_args__ = (
         Index("ix_sentiment_snapshots_scope", "scope"),
@@ -108,6 +108,9 @@ class SentimentSnapshotRecord(Base, TimestampMixin):
     summary_text: Mapped[str] = mapped_column(Text, default="")
     job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
     run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+
+
+SupportSnapshotRecord = SupportSnapshotRecord
 
 
 class MacroContextSnapshotRecord(Base, TimestampMixin):

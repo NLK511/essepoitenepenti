@@ -7,8 +7,8 @@ from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
-from trade_proposer_app.services.industry_sentiment import IndustrySentimentService
-from trade_proposer_app.services.macro_sentiment import MacroSentimentService
+from trade_proposer_app.services.industry_support import IndustrySupportRefreshService
+from trade_proposer_app.services.macro_support import MacroSupportRefreshService
 from trade_proposer_app.services.optimizations import WeightOptimizationService
 
 
@@ -26,8 +26,8 @@ class JobExecutionService:
         runs: RunRepository,
         evaluations: EvaluationExecutionService | None = None,
         optimizations: WeightOptimizationService | None = None,
-        macro_sentiment: MacroSentimentService | None = None,
-        industry_sentiment: IndustrySentimentService | None = None,
+        macro_support: MacroSupportRefreshService | None = None,
+        industry_support: IndustrySupportRefreshService | None = None,
         macro_context=None,
         industry_context=None,
         watchlist_orchestration=None,
@@ -37,8 +37,8 @@ class JobExecutionService:
         self.runs = runs
         self.evaluations = evaluations
         self.optimizations = optimizations
-        self.macro_sentiment = macro_sentiment
-        self.industry_sentiment = industry_sentiment
+        self.macro_support = macro_support
+        self.industry_support = industry_support
         self.macro_context = macro_context
         self.industry_context = industry_context
         self.watchlist_orchestration = watchlist_orchestration
@@ -202,8 +202,8 @@ class JobExecutionService:
         return [], timing
 
     def _execute_macro_sentiment_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
-        if self.macro_sentiment is None:
-            raise RuntimeError("macro sentiment execution service is not configured")
+        if self.macro_support is None:
+            raise RuntimeError("macro support execution service is not configured")
 
         execution_started = perf_counter()
         timing: dict[str, object] = {
@@ -216,7 +216,7 @@ class JobExecutionService:
 
         refresh_started = perf_counter()
         try:
-            result = self.macro_sentiment.refresh(job_id=run.job_id, run_id=run.id)
+            result = self.macro_support.refresh(job_id=run.job_id, run_id=run.id)
             timing["macro_refresh_seconds"] = round(perf_counter() - refresh_started, 6)
         except Exception as exc:
             timing["macro_refresh_seconds"] = round(perf_counter() - refresh_started, 6)
@@ -228,7 +228,7 @@ class JobExecutionService:
         snapshot = result.get("snapshot")
         context_snapshot = None
         if snapshot is not None and self.macro_context is not None:
-            context_snapshot = self.macro_context.create_from_sentiment_snapshot(
+            context_snapshot = self.macro_context.create_from_support_snapshot(
                 snapshot,
                 job_id=run.job_id,
                 run_id=run.id,
@@ -249,8 +249,8 @@ class JobExecutionService:
         return [], timing
 
     def _execute_industry_sentiment_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
-        if self.industry_sentiment is None:
-            raise RuntimeError("industry sentiment execution service is not configured")
+        if self.industry_support is None:
+            raise RuntimeError("industry support execution service is not configured")
 
         execution_started = perf_counter()
         timing: dict[str, object] = {
@@ -263,7 +263,7 @@ class JobExecutionService:
 
         refresh_started = perf_counter()
         try:
-            result = self.industry_sentiment.refresh_all(job_id=run.job_id, run_id=run.id)
+            result = self.industry_support.refresh_all(job_id=run.job_id, run_id=run.id)
             timing["industry_refresh_seconds"] = round(perf_counter() - refresh_started, 6)
         except Exception as exc:
             timing["industry_refresh_seconds"] = round(perf_counter() - refresh_started, 6)
@@ -277,7 +277,7 @@ class JobExecutionService:
         if self.industry_context is not None:
             for snapshot in snapshots:
                 context_snapshots.append(
-                    self.industry_context.create_from_sentiment_snapshot(
+                    self.industry_context.create_from_support_snapshot(
                         snapshot,
                         job_id=run.job_id,
                         run_id=run.id,

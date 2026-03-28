@@ -84,7 +84,7 @@ class StubOptimizationService:
         )
 
 
-class StubMacroSentimentService:
+class StubMacroSupportRefreshService:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
@@ -102,7 +102,7 @@ class StubMacroSentimentService:
         }
 
 
-class StubIndustrySentimentService:
+class StubIndustrySupportRefreshService:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
@@ -370,9 +370,9 @@ class WorkerSchedulerTests(unittest.TestCase):
         with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
             "trade_proposer_app.workers.tasks.create_proposal_service", return_value=StubProposalService()
         ), patch(
-            "trade_proposer_app.workers.tasks.create_macro_sentiment_service", return_value=StubMacroSentimentService()
+            "trade_proposer_app.workers.tasks.create_macro_support_service", return_value=StubMacroSupportRefreshService()
         ), patch(
-            "trade_proposer_app.workers.tasks.create_industry_sentiment_service", return_value=StubIndustrySentimentService()
+            "trade_proposer_app.workers.tasks.create_industry_support_service", return_value=StubIndustrySupportRefreshService()
         ):
             processed = process_once()
 
@@ -399,9 +399,9 @@ class WorkerSchedulerTests(unittest.TestCase):
         with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
             "trade_proposer_app.workers.tasks.create_proposal_service", return_value=StubProposalService()
         ), patch(
-            "trade_proposer_app.workers.tasks.create_macro_sentiment_service", return_value=StubMacroSentimentService()
+            "trade_proposer_app.workers.tasks.create_macro_support_service", return_value=StubMacroSupportRefreshService()
         ), patch(
-            "trade_proposer_app.workers.tasks.create_industry_sentiment_service", return_value=StubIndustrySentimentService()
+            "trade_proposer_app.workers.tasks.create_industry_support_service", return_value=StubIndustrySupportRefreshService()
         ):
             processed = process_once()
 
