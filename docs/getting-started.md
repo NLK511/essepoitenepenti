@@ -211,6 +211,23 @@ Production-style local stop helper:
 ./scripts/stop-prod.sh
 ```
 
+## Seeding the default watchlists
+
+If you want the repo's curated default watchlist pack, run:
+
+```bash
+.venv/bin/python scripts/deploy_watchlists.py
+```
+
+This seeds:
+- 15 default watchlists
+- 15 matching scheduled `Auto: ...` jobs
+- 300 total equities split across U.S., Europe, and Asia-Pacific
+- compact continent-plus-macro-industry buckets such as `US-Tech`, `EU-Fin`, and `APAC-Cyc`
+
+Design rationale and schedule map:
+- `default-watchlists.md`
+
 ## Validation
 
 Backend:

@@ -55,6 +55,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 
 ### Watchlist workflow
 - Persist watchlists with metadata such as `description`, `region`, `exchange`, `timezone`, `default_horizon`, `allow_shorts`, and `optimize_evaluation_timing`.
+- Seed a curated default watchlist pack through `scripts/deploy_watchlists.py`, covering 300 equities split across U.S., Europe, and Asia-Pacific continent-plus-macro-industry buckets; see `default-watchlists.md` for the rationale.
 - Inspect watchlist policy and timing assumptions through the API and UI.
 - Run watchlist-backed proposal jobs through a staged flow:
   1. cheap scan across the watchlist

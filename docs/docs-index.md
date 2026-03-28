@@ -64,6 +64,10 @@ These docs define the current product truth.
   - first-run troubleshooting
   - validation commands
   - optional Postgres integration-test workflow
+- `default-watchlists.md`
+  - seeded default watchlist strategy
+  - universe construction rationale
+  - compact naming and schedule rationale
 
 ### Current roadmap
 - `roadmap.md`
