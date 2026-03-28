@@ -20,6 +20,7 @@ from trade_proposer_app.services.event_extraction import (
     top_event_labels,
 )
 from trade_proposer_app.services.news import NewsIngestionService
+from trade_proposer_app.services.summary import SummaryResult, SummaryService
 
 MACRO_LINK_DEFINITIONS = [
     EventDefinition("inflation", "Inflation", ("inflation",), category="macro_transmission", window_hint="2d_5d", transmission_channels=("input_costs", "pricing_power")),
@@ -54,9 +55,11 @@ class IndustryContextService:
         repository: ContextSnapshotRepository,
         *,
         news_service: NewsIngestionService | None = None,
+        summary_service: SummaryService | None = None,
     ) -> None:
         self.repository = repository
         self.news_service = news_service
+        self.summary_service = summary_service
 
     def create_from_sentiment_snapshot(
         self,
@@ -128,7 +131,28 @@ class IndustryContextService:
             primary_source_counts,
             contradiction_count=int(lifecycle_summary.get("contradiction_count", 0) or 0),
         )
-        summary_text = self._summary_text(previous, industry_label, active_drivers, lifecycle_summary, linked_macro_themes, news_items, supporting_social_items)
+        triaged_evidence = self._triaged_news_items(news_items, active_drivers, linked_macro_events)
+        fallback_summary = self._fallback_summary_text(
+            previous,
+            industry_label,
+            active_drivers,
+            lifecycle_summary,
+            linked_macro_themes,
+            news_items,
+            supporting_social_items,
+        )
+        summary_result = self._summarize_context(
+            industry_label=industry_label,
+            active_drivers=active_drivers,
+            linked_macro_events=linked_macro_events,
+            lifecycle_summary=lifecycle_summary,
+            news_items=news_items,
+            supporting_social_items=supporting_social_items,
+            primary_coverage_quality=primary_coverage_quality,
+            warnings=warnings,
+            fallback_summary=fallback_summary,
+        )
+        summary_text = summary_result.summary or fallback_summary
         context = IndustryContextSnapshot(
             industry_key=industry_key,
             industry_label=industry_label,
@@ -170,6 +194,14 @@ class IndustryContextService:
                 "event_lifecycle_summary": lifecycle_summary,
                 "contradictory_event_labels": contradiction_labels,
                 "event_windows": list(lifecycle_summary.get("window_hints", [])),
+                "triaged_primary_evidence": triaged_evidence,
+                "linked_macro_event_labels": top_event_labels(linked_macro_events),
+                "context_summary_method": summary_result.method,
+                "context_summary_backend": summary_result.backend,
+                "context_summary_model": summary_result.model,
+                "context_summary_error": summary_result.llm_error,
+                "context_summary_duration_seconds": summary_result.duration_seconds,
+                "context_summary_metadata": summary_result.metadata,
             },
             run_id=run_id,
             job_id=job_id,
@@ -193,6 +225,150 @@ class IndustryContextService:
         analyzed = self.news_service.analyze_bundle(bundle)
         sentiment = analyzed.get("sentiment", {}) if isinstance(analyzed, dict) else {}
         return bundle, sentiment if isinstance(sentiment, dict) else {}
+
+    def _summarize_context(
+        self,
+        *,
+        industry_label: str,
+        active_drivers: list[dict[str, object]],
+        linked_macro_events: list[dict[str, object]],
+        lifecycle_summary: dict[str, object],
+        news_items: list[object],
+        supporting_social_items: list[object],
+        primary_coverage_quality: str,
+        warnings: list[str],
+        fallback_summary: str,
+    ) -> SummaryResult:
+        if self.summary_service is None or not active_drivers:
+            return SummaryResult(
+                summary=fallback_summary,
+                method="news_digest",
+                backend="news_digest",
+                model=None,
+                llm_error=None,
+                metadata={"reason": "summary service unavailable"},
+                duration_seconds=None,
+            )
+        prompt = self._build_context_summary_prompt(
+            industry_label=industry_label,
+            active_drivers=active_drivers,
+            linked_macro_events=linked_macro_events,
+            lifecycle_summary=lifecycle_summary,
+            news_items=news_items,
+            supporting_social_items=supporting_social_items,
+            primary_coverage_quality=primary_coverage_quality,
+            warnings=warnings,
+        )
+        return self.summary_service.summarize_prompt(
+            prompt,
+            fallback_summary=fallback_summary,
+            fallback_metadata={
+                "summary_kind": "industry_context",
+                "industry_label": industry_label,
+                "salient_driver_count": len(active_drivers),
+                "linked_macro_event_count": len(linked_macro_events),
+                "triaged_news_item_count": len(self._triaged_news_items(news_items, active_drivers, linked_macro_events)),
+            },
+        )
+
+    def _build_context_summary_prompt(
+        self,
+        *,
+        industry_label: str,
+        active_drivers: list[dict[str, object]],
+        linked_macro_events: list[dict[str, object]],
+        lifecycle_summary: dict[str, object],
+        news_items: list[object],
+        supporting_social_items: list[object],
+        primary_coverage_quality: str,
+        warnings: list[str],
+    ) -> str:
+        driver_lines = []
+        for index, event in enumerate(active_drivers[:3], start=1):
+            channels = event.get("transmission_channels") if isinstance(event.get("transmission_channels"), list) else []
+            driver_lines.append(
+                f"{index}. {event.get('label', 'Unknown driver')} | state={event.get('persistence_state', 'unknown')} | saliency={event.get('saliency_weight', 0.0)} | source={event.get('source_priority', 'other')} | window={event.get('window_hint', 'unknown')} | direction={event.get('evidence_direction', 'mixed')} | channels={', '.join(str(channel) for channel in channels[:3]) or 'unknown'}"
+            )
+        macro_lines = []
+        for index, event in enumerate(linked_macro_events[:2], start=1):
+            macro_lines.append(
+                f"{index}. {event.get('label', 'Unknown macro link')} | state={event.get('persistence_state', 'unknown')} | saliency={event.get('saliency_weight', 0.0)} | window={event.get('window_hint', 'unknown')}"
+            )
+        triaged_news = self._triaged_news_items(news_items, active_drivers, linked_macro_events)
+        news_lines = []
+        for index, item in enumerate(triaged_news[:6], start=1):
+            news_lines.append(
+                f"{index}. [{item['source_priority']}] {item['publisher']}: {item['title']}"
+                + (f" — {item['summary']}" if item['summary'] else "")
+            )
+        contradiction_labels = list(lifecycle_summary.get("contradictory_event_labels", []))
+        prompt_parts = [
+            f"Write a short operator-facing industry context summary for {industry_label} in 2-4 sentences.",
+            "Focus on the top salient industry drivers, not just one event.",
+            "Ground the summary in the highest-quality fetched sources first. Use social evidence only as secondary support.",
+            "Say what the main drivers are, how they matter over the next few trading days to weeks, and whether macro read-through is reinforcing or offsetting them.",
+            "If evidence is contradictory or degraded, say that plainly.",
+            "Do not use hype. Do not invent facts beyond the evidence below.",
+            "",
+            f"Primary news coverage quality: {primary_coverage_quality}",
+            f"Warnings: {'; '.join(warnings) if warnings else 'none'}",
+            f"Contradictions: {', '.join(contradiction_labels) if contradiction_labels else 'none'}",
+            f"Supporting social item count: {len(supporting_social_items)}",
+            "",
+            "Top industry drivers:",
+            *(driver_lines or ["none"]),
+            "",
+            "Linked macro read-through:",
+            *(macro_lines or ["none"]),
+            "",
+            "Triaged high-quality source items:",
+            *(news_lines or ["none"]),
+            "",
+            "Summary:",
+        ]
+        return "\n".join(prompt_parts)
+
+    def _triaged_news_items(
+        self,
+        news_items: list[object],
+        active_drivers: list[dict[str, object]],
+        linked_macro_events: list[dict[str, object]],
+    ) -> list[dict[str, str]]:
+        definition_map = {definition.key: definition for definition in [*INDUSTRY_EVENT_DEFINITIONS, *MACRO_LINK_DEFINITIONS]}
+        prioritized_events = [*active_drivers[:3], *linked_macro_events[:2]]
+        ranked: list[tuple[tuple[float, float, int], dict[str, str]]] = []
+        for raw_item in news_items:
+            if not isinstance(raw_item, dict):
+                continue
+            title = str(raw_item.get("title", "") or "").strip()
+            summary = str(raw_item.get("summary", "") or "").strip()
+            publisher = str(raw_item.get("publisher", "") or "").strip()
+            source_priority = self._source_priority_for_item(raw_item)
+            priority_score = {"official": 4.0, "trade": 3.0, "major": 2.0, "other": 1.0}.get(source_priority, 0.0)
+            text = f"{title} {summary}".lower()
+            event_hits = 0
+            saliency_score = 0.0
+            for event in prioritized_events:
+                key = str(event.get("key", "") or "")
+                definition = definition_map.get(key)
+                if definition is None:
+                    continue
+                if any(phrase.lower() in text for phrase in definition.phrases):
+                    event_hits += 1
+                    saliency_score += float(event.get("saliency_weight", 0.0) or 0.0)
+            ranked.append(
+                (
+                    (priority_score, saliency_score, event_hits),
+                    {
+                        "title": title,
+                        "summary": summary,
+                        "publisher": publisher or "unknown publisher",
+                        "source_priority": source_priority,
+                    },
+                )
+            )
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        return [item for _, item in ranked[:6]]
 
     @staticmethod
     def _linked_industry_themes(active_drivers: list[dict[str, object]]) -> list[str]:
@@ -271,7 +447,7 @@ class IndustryContextService:
         return round(max(5.0, min(92.0, confidence)), 1)
 
     @staticmethod
-    def _summary_text(
+    def _fallback_summary_text(
         previous: IndustryContextSnapshot | None,
         industry_label: str,
         active_drivers: list[dict[str, object]],
@@ -302,6 +478,18 @@ class IndustryContextService:
         if previous and previous.summary_text:
             return f"{industry_label} context is broadly unchanged, but this run did not surface a clearly dominant fresh driver."
         return f"{industry_label} context is currently light on salient evidence, so the output mainly records continuity and known macro links."
+
+    @staticmethod
+    def _source_priority_for_item(raw_item: dict[str, object]) -> str:
+        publisher = raw_item.get("publisher")
+        normalized = str(publisher or "").strip().lower()
+        if any(hint in normalized for hint in ("sec", "fda", "federal reserve", "treasury", "department of", "european commission")):
+            return "official"
+        if any(hint in normalized for hint in ("digitimes", "semianalysis", "freightwaves", "fierce", "endpoints", "stat", "the information", "industry dive")):
+            return "trade"
+        if any(hint in normalized for hint in ("reuters", "bloomberg", "financial times", "wall street journal", "wsj", "cnbc", "associated press", "ap", "nikkei", "barron's")):
+            return "major"
+        return "other"
 
     @staticmethod
     def _item_text(raw_item: object) -> str:

@@ -5,6 +5,7 @@ import { LoginPage } from "./pages/login-page";
 import { DashboardPage } from "./pages/dashboard-page";
 import { DebuggerPage } from "./pages/debugger-page";
 import { DocsPage } from "./pages/docs-page";
+import { ContextSnapshotDetailPage } from "./pages/context-snapshot-detail-page";
 import { JobsPage } from "./pages/jobs-page";
 import { RecommendationPlansPage } from "./pages/recommendation-plans-page";
 import { RunDetailPage } from "./pages/run-detail-page";
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="debugger" element={<Navigate to="/jobs/debugger" replace />} />
           <Route path="sentiment" element={<SentimentSnapshotsPage />} />
           <Route path="sentiment/:snapshotId" element={<SentimentSnapshotDetailPage />} />
+          <Route path="context/:scope/:snapshotId" element={<ContextSnapshotDetailPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="docs" element={<DocsPage />} />
           <Route path="runs/:runId" element={<RunDetailPage />} />

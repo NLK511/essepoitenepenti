@@ -131,11 +131,11 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
       description: "Inspect a ticker’s recent plans, outcomes, and supporting context.",
     };
   }
-  if (pathname.startsWith("/sentiment")) {
+  if (pathname.startsWith("/sentiment") || pathname.startsWith("/context/")) {
     return {
       eyebrow: "Context",
       title: "Context snapshots",
-      description: "Review macro and industry context records, saliency, and continuity across runs.",
+      description: "Review macro and industry context records, saliency, summary provenance, and continuity across runs.",
     };
   }
   if (pathname.startsWith("/settings")) {

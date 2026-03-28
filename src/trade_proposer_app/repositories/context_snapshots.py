@@ -55,6 +55,12 @@ class ContextSnapshotRepository:
             return None
         return self._to_macro_model(record)
 
+    def get_macro_context_snapshot(self, snapshot_id: int) -> MacroContextSnapshot | None:
+        record = self.session.get(MacroContextSnapshotRecord, snapshot_id)
+        if record is None:
+            return None
+        return self._to_macro_model(record)
+
     def create_industry_context_snapshot(self, snapshot: IndustryContextSnapshot) -> IndustryContextSnapshot:
         record = IndustryContextSnapshotRecord(
             industry_key=snapshot.industry_key,
@@ -101,6 +107,12 @@ class ContextSnapshotRepository:
             .order_by(IndustryContextSnapshotRecord.computed_at.desc())
             .limit(1)
         )
+        if record is None:
+            return None
+        return self._to_industry_model(record)
+
+    def get_industry_context_snapshot(self, snapshot_id: int) -> IndustryContextSnapshot | None:
+        record = self.session.get(IndustryContextSnapshotRecord, snapshot_id)
         if record is None:
             return None
         return self._to_industry_model(record)

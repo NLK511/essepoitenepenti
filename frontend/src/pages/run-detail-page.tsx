@@ -40,6 +40,40 @@ function calibrationSliceSummary(value: unknown, label: string): string {
   return `${label} ${key} · ${sampleStatus} · n=${resolvedCount} · win ${winRate}`;
 }
 
+function contextSummaryMethod(metadata: unknown): string {
+  return isRecord(metadata) && typeof metadata.context_summary_method === "string" ? metadata.context_summary_method : "unknown";
+}
+
+function contextSummaryBackend(metadata: unknown): string {
+  return isRecord(metadata) && typeof metadata.context_summary_backend === "string" ? metadata.context_summary_backend : "—";
+}
+
+function contextSummaryModel(metadata: unknown): string {
+  return isRecord(metadata) && typeof metadata.context_summary_model === "string" ? metadata.context_summary_model : "—";
+}
+
+function contextSummaryError(metadata: unknown): string | null {
+  return isRecord(metadata) && typeof metadata.context_summary_error === "string" ? metadata.context_summary_error : null;
+}
+
+function contextProvenanceTone(metadata: unknown): "ok" | "warning" | "neutral" {
+  if (contextSummaryError(metadata)) {
+    return "warning";
+  }
+  if (contextSummaryMethod(metadata) === "llm_summary") {
+    return "ok";
+  }
+  return "neutral";
+}
+
+function contextProvenanceLabel(metadata: unknown): string {
+  if (contextSummaryMethod(metadata) === "llm_summary") {
+    const model = contextSummaryModel(metadata);
+    return `LLM · ${contextSummaryBackend(metadata)}${model !== "—" ? ` · ${model}` : ""}`;
+  }
+  return `fallback · ${contextSummaryBackend(metadata)}`;
+}
+
 export function RunDetailPage() {
   const { runId } = useParams<{ runId: string }>();
   const navigate = useNavigate();
@@ -594,8 +628,14 @@ export function RunDetailPage() {
                         : [];
                       return (
                         <div key={item.id ?? item.computed_at} className="top-gap-small">
-                          <Badge tone={item.warnings.length > 0 ? "warning" : "ok"}>macro context</Badge>
-                          <span className="helper-text"> {item.summary_text || "No macro summary stored."}</span>
+                          <div className="cluster">
+                            <Badge tone={item.warnings.length > 0 ? "warning" : "ok"}>macro context</Badge>
+                            <Badge tone={contextProvenanceTone(item.metadata)}>{contextProvenanceLabel(item.metadata)}</Badge>
+                            {contextSummaryError(item.metadata) ? <Badge tone="warning">summary warning</Badge> : null}
+                            {item.id ? <Link to={`/context/macro/${item.id}`} className="button-subtle">Open detail</Link> : null}
+                          </div>
+                          <div className="helper-text top-gap-small">{item.summary_text || "No macro summary stored."}</div>
+                          {contextSummaryError(item.metadata) ? <div className="helper-text top-gap-small">{contextSummaryError(item.metadata)}</div> : null}
                           {lifecycle ? (
                             <div className="helper-text top-gap-small">
                               lifecycle: new {String(lifecycle.new_event_count ?? 0)} · escalating {String(lifecycle.escalating_event_count ?? 0)} · fading {String(lifecycle.fading_event_count ?? 0)}
@@ -614,8 +654,14 @@ export function RunDetailPage() {
                         : [];
                       return (
                         <div key={item.id ?? `${item.industry_key}-${item.computed_at}`} className="top-gap-small">
-                          <Badge tone={item.warnings.length > 0 ? "warning" : "ok"}>{item.industry_label || item.industry_key}</Badge>
-                          <span className="helper-text"> {item.summary_text || "No industry summary stored."}</span>
+                          <div className="cluster">
+                            <Badge tone={item.warnings.length > 0 ? "warning" : "ok"}>{item.industry_label || item.industry_key}</Badge>
+                            <Badge tone={contextProvenanceTone(item.metadata)}>{contextProvenanceLabel(item.metadata)}</Badge>
+                            {contextSummaryError(item.metadata) ? <Badge tone="warning">summary warning</Badge> : null}
+                            {item.id ? <Link to={`/context/industry/${item.id}`} className="button-subtle">Open detail</Link> : null}
+                          </div>
+                          <div className="helper-text top-gap-small">{item.summary_text || "No industry summary stored."}</div>
+                          {contextSummaryError(item.metadata) ? <div className="helper-text top-gap-small">{contextSummaryError(item.metadata)}</div> : null}
                           {lifecycle ? (
                             <div className="helper-text top-gap-small">
                               lifecycle: new {String(lifecycle.new_event_count ?? 0)} · escalating {String(lifecycle.escalating_event_count ?? 0)} · fading {String(lifecycle.fading_event_count ?? 0)}

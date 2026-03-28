@@ -20,6 +20,7 @@ from trade_proposer_app.services.event_extraction import (
     top_event_labels,
 )
 from trade_proposer_app.services.news import NewsIngestionService
+from trade_proposer_app.services.summary import SummaryResult, SummaryService
 
 MACRO_THEME_DEFINITIONS = [
     EventDefinition(
@@ -127,9 +128,11 @@ class MacroContextService:
         repository: ContextSnapshotRepository,
         *,
         news_service: NewsIngestionService | None = None,
+        summary_service: SummaryService | None = None,
     ) -> None:
         self.repository = repository
         self.news_service = news_service
+        self.summary_service = summary_service
 
     def create_from_sentiment_snapshot(
         self,
@@ -190,8 +193,19 @@ class MacroContextService:
             primary_source_counts,
             contradiction_count=int(lifecycle_summary.get("contradiction_count", 0) or 0),
         )
-        summary_text = self._summary_text(previous, active_themes, lifecycle_summary, news_items, supporting_social_items, warnings)
+        fallback_summary = self._fallback_summary_text(previous, active_themes, lifecycle_summary, news_items, supporting_social_items, warnings)
+        summary_result = self._summarize_context(
+            active_themes=active_themes,
+            lifecycle_summary=lifecycle_summary,
+            news_items=news_items,
+            supporting_social_items=supporting_social_items,
+            primary_coverage_quality=primary_coverage_quality,
+            warnings=warnings,
+            fallback_summary=fallback_summary,
+        )
+        summary_text = summary_result.summary or fallback_summary
         status = "warning" if warnings else "ok"
+        triaged_evidence = self._triaged_news_items(news_items, active_themes)
 
         context = MacroContextSnapshot(
             computed_at=datetime.now(timezone.utc),
@@ -231,6 +245,13 @@ class MacroContextService:
                 "contradictory_event_labels": contradiction_labels,
                 "event_windows": list(lifecycle_summary.get("window_hints", [])),
                 "news_queries": list(DEFAULT_MACRO_NEWS_QUERIES),
+                "triaged_primary_evidence": triaged_evidence,
+                "context_summary_method": summary_result.method,
+                "context_summary_backend": summary_result.backend,
+                "context_summary_model": summary_result.model,
+                "context_summary_error": summary_result.llm_error,
+                "context_summary_duration_seconds": summary_result.duration_seconds,
+                "context_summary_metadata": summary_result.metadata,
             },
             run_id=run_id,
             job_id=job_id,
@@ -320,8 +341,9 @@ class MacroContextService:
             confidence -= min(12.0, len(feed_errors) * 4.0)
         return round(max(5.0, min(92.0, confidence)), 1)
 
-    @staticmethod
-    def _summary_text(
+    @classmethod
+    def _fallback_summary_text(
+        cls,
         previous: MacroContextSnapshot | None,
         active_themes: list[dict[str, object]],
         lifecycle_summary: dict[str, object],
@@ -329,27 +351,241 @@ class MacroContextService:
         social_items: list[object],
         warnings: list[str],
     ) -> str:
-        theme_labels = [str(item.get("label", "")).strip() for item in active_themes if item.get("label")]
-        focus = ", ".join(theme_labels[:2]) if theme_labels else "no dominant macro theme"
-        new_labels = list(lifecycle_summary.get("new_event_labels", []))
-        escalating_labels = list(lifecycle_summary.get("escalating_event_labels", []))
+        top_theme = active_themes[0] if active_themes else None
+        if not isinstance(top_theme, dict):
+            if warnings:
+                return "Macro context evidence is light in this run, so the output is mainly a continuity placeholder rather than a strong regime call."
+            return "Macro context remains mixed without one clearly dominant theme."
+
+        top_label = str(top_theme.get("label", "")).strip() or "an unclear macro theme"
+        state = cls._describe_state(str(top_theme.get("persistence_state", "unknown") or "unknown"))
+        why = cls._describe_channels(top_theme.get("transmission_channels"))
+        window = cls._describe_window(str(top_theme.get("window_hint", "unknown") or "unknown"))
+        source = cls._describe_source_priority(str(top_theme.get("source_priority", "other") or "other"))
         contradiction_labels = list(lifecycle_summary.get("contradictory_event_labels", []))
+        escalating_labels = list(lifecycle_summary.get("escalating_event_labels", []))
+        new_labels = [label for label in lifecycle_summary.get("new_event_labels", []) if label != top_label]
         fading_labels = list(lifecycle_summary.get("fading_event_labels", []))
-        if contradiction_labels and theme_labels:
-            return f"Macro context centers on {focus}. Fresh evidence is present, but contradictions remain around {', '.join(contradiction_labels[:2])}."
-        if escalating_labels:
-            return f"Macro context centers on {focus}. The key update is escalation in {', '.join(escalating_labels[:2])}, keeping transmission pressure active."
-        if previous and previous.summary_text and new_labels:
-            return f"Backdrop still leans on {focus}, with fresh macro attention shifting toward {', '.join(new_labels[:2])}."
-        if fading_labels and theme_labels:
-            return f"Macro context still points to {focus}, but some earlier pressure is fading around {', '.join(fading_labels[:2])}."
-        if theme_labels and news_items:
-            return f"Macro context is currently led by {focus}, with primary news doing most of the regime-identification work in this run."
-        if theme_labels and social_items:
-            return f"Macro context points to {focus}, but primary-news evidence was thin so this run leans more on social confirmation than desired."
-        if warnings:
-            return "Macro context evidence is light in this run, so the output is mainly a continuity placeholder rather than a strong regime call."
-        return "Macro context remains mixed without one clearly dominant theme."
+
+        overview = f"Top macro event: {top_label}. It looks {state}, matters mainly through {why}, and the expected transmission window is {window}."
+        evidence = f"Evidence is led by {source} coverage"
+        if news_items:
+            evidence += f" across {len(news_items)} primary news item{'s' if len(news_items) != 1 else ''}"
+        elif social_items:
+            evidence += ", but this run had to lean on social confirmation more than desired"
+        else:
+            evidence += ", but this run has very thin direct evidence"
+        evidence += "."
+
+        updates: list[str] = []
+        if contradiction_labels:
+            updates.append(f"There is still conflicting evidence around {', '.join(contradiction_labels[:2])}")
+        elif top_label in escalating_labels:
+            updates.append(f"{top_label} is the main escalation in this run")
+        elif new_labels:
+            updates.append(f"Fresh attention is also shifting toward {', '.join(new_labels[:2])}")
+        elif top_label in fading_labels:
+            updates.append(f"The earlier pressure around {top_label} is fading")
+        elif previous and previous.summary_text:
+            updates.append("This remains broadly consistent with the prior macro snapshot")
+
+        if warnings and not contradiction_labels:
+            updates.append("Coverage is still degraded enough that the overview should be read with caution")
+
+        if updates:
+            return f"{overview} {evidence} {' '.join(updates)}."
+        return f"{overview} {evidence}"
+
+    def _summarize_context(
+        self,
+        *,
+        active_themes: list[dict[str, object]],
+        lifecycle_summary: dict[str, object],
+        news_items: list[object],
+        supporting_social_items: list[object],
+        primary_coverage_quality: str,
+        warnings: list[str],
+        fallback_summary: str,
+    ) -> SummaryResult:
+        if self.summary_service is None or not active_themes:
+            return SummaryResult(
+                summary=fallback_summary,
+                method="news_digest",
+                backend="news_digest",
+                model=None,
+                llm_error=None,
+                metadata={"reason": "summary service unavailable"},
+                duration_seconds=None,
+            )
+        prompt = self._build_context_summary_prompt(
+            active_themes=active_themes,
+            lifecycle_summary=lifecycle_summary,
+            news_items=news_items,
+            supporting_social_items=supporting_social_items,
+            primary_coverage_quality=primary_coverage_quality,
+            warnings=warnings,
+        )
+        return self.summary_service.summarize_prompt(
+            prompt,
+            fallback_summary=fallback_summary,
+            fallback_metadata={
+                "summary_kind": "macro_context",
+                "salient_event_count": len(active_themes),
+                "triaged_news_item_count": len(self._triaged_news_items(news_items, active_themes)),
+            },
+        )
+
+    def _build_context_summary_prompt(
+        self,
+        *,
+        active_themes: list[dict[str, object]],
+        lifecycle_summary: dict[str, object],
+        news_items: list[object],
+        supporting_social_items: list[object],
+        primary_coverage_quality: str,
+        warnings: list[str],
+    ) -> str:
+        top_events = []
+        for index, event in enumerate(active_themes[:3], start=1):
+            channels = event.get("transmission_channels") if isinstance(event.get("transmission_channels"), list) else []
+            top_events.append(
+                f"{index}. {event.get('label', 'Unknown event')} | state={event.get('persistence_state', 'unknown')} | saliency={event.get('saliency_weight', 0.0)} | source={event.get('source_priority', 'other')} | window={event.get('window_hint', 'unknown')} | direction={event.get('evidence_direction', 'mixed')} | channels={', '.join(str(channel) for channel in channels[:3]) or 'unknown'}"
+            )
+        triaged_news = self._triaged_news_items(news_items, active_themes)
+        news_lines = []
+        for index, item in enumerate(triaged_news[:6], start=1):
+            news_lines.append(
+                f"{index}. [{item['source_priority']}] {item['publisher']}: {item['title']}"
+                + (f" — {item['summary']}" if item['summary'] else "")
+            )
+        contradiction_labels = list(lifecycle_summary.get("contradictory_event_labels", []))
+        prompt_parts = [
+            "Write a short operator-facing macro market summary in 2-4 sentences.",
+            "Focus on the top salient events, not just one event.",
+            "Ground the summary in the highest-quality fetched sources first. Use social evidence only as secondary support.",
+            "Say what the main macro events are, why they matter, and what short-horizon transmission window they imply.",
+            "If evidence is contradictory or degraded, say that plainly.",
+            "Do not use hype. Do not invent facts beyond the evidence below.",
+            "",
+            f"Primary news coverage quality: {primary_coverage_quality}",
+            f"Warnings: {'; '.join(warnings) if warnings else 'none'}",
+            f"Contradictions: {', '.join(contradiction_labels) if contradiction_labels else 'none'}",
+            f"Supporting social item count: {len(supporting_social_items)}",
+            "",
+            "Top salient events:",
+            *top_events,
+            "",
+            "Triaged high-quality source items:",
+            *(news_lines or ["none"]),
+            "",
+            "Summary:",
+        ]
+        return "\n".join(prompt_parts)
+
+    def _triaged_news_items(
+        self,
+        news_items: list[object],
+        active_themes: list[dict[str, object]],
+    ) -> list[dict[str, str]]:
+        definition_map = {definition.key: definition for definition in MACRO_THEME_DEFINITIONS}
+        ranked: list[tuple[tuple[float, float, int], dict[str, str]]] = []
+        for raw_item in news_items:
+            if not isinstance(raw_item, dict):
+                continue
+            title = str(raw_item.get("title", "") or "").strip()
+            summary = str(raw_item.get("summary", "") or "").strip()
+            publisher = str(raw_item.get("publisher", "") or "").strip()
+            source_priority = self._source_priority_for_item(raw_item)
+            priority_score = {"official": 4.0, "trade": 3.0, "major": 2.0, "other": 1.0}.get(source_priority, 0.0)
+            text = f"{title} {summary}".lower()
+            event_hits = 0
+            saliency_score = 0.0
+            for event in active_themes[:3]:
+                key = str(event.get("key", "") or "")
+                definition = definition_map.get(key)
+                if definition is None:
+                    continue
+                if any(phrase.lower() in text for phrase in definition.phrases):
+                    event_hits += 1
+                    saliency_score += float(event.get("saliency_weight", 0.0) or 0.0)
+            ranked.append(
+                (
+                    (priority_score, saliency_score, event_hits),
+                    {
+                        "title": title,
+                        "summary": summary,
+                        "publisher": publisher or "unknown publisher",
+                        "source_priority": source_priority,
+                    },
+                )
+            )
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        return [item for _, item in ranked[:6]]
+
+    @staticmethod
+    def _source_priority_for_item(raw_item: dict[str, object]) -> str:
+        publisher = raw_item.get("publisher")
+        normalized = str(publisher or "").strip().lower()
+        if any(hint in normalized for hint in ("federal reserve", "fomc", "treasury", "ecb", "european central bank", "opec")):
+            return "official"
+        if any(hint in normalized for hint in ("digitimes", "semianalysis", "freightwaves")):
+            return "trade"
+        if any(hint in normalized for hint in ("reuters", "bloomberg", "financial times", "wall street journal", "wsj", "cnbc", "associated press", "ap", "nikkei")):
+            return "major"
+        return "other"
+
+    @staticmethod
+    def _describe_state(state: str) -> str:
+        return {
+            "new": "new",
+            "escalating": "like it is escalating",
+            "persistent": "persistent",
+            "fading": "like it is fading",
+        }.get(state, "unclear")
+
+    @staticmethod
+    def _describe_window(window: str) -> str:
+        return {
+            "1d": "about one trading day",
+            "2d_5d": "roughly the next 2 to 5 trading days",
+            "1w_plus": "about a week or longer",
+            "intraday": "intraday",
+            "unknown": "unclear",
+        }.get(window, window.replace("_", " ") if window else "unclear")
+
+    @staticmethod
+    def _describe_source_priority(priority: str) -> str:
+        return {
+            "official": "official or policy-source",
+            "major": "major-news",
+            "trade": "trade-publication",
+            "other": "other-news",
+            "social": "social",
+        }.get(priority, "mixed-source")
+
+    @staticmethod
+    def _describe_channels(raw_channels: object) -> str:
+        if not isinstance(raw_channels, list):
+            return "unclear channels"
+        channel_map = {
+            "rates": "interest-rate pressure",
+            "valuation_duration": "valuation sensitivity",
+            "funding_costs": "funding costs",
+            "commodity_input_costs": "commodity input costs",
+            "energy_revenue": "energy revenue sensitivity",
+            "transport_costs": "transport costs",
+            "cyclical_demand": "cyclical demand",
+            "credit_risk": "credit risk",
+            "beta": "broad risk appetite",
+            "risk_appetite": "broad risk appetite",
+            "liquidity": "liquidity conditions",
+            "euro_rates": "European rate pressure",
+            "european_demand": "European demand",
+            "commodity_risk": "commodity risk",
+            "supply_chain": "supply-chain pressure",
+        }
+        labels = [channel_map.get(str(item), str(item).replace("_", " ")) for item in raw_channels[:2]]
+        return " and ".join(labels) if labels else "unclear channels"
 
     @staticmethod
     def _item_text(raw_item: object) -> str:

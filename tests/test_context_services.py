@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 from trade_proposer_app.domain.models import IndustryContextSnapshot, MacroContextSnapshot, NewsArticle, NewsBundle, SentimentSnapshot
 from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.macro_context import MacroContextService
+from trade_proposer_app.services.summary import SummaryResult
 
 
 class StubNewsService:
@@ -86,6 +87,8 @@ class ContextServiceTests(unittest.TestCase):
         self.assertIn("official:1", context.source_breakdown["primary_news_source_priorities"])
         self.assertIn("NewsAPI", context.source_breakdown["primary_news_providers"])
         self.assertGreaterEqual(context.metadata["event_lifecycle_summary"]["new_event_count"], 1)
+        self.assertIn("Top macro event: European monetary policy.", context.summary_text)
+        self.assertIn("expected transmission window is about a week or longer", context.summary_text)
         self.assertTrue(news_service.fetch_topics_calls)
 
     def test_macro_context_tracks_lifecycle_and_contradictions(self) -> None:
@@ -146,6 +149,62 @@ class ContextServiceTests(unittest.TestCase):
         self.assertIn("Oil and energy", context.metadata["event_lifecycle_summary"]["contradictory_event_labels"])
         self.assertTrue(any("contradictory evidence" in warning for warning in context.warnings))
 
+    def test_macro_context_uses_llm_summary_when_available(self) -> None:
+        repository = MagicMock()
+        repository.get_latest_macro_context_snapshot.return_value = None
+        repository.create_macro_context_snapshot.side_effect = lambda context: context
+        news_bundle = NewsBundle(
+            ticker="Global Macro",
+            articles=[],
+            feeds_used=["NewsAPI"],
+        )
+        news_service = StubNewsService(
+            news_bundle,
+            {
+                "news_items": [
+                    {
+                        "title": "ECB keeps restrictive tone while yields rise",
+                        "summary": "Markets stay focused on European rates and valuation pressure",
+                        "publisher": "Reuters",
+                    },
+                    {
+                        "title": "Oil firms as conflict risk remains elevated",
+                        "summary": "Energy markets continue pricing geopolitical supply risk",
+                        "publisher": "Financial Times",
+                    },
+                ],
+                "coverage_insights": [],
+            },
+        )
+        summary_service = MagicMock()
+        summary_service.summarize_prompt.return_value = SummaryResult(
+            summary="European rates and geopolitical oil risk are the two main macro pressures, with policy and energy headlines leading the evidence.",
+            method="llm_summary",
+            backend="pi_agent",
+            model="test-model",
+            llm_error=None,
+            metadata={"summary_kind": "macro_context"},
+            duration_seconds=0.2,
+        )
+        snapshot = SentimentSnapshot(
+            id=9,
+            scope="macro",
+            subject_key="global_macro",
+            subject_label="Global Macro",
+            score=0.0,
+            label="NEUTRAL",
+            signals_json=json.dumps({"social_items": []}),
+            diagnostics_json=json.dumps({"providers": ["nitter"]}),
+            source_breakdown_json=json.dumps({}),
+        )
+
+        context = MacroContextService(repository, news_service=news_service, summary_service=summary_service).create_from_sentiment_snapshot(snapshot)
+
+        self.assertEqual(context.summary_text, summary_service.summarize_prompt.return_value.summary)
+        self.assertEqual(context.metadata["context_summary_method"], "llm_summary")
+        self.assertEqual(context.metadata["context_summary_backend"], "pi_agent")
+        summary_service.summarize_prompt.assert_called_once()
+
     def test_industry_context_uses_tracked_ticker_news_first(self) -> None:
         repository = MagicMock()
         repository.get_latest_industry_context_snapshot.return_value = None
@@ -205,7 +264,68 @@ class ContextServiceTests(unittest.TestCase):
         self.assertEqual(context.source_breakdown["primary_news_coverage_quality"], "high")
         self.assertIn("trade:1", context.source_breakdown["primary_news_source_priorities"])
         self.assertGreaterEqual(context.metadata["event_lifecycle_summary"]["new_event_count"], 1)
+        self.assertEqual(context.metadata["context_summary_method"], "news_digest")
+        self.assertEqual(context.metadata["triaged_primary_evidence"][0]["publisher"], "DigiTimes")
         self.assertEqual(news_service.fetch_many_calls, [["NVDA", "AMD"]])
+
+    def test_industry_context_uses_llm_summary_when_available(self) -> None:
+        repository = MagicMock()
+        repository.get_latest_industry_context_snapshot.return_value = None
+        repository.create_industry_context_snapshot.side_effect = lambda context: context
+        news_bundle = NewsBundle(
+            ticker="NVDA, AMD",
+            articles=[],
+            feeds_used=["NewsAPI"],
+        )
+        news_service = StubNewsService(
+            news_bundle,
+            {
+                "news_items": [
+                    {
+                        "title": "Chip demand stays strong as AI server backlog grows",
+                        "summary": "Semiconductor conference highlights supply chain and pricing discipline",
+                        "publisher": "DigiTimes",
+                    },
+                    {
+                        "title": "Treasury yields rise as rate-cut hopes fade",
+                        "summary": "Macro rate pressure keeps valuation sensitivity in focus for growth names",
+                        "publisher": "Reuters",
+                    },
+                ],
+                "coverage_insights": [],
+            },
+        )
+        summary_service = MagicMock()
+        summary_service.summarize_prompt.return_value = SummaryResult(
+            summary="Semiconductors are still being driven by AI and supply-chain demand signals, while rate pressure remains an important macro offset for duration-heavy names.",
+            method="llm_summary",
+            backend="pi_agent",
+            model="test-model",
+            llm_error=None,
+            metadata={"summary_kind": "industry_context"},
+            duration_seconds=0.2,
+        )
+        snapshot = SentimentSnapshot(
+            id=13,
+            scope="industry",
+            subject_key="semiconductors",
+            subject_label="Semiconductors",
+            score=0.2,
+            label="POSITIVE",
+            coverage_json=json.dumps({"tracked_tickers": ["NVDA", "AMD"]}),
+            signals_json=json.dumps({"social_items": []}),
+            diagnostics_json=json.dumps({"queries": ["semiconductor", "chip demand"], "providers": ["nitter"]}),
+            source_breakdown_json=json.dumps({}),
+        )
+
+        context = IndustryContextService(repository, news_service=news_service, summary_service=summary_service).create_from_sentiment_snapshot(snapshot)
+
+        self.assertEqual(context.summary_text, summary_service.summarize_prompt.return_value.summary)
+        self.assertEqual(context.metadata["context_summary_method"], "llm_summary")
+        self.assertEqual(context.metadata["context_summary_backend"], "pi_agent")
+        self.assertEqual(context.metadata["context_summary_model"], "test-model")
+        self.assertTrue(context.metadata["triaged_primary_evidence"])
+        summary_service.summarize_prompt.assert_called_once()
 
 
 if __name__ == "__main__":

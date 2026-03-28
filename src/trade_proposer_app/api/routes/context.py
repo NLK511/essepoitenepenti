@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
@@ -17,6 +17,17 @@ async def list_macro_context_snapshots(
     return ContextSnapshotRepository(session).list_macro_context_snapshots(limit=limit, run_id=run_id)
 
 
+@router.get("/macro/{snapshot_id}")
+async def get_macro_context_snapshot(
+    snapshot_id: int,
+    session: Session = Depends(get_db_session),
+) -> MacroContextSnapshot:
+    snapshot = ContextSnapshotRepository(session).get_macro_context_snapshot(snapshot_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Macro context snapshot not found")
+    return snapshot
+
+
 @router.get("/industry")
 async def list_industry_context_snapshots(
     industry_key: str | None = Query(default=None),
@@ -29,6 +40,17 @@ async def list_industry_context_snapshots(
         limit=limit,
         run_id=run_id,
     )
+
+
+@router.get("/industry/{snapshot_id}")
+async def get_industry_context_snapshot(
+    snapshot_id: int,
+    session: Session = Depends(get_db_session),
+) -> IndustryContextSnapshot:
+    snapshot = ContextSnapshotRepository(session).get_industry_context_snapshot(snapshot_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Industry context snapshot not found")
+    return snapshot
 
 
 @router.get("/ticker-signals")

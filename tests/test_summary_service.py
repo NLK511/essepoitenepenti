@@ -65,6 +65,17 @@ class SummaryServiceTests(unittest.TestCase):
         self.assertIn("Company beats estimates", result.summary)
         self.assertEqual(result.backend, "news_digest")
 
+    def test_summarize_prompt_uses_fallback_on_digest_backend(self) -> None:
+        service = SummaryService(summary_settings={"summary_backend": "news_digest"})
+        result = service.summarize_prompt(
+            "Explain the macro setup.",
+            fallback_summary="Fallback macro context summary",
+            fallback_metadata={"summary_kind": "macro_context"},
+        )
+        self.assertEqual(result.method, "news_digest")
+        self.assertEqual(result.summary, "Fallback macro context summary")
+        self.assertEqual(result.metadata["summary_kind"], "macro_context")
+
     @patch("trade_proposer_app.services.summary.subprocess.run")
     def test_pi_agent_backend_calls_cli(self, mock_run: MagicMock) -> None:
         response = MagicMock()

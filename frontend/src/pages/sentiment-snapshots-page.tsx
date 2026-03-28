@@ -4,8 +4,8 @@ import { Link } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { Run, SentimentSnapshot, SentimentSnapshotListResponse } from "../types";
-import { formatDate, formatDuration, jobTypeLabel } from "../utils";
+import type { MacroContextSnapshot, Run, SentimentSnapshot, SentimentSnapshotListResponse } from "../types";
+import { formatDate, jobTypeLabel } from "../utils";
 
 function snapshotTone(snapshot: SentimentSnapshot): "ok" | "warning" | "danger" | "neutral" {
   if (snapshot.is_expired) {
@@ -20,10 +20,79 @@ function snapshotTone(snapshot: SentimentSnapshot): "ok" | "warning" | "danger" 
   return "warning";
 }
 
+function macroContextTone(snapshot: MacroContextSnapshot): "ok" | "warning" | "danger" | "neutral" {
+  if (snapshot.status === "failed") {
+    return "danger";
+  }
+  if (snapshot.warnings.length > 0 || snapshot.status === "warning") {
+    return "warning";
+  }
+  return "ok";
+}
+
+function topMacroTheme(snapshot: MacroContextSnapshot): Record<string, unknown> | null {
+  const top = snapshot.active_themes[0];
+  return top && typeof top === "object" ? top : null;
+}
+
+function themeString(value: unknown, fallback = "—"): string {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function formatWindow(window: string): string {
+  switch (window) {
+    case "1d":
+      return "1 day";
+    case "2d_5d":
+      return "2–5 days";
+    case "1w_plus":
+      return "1 week+";
+    case "intraday":
+      return "intraday";
+    default:
+      return window || "—";
+  }
+}
+
+function summaryMethod(snapshot: MacroContextSnapshot): string {
+  return typeof snapshot.metadata?.context_summary_method === "string" ? snapshot.metadata.context_summary_method : "unknown";
+}
+
+function summaryBackend(snapshot: MacroContextSnapshot): string {
+  return typeof snapshot.metadata?.context_summary_backend === "string" ? snapshot.metadata.context_summary_backend : "—";
+}
+
+function summaryModel(snapshot: MacroContextSnapshot): string {
+  return typeof snapshot.metadata?.context_summary_model === "string" ? snapshot.metadata.context_summary_model : "—";
+}
+
+function summaryError(snapshot: MacroContextSnapshot): string | null {
+  return typeof snapshot.metadata?.context_summary_error === "string" ? snapshot.metadata.context_summary_error : null;
+}
+
+function provenanceTone(snapshot: MacroContextSnapshot): "ok" | "warning" | "neutral" {
+  if (summaryError(snapshot)) {
+    return "warning";
+  }
+  if (summaryMethod(snapshot) === "llm_summary") {
+    return "ok";
+  }
+  return "neutral";
+}
+
+function provenanceLabel(snapshot: MacroContextSnapshot): string {
+  const method = summaryMethod(snapshot);
+  if (method === "llm_summary") {
+    return `LLM · ${summaryBackend(snapshot)}${summaryModel(snapshot) !== "—" ? ` · ${summaryModel(snapshot)}` : ""}`;
+  }
+  return `fallback · ${summaryBackend(snapshot)}`;
+}
+
 export function SentimentSnapshotsPage() {
   const { showToast } = useToast();
   const [macro, setMacro] = useState<SentimentSnapshot[]>([]);
   const [industry, setIndustry] = useState<SentimentSnapshot[]>([]);
+  const [macroContexts, setMacroContexts] = useState<MacroContextSnapshot[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<"macro" | "industry" | "macro-now" | "industry-now" | null>(null);
@@ -32,12 +101,14 @@ export function SentimentSnapshotsPage() {
     try {
       setLoading(true);
       setError(null);
-      const [macroResponse, industryResponse] = await Promise.all([
+      const [macroResponse, industryResponse, macroContextResponse] = await Promise.all([
         getJson<SentimentSnapshotListResponse>("/api/sentiment-snapshots/macro?limit=6"),
         getJson<SentimentSnapshotListResponse>("/api/sentiment-snapshots/industry?limit=12"),
+        getJson<MacroContextSnapshot[]>("/api/context/macro?limit=6"),
       ]);
       setMacro(macroResponse.snapshots);
       setIndustry(industryResponse.snapshots);
+      setMacroContexts(macroContextResponse);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load sentiment snapshots");
     } finally {
@@ -87,15 +158,17 @@ export function SentimentSnapshotsPage() {
     }
   }
 
-  const latestMacro = macro[0] ?? null;
+  const latestMacroSentiment = macro[0] ?? null;
   const latestIndustry = industry[0] ?? null;
+  const latestMacroContext = macroContexts[0] ?? null;
+  const topTheme = latestMacroContext ? topMacroTheme(latestMacroContext) : null;
 
   return (
     <>
       <PageHeader
-        kicker="Snapshot-backed sentiment"
-        title="Inspect shared macro and industry sentiment refreshes."
-        subtitle="These snapshots are reused across proposal runs so macro and industry context stay consistent, auditable, and cheaper to compute."
+        kicker="Shared snapshots"
+        title="Inspect shared sentiment snapshots and macro context."
+        subtitle="Macro sentiment snapshots still exist, but the saliency-first macro overview now comes from stored macro context snapshots. Use this page to see both the old snapshot trail and the current macro context read." 
         actions={
           <>
             <button type="button" className="button" onClick={() => void enqueueRefresh("macro")} disabled={busyAction !== null}>
@@ -118,51 +191,61 @@ export function SentimentSnapshotsPage() {
       />
 
       {error ? <ErrorState message={error} /> : null}
-      {loading ? <LoadingState message="Loading shared sentiment snapshots…" /> : null}
+      {loading ? <LoadingState message="Loading shared snapshots…" /> : null}
 
       {!loading ? (
         <div className="stack-page">
           <section className="metrics-grid">
             <Card>
-              <div className="metric-label">Latest macro snapshot</div>
-              <div className="metric-value">{latestMacro ? latestMacro.label : "—"}</div>
-              <div className="helper-text">{latestMacro ? formatDate(latestMacro.computed_at) : "No macro snapshot yet"}</div>
+              <div className="metric-label">Top macro event</div>
+              <div className="metric-value">{topTheme ? themeString(topTheme.label) : "—"}</div>
+              <div className="helper-text">{latestMacroContext ? formatDate(latestMacroContext.computed_at) : "No macro context yet"}</div>
             </Card>
             <Card>
-              <div className="metric-label">Macro freshness</div>
-              <div className="metric-value">{latestMacro ? (latestMacro.is_expired ? "stale" : "fresh") : "—"}</div>
-              <div className="helper-text">{latestMacro?.expires_at ? `Expires ${formatDate(latestMacro.expires_at)}` : "No expiry recorded"}</div>
+              <div className="metric-label">Macro context confidence</div>
+              <div className="metric-value">{latestMacroContext ? `${latestMacroContext.confidence_percent.toFixed(1)}%` : "—"}</div>
+              <div className="helper-text">{latestMacroContext ? `Saliency ${latestMacroContext.saliency_score.toFixed(2)}` : "No macro context yet"}</div>
+              {latestMacroContext ? (
+                <div className="top-gap-small cluster">
+                  <Badge tone={provenanceTone(latestMacroContext)}>{provenanceLabel(latestMacroContext)}</Badge>
+                  {summaryError(latestMacroContext) ? <Badge tone="warning">summary warning</Badge> : null}
+                </div>
+              ) : null}
+            </Card>
+            <Card>
+              <div className="metric-label">Latest macro sentiment snapshot</div>
+              <div className="metric-value">{latestMacroSentiment ? latestMacroSentiment.label : "—"}</div>
+              <div className="helper-text">{latestMacroSentiment ? formatDate(latestMacroSentiment.computed_at) : "No macro snapshot yet"}</div>
             </Card>
             <Card>
               <div className="metric-label">Latest industry snapshot</div>
               <div className="metric-value">{latestIndustry ? latestIndustry.subject_label : "—"}</div>
               <div className="helper-text">{latestIndustry ? `${latestIndustry.label} · ${formatDate(latestIndustry.computed_at)}` : "No industry snapshot yet"}</div>
             </Card>
-            <Card>
-              <div className="metric-label">Tracked industry snapshots</div>
-              <div className="metric-value">{industry.length}</div>
-              <div className="helper-text">Most recent {industry.length} industry records</div>
-            </Card>
           </section>
 
           <section className="two-column">
             <Card>
-              <SectionTitle kicker="Macro" title="Latest shared macro context" />
-              {latestMacro ? <SnapshotSummary snapshot={latestMacro} /> : <EmptyState message="No macro snapshots available yet." />}
+              <SectionTitle kicker="Macro context" title="Current saliency-first macro overview" />
+              {latestMacroContext ? <MacroContextSummary snapshot={latestMacroContext} /> : <EmptyState message="No macro context snapshots available yet." />}
             </Card>
             <Card>
-              <SectionTitle kicker="Industry" title="Latest shared industry context" />
+              <SectionTitle kicker="Industry sentiment" title="Latest shared industry sentiment snapshot" />
               {latestIndustry ? <SnapshotSummary snapshot={latestIndustry} /> : <EmptyState message="No industry snapshots available yet." />}
             </Card>
           </section>
 
           <section className="card-grid">
             <Card>
-              <SectionTitle kicker="Macro history" title="Recent macro snapshots" />
-              {macro.length === 0 ? <EmptyState message="No macro snapshots stored yet." /> : <SnapshotList snapshots={macro} />}
+              <SectionTitle kicker="Macro context history" title="Recent macro context snapshots" />
+              {macroContexts.length === 0 ? <EmptyState message="No macro context snapshots stored yet." /> : <MacroContextList snapshots={macroContexts} />}
             </Card>
             <Card>
-              <SectionTitle kicker="Industry history" title="Recent industry snapshots" />
+              <SectionTitle kicker="Macro sentiment history" title="Recent macro sentiment snapshots" />
+              {macro.length === 0 ? <EmptyState message="No macro sentiment snapshots stored yet." /> : <SnapshotList snapshots={macro} />}
+            </Card>
+            <Card>
+              <SectionTitle kicker="Industry history" title="Recent industry sentiment snapshots" />
               {industry.length === 0 ? <EmptyState message="No industry snapshots stored yet." /> : <SnapshotList snapshots={industry} />}
             </Card>
           </section>
@@ -233,6 +316,105 @@ function SnapshotSummary({ snapshot }: { snapshot: SentimentSnapshot }) {
       <div className="helper-text">Run {snapshot.run_id ?? "—"} · Job {snapshot.job_id ?? "—"} · {jobTypeLabel(snapshot.scope === "macro" ? "macro_sentiment_refresh" : "industry_sentiment_refresh")}</div>
       {snapshot.id ? <Link to={`/sentiment/${snapshot.id}`} className="button-subtle">Open snapshot detail</Link> : null}
       <pre className="markdown-code-block">{JSON.stringify(snapshot.diagnostics, null, 2)}</pre>
+    </div>
+  );
+}
+
+function MacroContextList({ snapshots }: { snapshots: MacroContextSnapshot[] }) {
+  return (
+    <ul className="list-reset">
+      {snapshots.map((snapshot) => {
+        const topTheme = topMacroTheme(snapshot);
+        return (
+          <li key={snapshot.id ?? snapshot.computed_at} className="list-item">
+            <div className="card-headline">
+              <div>
+                <div className="cluster">
+                  <Badge tone="info">macro context</Badge>
+                  <Badge tone={macroContextTone(snapshot)}>{snapshot.status}</Badge>
+                  {topTheme ? <Badge>{themeString(topTheme.label)}</Badge> : null}
+                </div>
+                <div className="helper-text">Saliency {snapshot.saliency_score.toFixed(2)} · confidence {snapshot.confidence_percent.toFixed(1)}% · computed {formatDate(snapshot.computed_at)}</div>
+                <div className="top-gap-small cluster">
+                  <Badge tone={provenanceTone(snapshot)}>{provenanceLabel(snapshot)}</Badge>
+                  {summaryError(snapshot) ? <Badge tone="warning">fallback reason stored</Badge> : null}
+                </div>
+                {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
+                {summaryError(snapshot) ? <div className="helper-text top-gap-small">{summaryError(snapshot)}</div> : null}
+              </div>
+              <div className="cluster">
+                {snapshot.id ? <Link to={`/context/macro/${snapshot.id}`} className="button-subtle">Open detail</Link> : null}
+                {snapshot.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">Open run</Link> : null}
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
+  const topTheme = topMacroTheme(snapshot);
+  const contradictory = Array.isArray(snapshot.metadata?.contradictory_event_labels)
+    ? snapshot.metadata.contradictory_event_labels.filter((value): value is string => typeof value === "string")
+    : [];
+  const topChannels = Array.isArray(topTheme?.transmission_channels)
+    ? topTheme.transmission_channels.filter((value): value is string => typeof value === "string").slice(0, 2)
+    : [];
+
+  return (
+    <div className="stack-page">
+      <div className="cluster">
+        <Badge tone="info">macro context</Badge>
+        <Badge tone={macroContextTone(snapshot)}>{snapshot.status}</Badge>
+        {topTheme ? <Badge>{themeString(topTheme.label)}</Badge> : null}
+      </div>
+      <div className="summary-grid">
+        <div className="summary-item"><span className="summary-label">Top event</span><span className="summary-value">{topTheme ? themeString(topTheme.label) : "—"}</span></div>
+        <div className="summary-item"><span className="summary-label">State</span><span className="summary-value">{topTheme ? themeString(topTheme.persistence_state) : "—"}</span></div>
+        <div className="summary-item"><span className="summary-label">Window</span><span className="summary-value">{topTheme ? formatWindow(themeString(topTheme.window_hint, "")) : "—"}</span></div>
+        <div className="summary-item"><span className="summary-label">Source quality</span><span className="summary-value">{topTheme ? themeString(topTheme.source_priority) : "—"}</span></div>
+        <div className="summary-item"><span className="summary-label">Saliency</span><span className="summary-value">{snapshot.saliency_score.toFixed(2)}</span></div>
+        <div className="summary-item"><span className="summary-label">Confidence</span><span className="summary-value">{snapshot.confidence_percent.toFixed(1)}%</span></div>
+      </div>
+      <div className="top-gap-small cluster">
+        <Badge tone={provenanceTone(snapshot)}>{provenanceLabel(snapshot)}</Badge>
+        {summaryError(snapshot) ? <Badge tone="warning">fallback reason stored</Badge> : null}
+      </div>
+      {snapshot.summary_text ? (
+        <div className="summary-text-block top-gap-small">
+          <p>{snapshot.summary_text}</p>
+        </div>
+      ) : null}
+      {topChannels.length > 0 ? (
+        <div>
+          <div className="section-heading"><strong>Main transmission channels</strong></div>
+          <div className="cluster">
+            {topChannels.map((channel) => <Badge key={channel}>{channel}</Badge>)}
+          </div>
+        </div>
+      ) : null}
+      {contradictory.length > 0 ? (
+        <div>
+          <div className="section-heading"><strong>Contradictions</strong></div>
+          <div className="helper-text">{contradictory.join(", ")}</div>
+        </div>
+      ) : null}
+      {snapshot.warnings.length > 0 ? (
+        <div>
+          <div className="section-heading"><strong>Warnings</strong></div>
+          <ul className="list-reset">
+            {snapshot.warnings.map((warning) => <li key={warning} className="list-item compact-item">{warning}</li>)}
+          </ul>
+        </div>
+      ) : null}
+      {summaryError(snapshot) ? <div className="helper-text top-gap-small">Summary fallback reason: {summaryError(snapshot)}</div> : null}
+      <div className="helper-text">Run {snapshot.run_id ?? "—"} · Job {snapshot.job_id ?? "—"}</div>
+      <div className="cluster">
+        {snapshot.id ? <Link to={`/context/macro/${snapshot.id}`} className="button-subtle">Open context detail</Link> : null}
+        {snapshot.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">Open source run</Link> : null}
+      </div>
     </div>
   );
 }
