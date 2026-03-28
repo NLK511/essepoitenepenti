@@ -91,7 +91,7 @@ A good first pass is:
 6. run the job
 7. confirm the worker processes the run
 8. review the result in dashboard, run detail, recommendation plans, and ticker drill-downs
-9. open the sentiment page and confirm shared snapshots are present or clearly marked stale/missing
+9. open the Context snapshots page and confirm shared context/snapshot artifacts are present or clearly marked stale/missing
 
 ## Frontend development model
 

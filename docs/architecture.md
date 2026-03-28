@@ -19,8 +19,9 @@ This only works if it keeps three things true:
 - SQLite as the default local persistence engine
 - worker and scheduler entrypoints
 - repository-based persistence access
-- app-native proposal, evaluation, optimization, and sentiment-refresh workflows
-- shared sentiment snapshot storage and snapshot-aware health/preflight reporting
+- app-native proposal, evaluation, optimization, and macro/industry refresh workflows
+- shared sentiment snapshot storage plus redesign-native macro/industry/ticker context persistence
+- snapshot-aware health/preflight reporting
 
 ### Target deployment runtime
 - API process
@@ -37,13 +38,13 @@ flowchart LR
     User[Operator / Trader]
 
     subgraph Frontend[Frontend]
-        SPA[React + Vite SPA\nPages: Dashboard, Jobs, History, Debugger, Settings, Docs, Sentiment]
+        SPA[React + Vite SPA\nPages: Dashboard, Jobs, Watchlists, Debugger, Settings, Docs, Context]
         DocsUI[In-app docs browser\nfull-text search over app docs]
     end
 
     subgraph Backend[Backend API / Web]
         FastAPI[FastAPI app\n/api routes + SPA entry serving]
-        APIRoutes[API routes\ndashboard, jobs, runs, history, settings, docs, health, sentiment snapshots]
+        APIRoutes[API routes\ndashboard, jobs, runs, watchlists, docs, health, context, sentiment snapshots]
         WebEntry[SPA entry / built asset serving]
     end
 
@@ -57,7 +58,7 @@ flowchart LR
 
     subgraph Storage[Persistence]
         DB[(SQLite local dev\nPostgres target)]
-        Snapshots[(shared sentiment snapshots)]
+        Snapshots[(shared sentiment snapshots\n+ context snapshots)]
     end
 
     subgraph Pipeline[App-native analysis pipeline]
@@ -116,23 +117,23 @@ flowchart LR
 2. backend enqueues a run in the database
 3. worker claims the queued run atomically
 4. `JobExecutionService` executes the redesign orchestration path for proposal workflows
-5. the active path fetches price history, computes technical/contextual inputs, loads the latest valid macro and industry sentiment/context artifacts, and computes ticker-level signals
+5. the active path fetches price history, computes technical/contextual inputs, loads the latest valid macro and industry shared artifacts, and computes ticker-level signals
 6. the pipeline emits redesign-native trade outputs and diagnostic payloads
 7. backend persists the relevant redesign objects, diagnostics, run summary, and timing data
 8. frontend reads run, recommendation-plan, and ticker-signal state back via `/api`
 
-### Shared sentiment refresh
-1. scheduler or operator triggers macro/industry refresh
+### Shared macro/industry refresh
+1. scheduler or operator triggers macro or industry refresh
 2. backend enqueues a refresh run
 3. worker claims the run, or the operator uses the `run-now` endpoint for immediate execution
-4. refresh services compute shared sentiment and persist `SentimentSnapshot` records
-5. health/preflight reports whether those snapshots are fresh enough for proposal generation
+4. refresh services persist transitional `SentimentSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
+5. health/preflight currently reports freshness for the shared sentiment snapshots that still gate the transitional refresh layer
 
 ## Runtime components
 
 ### 1. API process
 Responsibilities:
-- expose JSON endpoints for dashboard, runs, jobs, watchlists, recommendation plans/outcomes, settings, docs, health, and sentiment snapshots
+- expose JSON endpoints for dashboard, runs, jobs, watchlists, recommendation plans/outcomes, settings, docs, health, context snapshots, and sentiment snapshots
 - validate user input
 - create jobs and runs
 - read and write database state

@@ -20,7 +20,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 
 ### Workflow operations
 - Create, edit, delete, and execute jobs.
-- Run proposal generation, recommendation evaluation, weight optimization, and context refresh through the same run system.
+- Run proposal generation, recommendation evaluation, weight optimization, and macro/industry refresh jobs through the same run system.
 - Convert proposal jobs into watchlists and schedule them.
 - Inspect queued, running, completed, failed, cancelled, and warning-heavy runs from the debugger and run detail pages.
 
@@ -32,11 +32,11 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 - Use ticker drill-down pages to review plan history and latest outcomes for a single name.
 
 ### Shared context workflow
-- Persist shared macro and industry snapshots.
-- Inspect recent snapshots from the context page and open snapshot detail views.
+- Persist shared macro and industry sentiment snapshots plus redesign-native macro and industry context snapshots.
+- Inspect recent context snapshots from the Context snapshots page and open detail views for macro or industry context objects.
 - Queue or run macro and industry refresh workflows manually.
-- Trace which snapshots were used by a run or recommendation.
-- See snapshot freshness in `/api/health` and `/api/health/preflight`.
+- Trace which shared artifacts were used by a run or recommendation plan.
+- See sentiment-snapshot freshness in `/api/health` and `/api/health/preflight`; context objects are reviewable through the context APIs and UI.
 - Optionally use Nitter as supporting social input for macro and industry context.
 
 ### Watchlist workflow
