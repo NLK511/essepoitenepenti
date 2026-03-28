@@ -1,17 +1,12 @@
 # Transmission Modeling Spec
 
+**Status:** active redesign reference
+
 ## Purpose
 
-This document specifies how the redesign should model **context transmission** from macro events to industries and from industries to tickers.
+This doc describes how the redesign should model **context transmission** from macro events to industries and from industries to tickers.
 
-The goal is not to invent a full causal market model. The goal is to make context usage:
-- explicit
-- inspectable
-- testable
-- less decorative
-- more action-relevant for short-horizon plans
-
-This spec should be read as an operator-facing decision-policy document, not as proof that transmission is already predictive.
+It is not trying to build a full causal market model. It is trying to make context usage explicit, inspectable, and testable.
 
 ## Scope
 

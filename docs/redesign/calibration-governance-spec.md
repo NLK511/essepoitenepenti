@@ -1,17 +1,12 @@
 # Calibration Governance Spec
 
+**Status:** active redesign reference
+
 ## Purpose
 
-This document defines how outcome history should and should not influence recommendation-plan confidence and action gating.
+This doc defines how outcome history should and should not influence recommendation-plan confidence and action gating.
 
-The goal is to make calibration:
-- conservative
-- sample-aware
-- operator-visible
-- useful for decision support
-- resistant to false precision
-
-This spec does not treat current calibration as a statistical proof layer. It defines governance rules for using measured outcomes honestly.
+The goal is simple: use measured outcomes carefully, keep the logic visible, and avoid fake precision.
 
 ## Scope
 

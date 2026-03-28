@@ -1,5 +1,7 @@
 # Measured Success Criteria
 
+**Status:** archival redesign history
+
 ## Purpose
 
 This document defines what counts as meaningful redesign progress.

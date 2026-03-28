@@ -1,6 +1,10 @@
 # User Journeys
 
-These journeys describe the product as it is intended to work today, not as a wishlist. They are meant to keep the UI and workflow priorities grounded in real operator outcomes.
+**Status:** canonical workflow framing
+
+These journeys describe how the product is meant to be used today.
+
+They are here to keep UI and workflow decisions tied to real operator tasks instead of wishlist features.
 
 ## Journey 1: First-time setup
 
@@ -129,3 +133,9 @@ The user can answer most product and operations questions from inside the app.
 ## Deferred journey: multi-user collaboration
 
 This is intentionally not a current product journey. Multi-user collaboration, RBAC, and tenancy remain future expansion topics and should not shape present-day workflow decisions until the single-user operational model is fully hardened.
+
+## See also
+
+- `operator-page-field-guide.md` — page-by-page workflow guidance
+- `features-and-capabilities.md` — what is available today
+- `getting-started.md` — first-time setup and startup

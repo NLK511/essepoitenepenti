@@ -1,5 +1,7 @@
 # Implementation Charter
 
+**Status:** archival redesign history
+
 ## Purpose
 
 This document locks the implementation-level defaults for the redesign.

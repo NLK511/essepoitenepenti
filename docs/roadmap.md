@@ -1,166 +1,87 @@
 # Roadmap
 
-## Current status
+**Status:** canonical current-priority roadmap
 
-Trade Proposer App now executes its critical workflows entirely inside this repository:
-- **Persistent state**: watchlists, jobs, runs, settings, sentiment snapshots, redesign-native context/signal objects, recommendation plans, and recommendation-plan outcomes live in one schema and remain queryable from the UI or API.
-- **Operator UI**: the React/Vite SPA provides dashboard, jobs, debugger, settings, docs, ticker, sentiment, ticker-signal, and recommendation-plan pages for the core operator workflows.
-- **Execution model**: the worker-backed queue persists job metadata, honors concurrency controls, and logs timing/diagnostic payloads for reproducibility.
-- **Feature-rich diagnostics**: every run emits structured `analysis_json`, feature vectors, aggregations, confidence weights, warnings, and workflow summaries.
-- **Shared sentiment/context**: macro and industry refresh workflows persist reusable snapshots and transitional context objects, proposal generation links back to those artifacts, and health/preflight now reports snapshot freshness.
-- **Signal integrity policy**: missing data becomes explicit neutral/warning output rather than an invented fallback.
-- **Redesign write path**: watchlist orchestration, cheap-scan diagnostics, ticker signals, recommendation plans, recommendation-plan outcomes, event-ranked news-first macro/industry context writers, and a dedicated ticker deep-analysis service now exist inside the main app execution flow.
-- **Legacy posture**: legacy recommendation operator surfaces are retired, optimization already uses recommendation-plan outcomes, the active product path no longer depends on legacy recommendation persistence, and the historical `recommendations` table is now dropped through migration `0015_drop_legacy_recommendations_table`.
+This roadmap is short on purpose.
 
-## Phase 1: Operational hardening (partially complete)
+It covers three things only:
+- what is shipped now
+- what still needs work
+- what is clearly later
 
-Foundational execution is in place, but this phase should still be treated as active because production hardening is not finished.
+Detailed completed-phase history is in `archive/roadmap-history.md`.
 
-Completed or largely in place:
-- scheduler-backed queueing and atomic claiming
-- structured pipeline contracts and stored diagnostics
-- worker-visible warning and failure categories
-- preflight guardrails for core dependencies and snapshot freshness
+## Current shipped baseline
+
+Trade Proposer App already has its core workflow in place:
+- watchlists, jobs, runs, settings, sentiment snapshots, ticker signals, recommendation plans, and recommendation-plan outcomes all persist inside one app-owned schema
+- the React/Vite operator UI supports dashboard, watchlists, jobs, debugger, run detail, context snapshots, ticker signals, recommendation plans, ticker drill-down, settings, and docs browsing
+- proposal generation, evaluation, optimization, and context refresh all execute inside this repository through the worker-backed run system
+- recommendation review is now centered on redesign-native objects: `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`
+- health and preflight surface degraded dependencies and snapshot freshness rather than hiding them
+- optimization already uses redesign-native outcomes rather than legacy recommendation history
+
+## Active priorities
+
+## 1. Reliability
+Highest current priority.
 
 Still needed:
-- stronger overlap and crash-recovery semantics
-- clearer production health signals and structured logging
-- tighter concurrency guarantees if multiple workers/processes are introduced
+- stronger overlap handling and crash recovery for scheduler/worker execution
+- clearer recovery semantics when partial failures occur
+- better coordination guarantees if concurrency increases
 
-## Phase 2: Self-contained intelligence (mostly complete)
+## 2. Observability
+The product is now feature-complete enough that runtime clarity matters more than additional surface area.
 
-This phase is no longer primarily about replacing prototype dependencies; that part is mostly done.
+Still needed:
+- structured logs and run correlation
+- clearer production-facing health signals
+- worker and scheduler heartbeats or equivalent operational visibility
+- easier diagnosis of provider failures and degraded states across processes
 
-Delivered:
-- app-native proposal generation
-- app-native evaluation
-- app-native weight optimization
-- configurable summarization via digest/OpenAI/Pi CLI
-- structured diagnostics surfaced in the UI
-- shared macro and industry sentiment snapshots reused during proposal generation (currently derived from social/Nitter refreshes, with news-based coverage listed as a future extension)
+## 3. Security and credential lifecycle
+The app should not expand provider surface area faster than it improves secret handling.
 
-Remaining:
-- validate the effectiveness of the expanded sentiment stack instead of only expanding it
-- continue tightening UI/schema consistency as diagnostics evolve
-- finish eliminating any remaining documentation drift that still describes shipped work as future work
+Still needed:
+- stronger single-user auth hardening
+- clearer credential rotation and re-encryption workflow
+- optional external secret-backend support if deployment needs justify it
 
-## Phase 3: Security and production readiness
+## 4. Measured recommendation quality
+The redesign path now has enough persistence and review plumbing that the next question is evidence quality, not raw feature quantity.
 
-Highest-value remaining non-analytical work:
-- **Credential lifecycle**: rotation, re-encryption, and optional external secret backends
-- **Authentication baseline**: strengthen the single-user auth path and define the minimum acceptable operator model before adding RBAC/tenancy
-- **Observability**: structured logging, run-level correlation IDs, worker/scheduler heartbeats, and deployment-facing health reporting
+Still needed:
+- accumulate more resolved recommendation-plan outcomes over time
+- use calibration summaries to improve operator trust and confidence discipline without creating false precision
+- keep comparing actual trade-plan behavior against simple baseline cohorts
+- verify which setup families, horizons, transmission conditions, and regimes are actually working
 
-## Phase 4: Redesign execution path
+## 5. Redesign maturation
+The redesign is already the active product path, but it still needs deeper evidence and cleaner narrowing of transitional concepts.
 
-This is now the highest-value analytical/product phase once operational hardening remains under control.
+Still needed:
+- continue improving ticker-analysis quality without reopening generic legacy patterns
+- decide the long-term role of sentiment snapshots now that richer context objects exist
+- keep recommendation-plan review as the clear canonical workflow
+- avoid reintroducing duplicate legacy-vs-redesign terminology
 
-Guiding principle for the rest of this phase:
-- build the redesign first as a measurable decision-support and candidate-ranking system
-- do not assume predictive success just because the outputs look coherent
-- steer implementation by stored outcomes, calibration, and operator usefulness rather than by adding more unmeasured complexity
+## Explicitly later
+These are lower-priority until the active priorities above improve:
+- additional providers that mainly increase source count without measured quality gains
+- broader automation beyond current operator workflows
+- multi-user scope, RBAC, or tenancy before the single-user model is operationally stronger
+- service extraction unless scale or operational pressure clearly justifies it
+- expansion of predictive claims before outcome history and calibration support them
 
-Delivered in this phase so far:
-- first-class watchlist metadata aligned with trading horizons and exchange-aware scheduling
-- watchlist policy inspection endpoints and operator-visible policy summaries in watchlist/run-detail workflows
-- persisted redesign-domain models for:
-  - macro context snapshots
-  - industry context snapshots
-  - ticker signal snapshots
-  - recommendation plans
-- repository and read API support for those new persisted objects
-- real watchlist-backed cheap-scan → shortlist → deep-analysis orchestration
-- dedicated cheap-scan signal model instead of recycled proposal confidence
-- dedicated `TickerDeepAnalysisService` extraction so orchestration no longer calls `ProposalService` directly
-- redesign-native `TickerDeepAnalysisService` execution path now computes ticker analysis internally instead of delegating normal watchlist deep analysis to `ProposalService.generate(...)`
-- persistence of `TickerSignalSnapshot` and `RecommendationPlan` for every scanned watchlist ticker
-- run-scoped API/UI visibility for redesign objects, including standalone browse pages for ticker signals and recommendation plans
-- richer run artifacts that now record shortlist rules, rejection counts, and per-ticker shortlist decisions
-- operator-facing shortlist reasoning surfaced more directly in run detail and ticker-signal views, including lane selection, catalyst proxy scores, and transmission context
-- first-class `recommendation_outcomes` persistence for `RecommendationPlan`, including horizon returns, excursion metrics, direction correctness, confidence buckets, and setup-family capture
-- app-native recommendation-plan evaluation flow exposed through API/UI queue actions and persisted back onto plans as latest outcomes
-- setup-family-aware recommendation generation and decomposed confidence payloads now flow into watchlist-backed `RecommendationPlan` writes through `signal_breakdown` and `evidence_summary`
-- recommendation-outcome calibration summaries now aggregate results by confidence bucket and setup family through API/UI operator workflows
-- watchlist-backed recommendation plans now use those stored calibration slices to raise or relax action thresholds for underperforming or outperforming confidence/setup cohorts
-- recommendation-plan workflows now expose baseline cohort comparisons so operators can compare actual actionable output against simple high-confidence, cheap-scan-attention, momentum-lane, and catalyst-lane slices
-- watchlist orchestration now includes richer ticker transmission summaries, now carrying primary drivers, conflict flags, and expected transmission windows, plus a reserved catalyst/event shortlist lane so cheap-scan technical ranking does not own every deep-analysis slot
-- recommendation-plan generation now carries setup-family-specific entry style and invalidation framing so plans differ more meaningfully across breakout / continuation / mean-reversion / catalyst-driven cases
-- operator plan views now surface calibration slice reasons and sample quality more directly, while docs increasingly frame `RecommendationPlan` + outcome review as the redesign’s canonical operator truth path
-- manual ticker proposal jobs now also execute through redesign orchestration via an explicit synthetic `1w` wrapper, reducing the remaining proposal-path gap between watchlist and manual workflows
-- run-detail operator views now show when a proposal run came from manual tickers versus a real watchlist and explicitly mark redesign plans/outcomes as canonical
-- new redesign-backed proposal runs no longer emit legacy recommendation compatibility artifacts, and operator navigation now redirects retired recommendation-detail routes toward recommendation-plan-first workflows
-- ticker drill-downs are being converged onto recommendation-plan/outcome history instead of legacy recommendation history
-- mounted operator evaluation/history APIs are being narrowed toward recommendation-plan evaluation and away from legacy recommendation-history endpoints, with unused legacy history/detail UI code removed and evaluation-run summaries converged onto recommendation-plan outcome vocabulary
-- ticker deep analysis now uses a redesign-native internal feature/context pipeline and only leans on legacy proposal services for raw data/news enrichment and compatibility fallback
-- calibration reporting now includes horizon, transmission-bias, context-regime, and horizon-plus-setup-family slices so operators can judge where the redesign is or is not working, now marks slice sample quality explicitly, and watchlist-backed action gating now uses those richer slices with bounded sample-aware adjustments instead of relying only on setup family and confidence bucket
+## Maintenance rule
+If a feature is shipped, describe it in the canonical product docs and remove it from the active roadmap unless unfinished follow-through remains.
 
-Current Phase 4 status:
-- **Phase 4A** is complete: optimization, mounted operator flows, active proposal-run review, and legacy recommendation persistence retirement are all recommendation-plan/outcome-native, and the historical `recommendations` table is now explicitly dropped instead of being left as a hidden compatibility artifact
-- **Phase 4B** is now substantially complete: setup-family-aware plan framing includes family-specific thesis/invalidation text, execution metadata, `no_action` reasoning, operator-visible evaluation focus, dedicated setup-family cohort reporting, family-specific evaluation review slices, and direct browse filtering by setup family
-- **Phase 4C** is now substantially complete: macro/industry context writers now dedupe and cluster evidence, track persistence vs escalation vs fade, flag contradictory event evidence, feed redesign-native context metadata back into ticker analysis, and ticker transmission now affects stored signal confidence/gating rather than living only in diagnostics
-- **Phase 4D** is now substantially complete: calibration-aware confidence re-scaling, operator-visible evidence concentration reporting, bounded sample-aware threshold gating, baseline cohort comparisons, and setup-family cohort review are all in place; remaining work should now focus on accumulating enough outcome history to justify stronger claims, not on adding more calibration theater
+If a detailed historical record is still useful, move it to archive rather than leaving it in the main reading path.
 
-Next required work in this phase:
-- use the new calibration summaries to drive actual confidence re-scaling and operator thresholds rather than only reporting grouped outcomes
-- carry the completed Phase 4B and Phase 4C framing/evidence work forward without reopening generic plan behavior for cosmetic reasons
-- continue cleaning residual wording or assumptions that still mention legacy recommendation storage after the explicit table drop
-- decide whether sentiment snapshots become operator-facing compatibility artifacts, internal inputs, or candidates for retirement now that context objects carry richer lifecycle and contradiction metadata
-
-Defined implementation phases from here:
-1. **Phase 4A — optimization convergence and legacy deletion**
-   - ✅ refactor optimization services, summaries, and tests to consume `RecommendationPlanOutcome`
-   - ✅ remove remaining optimization dependence on legacy recommendation WIN/LOSS rows
-   - ✅ stop proposal-run persistence, dashboard filtering, and mounted run-detail/debugger flows from depending on legacy recommendation rows/output payloads
-   - ✅ delete dormant legacy recommendation ORM/repository persistence code from the active product path
-   - ✅ continue narrowing API/UI/docs wording so recommendation-plan outcomes are the only active optimization truth source
-   - ✅ drop the historical `recommendations` table through migration `0015_drop_legacy_recommendations_table`
-   - status: complete
-2. **Phase 4B — setup-family-native recommendation behavior**
-   - ✅ strengthen family-specific thesis, invalidation, target, stop, timing expectation, and `no_action` generation
-   - ✅ surface family-specific execution metadata and evaluation focus directly in operator review views
-   - ✅ add deeper family-specific evaluation cohorts/reporting beyond the current shared calibration slices
-   - ✅ add operator-facing setup-family review slices plus direct browse filtering by setup family
-   - status: treat Phase 4B as substantially complete and fold further family refinements into Phase 4C/4D only when they are evidence-driven rather than cosmetic
-3. **Phase 4C — richer context and transmission engine**
-   - ✅ improve macro/industry event clustering and deduplication
-   - ✅ track persistence vs escalation vs fade more explicitly
-   - ✅ detect contradictory event evidence and persist lifecycle summaries in context metadata
-   - ✅ feed redesign-native context lifecycle/event metadata back into ticker analysis through snapshot-plus-context enrichment
-   - ✅ make transmission effects more measurable inside recommendation ranking via transmission-aware confidence adjustment and contradiction-aware no-action gating
-   - status: substantially complete; further work should now roll into Phase 4D evidence concentration unless a clearly better transmission model is justified by measured outcomes
-4. **Phase 4D — calibration and evidence concentration**
-   - ✅ move from grouped reporting toward cautious confidence re-scaling and operator gating informed by plan-outcome evidence
-   - ✅ expand operator-visible cohort review around setup family, horizon, transmission bias, and context regime
-   - ✅ add evidence-concentration reporting so operators can inspect the strongest and weakest measurable cohorts directly
-   - status: substantially complete; the limiting factor is now evidence accumulation over time rather than missing calibration plumbing
-
-Recommended implementation order inside Phase 4:
-1. Phase 4A — optimization convergence and legacy deletion
-2. Phase 4B — setup-family-native recommendation behavior
-3. Phase 4C — richer context and transmission engine
-4. Phase 4D — calibration and evidence concentration
-
-## Phase 5: Expansion (only after the above)
-
-Lower-priority growth items:
-- additional provider integrations where they demonstrably improve measured signal quality rather than just increase source count
-- historical exports and reporting helpers
-- retry/dead-letter behavior for transient external failures
-- selective service extraction only if scale demands it
-- broader automation only after the recommendation-plan path shows credible, repeatable outcome quality
-
-## Roadmap discipline
-
-A useful roadmap should separate three things clearly:
-- what is shipped
-- what is incomplete but necessary
-- what is merely possible later
-
-The project had started to blur those categories in a few docs. This roadmap keeps them separate so the near-term priority stays clear: finish reliability/security/observability hardening, then push the redesign toward measurable recommendation quality before broadening feature scope.
-
-## Related docs
-- `architecture.md`: system design and component boundaries
-- `getting-started.md`: setup and local development guide
-- `features-and-capabilities.md`: current product behavior and limits
-- `phase-2-app-native.md`: self-contained pipeline goals and remaining gaps
-- `raw-details-reference.md`: stored diagnostics and payload reference
+## See also
+- `product-thesis.md` — product intent and decision rules
+- `features-and-capabilities.md` — current behavior
+- `recommendation-methodology.md` — current pipeline logic
+- `architecture.md` — current system structure
+- `archive/roadmap-history.md` — detailed historical roadmap record

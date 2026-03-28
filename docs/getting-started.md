@@ -1,8 +1,14 @@
 # Getting Started
 
-Trade Proposer App is a FastAPI backend, a React/Vite frontend, a worker, and a scheduler. The recommendation pipeline runs entirely inside this repository: it uses `pandas` and `yfinance` for app-native scoring, applies the bundled `weights.json`, reuses shared macro and industry sentiment/context artifacts, and stores auditable diagnostics for every workflow.
+**Status:** canonical setup and operations guide
 
-This guide focuses on the fastest path to a healthy local install and the minimum checks that matter when something goes wrong.
+This guide covers local setup, startup, and the first checks to run when something looks wrong.
+
+The app has four main pieces:
+- FastAPI backend
+- React/Vite frontend
+- worker
+- scheduler
 
 ## What to remember
 
@@ -151,7 +157,7 @@ Supported external news services currently ingested by the app-native pipeline:
 
 Weight optimization also runs entirely inside the app and stores backup metadata for rollback.
 
-For stored fields and diagnostics, see `docs/raw-details-reference.md`.
+For stored fields and diagnostics, see `raw-details-reference.md`.
 
 ## Manual startup without helper scripts
 
@@ -222,3 +228,9 @@ Verify that:
 
 ### Health is green but proposals still look degraded
 Check the snapshot freshness warnings in `/api/health` or the Settings page. Proposal generation can still run when shared macro or industry snapshots are stale, but the app should tell you that sentiment context is degraded.
+
+## See also
+
+- `operator-page-field-guide.md` — where to go in the UI after startup
+- `glossary.md` — shared terms used across the app
+- `roadmap.md` — what is still being improved

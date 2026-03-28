@@ -1,67 +1,140 @@
 # Recommendation Methodology
 
-This document explains how Trade Proposer App produces recommendations through its app-native scoring pipeline.
+**Status:** canonical recommendation logic
 
-The goal of the methodology is not to maximize signal complexity. The goal is to generate recommendations that are reproducible, inspectable, and honest about degraded inputs.
+This document answers one question:
+> how does the app produce recommendation outputs?
 
-Just as importantly, the methodology should currently be read as a structured decision-support and candidate-ranking process, not as a fully validated predictive engine. Stronger predictive claims should only follow once the redesign path has outcome tracking, confidence calibration, and evidence that recommendation quality is improving in measured terms.
+The point of the methodology is not to pile on more signals. The point is to produce recommendations that are:
+- reproducible
+- inspectable
+- clear about degraded inputs
 
-## Methodology principles
+Right now the methodology should be read as a decision-support and candidate-ranking process. It is not yet proof of broad predictive skill.
 
-The most important rule is the product-wide signal-integrity principle:
-- missing or stale inputs should become explicit warnings or neutral values
-- degraded sentiment or provider coverage should remain visible in diagnostics
-- fallback behavior must not pretend to be equivalent to healthy input
+## Core rule
 
-That principle matters more than any individual indicator choice.
+The main rule is signal integrity:
+- missing or stale inputs should become warnings or neutral values
+- degraded provider coverage should stay visible in diagnostics
+- fallback behavior should not be presented as equal to healthy input
 
 ## Pipeline overview
 
 ### Current production pipeline
 `ProposalService` orchestrates recommendation generation for one or more tickers in a run.
 
-For each ticker, the current production pipeline:
-1. fetches recent OHLC history through `yfinance`
+For each ticker, the pipeline:
+1. fetches recent OHLC price history through `yfinance`
 2. computes technical indicators with `pandas`
 3. builds raw and normalized feature vectors
-4. loads the latest valid shared macro snapshot
-5. loads the latest valid shared industry snapshot for the ticker's mapped industry
-6. computes live ticker-specific sentiment from the current news payload
-7. applies the configured weights from `src/trade_proposer_app/data/weights.json`
+4. loads the latest valid shared macro artifact
+5. loads the latest valid shared industry artifact for the ticker’s mapped industry
+6. computes live ticker sentiment from current news input
+7. applies weights from `src/trade_proposer_app/data/weights.json`
 8. emits direction, confidence, entry, stop-loss, take-profit, and diagnostics
-9. persists the full result and structured analysis payloads
+9. persists structured outputs and audit payloads
 
-If an input is unavailable, the system does not invent substitute confidence. It emits warnings or neutral values and stores why.
+If an input is unavailable, the system stores that fact and falls back to warnings or neutral values.
 
-### Redesign path now partially implemented
-The app now also has persisted redesign-domain objects for:
+### Current redesign path
+The redesign path now persists:
 - `MacroContextSnapshot`
 - `IndustryContextSnapshot`
 - `TickerSignalSnapshot`
 - `RecommendationPlan`
+- `RecommendationPlanOutcome`
 
-These exist as database models, repositories, migrations, read APIs, and run-detail/UI inspection surfaces.
+Watchlist-backed proposal jobs use a staged flow:
+1. cheap scan across the watchlist
+2. shortlist selection
+3. deep analysis for shortlisted names through `TickerDeepAnalysisService`
+4. persistence of ticker signals and recommendation plans
 
-In addition, watchlist-backed proposal jobs now use a real staged orchestration path:
-1. cheap scan over all watchlist tickers
-2. shortlist selection using the dedicated cheap-scan signal model
-3. deep analysis only for shortlisted names through `TickerDeepAnalysisService`
-4. persistence of `TickerSignalSnapshot` and `RecommendationPlan` for every scanned ticker
-5. persistence of setup-family-aware execution metadata such as entry style, stop style, target style, timing expectation, evaluation focus, and family-specific action-reason detail
+## Data layers used by the methodology
 
-Current limitation:
-- `TickerDeepAnalysisService` now executes its own native deep-analysis flow for watchlist orchestration, but it still reuses some legacy proposal-service internals and payload shapes rather than a fully separated ticker engine
-- macro and industry refresh runs now write richer context objects through a news-first event pipeline that dedupes evidence, tracks lifecycle state (`new`, `escalating`, `persistent`, `fading`), and flags contradictions, but that pipeline is still heuristic rather than a mature causal model
-- the redesign path now has first-class recommendation outcome persistence/evaluation, watchlist-backed plans now persist setup family plus decomposed confidence components, grouped calibration summaries are available by confidence bucket and setup family, watchlist-backed action gating now applies sample-aware calibration adjustments across horizon, transmission-bias, context-regime, and horizon-plus-setup-family slices, operator workflows now compare actual actionable plans against simple heuristic baseline cohorts and dedicated setup-family cohorts, and they can also inspect per-family review slices by horizon, transmission bias, and context regime while filtering the main recommendation-plan browse flow directly by setup family; ticker planning now persists richer macro/industry transmission summaries while shortlist construction reserves a small catalyst/event lane alongside the main technical lane, ticker deep analysis now computes its own redesign-native technical/context feature pipeline, proposal-time context enrichment now prefers snapshot-plus-context inputs when available, transmission analysis now persists context strength, event relevance, contradiction counts, and a bounded transmission-confidence adjustment that can explicitly block conflicted plans, and calibration review now performs cautious confidence re-scaling so plans store raw-vs-calibrated confidence rather than only a threshold bump; the remaining limitation is evidence depth over time, not missing calibration plumbing
+### 1. Market data
+The app uses `yfinance` for price history and volume.
 
-## Recommendation-plan outcome evaluation
+That data is used both for proposal generation and later evaluation, which keeps generation and review on the same data path.
 
-The redesign path now persists `recommendation_outcomes` for `RecommendationPlan` objects.
+### 2. Shared macro and industry context
+The app stores broader reusable context by scope:
+- macro
+- industry
+- ticker
 
-The current evaluation flow records measures such as:
-- entry touched or not
-- stop-loss hit or not
-- take-profit hit or not
+This lets multiple recommendations share the same broader context window and link back to the exact artifacts they used.
+
+If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings.
+
+### 3. News ingestion and live ticker sentiment
+`NewsIngestionService` fetches provider-backed articles, deduplicates them, normalizes them, and records feed usage and feed failures.
+
+Ticker-level sentiment is then derived from the available articles.
+
+Stored transparency fields include:
+- `keyword_hits`
+- `coverage_insights`
+- feed errors
+- source counts
+- item counts
+
+So a neutral score can mean either:
+- the coverage was actually neutral
+- or the coverage was weak
+
+### 4. Optional summary enrichment
+The app always stores a digest of the news context.
+
+Operators can optionally route that digest and a compact technical snapshot through:
+- `openai_api`
+- `pi_agent`
+
+The result is stored in `analysis_json.summary`. If summarization fails, the digest remains and the error is recorded.
+
+## Feature engineering
+
+The technical feature set includes market-derived inputs such as:
+- trend indicators
+- momentum indicators
+- volatility measures
+- reversion signals
+- liquidity and volume context where available
+
+The app persists both:
+- raw values
+- normalized values
+
+## Scoring model
+
+`weights.json` defines the relative influence of normalized features and aggregate signals.
+
+At a high level, the scoring model:
+- computes weighted contributions across the normalized feature vector
+- builds aggregate directional context
+- resolves a directional bias (`LONG`, `SHORT`, or `NEUTRAL`)
+- computes a bounded confidence score
+
+The app stores intermediate vectors, aggregations, and weights so operators can inspect what influenced the result.
+
+## Price levels and risk
+
+Entry, stop-loss, and take-profit are derived from the same technical and risk context as the rest of the recommendation.
+
+In broad terms:
+- entry starts from the current price context and may be adjusted by directional pressure
+- stop-loss is based on volatility-sensitive distance
+- take-profit is derived from the same risk budget with reward-side adjustments
+
+## Outcome evaluation
+
+The app stores `RecommendationPlanOutcome` records for evaluated plans.
+
+Current evaluation records fields such as:
+- entry touched
+- stop-loss hit
+- take-profit hit
 - fixed-horizon returns (`1d`, `3d`, `5d`)
 - maximum favorable excursion
 - maximum adverse excursion
@@ -70,171 +143,22 @@ The current evaluation flow records measures such as:
 - confidence bucket
 - setup family
 
-Those outcomes are written back into the main app database, surfaced through the API, and attached to recommendation-plan reads as the latest stored outcome so operators can review trade-plan quality without leaving the redesign workflow.
-
-Current limitation:
-- the app is now storing the right evaluation data, but it is not yet using that history to calibrate confidence or materially retrain setup logic
-- setup family is persisted at evaluation time today, but generation-time setup classification is still incomplete and should become native to the ticker-analysis layer
-
-## App-native independence
-
-The current pipeline is intentionally self-contained: recommendation generation, evaluation, optimization, and shared sentiment reuse all run inside this repository instead of delegating core behavior to a prototype script. That makes the methodology easier to inspect, easier to test, and less likely to drift from the product's stored diagnostics.
-
-## Data and sentiment layers
-
-The methodology combines technical, context, and sentiment signals.
-
-### 1. Market data
-The pipeline uses `yfinance` to retrieve price history and volume. That history drives the technical indicators and is also reused by evaluation workflows, which helps keep proposal generation and later outcome review on the same data path.
-
-### 2. Shared context and sentiment snapshots
-The methodology now separates reusable broader context by scope:
-- **macro sentiment/context**: shared and refreshed through dedicated workflows
-- **industry sentiment/context**: shared and refreshed through dedicated workflows
-- **ticker sentiment**: computed live during proposal generation
-
-This design improves:
-- efficiency, because macro and industry context do not need to be recomputed for every ticker
-- consistency, because multiple recommendations in the same window can share the same broader context
-- traceability, because the exact snapshot or context IDs used by a recommendation are stored and linked in the UI
-
-Current redesign direction:
-- macro and industry should become increasingly context-first and event-centric
-- sentiment labels should remain secondary to "what matters now" and "why it matters"
-- shared context should help explain transmission and exposure, not just polarity
-
-If the relevant macro or industry snapshot is missing or stale, the methodology falls back to neutral values and explicit warnings.
-
-### 3. News ingestion and live ticker sentiment
-`NewsIngestionService` fetches provider-backed articles, deduplicates them, normalizes them into a unified structure, and records both feed usage and feed failures.
-
-A lightweight sentiment analyzer then derives ticker-level sentiment signals from the available articles. It stores transparency fields such as:
-- `keyword_hits`
-- `coverage_insights`
-- feed errors
-- source counts and item counts
-
-So a neutral score can be understood as either real neutrality or missing coverage.
-
-The redesign direction here is not simply "more news." It is better evidence quality:
-- official and primary releases should matter more than generic syndication
-- trade and industry sources should matter more for industry context
-- social evidence should confirm, accelerate, or contextualize rather than dominate macro/industry judgment
-- headline-only evidence should remain explicitly marked as lower-resolution evidence
-
-### 4. Optional summary enrichment
-The pipeline always stores a digest of the available news context. Operators can optionally route that digest and a compact technical snapshot through:
-- `openai_api`
-- `pi_agent`
-
-The resulting narrative and metadata are stored in `analysis_json.summary`. If that path fails, the digest remains available and the error is recorded.
-
-## Feature engineering
-
-The technical feature set includes standard market-derived signals such as:
-- trend indicators
-- momentum indicators
-- volatility measures
-- reversion signals
-- liquidity or volume context where available
-
-The methodology persists both:
-- raw values
-- normalized values
-
-This matters because the stored weights operate on normalized inputs, and audits need to show both the market observation and the transformed scoring input.
-
-## Scoring model
-
-`weights.json` defines the relative influence of the normalized features and aggregated signals.
-
-At a high level, the scoring model:
-- computes weighted contributions across the normalized feature vector
-- builds aggregate directional context
-- resolves a directional bias (`LONG`, `SHORT`, or `NEUTRAL`)
-- computes a bounded confidence score
-
-The methodology intentionally favors transparency over theoretical elegance: the app stores the intermediate vectors, aggregations, and weights so operators can inspect what influenced the result.
-
-Current realism constraint:
-- a coherent score is not the same thing as validated predictive edge
-- confidence should not remain a monolithic black-box number forever
-- the redesign should move toward setup-aware scoring and decomposed confidence such as context confidence, directional confidence, catalyst confidence, technical clarity, and execution clarity
-
-## Price levels and risk
-
-Entry, stop-loss, and take-profit are derived from the same technical and risk context rather than being post-hoc decorations.
-
-In general:
-- entry starts from the current price context and may be nudged by directional pressure
-- stop-loss is anchored to volatility-sensitive distance
-- take-profit is derived from the same risk budget with reward-side adjustments
-
-These values are persisted with the recommendation so later evaluation can judge the recommendation against the exact levels that were proposed.
-
-## Diagnostics and stored payloads
-
-Each recommendation and run persists structured artifacts such as:
-- `analysis_json`
-- `feature_vector_json`
-- `normalized_feature_vector_json`
-- `aggregations_json`
-- `confidence_weights_json`
-- warnings and provider errors
-- timing metadata
-
-`analysis_json` is the main operator-facing audit object. It records:
-- recommendation metadata
-- trade outputs
-- summary metadata
-- news coverage
-- sentiment layers
-- context flags
-- feature vectors
-- aggregations
-- diagnostics
-
-This is why the run detail and recommendation-plan-centered operator views can explain what happened without relying on raw logs alone.
-
-## Methodology strengths
-
-The methodology is strongest where it is explicit:
-- technical and sentiment signals are stored, not implied
-- shared broader context is reusable and auditable
-- degraded inputs become visible warnings
-- evaluation can review outcomes against the original stored levels
-- watchlist orchestration already explains shortlist and rejection behavior rather than hiding it in ranking internals
+These outcomes are written back into the main database and attached to plan reads as the latest stored outcome.
 
 ## Methodology limits
 
-The methodology still has important limits:
-- recommendation quality still depends on the quality and timeliness of external market/news inputs
-- sentiment is inspectable, but not yet fully validated as a source of measurable edge
-- scheduler and workflow reliability still matter because good methodology is less useful if operations are unreliable
-- more signal sources should not be added faster than their effectiveness can be measured
-- the redesign target architecture now has a real watchlist orchestration path, event-ranked news-first context writers, operator-visible shortlist reasoning, first-class recommendation-plan outcome tracking, a dedicated ticker deep-analysis service boundary, and setup-family-aware generation for watchlist-backed plans, but calibrated confidence and deeper context extraction still need substantial work
-- the app is not yet justified as a broad few-day swing predictor because setup-family performance and confidence calibration are still not first-class decision loops
-- cheap scan is valuable for triage, but on its own it will not capture the full set of event-driven or regime-sensitive opportunities the redesign is supposed to surface
+The current limits matter:
+- recommendation quality still depends on external market and news inputs
+- sentiment is inspectable, but not yet proven as a source of measured edge
+- scheduler and workflow reliability still affect trust in the outputs
+- cheap scan is only a triage layer, not the full trade-quality engine
+- context extraction is still heuristic
+- ticker deep analysis still reuses some older proposal internals
+- confidence calibration needs more evidence over time
 
-## Best next steps
-Given the work already completed, the next best implementation steps are:
-1. use stored recommendation outcomes to calibrate confidence and compare setup-family performance
-2. expose watchlist policy details more directly in operator workflows alongside the shortlist reasoning already surfaced
-3. deepen `TickerDeepAnalysisService` into a fuller redesign-native ticker engine with less dependence on legacy proposal payload conventions
-4. keep maturing macro/industry context extraction beyond the current heuristic event-ranking layer
-5. only then decide how quickly to retire, absorb, or narrow the remaining sentiment-snapshot-first and legacy recommendation paths
+## See also
 
-## Practical reading guide
-
-To inspect one recommendation plan end to end:
-1. open the recommendation-plan browser for the trade object
-2. open the source run for the execution context
-3. inspect the shared snapshot references if present
-4. inspect the structured diagnostics and sentiment coverage fields
-5. compare later evaluation outcomes against the stored price levels
-
-## Related docs
-- `product-thesis.md`: goals, principles, and priority order
-- `raw-details-reference.md`: field-level payload reference
-- `features-and-capabilities.md`: current product behavior
-- `phase-2-app-native.md`: self-contained pipeline progress and limits
+- `features-and-capabilities.md` — what the app can do now
+- `raw-details-reference.md` — stored field and payload reference
+- `roadmap.md` — what still needs work
+- `archive/phase-2-app-native.md` — older phase history

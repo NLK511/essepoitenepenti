@@ -17,9 +17,9 @@ The design intent from the original plan is still the right one:
 ## Why this document is short now
 
 The original long-form proposal became redundant once the feature shipped. The live references for the current behavior are now:
-- `docs/architecture.md`
-- `docs/features-and-capabilities.md`
-- `docs/raw-details-reference.md`
-- `docs/roadmap.md`
+- `../../architecture.md`
+- `../../features-and-capabilities.md`
+- `../../raw-details-reference.md`
+- `../../roadmap.md`
 
 If the snapshot model changes materially in the future, add a fresh design note that documents the delta rather than restoring the old implementation plan.

@@ -1,12 +1,14 @@
 # Short-Horizon Recommendation Engine Redesign
 
+**Status:** active redesign reference
+
 ## Purpose
 
-This document defines the new target architecture for the app.
+This doc keeps the broader redesign model in one place.
 
-The goal is no longer to build a generic sentiment dashboard. The goal is to produce **practical short-horizon trade recommendations** that aim to capture swings likely to happen within a few days.
+Use the split redesign docs as the main active reference. Use this file when you want the full combined picture in one read.
 
-This architecture should currently be read with an explicit realism constraint: the app is being redesigned first into a high-quality decision-support, candidate-ranking, and trade-framing system. It should only be treated as a broadly predictive engine after stored recommendation outcomes show real calibration and measurable edge.
+Near-term, the redesign should be read as a short-horizon decision-support, candidate-ranking, and trade-framing system. Stronger predictive claims should wait for outcome and calibration evidence.
 
 Recommendations should ultimately provide:
 
@@ -36,9 +38,9 @@ Near-term success for this architecture means:
 ## Non-negotiable operating principles
 
 ### 1. Observability and trust first
-The app must maximize user trust.
+Trust and observability come first.
 
-It must:
+The app must:
 
 - never use hidden fallbacks
 - never silently substitute weaker data for stronger data
@@ -827,3 +829,13 @@ All of that should operate under strict observability rules:
 - clear degraded states
 - stored diagnostics
 - no false confidence
+
+## See also
+
+- `README.md` — redesign doc map
+- `principles.md` — redesign rules
+- `target-architecture.md` — layered redesign shape
+- `transmission-modeling-spec.md` — context transmission rules
+- `calibration-governance-spec.md` — outcome-aware confidence governance
+- `setup-family-playbook.md` — setup-family-specific plan behavior
+- `data-model-and-persistence.md` — redesign persistence direction

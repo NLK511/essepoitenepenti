@@ -1,36 +1,41 @@
 # Raw Details Reference
 
-Trade Proposer App persists diagnostic metadata alongside runs, redesign recommendation plans, and sentiment/context refresh workflows so operators can audit behavior without leaving the platform. `RecommendationPlan`, `RecommendationPlanOutcome`, context snapshots, and ticker-signal snapshots are the active operator workflow objects.
+**Status:** technical reference
+
+This document answers one question:
+> what does the app store, and what do the main structured payloads contain?
+
+Trade Proposer App stores diagnostic metadata alongside runs, recommendation plans, recommendation-plan outcomes, ticker signals, and sentiment/context refresh workflows.
 
 ## Structured pipeline payloads
 
 The app-native pipeline emits a structured JSON object for each ticker it scores. This object is persisted as `analysis_json`.
 
 ### `analysis_json`
-The canonical structured payload groups diagnostics into a small number of logical sections:
-- `metadata`: timestamps, version, and the ticker that the pipeline scored
+The main sections are:
+- `metadata`: timestamps, version, and ticker
 - `trade`: direction, confidence, entry, stop-loss, and take-profit
-- `summary`: digest or LLM narrative text plus generation metadata (`method`, `backend`, `model`, runtime, fallback text, and errors)
-- `news`: unified `items`, feed usage, feed errors, item counts, and keyword-sentiment diagnostics
+- `summary`: digest or LLM narrative text plus generation metadata such as method, backend, model, runtime, fallback text, and errors
+- `news`: unified items, feed usage, feed errors, item counts, and keyword-sentiment diagnostics
 - `signals`: normalized cross-source signal payloads when additional signal providers are enabled
 - `social`: social/Nitter-focused diagnostics when enabled
-- `sentiment`: the stored sentiment layers and enhanced/fused sentiment metadata
+- `sentiment`: stored sentiment layers and enhanced/fused sentiment metadata
 - `context_flags`: boolean keyword/context tags
 - `feature_vectors`: nested `raw` and `normalized` values
 - `aggregations`, `confidence_weights`, and `aggregation_weights`: weighted breakdowns and applied weight maps
 - `diagnostics`: problems, provider failures, and summary errors
 
 ### `analysis_json.sentiment`
-This section is especially important because it now mixes live and snapshot-backed inputs.
+This section mixes live and snapshot-backed inputs.
 
 Typical shape:
-- `macro`: snapshot-backed shared macro sentiment, including `snapshot_id`, `subject_key`, `label`, `score`, and source/freshness metadata; when available it also carries `context_snapshot_id`, `context_summary`, `context_events`, `context_lifecycle`, and contradiction labels from the redesign-native macro context object
-- `industry`: snapshot-backed shared industry sentiment, including `snapshot_id`, `subject_key`, `label`, `score`, and source/freshness metadata; when available it also carries `context_snapshot_id`, `context_summary`, `context_events`, `context_lifecycle`, and contradiction labels from the redesign-native industry context object
+- `macro`: shared macro sentiment with fields such as `snapshot_id`, `subject_key`, `label`, `score`, and freshness/source metadata; when available it may also carry `context_snapshot_id`, `context_summary`, `context_events`, `context_lifecycle`, and contradiction labels from the redesign-native macro context object
+- `industry`: shared industry sentiment with the same kind of fields and optional context-object metadata
 - `ticker`: live per-proposal ticker sentiment
-- `enhanced`: the fused sentiment result used by the scoring logic, plus component contributions
-- `coverage_insights` / `keyword_hits`: transparency fields for sparse or neutral sentiment coverage
+- `enhanced`: the fused sentiment result used by scoring, plus component contributions
+- `coverage_insights` / `keyword_hits`: transparency fields for sparse or neutral coverage
 
-The UI uses the stored `snapshot_id` and `context_snapshot_id` values to link runs and trade outputs back to the exact shared artifacts that influenced them.
+The UI uses stored `snapshot_id` and `context_snapshot_id` values to link runs and trade outputs back to the shared artifacts that influenced them.
 
 ### Other stored payloads
 - `raw_output`: scripted stdout/stderr or raw pipeline detail when available
@@ -40,15 +45,18 @@ The UI uses the stored `snapshot_id` and `context_snapshot_id` values to link ru
 - `confidence_weights_json`: per-feature weights loaded from `weights.json`
 - `summary_method`: how the summarization backend generated the narrative
 
-## Trade-output-specific fields
+## Redesign-native trade objects
 
-The redesign path persists `RecommendationPlan` objects, `RecommendationPlanOutcome` objects, and `TickerSignalSnapshot` objects for watchlist orchestration. These redesign objects are the canonical place to inspect structured trade planning, per-ticker reasoning, and measured plan outcomes.
+The redesign path persists these main trade-review objects:
+- `TickerSignalSnapshot`
+- `RecommendationPlan`
+- `RecommendationPlanOutcome`
 
-Important redesign-native fields now include:
-- context snapshot lifecycle metadata such as `event_lifecycle_summary`, `contradictory_event_labels`, and per-event `persistence_state` / `window_hint`
+Important stored fields include:
+- context lifecycle metadata such as `event_lifecycle_summary`, `contradictory_event_labels`, and per-event `persistence_state` / `window_hint`
 - ticker transmission fields such as `context_strength_percent`, `context_event_relevance_percent`, `contradiction_count`, `decay_state`, and `transmission_confidence_adjustment`
-- recommendation-plan calibration fields such as `raw_confidence_percent`, `calibrated_confidence_percent`, `confidence_adjustment`, `effective_confidence_threshold`, and slice-level sample-status snapshots inside `calibration_review`
-- recommendation-plan action reasons such as `context_transmission_headwind` and `context_transmission_contradiction` when broader context blocks promotion
+- recommendation-plan calibration fields such as `raw_confidence_percent`, `calibrated_confidence_percent`, `confidence_adjustment`, `effective_confidence_threshold`, and sample-status snapshots inside `calibration_review`
+- recommendation-plan action reasons such as `context_transmission_headwind` and `context_transmission_contradiction`
 
 ## Run and workflow artifacts
 
@@ -82,11 +90,11 @@ Shared macro and industry refresh workflows persist `SentimentSnapshot` records 
 - `job_id`
 - `run_id`
 
-These records act as both reusable cache and audit object.
+These records are both reusable cache and audit object.
 
-## Diagnostics and timing
+## Diagnostics and timing fields
 
-These fields help populate debugger, run detail, and health views:
+Common stored diagnostic fields include:
 - `warnings`
 - `provider_errors`
 - `problems`
@@ -95,9 +103,15 @@ These fields help populate debugger, run detail, and health views:
 - `timing_json`
 - `analysis_timestamp`
 
-## Operational notes
+## Operational reference notes
 
-- **Weights**: `weights.json` lives in `src/trade_proposer_app/data/` and is used for every scoring run.
-- **Preflight**: `/api/health/preflight` reports on dependency readiness and now also includes shared snapshot freshness checks, so the app can signal degraded sentiment context before proposal generation.
-- **Summarization**: operators configure the summary backend via `/settings` (`news_digest`, `openai_api`, or `pi_agent`).
-- **Diagnostics reuse**: the same stored payloads support the debugger, run detail pages, recommendation-plan and ticker pages, and `/api/health`.
+- `weights.json` lives in `src/trade_proposer_app/data/` and is used for scoring runs.
+- `/api/health/preflight` reports dependency readiness and shared snapshot freshness.
+- operators configure the summary backend via `/settings` using `news_digest`, `openai_api`, or `pi_agent`.
+- the same stored payloads support the debugger, run detail pages, recommendation-plan pages, ticker pages, and health views.
+
+## See also
+
+- `recommendation-methodology.md` — how the pipeline works
+- `features-and-capabilities.md` — what the app can do now
+- `operator-page-field-guide.md` — where those fields appear in the UI

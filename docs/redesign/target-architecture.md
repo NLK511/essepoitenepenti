@@ -1,15 +1,18 @@
 # Target Architecture
 
-## Overview
+**Status:** active redesign reference
 
-The redesigned app should be organized into four layers:
+## Purpose
 
+This doc describes the target shape of the redesign.
+
+It splits the system into four layers:
 1. **Context**
 2. **Exposure**
 3. **Ticker setup**
 4. **Trade plan**
 
-The goal is to move away from a generic sentiment dashboard and toward a **short-horizon recommendation engine**.
+Near-term, this should be read as a shortlist, setup-evaluation, and trade-framing architecture, not as proof of general predictive skill.
 
 ## Layer 1: Context
 
@@ -119,6 +122,8 @@ Outputs should include:
 - tradeability status
 - summary
 - warnings
+- setup family
+- confidence components
 
 ## Layer 4: Trade plan
 
@@ -199,8 +204,10 @@ This stage creates:
 ### Stage D: Ticker setup evaluation
 This stage scores near-term swing potential using context, catalysts, sentiment, and market structure.
 
+It should evolve into a setup-aware evaluator rather than remain one generic scorer. Different setup families such as continuation, breakout, mean reversion, catalyst follow-through, and sympathy/macro-exposure trades should be distinguishable and later evaluable.
+
 ### Stage E: Trade construction
-This stage builds the final recommendation with entry, stop, target, and warnings.
+This stage builds the final recommendation with entry, stop, target, warnings, and explicit `watchlist` / `no_action` outcomes when structure is not strong enough.
 
 ## Summary generation rules
 

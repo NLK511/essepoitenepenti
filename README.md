@@ -51,17 +51,23 @@ After startup:
 
 ## Documentation
 
-For detailed information, see the `docs/` directory or browse them in-app at `/docs`:
+For detailed information, see the `docs/` directory or browse them in-app at `/docs`.
+
+Suggested reading order:
 - [Documentation Index](docs/docs-index.md)
 - [Getting Started](docs/getting-started.md)
-- [Architecture](docs/architecture.md)
-- [Roadmap](docs/roadmap.md)
+- [Operator Page & Field Guide](docs/operator-page-field-guide.md)
+- [Glossary](docs/glossary.md)
+
+Canonical current-state docs:
+- [Product Thesis](docs/product-thesis.md)
 - [Features & Capabilities](docs/features-and-capabilities.md)
 - [Recommendation Methodology](docs/recommendation-methodology.md)
-- [User Journeys](docs/user-journeys.md)
-- [Product Thesis](docs/product-thesis.md)
-- [Phase 2: App-native Outcomes](docs/phase-2-app-native.md)
+- [Architecture](docs/architecture.md)
+- [Roadmap](docs/roadmap.md)
 - [Raw Details Reference](docs/raw-details-reference.md)
+
+Historical and archived material is now grouped under `docs/archive/` so it does not clutter the main reading path.
 
 ## Tech Stack
 - **Backend**: Python, FastAPI, SQLAlchemy (SQLite/Postgres).

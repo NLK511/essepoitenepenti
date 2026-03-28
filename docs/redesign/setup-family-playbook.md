@@ -1,16 +1,12 @@
 # Setup Family Playbook
 
+**Status:** active redesign reference
+
 ## Purpose
 
-This document specifies how setup families should influence recommendation-plan generation, not just labeling.
+This doc describes how setup families should change recommendation-plan generation, not just labeling.
 
-The goal is to make setup families drive:
-- trade construction
-- invalidation logic
-- evaluation expectations
-- calibration review
-- operator explanation
-- operator-visible cohort review
+A setup family should affect trade construction, invalidation logic, evaluation expectations, and operator explanation.
 
 ## Core rule
 

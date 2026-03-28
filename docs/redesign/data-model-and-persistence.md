@@ -1,8 +1,14 @@
 # Data Model and Persistence
 
-## Database direction
+**Status:** active redesign reference
 
-The redesigned app should use a proper database, with PostgreSQL as the target datastore.
+## Purpose
+
+This doc describes the persistence direction for the redesign.
+
+PostgreSQL is the target datastore.
+
+## Database direction
 
 ### Why PostgreSQL
 

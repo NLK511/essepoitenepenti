@@ -1,10 +1,12 @@
 # Architecture
 
+**Status:** canonical current architecture
+
 ## Architecture choice
 
-Trade Proposer App uses a modular monolith with explicit internal boundaries. That remains the right choice because the product still benefits more from local simplicity and shared schemas than from early service extraction.
+Trade Proposer App uses a modular monolith with explicit internal boundaries. That still makes sense because the product gets more value from local simplicity and shared schemas than from early service extraction.
 
-This choice is effective when it preserves three principles:
+This only works if it keeps three things true:
 - keep business logic on the backend
 - keep runtime topology easy to start and debug locally
 - make future extraction possible without designing for it prematurely
@@ -205,9 +207,9 @@ Owns the React/Vite application.
 
 ## Architectural assessment
 
-The architecture is internally consistent in one important way: execution, diagnostics, persistence, and the UI all now share the same backend-owned contract. That reduces drift.
+The main thing working here is that execution, diagnostics, persistence, and the UI all share the same backend-owned contract. That reduces drift.
 
-Its weakest point is not the module split; it is the growing amount of operational behavior carried by one process family without yet having production-grade coordination. The codebase is still coherent, but scheduler reliability, auth/credential lifecycle, and observability are now more urgent than additional feature breadth.
+The main weak point is not the module split. It is the amount of operational behavior carried by one process family without stronger production coordination yet. Scheduler reliability, auth and credential lifecycle, and observability now matter more than adding more features.
 
 ## Immediate next architectural moves
 

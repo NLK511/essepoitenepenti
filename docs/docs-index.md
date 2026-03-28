@@ -1,22 +1,34 @@
 # Documentation Index
 
-This page explains which document is canonical for which topic so the documentation stays consistent and easy to maintain.
+**Status:** canonical navigation guide
 
-## Canonical docs
+This index shows where to start and what each doc is for.
+
+It separates current product docs, technical reference, and archived history so the main reading path stays clear.
+
+## Start here
+
+If you are new to the repo or the app, read these first:
+
+- `../README.md`
+  - repo-level overview and quick start
+- `getting-started.md`
+  - local setup, startup, auth basics, first-run checks
+- `operator-page-field-guide.md`
+  - what each major UI page is for and how to use it
+- `glossary.md`
+  - shared vocabulary across runs, signals, plans, outcomes, and snapshots
+
+## Canonical current-state docs
+
+These docs define the current product truth.
 
 ### Product direction
 - `product-thesis.md`
   - core goal
   - governing principle
-  - strategic priorities
-  - decision standard for future work
-
-### Current architecture
-- `architecture.md`
-  - runtime model
-  - module boundaries
-  - workflow topology
-  - architectural risks and next moves
+  - strategic priority order
+  - standard for future decisions
 
 ### Current product behavior
 - `features-and-capabilities.md`
@@ -24,19 +36,41 @@ This page explains which document is canonical for which topic so the documentat
   - current strengths
   - current weaknesses
 
-### Setup and operations
-- `getting-started.md`
-  - local setup
-  - startup
-  - auth basics
-  - common first-run issues
-
 ### Recommendation logic
 - `recommendation-methodology.md`
-  - how the scoring pipeline works
-  - sentiment layers
+  - how the app-native scoring and planning pipeline works
+  - sentiment and context layers
   - scoring and risk logic
   - methodology limits
+
+### Current architecture
+- `architecture.md`
+  - runtime model
+  - module boundaries
+  - workflow topology
+  - operational risks and next moves
+
+### Setup and operations
+- `getting-started.md`
+  - installation
+  - startup
+  - authentication basics
+  - first-run troubleshooting
+
+### Current roadmap
+- `roadmap.md`
+  - what is clearly shipped now
+  - what is still active work
+  - what is explicitly later
+
+### User workflow framing
+- `user-journeys.md`
+  - current intended operator journeys
+  - deferred journeys that should not drive near-term design
+
+## Technical reference docs
+
+These are useful after you already understand the product shape.
 
 ### Stored payloads and diagnostics
 - `raw-details-reference.md`
@@ -45,32 +79,66 @@ This page explains which document is canonical for which topic so the documentat
   - sentiment snapshots
   - diagnostics and timing
 
-### Roadmap
-- `roadmap.md`
-  - what is shipped
-  - what is incomplete but necessary
-  - what is intentionally later
+### Redesign specs still useful as active reference
+- `redesign/README.md`
+  - overview of active redesign docs
+- `redesign/principles.md`
+  - redesign rules and trust constraints
+- `redesign/target-architecture.md`
+  - desired longer-shape design for context, exposure, ticker setup, and trade-plan construction
+- `redesign/transmission-modeling-spec.md`
+  - transmission rules for context → industry → ticker reasoning
+- `redesign/calibration-governance-spec.md`
+  - sample-aware calibration and threshold-governance rules
+- `redesign/setup-family-playbook.md`
+  - setup-family-specific plan construction expectations
+- `redesign/data-model-and-persistence.md`
+  - redesign persistence direction and entity framing
 
-### User-facing workflow framing
-- `user-journeys.md`
-  - current operator journeys
-  - deferred journeys that should not shape near-term priorities
+## Archive
 
-## Archived or intentionally non-canonical docs
+Archived docs are still valuable for future development and historical context, but they are not part of the main reading path.
 
-These docs may still exist for historical context, but they should not override the canonical docs above:
-- `shared-sentiment-snapshot-implementation-plan.md`
-- `shared-sentiment-snapshot-refactor.md`
-- `nitter-social-implementation-checklist.md`
-- `nitter-social-sentiment-design.md`
+Start with:
+- `archive/README.md`
+- `archive/roadmap-history.md`
+
+Archived implementation/planning material includes:
+- `archive/phase-2-app-native.md`
+- `archive/implementation-plans/shared-sentiment-snapshot-implementation-plan.md`
+- `archive/implementation-plans/shared-sentiment-snapshot-refactor.md`
+- `archive/implementation-plans/nitter-social-implementation-checklist.md`
+- `archive/implementation-plans/nitter-social-sentiment-design.md`
+- `archive/redesign/migration-plan.md`
+- `archive/redesign/implementation-charter.md`
+- `archive/redesign/legacy-convergence-plan.md`
+- `archive/redesign/measured-success-criteria.md`
 
 ## Maintenance rule
 
 When a feature ships:
 - update the canonical doc for that topic
 - remove or archive planning language elsewhere
-- avoid describing shipped work as major future work in multiple places
+- do not leave shipped work described as major future work in multiple places
 
-When a feature is only exploratory:
-- keep it clearly marked as deferred or conceptual
-- do not let it compete with the active roadmap unless priorities actually change
+When a doc becomes mainly historical:
+- move it to `docs/archive/`
+- keep a short pointer from the active doc set if the history is still useful
+
+## Suggested reading paths
+
+### New operator
+- `getting-started.md`
+- `operator-page-field-guide.md`
+- `glossary.md`
+
+### Product understanding
+- `product-thesis.md`
+- `features-and-capabilities.md`
+- `recommendation-methodology.md`
+- `roadmap.md`
+
+### Technical reference
+- `architecture.md`
+- `raw-details-reference.md`
+- `redesign/README.md`

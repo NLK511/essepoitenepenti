@@ -1,12 +1,12 @@
 # Principles
 
+**Status:** active redesign reference
+
 ## Purpose
 
-These principles define the product and engineering rules for the redesigned app.
+This doc defines the product and engineering rules for the redesign.
 
-The system is being redesigned to support **short-horizon trade recommendations** intended to capture swings likely to happen within a few days.
-
-The realistic near-term target is an explainable decision-support and candidate-ranking system that can surface actionable `RecommendationPlan` outputs when the evidence is strong enough. It should not be treated as a broadly validated predictive engine until outcomes and calibration show that the redesign path is actually working.
+Near-term, the redesign is about a short-horizon decision-support and trade-planning system. It should not be treated as a broadly validated predictive engine until outcomes and calibration support that claim.
 
 ## Product objective
 

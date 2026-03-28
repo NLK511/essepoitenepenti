@@ -1,5 +1,7 @@
 # Legacy Retirement Plan
 
+**Status:** archival redesign history
+
 ## Purpose
 
 This document defines how the app should retire legacy recommendation surfaces now that the redesign path is the only intended operator workflow.

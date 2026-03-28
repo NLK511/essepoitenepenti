@@ -1,5 +1,7 @@
 # Phase 2: App-native Outcomes
 
+**Status:** historical reference
+
 This document tracks the part of the roadmap concerned with keeping Trade Proposer App self-contained. Phase 2 is no longer about proving that app-native execution is possible; it is about making the internal pipeline trustworthy, inspectable, and operationally reliable.
 
 ## Governing principle: signal integrity

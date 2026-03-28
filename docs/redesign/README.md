@@ -1,66 +1,61 @@
 # Redesign
 
-This area contains the new target architecture for evolving the app from a sentiment-oriented analysis tool into a short-horizon recommendation engine.
+**Status:** active redesign reference
 
-Across these docs, the redesign should be interpreted realistically: near-term the product is becoming a stronger operator-facing analysis, candidate-ranking, and trade-framing system. Broader predictive claims should follow only after recommendation outcomes and confidence calibration show measurable evidence of edge.
+This directory contains the redesign docs that are still part of the active technical reference.
 
-## Documents
+Historical redesign planning and convergence material has been moved to `../archive/redesign/` so this folder stays focused on current design guidance.
 
-### 1. Principles
+## Active redesign docs
+
+### Principles
 - `principles.md`
-- Core product principles, including observability, trust, no hidden fallbacks, and practical recommendation standards.
+- Core product principles: observability, trust, explicit degraded states, and no hidden fallbacks.
 
-### 2. Target architecture
+### Target architecture
 - `target-architecture.md`
-- High-level system design across context, exposure, ticker setup, and trade-plan construction.
+- High-level design across context, exposure, ticker setup, and trade-plan construction.
 
-### 3. Data model and persistence
+### Data model and persistence
 - `data-model-and-persistence.md`
-- Proposed PostgreSQL-backed storage model, major entities, and schema direction.
+- Redesign persistence direction, entity framing, and schema-oriented reference.
 
-### 4. Migration plan
-- `migration-plan.md`
-- Phased path from the current sentiment-oriented implementation to the new saliency-first architecture.
-
-### 5. Transmission modeling spec
+### Transmission modeling spec
 - `transmission-modeling-spec.md`
-- Concrete rules for mapping macro and industry context into ticker-level exposure, transmission bias, conflict handling, and timing windows.
+- Rules for mapping macro and industry context into ticker-level exposure, transmission bias, conflicts, and timing windows.
 
-### 6. Calibration governance spec
+### Calibration governance spec
 - `calibration-governance-spec.md`
-- Rules for sample-aware, operator-visible use of outcome history in action gating and calibration review.
+- Rules for sample-aware, operator-visible use of outcome history in confidence and action gating.
 
-### 7. Setup family playbook
+### Setup family playbook
 - `setup-family-playbook.md`
-- Concrete setup-family expectations for entry, invalidation, take-profit, context interaction, and evaluation.
-
-### 8. Measured success criteria
-- `measured-success-criteria.md`
-- Defines what counts as redesign success beyond shipping more schemas, heuristics, or UI.
-
-### 9. Legacy convergence plan
-- `legacy-convergence-plan.md`
-- Defines how and when the app should narrow or retire remaining legacy sentiment/recommendation paths.
+- Setup-family-specific expectations for entry, invalidation, target, context interaction, and evaluation.
 
 ### Full combined reference
 - `short-horizon-recommendation-architecture.md`
-- Full consolidated design document containing all sections together.
+- Consolidated design reference containing the broader redesign shape in one file.
 
-## Summary
+## Archived redesign docs
 
-The redesign centers on four ideas:
-
-1. **Macro context** should identify salient market-moving developments.
-2. **Industry context** should combine macro transmission with industry-native developments.
-3. **Ticker analysis** should estimate short-horizon swing setups and classify setup families where possible.
-4. **Recommendation plans** should be practical trade plans with entry, take profit, stop loss, horizon, confidence, and explicit warnings.
+The following redesign docs were moved to archive because they are now mainly historical or migration-oriented:
+- `../archive/redesign/migration-plan.md`
+- `../archive/redesign/implementation-charter.md`
+- `../archive/redesign/legacy-convergence-plan.md`
+- `../archive/redesign/measured-success-criteria.md`
 
 ## Operating rules
 
-Across all redesign work, the app should preserve these rules:
-
+Across all redesign work, preserve these rules:
 - no hidden fallbacks
 - explicit degraded states
 - structured warnings
 - clear source provenance
 - no false confidence
+
+## See also
+
+- `principles.md` — redesign rules
+- `target-architecture.md` — overall redesign shape
+- `../roadmap.md` — current priorities
+- `../archive/redesign/` — historical redesign planning and convergence docs

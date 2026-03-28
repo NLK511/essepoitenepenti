@@ -17,8 +17,8 @@ Keeping the old step-by-step plan here would be stale and redundant with the cur
 ## Use instead
 
 For the live system, refer to:
-- `docs/architecture.md`
-- `docs/features-and-capabilities.md`
-- `docs/raw-details-reference.md`
-- `docs/phase-2-app-native.md`
-- `docs/roadmap.md`
+- `../../architecture.md`
+- `../../features-and-capabilities.md`
+- `../../raw-details-reference.md`
+- `../phase-2-app-native.md`
+- `../../roadmap.md`

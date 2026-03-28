@@ -1,5 +1,7 @@
 # Migration Plan
 
+**Status:** archival redesign history
+
 ## Goal
 
 Move from the current sentiment-oriented implementation toward a saliency-first, context-driven, short-horizon recommendation engine without breaking the app all at once.
