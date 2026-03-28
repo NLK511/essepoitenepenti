@@ -1129,6 +1129,43 @@ details summary {
   color: var(--accent);
 }
 
+.glossary-term {
+  position: relative;
+  display: inline;
+  border-bottom: 1px dotted color-mix(in srgb, var(--accent) 65%, transparent);
+  color: inherit;
+  cursor: help;
+  outline: none;
+}
+
+.glossary-term::after {
+  content: attr(data-definition);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 10px);
+  z-index: 20;
+  width: min(320px, 70vw);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--panel) 94%, black 6%);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.glossary-term:hover::after,
+.glossary-term:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .markdown-paragraph {
   margin: 0 0 14px;
   line-height: 1.7;

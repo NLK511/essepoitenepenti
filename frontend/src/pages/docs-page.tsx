@@ -20,6 +20,11 @@ interface DocGroup {
   documents: DocDocument[];
 }
 
+interface GlossaryEntry {
+  term: string;
+  definition: string;
+}
+
 const DOC_GROUPS: DocGroupDefinition[] = [
   {
     id: "start",
@@ -103,11 +108,129 @@ function resolveInternalDocTarget(
   return { slug: match.slug, sectionId };
 }
 
-function inlineNodes(text: string, keyPrefix: string, currentDocument: DocDocument, documents: DocDocument[]): ReactNode[] {
+function stripMarkdownFormatting(text: string): string {
+  return text
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/^[-*]\s+/, "")
+    .trim();
+}
+
+function extractGlossaryEntries(documents: DocDocument[]): GlossaryEntry[] {
+  const glossaryDocument = documents.find((document) => document.slug === "glossary");
+  if (!glossaryDocument) {
+    return [];
+  }
+
+  const entries: GlossaryEntry[] = [];
+  const lines = glossaryDocument.content.split(/\r?\n/);
+  let currentTerm = "";
+  let currentDefinitionLines: string[] = [];
+
+  const flush = () => {
+    const definition = currentDefinitionLines
+      .map((line) => stripMarkdownFormatting(line))
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    if (currentTerm && definition) {
+      entries.push({ term: currentTerm, definition });
+    }
+    currentTerm = "";
+    currentDefinitionLines = [];
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("### ")) {
+      flush();
+      currentTerm = stripMarkdownFormatting(trimmed.slice(4));
+      continue;
+    }
+    if (trimmed.startsWith("## ")) {
+      flush();
+      continue;
+    }
+    if (!currentTerm || trimmed === "---") {
+      continue;
+    }
+    currentDefinitionLines.push(trimmed);
+  }
+  flush();
+
+  return entries.sort((left, right) => right.term.length - left.term.length);
+}
+
+function isGlossaryBoundary(character: string | undefined): boolean {
+  return !character || !/[a-z0-9]/i.test(character);
+}
+
+function applyGlossaryTooltips(text: string, keyPrefix: string, glossaryEntries: GlossaryEntry[]): ReactNode[] {
+  if (!text || glossaryEntries.length === 0) {
+    return [text];
+  }
+
+  const pattern = new RegExp(glossaryEntries.map((entry) => entry.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "gi");
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  let match: RegExpExecArray | null = pattern.exec(text);
+
+  while (match) {
+    const matchedText = match[0];
+    const start = match.index;
+    const end = start + matchedText.length;
+    const before = text[start - 1];
+    const after = text[end];
+
+    if (!isGlossaryBoundary(before) || !isGlossaryBoundary(after)) {
+      match = pattern.exec(text);
+      continue;
+    }
+
+    if (start > cursor) {
+      nodes.push(text.slice(cursor, start));
+    }
+
+    const glossaryEntry = glossaryEntries.find((entry) => entry.term.toLowerCase() === matchedText.toLowerCase());
+    if (glossaryEntry) {
+      nodes.push(
+        <span
+          key={`${keyPrefix}-glossary-${nodes.length}`}
+          className="glossary-term"
+          tabIndex={0}
+          data-definition={glossaryEntry.definition}
+          aria-label={`${matchedText}: ${glossaryEntry.definition}`}
+        >
+          {matchedText}
+        </span>,
+      );
+    } else {
+      nodes.push(matchedText);
+    }
+    cursor = end;
+    match = pattern.exec(text);
+  }
+
+  if (cursor < text.length) {
+    nodes.push(text.slice(cursor));
+  }
+
+  return nodes.length > 0 ? nodes : [text];
+}
+
+function inlineNodes(
+  text: string,
+  keyPrefix: string,
+  currentDocument: DocDocument,
+  documents: DocDocument[],
+  glossaryEntries: GlossaryEntry[],
+): ReactNode[] {
   const tokenPattern = /(`[^`]+`|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|\*[^*]+\*)/g;
   const matches = Array.from(text.matchAll(tokenPattern));
   if (matches.length === 0) {
-    return [text];
+    return applyGlossaryTooltips(text, keyPrefix, glossaryEntries);
   }
 
   const nodes: ReactNode[] = [];
@@ -116,7 +239,7 @@ function inlineNodes(text: string, keyPrefix: string, currentDocument: DocDocume
     const token = match[0];
     const start = match.index ?? 0;
     if (start > cursor) {
-      nodes.push(text.slice(cursor, start));
+      nodes.push(...applyGlossaryTooltips(text.slice(cursor, start), `${keyPrefix}-text-${index}`, glossaryEntries));
     }
 
     if (token.startsWith("`") && token.endsWith("`")) {
@@ -162,9 +285,17 @@ function inlineNodes(text: string, keyPrefix: string, currentDocument: DocDocume
         nodes.push(token);
       }
     } else if (token.startsWith("**") && token.endsWith("**")) {
-      nodes.push(<strong key={`${keyPrefix}-strong-${index}`}>{token.slice(2, -2)}</strong>);
+      nodes.push(
+        <strong key={`${keyPrefix}-strong-${index}`}>
+          {applyGlossaryTooltips(token.slice(2, -2), `${keyPrefix}-strong-${index}`, glossaryEntries)}
+        </strong>,
+      );
     } else if (token.startsWith("*") && token.endsWith("*")) {
-      nodes.push(<em key={`${keyPrefix}-em-${index}`}>{token.slice(1, -1)}</em>);
+      nodes.push(
+        <em key={`${keyPrefix}-em-${index}`}>
+          {applyGlossaryTooltips(token.slice(1, -1), `${keyPrefix}-em-${index}`, glossaryEntries)}
+        </em>,
+      );
     } else {
       nodes.push(token);
     }
@@ -239,7 +370,12 @@ function MermaidDiagram(props: { chart: string }) {
   return <div className="mermaid-diagram" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
-function renderMarkdown(document: DocDocument, activeSectionId: string, documents: DocDocument[]): ReactNode[] {
+function renderMarkdown(
+  document: DocDocument,
+  activeSectionId: string,
+  documents: DocDocument[],
+  glossaryEntries: GlossaryEntry[],
+): ReactNode[] {
   const lines = document.content.split(/\r?\n/);
   const nodes: ReactNode[] = [];
   let index = 0;
@@ -292,7 +428,7 @@ function renderMarkdown(document: DocDocument, activeSectionId: string, document
             id: headingId,
             className: `markdown-heading markdown-heading-${level}${activeSectionId === headingId ? " is-active-target" : ""}`,
           },
-          inlineNodes(text, `heading-${nodes.length}`, document, documents),
+          inlineNodes(text, `heading-${nodes.length}`, document, documents, glossaryEntries),
         ),
       );
       index += 1;
@@ -314,7 +450,9 @@ function renderMarkdown(document: DocDocument, activeSectionId: string, document
           listTag,
           { key: `list-${nodes.length}`, className: "markdown-list" },
           items.map((item, itemIndex) => (
-            <li key={`list-item-${nodes.length}-${itemIndex}`}>{inlineNodes(item, `list-${nodes.length}-${itemIndex}`, document, documents)}</li>
+            <li key={`list-item-${nodes.length}-${itemIndex}`}>
+              {inlineNodes(item, `list-${nodes.length}-${itemIndex}`, document, documents, glossaryEntries)}
+            </li>
           )),
         ),
       );
@@ -329,7 +467,7 @@ function renderMarkdown(document: DocDocument, activeSectionId: string, document
     }
     nodes.push(
       <p key={`paragraph-${nodes.length}`} className="markdown-paragraph">
-        {inlineNodes(paragraphLines.join(" "), `paragraph-${nodes.length}`, document, documents)}
+        {inlineNodes(paragraphLines.join(" "), `paragraph-${nodes.length}`, document, documents, glossaryEntries)}
       </p>,
     );
   }
@@ -419,6 +557,7 @@ export function DocsPage() {
   }, [documents, query]);
 
   const groupedDocuments = useMemo(() => buildDocGroups(filteredDocuments), [filteredDocuments]);
+  const glossaryEntries = useMemo(() => (documents ? extractGlossaryEntries(documents) : []), [documents]);
 
   const selectedDocument = useMemo(() => {
     if (filteredDocuments.length === 0) {
@@ -615,7 +754,7 @@ export function DocsPage() {
                     <h2 className="section-title">{selectedDocument.title}</h2>
                   </div>
                 </div>
-                <div className="markdown-content">{renderMarkdown(selectedDocument, selectedSectionId, documents)}</div>
+                <div className="markdown-content">{renderMarkdown(selectedDocument, selectedSectionId, documents, glossaryEntries)}</div>
               </article>
             ) : (
               <EmptyState message="Select a document to read." />
