@@ -54,7 +54,7 @@ These docs define the current product truth.
 - `ontology-enrichment-plan.md`
   - planned expansion of ticker, industry, and relationship coverage
   - tracking page for ontology work progress
-  - guidance for validation and file structure
+  - guidance for validation, reporting, and split file structure
 
 ### Setup and operations
 - `getting-started.md`

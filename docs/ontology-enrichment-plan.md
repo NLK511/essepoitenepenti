@@ -8,7 +8,7 @@ This page tracks the work needed to turn the current ticker taxonomy into a more
 
 Right now the app's ontology layer is still very thin.
 
-The main source is `src/trade_proposer_app/data/ticker_taxonomy.json`, and today it only has a very small starter set. That means:
+The ontology started as `src/trade_proposer_app/data/ticker_taxonomy.json`. The active source now lives under `src/trade_proposer_app/data/taxonomy/`, with the old monolith kept as a fallback compatibility file. Before this work the ontology was tiny. That meant:
 
 - industry coverage is too narrow
 - refresh jobs only know about a small number of industries
@@ -20,7 +20,7 @@ This plan is here so progress can be tracked in one place instead of being scatt
 
 ## Current baseline
 
-Today the ontology is mostly a per-ticker metadata file with fields like:
+Today the ontology is split into ticker, industry, sector, relationship, and event-vocabulary files, with the ticker layer still carrying fields like:
 
 - `company_name`
 - `aliases`
@@ -161,11 +161,11 @@ Goal: make the ontology behave more like a real market-structure graph.
 Goal: make maintenance easier as the ontology grows.
 
 #### Proposed structure
-- [ ] `src/trade_proposer_app/data/taxonomy/tickers.json`
-- [ ] `src/trade_proposer_app/data/taxonomy/industries.json`
-- [ ] `src/trade_proposer_app/data/taxonomy/sectors.json`
-- [ ] `src/trade_proposer_app/data/taxonomy/relationships.json`
-- [ ] `src/trade_proposer_app/data/taxonomy/event_vocab.json`
+- [x] `src/trade_proposer_app/data/taxonomy/tickers.json`
+- [x] `src/trade_proposer_app/data/taxonomy/industries.json`
+- [x] `src/trade_proposer_app/data/taxonomy/sectors.json`
+- [x] `src/trade_proposer_app/data/taxonomy/relationships.json`
+- [x] `src/trade_proposer_app/data/taxonomy/event_vocab.json`
 
 #### Exit criteria
 - The ontology is no longer trapped in one oversized file.
@@ -195,7 +195,7 @@ Goal: make ontology growth safer.
 #### Tooling ideas
 - [x] Add a validation script.
 - [x] Add unit tests for taxonomy integrity.
-- [ ] Add a lightweight review report showing industries, tickers, missing fields, and possible noisy keywords.
+- [x] Add a lightweight review report showing industries, tickers, missing fields, and possible noisy keywords.
 
 #### Exit criteria
 - Broken or low-quality ontology changes fail fast.
@@ -265,11 +265,12 @@ Use this section to note concrete shipped steps.
 - [x] Created this tracking page.
 - [x] Expanded starter ticker coverage with a pragmatic multi-region large-cap universe across the U.S., Europe, and Asia-Pacific.
 - [x] Added richer ticker metadata fields to the live taxonomy service and data file: `subindustry`, `region`, `domicile`, `market_cap_bucket`, `peers`, `suppliers`, `customers`, `exposure_channels`, `factor_tags`, and `event_vocab`.
-- [x] Added explicit industry objects in `src/trade_proposer_app/data/ticker_taxonomy.json` under `_industries`, then wired `src/trade_proposer_app/services/taxonomy.py` so industry refresh and query generation can use them directly instead of relying only on ticker-derived labels.
-- [x] Added first-pass relationship modeling in `src/trade_proposer_app/data/ticker_taxonomy.json` under `_relationships` for `benefits_from`, `hurt_by`, and `sensitive_to` edges.
-- [x] Added baseline taxonomy integrity tests for breadth, multi-region coverage, industry grouping behavior, explicit industry definitions, and relationship availability.
+- [x] Added explicit industry objects in the ontology data layer, then wired `src/trade_proposer_app/services/taxonomy.py` so industry refresh and query generation can use them directly instead of relying only on ticker-derived labels.
+- [x] Added first-pass relationship modeling for `benefits_from`, `hurt_by`, and `sensitive_to` edges.
+- [x] Split the active ontology into `src/trade_proposer_app/data/taxonomy/` with separate `tickers.json`, `industries.json`, `sectors.json`, `relationships.json`, and `event_vocab.json` files while keeping `ticker_taxonomy.json` as a backward-compatible fallback.
+- [x] Added baseline taxonomy integrity tests for breadth, multi-region coverage, industry grouping behavior, explicit industry definitions, split-file loading, and relationship availability.
 - [x] Added a validation script at `scripts/validate_taxonomy.py`.
-- [ ] Split the ontology into multiple files.
+- [x] Added a lightweight review report at `scripts/taxonomy_report.py`.
 
 ## Maintenance rule
 
@@ -280,12 +281,18 @@ When ontology-related work ships:
 
 ## Related files
 
-- `src/trade_proposer_app/data/ticker_taxonomy.json`
+- `src/trade_proposer_app/data/taxonomy/tickers.json`
+- `src/trade_proposer_app/data/taxonomy/industries.json`
+- `src/trade_proposer_app/data/taxonomy/sectors.json`
+- `src/trade_proposer_app/data/taxonomy/relationships.json`
+- `src/trade_proposer_app/data/taxonomy/event_vocab.json`
+- `src/trade_proposer_app/data/ticker_taxonomy.json` (fallback compatibility file)
 - `src/trade_proposer_app/services/taxonomy.py`
 - `src/trade_proposer_app/services/industry_context.py`
 - `src/trade_proposer_app/services/industry_support.py`
 - `src/trade_proposer_app/services/macro_context.py`
 - `scripts/validate_taxonomy.py`
+- `scripts/taxonomy_report.py`
 - `tests/test_taxonomy.py`
 
 ## See also

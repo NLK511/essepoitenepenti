@@ -5,7 +5,14 @@ import sys
 import unittest
 from pathlib import Path
 
-from trade_proposer_app.services.taxonomy import TickerTaxonomyService
+from trade_proposer_app.services.taxonomy import (
+    EVENT_VOCAB_PATH,
+    INDUSTRIES_PATH,
+    RELATIONSHIPS_PATH,
+    SECTORS_PATH,
+    TICKERS_PATH,
+    TickerTaxonomyService,
+)
 
 
 class TickerTaxonomyServiceTests(unittest.TestCase):
@@ -19,6 +26,19 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
 
         self.assertGreaterEqual(len(industries), 12)
         self.assertTrue({"US", "Europe", "Asia-Pacific"}.issubset(regions))
+
+    def test_split_taxonomy_files_exist_and_are_loaded(self) -> None:
+        self.assertTrue(TICKERS_PATH.exists())
+        self.assertTrue(INDUSTRIES_PATH.exists())
+        self.assertTrue(SECTORS_PATH.exists())
+        self.assertTrue(RELATIONSHIPS_PATH.exists())
+        self.assertTrue(EVENT_VOCAB_PATH.exists())
+
+        service = TickerTaxonomyService()
+        overview = service.taxonomy_overview()
+        self.assertEqual(overview["source_mode"], "split")
+        self.assertGreaterEqual(overview["sector_count"], 8)
+        self.assertGreaterEqual(overview["event_vocab_group_count"], 12)
 
     def test_query_profile_and_industry_profile_use_explicit_industry_definitions(self) -> None:
         service = TickerTaxonomyService()
@@ -39,6 +59,7 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertEqual(asml_industry_profile["subject_key"], "semiconductor_equipment")
         self.assertIn("Lithography equipment", asml_industry_profile["queries"])
         self.assertIn("fab_capex", asml_industry_profile["transmission_channels"])
+        self.assertIn("Information Technology", asml_industry_profile["sector_definition"]["label"])
 
     def test_list_industry_profiles_groups_multiple_tickers_and_relationships(self) -> None:
         service = TickerTaxonomyService()
@@ -65,17 +86,30 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertTrue(any(item["target"] == "oil_and_gas" and item["type"] == "hurt_by" for item in relationships))
         self.assertTrue(any(item["target"] == "consumer_spending" and item["target_kind"] == "macro_channel" for item in relationships))
 
-    def test_validation_script_passes(self) -> None:
+    def test_validation_and_report_scripts_pass(self) -> None:
         root = Path(__file__).resolve().parents[1]
-        result = subprocess.run(
+        validate = subprocess.run(
             [sys.executable, str(root / "scripts" / "validate_taxonomy.py")],
             cwd=root,
             capture_output=True,
             text=True,
             check=False,
         )
-        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertIn("Validation passed.", result.stdout)
+        self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
+        self.assertIn("Validation passed.", validate.stdout)
+        self.assertIn("Taxonomy source mode: split", validate.stdout)
+
+        report = subprocess.run(
+            [sys.executable, str(root / "scripts" / "taxonomy_report.py")],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(report.returncode, 0, msg=report.stdout + report.stderr)
+        self.assertIn("Taxonomy overview", report.stdout)
+        self.assertIn("Industry coverage", report.stdout)
+        self.assertIn("Semiconductors", report.stdout)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,398 @@
+{
+  "Communication Services": {
+    "label": "Communication Services",
+    "queries": [
+      "digital ad demand",
+      "search trends",
+      "cloud spending",
+      "ai search",
+      "digital advertising",
+      "social ad demand",
+      "reels monetization",
+      "ai infrastructure",
+      "engagement trends"
+    ],
+    "themes": [
+      "digital ads",
+      "search",
+      "cloud",
+      "ai",
+      "social media",
+      "social platforms"
+    ],
+    "macro_sensitivity": [
+      "ad budgets",
+      "enterprise spend",
+      "rates",
+      "consumer engagement"
+    ]
+  },
+  "Consumer Discretionary": {
+    "label": "Consumer Discretionary",
+    "queries": [
+      "e-commerce demand",
+      "cloud spending",
+      "aws growth",
+      "online retail",
+      "ev demand",
+      "auto pricing",
+      "battery supply",
+      "vehicle deliveries",
+      "auto demand",
+      "truck pricing",
+      "dealer inventory",
+      "ev mix"
+    ],
+    "themes": [
+      "e-commerce",
+      "cloud",
+      "advertising",
+      "ev",
+      "autos",
+      "battery",
+      "ev transition",
+      "trucks",
+      "hybrids",
+      "global manufacturing",
+      "housing",
+      "repair and remodel"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "enterprise spend",
+      "rates",
+      "china demand",
+      "auto credit",
+      "yen",
+      "auto demand",
+      "housing turnover",
+      "usd",
+      "inventory",
+      "north america demand",
+      "labor costs"
+    ]
+  },
+  "Consumer Staples": {
+    "label": "Consumer Staples",
+    "queries": [
+      "retail traffic",
+      "grocery share",
+      "inventory levels",
+      "pricing mix",
+      "membership trends",
+      "comps",
+      "traffic",
+      "basket size",
+      "retail comps",
+      "inventory markdowns",
+      "consumer mix",
+      "consumer trade down"
+    ],
+    "themes": [
+      "retail",
+      "consumer staples",
+      "grocery",
+      "membership",
+      "general merchandise",
+      "consumer"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "wage pressure",
+      "inventory"
+    ]
+  },
+  "Energy": {
+    "label": "Energy",
+    "queries": [
+      "crude prices",
+      "refining margins",
+      "lng demand",
+      "opec supply",
+      "oil supply",
+      "lng projects",
+      "lng trading",
+      "europe gas"
+    ],
+    "themes": [
+      "oil",
+      "lng",
+      "refining",
+      "upstream",
+      "trading",
+      "integrated energy"
+    ],
+    "macro_sensitivity": [
+      "oil prices",
+      "global growth",
+      "geopolitics",
+      "european gas prices"
+    ]
+  },
+  "Financials": {
+    "label": "Financials",
+    "queries": [
+      "net interest income",
+      "loan growth",
+      "investment banking",
+      "credit quality",
+      "deposit beta",
+      "loan demand",
+      "credit trends",
+      "deal pipeline",
+      "trading revenue",
+      "advisory fees",
+      "capital markets activity",
+      "wealth flows"
+    ],
+    "themes": [
+      "banking",
+      "capital markets",
+      "consumer finance",
+      "consumer banking",
+      "wealth",
+      "investment banking",
+      "trading",
+      "asset management",
+      "wealth management",
+      "markets",
+      "payments",
+      "consumer spending"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "yield curve",
+      "credit quality",
+      "risk appetite",
+      "deal activity",
+      "consumer spending",
+      "cross-border travel",
+      "usd",
+      "e-commerce demand"
+    ]
+  },
+  "Health Care": {
+    "label": "Health Care",
+    "queries": [
+      "obesity drug demand",
+      "glp-1",
+      "drug pricing",
+      "trial data",
+      "oncology demand",
+      "vaccine sales",
+      "drug pipeline",
+      "vaccine demand",
+      "pricing",
+      "supply constraints",
+      "pipeline",
+      "medical loss ratio"
+    ],
+    "themes": [
+      "pharma",
+      "obesity drugs",
+      "diabetes",
+      "oncology",
+      "vaccines",
+      "biologics",
+      "managed care",
+      "medical costs",
+      "benefits",
+      "pharmacy",
+      "drug pipeline",
+      "biotech readthrough"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "drug pricing",
+      "healthcare demand",
+      "medical cost trend",
+      "employment",
+      "consumer health demand"
+    ]
+  },
+  "Industrials": {
+    "label": "Industrials",
+    "queries": [
+      "construction equipment",
+      "dealer inventory",
+      "mining equipment",
+      "infrastructure spend",
+      "farm equipment demand",
+      "precision agriculture",
+      "engine deliveries",
+      "aerospace aftermarket",
+      "aircraft utilization",
+      "defense orders",
+      "engine inspections",
+      "missile demand"
+    ],
+    "themes": [
+      "construction",
+      "mining",
+      "infrastructure",
+      "agriculture",
+      "machinery",
+      "precision farming",
+      "aerospace",
+      "engines",
+      "aftermarket",
+      "defense",
+      "aircraft",
+      "aviation"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "commodity capex",
+      "usd",
+      "farm income",
+      "commodity prices",
+      "rates",
+      "air travel",
+      "supply chain",
+      "defense budgets",
+      "geopolitics",
+      "regulation",
+      "oil prices"
+    ]
+  },
+  "Information Technology": {
+    "label": "Information Technology",
+    "queries": [
+      "smartphone demand",
+      "consumer electronics",
+      "app store",
+      "device upgrades",
+      "cloud spending",
+      "enterprise software",
+      "azure",
+      "copilot",
+      "gpu demand",
+      "ai servers",
+      "semiconductor supply",
+      "accelerator demand"
+    ],
+    "themes": [
+      "consumer electronics",
+      "mobile",
+      "services",
+      "enterprise software",
+      "cloud",
+      "ai",
+      "data center",
+      "accelerators",
+      "pc cycle",
+      "networking",
+      "custom silicon",
+      "software"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "rates",
+      "usd",
+      "nasdaq",
+      "enterprise spend",
+      "cloud capex",
+      "ai capex",
+      "risk appetite",
+      "pc demand",
+      "industrial policy",
+      "global electronics demand",
+      "taiwan risk"
+    ]
+  },
+  "Materials": {
+    "label": "Materials",
+    "queries": [
+      "copper prices",
+      "mine supply",
+      "industrial metals demand",
+      "smelter activity",
+      "steel pricing",
+      "sheet demand",
+      "construction steel",
+      "steel spreads",
+      "aluminum prices",
+      "smelting costs",
+      "bauxite"
+    ],
+    "themes": [
+      "copper",
+      "mining",
+      "industrial metals",
+      "steel",
+      "construction",
+      "manufacturing",
+      "aluminum",
+      "materials"
+    ],
+    "macro_sensitivity": [
+      "china demand",
+      "global growth",
+      "usd",
+      "construction demand",
+      "industrial production",
+      "scrap prices",
+      "energy prices"
+    ]
+  },
+  "Real Estate": {
+    "label": "Real Estate",
+    "queries": [
+      "warehouse demand",
+      "rents",
+      "occupancy",
+      "industrial real estate",
+      "mall traffic",
+      "leasing spreads",
+      "retail real estate",
+      "net lease",
+      "cap rates",
+      "tenant coverage",
+      "real estate income",
+      "industrial rents"
+    ],
+    "themes": [
+      "logistics",
+      "warehousing",
+      "real estate",
+      "retail real estate",
+      "malls",
+      "consumer",
+      "income",
+      "net lease"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "industrial demand",
+      "e-commerce",
+      "consumer spending",
+      "retail occupancy",
+      "credit spreads",
+      "tenant health"
+    ]
+  },
+  "Utilities": {
+    "label": "Utilities",
+    "queries": [
+      "power demand",
+      "renewables buildout",
+      "regulated utility",
+      "rate base",
+      "storm costs",
+      "rate base growth"
+    ],
+    "themes": [
+      "utilities",
+      "renewables",
+      "power demand",
+      "regulated power",
+      "grid"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "power demand",
+      "regulation"
+    ]
+  }
+}

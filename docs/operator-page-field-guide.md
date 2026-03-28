@@ -539,7 +539,7 @@ Recent macro and industry context snapshots, plus the transitional macro/industr
 ### How to use it
 If plans look plausible but market backdrop feels wrong, inspect context review first.
 If the supporting refresh snapshots are stale, refresh them before generating too many new plans.
-Industry refresh now pulls from a broader ontology than the old one-name starter set, so this page should show a more varied set of industry labels and backdrops than before.
+Industry refresh now pulls from a broader ontology than the old one-name starter set, backed by split ticker/industry/relationship files, so this page should show a more varied set of industry labels and backdrops than before.
 
 ### Suggested use cases
 - morning macro refresh before proposal generation

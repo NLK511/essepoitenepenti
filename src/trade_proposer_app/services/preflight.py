@@ -7,9 +7,9 @@ from pathlib import Path
 import httpx
 
 from trade_proposer_app.domain.models import AppPreflightReport, PreflightCheck
+from trade_proposer_app.services.taxonomy import TAXONOMY_DIR, TAXONOMY_PATH, TICKERS_PATH
 
 WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "data" / "weights.json"
-TAXONOMY_PATH = Path(__file__).resolve().parents[1] / "data" / "ticker_taxonomy.json"
 REQUIRED_MODULES = ("pandas", "yfinance")
 
 
@@ -44,16 +44,18 @@ class AppPreflightService:
                 ),
             )
         )
-        taxonomy_exists = TAXONOMY_PATH.exists()
+        taxonomy_exists = TICKERS_PATH.exists() or TAXONOMY_PATH.exists()
+        taxonomy_location = TICKERS_PATH if TICKERS_PATH.exists() else TAXONOMY_PATH
         checks.append(
             PreflightCheck(
                 name="ticker_taxonomy",
                 status="ok" if taxonomy_exists else "warning",
                 message=(
-                    "ticker taxonomy available for macro/industry context and refresh workflows"
+                    f"ticker taxonomy available for macro/industry context and refresh workflows ({taxonomy_location})"
                     if taxonomy_exists
-                    else f"ticker taxonomy not found yet: {TAXONOMY_PATH}"
+                    else f"ticker taxonomy not found yet: expected {TICKERS_PATH} or {TAXONOMY_PATH}"
                 ),
+                details=[f"taxonomy directory: {TAXONOMY_DIR}"] if taxonomy_exists else None,
             )
         )
         checks.append(self._check_nitter())

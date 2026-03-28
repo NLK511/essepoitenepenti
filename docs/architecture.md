@@ -132,9 +132,10 @@ flowchart LR
 1. scheduler or operator triggers macro or industry refresh
 2. backend enqueues a refresh run
 3. worker claims the run, or the operator uses the `run-now` endpoint for immediate execution
-4. industry refresh scope is seeded from the taxonomy layer, which now contains both per-ticker profiles and explicit industry definitions plus first-pass relationship edges
-5. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
-6. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
+4. industry refresh scope is seeded from the taxonomy layer, which now contains split ontology files for tickers, industries, sectors, relationships, and event vocabulary
+5. the taxonomy service still supports a fallback monolith file so the repo does not hard-break if the split files are temporarily missing
+6. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
+7. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
 
 ## Runtime components
 

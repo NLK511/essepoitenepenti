@@ -1,0 +1,1089 @@
+{
+  "consumer_electronics": {
+    "label": "Consumer Electronics",
+    "sector": "Information Technology",
+    "queries": [
+      "consumer electronics demand",
+      "device upgrades",
+      "smartphone demand",
+      "gaming hardware"
+    ],
+    "themes": [
+      "consumer electronics",
+      "devices",
+      "gaming"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "device cycle",
+      "fx"
+    ],
+    "transmission_channels": [
+      "consumer_spending",
+      "device_cycle",
+      "fx"
+    ],
+    "peer_industries": [
+      "interactive_media_and_services",
+      "semiconductors"
+    ],
+    "risk_flags": [
+      "consumer demand slowdown",
+      "inventory build"
+    ],
+    "event_vocab": [
+      "product_cycle",
+      "pricing",
+      "channel_checks",
+      "inventory"
+    ],
+    "tickers": [
+      "AAPL",
+      "SONY"
+    ]
+  },
+  "semiconductors": {
+    "label": "Semiconductors",
+    "sector": "Information Technology",
+    "queries": [
+      "semiconductor demand",
+      "gpu demand",
+      "server demand",
+      "foundry capacity",
+      "chip pricing"
+    ],
+    "themes": [
+      "semiconductors",
+      "ai compute",
+      "data center"
+    ],
+    "macro_sensitivity": [
+      "ai capex",
+      "global electronics demand",
+      "export controls"
+    ],
+    "transmission_channels": [
+      "ai_capex",
+      "semiconductor_cycle",
+      "capacity_utilization"
+    ],
+    "peer_industries": [
+      "semiconductor_equipment",
+      "software",
+      "consumer_electronics"
+    ],
+    "risk_flags": [
+      "export controls",
+      "inventory correction",
+      "capacity bottlenecks"
+    ],
+    "event_vocab": [
+      "capacity",
+      "pricing",
+      "demand",
+      "market_share",
+      "export_controls"
+    ],
+    "tickers": [
+      "NVDA",
+      "AMD",
+      "AVGO",
+      "INTC",
+      "TSM"
+    ]
+  },
+  "semiconductor_equipment": {
+    "label": "Semiconductor Equipment",
+    "sector": "Information Technology",
+    "queries": [
+      "semiconductor equipment demand",
+      "wafer fab equipment",
+      "lithography shipments",
+      "fab capex"
+    ],
+    "themes": [
+      "semiconductor equipment",
+      "lithography",
+      "fab buildout"
+    ],
+    "macro_sensitivity": [
+      "fab capex",
+      "export controls",
+      "global electronics demand"
+    ],
+    "transmission_channels": [
+      "fab_capex",
+      "leading_edge_nodes",
+      "export_controls"
+    ],
+    "peer_industries": [
+      "semiconductors"
+    ],
+    "risk_flags": [
+      "tool shipment delays",
+      "export restrictions"
+    ],
+    "event_vocab": [
+      "tool_shipments",
+      "capex",
+      "export_controls",
+      "capacity"
+    ],
+    "tickers": [
+      "ASML"
+    ]
+  },
+  "software": {
+    "label": "Software",
+    "sector": "Information Technology",
+    "queries": [
+      "enterprise software demand",
+      "cloud migration",
+      "software budgets",
+      "seat growth"
+    ],
+    "themes": [
+      "enterprise software",
+      "cloud transition",
+      "ai assistants"
+    ],
+    "macro_sensitivity": [
+      "enterprise spend",
+      "rates",
+      "cloud capex"
+    ],
+    "transmission_channels": [
+      "enterprise_spend",
+      "cloud_transition",
+      "software_consolidation"
+    ],
+    "peer_industries": [
+      "interactive_media_and_services",
+      "semiconductors"
+    ],
+    "risk_flags": [
+      "budget tightening",
+      "slower seat growth"
+    ],
+    "event_vocab": [
+      "enterprise_budgets",
+      "cloud_growth",
+      "pricing",
+      "ai_attach"
+    ],
+    "tickers": [
+      "MSFT",
+      "CRM",
+      "ADBE",
+      "ORCL",
+      "SAP"
+    ]
+  },
+  "interactive_media_and_services": {
+    "label": "Interactive Media and Services",
+    "sector": "Communication Services",
+    "queries": [
+      "digital ad demand",
+      "search trends",
+      "social ad demand",
+      "engagement trends"
+    ],
+    "themes": [
+      "digital ads",
+      "search",
+      "social platforms",
+      "ai"
+    ],
+    "macro_sensitivity": [
+      "ad budgets",
+      "consumer engagement",
+      "rates"
+    ],
+    "transmission_channels": [
+      "ad_spend",
+      "engagement_trends",
+      "ai_capex"
+    ],
+    "peer_industries": [
+      "software",
+      "broadline_retail"
+    ],
+    "risk_flags": [
+      "regulatory pressure",
+      "ad budget slowdown"
+    ],
+    "event_vocab": [
+      "ad_demand",
+      "engagement",
+      "regulation",
+      "ai_theme"
+    ],
+    "tickers": [
+      "GOOGL",
+      "META"
+    ]
+  },
+  "broadline_retail": {
+    "label": "Broadline Retail",
+    "sector": "Consumer Discretionary",
+    "queries": [
+      "e-commerce demand",
+      "online retail",
+      "cloud spending",
+      "merchant trends"
+    ],
+    "themes": [
+      "e-commerce",
+      "consumer internet",
+      "cloud"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "logistics costs",
+      "enterprise spend"
+    ],
+    "transmission_channels": [
+      "consumer_spending",
+      "cloud_demand",
+      "logistics"
+    ],
+    "peer_industries": [
+      "retail",
+      "interactive_media_and_services"
+    ],
+    "risk_flags": [
+      "consumer slowdown",
+      "promotion intensity"
+    ],
+    "event_vocab": [
+      "consumer_demand",
+      "cloud_growth",
+      "logistics",
+      "promotions"
+    ],
+    "tickers": [
+      "AMZN",
+      "BABA",
+      "PDD"
+    ]
+  },
+  "banks": {
+    "label": "Banks",
+    "sector": "Financials",
+    "queries": [
+      "net interest income",
+      "loan growth",
+      "deposit trends",
+      "credit quality"
+    ],
+    "themes": [
+      "banking",
+      "consumer finance",
+      "commercial lending"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "yield curve",
+      "credit quality"
+    ],
+    "transmission_channels": [
+      "yield_curve",
+      "credit_cycle",
+      "deposit_trends"
+    ],
+    "peer_industries": [
+      "capital_markets",
+      "payments"
+    ],
+    "risk_flags": [
+      "credit deterioration",
+      "deposit competition"
+    ],
+    "event_vocab": [
+      "rates",
+      "credit_quality",
+      "deposit_trends",
+      "loan_growth"
+    ],
+    "tickers": [
+      "JPM",
+      "BAC"
+    ]
+  },
+  "capital_markets": {
+    "label": "Capital Markets",
+    "sector": "Financials",
+    "queries": [
+      "deal activity",
+      "trading revenue",
+      "wealth flows",
+      "capital markets activity"
+    ],
+    "themes": [
+      "investment banking",
+      "markets",
+      "wealth"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "risk appetite",
+      "deal activity"
+    ],
+    "transmission_channels": [
+      "deal_activity",
+      "market_volatility",
+      "wealth_flows"
+    ],
+    "peer_industries": [
+      "banks",
+      "payments"
+    ],
+    "risk_flags": [
+      "market volatility",
+      "deal drought"
+    ],
+    "event_vocab": [
+      "deal_activity",
+      "trading_revenue",
+      "wealth_flows"
+    ],
+    "tickers": [
+      "GS",
+      "MS"
+    ]
+  },
+  "payments": {
+    "label": "Payments",
+    "sector": "Financials",
+    "queries": [
+      "payment volumes",
+      "cross-border spend",
+      "checkout trends",
+      "travel spend"
+    ],
+    "themes": [
+      "payments",
+      "consumer spend",
+      "travel"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "cross-border travel",
+      "e-commerce demand"
+    ],
+    "transmission_channels": [
+      "consumer_spending",
+      "cross_border",
+      "payment_mix"
+    ],
+    "peer_industries": [
+      "banks",
+      "broadline_retail"
+    ],
+    "risk_flags": [
+      "consumer slowdown",
+      "take-rate compression"
+    ],
+    "event_vocab": [
+      "payment_volume",
+      "cross_border",
+      "take_rate"
+    ],
+    "tickers": [
+      "V",
+      "MA",
+      "PYPL"
+    ]
+  },
+  "oil_and_gas": {
+    "label": "Oil and Gas",
+    "sector": "Energy",
+    "queries": [
+      "crude prices",
+      "lng demand",
+      "refining margins",
+      "opec supply"
+    ],
+    "themes": [
+      "oil",
+      "lng",
+      "refining"
+    ],
+    "macro_sensitivity": [
+      "oil prices",
+      "global growth",
+      "geopolitics"
+    ],
+    "transmission_channels": [
+      "commodity_prices",
+      "refining_margins",
+      "geopolitics"
+    ],
+    "peer_industries": [
+      "airlines",
+      "machinery",
+      "utilities"
+    ],
+    "risk_flags": [
+      "commodity volatility",
+      "geopolitical disruption"
+    ],
+    "event_vocab": [
+      "commodity_prices",
+      "production",
+      "refining_margins",
+      "geopolitics"
+    ],
+    "tickers": [
+      "XOM",
+      "CVX",
+      "SHEL",
+      "TTE"
+    ]
+  },
+  "machinery": {
+    "label": "Machinery",
+    "sector": "Industrials",
+    "queries": [
+      "construction equipment demand",
+      "dealer inventory",
+      "infrastructure spend",
+      "farm equipment demand"
+    ],
+    "themes": [
+      "machinery",
+      "construction",
+      "agriculture"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "infrastructure spend",
+      "commodity capex"
+    ],
+    "transmission_channels": [
+      "infrastructure_spend",
+      "dealer_inventory",
+      "commodity_capex"
+    ],
+    "peer_industries": [
+      "aerospace_and_defense",
+      "metals_and_mining"
+    ],
+    "risk_flags": [
+      "dealer destocking",
+      "order slowdown"
+    ],
+    "event_vocab": [
+      "backlog",
+      "dealer_inventory",
+      "pricing",
+      "order_trends"
+    ],
+    "tickers": [
+      "CAT",
+      "DE"
+    ]
+  },
+  "aerospace_and_defense": {
+    "label": "Aerospace and Defense",
+    "sector": "Industrials",
+    "queries": [
+      "aircraft deliveries",
+      "defense orders",
+      "aftermarket demand",
+      "aerospace supply chain"
+    ],
+    "themes": [
+      "aerospace",
+      "defense",
+      "aftermarket"
+    ],
+    "macro_sensitivity": [
+      "air travel",
+      "defense budgets",
+      "geopolitics"
+    ],
+    "transmission_channels": [
+      "air_travel",
+      "defense_spend",
+      "supply_chain"
+    ],
+    "peer_industries": [
+      "airlines",
+      "machinery"
+    ],
+    "risk_flags": [
+      "supply chain bottlenecks",
+      "regulatory delays"
+    ],
+    "event_vocab": [
+      "deliveries",
+      "backlog",
+      "aftermarket",
+      "defense_orders"
+    ],
+    "tickers": [
+      "GE",
+      "RTX",
+      "BA"
+    ]
+  },
+  "airlines": {
+    "label": "Airlines",
+    "sector": "Industrials",
+    "queries": [
+      "airfare demand",
+      "business travel",
+      "jet fuel",
+      "capacity discipline"
+    ],
+    "themes": [
+      "travel",
+      "airlines",
+      "capacity"
+    ],
+    "macro_sensitivity": [
+      "oil prices",
+      "consumer spending",
+      "business travel"
+    ],
+    "transmission_channels": [
+      "travel_demand",
+      "fuel_costs",
+      "pricing"
+    ],
+    "peer_industries": [
+      "aerospace_and_defense",
+      "oil_and_gas"
+    ],
+    "risk_flags": [
+      "fuel cost spike",
+      "demand slowdown"
+    ],
+    "event_vocab": [
+      "travel_demand",
+      "fuel_costs",
+      "capacity",
+      "pricing"
+    ],
+    "tickers": [
+      "DAL",
+      "UAL",
+      "AAL"
+    ]
+  },
+  "automobiles": {
+    "label": "Automobiles",
+    "sector": "Consumer Discretionary",
+    "queries": [
+      "auto demand",
+      "vehicle pricing",
+      "dealer inventory",
+      "battery supply"
+    ],
+    "themes": [
+      "autos",
+      "ev",
+      "manufacturing"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "rates",
+      "auto credit"
+    ],
+    "transmission_channels": [
+      "auto_demand",
+      "dealer_inventory",
+      "auto_credit"
+    ],
+    "peer_industries": [
+      "consumer_electronics",
+      "metals_and_mining"
+    ],
+    "risk_flags": [
+      "pricing pressure",
+      "inventory build"
+    ],
+    "event_vocab": [
+      "deliveries",
+      "pricing",
+      "inventory",
+      "production"
+    ],
+    "tickers": [
+      "TSLA",
+      "GM",
+      "F",
+      "TM"
+    ]
+  },
+  "retail": {
+    "label": "Retail",
+    "sector": "Consumer Staples",
+    "queries": [
+      "retail traffic",
+      "inventory levels",
+      "consumer trade down",
+      "basket size"
+    ],
+    "themes": [
+      "retail",
+      "consumer staples",
+      "grocery"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "wage pressure"
+    ],
+    "transmission_channels": [
+      "consumer_spending",
+      "traffic",
+      "price_gaps"
+    ],
+    "peer_industries": [
+      "broadline_retail",
+      "home_improvement_retail",
+      "apparel"
+    ],
+    "risk_flags": [
+      "inventory markdowns",
+      "consumer trade-down"
+    ],
+    "event_vocab": [
+      "traffic",
+      "pricing",
+      "inventory",
+      "consumer_trade_down"
+    ],
+    "tickers": [
+      "WMT",
+      "COST",
+      "TGT"
+    ]
+  },
+  "home_improvement_retail": {
+    "label": "Home Improvement Retail",
+    "sector": "Consumer Discretionary",
+    "queries": [
+      "home improvement demand",
+      "housing turnover",
+      "repair and remodel",
+      "pro customer demand"
+    ],
+    "themes": [
+      "housing",
+      "repair and remodel",
+      "retail"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "housing turnover",
+      "consumer spending"
+    ],
+    "transmission_channels": [
+      "housing_turnover",
+      "repair_spend",
+      "rates"
+    ],
+    "peer_industries": [
+      "retail"
+    ],
+    "risk_flags": [
+      "housing slowdown",
+      "rate pressure"
+    ],
+    "event_vocab": [
+      "housing_turnover",
+      "consumer_demand",
+      "pricing"
+    ],
+    "tickers": [
+      "HD"
+    ]
+  },
+  "apparel": {
+    "label": "Apparel",
+    "sector": "Consumer Discretionary",
+    "queries": [
+      "apparel demand",
+      "inventory clearance",
+      "wholesale orders",
+      "brand momentum"
+    ],
+    "themes": [
+      "apparel",
+      "brand",
+      "consumer"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "fx",
+      "inventory"
+    ],
+    "transmission_channels": [
+      "consumer_spending",
+      "inventory",
+      "fx"
+    ],
+    "peer_industries": [
+      "retail"
+    ],
+    "risk_flags": [
+      "inventory overhang",
+      "promotion pressure"
+    ],
+    "event_vocab": [
+      "inventory",
+      "pricing",
+      "wholesale_orders",
+      "brand_momentum"
+    ],
+    "tickers": [
+      "NKE",
+      "LULU"
+    ]
+  },
+  "restaurants": {
+    "label": "Restaurants",
+    "sector": "Consumer Discretionary",
+    "queries": [
+      "same-store sales",
+      "traffic trends",
+      "labor costs",
+      "china demand"
+    ],
+    "themes": [
+      "restaurants",
+      "consumer",
+      "traffic"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "labor costs",
+      "china demand"
+    ],
+    "transmission_channels": [
+      "consumer_spending",
+      "traffic",
+      "labor_costs"
+    ],
+    "peer_industries": [
+      "retail",
+      "apparel"
+    ],
+    "risk_flags": [
+      "traffic slowdown",
+      "labor inflation"
+    ],
+    "event_vocab": [
+      "traffic",
+      "pricing",
+      "labor_costs",
+      "china_demand"
+    ],
+    "tickers": [
+      "SBUX"
+    ]
+  },
+  "pharmaceuticals": {
+    "label": "Pharmaceuticals",
+    "sector": "Health Care",
+    "queries": [
+      "drug pricing",
+      "trial data",
+      "obesity drug demand",
+      "oncology demand"
+    ],
+    "themes": [
+      "pharma",
+      "drug pipeline",
+      "biotech readthrough"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "drug pricing",
+      "healthcare demand"
+    ],
+    "transmission_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "peer_industries": [
+      "managed_care"
+    ],
+    "risk_flags": [
+      "trial disappointments",
+      "pricing pressure"
+    ],
+    "event_vocab": [
+      "trial_data",
+      "pricing",
+      "regulation",
+      "demand"
+    ],
+    "tickers": [
+      "LLY",
+      "MRK",
+      "PFE",
+      "NVO",
+      "AZN"
+    ]
+  },
+  "managed_care": {
+    "label": "Managed Care",
+    "sector": "Health Care",
+    "queries": [
+      "medical cost trend",
+      "medicare advantage",
+      "utilization trend",
+      "reimbursement"
+    ],
+    "themes": [
+      "managed care",
+      "medical costs",
+      "reimbursement"
+    ],
+    "macro_sensitivity": [
+      "medical cost trend",
+      "regulation",
+      "employment"
+    ],
+    "transmission_channels": [
+      "medical_cost_trend",
+      "reimbursement",
+      "utilization"
+    ],
+    "peer_industries": [
+      "pharmaceuticals"
+    ],
+    "risk_flags": [
+      "higher utilization",
+      "reimbursement pressure"
+    ],
+    "event_vocab": [
+      "utilization",
+      "reimbursement",
+      "regulation",
+      "cost_trend"
+    ],
+    "tickers": [
+      "UNH",
+      "CVS"
+    ]
+  },
+  "industrial_reits": {
+    "label": "Industrial REITs",
+    "sector": "Real Estate",
+    "queries": [
+      "warehouse demand",
+      "industrial rents",
+      "occupancy trends",
+      "logistics real estate"
+    ],
+    "themes": [
+      "logistics",
+      "warehousing",
+      "real estate"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "industrial demand",
+      "e-commerce"
+    ],
+    "transmission_channels": [
+      "rates",
+      "logistics_demand",
+      "occupancy"
+    ],
+    "peer_industries": [
+      "retail_reits",
+      "net_lease_reits"
+    ],
+    "risk_flags": [
+      "rate pressure",
+      "new supply"
+    ],
+    "event_vocab": [
+      "occupancy",
+      "rent_spread",
+      "rates",
+      "supply"
+    ],
+    "tickers": [
+      "PLD"
+    ]
+  },
+  "retail_reits": {
+    "label": "Retail REITs",
+    "sector": "Real Estate",
+    "queries": [
+      "mall traffic",
+      "leasing spreads",
+      "retail occupancy",
+      "consumer traffic"
+    ],
+    "themes": [
+      "retail real estate",
+      "malls",
+      "consumer"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "consumer spending",
+      "retail occupancy"
+    ],
+    "transmission_channels": [
+      "rates",
+      "retail_traffic",
+      "occupancy"
+    ],
+    "peer_industries": [
+      "industrial_reits",
+      "net_lease_reits"
+    ],
+    "risk_flags": [
+      "weak tenant health",
+      "rate pressure"
+    ],
+    "event_vocab": [
+      "occupancy",
+      "rent_spread",
+      "rates",
+      "traffic"
+    ],
+    "tickers": [
+      "SPG"
+    ]
+  },
+  "net_lease_reits": {
+    "label": "Net Lease REITs",
+    "sector": "Real Estate",
+    "queries": [
+      "net lease cap rates",
+      "tenant coverage",
+      "credit spreads",
+      "income real estate"
+    ],
+    "themes": [
+      "net lease",
+      "income",
+      "real estate"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit spreads",
+      "tenant health"
+    ],
+    "transmission_channels": [
+      "rates",
+      "credit_spreads",
+      "tenant_health"
+    ],
+    "peer_industries": [
+      "industrial_reits",
+      "retail_reits"
+    ],
+    "risk_flags": [
+      "higher funding costs",
+      "tenant stress"
+    ],
+    "event_vocab": [
+      "cap_rates",
+      "rates",
+      "occupancy",
+      "credit"
+    ],
+    "tickers": [
+      "O"
+    ]
+  },
+  "utilities": {
+    "label": "Utilities",
+    "sector": "Utilities",
+    "queries": [
+      "power demand",
+      "rate base growth",
+      "regulated utility",
+      "storm costs"
+    ],
+    "themes": [
+      "utilities",
+      "regulated power",
+      "renewables"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "power demand",
+      "regulation"
+    ],
+    "transmission_channels": [
+      "rates",
+      "power_demand",
+      "regulation"
+    ],
+    "peer_industries": [
+      "oil_and_gas"
+    ],
+    "risk_flags": [
+      "rate sensitivity",
+      "regulatory lag"
+    ],
+    "event_vocab": [
+      "rate_base",
+      "power_demand",
+      "regulation",
+      "rates"
+    ],
+    "tickers": [
+      "NEE",
+      "DUK"
+    ]
+  },
+  "metals_and_mining": {
+    "label": "Metals and Mining",
+    "sector": "Materials",
+    "queries": [
+      "copper prices",
+      "steel pricing",
+      "aluminum prices",
+      "industrial metals demand"
+    ],
+    "themes": [
+      "materials",
+      "mining",
+      "industrial metals"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "china demand",
+      "usd"
+    ],
+    "transmission_channels": [
+      "commodity_prices",
+      "china_demand",
+      "industrial_production"
+    ],
+    "peer_industries": [
+      "machinery",
+      "automobiles",
+      "oil_and_gas"
+    ],
+    "risk_flags": [
+      "commodity volatility",
+      "china slowdown"
+    ],
+    "event_vocab": [
+      "commodity_prices",
+      "supply",
+      "demand",
+      "capacity"
+    ],
+    "tickers": [
+      "FCX",
+      "NUE",
+      "AA"
+    ]
+  }
+}

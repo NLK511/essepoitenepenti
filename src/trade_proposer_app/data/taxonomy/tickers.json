@@ -1,0 +1,3623 @@
+{
+  "AAPL": {
+    "company_name": "Apple Inc.",
+    "aliases": [
+      "Apple",
+      "Apple Inc",
+      "iPhone maker"
+    ],
+    "sector": "Information Technology",
+    "industry": "Consumer Electronics",
+    "subindustry": "Smartphones and devices",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "consumer electronics",
+      "mobile",
+      "services"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "rates",
+      "usd",
+      "nasdaq"
+    ],
+    "industry_keywords": [
+      "smartphone demand",
+      "consumer electronics",
+      "app store",
+      "device upgrades"
+    ],
+    "ticker_keywords": [
+      "AAPL",
+      "$AAPL",
+      "Apple",
+      "iPhone",
+      "Apple earnings"
+    ],
+    "exclude_keywords": [
+      "apple fruit",
+      "apple pie"
+    ],
+    "peers": [
+      "SONY",
+      "005930.KS"
+    ],
+    "suppliers": [
+      "TSM",
+      "AVGO"
+    ],
+    "customers": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "device_cycle",
+      "services_attach"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "quality_growth"
+    ],
+    "event_vocab": [
+      "product_cycle",
+      "channel_checks",
+      "pricing",
+      "services_growth"
+    ]
+  },
+  "MSFT": {
+    "company_name": "Microsoft Corporation",
+    "aliases": [
+      "Microsoft",
+      "Azure",
+      "Microsoft Corp"
+    ],
+    "sector": "Information Technology",
+    "industry": "Software",
+    "subindustry": "Enterprise software and cloud",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "enterprise software",
+      "cloud",
+      "ai"
+    ],
+    "macro_sensitivity": [
+      "enterprise spend",
+      "rates",
+      "usd",
+      "cloud capex"
+    ],
+    "industry_keywords": [
+      "cloud spending",
+      "enterprise software",
+      "azure",
+      "copilot"
+    ],
+    "ticker_keywords": [
+      "MSFT",
+      "$MSFT",
+      "Microsoft",
+      "Azure",
+      "Copilot"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "GOOGL",
+      "AMZN",
+      "ORCL"
+    ],
+    "suppliers": [],
+    "customers": [
+      "NVDA"
+    ],
+    "exposure_channels": [
+      "enterprise_spend",
+      "cloud_demand",
+      "ai_capex"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "quality_growth"
+    ],
+    "event_vocab": [
+      "cloud_demand",
+      "enterprise_budgets",
+      "ai_attach",
+      "productivity_software"
+    ]
+  },
+  "NVDA": {
+    "company_name": "NVIDIA Corporation",
+    "aliases": [
+      "NVIDIA",
+      "Nvidia",
+      "GPU leader"
+    ],
+    "sector": "Information Technology",
+    "industry": "Semiconductors",
+    "subindustry": "AI accelerators",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "ai",
+      "data center",
+      "accelerators"
+    ],
+    "macro_sensitivity": [
+      "ai capex",
+      "rates",
+      "usd",
+      "risk appetite"
+    ],
+    "industry_keywords": [
+      "gpu demand",
+      "ai servers",
+      "semiconductor supply",
+      "accelerator demand"
+    ],
+    "ticker_keywords": [
+      "NVDA",
+      "$NVDA",
+      "NVIDIA",
+      "H100",
+      "Blackwell"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "AMD",
+      "AVGO",
+      "TSM"
+    ],
+    "suppliers": [
+      "TSM",
+      "ASML"
+    ],
+    "customers": [
+      "MSFT",
+      "AMZN",
+      "META",
+      "GOOGL"
+    ],
+    "exposure_channels": [
+      "ai_capex",
+      "cloud_spend",
+      "semiconductor_cycle"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "high_beta",
+      "growth"
+    ],
+    "event_vocab": [
+      "ai_theme",
+      "pricing",
+      "capacity",
+      "demand",
+      "export_controls"
+    ]
+  },
+  "AMD": {
+    "company_name": "Advanced Micro Devices, Inc.",
+    "aliases": [
+      "AMD",
+      "Advanced Micro Devices"
+    ],
+    "sector": "Information Technology",
+    "industry": "Semiconductors",
+    "subindustry": "Compute processors",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "ai",
+      "pc cycle",
+      "data center"
+    ],
+    "macro_sensitivity": [
+      "ai capex",
+      "pc demand",
+      "rates"
+    ],
+    "industry_keywords": [
+      "chip demand",
+      "cpu demand",
+      "gpu demand",
+      "server demand"
+    ],
+    "ticker_keywords": [
+      "AMD",
+      "$AMD",
+      "AMD",
+      "MI300",
+      "Ryzen"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "NVDA",
+      "INTC",
+      "AVGO"
+    ],
+    "suppliers": [
+      "TSM"
+    ],
+    "customers": [
+      "MSFT",
+      "AMZN"
+    ],
+    "exposure_channels": [
+      "ai_capex",
+      "compute_demand",
+      "pc_refresh"
+    ],
+    "factor_tags": [
+      "high_beta",
+      "growth"
+    ],
+    "event_vocab": [
+      "product_cycle",
+      "demand",
+      "pricing",
+      "market_share"
+    ]
+  },
+  "AVGO": {
+    "company_name": "Broadcom Inc.",
+    "aliases": [
+      "Broadcom"
+    ],
+    "sector": "Information Technology",
+    "industry": "Semiconductors",
+    "subindustry": "Connectivity and custom silicon",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "networking",
+      "custom silicon",
+      "software"
+    ],
+    "macro_sensitivity": [
+      "enterprise spend",
+      "ai capex",
+      "rates"
+    ],
+    "industry_keywords": [
+      "custom silicon",
+      "networking chips",
+      "semiconductor demand",
+      "vmware"
+    ],
+    "ticker_keywords": [
+      "AVGO",
+      "$AVGO",
+      "Broadcom",
+      "VMware"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "NVDA",
+      "AMD",
+      "ORCL"
+    ],
+    "suppliers": [
+      "TSM"
+    ],
+    "customers": [
+      "GOOGL",
+      "META",
+      "AMZN"
+    ],
+    "exposure_channels": [
+      "ai_capex",
+      "network_investment",
+      "enterprise_software"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "quality_growth"
+    ],
+    "event_vocab": [
+      "ai_theme",
+      "pricing",
+      "enterprise_spend",
+      "product_cycle"
+    ]
+  },
+  "INTC": {
+    "company_name": "Intel Corporation",
+    "aliases": [
+      "Intel"
+    ],
+    "sector": "Information Technology",
+    "industry": "Semiconductors",
+    "subindustry": "Compute processors and foundry",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "pc",
+      "data center",
+      "foundry"
+    ],
+    "macro_sensitivity": [
+      "pc demand",
+      "industrial policy",
+      "rates"
+    ],
+    "industry_keywords": [
+      "pc demand",
+      "server cpu",
+      "foundry expansion",
+      "chip manufacturing"
+    ],
+    "ticker_keywords": [
+      "INTC",
+      "$INTC",
+      "Intel",
+      "Intel Foundry"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "AMD",
+      "TSM",
+      "NVDA"
+    ],
+    "suppliers": [
+      "ASML"
+    ],
+    "customers": [],
+    "exposure_channels": [
+      "pc_refresh",
+      "server_demand",
+      "foundry_capex"
+    ],
+    "factor_tags": [
+      "value",
+      "cyclical"
+    ],
+    "event_vocab": [
+      "product_cycle",
+      "capacity",
+      "pricing",
+      "share_shift"
+    ]
+  },
+  "TSM": {
+    "company_name": "Taiwan Semiconductor Manufacturing Company Limited",
+    "aliases": [
+      "TSMC",
+      "Taiwan Semiconductor"
+    ],
+    "sector": "Information Technology",
+    "industry": "Semiconductors",
+    "subindustry": "Foundry",
+    "region": "Asia-Pacific",
+    "domicile": "Taiwan",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "foundry",
+      "ai",
+      "leading-edge nodes"
+    ],
+    "macro_sensitivity": [
+      "global electronics demand",
+      "taiwan risk",
+      "usd"
+    ],
+    "industry_keywords": [
+      "foundry capacity",
+      "wafer demand",
+      "advanced packaging",
+      "node migration"
+    ],
+    "ticker_keywords": [
+      "TSM",
+      "$TSM",
+      "TSMC",
+      "Taiwan Semiconductor"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "INTC",
+      "ASML",
+      "NVDA"
+    ],
+    "suppliers": [
+      "ASML"
+    ],
+    "customers": [
+      "AAPL",
+      "NVDA",
+      "AMD",
+      "AVGO"
+    ],
+    "exposure_channels": [
+      "semiconductor_cycle",
+      "capacity_utilization",
+      "geopolitical_risk"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "cyclical_quality"
+    ],
+    "event_vocab": [
+      "capacity",
+      "supply_chain",
+      "pricing",
+      "geopolitics"
+    ]
+  },
+  "ASML": {
+    "company_name": "ASML Holding N.V.",
+    "aliases": [
+      "ASML",
+      "ASML Holding"
+    ],
+    "sector": "Information Technology",
+    "industry": "Semiconductor Equipment",
+    "subindustry": "Lithography equipment",
+    "region": "Europe",
+    "domicile": "Netherlands",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "semiconductor equipment",
+      "lithography",
+      "ai capex"
+    ],
+    "macro_sensitivity": [
+      "fab capex",
+      "export controls",
+      "eurusd"
+    ],
+    "industry_keywords": [
+      "lithography demand",
+      "wafer fab equipment",
+      "chip tools",
+      "semiconductor equipment"
+    ],
+    "ticker_keywords": [
+      "ASML",
+      "$ASML",
+      "ASML",
+      "EUV"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "TSM",
+      "NVDA",
+      "AMAT"
+    ],
+    "suppliers": [],
+    "customers": [
+      "TSM",
+      "INTC",
+      "005930.KS"
+    ],
+    "exposure_channels": [
+      "fab_capex",
+      "export_controls",
+      "leading_edge_nodes"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "quality_growth"
+    ],
+    "event_vocab": [
+      "capacity",
+      "export_controls",
+      "tool_shipments",
+      "capex"
+    ]
+  },
+  "AMZN": {
+    "company_name": "Amazon.com, Inc.",
+    "aliases": [
+      "Amazon",
+      "AWS"
+    ],
+    "sector": "Consumer Discretionary",
+    "industry": "Broadline Retail",
+    "subindustry": "E-commerce and cloud",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "e-commerce",
+      "cloud",
+      "advertising"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "enterprise spend",
+      "rates"
+    ],
+    "industry_keywords": [
+      "e-commerce demand",
+      "cloud spending",
+      "aws growth",
+      "online retail"
+    ],
+    "ticker_keywords": [
+      "AMZN",
+      "$AMZN",
+      "Amazon",
+      "AWS",
+      "Prime Day"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "WMT",
+      "MSFT",
+      "GOOGL"
+    ],
+    "suppliers": [],
+    "customers": [
+      "NVDA"
+    ],
+    "exposure_channels": [
+      "consumer_spending",
+      "cloud_demand",
+      "logistics"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "growth"
+    ],
+    "event_vocab": [
+      "consumer_demand",
+      "cloud_demand",
+      "pricing",
+      "fulfillment"
+    ]
+  },
+  "GOOGL": {
+    "company_name": "Alphabet Inc.",
+    "aliases": [
+      "Alphabet",
+      "Google"
+    ],
+    "sector": "Communication Services",
+    "industry": "Interactive Media and Services",
+    "subindustry": "Search, ads, and cloud",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "digital ads",
+      "search",
+      "cloud",
+      "ai"
+    ],
+    "macro_sensitivity": [
+      "ad budgets",
+      "enterprise spend",
+      "rates"
+    ],
+    "industry_keywords": [
+      "digital ad demand",
+      "search trends",
+      "cloud spending",
+      "ai search"
+    ],
+    "ticker_keywords": [
+      "GOOGL",
+      "$GOOGL",
+      "Alphabet",
+      "Google",
+      "YouTube"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "META",
+      "MSFT",
+      "AMZN"
+    ],
+    "suppliers": [],
+    "customers": [
+      "NVDA"
+    ],
+    "exposure_channels": [
+      "ad_spend",
+      "cloud_demand",
+      "ai_capex"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "quality_growth"
+    ],
+    "event_vocab": [
+      "ad_demand",
+      "cloud_growth",
+      "ai_theme",
+      "regulation"
+    ]
+  },
+  "META": {
+    "company_name": "Meta Platforms, Inc.",
+    "aliases": [
+      "Meta",
+      "Facebook",
+      "Instagram"
+    ],
+    "sector": "Communication Services",
+    "industry": "Interactive Media and Services",
+    "subindustry": "Social platforms and digital ads",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "digital ads",
+      "social media",
+      "ai"
+    ],
+    "macro_sensitivity": [
+      "ad budgets",
+      "consumer engagement",
+      "rates"
+    ],
+    "industry_keywords": [
+      "digital advertising",
+      "social ad demand",
+      "reels monetization",
+      "ai infrastructure"
+    ],
+    "ticker_keywords": [
+      "META",
+      "$META",
+      "Meta",
+      "Facebook",
+      "Instagram"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "GOOGL",
+      "SNAP",
+      "PINS"
+    ],
+    "suppliers": [],
+    "customers": [
+      "NVDA"
+    ],
+    "exposure_channels": [
+      "ad_spend",
+      "engagement_trends",
+      "ai_capex"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "growth"
+    ],
+    "event_vocab": [
+      "ad_demand",
+      "ai_theme",
+      "pricing",
+      "regulation"
+    ]
+  },
+  "CRM": {
+    "company_name": "Salesforce, Inc.",
+    "aliases": [
+      "Salesforce"
+    ],
+    "sector": "Information Technology",
+    "industry": "Software",
+    "subindustry": "Application software",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "enterprise software",
+      "crm",
+      "ai assistants"
+    ],
+    "macro_sensitivity": [
+      "enterprise spend",
+      "rates"
+    ],
+    "industry_keywords": [
+      "crm demand",
+      "enterprise software budgets",
+      "seat growth",
+      "ai agent"
+    ],
+    "ticker_keywords": [
+      "CRM",
+      "$CRM",
+      "Salesforce"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "NOW",
+      "ADBE",
+      "MSFT"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "seat_growth",
+      "software_consolidation"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "growth"
+    ],
+    "event_vocab": [
+      "enterprise_budgets",
+      "guidance",
+      "pricing",
+      "ai_attach"
+    ]
+  },
+  "ADBE": {
+    "company_name": "Adobe Inc.",
+    "aliases": [
+      "Adobe"
+    ],
+    "sector": "Information Technology",
+    "industry": "Software",
+    "subindustry": "Creative and document software",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "creative software",
+      "digital documents",
+      "ai tools"
+    ],
+    "macro_sensitivity": [
+      "enterprise spend",
+      "consumer creators",
+      "rates"
+    ],
+    "industry_keywords": [
+      "creative cloud",
+      "document cloud",
+      "ai creative tools"
+    ],
+    "ticker_keywords": [
+      "ADBE",
+      "$ADBE",
+      "Adobe",
+      "Photoshop"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "CRM",
+      "MSFT",
+      "NOW"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "software_spend",
+      "creator_demand",
+      "ai_attach"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "quality_growth"
+    ],
+    "event_vocab": [
+      "subscription_growth",
+      "pricing",
+      "ai_attach",
+      "guidance"
+    ]
+  },
+  "ORCL": {
+    "company_name": "Oracle Corporation",
+    "aliases": [
+      "Oracle"
+    ],
+    "sector": "Information Technology",
+    "industry": "Software",
+    "subindustry": "Database and cloud infrastructure",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "database",
+      "cloud infrastructure",
+      "enterprise software"
+    ],
+    "macro_sensitivity": [
+      "enterprise spend",
+      "cloud capex",
+      "rates"
+    ],
+    "industry_keywords": [
+      "database demand",
+      "cloud infrastructure",
+      "enterprise workloads"
+    ],
+    "ticker_keywords": [
+      "ORCL",
+      "$ORCL",
+      "Oracle"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "MSFT",
+      "AMZN",
+      "CRM"
+    ],
+    "suppliers": [],
+    "customers": [
+      "NVDA"
+    ],
+    "exposure_channels": [
+      "enterprise_spend",
+      "cloud_demand",
+      "ai_capex"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "quality"
+    ],
+    "event_vocab": [
+      "cloud_growth",
+      "enterprise_budgets",
+      "pricing",
+      "guidance"
+    ]
+  },
+  "JPM": {
+    "company_name": "JPMorgan Chase & Co.",
+    "aliases": [
+      "JPMorgan",
+      "JPM"
+    ],
+    "sector": "Financials",
+    "industry": "Banks",
+    "subindustry": "Diversified banking",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "banking",
+      "capital markets",
+      "consumer finance"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "yield curve",
+      "credit quality"
+    ],
+    "industry_keywords": [
+      "net interest income",
+      "loan growth",
+      "investment banking",
+      "credit quality"
+    ],
+    "ticker_keywords": [
+      "JPM",
+      "$JPM",
+      "JPMorgan",
+      "JPM"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "BAC",
+      "GS",
+      "MS"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "yield_curve",
+      "credit_cycle",
+      "capital_markets"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "value",
+      "financials"
+    ],
+    "event_vocab": [
+      "rates",
+      "deposit_trends",
+      "credit_quality",
+      "trading_revenue"
+    ]
+  },
+  "BAC": {
+    "company_name": "Bank of America Corporation",
+    "aliases": [
+      "Bank of America",
+      "BofA"
+    ],
+    "sector": "Financials",
+    "industry": "Banks",
+    "subindustry": "Diversified banking",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "consumer banking",
+      "wealth",
+      "capital markets"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "yield curve",
+      "credit quality"
+    ],
+    "industry_keywords": [
+      "deposit beta",
+      "loan demand",
+      "net interest income",
+      "credit trends"
+    ],
+    "ticker_keywords": [
+      "BAC",
+      "$BAC",
+      "Bank of America",
+      "BofA"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "JPM",
+      "C",
+      "WFC"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "yield_curve",
+      "consumer_credit",
+      "capital_markets"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "value",
+      "financials"
+    ],
+    "event_vocab": [
+      "rates",
+      "deposit_trends",
+      "credit_quality",
+      "loan_growth"
+    ]
+  },
+  "GS": {
+    "company_name": "The Goldman Sachs Group, Inc.",
+    "aliases": [
+      "Goldman Sachs",
+      "Goldman"
+    ],
+    "sector": "Financials",
+    "industry": "Capital Markets",
+    "subindustry": "Investment banking and markets",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "investment banking",
+      "trading",
+      "asset management"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "risk appetite",
+      "deal activity"
+    ],
+    "industry_keywords": [
+      "deal pipeline",
+      "trading revenue",
+      "advisory fees",
+      "capital markets activity"
+    ],
+    "ticker_keywords": [
+      "GS",
+      "$GS",
+      "Goldman Sachs",
+      "Goldman"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "MS",
+      "JPM"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "deal_activity",
+      "market_volatility",
+      "risk_appetite"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "financials"
+    ],
+    "event_vocab": [
+      "capital_markets_activity",
+      "trading_revenue",
+      "deal_activity"
+    ]
+  },
+  "MS": {
+    "company_name": "Morgan Stanley",
+    "aliases": [
+      "Morgan Stanley"
+    ],
+    "sector": "Financials",
+    "industry": "Capital Markets",
+    "subindustry": "Investment banking and wealth",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "wealth management",
+      "markets",
+      "investment banking"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "risk appetite",
+      "deal activity"
+    ],
+    "industry_keywords": [
+      "wealth flows",
+      "investment banking",
+      "trading revenue"
+    ],
+    "ticker_keywords": [
+      "MS",
+      "$MS",
+      "Morgan Stanley"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "GS",
+      "JPM"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "deal_activity",
+      "market_volatility",
+      "wealth_flows"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "financials"
+    ],
+    "event_vocab": [
+      "capital_markets_activity",
+      "trading_revenue",
+      "wealth_flows"
+    ]
+  },
+  "V": {
+    "company_name": "Visa Inc.",
+    "aliases": [
+      "Visa"
+    ],
+    "sector": "Financials",
+    "industry": "Payments",
+    "subindustry": "Card networks",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "payments",
+      "consumer spending",
+      "travel"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "cross-border travel",
+      "usd"
+    ],
+    "industry_keywords": [
+      "payment volumes",
+      "cross-border spend",
+      "card spending"
+    ],
+    "ticker_keywords": [
+      "V",
+      "$V",
+      "Visa"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "MA",
+      "PYPL"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "travel_recovery",
+      "payment_mix"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "quality_growth"
+    ],
+    "event_vocab": [
+      "payment_volume",
+      "cross_border",
+      "consumer_spend"
+    ]
+  },
+  "MA": {
+    "company_name": "Mastercard Incorporated",
+    "aliases": [
+      "Mastercard"
+    ],
+    "sector": "Financials",
+    "industry": "Payments",
+    "subindustry": "Card networks",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "payments",
+      "consumer spending",
+      "travel"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "cross-border travel",
+      "usd"
+    ],
+    "industry_keywords": [
+      "payment volumes",
+      "cross-border spend",
+      "travel spend"
+    ],
+    "ticker_keywords": [
+      "MA",
+      "$MA",
+      "Mastercard"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "V",
+      "PYPL"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "travel_recovery",
+      "payment_mix"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "quality_growth"
+    ],
+    "event_vocab": [
+      "payment_volume",
+      "cross_border",
+      "consumer_spend"
+    ]
+  },
+  "PYPL": {
+    "company_name": "PayPal Holdings, Inc.",
+    "aliases": [
+      "PayPal"
+    ],
+    "sector": "Financials",
+    "industry": "Payments",
+    "subindustry": "Digital payments",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "digital payments",
+      "checkout",
+      "consumer spend"
+    ],
+    "macro_sensitivity": [
+      "e-commerce demand",
+      "consumer spending",
+      "rates"
+    ],
+    "industry_keywords": [
+      "checkout conversion",
+      "digital wallet",
+      "transaction margin"
+    ],
+    "ticker_keywords": [
+      "PYPL",
+      "$PYPL",
+      "PayPal"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "V",
+      "MA",
+      "SQ"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "ecommerce_demand",
+      "consumer_spending",
+      "take_rate"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "growth"
+    ],
+    "event_vocab": [
+      "payment_volume",
+      "take_rate",
+      "checkout_trends"
+    ]
+  },
+  "XOM": {
+    "company_name": "Exxon Mobil Corporation",
+    "aliases": [
+      "Exxon",
+      "Exxon Mobil"
+    ],
+    "sector": "Energy",
+    "industry": "Oil and Gas",
+    "subindustry": "Integrated oil and gas",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "oil",
+      "lng",
+      "refining"
+    ],
+    "macro_sensitivity": [
+      "oil prices",
+      "global growth",
+      "geopolitics"
+    ],
+    "industry_keywords": [
+      "crude prices",
+      "refining margins",
+      "lng demand",
+      "opec supply"
+    ],
+    "ticker_keywords": [
+      "XOM",
+      "$XOM",
+      "Exxon",
+      "Exxon Mobil"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "CVX",
+      "SHEL",
+      "TTE"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "commodity_prices",
+      "refining_margins",
+      "geopolitics"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "value",
+      "commodities"
+    ],
+    "event_vocab": [
+      "commodity_prices",
+      "geopolitics",
+      "production",
+      "refining_margins"
+    ]
+  },
+  "CVX": {
+    "company_name": "Chevron Corporation",
+    "aliases": [
+      "Chevron"
+    ],
+    "sector": "Energy",
+    "industry": "Oil and Gas",
+    "subindustry": "Integrated oil and gas",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "oil",
+      "lng",
+      "upstream"
+    ],
+    "macro_sensitivity": [
+      "oil prices",
+      "global growth",
+      "geopolitics"
+    ],
+    "industry_keywords": [
+      "crude prices",
+      "oil supply",
+      "refining margins",
+      "lng projects"
+    ],
+    "ticker_keywords": [
+      "CVX",
+      "$CVX",
+      "Chevron"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "XOM",
+      "SHEL",
+      "TTE"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "commodity_prices",
+      "production_growth",
+      "geopolitics"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "value",
+      "commodities"
+    ],
+    "event_vocab": [
+      "commodity_prices",
+      "geopolitics",
+      "production",
+      "capex"
+    ]
+  },
+  "SHEL": {
+    "company_name": "Shell plc",
+    "aliases": [
+      "Shell"
+    ],
+    "sector": "Energy",
+    "industry": "Oil and Gas",
+    "subindustry": "Integrated oil and gas",
+    "region": "Europe",
+    "domicile": "United Kingdom",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "oil",
+      "lng",
+      "trading"
+    ],
+    "macro_sensitivity": [
+      "oil prices",
+      "european gas prices",
+      "geopolitics"
+    ],
+    "industry_keywords": [
+      "lng trading",
+      "crude prices",
+      "europe gas",
+      "refining margins"
+    ],
+    "ticker_keywords": [
+      "SHEL",
+      "$SHEL",
+      "Shell"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "XOM",
+      "CVX",
+      "TTE"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "commodity_prices",
+      "lng_prices",
+      "geopolitics"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "value",
+      "commodities"
+    ],
+    "event_vocab": [
+      "commodity_prices",
+      "geopolitics",
+      "lng",
+      "refining_margins"
+    ]
+  },
+  "TTE": {
+    "company_name": "TotalEnergies SE",
+    "aliases": [
+      "TotalEnergies",
+      "Total"
+    ],
+    "sector": "Energy",
+    "industry": "Oil and Gas",
+    "subindustry": "Integrated oil and gas",
+    "region": "Europe",
+    "domicile": "France",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "oil",
+      "lng",
+      "integrated energy"
+    ],
+    "macro_sensitivity": [
+      "oil prices",
+      "european gas prices",
+      "geopolitics"
+    ],
+    "industry_keywords": [
+      "crude prices",
+      "lng demand",
+      "europe gas",
+      "refining margins"
+    ],
+    "ticker_keywords": [
+      "TTE",
+      "$TTE",
+      "TotalEnergies",
+      "Total"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "SHEL",
+      "XOM",
+      "CVX"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "commodity_prices",
+      "lng_prices",
+      "geopolitics"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "value",
+      "commodities"
+    ],
+    "event_vocab": [
+      "commodity_prices",
+      "geopolitics",
+      "lng",
+      "refining_margins"
+    ]
+  },
+  "CAT": {
+    "company_name": "Caterpillar Inc.",
+    "aliases": [
+      "Caterpillar",
+      "CAT"
+    ],
+    "sector": "Industrials",
+    "industry": "Machinery",
+    "subindustry": "Construction and mining equipment",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "construction",
+      "mining",
+      "infrastructure"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "commodity capex",
+      "usd"
+    ],
+    "industry_keywords": [
+      "construction equipment",
+      "dealer inventory",
+      "mining equipment",
+      "infrastructure spend"
+    ],
+    "ticker_keywords": [
+      "CAT",
+      "$CAT",
+      "Caterpillar"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "DE",
+      "PCAR"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "infrastructure_spend",
+      "commodity_capex",
+      "dealer_inventory"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "cyclical"
+    ],
+    "event_vocab": [
+      "dealer_inventory",
+      "order_trends",
+      "pricing",
+      "backlog"
+    ]
+  },
+  "DE": {
+    "company_name": "Deere & Company",
+    "aliases": [
+      "Deere",
+      "John Deere"
+    ],
+    "sector": "Industrials",
+    "industry": "Machinery",
+    "subindustry": "Agricultural machinery",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "agriculture",
+      "machinery",
+      "precision farming"
+    ],
+    "macro_sensitivity": [
+      "farm income",
+      "commodity prices",
+      "rates"
+    ],
+    "industry_keywords": [
+      "farm equipment demand",
+      "dealer inventory",
+      "precision agriculture"
+    ],
+    "ticker_keywords": [
+      "DE",
+      "$DE",
+      "Deere",
+      "John Deere"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "CAT"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "farm_income",
+      "equipment_cycle",
+      "dealer_inventory"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "cyclical"
+    ],
+    "event_vocab": [
+      "dealer_inventory",
+      "demand",
+      "pricing",
+      "backlog"
+    ]
+  },
+  "GE": {
+    "company_name": "GE Aerospace",
+    "aliases": [
+      "GE Aerospace",
+      "General Electric"
+    ],
+    "sector": "Industrials",
+    "industry": "Aerospace and Defense",
+    "subindustry": "Aerospace systems",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "aerospace",
+      "engines",
+      "aftermarket"
+    ],
+    "macro_sensitivity": [
+      "air travel",
+      "supply chain",
+      "defense budgets"
+    ],
+    "industry_keywords": [
+      "engine deliveries",
+      "aerospace aftermarket",
+      "aircraft utilization"
+    ],
+    "ticker_keywords": [
+      "GE",
+      "$GE",
+      "GE Aerospace",
+      "General Electric"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "RTX",
+      "BA"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "air_travel",
+      "aftermarket_activity",
+      "supply_chain"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "industrial_quality"
+    ],
+    "event_vocab": [
+      "backlog",
+      "deliveries",
+      "supply_chain",
+      "aftermarket"
+    ]
+  },
+  "RTX": {
+    "company_name": "RTX Corporation",
+    "aliases": [
+      "RTX",
+      "Raytheon"
+    ],
+    "sector": "Industrials",
+    "industry": "Aerospace and Defense",
+    "subindustry": "Defense and aerospace systems",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "defense",
+      "aerospace",
+      "engines"
+    ],
+    "macro_sensitivity": [
+      "defense budgets",
+      "geopolitics",
+      "air travel"
+    ],
+    "industry_keywords": [
+      "defense orders",
+      "engine inspections",
+      "missile demand"
+    ],
+    "ticker_keywords": [
+      "RTX",
+      "$RTX",
+      "RTX",
+      "Raytheon"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "GE",
+      "LMT",
+      "BA"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "defense_spend",
+      "geopolitics",
+      "aftermarket_activity"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "defensive"
+    ],
+    "event_vocab": [
+      "defense_orders",
+      "supply_chain",
+      "aftermarket",
+      "geopolitics"
+    ]
+  },
+  "BA": {
+    "company_name": "The Boeing Company",
+    "aliases": [
+      "Boeing"
+    ],
+    "sector": "Industrials",
+    "industry": "Aerospace and Defense",
+    "subindustry": "Commercial aircraft",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "aircraft",
+      "defense",
+      "aviation"
+    ],
+    "macro_sensitivity": [
+      "air travel",
+      "supply chain",
+      "regulation"
+    ],
+    "industry_keywords": [
+      "aircraft deliveries",
+      "faa",
+      "production rates",
+      "aerospace supply chain"
+    ],
+    "ticker_keywords": [
+      "BA",
+      "$BA",
+      "Boeing"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "GE",
+      "RTX"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "air_travel",
+      "regulatory_risk",
+      "supply_chain"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "cyclical"
+    ],
+    "event_vocab": [
+      "deliveries",
+      "regulation",
+      "backlog",
+      "supply_chain"
+    ]
+  },
+  "DAL": {
+    "company_name": "Delta Air Lines, Inc.",
+    "aliases": [
+      "Delta",
+      "Delta Air Lines"
+    ],
+    "sector": "Industrials",
+    "industry": "Airlines",
+    "subindustry": "Passenger airlines",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "travel",
+      "airlines",
+      "premium demand"
+    ],
+    "macro_sensitivity": [
+      "oil prices",
+      "consumer spending",
+      "business travel"
+    ],
+    "industry_keywords": [
+      "airfare demand",
+      "unit revenue",
+      "jet fuel",
+      "capacity"
+    ],
+    "ticker_keywords": [
+      "DAL",
+      "$DAL",
+      "Delta"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "UAL",
+      "AAL"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "travel_demand",
+      "fuel_costs",
+      "pricing"
+    ],
+    "factor_tags": [
+      "cyclical",
+      "consumer_travel"
+    ],
+    "event_vocab": [
+      "travel_demand",
+      "fuel_costs",
+      "capacity",
+      "pricing"
+    ]
+  },
+  "UAL": {
+    "company_name": "United Airlines Holdings, Inc.",
+    "aliases": [
+      "United Airlines",
+      "United"
+    ],
+    "sector": "Industrials",
+    "industry": "Airlines",
+    "subindustry": "Passenger airlines",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "travel",
+      "airlines",
+      "international"
+    ],
+    "macro_sensitivity": [
+      "oil prices",
+      "consumer spending",
+      "business travel"
+    ],
+    "industry_keywords": [
+      "airfare demand",
+      "business travel",
+      "jet fuel",
+      "capacity"
+    ],
+    "ticker_keywords": [
+      "UAL",
+      "$UAL",
+      "United Airlines",
+      "United"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "DAL",
+      "AAL"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "travel_demand",
+      "fuel_costs",
+      "pricing"
+    ],
+    "factor_tags": [
+      "cyclical",
+      "consumer_travel"
+    ],
+    "event_vocab": [
+      "travel_demand",
+      "fuel_costs",
+      "capacity",
+      "pricing"
+    ]
+  },
+  "AAL": {
+    "company_name": "American Airlines Group Inc.",
+    "aliases": [
+      "American Airlines",
+      "American Air"
+    ],
+    "sector": "Industrials",
+    "industry": "Airlines",
+    "subindustry": "Passenger airlines",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "travel",
+      "airlines",
+      "domestic demand"
+    ],
+    "macro_sensitivity": [
+      "oil prices",
+      "consumer spending",
+      "business travel"
+    ],
+    "industry_keywords": [
+      "airfare demand",
+      "capacity",
+      "jet fuel",
+      "leisure travel"
+    ],
+    "ticker_keywords": [
+      "AAL",
+      "$AAL",
+      "American Airlines"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "DAL",
+      "UAL"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "travel_demand",
+      "fuel_costs",
+      "pricing"
+    ],
+    "factor_tags": [
+      "cyclical",
+      "consumer_travel"
+    ],
+    "event_vocab": [
+      "travel_demand",
+      "fuel_costs",
+      "capacity",
+      "pricing"
+    ]
+  },
+  "TSLA": {
+    "company_name": "Tesla, Inc.",
+    "aliases": [
+      "Tesla"
+    ],
+    "sector": "Consumer Discretionary",
+    "industry": "Automobiles",
+    "subindustry": "Electric vehicles",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "ev",
+      "autos",
+      "battery"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "rates",
+      "china demand"
+    ],
+    "industry_keywords": [
+      "ev demand",
+      "auto pricing",
+      "battery supply",
+      "vehicle deliveries"
+    ],
+    "ticker_keywords": [
+      "TSLA",
+      "$TSLA",
+      "Tesla"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "GM",
+      "F",
+      "TM"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "auto_demand",
+      "pricing",
+      "battery_supply"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "high_beta",
+      "growth"
+    ],
+    "event_vocab": [
+      "deliveries",
+      "pricing",
+      "inventory",
+      "battery_supply"
+    ]
+  },
+  "GM": {
+    "company_name": "General Motors Company",
+    "aliases": [
+      "General Motors",
+      "GM"
+    ],
+    "sector": "Consumer Discretionary",
+    "industry": "Automobiles",
+    "subindustry": "Automobiles",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "autos",
+      "ev transition",
+      "trucks"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "rates",
+      "auto credit"
+    ],
+    "industry_keywords": [
+      "auto demand",
+      "truck pricing",
+      "dealer inventory",
+      "ev mix"
+    ],
+    "ticker_keywords": [
+      "GM",
+      "$GM",
+      "General Motors"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "F",
+      "TSLA",
+      "TM"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "auto_demand",
+      "dealer_inventory",
+      "auto_credit"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "cyclical",
+      "value"
+    ],
+    "event_vocab": [
+      "deliveries",
+      "pricing",
+      "inventory",
+      "credit"
+    ]
+  },
+  "F": {
+    "company_name": "Ford Motor Company",
+    "aliases": [
+      "Ford"
+    ],
+    "sector": "Consumer Discretionary",
+    "industry": "Automobiles",
+    "subindustry": "Automobiles",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "autos",
+      "trucks",
+      "ev transition"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "rates",
+      "auto credit"
+    ],
+    "industry_keywords": [
+      "auto demand",
+      "truck demand",
+      "dealer inventory",
+      "vehicle pricing"
+    ],
+    "ticker_keywords": [
+      "F",
+      "$F",
+      "Ford"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "GM",
+      "TSLA",
+      "TM"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "auto_demand",
+      "dealer_inventory",
+      "auto_credit"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "cyclical",
+      "value"
+    ],
+    "event_vocab": [
+      "deliveries",
+      "pricing",
+      "inventory",
+      "credit"
+    ]
+  },
+  "TM": {
+    "company_name": "Toyota Motor Corporation",
+    "aliases": [
+      "Toyota"
+    ],
+    "sector": "Consumer Discretionary",
+    "industry": "Automobiles",
+    "subindustry": "Automobiles",
+    "region": "Asia-Pacific",
+    "domicile": "Japan",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "autos",
+      "hybrids",
+      "global manufacturing"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "yen",
+      "auto demand"
+    ],
+    "industry_keywords": [
+      "vehicle demand",
+      "hybrid demand",
+      "auto production",
+      "supply chain"
+    ],
+    "ticker_keywords": [
+      "TM",
+      "$TM",
+      "Toyota"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "TSLA",
+      "GM",
+      "F"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "auto_demand",
+      "fx",
+      "supply_chain"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "quality_cyclical"
+    ],
+    "event_vocab": [
+      "deliveries",
+      "production",
+      "supply_chain",
+      "pricing"
+    ]
+  },
+  "WMT": {
+    "company_name": "Walmart Inc.",
+    "aliases": [
+      "Walmart"
+    ],
+    "sector": "Consumer Staples",
+    "industry": "Retail",
+    "subindustry": "Mass retail",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "retail",
+      "consumer staples",
+      "grocery"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "wage pressure"
+    ],
+    "industry_keywords": [
+      "retail traffic",
+      "grocery share",
+      "inventory levels",
+      "pricing mix"
+    ],
+    "ticker_keywords": [
+      "WMT",
+      "$WMT",
+      "Walmart"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "COST",
+      "TGT",
+      "AMZN"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "grocery_mix",
+      "price_gaps"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "defensive"
+    ],
+    "event_vocab": [
+      "traffic",
+      "pricing",
+      "inventory",
+      "consumer_trade_down"
+    ]
+  },
+  "COST": {
+    "company_name": "Costco Wholesale Corporation",
+    "aliases": [
+      "Costco"
+    ],
+    "sector": "Consumer Staples",
+    "industry": "Retail",
+    "subindustry": "Membership retail",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "retail",
+      "membership",
+      "consumer staples"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "wage pressure"
+    ],
+    "industry_keywords": [
+      "membership trends",
+      "comps",
+      "traffic",
+      "basket size"
+    ],
+    "ticker_keywords": [
+      "COST",
+      "$COST",
+      "Costco"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "WMT",
+      "TGT"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "traffic",
+      "price_gaps"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "defensive_quality"
+    ],
+    "event_vocab": [
+      "traffic",
+      "pricing",
+      "membership",
+      "consumer_trade_down"
+    ]
+  },
+  "TGT": {
+    "company_name": "Target Corporation",
+    "aliases": [
+      "Target"
+    ],
+    "sector": "Consumer Staples",
+    "industry": "Retail",
+    "subindustry": "Mass retail",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "retail",
+      "general merchandise",
+      "consumer"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inflation",
+      "inventory"
+    ],
+    "industry_keywords": [
+      "retail comps",
+      "inventory markdowns",
+      "traffic",
+      "consumer mix"
+    ],
+    "ticker_keywords": [
+      "TGT",
+      "$TGT",
+      "Target"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "WMT",
+      "COST"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "inventory",
+      "promotions"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "consumer"
+    ],
+    "event_vocab": [
+      "traffic",
+      "pricing",
+      "inventory",
+      "consumer_trade_down"
+    ]
+  },
+  "HD": {
+    "company_name": "The Home Depot, Inc.",
+    "aliases": [
+      "Home Depot"
+    ],
+    "sector": "Consumer Discretionary",
+    "industry": "Home Improvement Retail",
+    "subindustry": "Home improvement",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "housing",
+      "repair and remodel",
+      "consumer"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "housing turnover",
+      "consumer spending"
+    ],
+    "industry_keywords": [
+      "home improvement demand",
+      "housing turnover",
+      "repair and remodel"
+    ],
+    "ticker_keywords": [
+      "HD",
+      "$HD",
+      "Home Depot"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "LOW"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "housing_turnover",
+      "repair_spend",
+      "rates"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "consumer_cyclical"
+    ],
+    "event_vocab": [
+      "housing_turnover",
+      "consumer_demand",
+      "pricing"
+    ]
+  },
+  "NKE": {
+    "company_name": "NIKE, Inc.",
+    "aliases": [
+      "Nike"
+    ],
+    "sector": "Consumer Discretionary",
+    "industry": "Apparel",
+    "subindustry": "Footwear and apparel",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "apparel",
+      "brand",
+      "consumer"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "usd",
+      "china demand"
+    ],
+    "industry_keywords": [
+      "apparel demand",
+      "inventory clearance",
+      "wholesale orders",
+      "sneaker demand"
+    ],
+    "ticker_keywords": [
+      "NKE",
+      "$NKE",
+      "Nike"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "LULU",
+      "ADIDY"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "inventory",
+      "fx"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "consumer_cyclical"
+    ],
+    "event_vocab": [
+      "inventory",
+      "pricing",
+      "wholesale_orders",
+      "brand_momentum"
+    ]
+  },
+  "LULU": {
+    "company_name": "Lululemon Athletica Inc.",
+    "aliases": [
+      "Lululemon",
+      "Lulu"
+    ],
+    "sector": "Consumer Discretionary",
+    "industry": "Apparel",
+    "subindustry": "Athletic apparel",
+    "region": "US",
+    "domicile": "Canada",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "apparel",
+      "athleisure",
+      "consumer"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "inventory",
+      "north america demand"
+    ],
+    "industry_keywords": [
+      "apparel demand",
+      "inventory discipline",
+      "store traffic",
+      "international growth"
+    ],
+    "ticker_keywords": [
+      "LULU",
+      "$LULU",
+      "Lululemon"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "NKE"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "inventory",
+      "international_growth"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "growth"
+    ],
+    "event_vocab": [
+      "traffic",
+      "inventory",
+      "pricing",
+      "international_growth"
+    ]
+  },
+  "SBUX": {
+    "company_name": "Starbucks Corporation",
+    "aliases": [
+      "Starbucks"
+    ],
+    "sector": "Consumer Discretionary",
+    "industry": "Restaurants",
+    "subindustry": "Coffee retail",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "restaurants",
+      "consumer",
+      "china"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "labor costs",
+      "china demand"
+    ],
+    "industry_keywords": [
+      "same-store sales",
+      "traffic",
+      "china demand",
+      "wage pressure"
+    ],
+    "ticker_keywords": [
+      "SBUX",
+      "$SBUX",
+      "Starbucks"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "MCD",
+      "YUM"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "traffic",
+      "labor_costs"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "consumer"
+    ],
+    "event_vocab": [
+      "traffic",
+      "pricing",
+      "labor_costs",
+      "china_demand"
+    ]
+  },
+  "LLY": {
+    "company_name": "Eli Lilly and Company",
+    "aliases": [
+      "Eli Lilly",
+      "Lilly"
+    ],
+    "sector": "Health Care",
+    "industry": "Pharmaceuticals",
+    "subindustry": "Branded pharmaceuticals",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "pharma",
+      "obesity drugs",
+      "diabetes"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "drug pricing",
+      "healthcare demand"
+    ],
+    "industry_keywords": [
+      "obesity drug demand",
+      "glp-1",
+      "drug pricing",
+      "trial data"
+    ],
+    "ticker_keywords": [
+      "LLY",
+      "$LLY",
+      "Eli Lilly",
+      "Lilly",
+      "Zepbound",
+      "Mounjaro"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "NVO",
+      "MRK",
+      "PFE"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "defensive_growth"
+    ],
+    "event_vocab": [
+      "trial_data",
+      "pricing",
+      "regulation",
+      "demand"
+    ]
+  },
+  "MRK": {
+    "company_name": "Merck & Co., Inc.",
+    "aliases": [
+      "Merck"
+    ],
+    "sector": "Health Care",
+    "industry": "Pharmaceuticals",
+    "subindustry": "Branded pharmaceuticals",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "pharma",
+      "oncology",
+      "vaccines"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "drug pricing",
+      "healthcare demand"
+    ],
+    "industry_keywords": [
+      "oncology demand",
+      "trial data",
+      "drug pricing",
+      "vaccine sales"
+    ],
+    "ticker_keywords": [
+      "MRK",
+      "$MRK",
+      "Merck",
+      "Keytruda"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "LLY",
+      "PFE",
+      "AZN"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "defensive"
+    ],
+    "event_vocab": [
+      "trial_data",
+      "pricing",
+      "regulation",
+      "demand"
+    ]
+  },
+  "PFE": {
+    "company_name": "Pfizer Inc.",
+    "aliases": [
+      "Pfizer"
+    ],
+    "sector": "Health Care",
+    "industry": "Pharmaceuticals",
+    "subindustry": "Branded pharmaceuticals",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "pharma",
+      "vaccines",
+      "oncology"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "drug pricing",
+      "healthcare demand"
+    ],
+    "industry_keywords": [
+      "drug pipeline",
+      "vaccine demand",
+      "trial data",
+      "pricing"
+    ],
+    "ticker_keywords": [
+      "PFE",
+      "$PFE",
+      "Pfizer"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "MRK",
+      "LLY",
+      "AZN"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "defensive"
+    ],
+    "event_vocab": [
+      "trial_data",
+      "pricing",
+      "regulation",
+      "demand"
+    ]
+  },
+  "NVO": {
+    "company_name": "Novo Nordisk A/S",
+    "aliases": [
+      "Novo Nordisk",
+      "Novo"
+    ],
+    "sector": "Health Care",
+    "industry": "Pharmaceuticals",
+    "subindustry": "Diabetes and obesity drugs",
+    "region": "Europe",
+    "domicile": "Denmark",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "pharma",
+      "obesity drugs",
+      "diabetes"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "drug pricing",
+      "healthcare demand"
+    ],
+    "industry_keywords": [
+      "obesity drug demand",
+      "glp-1",
+      "drug pricing",
+      "supply constraints"
+    ],
+    "ticker_keywords": [
+      "NVO",
+      "$NVO",
+      "Novo Nordisk",
+      "Ozempic",
+      "Wegovy"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "LLY",
+      "MRK"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "supply_constraints"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "defensive_growth"
+    ],
+    "event_vocab": [
+      "trial_data",
+      "pricing",
+      "regulation",
+      "demand"
+    ]
+  },
+  "AZN": {
+    "company_name": "AstraZeneca PLC",
+    "aliases": [
+      "AstraZeneca"
+    ],
+    "sector": "Health Care",
+    "industry": "Pharmaceuticals",
+    "subindustry": "Branded pharmaceuticals",
+    "region": "Europe",
+    "domicile": "United Kingdom",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "pharma",
+      "oncology",
+      "biologics"
+    ],
+    "macro_sensitivity": [
+      "regulation",
+      "drug pricing",
+      "healthcare demand"
+    ],
+    "industry_keywords": [
+      "oncology demand",
+      "trial data",
+      "drug pricing",
+      "pipeline"
+    ],
+    "ticker_keywords": [
+      "AZN",
+      "$AZN",
+      "AstraZeneca"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "MRK",
+      "PFE",
+      "LLY"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "drug_demand",
+      "pricing",
+      "trial_data"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "defensive"
+    ],
+    "event_vocab": [
+      "trial_data",
+      "pricing",
+      "regulation",
+      "demand"
+    ]
+  },
+  "UNH": {
+    "company_name": "UnitedHealth Group Incorporated",
+    "aliases": [
+      "UnitedHealth",
+      "UnitedHealth Group"
+    ],
+    "sector": "Health Care",
+    "industry": "Managed Care",
+    "subindustry": "Managed care",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "managed care",
+      "medical costs",
+      "benefits"
+    ],
+    "macro_sensitivity": [
+      "medical cost trend",
+      "regulation",
+      "employment"
+    ],
+    "industry_keywords": [
+      "medical loss ratio",
+      "medicare advantage",
+      "utilization",
+      "reimbursement"
+    ],
+    "ticker_keywords": [
+      "UNH",
+      "$UNH",
+      "UnitedHealth"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "HUM",
+      "CVS"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "medical_cost_trend",
+      "reimbursement",
+      "utilization"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "defensive"
+    ],
+    "event_vocab": [
+      "utilization",
+      "reimbursement",
+      "regulation",
+      "cost_trend"
+    ]
+  },
+  "CVS": {
+    "company_name": "CVS Health Corporation",
+    "aliases": [
+      "CVS Health",
+      "CVS"
+    ],
+    "sector": "Health Care",
+    "industry": "Managed Care",
+    "subindustry": "Managed care and pharmacy services",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "managed care",
+      "pharmacy",
+      "benefits"
+    ],
+    "macro_sensitivity": [
+      "medical cost trend",
+      "regulation",
+      "consumer health demand"
+    ],
+    "industry_keywords": [
+      "medical cost trend",
+      "pbm",
+      "reimbursement",
+      "utilization"
+    ],
+    "ticker_keywords": [
+      "CVS",
+      "$CVS",
+      "CVS Health",
+      "CVS"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "UNH",
+      "HUM"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "medical_cost_trend",
+      "reimbursement",
+      "utilization"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "defensive"
+    ],
+    "event_vocab": [
+      "utilization",
+      "reimbursement",
+      "regulation",
+      "cost_trend"
+    ]
+  },
+  "PLD": {
+    "company_name": "Prologis, Inc.",
+    "aliases": [
+      "Prologis"
+    ],
+    "sector": "Real Estate",
+    "industry": "Industrial REITs",
+    "subindustry": "Logistics real estate",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "logistics",
+      "warehousing",
+      "real estate"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "industrial demand",
+      "e-commerce"
+    ],
+    "industry_keywords": [
+      "warehouse demand",
+      "rents",
+      "occupancy",
+      "industrial real estate"
+    ],
+    "ticker_keywords": [
+      "PLD",
+      "$PLD",
+      "Prologis"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "SPG",
+      "O"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "rates",
+      "logistics_demand",
+      "occupancy"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "rate_sensitive"
+    ],
+    "event_vocab": [
+      "occupancy",
+      "rent_spread",
+      "rates",
+      "supply"
+    ]
+  },
+  "SPG": {
+    "company_name": "Simon Property Group, Inc.",
+    "aliases": [
+      "Simon Property Group",
+      "Simon"
+    ],
+    "sector": "Real Estate",
+    "industry": "Retail REITs",
+    "subindustry": "Mall real estate",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "retail real estate",
+      "malls",
+      "consumer"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "consumer spending",
+      "retail occupancy"
+    ],
+    "industry_keywords": [
+      "mall traffic",
+      "occupancy",
+      "leasing spreads",
+      "retail real estate"
+    ],
+    "ticker_keywords": [
+      "SPG",
+      "$SPG",
+      "Simon Property Group",
+      "Simon"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "PLD",
+      "O"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "rates",
+      "retail_traffic",
+      "occupancy"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "rate_sensitive"
+    ],
+    "event_vocab": [
+      "occupancy",
+      "rent_spread",
+      "rates",
+      "traffic"
+    ]
+  },
+  "O": {
+    "company_name": "Realty Income Corporation",
+    "aliases": [
+      "Realty Income"
+    ],
+    "sector": "Real Estate",
+    "industry": "Net Lease REITs",
+    "subindustry": "Net lease real estate",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "real estate",
+      "income",
+      "net lease"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "credit spreads",
+      "tenant health"
+    ],
+    "industry_keywords": [
+      "net lease",
+      "cap rates",
+      "tenant coverage",
+      "real estate income"
+    ],
+    "ticker_keywords": [
+      "O",
+      "$O",
+      "Realty Income"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "PLD",
+      "SPG"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "rates",
+      "credit_spreads",
+      "tenant_health"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "rate_sensitive",
+      "income"
+    ],
+    "event_vocab": [
+      "cap_rates",
+      "rates",
+      "occupancy",
+      "credit"
+    ]
+  },
+  "NEE": {
+    "company_name": "NextEra Energy, Inc.",
+    "aliases": [
+      "NextEra",
+      "NextEra Energy"
+    ],
+    "sector": "Utilities",
+    "industry": "Utilities",
+    "subindustry": "Electric utilities and renewables",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "utilities",
+      "renewables",
+      "power demand"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "power demand",
+      "regulation"
+    ],
+    "industry_keywords": [
+      "power demand",
+      "renewables buildout",
+      "regulated utility",
+      "rate base"
+    ],
+    "ticker_keywords": [
+      "NEE",
+      "$NEE",
+      "NextEra",
+      "NextEra Energy"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "DUK"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "rates",
+      "power_demand",
+      "regulation"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "defensive",
+      "rate_sensitive"
+    ],
+    "event_vocab": [
+      "rate_base",
+      "power_demand",
+      "regulation",
+      "rates"
+    ]
+  },
+  "DUK": {
+    "company_name": "Duke Energy Corporation",
+    "aliases": [
+      "Duke Energy"
+    ],
+    "sector": "Utilities",
+    "industry": "Utilities",
+    "subindustry": "Electric utilities",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "utilities",
+      "regulated power",
+      "grid"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "power demand",
+      "regulation"
+    ],
+    "industry_keywords": [
+      "rate base",
+      "power demand",
+      "storm costs",
+      "regulated utility"
+    ],
+    "ticker_keywords": [
+      "DUK",
+      "$DUK",
+      "Duke Energy"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "NEE"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "rates",
+      "power_demand",
+      "regulation"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "defensive",
+      "rate_sensitive"
+    ],
+    "event_vocab": [
+      "rate_base",
+      "power_demand",
+      "regulation",
+      "rates"
+    ]
+  },
+  "SAP": {
+    "company_name": "SAP SE",
+    "aliases": [
+      "SAP"
+    ],
+    "sector": "Information Technology",
+    "industry": "Software",
+    "subindustry": "Enterprise software",
+    "region": "Europe",
+    "domicile": "Germany",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "enterprise software",
+      "erp",
+      "cloud transition"
+    ],
+    "macro_sensitivity": [
+      "enterprise spend",
+      "eurusd",
+      "european growth"
+    ],
+    "industry_keywords": [
+      "erp demand",
+      "cloud backlog",
+      "enterprise software migration"
+    ],
+    "ticker_keywords": [
+      "SAP",
+      "$SAP",
+      "SAP"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "MSFT",
+      "ORCL",
+      "CRM"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "enterprise_spend",
+      "cloud_transition",
+      "backlog"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "quality_growth"
+    ],
+    "event_vocab": [
+      "cloud_growth",
+      "backlog",
+      "pricing",
+      "enterprise_budgets"
+    ]
+  },
+  "SONY": {
+    "company_name": "Sony Group Corporation",
+    "aliases": [
+      "Sony"
+    ],
+    "sector": "Consumer Discretionary",
+    "industry": "Consumer Electronics",
+    "subindustry": "Entertainment and devices",
+    "region": "Asia-Pacific",
+    "domicile": "Japan",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "consumer electronics",
+      "gaming",
+      "content"
+    ],
+    "macro_sensitivity": [
+      "consumer spending",
+      "yen",
+      "gaming demand"
+    ],
+    "industry_keywords": [
+      "gaming demand",
+      "consumer electronics",
+      "playstation demand",
+      "image sensors"
+    ],
+    "ticker_keywords": [
+      "SONY",
+      "$SONY",
+      "Sony",
+      "PlayStation"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "AAPL",
+      "NTDOY"
+    ],
+    "suppliers": [
+      "TSM"
+    ],
+    "customers": [],
+    "exposure_channels": [
+      "consumer_spending",
+      "gaming_cycle",
+      "fx"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "consumer_tech"
+    ],
+    "event_vocab": [
+      "product_cycle",
+      "gaming_demand",
+      "pricing",
+      "fx"
+    ]
+  },
+  "BABA": {
+    "company_name": "Alibaba Group Holding Limited",
+    "aliases": [
+      "Alibaba"
+    ],
+    "sector": "Consumer Discretionary",
+    "industry": "Broadline Retail",
+    "subindustry": "E-commerce and cloud",
+    "region": "Asia-Pacific",
+    "domicile": "China",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "e-commerce",
+      "china consumer",
+      "cloud"
+    ],
+    "macro_sensitivity": [
+      "china demand",
+      "regulation",
+      "consumer spending"
+    ],
+    "industry_keywords": [
+      "china e-commerce",
+      "merchant trends",
+      "cloud demand",
+      "stimulus"
+    ],
+    "ticker_keywords": [
+      "BABA",
+      "$BABA",
+      "Alibaba"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "PDD",
+      "AMZN"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "china_consumer",
+      "cloud_demand",
+      "regulation"
+    ],
+    "factor_tags": [
+      "mega_cap",
+      "china_internet"
+    ],
+    "event_vocab": [
+      "consumer_demand",
+      "cloud_growth",
+      "regulation",
+      "stimulus"
+    ]
+  },
+  "PDD": {
+    "company_name": "PDD Holdings Inc.",
+    "aliases": [
+      "PDD",
+      "Pinduoduo",
+      "Temu"
+    ],
+    "sector": "Consumer Discretionary",
+    "industry": "Broadline Retail",
+    "subindustry": "Value e-commerce",
+    "region": "Asia-Pacific",
+    "domicile": "China",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "e-commerce",
+      "discount retail",
+      "china consumer"
+    ],
+    "macro_sensitivity": [
+      "china demand",
+      "consumer spending",
+      "shipping costs"
+    ],
+    "industry_keywords": [
+      "value e-commerce",
+      "temu demand",
+      "merchant subsidies",
+      "cross-border e-commerce"
+    ],
+    "ticker_keywords": [
+      "PDD",
+      "$PDD",
+      "PDD",
+      "Pinduoduo",
+      "Temu"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "BABA",
+      "AMZN"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "china_consumer",
+      "promotion_intensity",
+      "cross_border_logistics"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "china_internet"
+    ],
+    "event_vocab": [
+      "consumer_demand",
+      "promotions",
+      "logistics",
+      "regulation"
+    ]
+  },
+  "FCX": {
+    "company_name": "Freeport-McMoRan Inc.",
+    "aliases": [
+      "Freeport-McMoRan",
+      "Freeport"
+    ],
+    "sector": "Materials",
+    "industry": "Metals and Mining",
+    "subindustry": "Copper mining",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "copper",
+      "mining",
+      "industrial metals"
+    ],
+    "macro_sensitivity": [
+      "china demand",
+      "global growth",
+      "usd"
+    ],
+    "industry_keywords": [
+      "copper prices",
+      "mine supply",
+      "industrial metals demand",
+      "smelter activity"
+    ],
+    "ticker_keywords": [
+      "FCX",
+      "$FCX",
+      "Freeport-McMoRan",
+      "Freeport"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "NUE",
+      "AA"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "copper_prices",
+      "china_demand",
+      "global_growth"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "cyclical",
+      "commodities"
+    ],
+    "event_vocab": [
+      "commodity_prices",
+      "supply",
+      "china_demand",
+      "production"
+    ]
+  },
+  "NUE": {
+    "company_name": "Nucor Corporation",
+    "aliases": [
+      "Nucor"
+    ],
+    "sector": "Materials",
+    "industry": "Metals and Mining",
+    "subindustry": "Steel",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "steel",
+      "construction",
+      "manufacturing"
+    ],
+    "macro_sensitivity": [
+      "construction demand",
+      "industrial production",
+      "scrap prices"
+    ],
+    "industry_keywords": [
+      "steel pricing",
+      "sheet demand",
+      "construction steel",
+      "steel spreads"
+    ],
+    "ticker_keywords": [
+      "NUE",
+      "$NUE",
+      "Nucor"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "FCX",
+      "AA"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "steel_prices",
+      "construction_demand",
+      "industrial_production"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "cyclical",
+      "materials"
+    ],
+    "event_vocab": [
+      "pricing",
+      "demand",
+      "spreads",
+      "capacity"
+    ]
+  },
+  "AA": {
+    "company_name": "Alcoa Corporation",
+    "aliases": [
+      "Alcoa"
+    ],
+    "sector": "Materials",
+    "industry": "Metals and Mining",
+    "subindustry": "Aluminum",
+    "region": "US",
+    "domicile": "United States",
+    "market_cap_bucket": "large_cap",
+    "themes": [
+      "aluminum",
+      "materials",
+      "industrial metals"
+    ],
+    "macro_sensitivity": [
+      "global growth",
+      "energy prices",
+      "usd"
+    ],
+    "industry_keywords": [
+      "aluminum prices",
+      "smelting costs",
+      "industrial metals demand",
+      "bauxite"
+    ],
+    "ticker_keywords": [
+      "AA",
+      "$AA",
+      "Alcoa"
+    ],
+    "exclude_keywords": [],
+    "peers": [
+      "FCX",
+      "NUE"
+    ],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [
+      "aluminum_prices",
+      "energy_costs",
+      "global_growth"
+    ],
+    "factor_tags": [
+      "large_cap",
+      "cyclical",
+      "materials"
+    ],
+    "event_vocab": [
+      "commodity_prices",
+      "energy_costs",
+      "supply",
+      "demand"
+    ]
+  }
+}
