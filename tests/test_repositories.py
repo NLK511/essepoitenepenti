@@ -666,6 +666,8 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("transmission_confidence_adjustment", source_breakdown_map["AAPL"])
         self.assertIn("transmission_summary", plan_map["AAPL"].signal_breakdown)
         self.assertIn("primary_drivers", plan_map["AAPL"].signal_breakdown["transmission_summary"])
+        self.assertIn("ticker_relationship_edges", plan_map["AAPL"].signal_breakdown["transmission_summary"])
+        self.assertIn("matched_ticker_relationships", plan_map["AAPL"].signal_breakdown["transmission_summary"])
 
     def test_job_execution_processes_manual_ticker_jobs_through_redesign_orchestration(self) -> None:
         session = create_session()

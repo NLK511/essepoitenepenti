@@ -54,6 +54,21 @@ function sampleTone(status: string): "ok" | "warning" | "neutral" {
   return "neutral";
 }
 
+function relationshipItems(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => !!item && typeof item === "object" && !Array.isArray(item)) : [];
+}
+
+function relationshipLabel(item: Record<string, unknown>): string {
+  const relationType = typeof item.type === "string" ? item.type.split("_").join(" ") : "relationship";
+  const target = typeof item.target === "string"
+    ? item.target
+    : typeof item.target_label === "string"
+      ? item.target_label
+      : "target";
+  const channel = typeof item.channel === "string" ? item.channel.split("_").join(" ") : null;
+  return channel ? `${relationType} · ${target} · ${channel}` : `${relationType} · ${target}`;
+}
+
 function calibrationSliceSummary(calibrationReview: Record<string, unknown> | null, key: string): string {
   const item = asRecord(calibrationReview?.[key]);
   if (!item) {
@@ -649,6 +664,8 @@ export function RecommendationPlansPage() {
                   const expectedWindow = typeof transmissionSummary?.expected_transmission_window === "string"
                     ? transmissionSummary.expected_transmission_window
                     : "unknown";
+                  const matchedTickerRelationships = relationshipItems(transmissionSummary?.matched_ticker_relationships);
+                  const tickerRelationshipEdges = relationshipItems(transmissionSummary?.ticker_relationship_edges);
                   const effectiveThreshold = typeof calibrationReview?.effective_confidence_threshold === "number"
                     ? calibrationReview.effective_confidence_threshold
                     : null;
@@ -714,6 +731,7 @@ export function RecommendationPlansPage() {
                         <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
                         <div className="helper-text">window {expectedWindow}</div>
                         <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
+                        <div className="helper-text">ticker relationships {matchedTickerRelationships.length > 0 ? matchedTickerRelationships.slice(0, 2).map((item) => relationshipLabel(item)).join(" · ") : tickerRelationshipEdges.length > 0 ? `${tickerRelationshipEdges.length} stored` : "none"}</div>
                         <div className="helper-text">conflicts {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
                         <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
                       </td>

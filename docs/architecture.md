@@ -136,8 +136,9 @@ flowchart LR
 5. the taxonomy service still supports a fallback monolith file so the repo does not hard-break if the split files are temporarily missing
 6. industry context generation now reads ontology relationships and stores matched transmission edges plus ontology provenance inside the snapshot metadata
 7. ticker deep analysis now also derives ticker-level relationship edges from the taxonomy layer so transmission diagnostics can show peer, supplier, and customer read-through alongside macro and industry context
-8. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
-9. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
+8. watchlist orchestration now carries matched ticker relationships forward into stored `RecommendationPlan.signal_breakdown.transmission_summary`, which lets operator review pages surface them without re-reading the full deep-analysis JSON blob
+9. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
+10. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
 
 ## Runtime components
 
