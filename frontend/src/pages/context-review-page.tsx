@@ -189,9 +189,46 @@ export function ContextReviewPage() {
   }
 
   const latestMacroSentiment = macro[0] ?? null;
-  const latestIndustrySentiment = industry[0] ?? null;
   const latestMacroContext = macroContexts[0] ?? null;
-  const latestIndustryContext = industryContexts[0] ?? null;
+
+  const latestIndustryByKey = useMemo(() => {
+    const map = new Map<string, IndustryContextSnapshot>();
+    industryContexts.forEach((snapshot) => {
+      if (!map.has(snapshot.industry_key)) {
+        map.set(snapshot.industry_key, snapshot);
+      }
+    });
+    return map;
+  }, [industryContexts]);
+
+  const industryOptions = useMemo(
+    () => Array.from(latestIndustryByKey.values()).map((snapshot) => ({
+      value: snapshot.industry_key,
+      label: snapshot.industry_label || snapshot.industry_key,
+    })),
+    [latestIndustryByKey],
+  );
+
+  const [selectedIndustryKey, setSelectedIndustryKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (industryOptions.length === 0) {
+      setSelectedIndustryKey(null);
+      return;
+    }
+    if (!selectedIndustryKey || !latestIndustryByKey.has(selectedIndustryKey)) {
+      setSelectedIndustryKey(industryOptions[0]?.value ?? null);
+    }
+  }, [industryOptions, latestIndustryByKey, selectedIndustryKey]);
+
+  const latestIndustryContext = selectedIndustryKey ? latestIndustryByKey.get(selectedIndustryKey) ?? null : industryContexts[0] ?? null;
+  const industrySupportHistory = selectedIndustryKey
+    ? industry.filter((snapshot) => snapshot.subject_key === selectedIndustryKey)
+    : industry;
+  const latestIndustrySentiment = industrySupportHistory[0] ?? null;
+  const visibleIndustryHistory = selectedIndustryKey
+    ? industryContexts.filter((snapshot) => snapshot.industry_key === selectedIndustryKey)
+    : industryContexts;
 
   const headerMetrics = useMemo(() => {
     if (activeTab === "macro") {
@@ -295,7 +332,14 @@ export function ContextReviewPage() {
           {activeTab === "macro" ? (
             <MacroContextTab snapshot={latestMacroContext} history={macroContexts} supportHistory={macro} />
           ) : (
-            <IndustryContextTab snapshot={latestIndustryContext} history={industryContexts} supportHistory={industry} />
+            <IndustryContextTab
+              snapshot={latestIndustryContext}
+              history={visibleIndustryHistory}
+              supportHistory={industrySupportHistory}
+              industryOptions={industryOptions}
+              selectedIndustryKey={selectedIndustryKey}
+              onSelectIndustry={setSelectedIndustryKey}
+            />
           )}
         </div>
       ) : null}
@@ -345,11 +389,29 @@ function IndustryContextTab(props: {
   snapshot: IndustryContextSnapshot | null;
   history: IndustryContextSnapshot[];
   supportHistory: SupportSnapshot[];
+  industryOptions: Array<{ value: string; label: string }>;
+  selectedIndustryKey: string | null;
+  onSelectIndustry: (industryKey: string) => void;
 }) {
   const snapshot = props.snapshot;
 
   return (
     <div className="stack-page">
+      {props.industryOptions.length > 1 && props.selectedIndustryKey ? (
+        <Card>
+          <SectionTitle
+            kicker="Industry selector"
+            title="Choose industry"
+            actions={<HelpHint tooltip="Switch between industries so the current context card and history stay tied to one sector backdrop at a time." to={contextReviewDoc("context-review")} />}
+          />
+          <SegmentedTabs
+            value={props.selectedIndustryKey}
+            onChange={props.onSelectIndustry}
+            options={props.industryOptions}
+          />
+        </Card>
+      ) : null}
+
       <Card>
         <SectionTitle
           kicker="Industry context"
