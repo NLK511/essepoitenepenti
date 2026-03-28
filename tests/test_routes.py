@@ -934,10 +934,10 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         snapshot_ids = self.seed_sentiment_snapshots()
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            listed = await client.get("/api/sentiment-snapshots")
-            macro = await client.get("/api/sentiment-snapshots/macro")
-            industry = await client.get("/api/sentiment-snapshots/industry")
-            detail = await client.get(f"/api/sentiment-snapshots/{snapshot_ids[1]}")
+            listed = await client.get("/api/support-snapshots")
+            macro = await client.get("/api/support-snapshots/macro")
+            industry = await client.get("/api/support-snapshots/industry")
+            detail = await client.get(f"/api/support-snapshots/{snapshot_ids[1]}")
 
         self.assertEqual(listed.status_code, 200)
         self.assertEqual(macro.status_code, 200)
@@ -1119,19 +1119,21 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(queued.json()["job_type"], JobType.RECOMMENDATION_EVALUATION.value)
         self.assertEqual(scoped.json()["job_type"], JobType.RECOMMENDATION_EVALUATION.value)
 
-    async def test_sentiment_snapshot_detail_returns_404_for_missing_snapshot(self) -> None:
+    async def test_support_snapshot_detail_returns_404_for_missing_snapshot(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            response = await client.get("/api/sentiment-snapshots/9999")
+            response = await client.get("/api/support-snapshots/9999")
+            legacy = await client.get("/api/sentiment-snapshots/9999")
 
         self.assertEqual(response.status_code, 404)
         self.assertIn("not found", response.text.lower())
+        self.assertEqual(legacy.status_code, 404)
 
     async def test_sentiment_snapshot_manual_refresh_routes_queue_runs(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            macro = await client.post("/api/sentiment-snapshots/refresh/macro", data={})
-            industry = await client.post("/api/sentiment-snapshots/refresh/industry", data={})
+            macro = await client.post("/api/support-snapshots/refresh/macro", data={})
+            industry = await client.post("/api/support-snapshots/refresh/industry", data={})
             runs = await client.get("/api/runs")
 
         self.assertEqual(macro.status_code, 200)
@@ -1161,12 +1163,12 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
 
         transport = httpx.ASGITransport(app=app)
         with patch(
-            "trade_proposer_app.api.routes.sentiment_snapshots._create_job_execution_service",
+            "trade_proposer_app.api.routes.support_snapshots._create_job_execution_service",
             side_effect=lambda session: StubSnapshotExecutionService(session),
         ):
             async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-                macro = await client.post("/api/sentiment-snapshots/refresh/macro/run-now", data={})
-                industry = await client.post("/api/sentiment-snapshots/refresh/industry/run-now", data={})
+                macro = await client.post("/api/support-snapshots/refresh/macro/run-now", data={})
+                industry = await client.post("/api/support-snapshots/refresh/industry/run-now", data={})
 
         self.assertEqual(macro.status_code, 200)
         self.assertEqual(industry.status_code, 200)

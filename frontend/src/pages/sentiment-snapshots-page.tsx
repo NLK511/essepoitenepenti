@@ -108,8 +108,8 @@ export function ContextReviewPage() {
       setLoading(true);
       setError(null);
       const [macroResponse, industryResponse, macroContextResponse, industryContextResponse] = await Promise.all([
-        getJson<SupportSnapshotListResponse>("/api/sentiment-snapshots/macro?limit=6"),
-        getJson<SupportSnapshotListResponse>("/api/sentiment-snapshots/industry?limit=12"),
+        getJson<SupportSnapshotListResponse>("/api/support-snapshots/macro?limit=6"),
+        getJson<SupportSnapshotListResponse>("/api/support-snapshots/industry?limit=12"),
         getJson<MacroContextSnapshot[]>("/api/context/macro?limit=6"),
         getJson<IndustryContextSnapshot[]>("/api/context/industry?limit=12"),
       ]);
@@ -132,7 +132,7 @@ export function ContextReviewPage() {
     try {
       setBusyAction(scope);
       setError(null);
-      const run = await postForm<Run>(`/api/sentiment-snapshots/refresh/${scope}`, {});
+      const run = await postForm<Run>(`/api/support-snapshots/refresh/${scope}`, {});
       showToast({
         message: `${scope === "macro" ? "Macro" : "Industry"} refresh queued as run #${run.id}`,
         tone: "success",
@@ -149,7 +149,7 @@ export function ContextReviewPage() {
       setBusyAction(scope === "macro" ? "macro-now" : "industry-now");
       setError(null);
       const response = await postForm<{ run: Run; executed: boolean; reason?: string; artifact?: Record<string, unknown> }>(
-        `/api/sentiment-snapshots/refresh/${scope}/run-now`,
+        `/api/support-snapshots/refresh/${scope}/run-now`,
         {},
       );
       showToast({

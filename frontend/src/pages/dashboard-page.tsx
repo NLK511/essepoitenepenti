@@ -18,8 +18,8 @@ export function DashboardPage() {
         setError(null);
         const [dashboard, macroSnapshots, industrySnapshots] = await Promise.all([
           getJson<DashboardResponse>("/api/dashboard"),
-          getJson<SupportSnapshotListResponse>("/api/sentiment-snapshots/macro?limit=1"),
-          getJson<SupportSnapshotListResponse>("/api/sentiment-snapshots/industry?limit=1"),
+          getJson<SupportSnapshotListResponse>("/api/support-snapshots/macro?limit=1"),
+          getJson<SupportSnapshotListResponse>("/api/support-snapshots/industry?limit=1"),
         ]);
         setData(dashboard);
         setLatestMacroLabel(

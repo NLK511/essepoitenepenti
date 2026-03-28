@@ -32,7 +32,7 @@ export function SupportSnapshotDetailPage() {
       }
       try {
         setError(null);
-        setSnapshot(await getJson<SupportSnapshot>(`/api/sentiment-snapshots/${snapshotId}`));
+        setSnapshot(await getJson<SupportSnapshot>(`/api/support-snapshots/${snapshotId}`));
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load support snapshot");
       }

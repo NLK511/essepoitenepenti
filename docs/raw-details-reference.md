@@ -70,7 +70,7 @@ Examples:
 
 The run detail page uses these artifacts to render workflow-specific cards or link directly to created snapshots.
 
-## Sentiment snapshot records
+## Support snapshot records
 
 Shared macro and industry refresh workflows persist `SupportSnapshot` records with fields such as:
 - `id`

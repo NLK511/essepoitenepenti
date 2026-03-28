@@ -127,13 +127,13 @@ flowchart LR
 2. backend enqueues a refresh run
 3. worker claims the run, or the operator uses the `run-now` endpoint for immediate execution
 4. refresh services persist transitional `SupportSnapshot` records and then materialize redesign-native macro or industry context snapshots from the same run
-5. health/preflight currently reports freshness for the shared sentiment snapshots that still gate the transitional refresh layer
+5. health/preflight currently reports freshness for the shared support snapshots that still gate the transitional refresh layer
 
 ## Runtime components
 
 ### 1. API process
 Responsibilities:
-- expose JSON endpoints for dashboard, runs, jobs, watchlists, recommendation plans/outcomes, settings, docs, health, context snapshots, and sentiment snapshots
+- expose JSON endpoints for dashboard, runs, jobs, watchlists, recommendation plans/outcomes, settings, docs, health, context snapshots, and support snapshots
 - validate user input
 - create jobs and runs
 - read and write database state
@@ -141,7 +141,7 @@ Responsibilities:
 
 ### 2. Frontend
 Responsibilities:
-- present operator workflows for setup, monitoring, debugging, recommendation-plan review, docs browsing, and sentiment inspection
+- present operator workflows for setup, monitoring, debugging, recommendation-plan review, docs browsing, and support/context inspection
 - consume the API using typed fetch helpers
 - keep UI logic client-side while leaving domain logic on the backend
 
