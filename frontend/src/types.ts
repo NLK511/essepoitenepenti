@@ -123,6 +123,22 @@ export interface PreflightCheck {
   details: string[];
 }
 
+export interface AppHealthResponse {
+  status: string;
+  app: string;
+  env: string;
+  preflight: {
+    status: string;
+    engine: string;
+    checked_at: string;
+  };
+  workers: {
+    status: string;
+    count: number;
+    details: string[];
+  };
+}
+
 export interface AppPreflightReport {
   status: string;
   checked_at: string;

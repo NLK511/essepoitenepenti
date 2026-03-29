@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import re
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from statistics import pstdev
 from typing import ClassVar, Iterable
+from urllib.parse import quote
 
 import httpx
+import yfinance as yf
 
 from trade_proposer_app.domain.models import NewsArticle, NewsBundle, ProviderCredential
 from trade_proposer_app.services.constants import DEFAULT_CONTEXT_FLAGS
@@ -346,8 +350,122 @@ class FinnhubProvider(NewsProvider):
         return articles[:limit]
 
 
+class YahooFinanceProvider(NewsProvider):
+    name: ClassVar[str] = "YahooFinance"
+    provider_key: ClassVar[str] = "yahoofinance"
+    supports_topic: ClassVar[bool] = False
+
+    def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
+        try:
+            raw_news = yf.Ticker(ticker).news
+        except Exception as exc:
+            raise NewsFetchError(f"failed to fetch news for {ticker} from Yahoo Finance: {exc}") from exc
+
+        if not isinstance(raw_news, list):
+            raise NewsFetchError("unexpected response from Yahoo Finance")
+
+        articles: list[NewsArticle] = []
+        for entry in raw_news:
+            if not isinstance(entry, dict):
+                continue
+            
+            # Extract standard yfinance news fields
+            title = _cleanup_text(entry.get("title"))
+            summary = _cleanup_text(entry.get("summary"))
+            publisher = _cleanup_text(entry.get("provider", {}).get("displayName") if isinstance(entry.get("provider"), dict) else None)
+            
+            link_obj = entry.get("clickThroughUrl") or entry.get("canonicalUrl")
+            link = _cleanup_text(link_obj.get("url") if isinstance(link_obj, dict) else None)
+
+            published = None
+            raw_date = entry.get("pubDate")
+            if isinstance(raw_date, str):
+                try:
+                    published = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+                except ValueError:
+                    pass
+
+            articles.append(
+                NewsArticle(
+                    title=title,
+                    summary=summary,
+                    publisher=publisher or "Yahoo Finance",
+                    link=link,
+                    published_at=published,
+                )
+            )
+        return articles[:limit]
+
+
+class GoogleNewsProvider(NewsProvider):
+    name: ClassVar[str] = "GoogleNews"
+    provider_key: ClassVar[str] = "googlenews"
+    supports_topic: ClassVar[bool] = True
+
+    def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
+        return self._fetch_query(f"{ticker} stock", limit)
+
+    def fetch_topic(self, topic: str, limit: int) -> list[NewsArticle]:
+        return self._fetch_query(topic, limit)
+
+    def _fetch_query(self, query: str, limit: int) -> list[NewsArticle]:
+        domain_filters = " OR ".join(f"site:{domain}" for domain in HIGH_QUALITY_NEWS_DOMAINS)
+        full_query = f"{query} ({domain_filters}) when:7d"
+        url = f"https://news.google.com/rss/search?q={quote(full_query)}&hl=en-US&gl=US&ceid=US:en"
+        
+        response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+        if response.status_code != 200:
+            raise NewsFetchError(f"unexpected status {response.status_code} from Google News")
+            
+        try:
+            root = ET.fromstring(response.text)
+        except ET.ParseError as exc:
+            raise NewsFetchError(f"failed to parse Google News XML: {exc}") from exc
+            
+        articles: list[NewsArticle] = []
+        for item in root.findall(".//item"):
+            title_elem = item.find("title")
+            link_elem = item.find("link")
+            pub_date_elem = item.find("pubDate")
+            desc_elem = item.find("description")
+            source_elem = item.find("source")
+
+            title = _cleanup_text(title_elem.text if title_elem is not None else None)
+            link = _cleanup_text(link_elem.text if link_elem is not None else None)
+            
+            # Clean description (usually contains HTML, we strip simple tags)
+            desc_raw = desc_elem.text if desc_elem is not None else ""
+            summary = _cleanup_text(re.sub(r'<[^>]+>', '', desc_raw))
+
+            publisher = "Google News"
+            if source_elem is not None and source_elem.text:
+                publisher = _cleanup_text(source_elem.text)
+
+            published = None
+            if pub_date_elem is not None and pub_date_elem.text:
+                try:
+                    published = parsedate_to_datetime(pub_date_elem.text)
+                except (TypeError, ValueError):
+                    pass
+
+            # Filter out non-whitelist sites based on publisher domain fallback if needed,
+            # though Google should enforce this via the site: operators.
+            articles.append(
+                NewsArticle(
+                    title=title,
+                    summary=summary,
+                    publisher=publisher,
+                    link=link,
+                    published_at=published,
+                )
+            )
+        return articles[:limit]
+
+
 PROVIDER_BUILDERS[NewsAPIProvider.provider_key] = NewsAPIProvider
 PROVIDER_BUILDERS[FinnhubProvider.provider_key] = FinnhubProvider
+PROVIDER_BUILDERS[YahooFinanceProvider.provider_key] = YahooFinanceProvider
+PROVIDER_BUILDERS[GoogleNewsProvider.provider_key] = GoogleNewsProvider
 
 
 class NaiveSentimentAnalyzer:

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth";
+import { getJson } from "../api";
+import { AppHealthResponse } from "../types";
 
 const THEME_KEY = "trade-proposer-theme";
 
@@ -186,6 +188,29 @@ export function AppLayout() {
   }, []);
 
   const meta = useMemo(() => routeMeta(location.pathname), [location.pathname]);
+  const [health, setHealth] = useState<AppHealthResponse | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchHealth = () => {
+      getJson<AppHealthResponse>("/api/health")
+        .then((data) => {
+          if (mounted) setHealth(data);
+        })
+        .catch((err) => console.error("Health fetch failed", err));
+    };
+
+    fetchHealth();
+    const interval = setInterval(fetchHealth, 30000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const workerStatus = health?.workers?.status || "unknown";
+  const workerCount = health?.workers?.count || 0;
+
   const jobsSectionActive = location.pathname === "/jobs" || location.pathname.startsWith("/jobs/");
 
   return (
@@ -207,6 +232,14 @@ export function AppLayout() {
           <p>
             Review watchlists, shortlist candidates, and inspect recommendation plans with outcome-aware evidence.
           </p>
+
+          <div className="sidebar-status-indicator-group">
+            <div className={`status-dot ${workerStatus === "ok" ? "is-ok" : "is-warning"}`} />
+            <div className="status-indicator-label">
+              {workerStatus === "ok" ? `${workerCount} worker${workerCount !== 1 ? "s" : ""} active` : "No workers active"}
+            </div>
+          </div>
+
           <a href="/api/health" className="button-subtle sidebar-status-link" target="_blank" rel="noreferrer">
             Open API health
           </a>

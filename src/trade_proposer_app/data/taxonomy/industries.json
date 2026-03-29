@@ -1085,5 +1085,524 @@
       "NUE",
       "AA"
     ]
+  },
+  "broad_market_etf": {
+    "label": "Broad Market ETF",
+    "sector": "Index / ETF",
+    "queries": [
+      "broad market exposure",
+      "equity index flows",
+      "passive inflows",
+      "market beta"
+    ],
+    "themes": [
+      "markets"
+    ],
+    "macro_sensitivity": [
+      "global_growth",
+      "risk_appetite",
+      "rates"
+    ],
+    "transmission_channels": [
+      "market_volatility",
+      "macro_regime"
+    ],
+    "peer_industries": [
+      "large_cap_growth_etf",
+      "small_cap_etf"
+    ],
+    "risk_flags": [
+      "index rebalancing",
+      "risk-off rotation"
+    ],
+    "event_vocab": [
+      "fund_flows",
+      "rebalance",
+      "index_level"
+    ],
+    "tickers": [
+      "SPY"
+    ]
+  },
+  "large_cap_growth_etf": {
+    "label": "Large Cap Growth ETF",
+    "sector": "Index / ETF",
+    "queries": [
+      "nasdaq exposure",
+      "large cap growth",
+      "tech-heavy index",
+      "growth beta"
+    ],
+    "themes": [
+      "markets",
+      "software",
+      "semiconductors",
+      "consumer_electronics"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "global_growth",
+      "ai_capex"
+    ],
+    "transmission_channels": [
+      "market_volatility",
+      "enterprise_spend",
+      "semiconductor_cycle"
+    ],
+    "peer_industries": [
+      "broad_market_etf",
+      "technology_etf",
+      "small_cap_etf"
+    ],
+    "risk_flags": [
+      "duration pressure",
+      "valuation compression"
+    ],
+    "event_vocab": [
+      "fund_flows",
+      "rebalance",
+      "index_level"
+    ],
+    "tickers": [
+      "QQQ"
+    ]
+  },
+  "small_cap_etf": {
+    "label": "Small Cap ETF",
+    "sector": "Index / ETF",
+    "queries": [
+      "small cap exposure",
+      "domestic cyclicals",
+      "small cap beta"
+    ],
+    "themes": [
+      "markets",
+      "consumer",
+      "construction"
+    ],
+    "macro_sensitivity": [
+      "global_growth",
+      "rates",
+      "consumer_spending"
+    ],
+    "transmission_channels": [
+      "market_volatility",
+      "macro_regime",
+      "consumer_spending"
+    ],
+    "peer_industries": [
+      "broad_market_etf",
+      "large_cap_growth_etf"
+    ],
+    "risk_flags": [
+      "liquidity thinning",
+      "risk-off rotation"
+    ],
+    "event_vocab": [
+      "fund_flows",
+      "rebalance",
+      "small_cap_breadth"
+    ],
+    "tickers": [
+      "IWM"
+    ]
+  },
+  "financials_etf": {
+    "label": "Financials ETF",
+    "sector": "Index / ETF",
+    "queries": [
+      "financials sector exposure",
+      "banks",
+      "capital markets exposure"
+    ],
+    "themes": [
+      "banking",
+      "capital_markets",
+      "consumer_banking",
+      "payments"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "yield_curve",
+      "credit_cycle"
+    ],
+    "transmission_channels": [
+      "yield_curve",
+      "credit_cycle",
+      "capital_markets"
+    ],
+    "peer_industries": [
+      "broad_market_etf",
+      "technology_etf",
+      "energy_etf"
+    ],
+    "risk_flags": [
+      "credit deterioration",
+      "flattening yield curve"
+    ],
+    "event_vocab": [
+      "fund_flows",
+      "rate_sensitive",
+      "index_level"
+    ],
+    "tickers": [
+      "XLF"
+    ]
+  },
+  "technology_etf": {
+    "label": "Technology ETF",
+    "sector": "Index / ETF",
+    "queries": [
+      "technology sector exposure",
+      "software and semiconductors",
+      "tech-heavy basket"
+    ],
+    "themes": [
+      "semiconductors",
+      "software",
+      "consumer_electronics",
+      "ai"
+    ],
+    "macro_sensitivity": [
+      "ai_capex",
+      "rates",
+      "global_electronics_demand"
+    ],
+    "transmission_channels": [
+      "semiconductor_cycle",
+      "enterprise_spend",
+      "market_volatility"
+    ],
+    "peer_industries": [
+      "broad_market_etf",
+      "large_cap_growth_etf",
+      "financials_etf"
+    ],
+    "risk_flags": [
+      "valuation compression",
+      "capex slowdown"
+    ],
+    "event_vocab": [
+      "fund_flows",
+      "rebalance",
+      "technology_rotation"
+    ],
+    "tickers": [
+      "XLK"
+    ]
+  },
+  "energy_etf": {
+    "label": "Energy ETF",
+    "sector": "Index / ETF",
+    "queries": [
+      "energy sector exposure",
+      "oil prices",
+      "integrated energy"
+    ],
+    "themes": [
+      "oil",
+      "integrated_energy"
+    ],
+    "macro_sensitivity": [
+      "oil_prices",
+      "global_growth",
+      "geopolitics"
+    ],
+    "transmission_channels": [
+      "commodity_prices",
+      "refining_margins",
+      "geopolitics"
+    ],
+    "peer_industries": [
+      "industrials_etf",
+      "financials_etf",
+      "broad_market_etf"
+    ],
+    "risk_flags": [
+      "oil volatility",
+      "geopolitical shocks"
+    ],
+    "event_vocab": [
+      "fund_flows",
+      "rebalance",
+      "energy_rotation"
+    ],
+    "tickers": [
+      "XLE"
+    ]
+  },
+  "industrials_etf": {
+    "label": "Industrials ETF",
+    "sector": "Index / ETF",
+    "queries": [
+      "industrials sector exposure",
+      "aerospace and construction",
+      "capex cyclicals"
+    ],
+    "themes": [
+      "construction",
+      "aerospace",
+      "aftermarket"
+    ],
+    "macro_sensitivity": [
+      "industrial_demand",
+      "global_growth",
+      "supply_chain"
+    ],
+    "transmission_channels": [
+      "industrial_production",
+      "infrastructure_spend",
+      "supply_chain"
+    ],
+    "peer_industries": [
+      "energy_etf",
+      "broad_market_etf"
+    ],
+    "risk_flags": [
+      "capex slowdown",
+      "supply chain disruption"
+    ],
+    "event_vocab": [
+      "fund_flows",
+      "rebalance",
+      "industrial_rotation"
+    ],
+    "tickers": [
+      "XLI"
+    ]
+  },
+  "consumer_discretionary_etf": {
+    "label": "Consumer Discretionary ETF",
+    "sector": "Index / ETF",
+    "queries": [
+      "consumer discretionary exposure",
+      "retail and autos",
+      "consumer beta"
+    ],
+    "themes": [
+      "consumer",
+      "consumer_spending",
+      "autos",
+      "e_commerce"
+    ],
+    "macro_sensitivity": [
+      "consumer_spending",
+      "auto_demand",
+      "rates"
+    ],
+    "transmission_channels": [
+      "consumer_spending",
+      "auto_demand",
+      "ecommerce_demand"
+    ],
+    "peer_industries": [
+      "broad_market_etf",
+      "technology_etf",
+      "financials_etf"
+    ],
+    "risk_flags": [
+      "consumer slowdown",
+      "inventory build"
+    ],
+    "event_vocab": [
+      "fund_flows",
+      "rebalance",
+      "consumer_rotation"
+    ],
+    "tickers": [
+      "XLY"
+    ]
+  },
+  "real_estate_etf": {
+    "label": "Real Estate ETF",
+    "sector": "Index / ETF",
+    "queries": [
+      "real estate sector exposure",
+      "reit flows",
+      "property values"
+    ],
+    "themes": [
+      "real_estate",
+      "retail_real_estate"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "tenant_health",
+      "housing_turnover"
+    ],
+    "transmission_channels": [
+      "occupancy",
+      "tenant_health",
+      "valuation_duration"
+    ],
+    "peer_industries": [
+      "broad_market_etf",
+      "treasury_etf"
+    ],
+    "risk_flags": [
+      "rate sensitivity",
+      "occupancy pressure"
+    ],
+    "event_vocab": [
+      "fund_flows",
+      "rebalance",
+      "reit_rotation"
+    ],
+    "tickers": [
+      "VNQ"
+    ]
+  },
+  "commodity_etf": {
+    "label": "Commodity ETF",
+    "sector": "Index / ETF",
+    "queries": [
+      "commodity exposure",
+      "gold prices",
+      "oil prices"
+    ],
+    "themes": [
+      "markets",
+      "oil"
+    ],
+    "macro_sensitivity": [
+      "commodity_prices",
+      "oil_prices",
+      "inflation"
+    ],
+    "transmission_channels": [
+      "commodity_prices",
+      "market_volatility"
+    ],
+    "peer_industries": [
+      "energy_etf",
+      "currency_etf",
+      "treasury_etf"
+    ],
+    "risk_flags": [
+      "commodity shock",
+      "carry drag"
+    ],
+    "event_vocab": [
+      "fund_flows",
+      "rebalance",
+      "commodity_rotation"
+    ],
+    "tickers": [
+      "GLD",
+      "USO"
+    ]
+  },
+  "treasury_etf": {
+    "label": "Treasury ETF",
+    "sector": "Index / ETF",
+    "queries": [
+      "treasury yields",
+      "duration exposure",
+      "bond prices"
+    ],
+    "themes": [
+      "markets"
+    ],
+    "macro_sensitivity": [
+      "rates",
+      "inflation"
+    ],
+    "transmission_channels": [
+      "yield_curve",
+      "valuation_duration"
+    ],
+    "peer_industries": [
+      "commodity_etf",
+      "currency_etf",
+      "volatility_etf"
+    ],
+    "risk_flags": [
+      "duration loss",
+      "inflation pressure"
+    ],
+    "event_vocab": [
+      "fund_flows",
+      "duration",
+      "yield_move"
+    ],
+    "tickers": [
+      "TLT",
+      "IEF",
+      "TIP"
+    ]
+  },
+  "currency_etf": {
+    "label": "Currency ETF",
+    "sector": "Index / ETF",
+    "queries": [
+      "currency exposure",
+      "dollar index",
+      "fx beta"
+    ],
+    "themes": [
+      "markets"
+    ],
+    "macro_sensitivity": [
+      "usd",
+      "fx",
+      "rates"
+    ],
+    "transmission_channels": [
+      "fx",
+      "market_volatility"
+    ],
+    "peer_industries": [
+      "treasury_etf",
+      "commodity_etf"
+    ],
+    "risk_flags": [
+      "fx whipsaw",
+      "carry erosion"
+    ],
+    "event_vocab": [
+      "fund_flows",
+      "fx_move",
+      "dollar_strength"
+    ],
+    "tickers": [
+      "UUP"
+    ]
+  },
+  "volatility_etf": {
+    "label": "Volatility ETF",
+    "sector": "Index / ETF",
+    "queries": [
+      "volatility exposure",
+      "risk-off hedge",
+      "vix futures"
+    ],
+    "themes": [
+      "markets"
+    ],
+    "macro_sensitivity": [
+      "risk_appetite",
+      "global_growth"
+    ],
+    "transmission_channels": [
+      "market_volatility",
+      "risk_appetite"
+    ],
+    "peer_industries": [
+      "broad_market_etf",
+      "treasury_etf",
+      "currency_etf"
+    ],
+    "risk_flags": [
+      "contango bleed",
+      "vol crush"
+    ],
+    "event_vocab": [
+      "fund_flows",
+      "hedge_flow",
+      "vol_spike"
+    ],
+    "tickers": [
+      "VXX"
+    ]
   }
 }

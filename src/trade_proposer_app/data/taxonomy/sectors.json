@@ -394,5 +394,22 @@
       "power demand",
       "regulation"
     ]
+  },
+  "Index/ETF": {
+    "label": "Index / ETF",
+    "queries": [
+      "ETF flows",
+      "index exposure",
+      "passive flows",
+      "broad market beta"
+    ],
+    "themes": [
+      "markets"
+    ],
+    "macro_sensitivity": [
+      "global_growth",
+      "risk_appetite",
+      "rates"
+    ]
   }
 }
