@@ -498,7 +498,7 @@
     "macro_sensitivity": [
       "fab capex",
       "export controls",
-      "eurusd"
+      "fx"
     ],
     "industry_keywords": [
       "lithography demand",
@@ -624,7 +624,7 @@
     "domicile": "United States",
     "market_cap_bucket": "large_cap",
     "themes": [
-      "digital ads",
+      "advertising",
       "search",
       "cloud",
       "ai"
@@ -691,7 +691,7 @@
     "domicile": "United States",
     "market_cap_bucket": "large_cap",
     "themes": [
-      "digital ads",
+      "advertising",
       "social media",
       "ai"
     ],
@@ -1184,7 +1184,7 @@
     "market_cap_bucket": "large_cap",
     "themes": [
       "payments",
-      "consumer spending",
+      "consumer spend",
       "travel"
     ],
     "macro_sensitivity": [
@@ -1244,7 +1244,7 @@
     "market_cap_bucket": "large_cap",
     "themes": [
       "payments",
-      "consumer spending",
+      "consumer spend",
       "travel"
     ],
     "macro_sensitivity": [
@@ -3529,7 +3529,7 @@
     ],
     "macro_sensitivity": [
       "enterprise spend",
-      "eurusd",
+      "fx",
       "european growth"
     ],
     "industry_keywords": [
@@ -3969,7 +3969,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -4036,7 +4036,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "internet content & information",
@@ -4101,7 +4101,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "tobacco",
@@ -4175,7 +4175,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "internet retail",
@@ -4242,7 +4242,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "electronic gaming & multimedia",
@@ -4315,7 +4315,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "consumer electronics",
@@ -4391,7 +4391,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "auto manufacturers",
@@ -4464,7 +4464,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "semiconductor equipment & materials",
@@ -4532,7 +4532,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "telecom services",
@@ -4598,7 +4598,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "telecom services",
@@ -4662,7 +4662,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "packaged foods",
@@ -4737,7 +4737,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -4813,7 +4813,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - application",
@@ -4890,7 +4890,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "aerospace & defense",
@@ -4964,7 +4964,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "semiconductor equipment & materials",
@@ -5041,7 +5041,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -5112,7 +5112,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "chemicals",
@@ -5180,7 +5180,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "other industrial metals & mining",
@@ -5246,7 +5246,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas equipment & services",
@@ -5316,7 +5316,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -5384,7 +5384,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas integrated",
@@ -5455,7 +5455,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - application",
@@ -5526,9 +5526,8 @@
       "integrated energy"
     ],
     "macro_sensitivity": [
-      "global_growth",
-      "oil prices",
       "global growth",
+      "oil prices",
       "geopolitics",
       "european gas prices"
     ],
@@ -5595,7 +5594,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas e&p",
@@ -5666,7 +5665,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - infrastructure",
@@ -5742,7 +5741,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "biotechnology",
@@ -5817,7 +5816,7 @@
       "manufacturing"
     ],
     "macro_sensitivity": [
-      "global_growth",
+      "global growth",
       "consumer spending",
       "enterprise spend",
       "rates",
@@ -5829,8 +5828,7 @@
       "usd",
       "inventory",
       "north america demand",
-      "labor costs",
-      "global growth"
+      "labor costs"
     ],
     "industry_keywords": [
       "e-commerce demand",
@@ -5898,7 +5896,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "utilities - diversified",
@@ -5956,7 +5954,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas e&p",
@@ -6027,7 +6025,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - infrastructure",
@@ -6104,7 +6102,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -6159,7 +6157,7 @@
       "SPDR Gold Shares"
     ],
     "sector": "Index / ETF",
-    "industry": "Commodity Etf",
+    "industry": "Commodity ETF",
     "subindustry": "Commodities Focused",
     "region": "US",
     "domicile": "Unknown",
@@ -6227,7 +6225,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "internet content & information",
@@ -6292,7 +6290,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas equipment & services",
@@ -6363,7 +6361,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical care facilities",
@@ -6418,7 +6416,7 @@
       "iShares 7-10 Year Treasury Bond ETF"
     ],
     "sector": "Index / ETF",
-    "industry": "Treasury Etf",
+    "industry": "Treasury ETF",
     "subindustry": "Long Government",
     "region": "US",
     "domicile": "Unknown",
@@ -6492,7 +6490,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "diagnostics & research",
@@ -6568,7 +6566,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -6623,7 +6621,7 @@
       "iShares Russell 2000 ETF"
     ],
     "sector": "Index / ETF",
-    "industry": "Small Cap Etf",
+    "industry": "Small Cap ETF",
     "subindustry": "Small Blend",
     "region": "US",
     "domicile": "Unknown",
@@ -6632,7 +6630,7 @@
       "markets"
     ],
     "macro_sensitivity": [
-      "global_growth",
+      "global growth",
       "rates"
     ],
     "industry_keywords": [
@@ -6700,7 +6698,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -6770,7 +6768,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas midstream",
@@ -6843,7 +6841,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "semiconductor equipment & materials",
@@ -6917,7 +6915,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "luxury goods",
@@ -6992,7 +6990,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - infrastructure",
@@ -7069,7 +7067,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "biotechnology",
@@ -7147,7 +7145,7 @@
       "ai assistants"
     ],
     "macro_sensitivity": [
-      "global_growth",
+      "global growth",
       "consumer spending",
       "rates",
       "usd",
@@ -7159,8 +7157,7 @@
       "pc demand",
       "industrial policy",
       "global electronics demand",
-      "taiwan risk",
-      "global growth"
+      "taiwan risk"
     ],
     "industry_keywords": [
       "smartphone demand",
@@ -7235,9 +7232,8 @@
       "integrated energy"
     ],
     "macro_sensitivity": [
-      "global_growth",
-      "oil prices",
       "global growth",
+      "oil prices",
       "geopolitics",
       "european gas prices"
     ],
@@ -7306,7 +7302,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas equipment & services",
@@ -7376,14 +7372,13 @@
       "biotech readthrough"
     ],
     "macro_sensitivity": [
-      "global_growth",
+      "global growth",
       "regulation",
       "drug pricing",
       "healthcare demand",
       "medical cost trend",
       "employment",
-      "consumer health demand",
-      "global growth"
+      "consumer health demand"
     ],
     "industry_keywords": [
       "obesity drug demand",
@@ -7459,7 +7454,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - application",
@@ -7536,7 +7531,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - infrastructure",
@@ -7608,7 +7603,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "gold",
@@ -7675,7 +7670,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas e&p",
@@ -7746,7 +7741,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - infrastructure",
@@ -7817,9 +7812,8 @@
       "integrated energy"
     ],
     "macro_sensitivity": [
-      "global_growth",
-      "oil prices",
       "global growth",
+      "oil prices",
       "geopolitics",
       "european gas prices"
     ],
@@ -7895,7 +7889,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - infrastructure",
@@ -7950,7 +7944,7 @@
       "Invesco QQQ Trust"
     ],
     "sector": "Index / ETF",
-    "industry": "Large Cap Growth Etf",
+    "industry": "Large Cap Growth ETF",
     "subindustry": "Large Growth",
     "region": "US",
     "domicile": "Unknown",
@@ -8029,7 +8023,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "biotechnology",
@@ -8103,7 +8097,6 @@
       "aviation"
     ],
     "macro_sensitivity": [
-      "global_growth",
       "global growth",
       "commodity capex",
       "usd",
@@ -8183,7 +8176,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "other industrial metals & mining",
@@ -8251,7 +8244,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "other industrial metals & mining",
@@ -8323,7 +8316,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -8399,7 +8392,7 @@
       "ai assistants"
     ],
     "macro_sensitivity": [
-      "global_growth",
+      "global growth",
       "consumer spending",
       "rates",
       "usd",
@@ -8411,8 +8404,7 @@
       "pc demand",
       "industrial policy",
       "global electronics demand",
-      "taiwan risk",
-      "global growth"
+      "taiwan risk"
     ],
     "industry_keywords": [
       "smartphone demand",
@@ -8491,7 +8483,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - application",
@@ -8566,7 +8558,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "specialty industrial machinery",
@@ -8633,7 +8625,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas equipment & services",
@@ -8704,7 +8696,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - application",
@@ -8780,7 +8772,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - infrastructure",
@@ -8836,7 +8828,7 @@
       "SPDR S&P 500 ETF Trust"
     ],
     "sector": "Index / ETF",
-    "industry": "Broad Market Etf",
+    "industry": "Broad Market ETF",
     "subindustry": "Large Blend",
     "region": "US",
     "domicile": "Unknown",
@@ -8845,8 +8837,8 @@
       "markets"
     ],
     "macro_sensitivity": [
-      "global_growth",
-      "risk_appetite"
+      "global growth",
+      "risk appetite"
     ],
     "industry_keywords": [
       "ETF flows",
@@ -8908,7 +8900,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas e&p",
@@ -8980,7 +8972,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "health information services",
@@ -9057,7 +9049,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - application",
@@ -9110,7 +9102,7 @@
       "iShares TIPS Bond ETF"
     ],
     "sector": "Index / ETF",
-    "industry": "Treasury Etf",
+    "industry": "Treasury ETF",
     "subindustry": "Inflation-Protected Bond",
     "region": "US",
     "domicile": "Unknown",
@@ -9162,7 +9154,7 @@
       "iShares 20+ Year Treasury Bond ETF"
     ],
     "sector": "Index / ETF",
-    "industry": "Treasury Etf",
+    "industry": "Treasury ETF",
     "subindustry": "Long Government",
     "region": "US",
     "domicile": "Unknown",
@@ -9235,7 +9227,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -9290,7 +9282,7 @@
       "United States Oil Fund, LP"
     ],
     "sector": "Index / ETF",
-    "industry": "Commodity Etf",
+    "industry": "Commodity ETF",
     "subindustry": "Commodities Focused",
     "region": "US",
     "domicile": "Unknown",
@@ -9299,9 +9291,9 @@
       "markets"
     ],
     "macro_sensitivity": [
-      "oil_prices",
+      "oil prices",
       "geopolitics",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "ETF flows",
@@ -9344,7 +9336,7 @@
       "Invesco DB US Dollar Index Bullish Fund"
     ],
     "sector": "Index / ETF",
-    "industry": "Currency Etf",
+    "industry": "Currency ETF",
     "subindustry": "Trading--Miscellaneous",
     "region": "US",
     "domicile": "Unknown",
@@ -9353,7 +9345,6 @@
       "markets"
     ],
     "macro_sensitivity": [
-      "global_growth",
       "global growth",
       "risk appetite",
       "rates",
@@ -9419,7 +9410,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas refining & marketing",
@@ -9468,7 +9459,7 @@
       "Vanguard Real Estate ETF"
     ],
     "sector": "Index / ETF",
-    "industry": "Real Estate Etf",
+    "industry": "Real Estate ETF",
     "subindustry": "Real Estate",
     "region": "US",
     "domicile": "Unknown",
@@ -9479,7 +9470,6 @@
       "retail real estate"
     ],
     "macro_sensitivity": [
-      "global_growth",
       "global growth",
       "risk appetite",
       "rates",
@@ -9530,7 +9520,7 @@
       "iPath Series B S&P 500 VIX Short-Term Futures ETN"
     ],
     "sector": "Index / ETF",
-    "industry": "Volatility Etf",
+    "industry": "Volatility ETF",
     "subindustry": "Trading--Miscellaneous",
     "region": "US",
     "domicile": "Unknown",
@@ -9539,7 +9529,6 @@
       "markets"
     ],
     "macro_sensitivity": [
-      "global_growth",
       "global growth",
       "risk appetite",
       "rates"
@@ -9610,7 +9599,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "home improvement retail",
@@ -9667,7 +9656,7 @@
       "Energy Select Sector SPDR Fund"
     ],
     "sector": "Index / ETF",
-    "industry": "Energy Etf",
+    "industry": "Energy ETF",
     "subindustry": "Equity Energy",
     "region": "US",
     "domicile": "Unknown",
@@ -9678,7 +9667,6 @@
       "integrated energy"
     ],
     "macro_sensitivity": [
-      "global_growth",
       "global growth",
       "risk appetite",
       "rates",
@@ -9730,7 +9718,7 @@
       "Financial Select Sector SPDR Fund"
     ],
     "sector": "Index / ETF",
-    "industry": "Financials Etf",
+    "industry": "Financials ETF",
     "subindustry": "Financial",
     "region": "US",
     "domicile": "Unknown",
@@ -9743,7 +9731,6 @@
       "payments"
     ],
     "macro_sensitivity": [
-      "global_growth",
       "global growth",
       "risk appetite",
       "rates",
@@ -9795,7 +9782,7 @@
       "Industrial Select Sector SPDR Fund"
     ],
     "sector": "Index / ETF",
-    "industry": "Industrials Etf",
+    "industry": "Industrials ETF",
     "subindustry": "Industrials",
     "region": "US",
     "domicile": "Unknown",
@@ -9807,7 +9794,6 @@
       "aftermarket"
     ],
     "macro_sensitivity": [
-      "global_growth",
       "global growth",
       "risk appetite",
       "rates",
@@ -9859,7 +9845,7 @@
       "Technology Select Sector SPDR Fund"
     ],
     "sector": "Index / ETF",
-    "industry": "Technology Etf",
+    "industry": "Technology ETF",
     "subindustry": "Technology",
     "region": "US",
     "domicile": "Unknown",
@@ -9872,7 +9858,6 @@
       "ai"
     ],
     "macro_sensitivity": [
-      "global_growth",
       "global growth",
       "risk appetite",
       "rates",
@@ -9924,7 +9909,7 @@
       "Consumer Discretionary Select Sector SPDR Fund"
     ],
     "sector": "Index / ETF",
-    "industry": "Consumer Discretionary Etf",
+    "industry": "Consumer Discretionary ETF",
     "subindustry": "Consumer Cyclical",
     "region": "US",
     "domicile": "Unknown",
@@ -9937,7 +9922,6 @@
       "e-commerce"
     ],
     "macro_sensitivity": [
-      "global_growth",
       "global growth",
       "risk appetite",
       "rates",
@@ -10010,7 +9994,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - infrastructure",
@@ -10087,7 +10071,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - specialty & generic",
@@ -10163,7 +10147,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "auto manufacturers",
@@ -10239,7 +10223,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "semiconductors",
@@ -10317,7 +10301,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "auto manufacturers",
@@ -10392,7 +10376,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "consumer electronics",
@@ -10469,7 +10453,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "auto parts",
@@ -10543,7 +10527,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "auto manufacturers",
@@ -10610,7 +10594,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "internet content & information",
@@ -10674,7 +10658,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "internet content & information",
@@ -10739,7 +10723,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas integrated",
@@ -10810,7 +10794,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -10887,7 +10871,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "biotechnology",
@@ -10956,7 +10940,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas integrated",
@@ -11027,7 +11011,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -11096,7 +11080,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas e&p",
@@ -11167,7 +11151,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -11242,7 +11226,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -11312,7 +11296,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "building materials",
@@ -11386,7 +11370,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "biotechnology",
@@ -11459,7 +11443,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "auto manufacturers",
@@ -11532,7 +11516,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "insurance - life",
@@ -11606,7 +11590,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -11675,7 +11659,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas e&p",
@@ -11748,7 +11732,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "consumer electronics",
@@ -11823,7 +11807,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "biotechnology",
@@ -11898,7 +11882,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "biotechnology",
@@ -11973,7 +11957,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "electronic components",
@@ -12049,7 +12033,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "electronic components",
@@ -12127,7 +12111,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "semiconductors",
@@ -12204,7 +12188,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "auto manufacturers",
@@ -12277,7 +12261,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "diagnostics & research",
@@ -12356,7 +12340,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "semiconductors",
@@ -12428,7 +12412,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "beverages - brewers",
@@ -12498,7 +12482,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "beverages - brewers",
@@ -12573,7 +12557,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "insurance - life",
@@ -12649,7 +12633,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "insurance - life",
@@ -12725,7 +12709,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -12804,7 +12788,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "semiconductors",
@@ -12882,7 +12866,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "computer hardware",
@@ -12956,7 +12940,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -13034,7 +13018,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "semiconductors",
@@ -13113,7 +13097,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -13182,7 +13166,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "household & personal products",
@@ -13256,7 +13240,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - specialty & generic",
@@ -13330,7 +13314,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - specialty & generic",
@@ -13406,7 +13390,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -13482,7 +13466,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - specialty & generic",
@@ -13559,7 +13543,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical instruments & supplies",
@@ -13633,7 +13617,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -13708,7 +13692,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -13785,7 +13769,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "conglomerates",
@@ -13851,7 +13835,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "household & personal products",
@@ -13920,7 +13904,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas refining & marketing",
@@ -13986,7 +13970,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas refining & marketing",
@@ -14059,7 +14043,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "specialty industrial machinery",
@@ -14132,7 +14116,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "farm & heavy construction machinery",
@@ -14206,7 +14190,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "building products & equipment",
@@ -14280,7 +14264,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "conglomerates",
@@ -14355,7 +14339,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "pharmaceutical retailers",
@@ -14430,7 +14414,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "specialty industrial machinery",
@@ -14506,7 +14490,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "auto manufacturers",
@@ -14579,7 +14563,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "auto manufacturers",
@@ -14655,7 +14639,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "auto manufacturers",
@@ -14729,7 +14713,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical devices",
@@ -14804,7 +14788,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical instruments & supplies",
@@ -14871,7 +14855,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "electronic gaming & multimedia",
@@ -14944,7 +14928,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "conglomerates",
@@ -15017,7 +15001,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "conglomerates",
@@ -15090,7 +15074,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "conglomerates",
@@ -15163,7 +15147,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "conglomerates",
@@ -15236,7 +15220,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -15313,7 +15297,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -15390,7 +15374,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -15467,7 +15451,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "capital markets",
@@ -15545,7 +15529,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "insurance - property & casualty",
@@ -15622,7 +15606,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "internet retail",
@@ -15697,7 +15681,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "internet retail",
@@ -15766,7 +15750,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "other industrial metals & mining",
@@ -15832,7 +15816,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "beverages - brewers",
@@ -15907,7 +15891,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "travel services",
@@ -15982,7 +15966,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical devices",
@@ -16056,7 +16040,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -16130,7 +16114,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "footwear & accessories",
@@ -16204,7 +16188,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - infrastructure",
@@ -16280,7 +16264,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "insurance - diversified",
@@ -16356,7 +16340,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "aerospace & defense",
@@ -16426,7 +16410,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "specialty chemicals",
@@ -16500,7 +16484,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical instruments & supplies",
@@ -16575,7 +16559,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - specialty & generic",
@@ -16650,7 +16634,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "insurance - diversified",
@@ -16725,7 +16709,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "information technology services",
@@ -16800,7 +16784,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -16874,7 +16858,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "semiconductor equipment & materials",
@@ -16948,7 +16932,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "semiconductor equipment & materials",
@@ -17023,7 +17007,7 @@
       "repair and remodel"
     ],
     "macro_sensitivity": [
-      "global_growth",
+      "global growth",
       "consumer spending",
       "enterprise spend",
       "rates",
@@ -17035,8 +17019,7 @@
       "usd",
       "inventory",
       "north america demand",
-      "labor costs",
-      "global growth"
+      "labor costs"
     ],
     "industry_keywords": [
       "e-commerce demand",
@@ -17110,7 +17093,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "credit services",
@@ -17184,7 +17167,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -17258,7 +17241,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -17328,7 +17311,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "chemicals",
@@ -17394,7 +17377,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "tobacco",
@@ -17467,7 +17450,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -17541,7 +17524,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -17610,7 +17593,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "household & personal products",
@@ -17685,7 +17668,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -17760,7 +17743,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "asset management",
@@ -17836,7 +17819,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -17910,7 +17893,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "auto manufacturers",
@@ -17977,7 +17960,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "packaged foods",
@@ -18051,7 +18034,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -18119,7 +18102,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas integrated",
@@ -18190,7 +18173,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical devices",
@@ -18265,7 +18248,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -18340,7 +18323,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -18408,7 +18391,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "internet content & information",
@@ -18478,7 +18461,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "insurance - property & casualty",
@@ -18552,7 +18535,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -18620,7 +18603,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "beverages - non-alcoholic",
@@ -18695,7 +18678,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "healthcare plans",
@@ -18763,7 +18746,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "household & personal products",
@@ -18831,7 +18814,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "telecom services",
@@ -18902,7 +18885,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "financial data & stock exchanges",
@@ -18978,7 +18961,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "credit services",
@@ -19052,7 +19035,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical devices",
@@ -19120,7 +19103,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "grocery stores",
@@ -19194,7 +19177,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "capital markets",
@@ -19265,7 +19248,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "building materials",
@@ -19337,7 +19320,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -19412,7 +19395,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - application",
@@ -19488,7 +19471,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical devices",
@@ -19556,7 +19539,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "beverages - wineries & distilleries",
@@ -19630,7 +19613,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "internet retail",
@@ -19705,7 +19688,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "diagnostics & research",
@@ -19772,7 +19755,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "entertainment",
@@ -19841,7 +19824,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - application",
@@ -19910,7 +19893,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas integrated",
@@ -19975,7 +19958,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas e&p",
@@ -20041,7 +20024,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas integrated",
@@ -20111,7 +20094,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "communication equipment",
@@ -20186,7 +20169,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "specialty industrial machinery",
@@ -20260,7 +20243,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "industrial distribution",
@@ -20330,7 +20313,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "other industrial metals & mining",
@@ -20402,7 +20385,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical care facilities",
@@ -20478,7 +20461,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical devices",
@@ -20547,7 +20530,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "packaged foods",
@@ -20619,7 +20602,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "other industrial metals & mining",
@@ -20691,7 +20674,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "biotechnology",
@@ -20764,7 +20747,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical devices",
@@ -20838,7 +20821,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -20908,7 +20891,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "building materials",
@@ -20975,7 +20958,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "beverages - brewers",
@@ -21044,7 +21027,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "household & personal products",
@@ -21116,7 +21099,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "building materials",
@@ -21190,7 +21173,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "conglomerates",
@@ -21263,7 +21246,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -21338,7 +21321,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "financial data & stock exchanges",
@@ -21416,7 +21399,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "semiconductors",
@@ -21488,7 +21471,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "tobacco",
@@ -21561,7 +21544,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -21637,7 +21620,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - application",
@@ -21712,7 +21695,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -21787,7 +21770,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical instruments & supplies",
@@ -21866,7 +21849,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "restaurants",
@@ -21942,7 +21925,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -22016,7 +21999,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "luxury goods",
@@ -22084,7 +22067,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "household & personal products",
@@ -22152,7 +22135,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "beverages - non-alcoholic",
@@ -22219,7 +22202,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "telecom services",
@@ -22290,7 +22273,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "asset management",
@@ -22365,7 +22348,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "computer hardware",
@@ -22441,7 +22424,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "home improvement retail",
@@ -22520,7 +22503,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "auto manufacturers",
@@ -22594,7 +22577,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "luxury goods",
@@ -22672,7 +22655,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "restaurants",
@@ -22748,7 +22731,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical devices",
@@ -22824,7 +22807,7 @@
       "consumer spend"
     ],
     "macro_sensitivity": [
-      "global_growth",
+      "global growth",
       "rates",
       "yield curve",
       "credit quality",
@@ -22833,8 +22816,7 @@
       "consumer spending",
       "cross-border travel",
       "usd",
-      "e-commerce demand",
-      "global growth"
+      "e-commerce demand"
     ],
     "industry_keywords": [
       "net interest income",
@@ -22910,7 +22892,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "conglomerates",
@@ -22977,7 +22959,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "tobacco",
@@ -23047,7 +23029,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas refining & marketing",
@@ -23117,7 +23099,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "insurance - reinsurance",
@@ -23185,7 +23167,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "packaged foods",
@@ -23253,7 +23235,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "entertainment",
@@ -23324,7 +23306,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "communication equipment",
@@ -23398,7 +23380,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -23473,7 +23455,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -23547,7 +23529,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -23615,7 +23597,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "household & personal products",
@@ -23689,7 +23671,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -23758,7 +23740,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "beverages - non-alcoholic",
@@ -23828,7 +23810,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "household & personal products",
@@ -23903,7 +23885,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical devices",
@@ -23973,7 +23955,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "tobacco",
@@ -24048,7 +24030,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -24124,7 +24106,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "insurance - life",
@@ -24198,7 +24180,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "internet retail",
@@ -24266,7 +24248,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas refining & marketing",
@@ -24339,7 +24321,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "airlines",
@@ -24415,7 +24397,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "diagnostics & research",
@@ -24484,7 +24466,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "beverages - wineries & distilleries",
@@ -24554,7 +24536,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "other industrial metals & mining",
@@ -24620,7 +24602,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "household & personal products",
@@ -24695,7 +24677,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical instruments & supplies",
@@ -24770,7 +24752,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -24845,7 +24827,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "solar",
@@ -24919,7 +24901,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -24994,7 +24976,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "drug manufacturers - general",
@@ -25068,7 +25050,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - application",
@@ -25144,7 +25126,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "capital markets",
@@ -25213,7 +25195,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas integrated",
@@ -25283,7 +25265,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical devices",
@@ -25354,7 +25336,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "specialty chemicals",
@@ -25428,7 +25410,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "financial data & stock exchanges",
@@ -25504,7 +25486,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical instruments & supplies",
@@ -25581,7 +25563,7 @@
       "ai compute"
     ],
     "macro_sensitivity": [
-      "global_growth",
+      "global growth",
       "consumer spending",
       "rates",
       "usd",
@@ -25594,8 +25576,7 @@
       "industrial policy",
       "global electronics demand",
       "taiwan risk",
-      "export controls",
-      "global growth"
+      "export controls"
     ],
     "industry_keywords": [
       "smartphone demand",
@@ -25668,7 +25649,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas e&p",
@@ -25738,7 +25719,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "specialty industrial machinery",
@@ -25807,7 +25788,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "specialty chemicals",
@@ -25881,7 +25862,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "medical devices",
@@ -25949,7 +25930,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "telecom services",
@@ -26014,7 +25995,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "telecom services",
@@ -26084,7 +26065,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - application",
@@ -26160,7 +26141,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -26235,7 +26216,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "diagnostics & research",
@@ -26304,7 +26285,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "telecom services",
@@ -26370,7 +26351,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas integrated",
@@ -26442,7 +26423,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - application",
@@ -26518,7 +26499,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -26593,7 +26574,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "biotechnology",
@@ -26666,7 +26647,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -26734,7 +26715,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "household & personal products",
@@ -26809,7 +26790,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "railroads",
@@ -26882,7 +26863,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "integrated freight & logistics",
@@ -26957,7 +26938,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - regional",
@@ -27031,7 +27012,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "auto manufacturers",
@@ -27099,7 +27080,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "telecom services",
@@ -27171,7 +27152,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -27239,7 +27220,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "oil & gas e&p",
@@ -27309,7 +27290,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "banks - diversified",
@@ -27384,7 +27365,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "specialty business services",
@@ -27458,7 +27439,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "software - infrastructure",
@@ -27526,7 +27507,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "grocery stores",
@@ -27600,7 +27581,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "internet retail",
@@ -27674,7 +27655,7 @@
     ],
     "macro_sensitivity": [
       "rates",
-      "global_growth"
+      "global growth"
     ],
     "industry_keywords": [
       "insurance - diversified",
