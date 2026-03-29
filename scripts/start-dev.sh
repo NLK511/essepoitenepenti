@@ -158,7 +158,6 @@ VENV_PYTHON="${VENV_DIR}/bin/python"
 [[ -x "$VENV_PYTHON" ]] || fail "missing ${VENV_PYTHON}; run ./scripts/setup.sh first"
 DATABASE_URL_VALUE="$(read_env_value DATABASE_URL "$ENV_FILE")"
 FILE_AUTH_TOKEN="$(read_env_value SINGLE_USER_AUTH_TOKEN "$ENV_FILE")"
-FRONTEND_AUTH_TOKEN="${VITE_API_AUTH_TOKEN:-${SINGLE_USER_AUTH_TOKEN:-$FILE_AUTH_TOKEN}}"
 
 if [[ "$START_FRONTEND" == "true" ]]; then
   command -v npm >/dev/null 2>&1 || fail "npm is required to start the frontend dev server"
@@ -285,7 +284,7 @@ if [[ "$START_FRONTEND" == "true" ]]; then
   log "starting frontend dev server on ${FRONTEND_PORT}"
   (
     cd "$FRONTEND_DIR"
-    VITE_API_AUTH_TOKEN="${FRONTEND_AUTH_TOKEN}" exec npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT"
+    exec npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT"
   ) &
   FRONTEND_PID=$!
   printf '%s\n' "$FRONTEND_PID" > "$FRONTEND_PID_FILE"

@@ -10,6 +10,7 @@ from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
+from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.industry_support import IndustrySupportRefreshService
 from trade_proposer_app.services.macro_support import MacroSupportRefreshService
 from trade_proposer_app.services.optimizations import WeightOptimizationService
@@ -35,6 +36,7 @@ class JobExecutionService:
         industry_context=None,
         watchlist_orchestration=None,
         recommendation_plans=None,
+        historical_replay: HistoricalReplayService | None = None,
     ) -> None:
         self.jobs = jobs
         self.runs = runs
@@ -46,6 +48,7 @@ class JobExecutionService:
         self.industry_context = industry_context
         self.watchlist_orchestration = watchlist_orchestration
         self.recommendation_plans = recommendation_plans
+        self.historical_replay = historical_replay
 
     def enqueue_job(self, job_id: int, scheduled_for: datetime | None = None) -> Run:
         self.runs.recover_stale_running_runs(stale_after_seconds=settings.run_stale_after_seconds)
@@ -87,6 +90,8 @@ class JobExecutionService:
             return self._execute_macro_support_run(run)
         if run.job_type == JobType.INDUSTRY_CONTEXT_REFRESH:
             return self._execute_industry_support_run(run)
+        if run.job_type == JobType.HISTORICAL_REPLAY:
+            return self._execute_historical_replay_run(run)
         raise RuntimeError(f"unsupported job_type execution: {run.job_type.value}")
 
     def _execute_proposal_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
@@ -338,6 +343,70 @@ class JobExecutionService:
         self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
         return [], timing
 
+    def _execute_historical_replay_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
+        if self.historical_replay is None:
+            raise RuntimeError("historical replay service is not configured")
+
+        execution_started = perf_counter()
+        timing: dict[str, object] = {
+            "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
+            "replay_setup_seconds": 0.0,
+            "replay_execution_seconds": 0.0,
+            "persistence_seconds": 0.0,
+            "finalize_seconds": 0.0,
+            "total_execution_seconds": 0.0,
+        }
+        artifact = self._get_run_artifact(run)
+        replay_payload = artifact.get("historical_replay") if isinstance(artifact.get("historical_replay"), dict) else {}
+        batch_id = replay_payload.get("batch_id")
+        slice_id = replay_payload.get("slice_id")
+        if not isinstance(batch_id, int) or not isinstance(slice_id, int):
+            raise RuntimeError("historical replay run is missing batch_id or slice_id artifact metadata")
+
+        setup_started = perf_counter()
+        self.historical_replay.mark_slice_running(slice_id)
+        timing["replay_setup_seconds"] = round(perf_counter() - setup_started, 6)
+
+        execution_phase_started = perf_counter()
+        try:
+            input_summary, output_summary = self.historical_replay.build_stub_execution_payload(batch_id, slice_id)
+            timing["replay_execution_seconds"] = round(perf_counter() - execution_phase_started, 6)
+        except Exception as exc:
+            timing["replay_execution_seconds"] = round(perf_counter() - execution_phase_started, 6)
+            timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
+            self.historical_replay.fail_slice(slice_id, error_message=str(exc), timing=timing)
+            raise RunExecutionFailed(exc, timing) from exc
+
+        persistence_started = perf_counter()
+        summary = {
+            "replay_batch_id": batch_id,
+            "replay_slice_id": slice_id,
+            "as_of": input_summary.get("as_of"),
+            "mode": input_summary.get("mode"),
+            "cadence": input_summary.get("cadence"),
+            "status": "completed",
+            "message": output_summary.get("message"),
+        }
+        replay_artifact = {
+            **artifact,
+            "historical_replay_result": {
+                "input_summary": input_summary,
+                "output_summary": output_summary,
+            },
+        }
+        self.runs.set_summary(run.id or 0, summary)
+        self.runs.set_artifact(run.id or 0, replay_artifact)
+        self.historical_replay.complete_slice(
+            slice_id,
+            input_summary=input_summary,
+            output_summary=output_summary,
+            timing=timing,
+        )
+        timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
+
+        self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
+        return [], timing
+
     def process_next_queued_run(self, worker_id: str | None = None) -> tuple[Run | None, list[Recommendation]]:
         self.runs.recover_stale_running_runs(stale_after_seconds=settings.run_stale_after_seconds)
         run = self.runs.claim_next_queued_run(worker_id=worker_id)
@@ -468,6 +537,8 @@ class JobExecutionService:
             "industry_refresh_seconds",
             "evaluation_seconds",
             "optimization_seconds",
+            "replay_setup_seconds",
+            "replay_execution_seconds",
             "persistence_seconds",
             "finalize_seconds",
         ]

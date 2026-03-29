@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode, useEffect } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
 import { saveStoredToken, readStoredToken } from "./token-storage";
@@ -12,24 +12,12 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const storedToken = readStoredToken();
-  const [token, setTokenState] = useState<string | null>(storedToken);
+  const [token, setTokenState] = useState<string | null>(() => readStoredToken());
 
   const setToken = useCallback((value: string | null) => {
     setTokenState(value);
     saveStoredToken(value);
   }, []);
-
-  useEffect(() => {
-    if (storedToken) {
-      return;
-    }
-    const envToken = (import.meta.env.VITE_API_AUTH_TOKEN ?? "").trim();
-    if (!envToken) {
-      return;
-    }
-    setToken(envToken);
-  }, [storedToken, setToken]);
 
   const login = useCallback(
     async (username: string, password: string) => {

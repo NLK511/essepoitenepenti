@@ -16,6 +16,7 @@ class JobType(StrEnum):
     WEIGHT_OPTIMIZATION = "weight_optimization"
     MACRO_CONTEXT_REFRESH = "macro_sentiment_refresh"
     INDUSTRY_CONTEXT_REFRESH = "industry_sentiment_refresh"
+    HISTORICAL_REPLAY = "historical_replay"
     MACRO_SENTIMENT_REFRESH = MACRO_CONTEXT_REFRESH
     INDUSTRY_SENTIMENT_REFRESH = INDUSTRY_CONTEXT_REFRESH
 

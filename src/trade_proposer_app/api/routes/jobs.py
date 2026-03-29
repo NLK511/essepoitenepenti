@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.domain.models import Job, Run, Watchlist
+from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
@@ -16,6 +17,7 @@ from trade_proposer_app.services.builders import (
     create_macro_support_service,
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
+from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.optimizations import WeightOptimizationService
@@ -59,8 +61,8 @@ def normalize_job_type(job_type: str | None) -> JobType:
             status_code=400,
             detail=(
                 "invalid job_type: use proposal_generation, recommendation_evaluation, "
-                "weight_optimization, macro_sentiment_refresh (macro context refresh), or "
-                "industry_sentiment_refresh (industry context refresh)"
+                "weight_optimization, macro_sentiment_refresh (macro context refresh), "
+                "industry_sentiment_refresh (industry context refresh), or historical_replay"
             ),
         ) from exc
 
@@ -161,6 +163,11 @@ async def execute_job(job_id: int, session: Session = Depends(get_db_session)) -
         macro_context=create_macro_context_service(session),
         industry_context=create_industry_context_service(session),
         recommendation_plans=RecommendationPlanRepository(session),
+        historical_replay=HistoricalReplayService(
+            historical_replays=HistoricalReplayRepository(session),
+            jobs=JobRepository(session),
+            runs=RunRepository(session),
+        ),
     )
     return service.enqueue_job(job_id)
 

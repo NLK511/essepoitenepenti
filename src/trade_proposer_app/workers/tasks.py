@@ -5,6 +5,7 @@ import os
 import uuid
 
 from trade_proposer_app.db import SessionLocal
+from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
@@ -18,6 +19,7 @@ from trade_proposer_app.services.builders import (
     create_watchlist_orchestration_service,
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
+from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.optimizations import WeightOptimizationService
@@ -44,6 +46,11 @@ def process_once(worker_id: str | None = None) -> bool:
             industry_context=create_industry_context_service(session),
             watchlist_orchestration=create_watchlist_orchestration_service(session, proposal_service=proposal_service),
             recommendation_plans=RecommendationPlanRepository(session),
+            historical_replay=HistoricalReplayService(
+                historical_replays=HistoricalReplayRepository(session),
+                jobs=JobRepository(session),
+                runs=RunRepository(session),
+            ),
         )
         try:
             run, _recommendations = service.process_next_queued_run(worker_id=worker_id)

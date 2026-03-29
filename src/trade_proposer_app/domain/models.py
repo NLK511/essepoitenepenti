@@ -655,3 +655,37 @@ class AppPreflightReport(BaseModel):
     checked_at: datetime
     engine: str
     checks: list[PreflightCheck] = Field(default_factory=list)
+
+
+class HistoricalReplayBatch(BaseModel):
+    id: int | None = None
+    name: str
+    status: str = "planned"
+    mode: str = "research"
+    as_of_start: datetime
+    as_of_end: datetime
+    cadence: str = "daily"
+    config_json: str = "{}"
+    summary_json: str = "{}"
+    artifact_json: str = "{}"
+    error_message: str | None = None
+    job_id: int | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class HistoricalReplaySlice(BaseModel):
+    id: int | None = None
+    replay_batch_id: int
+    job_id: int | None = None
+    run_id: int | None = None
+    as_of: datetime
+    status: str = "planned"
+    error_message: str | None = None
+    input_summary_json: str = "{}"
+    output_summary_json: str = "{}"
+    timing_json: str = "{}"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

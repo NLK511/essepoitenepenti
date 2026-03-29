@@ -535,3 +535,7 @@ When a design choice is unclear, prefer the option that:
 3. reuses production concepts
 4. allows strict and approximate research modes to remain clearly separate
 5. improves future archival quality, not only past reconstruction
+
+## See also
+
+- `historical-replay-implementation-checklist.md` — concrete codebase implementation order and module-level checklist

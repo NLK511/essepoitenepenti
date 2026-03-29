@@ -142,7 +142,6 @@ else
   log "warning: ${ENV_FILE} not found; using defaults"
 fi
 
-export VITE_API_AUTH_TOKEN="${SINGLE_USER_AUTH_TOKEN:-}"
 export APP_ENV="${APP_ENV:-production}"
 START_HOST="${START_HOST:-${APP_HOST:-0.0.0.0}}"
 START_PORT="${START_PORT:-${APP_PORT:-8000}}"

@@ -156,7 +156,7 @@ Every `/api` request must carry `Authorization: Bearer <token>`, except for allo
 
 The React UI routes unauthenticated visitors to `/login`. The login page exchanges the configured username/password for the same bearer token and stores it locally for future API requests.
 
-When using Vite manually, make sure `VITE_API_AUTH_TOKEN` matches `SINGLE_USER_AUTH_TOKEN`.
+The frontend now requires an explicit login session; do not bake a bearer token into the client bundle.
 
 ## Summary engine and external services
 

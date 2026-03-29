@@ -86,6 +86,41 @@ class WorkerHeartbeatRecord(Base, TimestampMixin):
         return f"<WorkerHeartbeat(worker_id={self.worker_id}, status={self.status})>"
 
 
+class HistoricalReplayBatchRecord(Base, TimestampMixin):
+    __tablename__ = "historical_replay_batches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(160), unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(32), default="planned", index=True)
+    mode: Mapped[str] = mapped_column(String(32), default="research", index=True)
+    as_of_start: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    as_of_end: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    cadence: Mapped[str] = mapped_column(String(32), default="daily")
+    config_json: Mapped[str] = mapped_column(Text, default="{}")
+    summary_json: Mapped[str] = mapped_column(Text, default="{}")
+    artifact_json: Mapped[str] = mapped_column(Text, default="{}")
+    error_message: Mapped[str] = mapped_column(Text, default="")
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class HistoricalReplaySliceRecord(Base, TimestampMixin):
+    __tablename__ = "historical_replay_slices"
+    __table_args__ = (UniqueConstraint("replay_batch_id", "as_of", name="uq_historical_replay_slice_batch_as_of"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    replay_batch_id: Mapped[int] = mapped_column(ForeignKey("historical_replay_batches.id"), index=True)
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+    as_of: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), default="planned", index=True)
+    error_message: Mapped[str] = mapped_column(Text, default="")
+    input_summary_json: Mapped[str] = mapped_column(Text, default="{}")
+    output_summary_json: Mapped[str] = mapped_column(Text, default="{}")
+    timing_json: Mapped[str] = mapped_column(Text, default="{}")
+
+
 class AppSettingRecord(Base, TimestampMixin):
     __tablename__ = "app_settings"
 

@@ -59,6 +59,9 @@ These docs define the current product truth.
   - phased plan for building a point-in-time historical replay dataset
   - rules for strict vs research backtests
   - guidance for context, news, and social-data feasibility
+- `historical-replay-implementation-checklist.md`
+  - codebase-specific implementation checklist for historical replay
+  - schema, services, repositories, jobs, and MVP delivery order
 
 ### Setup and operations
 - `getting-started.md`
