@@ -55,6 +55,10 @@ These docs define the current product truth.
   - planned expansion of ticker, industry, and relationship coverage
   - tracking page for ontology work progress
   - guidance for validation, reporting, and split file structure
+- `historical-replay-backtesting-plan.md`
+  - phased plan for building a point-in-time historical replay dataset
+  - rules for strict vs research backtests
+  - guidance for context, news, and social-data feasibility
 
 ### Setup and operations
 - `getting-started.md`

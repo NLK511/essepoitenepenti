@@ -12,6 +12,8 @@ from trade_proposer_app.persistence.models import (
     MacroContextSnapshotRecord,
     TickerSignalSnapshotRecord,
 )
+from datetime import datetime, timezone
+
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
@@ -22,8 +24,8 @@ class ContextSnapshotRepository:
 
     def create_macro_context_snapshot(self, snapshot: MacroContextSnapshot) -> MacroContextSnapshot:
         record = MacroContextSnapshotRecord(
-            computed_at=snapshot.computed_at,
-            expires_at=snapshot.expires_at,
+            computed_at=self._normalize_datetime(snapshot.computed_at),
+            expires_at=self._normalize_datetime(snapshot.expires_at) if snapshot.expires_at else None,
             status=snapshot.status,
             summary_text=snapshot.summary_text,
             saliency_score=snapshot.saliency_score,
@@ -69,8 +71,8 @@ class ContextSnapshotRepository:
         record = IndustryContextSnapshotRecord(
             industry_key=snapshot.industry_key,
             industry_label=snapshot.industry_label,
-            computed_at=snapshot.computed_at,
-            expires_at=snapshot.expires_at,
+            computed_at=self._normalize_datetime(snapshot.computed_at),
+            expires_at=self._normalize_datetime(snapshot.expires_at) if snapshot.expires_at else None,
             status=snapshot.status,
             summary_text=snapshot.summary_text,
             direction=snapshot.direction,
@@ -126,7 +128,7 @@ class ContextSnapshotRepository:
         record = TickerSignalSnapshotRecord(
             ticker=snapshot.ticker,
             horizon=snapshot.horizon.value,
-            computed_at=snapshot.computed_at,
+            computed_at=self._normalize_datetime(snapshot.computed_at),
             status=snapshot.status,
             direction=snapshot.direction,
             swing_probability_percent=snapshot.swing_probability_percent,
@@ -192,11 +194,19 @@ class ContextSnapshotRepository:
         label = str(definition.get("label", value)).strip() or value.strip()
         return KeyLabelDetail(key=key, label=label)
 
+    @staticmethod
+    def _normalize_datetime(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
     def _to_macro_model(self, record: MacroContextSnapshotRecord) -> MacroContextSnapshot:
         return MacroContextSnapshot(
             id=record.id,
-            computed_at=record.computed_at,
-            expires_at=record.expires_at,
+            computed_at=self._normalize_datetime(record.computed_at),
+            expires_at=self._normalize_datetime(record.expires_at) if record.expires_at else None,
             status=record.status,
             summary_text=record.summary_text,
             saliency_score=record.saliency_score,
@@ -216,8 +226,8 @@ class ContextSnapshotRepository:
             id=record.id,
             industry_key=record.industry_key,
             industry_label=record.industry_label,
-            computed_at=record.computed_at,
-            expires_at=record.expires_at,
+            computed_at=self._normalize_datetime(record.computed_at),
+            expires_at=self._normalize_datetime(record.expires_at) if record.expires_at else None,
             status=record.status,
             summary_text=record.summary_text,
             direction=record.direction,
@@ -243,7 +253,7 @@ class ContextSnapshotRepository:
             id=record.id,
             ticker=record.ticker,
             horizon=horizon,
-            computed_at=record.computed_at,
+            computed_at=self._normalize_datetime(record.computed_at),
             status=record.status,
             direction=record.direction,
             swing_probability_percent=record.swing_probability_percent,

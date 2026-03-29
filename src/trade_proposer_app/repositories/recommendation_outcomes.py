@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -24,7 +25,7 @@ class RecommendationOutcomeRepository:
             self.session.add(record)
         record.outcome = outcome.outcome
         record.status = outcome.status
-        record.evaluated_at = outcome.evaluated_at
+        record.evaluated_at = self._normalize_datetime(outcome.evaluated_at)
         record.entry_touched = outcome.entry_touched
         record.stop_loss_hit = outcome.stop_loss_hit
         record.take_profit_hit = outcome.take_profit_hit
@@ -87,13 +88,20 @@ class RecommendationOutcomeRepository:
         }
 
     @staticmethod
-    def _to_model(record: RecommendationOutcomeRecord) -> RecommendationPlanOutcome:
+    def _normalize_datetime(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    def _to_model(self, record: RecommendationOutcomeRecord) -> RecommendationPlanOutcome:
         return RecommendationPlanOutcome(
             id=record.id,
             recommendation_plan_id=record.recommendation_plan_id,
             outcome=record.outcome,
             status=record.status,
-            evaluated_at=record.evaluated_at,
+            evaluated_at=self._normalize_datetime(record.evaluated_at),
             entry_touched=record.entry_touched,
             stop_loss_hit=record.stop_loss_hit,
             take_profit_hit=record.take_profit_hit,

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -19,6 +21,14 @@ def _create_preflight_service(session: Session) -> AppPreflightService:
         return AppPreflightService(social_settings)
     except TypeError:
         return AppPreflightService()
+
+
+def _normalize_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _augment_report_with_snapshot_checks(report: AppPreflightReport, session: Session) -> AppPreflightReport:
@@ -58,10 +68,11 @@ def _augment_report_with_snapshot_checks(report: AppPreflightReport, session: Se
             )
             continue
 
-        computed_at = getattr(snapshot, "computed_at", None)
-        expires_at = getattr(snapshot, "expires_at", None)
+        computed_at = _normalize_datetime(getattr(snapshot, "computed_at", None))
+        expires_at = _normalize_datetime(getattr(snapshot, "expires_at", None))
+        checked_at = _normalize_datetime(report.checked_at) or report.checked_at
 
-        if expires_at is not None and expires_at < report.checked_at:
+        if expires_at is not None and checked_at is not None and expires_at < checked_at:
             extra_checks.append(
                 PreflightCheck(
                     name=name,

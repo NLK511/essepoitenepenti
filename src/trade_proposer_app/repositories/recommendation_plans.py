@@ -9,6 +9,8 @@ from trade_proposer_app.domain.enums import StrategyHorizon
 from trade_proposer_app.domain.models import KeyLabelDetail, RecommendationPlan
 from trade_proposer_app.persistence.models import RecommendationPlanRecord
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
+from datetime import datetime, timezone
+
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
@@ -38,7 +40,7 @@ class RecommendationPlanRepository:
             missing_inputs_json=self._dump(plan.missing_inputs),
             evidence_summary_json=self._dump(plan.evidence_summary),
             signal_breakdown_json=self._dump(plan.signal_breakdown),
-            computed_at=plan.computed_at,
+            computed_at=self._normalize_datetime(plan.computed_at),
             watchlist_id=plan.watchlist_id,
             ticker_signal_snapshot_id=plan.ticker_signal_snapshot_id,
             job_id=plan.job_id,
@@ -117,6 +119,14 @@ class RecommendationPlanRepository:
         label = str(definition.get("label", value)).strip() or value.strip()
         return KeyLabelDetail(key=key, label=label)
 
+    @staticmethod
+    def _normalize_datetime(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
     def _to_model(self, record: RecommendationPlanRecord) -> RecommendationPlan:
         try:
             horizon = StrategyHorizon(record.horizon)
@@ -142,7 +152,7 @@ class RecommendationPlanRepository:
             missing_inputs=self._load(record.missing_inputs_json, []),
             evidence_summary=self._load(record.evidence_summary_json, {}),
             signal_breakdown=self._load(record.signal_breakdown_json, {}),
-            computed_at=record.computed_at,
+            computed_at=self._normalize_datetime(record.computed_at),
             run_id=record.run_id,
             job_id=record.job_id,
             watchlist_id=record.watchlist_id,

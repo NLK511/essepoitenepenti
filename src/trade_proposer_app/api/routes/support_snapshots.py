@@ -121,6 +121,14 @@ async def get_support_snapshot(snapshot_id: int, session: Session = Depends(get_
     return _serialize_snapshot(snapshot)
 
 
+def _normalize_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def _run_snapshot_refresh_now(session: Session, job_name: str, job_type: JobType) -> dict[str, object]:
     jobs = JobRepository(session)
     runs = RunRepository(session)
@@ -148,9 +156,9 @@ def _run_snapshot_refresh_now(session: Session, job_name: str, job_type: JobType
 
 
 def _serialize_snapshot(snapshot: SupportSnapshot) -> dict[str, Any]:
-    now = datetime.now(timezone.utc)
-    expires_at = snapshot.expires_at
-    is_expired = expires_at is not None and expires_at < now
+    now = _normalize_datetime(datetime.now(timezone.utc))
+    expires_at = _normalize_datetime(snapshot.expires_at)
+    is_expired = expires_at is not None and now is not None and expires_at < now
     return {
         "id": snapshot.id,
         "scope": snapshot.scope,

@@ -68,7 +68,11 @@ class RecommendationPlanEvaluationService:
         errors: list[str] = []
         end_time = datetime.now(timezone.utc)
         for ticker, grouped_plans in groups.items():
-            earliest = min(plan.computed_at for plan in grouped_plans)
+            computed_times = [self._normalize_datetime(plan.computed_at) for plan in grouped_plans]
+            normalized_times = [dt for dt in computed_times if dt is not None]
+            if not normalized_times:
+                continue
+            earliest = min(normalized_times)
             start_time = earliest - timedelta(days=2)
             try:
                 data = self._download_price_history(ticker, start_time, end_time)

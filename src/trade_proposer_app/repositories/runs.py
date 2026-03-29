@@ -46,7 +46,7 @@ class RunRepository:
             job_type=resolved_job_type.value,
             status=status,
             error_message=error_message or "",
-            scheduled_for=scheduled_for,
+            scheduled_for=self._normalize_optional_datetime(scheduled_for),
         )
         self.session.add(record)
         self.session.commit()
@@ -88,7 +88,7 @@ class RunRepository:
         record = self.session.scalars(
             select(RunRecord)
             .where(RunRecord.job_id == job_id)
-            .where(RunRecord.scheduled_for == scheduled_for)
+            .where(RunRecord.scheduled_for == self._normalize_datetime(scheduled_for))
             .order_by(RunRecord.created_at.desc())
             .limit(1)
         ).first()
@@ -199,7 +199,7 @@ class RunRepository:
             .values(
                 status=RunStatus.RUNNING.value,
                 error_message="",
-                started_at=started_at,
+                started_at=self._normalize_datetime(started_at),
                 completed_at=None,
                 duration_seconds=None,
                 worker_id=worker_id,
@@ -215,7 +215,7 @@ class RunRepository:
         return self._to_run_model(record)
 
     def renew_lease(self, run_id: int, lease_seconds: int = 300) -> bool:
-        new_expiry = datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)
+        new_expiry = self._normalize_datetime(datetime.now(timezone.utc)) + timedelta(seconds=lease_seconds)
         result = self.session.execute(
             update(RunRecord)
             .where(RunRecord.id == run_id)
@@ -240,7 +240,7 @@ class RunRepository:
         if timing is not None:
             record.timing_json = self._serialize_timing(timing)
         if status in TERMINAL_RUN_STATUSES:
-            record.completed_at = datetime.now(timezone.utc)
+            record.completed_at = self._normalize_datetime(datetime.now(timezone.utc))
             record.lease_expires_at = None
             if record.started_at is not None:
                 completed_at = self._normalize_datetime(record.completed_at)
@@ -306,8 +306,8 @@ class RunRepository:
                 hostname=heartbeat.hostname,
                 pid=heartbeat.pid,
                 status=heartbeat.status,
-                last_heartbeat_at=now,
-                started_at=heartbeat.started_at or now,
+                last_heartbeat_at=self._normalize_datetime(now),
+                started_at=self._normalize_optional_datetime(heartbeat.started_at) or self._normalize_datetime(now),
                 version=heartbeat.version,
                 active_run_id=heartbeat.active_run_id,
                 metadata_json=heartbeat.metadata_json,
@@ -315,7 +315,9 @@ class RunRepository:
             self.session.add(record)
         else:
             record.status = heartbeat.status
-            record.last_heartbeat_at = now
+            record.last_heartbeat_at = self._normalize_datetime(now)
+            if record.started_at is not None:
+                record.started_at = self._normalize_datetime(record.started_at)
             record.active_run_id = heartbeat.active_run_id
             record.metadata_json = heartbeat.metadata_json
             if heartbeat.version:

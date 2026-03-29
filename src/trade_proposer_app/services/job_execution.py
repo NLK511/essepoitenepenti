@@ -481,13 +481,19 @@ class JobExecutionService:
     def _calculate_queue_wait_seconds(run: Run) -> float:
         if run.started_at is None:
             return 0.0
-        started_at = run.started_at if run.started_at.tzinfo is not None else run.started_at.replace(tzinfo=None)
-        created_at = run.created_at if run.created_at.tzinfo is not None else run.created_at.replace(tzinfo=None)
-        if started_at.tzinfo is None and created_at.tzinfo is not None:
-            created_at = created_at.replace(tzinfo=None)
-        if created_at.tzinfo is None and started_at.tzinfo is not None:
-            started_at = started_at.replace(tzinfo=None)
+        started_at = JobExecutionService._normalize_datetime(run.started_at)
+        created_at = JobExecutionService._normalize_datetime(run.created_at)
+        if started_at is None or created_at is None:
+            return 0.0
         return round(max(0.0, (started_at - created_at).total_seconds()), 6)
+
+    @staticmethod
+    def _normalize_datetime(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
     @staticmethod
     def _get_ticker_generation_list(timing: dict[str, object]) -> list[dict[str, object]]:
