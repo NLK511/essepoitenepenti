@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 from time import perf_counter
 
+from trade_proposer_app.config import settings
 from trade_proposer_app.domain.enums import JobType, RunStatus, StrategyHorizon
 from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, Run, Watchlist
 from trade_proposer_app.repositories.jobs import JobRepository
@@ -45,6 +46,7 @@ class JobExecutionService:
         self.recommendation_plans = recommendation_plans
 
     def enqueue_job(self, job_id: int, scheduled_for: datetime | None = None) -> Run:
+        self.runs.recover_stale_running_runs(stale_after_seconds=settings.run_stale_after_seconds)
         job = self.jobs.get(job_id)
         if scheduled_for is not None:
             existing_scheduled_run = self.runs.get_run_for_job_and_scheduled_for(job.id or job_id, scheduled_for)
@@ -300,6 +302,7 @@ class JobExecutionService:
         return [], timing
 
     def process_next_queued_run(self) -> tuple[Run | None, list[Recommendation]]:
+        self.runs.recover_stale_running_runs(stale_after_seconds=settings.run_stale_after_seconds)
         run = self.runs.claim_next_queued_run()
         if run is None:
             return None, []
@@ -315,6 +318,11 @@ class JobExecutionService:
             exc.timing["total_execution_seconds"] = round(
                 float(exc.timing.get("total_execution_seconds") or 0.0),
                 6,
+            )
+            current_run = self.runs.get_run(run.id or 0)
+            self.runs.set_artifact(
+                run.id or 0,
+                self._build_failure_artifact(current_run, run, exc),
             )
             self.runs.update_status(run.id or 0, RunStatus.FAILED.value, error_message=str(exc.cause), timing=exc.timing)
             exc.timing["finalize_seconds"] = round(perf_counter() - finalize_started, 6)
@@ -399,6 +407,38 @@ class JobExecutionService:
         except json.JSONDecodeError:
             return {}
         return parsed if isinstance(parsed, dict) else {}
+
+    @classmethod
+    def _build_failure_artifact(cls, current_run: Run, claimed_run: Run, exc: RunExecutionFailed) -> dict[str, object]:
+        artifact = cls._get_run_artifact(current_run)
+        existing_failure = artifact.get("failure") if isinstance(artifact.get("failure"), dict) else {}
+        artifact["failure"] = {
+            **existing_failure,
+            "job_type": claimed_run.job_type.value,
+            "message": str(exc.cause),
+            "failed_after_phase": cls._infer_failure_phase(exc.timing),
+            "had_summary_before_failure": bool(current_run.summary_json),
+            "had_artifact_before_failure": bool(current_run.artifact_json),
+        }
+        return artifact
+
+    @staticmethod
+    def _infer_failure_phase(timing: dict[str, object]) -> str:
+        ordered_phases = [
+            "resolve_tickers_seconds",
+            "recommendation_generation_seconds",
+            "macro_refresh_seconds",
+            "industry_refresh_seconds",
+            "evaluation_seconds",
+            "optimization_seconds",
+            "persistence_seconds",
+            "finalize_seconds",
+        ]
+        for phase in reversed(ordered_phases):
+            value = timing.get(phase)
+            if isinstance(value, (int, float)) and float(value) > 0:
+                return phase.removesuffix("_seconds")
+        return "startup"
 
     @staticmethod
     def _calculate_queue_wait_seconds(run: Run) -> float:

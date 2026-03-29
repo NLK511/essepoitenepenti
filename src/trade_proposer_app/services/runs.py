@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from trade_proposer_app.config import settings
 from trade_proposer_app.db import SessionLocal
 from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.repositories.jobs import JobRepository
@@ -48,6 +49,10 @@ def enqueue_enabled_jobs(now: datetime | None = None) -> int:
             recommendation_plans=RecommendationPlanRepository(session),
         )
         normalized_now = normalize_schedule_time(now or datetime.now(timezone.utc))
+        runs_repository.recover_stale_running_runs(
+            stale_after_seconds=settings.run_stale_after_seconds,
+            now=normalized_now,
+        )
         count = 0
         for job in jobs:
             watchlist = None

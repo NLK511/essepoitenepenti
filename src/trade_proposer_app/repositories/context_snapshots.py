@@ -16,9 +16,9 @@ from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
 class ContextSnapshotRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, taxonomy_service: TickerTaxonomyService | None = None) -> None:
         self.session = session
-        self.taxonomy_service = TickerTaxonomyService()
+        self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
     def create_macro_context_snapshot(self, snapshot: MacroContextSnapshot) -> MacroContextSnapshot:
         record = MacroContextSnapshotRecord(

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
@@ -124,6 +124,54 @@ class RunRepository:
             claimed = self.claim_queued_run(candidate_id)
             if claimed is not None:
                 return claimed
+
+    def recover_stale_running_runs(
+        self,
+        *,
+        stale_after_seconds: int,
+        now: datetime | None = None,
+    ) -> list[Run]:
+        if stale_after_seconds <= 0:
+            return []
+        reference_now = self._normalize_optional_datetime(now) or datetime.now(timezone.utc)
+        stale_before = reference_now - timedelta(seconds=stale_after_seconds)
+        stale_records = list(
+            self.session.scalars(
+                select(RunRecord)
+                .where(RunRecord.status == RunStatus.RUNNING.value)
+                .where(RunRecord.started_at.is_not(None))
+                .where(RunRecord.completed_at.is_(None))
+                .where(RunRecord.started_at < stale_before)
+                .order_by(RunRecord.started_at.asc())
+            ).all()
+        )
+        recovered: list[Run] = []
+        for record in stale_records:
+            timing = self._deserialize_json_object(record.timing_json)
+            timing["recovery"] = {
+                "recovered_at": reference_now.isoformat(),
+                "strategy": "started_at_timeout",
+                "stale_after_seconds": stale_after_seconds,
+                "previous_status": record.status,
+            }
+            record.status = RunStatus.FAILED.value
+            previous_error = (record.error_message or "").strip()
+            timeout_error = (
+                "Recovered stale running run after exceeding "
+                f"{stale_after_seconds} seconds without completion."
+            )
+            record.error_message = f"{previous_error} | {timeout_error}" if previous_error else timeout_error
+            record.timing_json = self._serialize_timing(timing)
+            record.completed_at = reference_now
+            started_at = self._normalize_optional_datetime(record.started_at)
+            record.duration_seconds = (
+                max(0.0, (reference_now - started_at).total_seconds()) if started_at is not None else None
+            )
+            recovered.append(self._to_run_model(record))
+        if stale_records:
+            self.session.commit()
+            recovered = [self._to_run_model(record) for record in stale_records]
+        return recovered
 
     def claim_queued_run(self, run_id: int) -> Run | None:
         started_at = datetime.now(timezone.utc)
@@ -269,6 +317,16 @@ class RunRepository:
     @staticmethod
     def _serialize_timing(timing: dict[str, object]) -> str:
         return json.dumps(timing, indent=2, sort_keys=True)
+
+    @staticmethod
+    def _deserialize_json_object(payload: str | None) -> dict[str, object]:
+        if not payload:
+            return {}
+        try:
+            parsed = json.loads(payload)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
 
     @staticmethod
     def _normalize_datetime(value: datetime) -> datetime:

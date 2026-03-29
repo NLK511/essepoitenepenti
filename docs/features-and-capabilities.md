@@ -23,7 +23,7 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 - Run proposal generation, recommendation evaluation, weight optimization, and macro/industry context refresh jobs through the same run system.
 - Convert proposal jobs into watchlists and schedule them.
 - Inspect queued, running, completed, failed, cancelled, and warning-heavy runs from the debugger and run detail pages.
-- Review persisted run timing, summary, artifact, and error details after execution finishes or fails.
+- Review persisted run timing, summary, artifact, failure-phase metadata, and error details after execution finishes or fails.
 
 ### Recommendation workflow
 - Persist proposal outputs as `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`.
@@ -102,7 +102,7 @@ These parts of the product are already in place and connected:
 ## Current limits
 
 The main limits are still practical ones:
-- scheduler and worker reliability still need more hardening, especially stale-run recovery after process death
+- scheduler and worker reliability still need more hardening; the app now recovers obviously stale `running` runs with a started-at timeout, but it still lacks heartbeat-based liveness tracking and finer-grained crash recovery
 - observability is still thin for a multi-process workflow app because logs are not yet structured and daemon liveness is not surfaced explicitly
 - auth, RBAC, tenancy, and credential lifecycle are still incomplete; the current security model is single-user and frontend auth tokens are stored in local storage
 - context extraction is still heuristic rather than a mature event model

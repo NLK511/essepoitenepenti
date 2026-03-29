@@ -30,10 +30,11 @@ Foundations already in place:
 - scheduled runs have a persisted `scheduled_for` slot and a database uniqueness guard on `(job_id, scheduled_for)`
 - run claiming is atomic at the row-update level, so two workers should not both flip the same queued run to `running`
 - enqueue paths already avoid obvious duplicate active runs for the same job, and weight optimization has an explicit single-active-run guard
-- run timing, status, and error fields are persisted so failed executions are inspectable after the fact
+- run timing, status, error fields, and failure-phase artifact metadata are persisted so failed executions are inspectable after the fact
+- scheduler and worker entry paths now recover obviously stale `running` runs by failing them once they exceed the configured `started_at` timeout, which also unblocks fresh scheduled or manual reruns
 
 Still needed:
-- crash recovery for runs left stuck in `queued` or `running` after worker or process death; there is no lease, heartbeat, or stale-run reaper yet
+- stronger crash recovery than the current coarse started-at timeout; there is still no heartbeat, lease renewal, or safe stale-run requeue path yet
 - clearer recovery semantics when a run fails after partially persisting summary, artifact, or downstream objects
 - stronger coordination guarantees if scheduler or worker concurrency increases beyond the current simple polling/claim model
 

@@ -5,9 +5,10 @@ from unittest.mock import patch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.config import settings
 from trade_proposer_app.domain.enums import JobType, RecommendationDirection, StrategyHorizon
 from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, RunDiagnostics, RunOutput
-from trade_proposer_app.persistence.models import Base
+from trade_proposer_app.persistence.models import Base, RunRecord
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
@@ -281,6 +282,33 @@ class WorkerSchedulerTests(unittest.TestCase):
 
         self.assertIsNotNone(first_claim)
         self.assertIsNone(second_claim)
+
+    def test_scheduler_recovers_stale_running_run_before_enqueuing_next_slot(self) -> None:
+        session = self.create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create("Recover Scheduled Slot", ["AAPL"], "0 * * * *")
+        stale_run = runs.enqueue(job.id or 0)
+        claimed = runs.claim_next_queued_run()
+        assert claimed is not None
+        record = session.get(RunRecord, stale_run.id or 0)
+        assert record is not None
+        record.started_at = datetime(2026, 3, 14, 8, 0, tzinfo=timezone.utc)
+        session.commit()
+        scheduled_now = datetime(2026, 3, 14, 10, 0, tzinfo=timezone.utc)
+        previous_timeout = settings.run_stale_after_seconds
+        settings.run_stale_after_seconds = 300
+        try:
+            with patch("trade_proposer_app.services.runs.SessionLocal", return_value=session):
+                count = enqueue_enabled_jobs(now=scheduled_now)
+        finally:
+            settings.run_stale_after_seconds = previous_timeout
+
+        self.assertEqual(count, 1)
+        self.assertEqual(runs.get_run(stale_run.id or 0).status, "failed")
+        scheduled_runs = [run for run in runs.list_latest_runs(limit=10) if run.job_id == job.id and run.id != stale_run.id]
+        self.assertEqual(len(scheduled_runs), 1)
+        self.assertEqual(scheduled_runs[0].scheduled_for, scheduled_now)
 
     def test_worker_process_once_processes_queued_run(self) -> None:
         session = self.create_session()

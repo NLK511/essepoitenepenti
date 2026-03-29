@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.config import settings
 from trade_proposer_app.domain.enums import JobType, RecommendationDirection, StrategyHorizon
 from trade_proposer_app.domain.models import (
     EvaluationRunResult,
@@ -1116,8 +1117,11 @@ class RepositoryTests(unittest.TestCase):
         self.assertIsNotNone(latest_run.completed_at)
         self.assertIsNotNone(latest_run.duration_seconds)
         self.assertIsNotNone(latest_run.timing_json)
+        self.assertIsNotNone(latest_run.artifact_json)
         assert latest_run.timing_json is not None
         self.assertIn('"recommendation_generation_seconds"', latest_run.timing_json)
+        self.assertIn('"failed_after_phase": "recommendation_generation"', latest_run.artifact_json or "")
+        self.assertIn('"had_summary_before_failure": false', latest_run.artifact_json or "")
 
     def test_job_execution_stops_immediately_on_multi_ticker_failure_without_partial_persistence(self) -> None:
         session = create_session()
@@ -1144,6 +1148,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn('"ticker": "MISSING"', latest_run.timing_json)
         self.assertIn('"status": "failed"', latest_run.timing_json)
         self.assertNotIn('"ticker": "MSFT"', latest_run.timing_json)
+        self.assertIn('"failed_after_phase": "recommendation_generation"', latest_run.artifact_json or "")
 
     def test_job_repository_delete_removes_job_runs_and_recommendations_without_nulling_run_job_id(self) -> None:
         session = create_session()
@@ -1207,6 +1212,60 @@ class RepositoryTests(unittest.TestCase):
 
         self.assertIsNone(session.get(RunRecord, run.id or 0))
         self.assertEqual(SupportSnapshotRepository(session).list_recent_snapshots(), [])
+
+    def test_run_repository_recovers_stale_running_runs(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create("Stale Running", ["AAPL"], None)
+        run = runs.enqueue(job.id or 0)
+        claimed = runs.claim_next_queued_run()
+        assert claimed is not None
+        stale_now = datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc)
+        stale_started = datetime(2026, 3, 24, 11, 0, tzinfo=timezone.utc)
+        record = session.get(RunRecord, run.id or 0)
+        assert record is not None
+        record.started_at = stale_started
+        session.commit()
+
+        recovered = runs.recover_stale_running_runs(stale_after_seconds=900, now=stale_now)
+
+        self.assertEqual(len(recovered), 1)
+        refreshed = runs.get_run(run.id or 0)
+        self.assertEqual(refreshed.status, "failed")
+        self.assertIn("Recovered stale running run", refreshed.error_message or "")
+        self.assertIsNotNone(refreshed.completed_at)
+        self.assertEqual(refreshed.duration_seconds, 3600.0)
+        self.assertIn('"strategy": "started_at_timeout"', refreshed.timing_json or "")
+
+    def test_enqueue_job_recovers_stale_running_run_before_active_run_check(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create("Recover Before Enqueue", ["AAPL"], None)
+        original = runs.enqueue(job.id or 0)
+        claimed = runs.claim_next_queued_run()
+        assert claimed is not None
+        record = session.get(RunRecord, original.id or 0)
+        assert record is not None
+        record.started_at = datetime(2000, 1, 1, 0, 0, tzinfo=timezone.utc)
+        session.commit()
+        service = JobExecutionService(
+            jobs=jobs,
+            runs=runs,
+            watchlist_orchestration=StubWatchlistOrchestrationService(),
+        )
+        previous_timeout = settings.run_stale_after_seconds
+        settings.run_stale_after_seconds = 60
+        try:
+            queued = service.enqueue_job(job.id or 0, scheduled_for=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc))
+        finally:
+            settings.run_stale_after_seconds = previous_timeout
+
+        self.assertNotEqual(queued.id, original.id)
+        self.assertEqual(queued.status, "queued")
+        stale_run = runs.get_run(original.id or 0)
+        self.assertEqual(stale_run.status, "failed")
 
     def test_settings_repository_defaults_summary_backend_to_pi_agent(self) -> None:
         session = create_session()

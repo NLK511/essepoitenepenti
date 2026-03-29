@@ -127,7 +127,7 @@ flowchart LR
 6. the pipeline emits redesign-native trade outputs and diagnostic payloads
 7. backend persists the relevant redesign objects, diagnostics, run summary, and timing data
 8. frontend reads run, recommendation-plan, and ticker-signal state back via `/api`
-9. if execution fails, run timing and error state are still persisted, but partial downstream writes are not yet rolled back across the full workflow
+9. if execution fails, run timing, error state, and failure-phase metadata are still persisted, but partial downstream writes are not yet rolled back across the full workflow
 
 ### Shared macro/industry refresh
 1. scheduler or operator triggers macro or industry refresh
@@ -202,7 +202,8 @@ Responsibilities:
 
 Current state:
 - queued runs are claimed with a guarded row update so duplicate execution is reduced under the current polling model
-- there is not yet a heartbeat, lease timeout, or stale-run recovery path if a worker dies mid-run
+- scheduler- and worker-entry paths now recover obviously stale `running` runs by failing them once their `started_at` age exceeds the configured timeout
+- there is still not yet a heartbeat or lease-renewal path, so stale-run recovery currently uses a coarse started-at timeout rather than active liveness tracking
 
 ### 4. Scheduler process
 Responsibilities:

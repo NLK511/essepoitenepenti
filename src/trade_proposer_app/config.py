@@ -10,6 +10,7 @@ class AppSettings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     secret_key: str = "change-me"
     weights_file_path: str = ""
+    run_stale_after_seconds: int = 1800
     single_user_auth_enabled: bool = True
     single_user_auth_token: str = "change-me"
     single_user_auth_allowlist_paths: str | None = None
