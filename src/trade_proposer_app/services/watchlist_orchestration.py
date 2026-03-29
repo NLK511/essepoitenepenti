@@ -902,8 +902,7 @@ class WatchlistOrchestrationService:
             industry_exposure_channel_details = explicit.get("industry_exposure_channel_details", []) if isinstance(explicit.get("industry_exposure_channel_details"), list) else []
             ticker_exposure_channels = explicit.get("ticker_exposure_channels", []) if isinstance(explicit.get("ticker_exposure_channels"), list) else []
             ticker_exposure_channel_details = explicit.get("ticker_exposure_channel_details", []) if isinstance(explicit.get("ticker_exposure_channel_details"), list) else []
-            conflict_flags = explicit.get("conflict_flags", []) if isinstance(explicit.get("conflict_flags"), list) else []
-            conflict_flag_details = explicit.get("conflict_flag_details", []) if isinstance(explicit.get("conflict_flag_details"), list) else []
+            matched_ticker_relationships = explicit.get("matched_ticker_relationships", []) if isinstance(explicit.get("matched_ticker_relationships"), list) else []
             return {
                 "alignment_percent": alignment_percent,
                 "context_bias": bias,
@@ -922,11 +921,12 @@ class WatchlistOrchestrationService:
                 "ticker_exposure_channels": ticker_exposure_channels,
                 "ticker_exposure_channel_details": ticker_exposure_channel_details or self._channel_detail_fallback(ticker_exposure_channels),
                 "ticker_relationship_edges": explicit.get("ticker_relationship_edges", []) if isinstance(explicit.get("ticker_relationship_edges"), list) else [],
-                "matched_ticker_relationships": explicit.get("matched_ticker_relationships", []) if isinstance(explicit.get("matched_ticker_relationships"), list) else [],
+                "matched_ticker_relationships": matched_ticker_relationships,
+                "matched_ticker_relationship_details": explicit.get("matched_ticker_relationship_details", []) if isinstance(explicit.get("matched_ticker_relationship_details"), list) else self._relationship_detail_fallback(matched_ticker_relationships),
                 "expected_transmission_window": self._string_value(explicit.get("expected_transmission_window"), default=self._fallback_transmission_window(signal)),
                 "expected_transmission_window_detail": explicit.get("expected_transmission_window_detail") if isinstance(explicit.get("expected_transmission_window_detail"), dict) else self._transmission_window_detail(self._string_value(explicit.get("expected_transmission_window"), default=self._fallback_transmission_window(signal))),
-                "conflict_flags": conflict_flags,
-                "conflict_flag_details": conflict_flag_details or self._detail_fallback(conflict_flags),
+                "conflict_flags": explicit.get("conflict_flags", []) if isinstance(explicit.get("conflict_flags"), list) else [],
+                "conflict_flag_details": explicit.get("conflict_flag_details", []) if isinstance(explicit.get("conflict_flag_details"), list) else self._detail_fallback(explicit.get("conflict_flags", [])),
                 "decay_state": self._string_value(explicit.get("decay_state"), default=self._fallback_decay_state(signal)),
                 "transmission_confidence_adjustment": round(float(signal.diagnostics.get("transmission_confidence_adjustment", 0.0)), 2) if self._is_number(signal.diagnostics.get("transmission_confidence_adjustment")) else 0.0,
                 "lane_hint": "event" if bias == "tailwind" and signal.catalyst_score >= 65.0 else "technical",
@@ -957,6 +957,7 @@ class WatchlistOrchestrationService:
             "ticker_exposure_channel_details": self._channel_detail_fallback(self._fallback_ticker_exposure_channels(signal, candidate)),
             "ticker_relationship_edges": [],
             "matched_ticker_relationships": [],
+            "matched_ticker_relationship_details": [],
             "expected_transmission_window": self._fallback_transmission_window(signal),
             "expected_transmission_window_detail": self._transmission_window_detail(self._fallback_transmission_window(signal)),
             "conflict_flags": self._fallback_conflict_flags(signal, candidate, bias),
@@ -1019,6 +1020,23 @@ class WatchlistOrchestrationService:
             for channel in list(dict.fromkeys(channels))
             if isinstance(channel, str) and channel.strip()
         ]
+
+    def _relationship_detail_fallback(self, relationships: list[dict[str, object]]) -> list[dict[str, object]]:
+        details: list[dict[str, object]] = []
+        for rel in relationships:
+            if not isinstance(rel, dict):
+                continue
+            enriched = {**rel}
+            rel_type = str(rel.get("type", "")).strip()
+            if rel_type:
+                type_def = self.taxonomy_service.get_relationship_type_definition(rel_type)
+                enriched["type_label"] = type_def.get("label", rel_type.replace("_", " "))
+            channel = str(rel.get("channel", "")).strip()
+            if channel:
+                channel_def = self.taxonomy_service.get_transmission_channel_definition(channel)
+                enriched["channel_label"] = channel_def.get("label", channel.replace("_", " "))
+            details.append(enriched)
+        return details
 
     def _transmission_window_detail(self, value: str | None) -> dict[str, str] | None:
         if not isinstance(value, str) or not value.strip():
