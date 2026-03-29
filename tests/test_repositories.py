@@ -2,7 +2,7 @@ import json
 import unittest
 from datetime import datetime, timezone
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, update
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.config import settings
@@ -1219,17 +1219,17 @@ class RepositoryTests(unittest.TestCase):
         runs = RunRepository(session)
         job = jobs.create("Stale Running", ["AAPL"], None)
         run = runs.enqueue(job.id or 0)
-        claimed = runs.claim_next_queued_run()
-        assert claimed is not None
-        stale_now = datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc)
-        stale_started = datetime(2026, 3, 24, 11, 0, tzinfo=timezone.utc)
-        record = session.get(RunRecord, run.id or 0)
-        assert record is not None
-        record.started_at = stale_started
+        # Manually set to RUNNING without lease to test legacy recovery
+        session.execute(
+            update(RunRecord)
+            .where(RunRecord.id == run.id)
+            .values(status="running", started_at=datetime(2026, 3, 24, 11, 0, tzinfo=timezone.utc))
+        )
         session.commit()
-
+        
+        stale_now = datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc)
         recovered = runs.recover_stale_running_runs(stale_after_seconds=900, now=stale_now)
-
+    
         self.assertEqual(len(recovered), 1)
         refreshed = runs.get_run(run.id or 0)
         self.assertEqual(refreshed.status, "failed")
@@ -1244,12 +1244,14 @@ class RepositoryTests(unittest.TestCase):
         runs = RunRepository(session)
         job = jobs.create("Recover Before Enqueue", ["AAPL"], None)
         original = runs.enqueue(job.id or 0)
-        claimed = runs.claim_next_queued_run()
-        assert claimed is not None
-        record = session.get(RunRecord, original.id or 0)
-        assert record is not None
-        record.started_at = datetime(2000, 1, 1, 0, 0, tzinfo=timezone.utc)
+        # Manually set to RUNNING without lease
+        session.execute(
+            update(RunRecord)
+            .where(RunRecord.id == original.id)
+            .values(status="running", started_at=datetime(2000, 1, 1, 0, 0, tzinfo=timezone.utc))
+        )
         session.commit()
+        
         service = JobExecutionService(
             jobs=jobs,
             runs=runs,

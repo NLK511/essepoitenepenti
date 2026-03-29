@@ -1,5 +1,8 @@
 import traceback
 import time
+import socket
+import os
+import uuid
 
 from trade_proposer_app.db import SessionLocal
 from trade_proposer_app.repositories.jobs import JobRepository
@@ -20,7 +23,7 @@ from trade_proposer_app.services.recommendation_plan_evaluations import Recommen
 from trade_proposer_app.services.optimizations import WeightOptimizationService
 
 
-def process_once() -> bool:
+def process_once(worker_id: str | None = None) -> bool:
     session = SessionLocal()
     try:
         settings_repository = SettingsRepository(session)
@@ -43,7 +46,7 @@ def process_once() -> bool:
             recommendation_plans=RecommendationPlanRepository(session),
         )
         try:
-            run, _recommendations = service.process_next_queued_run()
+            run, _recommendations = service.process_next_queued_run(worker_id=worker_id)
             return run is not None
         except Exception as exc:
             print(f"worker error: run processing failed: {exc}")
@@ -54,9 +57,10 @@ def process_once() -> bool:
 
 
 def main() -> None:
-    print("worker started: processing queued runs")
+    worker_id = f"worker-{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    print(f"worker started: {worker_id}")
     while True:
-        processed = process_once()
+        processed = process_once(worker_id=worker_id)
         if not processed:
             time.sleep(2)
 

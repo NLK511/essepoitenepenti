@@ -5,7 +5,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import JobType, RunStatus
-from trade_proposer_app.domain.models import Run
+from trade_proposer_app.domain.models import Run, WorkerHeartbeat
 from trade_proposer_app.persistence.models import (
     IndustryContextSnapshotRecord,
     JobRecord,
@@ -15,6 +15,7 @@ from trade_proposer_app.persistence.models import (
     RunRecord,
     SupportSnapshotRecord,
     TickerSignalSnapshotRecord,
+    WorkerHeartbeatRecord,
 )
 
 
@@ -110,7 +111,7 @@ class RunRepository:
             return None
         return self._to_run_model(record)
 
-    def claim_next_queued_run(self) -> Run | None:
+    def claim_next_queued_run(self, worker_id: str | None = None, lease_seconds: int = 300) -> Run | None:
         while True:
             candidate_id = self.session.scalars(
                 select(RunRecord.id)
@@ -121,7 +122,7 @@ class RunRepository:
             if candidate_id is None:
                 return None
 
-            claimed = self.claim_queued_run(candidate_id)
+            claimed = self.claim_queued_run(candidate_id, worker_id=worker_id, lease_seconds=lease_seconds)
             if claimed is not None:
                 return claimed
 
@@ -135,30 +136,45 @@ class RunRepository:
             return []
         reference_now = self._normalize_optional_datetime(now) or datetime.now(timezone.utc)
         stale_before = reference_now - timedelta(seconds=stale_after_seconds)
-        stale_records = list(
+
+        # Recover based on lease expiration
+        lease_stale_records = list(
             self.session.scalars(
                 select(RunRecord)
                 .where(RunRecord.status == RunStatus.RUNNING.value)
+                .where(RunRecord.lease_expires_at.is_not(None))
+                .where(RunRecord.lease_expires_at < reference_now)
+            ).all()
+        )
+
+        # Recover based on legacy started_at timeout (for runs without leases)
+        started_at_stale_records = list(
+            self.session.scalars(
+                select(RunRecord)
+                .where(RunRecord.status == RunStatus.RUNNING.value)
+                .where(RunRecord.lease_expires_at.is_(None))
                 .where(RunRecord.started_at.is_not(None))
                 .where(RunRecord.completed_at.is_(None))
                 .where(RunRecord.started_at < stale_before)
                 .order_by(RunRecord.started_at.asc())
             ).all()
         )
+
+        stale_records = list({r.id: r for r in (lease_stale_records + started_at_stale_records)}.values())
         recovered: list[Run] = []
         for record in stale_records:
             timing = self._deserialize_json_object(record.timing_json)
+            strategy = "lease_timeout" if record.lease_expires_at else "started_at_timeout"
             timing["recovery"] = {
                 "recovered_at": reference_now.isoformat(),
-                "strategy": "started_at_timeout",
+                "strategy": strategy,
                 "stale_after_seconds": stale_after_seconds,
                 "previous_status": record.status,
             }
             record.status = RunStatus.FAILED.value
             previous_error = (record.error_message or "").strip()
             timeout_error = (
-                "Recovered stale running run after exceeding "
-                f"{stale_after_seconds} seconds without completion."
+                f"Recovered stale running run via {strategy}."
             )
             record.error_message = f"{previous_error} | {timeout_error}" if previous_error else timeout_error
             record.timing_json = self._serialize_timing(timing)
@@ -173,8 +189,9 @@ class RunRepository:
             recovered = [self._to_run_model(record) for record in stale_records]
         return recovered
 
-    def claim_queued_run(self, run_id: int) -> Run | None:
+    def claim_queued_run(self, run_id: int, worker_id: str | None = None, lease_seconds: int = 300) -> Run | None:
         started_at = datetime.now(timezone.utc)
+        lease_expires_at = started_at + timedelta(seconds=lease_seconds)
         result = self.session.execute(
             update(RunRecord)
             .where(RunRecord.id == run_id)
@@ -185,6 +202,8 @@ class RunRepository:
                 started_at=started_at,
                 completed_at=None,
                 duration_seconds=None,
+                worker_id=worker_id,
+                lease_expires_at=lease_expires_at,
             )
         )
         self.session.commit()
@@ -194,6 +213,17 @@ class RunRepository:
         if record is None:
             return None
         return self._to_run_model(record)
+
+    def renew_lease(self, run_id: int, lease_seconds: int = 300) -> bool:
+        new_expiry = datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)
+        result = self.session.execute(
+            update(RunRecord)
+            .where(RunRecord.id == run_id)
+            .where(RunRecord.status == RunStatus.RUNNING.value)
+            .values(lease_expires_at=new_expiry)
+        )
+        self.session.commit()
+        return result.rowcount == 1
 
     def update_status(
         self,
@@ -211,6 +241,7 @@ class RunRepository:
             record.timing_json = self._serialize_timing(timing)
         if status in TERMINAL_RUN_STATUSES:
             record.completed_at = datetime.now(timezone.utc)
+            record.lease_expires_at = None
             if record.started_at is not None:
                 completed_at = self._normalize_datetime(record.completed_at)
                 started_at = self._normalize_datetime(record.started_at)
@@ -266,6 +297,40 @@ class RunRepository:
         self.session.refresh(record)
         return self._to_run_model(record)
 
+    def upsert_heartbeat(self, heartbeat: WorkerHeartbeat) -> None:
+        record = self.session.get(WorkerHeartbeatRecord, heartbeat.worker_id)
+        now = datetime.now(timezone.utc)
+        if record is None:
+            record = WorkerHeartbeatRecord(
+                worker_id=heartbeat.worker_id,
+                hostname=heartbeat.hostname,
+                pid=heartbeat.pid,
+                status=heartbeat.status,
+                last_heartbeat_at=now,
+                started_at=heartbeat.started_at or now,
+                version=heartbeat.version,
+                active_run_id=heartbeat.active_run_id,
+                metadata_json=heartbeat.metadata_json,
+            )
+            self.session.add(record)
+        else:
+            record.status = heartbeat.status
+            record.last_heartbeat_at = now
+            record.active_run_id = heartbeat.active_run_id
+            record.metadata_json = heartbeat.metadata_json
+            if heartbeat.version:
+                record.version = heartbeat.version
+        self.session.commit()
+
+    def list_active_workers(self, stale_seconds: int = 60) -> list[WorkerHeartbeat]:
+        stale_before = datetime.now(timezone.utc) - timedelta(seconds=stale_seconds)
+        rows = self.session.scalars(
+            select(WorkerHeartbeatRecord)
+            .where(WorkerHeartbeatRecord.last_heartbeat_at >= stale_before)
+            .order_by(WorkerHeartbeatRecord.last_heartbeat_at.desc())
+        ).all()
+        return [self._to_heartbeat_model(row) for row in rows]
+
     def delete_run(self, run_id: int) -> None:
         record = self.session.get(RunRecord, run_id)
         if record is None:
@@ -287,23 +352,39 @@ class RunRepository:
         self.session.delete(record)
         self.session.commit()
 
-    @classmethod
-    def _to_run_model(cls, record: RunRecord) -> Run:
+    def _to_run_model(self, record: RunRecord) -> Run:
         return Run(
             id=record.id,
             job_id=record.job_id,
             job_type=JobType(record.job_type or JobType.PROPOSAL_GENERATION.value),
             status=record.status,
             error_message=record.error_message or None,
-            scheduled_for=cls._normalize_optional_datetime(record.scheduled_for),
+            scheduled_for=self._normalize_optional_datetime(record.scheduled_for),
             summary_json=record.summary_json or None,
             artifact_json=record.artifact_json or None,
-            created_at=cls._normalize_datetime(record.created_at),
-            updated_at=cls._normalize_datetime(record.updated_at),
-            started_at=cls._normalize_optional_datetime(record.started_at),
-            completed_at=cls._normalize_optional_datetime(record.completed_at),
+            created_at=self._normalize_datetime(record.created_at),
+            updated_at=self._normalize_datetime(record.updated_at),
+            started_at=self._normalize_optional_datetime(record.started_at),
+            completed_at=self._normalize_optional_datetime(record.completed_at),
             duration_seconds=record.duration_seconds,
+            worker_id=record.worker_id,
+            lease_expires_at=self._normalize_optional_datetime(record.lease_expires_at),
             timing_json=record.timing_json or None,
+        )
+
+    def _to_heartbeat_model(self, record: WorkerHeartbeatRecord) -> WorkerHeartbeat:
+        return WorkerHeartbeat(
+            worker_id=record.worker_id,
+            hostname=record.hostname,
+            pid=record.pid,
+            status=record.status,
+            last_heartbeat_at=self._normalize_datetime(record.last_heartbeat_at),
+            started_at=self._normalize_datetime(record.started_at),
+            version=record.version,
+            active_run_id=record.active_run_id,
+            metadata_json=record.metadata_json,
+            created_at=self._normalize_datetime(record.created_at),
+            updated_at=self._normalize_datetime(record.updated_at),
         )
 
     def _resolve_job_type(self, job_id: int, job_type: JobType | None) -> JobType:
@@ -334,8 +415,7 @@ class RunRepository:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
 
-    @classmethod
-    def _normalize_optional_datetime(cls, value: datetime | None) -> datetime | None:
+    def _normalize_optional_datetime(self, value: datetime | None) -> datetime | None:
         if value is None:
             return None
-        return cls._normalize_datetime(value)
+        return self._normalize_datetime(value)

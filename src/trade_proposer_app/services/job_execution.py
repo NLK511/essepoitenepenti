@@ -1,10 +1,12 @@
 import json
-from datetime import datetime
+import os
+import socket
+from datetime import datetime, timezone
 from time import perf_counter
 
 from trade_proposer_app.config import settings
 from trade_proposer_app.domain.enums import JobType, RunStatus, StrategyHorizon
-from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, Run, Watchlist
+from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, Run, Watchlist, WorkerHeartbeat
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
@@ -63,8 +65,18 @@ class JobExecutionService:
         self.jobs.mark_enqueued(job.id or job_id)
         return queued_run
 
-    def execute_run(self, run_id: int) -> tuple[list[Recommendation], dict[str, object]]:
+    def execute_run(self, run_id: int, worker_id: str | None = None) -> tuple[list[Recommendation], dict[str, object]]:
         run = self.runs.get_run(run_id)
+        if worker_id:
+            self.runs.upsert_heartbeat(WorkerHeartbeat(
+                worker_id=worker_id,
+                hostname=socket.gethostname(),
+                pid=os.getpid(),
+                status="running",
+                last_heartbeat_at=datetime.now(timezone.utc),
+                started_at=datetime.now(timezone.utc), # simplified
+                active_run_id=run_id,
+            ))
         if run.job_type == JobType.PROPOSAL_GENERATION:
             return self._execute_proposal_run(run)
         if run.job_type == JobType.RECOMMENDATION_EVALUATION:
@@ -301,16 +313,16 @@ class JobExecutionService:
         self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
         return [], timing
 
-    def process_next_queued_run(self) -> tuple[Run | None, list[Recommendation]]:
+    def process_next_queued_run(self, worker_id: str | None = None) -> tuple[Run | None, list[Recommendation]]:
         self.runs.recover_stale_running_runs(stale_after_seconds=settings.run_stale_after_seconds)
-        run = self.runs.claim_next_queued_run()
+        run = self.runs.claim_next_queued_run(worker_id=worker_id)
         if run is None:
             return None, []
-        return self.execute_claimed_run(run)
+        return self.execute_claimed_run(run, worker_id=worker_id)
 
-    def execute_claimed_run(self, run: Run) -> tuple[Run, list[Recommendation]]:
+    def execute_claimed_run(self, run: Run, worker_id: str | None = None) -> tuple[Run, list[Recommendation]]:
         try:
-            recommendations, _timing = self.execute_run(run.id or 0)
+            recommendations, _timing = self.execute_run(run.id or 0, worker_id=worker_id)
             return self.runs.get_run(run.id or 0), recommendations
         except RunExecutionFailed as exc:
             finalize_started = perf_counter()

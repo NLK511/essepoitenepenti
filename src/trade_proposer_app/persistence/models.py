@@ -63,8 +63,27 @@ class RunRecord(Base, TimestampMixin):
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    worker_id: Mapped[str | None] = mapped_column(String(120), ForeignKey("worker_heartbeats.worker_id"), nullable=True, index=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     timing_json: Mapped[str] = mapped_column(Text, default="")
     job: Mapped[JobRecord] = relationship(back_populates="runs")
+
+
+class WorkerHeartbeatRecord(Base, TimestampMixin):
+    __tablename__ = "worker_heartbeats"
+
+    worker_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    hostname: Mapped[str] = mapped_column(String(120), nullable=False)
+    pid: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    last_heartbeat_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    active_run_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("runs.id"), nullable=True)
+    metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<WorkerHeartbeat(worker_id={self.worker_id}, status={self.status})>"
 
 
 class AppSettingRecord(Base, TimestampMixin):

@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, update
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.config import settings
@@ -289,12 +289,14 @@ class WorkerSchedulerTests(unittest.TestCase):
         runs = RunRepository(session)
         job = jobs.create("Recover Scheduled Slot", ["AAPL"], "0 * * * *")
         stale_run = runs.enqueue(job.id or 0)
-        claimed = runs.claim_next_queued_run()
-        assert claimed is not None
-        record = session.get(RunRecord, stale_run.id or 0)
-        assert record is not None
-        record.started_at = datetime(2026, 3, 14, 8, 0, tzinfo=timezone.utc)
+        # Manually set to RUNNING without lease
+        session.execute(
+            update(RunRecord)
+            .where(RunRecord.id == stale_run.id)
+            .values(status="running", started_at=datetime(2026, 3, 14, 8, 0, tzinfo=timezone.utc))
+        )
         session.commit()
+        
         scheduled_now = datetime(2026, 3, 14, 10, 0, tzinfo=timezone.utc)
         previous_timeout = settings.run_stale_after_seconds
         settings.run_stale_after_seconds = 300

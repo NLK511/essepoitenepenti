@@ -238,7 +238,23 @@ class Run(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     duration_seconds: float | None = None
+    worker_id: str | None = None
+    lease_expires_at: datetime | None = None
     timing_json: str | None = None
+
+
+class WorkerHeartbeat(BaseModel):
+    worker_id: str
+    hostname: str
+    pid: int
+    status: str
+    last_heartbeat_at: datetime
+    started_at: datetime
+    version: str | None = None
+    active_run_id: int | None = None
+    metadata_json: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class AppSetting(BaseModel):
