@@ -18,6 +18,18 @@ SUMMARY_METHOD_NEWS_DIGEST = "news_digest"
 NEWS_API_BASE_URL = "https://newsapi.org/v2/everything"
 FINNHUB_NEWS_URL = "https://finnhub.io/api/v1/company-news"
 
+HIGH_QUALITY_NEWS_DOMAINS = [
+    "bloomberg.com", "reuters.com", "wsj.com", "ft.com", "cnbc.com",
+    "barrons.com", "marketwatch.com", "nikkei.com", "scmp.com",
+    "spglobal.com", "thefly.com", "apnews.com", "bbc.com",
+    "nytimes.com", "washingtonpost.com", "aljazeera.com",
+    "techcrunch.com", "theinformation.com", "arstechnica.com",
+    "digitimes.com", "theregister.com", "statnews.com",
+    "fiercepharma.com", "fiercebiotech.com", "biopharmadive.com",
+    "endpointsnews.com", "freightwaves.com", "supplychaindive.com",
+    "oilprice.com", "utilitydive.com", "automotivenews.com",
+]
+
 CONTINUOUS_CONTEXT_KEYWORDS: dict[str, str] = {
     "earnings": "context_tag_earnings",
     "financial": "context_tag_earnings",
@@ -268,6 +280,7 @@ class NewsAPIProvider(NewsProvider):
             "sortBy": "publishedAt",
             "pageSize": min(limit, MAX_ARTICLES_PER_PROVIDER),
             "page": 1,
+            "domains": ",".join(HIGH_QUALITY_NEWS_DOMAINS),
         }
         response = httpx.get(NEWS_API_BASE_URL, params=params, timeout=self.timeout)
         if response.status_code != 200:
