@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from trade_proposer_app.domain.models import SupportSnapshot
 from trade_proposer_app.repositories.support_snapshots import SupportSnapshotRepository
 from trade_proposer_app.services.social import SocialIngestionService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
@@ -22,11 +23,10 @@ class IndustrySupportRefreshService:
         self.social_service = social_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
-    def refresh_all(self, *, job_id: int | None = None, run_id: int | None = None) -> dict[str, Any]:
+    def refresh_all(self, *, job_id: int | None = None, run_id: int | None = None) -> list[SupportSnapshot]:
         snapshots = []
-        summaries = []
         for profile in self.taxonomy_service.list_industry_profiles():
-            snapshot, summary = self.refresh_industry(
+            snapshot = self.refresh_industry(
                 subject_key=profile["subject_key"],
                 subject_label=profile["subject_label"],
                 queries=profile.get("queries", []),
@@ -35,15 +35,7 @@ class IndustrySupportRefreshService:
                 run_id=run_id,
             )
             snapshots.append(snapshot)
-            summaries.append(summary)
-        return {
-            "snapshots": snapshots,
-            "summary": {
-                "scope": "industry",
-                "snapshot_count": len(snapshots),
-                "industries": summaries,
-            },
-        }
+        return snapshots
 
     def refresh_industry(
         self,
@@ -54,7 +46,7 @@ class IndustrySupportRefreshService:
         tickers: list[str] | None = None,
         job_id: int | None = None,
         run_id: int | None = None,
-    ) -> tuple[Any, dict[str, Any]]:
+    ) -> SupportSnapshot:
         social_result = (
             self.social_service.analyze_subject(
                 subject_key=subject_key,
@@ -109,13 +101,7 @@ class IndustrySupportRefreshService:
             job_id=job_id,
             run_id=run_id,
         )
-        return snapshot, {
-            "subject_key": subject_key,
-            "subject_label": subject_label,
-            "score": score,
-            "label": label,
-            "expires_at": expires_at.isoformat(),
-        }
+        return snapshot
 
 
 IndustrySupportRefreshService = IndustrySupportRefreshService

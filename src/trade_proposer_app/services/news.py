@@ -251,6 +251,7 @@ class NewsProvider:
 
     name: ClassVar[str] = "generic"
     provider_key: ClassVar[str] = ""
+    supports_topic: ClassVar[bool] = True
 
     def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
         raise NotImplementedError
@@ -308,6 +309,7 @@ class NewsAPIProvider(NewsProvider):
 class FinnhubProvider(NewsProvider):
     name: ClassVar[str] = "Finnhub"
     provider_key: ClassVar[str] = "finnhub"
+    supports_topic: ClassVar[bool] = False
 
     def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
         api_key = (self.credential.api_key or "").strip()
@@ -485,6 +487,8 @@ class NewsIngestionService:
         seen_links: set[str] = set()
         fetch_limit = min(limit or self.max_articles, self.max_articles)
         for provider in self.providers:
+            if not getattr(provider, "supports_topic", True):
+                continue
             try:
                 articles = provider.fetch_topic(topic, fetch_limit)
             except Exception as exc:  # noqa: BLE001

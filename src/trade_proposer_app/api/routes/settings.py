@@ -64,6 +64,25 @@ async def set_summary_settings(
     return {"settings": repository.get_summary_settings()}
 
 
+@router.post("/news")
+async def set_news_settings(
+    macro_article_limit: str = Form(default="12"),
+    industry_article_limit: str = Form(default="12"),
+    ticker_article_limit: str = Form(default="12"),
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    repository = SettingsRepository(session)
+    settings_map = repository.get_setting_map()
+    repository.set_settings(
+        {
+            "news_macro_article_limit": macro_article_limit.strip() or settings_map.get("news_macro_article_limit", "12"),
+            "news_industry_article_limit": industry_article_limit.strip() or settings_map.get("news_industry_article_limit", "12"),
+            "news_ticker_article_limit": ticker_article_limit.strip() or settings_map.get("news_ticker_article_limit", "12"),
+        }
+    )
+    return {"status": "success"}
+
+
 @router.post("/social")
 async def set_social_settings(
     sentiment_enabled: str = Form(default="false"),

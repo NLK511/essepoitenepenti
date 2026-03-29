@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime, timezone
+from typing import Any
 from unittest.mock import patch
 
 from sqlalchemy import create_engine, update
@@ -89,40 +90,39 @@ class StubMacroSupportRefreshService:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
-    def refresh(self, *, job_id: int | None = None, run_id: int | None = None) -> dict[str, object]:
-        return {
-            "snapshot": type("Snapshot", (), {"id": 11, "subject_key": "global_macro", "subject_label": "Global Macro"})(),
-            "summary": {
-                "scope": "macro",
+    def refresh(self, *, job_id: int | None = None, run_id: int | None = None) -> Any:
+        return type(
+            "Snapshot",
+            (),
+            {
+                "id": 11,
                 "subject_key": "global_macro",
                 "subject_label": "Global Macro",
                 "score": 0.1,
                 "label": "NEUTRAL",
-                "expires_at": "2026-03-22T06:00:00+00:00",
+                "computed_at": datetime(2026, 3, 22, 6, 0, 0, tzinfo=timezone.utc),
             },
-        }
+        )()
 
 
 class StubIndustrySupportRefreshService:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
-    def refresh_all(self, *, job_id: int | None = None, run_id: int | None = None) -> dict[str, object]:
-        return {
-            "snapshots": [type("Snapshot", (), {"id": 21, "subject_key": "consumer_electronics", "subject_label": "Consumer Electronics"})()],
-            "summary": {
-                "scope": "industry",
-                "snapshot_count": 1,
-                "industries": [
-                    {
-                        "subject_key": "consumer_electronics",
-                        "subject_label": "Consumer Electronics",
-                        "score": 0.12,
-                        "label": "POSITIVE",
-                    }
-                ],
-            },
-        }
+    def refresh_all(self, *, job_id: int | None = None, run_id: int | None = None) -> list[Any]:
+        return [
+            type(
+                "Snapshot",
+                (),
+                {
+                    "id": 21,
+                    "subject_key": "consumer_electronics",
+                    "subject_label": "Consumer Electronics",
+                    "score": 0.12,
+                    "label": "POSITIVE",
+                },
+            )()
+        ]
 
 
 class WorkerSchedulerTests(unittest.TestCase):

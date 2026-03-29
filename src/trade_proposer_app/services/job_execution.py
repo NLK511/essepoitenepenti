@@ -238,9 +238,16 @@ class JobExecutionService:
             raise RunExecutionFailed(exc, timing) from exc
 
         persistence_started = perf_counter()
-        summary = dict(result.get("summary", {}))
-        snapshot = result.get("snapshot")
+        snapshot = result
         context_snapshot = None
+        summary = {
+            "scope": "macro",
+            "subject_key": getattr(snapshot, "subject_key", None),
+            "subject_label": getattr(snapshot, "subject_label", None),
+            "score": getattr(snapshot, "score", 0.0),
+            "label": getattr(snapshot, "label", "NEUTRAL"),
+            "computed_at": (snapshot.computed_at.isoformat() if snapshot and snapshot.computed_at else None),
+        }
         if snapshot is not None and self.macro_context is not None:
             context_snapshot = self.macro_context.create_from_support_snapshot(
                 snapshot,
@@ -285,8 +292,20 @@ class JobExecutionService:
             raise RunExecutionFailed(exc, timing) from exc
 
         persistence_started = perf_counter()
-        summary = dict(result.get("summary", {}))
-        snapshots = result.get("snapshots") or []
+        snapshots = result or []
+        summary = {
+            "scope": "industry",
+            "snapshot_count": len(snapshots),
+            "industries": [
+                {
+                    "subject_key": getattr(s, "subject_key", None),
+                    "subject_label": getattr(s, "subject_label", None),
+                    "score": getattr(s, "score", 0.0),
+                    "label": getattr(s, "label", "NEUTRAL"),
+                }
+                for s in snapshots
+            ],
+        }
         context_snapshots = []
         if self.industry_context is not None:
             for snapshot in snapshots:

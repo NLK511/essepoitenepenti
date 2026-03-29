@@ -25,8 +25,10 @@ from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchest
 def create_proposal_service(session: Session) -> ProposalService:
     """Create the app-native proposal service with configured news and social ingestion."""
     repository = SettingsRepository(session)
+    settings_map = repository.get_setting_map()
     credentials = repository.get_provider_credential_map()
-    news_service = NewsIngestionService.from_provider_credentials(credentials)
+    ticker_limit = int(settings_map.get("news_ticker_article_limit", "12"))
+    news_service = NewsIngestionService.from_provider_credentials(credentials, max_articles=ticker_limit)
     social_service = SocialIngestionService.from_settings(repository.get_social_settings())
     signal_service = SignalIngestionService(social_service=social_service)
     summary_service = SummaryService(
@@ -79,8 +81,10 @@ def create_watchlist_orchestration_service(
 
 def create_macro_support_service(session: Session) -> MacroSupportRefreshService:
     repository = SettingsRepository(session)
+    settings_map = repository.get_setting_map()
     credentials = repository.get_provider_credential_map()
-    news_service = NewsIngestionService.from_provider_credentials(credentials)
+    macro_limit = int(settings_map.get("news_macro_article_limit", "12"))
+    news_service = NewsIngestionService.from_provider_credentials(credentials, max_articles=macro_limit)
     social_service = SocialIngestionService.from_settings(repository.get_social_settings())
     snapshot_repository = SupportSnapshotRepository(session)
     return MacroSupportRefreshService(snapshot_repository, social_service=social_service, news_service=news_service)
@@ -88,8 +92,10 @@ def create_macro_support_service(session: Session) -> MacroSupportRefreshService
 
 def create_macro_context_service(session: Session) -> MacroContextService:
     repository = SettingsRepository(session)
+    settings_map = repository.get_setting_map()
     credentials = repository.get_provider_credential_map()
-    news_service = NewsIngestionService.from_provider_credentials(credentials)
+    macro_limit = int(settings_map.get("news_macro_article_limit", "12"))
+    news_service = NewsIngestionService.from_provider_credentials(credentials, max_articles=macro_limit)
     summary_service = SummaryService(
         summary_settings=repository.get_summary_settings(),
         provider_credentials=credentials,
@@ -111,8 +117,10 @@ def create_industry_support_service(session: Session) -> IndustrySupportRefreshS
 
 def create_industry_context_service(session: Session) -> IndustryContextService:
     repository = SettingsRepository(session)
+    settings_map = repository.get_setting_map()
     credentials = repository.get_provider_credential_map()
-    news_service = NewsIngestionService.from_provider_credentials(credentials)
+    industry_limit = int(settings_map.get("news_industry_article_limit", "12"))
+    news_service = NewsIngestionService.from_provider_credentials(credentials, max_articles=industry_limit)
     summary_service = SummaryService(
         summary_settings=repository.get_summary_settings(),
         provider_credentials=credentials,

@@ -128,6 +128,27 @@ export function SettingsPage() {
     }
   }
 
+  async function saveNewsSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    try {
+      setSaving("news");
+      setError(null);
+      setNotice(null);
+      await postForm<{ settings: Record<string, string> }>("/api/settings/news", {
+        macro_article_limit: String(formData.get("macro_article_limit") ?? "12"),
+        industry_article_limit: String(formData.get("industry_article_limit") ?? "12"),
+        ticker_article_limit: String(formData.get("ticker_article_limit") ?? "12"),
+      });
+      setNotice("News settings saved");
+      await loadData();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save news settings");
+    } finally {
+      setSaving(null);
+    }
+  }
+
   async function saveSocialSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -298,6 +319,19 @@ export function SettingsPage() {
                   />
                 </label>
                 <button className="button" type="submit" disabled={saving === "summary"}>{saving === "summary" ? "Saving…" : "Save summary settings"}</button>
+              </form>
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="News providers" title="News limits" subtitle="Configure maximum number of articles fetched per context level." />
+              <form className="stack-form" onSubmit={saveNewsSettings}>
+                <div className="form-grid">
+                  <label className="form-field"><span>Macro limit</span><input name="macro_article_limit" defaultValue={settingMap.news_macro_article_limit ?? "12"} /></label>
+                  <label className="form-field"><span>Industry limit</span><input name="industry_article_limit" defaultValue={settingMap.news_industry_article_limit ?? "12"} /></label>
+                  <label className="form-field"><span>Ticker limit</span><input name="ticker_article_limit" defaultValue={settingMap.news_ticker_article_limit ?? "12"} /></label>
+                </div>
+                <div className="helper-text">Set how many articles are aggregated into the news bundle for macro, industry, and ticker analysis. Higher values provide more context to the LLM but cost more tokens and take longer.</div>
+                <button className="button" type="submit" disabled={saving === "news"}>{saving === "news" ? "Saving…" : "Save news settings"}</button>
               </form>
             </Card>
 
