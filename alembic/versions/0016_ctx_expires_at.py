@@ -1,6 +1,6 @@
 """add expires_at to context snapshots
 
-Revision ID: 0016_add_expires_at_to_context_snapshots
+Revision ID: 0016_ctx_expires_at
 Revises: a71d15669f3f
 Create Date: 2026-03-29 00:00:00
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0016_add_expires_at_to_context_snapshots"
+revision = "0016_ctx_expires_at"
 down_revision = "a71d15669f3f"
 branch_labels = None
 depends_on = None
