@@ -6,6 +6,7 @@ from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import AppPreflightReport, PreflightCheck
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.support_snapshots import SupportSnapshotRepository
+from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.preflight import AppPreflightService
 
@@ -27,7 +28,19 @@ def _augment_report_with_snapshot_checks(report: AppPreflightReport, session: Se
     latest_industry = next(iter(repository.list_recent_snapshots(scope="industry", limit=1)), None)
     latest_macro_context = context_repository.get_latest_macro_context_snapshot()
     latest_industry_context = next(iter(context_repository.list_industry_context_snapshots(limit=1)), None)
+    runs_repository = RunRepository(session)
+    active_workers = runs_repository.list_active_workers(stale_seconds=settings.worker_heartbeat_interval_seconds * 2)
     extra_checks: list[PreflightCheck] = []
+
+    worker_status = "ok" if active_workers else "warning"
+    extra_checks.append(
+        PreflightCheck(
+            name="worker:heartbeat",
+            status=worker_status,
+            message=f"{len(active_workers)} workers active" if active_workers else "No active workers detected",
+            details=[f"worker_id={w.worker_id}, hostname={w.hostname}, pid={w.pid}" for w in active_workers]
+        )
+    )
 
     for name, label, snapshot in (
         ("support_snapshot:macro", "macro support", latest_macro),
@@ -111,6 +124,11 @@ async def health(session: Session = Depends(get_db_session)) -> dict[str, object
         "context_snapshots": {
             "macro": context_checks.get("context_snapshot:macro").model_dump() if context_checks.get("context_snapshot:macro") else None,
             "industry": context_checks.get("context_snapshot:industry").model_dump() if context_checks.get("context_snapshot:industry") else None,
+        },
+        "workers": {
+            "status": next((c.status for c in report.checks if c.name == "worker:heartbeat"), "unknown"),
+            "count": len(next((c.details or [] for c in report.checks if c.name == "worker:heartbeat"), [])),
+            "details": next((c.details or [] for c in report.checks if c.name == "worker:heartbeat"), []),
         },
     }
 
