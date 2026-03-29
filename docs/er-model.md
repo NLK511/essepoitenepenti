@@ -12,6 +12,8 @@ Notes:
 
 ## Mermaid ER diagram
 
+This diagram intentionally uses plain Mermaid ER syntax with unquoted entity identifiers so it stays compatible with the in-app renderer.
+
 ```mermaid
 erDiagram
     WATCHLISTS {

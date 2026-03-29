@@ -346,26 +346,50 @@ function MermaidDiagram(props: { chart: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    const mermaidModule = mermaid as typeof mermaid & { parseError?: ((error: unknown) => void) | undefined };
+    const previousParseError = mermaidModule.parseError;
 
     async function renderDiagram() {
       try {
-        mermaid.initialize({ startOnLoad: false, securityLevel: "loose", theme: "default" });
-        const rendered = await mermaid.render(diagramId, normalizedChart);
-        if (!cancelled) {
-          setSvg(rendered.svg);
-          setError(null);
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "strict",
+          theme: "default",
+          flowchart: { htmlLabels: false },
+          suppressErrors: true,
+        });
+        mermaidModule.parseError = () => undefined;
+
+        const parsed = await mermaid.parse(normalizedChart, { suppressErrors: true });
+        if (!parsed) {
+          throw new Error("Mermaid diagram syntax could not be parsed");
         }
+
+        const rendered = await mermaid.render(diagramId, normalizedChart);
+        if (cancelled) {
+          return;
+        }
+
+        if (rendered.svg.includes("Syntax error in text")) {
+          throw new Error("Mermaid diagram syntax error");
+        }
+
+        setSvg(rendered.svg);
+        setError(null);
       } catch (renderError) {
         if (!cancelled) {
           setSvg(null);
           setError(renderError instanceof Error ? renderError.message : "Failed to render Mermaid diagram");
         }
+      } finally {
+        mermaidModule.parseError = previousParseError;
       }
     }
 
     void renderDiagram();
     return () => {
       cancelled = true;
+      mermaidModule.parseError = previousParseError;
     };
   }, [diagramId, normalizedChart]);
 

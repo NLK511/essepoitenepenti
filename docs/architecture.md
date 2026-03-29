@@ -35,49 +35,49 @@ This only works if it keeps three things true:
 
 ```mermaid
 flowchart LR
-    User[Operator / Trader]
+    User["Operator / Trader"]
 
-    subgraph Frontend[Frontend]
-        SPA[React + Vite SPA\nPages: Dashboard, Jobs, Watchlists, Debugger, Settings, Docs, Context]
-        DocsUI[In-app docs browser\nfull-text search over app docs]
+    subgraph Frontend["Frontend"]
+        SPA["React + Vite SPA\nPages: Dashboard, Jobs, Watchlists, Debugger, Settings, Docs, Context"]
+        DocsUI["In-app docs browser\nfull-text search over app docs"]
     end
 
-    subgraph Backend[Backend API / Web]
-        FastAPI[FastAPI app\n/api routes + SPA entry serving]
-        APIRoutes[API routes\ndashboard, jobs, runs, watchlists, docs, health, context, support snapshots]
-        WebEntry[SPA entry / built asset serving]
+    subgraph Backend["Backend API / Web"]
+        FastAPI["FastAPI app\n/api routes + SPA entry serving"]
+        APIRoutes["API routes\ndashboard, jobs, runs, watchlists, docs, health, context, support snapshots"]
+        WebEntry["SPA entry / built asset serving"]
     end
 
-    subgraph Core[Backend core modules]
-        Domain[domain\ntyped models and enums]
-        Repositories[repositories\nDB translation and queries]
-        Services[services\njob execution, proposals, preflight, scheduler, support refresh]
-        Workers[worker\nqueued run processor]
-        Scheduler[scheduler\nenqueue pass for scheduled jobs]
+    subgraph Core["Backend core modules"]
+        Domain["domain\ntyped models and enums"]
+        Repositories["repositories\nDB translation and queries"]
+        Services["services\njob execution, proposals, preflight, scheduler, support refresh"]
+        Workers["worker\nqueued run processor"]
+        Scheduler["scheduler\nenqueue pass for scheduled jobs"]
     end
 
-    subgraph Storage[Persistence]
-        DB[(SQLite local dev\nPostgres target)]
-        Snapshots[(shared support snapshots\n+ context snapshots)]
+    subgraph Storage["Persistence"]
+        DB[("SQLite local dev\nPostgres target")]
+        Snapshots[("shared support snapshots\n+ context snapshots")]
     end
 
-    subgraph Pipeline[App-native analysis pipeline]
-        Orchestration[WatchlistOrchestrationService\ncheap scan -> shortlist -> deep analysis]
-        DeepAnalysis[TickerDeepAnalysisService\nnative ticker analysis + transmission]
-        ProposalService[ProposalService\nshared helper engine for features/news/context]
-        SnapshotResolver[SupportSnapshotResolver\nloads latest macro + industry snapshots]
-        NewsIngestionService[NewsIngestionService\nfetches news + supporting signal inputs]
-        FeatureEngine[Feature engineering &\nnormalization]
-        Weights[weights.json\ninternal scoring weights]
-        RefreshServices[MacroSupportRefreshService +\nIndustrySupportRefreshService]
+    subgraph Pipeline["App-native analysis pipeline"]
+        Orchestration["WatchlistOrchestrationService\ncheap scan to shortlist to deep analysis"]
+        DeepAnalysis["TickerDeepAnalysisService\nnative ticker analysis + transmission"]
+        ProposalService["ProposalService\nshared helper engine for features/news/context"]
+        SnapshotResolver["SupportSnapshotResolver\nloads latest macro + industry snapshots"]
+        NewsIngestionService["NewsIngestionService\nfetches news + supporting signal inputs"]
+        FeatureEngine["Feature engineering &\nnormalization"]
+        Weights["weights.json\ninternal scoring weights"]
+        RefreshServices["MacroSupportRefreshService +\nIndustrySupportRefreshService"]
     end
 
-    subgraph External[External services]
-        GoogleNews[Google News RSS]
-        YahooFinance[Yahoo Finance]
-        Finnhub[Finnhub]
-        NewsAPI[NewsAPI (disabled)]
-        OptionalLLM[OpenAI / Pi CLI]
+    subgraph External["External services"]
+        GoogleNews["Google News RSS"]
+        YahooFinance["Yahoo Finance"]
+        Finnhub["Finnhub"]
+        NewsAPI["NewsAPI (disabled)"]
+        OptionalLLM["OpenAI / Pi CLI"]
     end
 
     User --> SPA
