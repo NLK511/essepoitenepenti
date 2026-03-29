@@ -260,9 +260,17 @@ export function ContextSnapshotDetailPage() {
                   const recencyLabel = typeof (row.recency_bucket_detail as { label?: unknown } | undefined)?.label === "string"
                     ? (row.recency_bucket_detail as { label: string }).label
                     : eventLabel(row.recency_bucket);
+                  const eventTitle = typeof row.title === "string" && row.title.trim()
+                    ? row.title.trim()
+                    : typeof row.label === "string" && row.label.trim()
+                      ? row.label.trim()
+                      : eventLabel(row.key) || `Macro event ${index + 1}`;
+                  const eventKeyLabel = eventLabel(row.key);
                   return (
-                    <li key={`${index}-${eventLabel(row.key)}`} className="list-item">
-                      <div className="cluster">
+                    <li key={`${index}-${eventKeyLabel}`} className="list-item">
+                      <div className="top-gap-small"><strong>{eventTitle}</strong></div>
+                      {eventKeyLabel && eventKeyLabel !== eventTitle ? <div className="helper-text">Key: {eventKeyLabel}</div> : null}
+                      <div className="cluster top-gap-small">
                         <Badge>{eventLabel(row.label)}</Badge>
                         <Badge>{persistenceLabel}</Badge>
                         <Badge>{sourcePriorityLabel}</Badge>
