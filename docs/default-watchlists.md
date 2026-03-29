@@ -77,6 +77,7 @@ Group intent:
 ## Scheduling rationale
 
 The seeded schedules are staggered by region and by macro-industry so they do not overlap.
+The default deployment also adds a small support-refresh trio: two macro runs per day in the quiet windows between regional batches, plus one industry refresh in the midday gap.
 
 Regional schedule blocks:
 - **Asia-Pacific:** `00:00` to `02:00` UTC
@@ -118,11 +119,20 @@ Why the order inside a region is not arbitrary:
 | `US-Cons` | United States | Cons | `14:30` | after leadership rotation shows whether staples / media are favored |
 | `US-Cyc` | United States | Cyc | `15:00` | later read for energy, transports, and macro cyclicals |
 
+Support-refresh jobs:
+
+| Job | Scope | UTC schedule | Rationale summary |
+|---|---|---:|---|
+| `Auto: Macro Support Refresh AM` | Macro | `06:00` | before Europe opens, when the macro read can refresh without colliding with seeded watchlist jobs |
+| `Auto: Macro Support Refresh PM` | Macro | `18:00` | after the U.S. block, when the full-session macro read can complete without overlapping other jobs |
+| `Auto: Industry Support Refresh` | Industry | `10:30` | between Europe and U.S. batches, when industry context can refresh in a quiet window |
+
 ## Coverage summary
 
 The default script seeds:
 - **15 watchlists**
-- **15 scheduled jobs**
+- **18 scheduled jobs**
+  - 15 proposal-generation jobs, plus 2 macro refresh jobs and 1 industry refresh job
 - **300 unique equities total**
 
 Regional split:
@@ -151,3 +161,4 @@ If the default watchlists are changed in the future:
 - update `scripts/deploy_watchlists.py`
 - keep the total-universe and scheduling rationale in sync here
 - preserve compact naming and non-overlapping schedule discipline unless there is a strong operational reason not to
+- keep the support-refresh windows in the midday / off-peak gaps so they do not collide with the seeded equity batches

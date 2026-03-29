@@ -5,6 +5,7 @@ Design goals for these defaults:
 - grouped by compact continent + macro-industry names
 - scheduled in region-appropriate windows that are interesting for analysis
 - fully staggered to avoid overlapping runs and reduce API quota spikes
+- include a small set of daily macro and industry refresh jobs in the quiet windows between regional equity batches
 """
 from __future__ import annotations
 
@@ -222,6 +223,27 @@ WATCHLIST_SPECS = [
     },
 ]
 
+SUPPORT_REFRESH_JOB_SPECS = [
+    {
+        "name": "Auto: Macro Support Refresh AM",
+        "job_type": JobType.MACRO_CONTEXT_REFRESH,
+        "cron": "00 06 * * MON-FRI",
+        "schedule_rationale": "Runs before the Europe block so the morning macro read is fresh without colliding with seeded watchlist jobs.",
+    },
+    {
+        "name": "Auto: Macro Support Refresh PM",
+        "job_type": JobType.MACRO_CONTEXT_REFRESH,
+        "cron": "00 18 * * MON-FRI",
+        "schedule_rationale": "Runs after the U.S. block so the evening macro read captures the full session while leaving the watchlist windows clear.",
+    },
+    {
+        "name": "Auto: Industry Support Refresh",
+        "job_type": JobType.INDUSTRY_CONTEXT_REFRESH,
+        "cron": "30 10 * * MON-FRI",
+        "schedule_rationale": "Placed in the gap between Europe and U.S. batches so industry context refreshes stay out of the way of the seeded equity scans.",
+    },
+]
+
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
@@ -237,7 +259,24 @@ def main() -> None:
             normalized = _normalize_tickers(spec["tickers"])
             watchlist_record = _ensure_watchlist(session, watchlist_repo, spec["name"], normalized)
             job_name = f"Auto: {spec['name']}"
-            _ensure_job(session, job_repo, watchlist_record, job_name, spec["cron"])
+            _ensure_job(
+                session,
+                job_repo,
+                watchlist_record,
+                job_name,
+                spec["cron"],
+                job_type=JobType.PROPOSAL_GENERATION,
+            )
+
+        for spec in SUPPORT_REFRESH_JOB_SPECS:
+            _ensure_job(
+                session,
+                job_repo,
+                None,
+                spec["name"],
+                spec["cron"],
+                job_type=spec["job_type"],
+            )
 
     logging.info("Deployment complete")
 
@@ -302,11 +341,13 @@ def _ensure_watchlist(
 def _ensure_job(
     session,
     repo: JobRepository,
-    watchlist: WatchlistRecord,
+    watchlist: WatchlistRecord | None,
     job_name: str,
     cron: str,
+    job_type: JobType,
 ) -> None:
     record = session.scalars(select(JobRecord).where(JobRecord.name == job_name)).first()
+    watchlist_id = watchlist.id if watchlist is not None else None
     if record:
         repo.update(
             job_id=record.id,
@@ -314,18 +355,20 @@ def _ensure_job(
             tickers=[],
             schedule=cron,
             enabled=True,
-            watchlist_id=watchlist.id,
+            watchlist_id=watchlist_id,
+            job_type=job_type,
         )
-        logging.info("Updated job '%s'", job_name)
+        logging.info("Updated job '%s' (%s)", job_name, job_type.value)
     else:
         repo.create(
             name=job_name,
             tickers=[],
             schedule=cron,
             enabled=True,
-            watchlist_id=watchlist.id,
+            watchlist_id=watchlist_id,
+            job_type=job_type,
         )
-        logging.info("Created job '%s'", job_name)
+        logging.info("Created job '%s' (%s)", job_name, job_type.value)
 
 
 def _find_watchlist_record(session, name: str) -> WatchlistRecord | None:

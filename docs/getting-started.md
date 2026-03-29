@@ -223,7 +223,8 @@ If you want the repo's curated default watchlist pack, run:
 
 This seeds:
 - 15 default watchlists
-- 15 matching scheduled `Auto: ...` jobs
+- 18 matching scheduled `Auto: ...` jobs
+  - 15 proposal-generation jobs, plus 2 macro refresh jobs and 1 industry refresh job
 - 300 total equities split across U.S., Europe, and Asia-Pacific
 - compact continent-plus-macro-industry buckets such as `US-Tech`, `EU-Fin`, and `APAC-Cyc`
 
