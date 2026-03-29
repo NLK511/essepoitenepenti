@@ -4927,5 +4927,2566 @@
       "strength": "medium",
       "note": "mining investment can support heavy equipment demand"
     }
-  ]
+  ],
+  "0005.HK": {
+    "company_name": "0005.HK",
+    "aliases": [
+      "0005.HK"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "HK",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "0005.HK",
+      "$0005.HK"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "0700.HK": {
+    "company_name": "0700.HK",
+    "aliases": [
+      "0700.HK"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "HK",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "0700.HK",
+      "$0700.HK"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "2914.T": {
+    "company_name": "2914.T",
+    "aliases": [
+      "2914.T"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "Global",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "2914.T",
+      "$2914.T"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "3690.HK": {
+    "company_name": "3690.HK",
+    "aliases": [
+      "3690.HK"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "HK",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "3690.HK",
+      "$3690.HK"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "3888.HK": {
+    "company_name": "3888.HK",
+    "aliases": [
+      "3888.HK"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "HK",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "3888.HK",
+      "$3888.HK"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "6758.T": {
+    "company_name": "6758.T",
+    "aliases": [
+      "6758.T"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "Global",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "6758.T",
+      "$6758.T"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "7203.T": {
+    "company_name": "7203.T",
+    "aliases": [
+      "7203.T"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "Global",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "7203.T",
+      "$7203.T"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "8035.T": {
+    "company_name": "8035.T",
+    "aliases": [
+      "8035.T"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "Global",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "8035.T",
+      "$8035.T"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "9432.T": {
+    "company_name": "9432.T",
+    "aliases": [
+      "9432.T"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "Global",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "9432.T",
+      "$9432.T"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "9984.T": {
+    "company_name": "9984.T",
+    "aliases": [
+      "9984.T"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "Global",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "9984.T",
+      "$9984.T"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "A2M.AX": {
+    "company_name": "A2M.AX",
+    "aliases": [
+      "A2M.AX"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "Global",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "A2M.AX",
+      "$A2M.AX"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "ABBV": {
+    "company_name": "ABBV",
+    "aliases": [
+      "ABBV"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "ABBV",
+      "$ABBV"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "ADSK": {
+    "company_name": "ADSK",
+    "aliases": [
+      "ADSK"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "ADSK",
+      "$ADSK"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "AIR": {
+    "company_name": "AIR",
+    "aliases": [
+      "AIR"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "AIR",
+      "$AIR"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "AMAT": {
+    "company_name": "AMAT",
+    "aliases": [
+      "AMAT"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "AMAT",
+      "$AMAT"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "AMGN": {
+    "company_name": "AMGN",
+    "aliases": [
+      "AMGN"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "AMGN",
+      "$AMGN"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "BASFY": {
+    "company_name": "BASFY",
+    "aliases": [
+      "BASFY"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "BASFY",
+      "$BASFY"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "BHP.AX": {
+    "company_name": "BHP.AX",
+    "aliases": [
+      "BHP.AX"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "Global",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "BHP.AX",
+      "$BHP.AX"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "BKR": {
+    "company_name": "BKR",
+    "aliases": [
+      "BKR"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "BKR",
+      "$BKR"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "BMY": {
+    "company_name": "BMY",
+    "aliases": [
+      "BMY"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "BMY",
+      "$BMY"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "BP": {
+    "company_name": "BP",
+    "aliases": [
+      "BP"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "BP",
+      "$BP"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "CDNS": {
+    "company_name": "CDNS",
+    "aliases": [
+      "CDNS"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "CDNS",
+      "$CDNS"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "CHK": {
+    "company_name": "CHK",
+    "aliases": [
+      "CHK"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "CHK",
+      "$CHK"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "COP": {
+    "company_name": "COP",
+    "aliases": [
+      "COP"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "COP",
+      "$COP"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "CRWD": {
+    "company_name": "CRWD",
+    "aliases": [
+      "CRWD"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "CRWD",
+      "$CRWD"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "CSL.AX": {
+    "company_name": "CSL.AX",
+    "aliases": [
+      "CSL.AX"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "Global",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "CSL.AX",
+      "$CSL.AX"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "DAI": {
+    "company_name": "DAI",
+    "aliases": [
+      "DAI"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "DAI",
+      "$DAI"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "ENGIY": {
+    "company_name": "ENGIY",
+    "aliases": [
+      "ENGIY"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "ENGIY",
+      "$ENGIY"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "EQT": {
+    "company_name": "EQT",
+    "aliases": [
+      "EQT"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "EQT",
+      "$EQT"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "FTNT": {
+    "company_name": "FTNT",
+    "aliases": [
+      "FTNT"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "FTNT",
+      "$FTNT"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "GILD": {
+    "company_name": "GILD",
+    "aliases": [
+      "GILD"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "GILD",
+      "$GILD"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "GLD": {
+    "company_name": "GLD Commodity ETF",
+    "aliases": [
+      "GLD"
+    ],
+    "sector": "Commodities",
+    "industry": "Resource ETF",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "GLD",
+      "$GLD"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "GOOG": {
+    "company_name": "GOOG",
+    "aliases": [
+      "GOOG"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "GOOG",
+      "$GOOG"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "HAL": {
+    "company_name": "HAL",
+    "aliases": [
+      "HAL"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "HAL",
+      "$HAL"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "HCA": {
+    "company_name": "HCA",
+    "aliases": [
+      "HCA"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "HCA",
+      "$HCA"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "IEF": {
+    "company_name": "IEF Treasury ETF",
+    "aliases": [
+      "IEF"
+    ],
+    "sector": "Fixed Income",
+    "industry": "Treasuries",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "IEF",
+      "$IEF"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "ILMN": {
+    "company_name": "ILMN",
+    "aliases": [
+      "ILMN"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "ILMN",
+      "$ILMN"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "ING": {
+    "company_name": "ING",
+    "aliases": [
+      "ING"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "ING",
+      "$ING"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "IWM": {
+    "company_name": "IWM ETF",
+    "aliases": [
+      "IWM"
+    ],
+    "sector": "Index",
+    "industry": "Broad Market",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mega_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "IWM",
+      "$IWM"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [
+      "index",
+      "liquid"
+    ],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "JNJ": {
+    "company_name": "JNJ",
+    "aliases": [
+      "JNJ"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "JNJ",
+      "$JNJ"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "KMI": {
+    "company_name": "KMI",
+    "aliases": [
+      "KMI"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "KMI",
+      "$KMI"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "LRCX": {
+    "company_name": "LRCX",
+    "aliases": [
+      "LRCX"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "LRCX",
+      "$LRCX"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "LVMUY": {
+    "company_name": "LVMUY",
+    "aliases": [
+      "LVMUY"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "LVMUY",
+      "$LVMUY"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "MDB": {
+    "company_name": "MDB",
+    "aliases": [
+      "MDB"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "MDB",
+      "$MDB"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "MRNA": {
+    "company_name": "MRNA",
+    "aliases": [
+      "MRNA"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "MRNA",
+      "$MRNA"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "MTTR": {
+    "company_name": "MTTR",
+    "aliases": [
+      "MTTR"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "MTTR",
+      "$MTTR"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "NBL": {
+    "company_name": "NBL",
+    "aliases": [
+      "NBL"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "NBL",
+      "$NBL"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "NOV": {
+    "company_name": "NOV",
+    "aliases": [
+      "NOV"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "NOV",
+      "$NOV"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "NOVN": {
+    "company_name": "NOVN",
+    "aliases": [
+      "NOVN"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "NOVN",
+      "$NOVN"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "NOW": {
+    "company_name": "NOW",
+    "aliases": [
+      "NOW"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "NOW",
+      "$NOW"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "OKTA": {
+    "company_name": "OKTA",
+    "aliases": [
+      "OKTA"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "OKTA",
+      "$OKTA"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "OR": {
+    "company_name": "OR",
+    "aliases": [
+      "OR"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "OR",
+      "$OR"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "OXY": {
+    "company_name": "OXY",
+    "aliases": [
+      "OXY"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "OXY",
+      "$OXY"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "PANW": {
+    "company_name": "PANW",
+    "aliases": [
+      "PANW"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "PANW",
+      "$PANW"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "PE": {
+    "company_name": "PE",
+    "aliases": [
+      "PE"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "PE",
+      "$PE"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "PLTR": {
+    "company_name": "PLTR",
+    "aliases": [
+      "PLTR"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "PLTR",
+      "$PLTR"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "QQQ": {
+    "company_name": "QQQ ETF",
+    "aliases": [
+      "QQQ"
+    ],
+    "sector": "Index",
+    "industry": "Broad Market",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mega_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "QQQ",
+      "$QQQ"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [
+      "index",
+      "liquid"
+    ],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "REGN": {
+    "company_name": "REGN",
+    "aliases": [
+      "REGN"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "REGN",
+      "$REGN"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "RHM": {
+    "company_name": "RHM",
+    "aliases": [
+      "RHM"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "RHM",
+      "$RHM"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "RIO": {
+    "company_name": "RIO",
+    "aliases": [
+      "RIO"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "RIO",
+      "$RIO"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "RIO.AX": {
+    "company_name": "RIO.AX",
+    "aliases": [
+      "RIO.AX"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "Global",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "RIO.AX",
+      "$RIO.AX"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "SAN": {
+    "company_name": "SAN",
+    "aliases": [
+      "SAN"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "SAN",
+      "$SAN"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "SAPH": {
+    "company_name": "SAPH",
+    "aliases": [
+      "SAPH"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "SAPH",
+      "$SAPH"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "SHOP": {
+    "company_name": "SHOP",
+    "aliases": [
+      "SHOP"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "SHOP",
+      "$SHOP"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "SIEGY": {
+    "company_name": "SIEGY",
+    "aliases": [
+      "SIEGY"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "SIEGY",
+      "$SIEGY"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "SLB": {
+    "company_name": "SLB",
+    "aliases": [
+      "SLB"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "SLB",
+      "$SLB"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "SNOW": {
+    "company_name": "SNOW",
+    "aliases": [
+      "SNOW"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "SNOW",
+      "$SNOW"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "SNPS": {
+    "company_name": "SNPS",
+    "aliases": [
+      "SNPS"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "SNPS",
+      "$SNPS"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "SPY": {
+    "company_name": "SPY ETF",
+    "aliases": [
+      "SPY"
+    ],
+    "sector": "Index",
+    "industry": "Broad Market",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mega_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "SPY",
+      "$SPY"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [
+      "index",
+      "liquid"
+    ],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "TALO": {
+    "company_name": "TALO",
+    "aliases": [
+      "TALO"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "TALO",
+      "$TALO"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "TDOC": {
+    "company_name": "TDOC",
+    "aliases": [
+      "TDOC"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "TDOC",
+      "$TDOC"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "TEAM": {
+    "company_name": "TEAM",
+    "aliases": [
+      "TEAM"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "TEAM",
+      "$TEAM"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "TIP": {
+    "company_name": "TIP Treasury ETF",
+    "aliases": [
+      "TIP"
+    ],
+    "sector": "Fixed Income",
+    "industry": "Treasuries",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "TIP",
+      "$TIP"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "TLT": {
+    "company_name": "TLT Treasury ETF",
+    "aliases": [
+      "TLT"
+    ],
+    "sector": "Fixed Income",
+    "industry": "Treasuries",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "TLT",
+      "$TLT"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "UBS": {
+    "company_name": "UBS",
+    "aliases": [
+      "UBS"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "UBS",
+      "$UBS"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "USO": {
+    "company_name": "USO Commodity ETF",
+    "aliases": [
+      "USO"
+    ],
+    "sector": "Commodities",
+    "industry": "Resource ETF",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "USO",
+      "$USO"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "UUP": {
+    "company_name": "UUP",
+    "aliases": [
+      "UUP"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "UUP",
+      "$UUP"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "VLO": {
+    "company_name": "VLO",
+    "aliases": [
+      "VLO"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "VLO",
+      "$VLO"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "VNQ": {
+    "company_name": "VNQ",
+    "aliases": [
+      "VNQ"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "VNQ",
+      "$VNQ"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "VXX": {
+    "company_name": "VXX",
+    "aliases": [
+      "VXX"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "VXX",
+      "$VXX"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "WES.AX": {
+    "company_name": "WES.AX",
+    "aliases": [
+      "WES.AX"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "Global",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "WES.AX",
+      "$WES.AX"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "XLE": {
+    "company_name": "XLE",
+    "aliases": [
+      "XLE"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "XLE",
+      "$XLE"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "XLF": {
+    "company_name": "XLF",
+    "aliases": [
+      "XLF"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "XLF",
+      "$XLF"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "XLI": {
+    "company_name": "XLI",
+    "aliases": [
+      "XLI"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "XLI",
+      "$XLI"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "XLK": {
+    "company_name": "XLK",
+    "aliases": [
+      "XLK"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "XLK",
+      "$XLK"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "XLY": {
+    "company_name": "XLY",
+    "aliases": [
+      "XLY"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "XLY",
+      "$XLY"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "ZS": {
+    "company_name": "ZS",
+    "aliases": [
+      "ZS"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "ZS",
+      "$ZS"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  },
+  "ZTS": {
+    "company_name": "ZTS",
+    "aliases": [
+      "ZTS"
+    ],
+    "sector": "Unknown",
+    "industry": "Unknown",
+    "subindustry": "Unknown",
+    "region": "US",
+    "domicile": "Unknown",
+    "market_cap_bucket": "mid_cap",
+    "themes": [],
+    "macro_sensitivity": [],
+    "industry_keywords": [],
+    "ticker_keywords": [
+      "ZTS",
+      "$ZTS"
+    ],
+    "exclude_keywords": [],
+    "peers": [],
+    "suppliers": [],
+    "customers": [],
+    "exposure_channels": [],
+    "factor_tags": [],
+    "event_vocab": [
+      "earnings",
+      "guidance"
+    ]
+  }
 }
