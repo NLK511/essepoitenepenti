@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from sqlalchemy import select
 
 from trade_proposer_app.db import SessionLocal
+from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.persistence.models import JobRecord, WatchlistRecord
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.repositories.jobs import JobRepository
@@ -226,19 +227,19 @@ WATCHLIST_SPECS = [
 SUPPORT_REFRESH_JOB_SPECS = [
     {
         "name": "Auto: Macro Support Refresh AM",
-        "job_type": JobType.MACRO_CONTEXT_REFRESH,
+        "job_type": "macro_sentiment_refresh",
         "cron": "00 06 * * MON-FRI",
         "schedule_rationale": "Runs before the Europe block so the morning macro read is fresh without colliding with seeded watchlist jobs.",
     },
     {
         "name": "Auto: Macro Support Refresh PM",
-        "job_type": JobType.MACRO_CONTEXT_REFRESH,
+        "job_type": "macro_sentiment_refresh",
         "cron": "00 18 * * MON-FRI",
         "schedule_rationale": "Runs after the U.S. block so the evening macro read captures the full session while leaving the watchlist windows clear.",
     },
     {
         "name": "Auto: Industry Support Refresh",
-        "job_type": JobType.INDUSTRY_CONTEXT_REFRESH,
+        "job_type": "industry_sentiment_refresh",
         "cron": "30 10 * * MON-FRI",
         "schedule_rationale": "Placed in the gap between Europe and U.S. batches so industry context refreshes stay out of the way of the seeded equity scans.",
     },
@@ -275,7 +276,7 @@ def main() -> None:
                 None,
                 spec["name"],
                 spec["cron"],
-                job_type=spec["job_type"],
+                job_type=JobType(spec["job_type"]),
             )
 
     logging.info("Deployment complete")
