@@ -50,6 +50,17 @@ function eventLabel(value: unknown): string {
   return typeof value === "string" && value.trim() ? value : "—";
 }
 
+function contextEventTitle(row: Record<string, unknown>, index: number, fallbackPrefix: string): string {
+  if (typeof row.title === "string" && row.title.trim()) {
+    return row.title.trim();
+  }
+  if (typeof row.label === "string" && row.label.trim()) {
+    return row.label.trim();
+  }
+  const key = eventLabel(row.key);
+  return key !== "—" ? key : `${fallbackPrefix} ${index + 1}`;
+}
+
 function recordList(value: unknown): Array<Record<string, unknown>> {
   return Array.isArray(value)
     ? value.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
@@ -260,16 +271,14 @@ export function ContextSnapshotDetailPage() {
                   const recencyLabel = typeof (row.recency_bucket_detail as { label?: unknown } | undefined)?.label === "string"
                     ? (row.recency_bucket_detail as { label: string }).label
                     : eventLabel(row.recency_bucket);
-                  const eventTitle = typeof row.title === "string" && row.title.trim()
-                    ? row.title.trim()
-                    : typeof row.label === "string" && row.label.trim()
-                      ? row.label.trim()
-                      : eventLabel(row.key) || `Macro event ${index + 1}`;
+                  const eventTitle = contextEventTitle(row, index, isIndustrySnapshot(snapshot) ? "Industry driver" : "Macro event");
                   const eventKeyLabel = eventLabel(row.key);
+                  const eventLabelText = eventLabel(row.label);
                   return (
                     <li key={`${index}-${eventKeyLabel}`} className="list-item">
                       <div className="top-gap-small"><strong>{eventTitle}</strong></div>
-                      {eventKeyLabel && eventKeyLabel !== eventTitle ? <div className="helper-text">Key: {eventKeyLabel}</div> : null}
+                      {eventLabelText !== "—" && eventLabelText !== eventTitle ? <div className="helper-text">Label: {eventLabelText}</div> : null}
+                      {eventKeyLabel !== "—" && eventKeyLabel !== eventTitle && eventKeyLabel !== eventLabelText ? <div className="helper-text">Key: {eventKeyLabel}</div> : null}
                       <div className="cluster top-gap-small">
                         <Badge>{eventLabel(row.label)}</Badge>
                         <Badge>{persistenceLabel}</Badge>

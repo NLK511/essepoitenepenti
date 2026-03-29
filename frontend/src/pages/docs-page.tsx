@@ -320,9 +320,25 @@ function isSpecialLine(line: string): boolean {
   );
 }
 
+function normalizeMermaidChart(chart: string): string {
+  const lines = chart.replace(/\r\n/g, "\n").split("\n");
+  while (lines.length > 0 && lines[0].trim() === "") {
+    lines.shift();
+  }
+  while (lines.length > 0 && lines[lines.length - 1].trim() === "") {
+    lines.pop();
+  }
+  const indents = lines
+    .filter((line) => line.trim().length > 0)
+    .map((line) => line.match(/^\s*/)?.[0].length ?? 0);
+  const commonIndent = indents.length > 0 ? Math.min(...indents) : 0;
+  return lines.map((line) => line.slice(commonIndent)).join("\n");
+}
+
 function MermaidDiagram(props: { chart: string }) {
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const normalizedChart = useMemo(() => normalizeMermaidChart(props.chart), [props.chart]);
   const diagramId = useMemo(() => {
     mermaidDiagramCounter += 1;
     return `mermaid-diagram-${mermaidDiagramCounter}`;
@@ -334,7 +350,7 @@ function MermaidDiagram(props: { chart: string }) {
     async function renderDiagram() {
       try {
         mermaid.initialize({ startOnLoad: false, securityLevel: "loose", theme: "default" });
-        const rendered = await mermaid.render(diagramId, props.chart);
+        const rendered = await mermaid.render(diagramId, normalizedChart);
         if (!cancelled) {
           setSvg(rendered.svg);
           setError(null);
@@ -351,13 +367,13 @@ function MermaidDiagram(props: { chart: string }) {
     return () => {
       cancelled = true;
     };
-  }, [diagramId, props.chart]);
+  }, [diagramId, normalizedChart]);
 
   if (error) {
     return (
       <div className="mermaid-error-block">
         <div className="helper-text">Mermaid diagram could not be rendered.</div>
-        <pre>{props.chart}</pre>
+        <pre>{normalizedChart}</pre>
         <div className="warning-text top-gap-small">{error}</div>
       </div>
     );
