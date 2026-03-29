@@ -5,7 +5,6 @@ from typing import Any
 
 from trade_proposer_app.repositories.support_snapshots import SupportSnapshotRepository
 from trade_proposer_app.services.social import SocialIngestionService
-from trade_proposer_app.services.snapshot_summary import SnapshotSummaryContext, build_snapshot_summary
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 INDUSTRY_TTL_HOURS = 8
@@ -56,7 +55,6 @@ class IndustrySupportRefreshService:
         job_id: int | None = None,
         run_id: int | None = None,
     ) -> tuple[Any, dict[str, Any]]:
-        previous_snapshot = self.repository.get_latest_snapshot("industry", subject_key)
         social_result = (
             self.social_service.analyze_subject(
                 subject_key=subject_key,
@@ -70,42 +68,13 @@ class IndustrySupportRefreshService:
         social_sentiment = social_result.get("sentiment", {})
         social_score = float(social_sentiment.get("score", 0.0) or 0.0)
         social_count = int(social_sentiment.get("item_count", 0) or 0)
+        bundle = social_result.get("bundle")
+
         score = social_score
         label = social_sentiment.get("label") or "NEUTRAL"
-        coverage = {
-            "social_count": social_count,
-            "news_count": 0,
-            "ttl_hours": INDUSTRY_TTL_HOURS,
-            "tracked_tickers": tickers or [],
-            "query_count": len(queries or []),
-        }
-        source_breakdown = {
-            "news": {"score": 0.0, "item_count": 0},
-            "social": {"score": social_score, "item_count": social_count},
-        }
-        drivers: list[str] = []
-        if social_count == 0:
-            drivers.append(f"industry refresh completed without social matches for {subject_label}; snapshot remains neutral")
-        bundle = social_result.get("bundle")
-        diagnostics = {
-            "warnings": social_sentiment.get("coverage_insights", []),
-            "providers": (getattr(bundle, "feeds_used", []) if bundle is not None else []),
-            "query_diagnostics": (getattr(bundle, "query_diagnostics", {}) if bundle is not None else {}),
-            "queries": queries or [subject_label],
-        }
-        summary_text = build_snapshot_summary(
-            SnapshotSummaryContext(
-                scope="industry",
-                subject_label=subject_label,
-                score=score,
-                label=label,
-                drivers=drivers,
-                coverage_insights=list(social_sentiment.get("coverage_insights", [])),
-                previous_snapshot=previous_snapshot,
-            )
-        )
         computed_at = datetime.now(timezone.utc)
         expires_at = computed_at + timedelta(hours=INDUSTRY_TTL_HOURS)
+
         snapshot = self.repository.create_snapshot(
             scope="industry",
             subject_key=subject_key,
@@ -114,15 +83,29 @@ class IndustrySupportRefreshService:
             label=label,
             computed_at=computed_at,
             expires_at=expires_at,
-            coverage=coverage,
-            source_breakdown=source_breakdown,
-            drivers=drivers,
+            coverage={
+                "social_count": social_count,
+                "news_count": 0,
+                "ttl_hours": INDUSTRY_TTL_HOURS,
+                "tracked_tickers": tickers or [],
+                "query_count": len(queries or []),
+            },
+            source_breakdown={
+                "news": {"score": 0.0, "item_count": 0},
+                "social": {"score": social_score, "item_count": social_count},
+            },
+            drivers=[],
             signals={
                 "social_items": social_sentiment.get("items", []),
                 "scope_breakdown": social_sentiment.get("scope_breakdown", {}),
             },
-            diagnostics=diagnostics,
-            summary_text=summary_text,
+            diagnostics={
+                "warnings": social_sentiment.get("coverage_insights", []),
+                "providers": (getattr(bundle, "feeds_used", []) if bundle is not None else []),
+                "query_diagnostics": (getattr(bundle, "query_diagnostics", {}) if bundle is not None else {}),
+                "queries": queries or [subject_label],
+            },
+            summary_text="",
             job_id=job_id,
             run_id=run_id,
         )
@@ -131,8 +114,6 @@ class IndustrySupportRefreshService:
             "subject_label": subject_label,
             "score": score,
             "label": label,
-            "summary_text": summary_text,
-            "previous_snapshot_id": previous_snapshot.id if previous_snapshot is not None else None,
             "expires_at": expires_at.isoformat(),
         }
 
