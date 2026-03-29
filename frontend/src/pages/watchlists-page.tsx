@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 
-import { getJson, postForm } from "../api";
+import { getJson, postForm, deleteJson } from "../api";
 import { Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, Badge, StatCard } from "../components/ui";
 import type { Watchlist, WatchlistEvaluationPolicy } from "../types";
 import { tickerTone } from "../utils";
@@ -56,6 +56,22 @@ export function WatchlistsPage() {
       await loadWatchlists();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Failed to create watchlist");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDelete(watchlistId: number) {
+    if (!window.confirm("Are you sure you want to delete this watchlist? This may fail if it is currently in use by a job.")) {
+      return;
+    }
+    try {
+      setSubmitting(true);
+      setError(null);
+      await deleteJson(`/api/watchlists/${watchlistId}`);
+      await loadWatchlists();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Failed to delete watchlist");
     } finally {
       setSubmitting(false);
     }
@@ -143,7 +159,21 @@ export function WatchlistsPage() {
                         <h3 className="data-card-title">{watchlist.name}</h3>
                         {watchlist.description ? <div className="helper-text">{watchlist.description}</div> : null}
                       </div>
-                      <Badge>{watchlist.tickers.length} ticker(s)</Badge>
+                      <div className="badge-row" style={{ alignItems: "center" }}>
+                        <Badge>{watchlist.tickers.length} ticker(s)</Badge>
+                        {watchlist.id ? (
+                          <button
+                            type="button"
+                            className="button button-small button-danger"
+                            onClick={() => watchlist.id && handleDelete(watchlist.id)}
+                            disabled={submitting}
+                            title="Delete watchlist"
+                            style={{ padding: "2px 8px", fontSize: "0.75rem" }}
+                          >
+                            Delete
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="data-points">
                       <div className="data-point"><span className="data-point-label">region</span><span className="data-point-value">{watchlist.region || "—"}</span></div>

@@ -340,7 +340,7 @@ class ProposalService:
                 "context_regime_tags": context.get("macro_context_regime_tags", []),
                 "context_lifecycle": context.get("macro_context_lifecycle", {}),
                 "context_contradictory_event_labels": context.get("macro_context_contradictory_event_labels", []),
-                "context_events": context.get("macro_context_events", []),
+                "context_events": context.get("macro_context_events") or context.get("macro_context_active_themes") or [],
                 "source_breakdown": context.get("macro_snapshot_source_breakdown", {
                     "news": {"score": context.get("macro_news_sentiment_score", 0.0), "item_count": context.get("macro_news_item_count", 0)},
                     "social": {"score": context.get("macro_social_sentiment_score", 0.0), "item_count": context.get("macro_social_item_count", 0)},
@@ -364,7 +364,7 @@ class ProposalService:
                 "context_regime_tags": context.get("industry_context_regime_tags", []),
                 "context_lifecycle": context.get("industry_context_lifecycle", {}),
                 "context_contradictory_event_labels": context.get("industry_context_contradictory_event_labels", []),
-                "context_events": context.get("industry_context_events", []),
+                "context_events": context.get("industry_context_events") or context.get("industry_context_active_drivers") or [],
                 "industry": context.get("ticker_profile", {}).get("industry", ""),
                 "source_breakdown": context.get("industry_snapshot_source_breakdown", {
                     "news": {"score": context.get("industry_news_sentiment_score", 0.0), "item_count": context.get("industry_news_item_count", 0)},
@@ -1046,6 +1046,7 @@ class ProposalService:
                     "macro_context_saliency_score": float(macro_snapshot.get("context_saliency_score", 0.0) or 0.0),
                     "macro_context_confidence_percent": float(macro_snapshot.get("context_confidence_percent", 0.0) or 0.0),
                     "macro_context_events": macro_snapshot.get("context_active_events", []),
+                    "macro_context_active_themes": macro_snapshot.get("context_active_themes", []),
                     "macro_context_regime_tags": macro_snapshot.get("context_regime_tags", []),
                     "macro_context_lifecycle": macro_snapshot.get("context_lifecycle", {}),
                     "macro_context_contradictory_event_labels": macro_snapshot.get("context_contradictory_event_labels", []),
@@ -1080,6 +1081,7 @@ class ProposalService:
                     "industry_context_saliency_score": float(industry_snapshot.get("context_saliency_score", 0.0) or 0.0),
                     "industry_context_confidence_percent": float(industry_snapshot.get("context_confidence_percent", 0.0) or 0.0),
                     "industry_context_events": industry_snapshot.get("context_active_events", []),
+                    "industry_context_active_drivers": industry_snapshot.get("context_active_drivers", []),
                     "industry_context_regime_tags": industry_snapshot.get("context_regime_tags", []),
                     "industry_context_lifecycle": industry_snapshot.get("context_lifecycle", {}),
                     "industry_context_contradictory_event_labels": industry_snapshot.get("context_contradictory_event_labels", []),

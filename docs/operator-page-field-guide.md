@@ -216,6 +216,7 @@ Visible fields often include:
 - schedule source and cron summary from policy
 - shortlist strategy
 - policy warnings
+- **Actions**: delete the watchlist (if not currently in use by a job)
 
 ### Field meanings
 - **Default horizon**: the base time assumption for plans sourced from the watchlist
