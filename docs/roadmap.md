@@ -31,10 +31,10 @@ Foundations already in place:
 - run claiming is atomic at the row-update level, so two workers should not both flip the same queued run to `running`
 - enqueue paths already avoid obvious duplicate active runs for the same job, and weight optimization has an explicit single-active-run guard
 - run timing, status, error fields, and failure-phase artifact metadata are persisted so failed executions are inspectable after the fact
-- scheduler and worker entry paths now recover obviously stale `running` runs by failing them once they exceed the configured `started_at` timeout, which also unblocks fresh scheduled or manual reruns
+- worker heartbeats and run leases are implemented, ensuring active runs are tied to a specific worker and safely recovered if that worker crashes
+- scheduler and worker entry paths now recover stale `running` runs by failing them once their active lease expires (or via a legacy `started_at` timeout fallback), unblocking fresh scheduled or manual reruns
 
 Still needed:
-- stronger crash recovery than the current coarse started-at timeout; there is still no heartbeat, lease renewal, or safe stale-run requeue path yet
 - clearer recovery semantics when a run fails after partially persisting summary, artifact, or downstream objects
 - stronger coordination guarantees if scheduler or worker concurrency increases beyond the current simple polling/claim model
 
@@ -45,11 +45,12 @@ Foundations already in place:
 - runs persist timing, summary, artifact, status, duration, and error payloads, and the operator UI can inspect them through run detail views
 - health and preflight endpoints already surface dependency checks and degraded state instead of silently masking missing inputs
 - context and recommendation review flows now expose warnings, provenance, and degraded summaries in the main UI
+- worker heartbeats are persisted to the database to provide operational visibility into active background processes
 
 Still needed:
 - structured logs and explicit run correlation across API, worker, and scheduler processes; current daemon logging is still mostly `print(...)`/traceback output
 - clearer production-facing health signals that distinguish app health from refresh freshness and legacy support-snapshot status
-- worker and scheduler heartbeats or equivalent operational visibility
+- exposing worker heartbeat status and active lease counts in the `/api/health` endpoint
 - easier diagnosis of provider failures and degraded states across processes without relying on manual log inspection or per-run drill-down
 
 ## 3. Security and credential lifecycle
