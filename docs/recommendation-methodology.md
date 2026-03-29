@@ -140,15 +140,40 @@ The app persists both:
 - raw values
 - normalized values
 
-## Scoring model
+## Scoring and Confidence Model
 
 `weights.json` defines the relative influence of normalized features and aggregate signals.
 
-At a high level, the scoring model:
-- computes weighted contributions across the normalized feature vector
-- builds aggregate directional context
-- resolves a directional bias (`LONG`, `SHORT`, or `NEUTRAL`)
-- computes a bounded confidence score
+### 1. Directional Bias
+The system resolves a directional bias (`LONG`, `SHORT`, or `NEUTRAL`) based on:
+- **Price vs SMA200**: Primary trend filter.
+- **Momentum**: Short (5d), medium (21d), and long-term (63d) price changes.
+- **Sentiment Alignment**: Combined score from ticker, industry, and macro sentiment.
+
+### 2. Confidence Calculation
+Confidence is a weighted aggregation of several normalized components (0-100%):
+- **Context Confidence (18%)**: Alignment of the trade direction with Macro and Industry sentiment.
+- **Directional Confidence (30%)**: Strength of ticker-specific sentiment and medium-term price momentum.
+- **Catalyst Confidence (14%)**: Intensity of recent news and social volume (item counts and context saliency).
+- **Technical Clarity (20%)**: Price position relative to SMA50/SMA200 and RSI optimization (closeness to optimal 55 RSI for trend follow-through).
+- **Execution Clarity (18%)**: Reward-to-risk environment based on ATR volatility and short-term momentum volatility.
+
+A **Data Quality Cap** (0-100%) is applied based on the number of warnings and feed errors encountered during analysis, potentially capping the final confidence score to prevent over-confidence on degraded inputs.
+
+### 4. Setup Classification
+Every recommendation is categorized into a **Setup Family** to aid in performance analysis and calibration:
+- **Catalyst Follow-through**: High news volume with significant ticker sentiment.
+- **Continuation**: Strong existing momentum and technical alignment.
+- **Breakout/Breakdown**: Short-term volatility expansion from established levels.
+- **Mean Reversion**: Significant RSI extremes (Overbought/Oversold).
+- **Macro Beneficiary/Loser**: Heavy reliance on Macro/Industry context scores rather than ticker-specific signals.
+
+### 5. Transmission Analysis
+The methodology calculates a **Transmission Alignment** score to measure how well the trade idea is "transmitted" from the broader macro environment down to the specific ticker:
+- **Base Alignment**: Initial score based on triple-sentiment alignment (Macro/Industry/Ticker).
+- **Event Relevance**: Strength of specific macro/industry themes (e.g., "AI Demand", "Rate Cuts") mapped to the ticker's business profile.
+- **Freshness Bonus**: Incremental confidence for trades supported by very recent (last 24-48h) context events.
+- **Contradiction Penalty**: Systematic reduction if macro and industry signals are in conflict (e.g., bullish macro but bearish industry).
 
 The app stores intermediate vectors, aggregations, and weights so operators can inspect what influenced the result.
 
@@ -191,8 +216,8 @@ The current limits matter:
 - cheap scan is only a triage layer, not the full trade-quality engine
 - context extraction is still heuristic
 - ticker deep analysis still reuses some older proposal internals
-- the methodology still depends on a transitional support-snapshot-backed resolver layer for shared macro and industry context
-- confidence calibration is implemented and already influences plan construction, but it still needs more resolved evidence over time
+- the methodology still uses a transitional support-snapshot-backed resolver layer for shared macro and industry context, though it now bridges redesign-native events into these records
+- confidence calibration is active and influences plan construction based on historical outcomes
 
 ## See also
 
