@@ -118,6 +118,7 @@ class MacroContextSnapshotRecord(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     computed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="ok", index=True)
     summary_text: Mapped[str] = mapped_column(Text, default="")
     saliency_score: Mapped[float] = mapped_column(Float, default=0.0)
@@ -139,6 +140,7 @@ class IndustryContextSnapshotRecord(Base, TimestampMixin):
     industry_key: Mapped[str] = mapped_column(String(120), index=True)
     industry_label: Mapped[str] = mapped_column(String(120), default="")
     computed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="ok", index=True)
     summary_text: Mapped[str] = mapped_column(Text, default="")
     direction: Mapped[str] = mapped_column(String(32), default="neutral")

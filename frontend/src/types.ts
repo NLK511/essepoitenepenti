@@ -191,6 +191,7 @@ export interface ContextEventRow {
 export interface MacroContextSnapshot {
   id: number | null;
   computed_at: string;
+  expires_at: string | null;
   status: string;
   summary_text: string;
   saliency_score: number;
@@ -210,6 +211,7 @@ export interface IndustryContextSnapshot {
   industry_key: string;
   industry_label: string;
   computed_at: string;
+  expires_at: string | null;
   status: string;
   summary_text: string;
   direction: string;

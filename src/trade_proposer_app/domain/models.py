@@ -269,6 +269,7 @@ class SupportSnapshot(BaseModel):
 class MacroContextSnapshot(BaseModel):
     id: int | None = None
     computed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: datetime | None = None
     status: str = "ok"
     summary_text: str = ""
     saliency_score: float = 0.0
@@ -288,6 +289,7 @@ class IndustryContextSnapshot(BaseModel):
     industry_key: str
     industry_label: str = ""
     computed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: datetime | None = None
     status: str = "ok"
     summary_text: str = ""
     direction: str = "neutral"
@@ -335,6 +337,7 @@ class RecommendationTransmissionSummary(DictLikeModel):
     lane_hint: str | None = None
     ticker_relationship_edges: list[dict[str, object]] = Field(default_factory=list)
     matched_ticker_relationships: list[dict[str, object]] = Field(default_factory=list)
+    matched_ticker_relationship_details: list[dict[str, object]] = Field(default_factory=list)
     transmission_alignment_score: float | None = None
 
 

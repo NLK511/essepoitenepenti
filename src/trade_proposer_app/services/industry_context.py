@@ -179,6 +179,7 @@ class IndustryContextService:
             industry_key=industry_key,
             industry_label=industry_label,
             computed_at=datetime.now(timezone.utc),
+            expires_at=getattr(snapshot, "expires_at", None),
             status="warning" if warnings else "ok",
             summary_text=summary_text,
             direction=self._direction_from_label(str(getattr(snapshot, "label", "NEUTRAL") or "NEUTRAL")),

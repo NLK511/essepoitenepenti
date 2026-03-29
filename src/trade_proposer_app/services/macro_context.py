@@ -215,6 +215,7 @@ class MacroContextService:
 
         context = MacroContextSnapshot(
             computed_at=datetime.now(timezone.utc),
+            expires_at=getattr(snapshot, "expires_at", None),
             status=status,
             summary_text=summary_text,
             saliency_score=saliency_score,

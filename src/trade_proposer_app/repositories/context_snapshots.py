@@ -23,6 +23,7 @@ class ContextSnapshotRepository:
     def create_macro_context_snapshot(self, snapshot: MacroContextSnapshot) -> MacroContextSnapshot:
         record = MacroContextSnapshotRecord(
             computed_at=snapshot.computed_at,
+            expires_at=snapshot.expires_at,
             status=snapshot.status,
             summary_text=snapshot.summary_text,
             saliency_score=snapshot.saliency_score,
@@ -69,6 +70,7 @@ class ContextSnapshotRepository:
             industry_key=snapshot.industry_key,
             industry_label=snapshot.industry_label,
             computed_at=snapshot.computed_at,
+            expires_at=snapshot.expires_at,
             status=snapshot.status,
             summary_text=snapshot.summary_text,
             direction=snapshot.direction,
@@ -190,22 +192,11 @@ class ContextSnapshotRepository:
         label = str(definition.get("label", value)).strip() or value.strip()
         return KeyLabelDetail(key=key, label=label)
 
-    def _with_transmission_bias_detail(self, payload: Any) -> Any:
-        if not isinstance(payload, dict):
-            return payload
-        if payload.get("transmission_bias_detail") is not None:
-            return payload
-        transmission_bias = payload.get("transmission_bias")
-        if not isinstance(transmission_bias, str) or not transmission_bias.strip():
-            return payload
-        enriched = dict(payload)
-        enriched["transmission_bias_detail"] = self._transmission_bias_detail(transmission_bias)
-        return enriched
-
     def _to_macro_model(self, record: MacroContextSnapshotRecord) -> MacroContextSnapshot:
         return MacroContextSnapshot(
             id=record.id,
             computed_at=record.computed_at,
+            expires_at=record.expires_at,
             status=record.status,
             summary_text=record.summary_text,
             saliency_score=record.saliency_score,
@@ -226,6 +217,7 @@ class ContextSnapshotRepository:
             industry_key=record.industry_key,
             industry_label=record.industry_label,
             computed_at=record.computed_at,
+            expires_at=record.expires_at,
             status=record.status,
             summary_text=record.summary_text,
             direction=record.direction,
@@ -247,8 +239,6 @@ class ContextSnapshotRepository:
             horizon = StrategyHorizon(record.horizon)
         except ValueError:
             horizon = StrategyHorizon.ONE_WEEK
-        source_breakdown = self._with_transmission_bias_detail(self._load(record.source_breakdown_json, {}))
-        diagnostics = self._with_transmission_bias_detail(self._load(record.diagnostics_json, {}))
         return TickerSignalSnapshot(
             id=record.id,
             ticker=record.ticker,
@@ -268,8 +258,8 @@ class ContextSnapshotRepository:
             execution_quality_score=record.execution_quality_score,
             warnings=self._load(record.warnings_json, []),
             missing_inputs=self._load(record.missing_inputs_json, []),
-            source_breakdown=source_breakdown,
-            diagnostics=diagnostics,
+            source_breakdown=self._load(record.source_breakdown_json, {}),
+            diagnostics=self._load(record.diagnostics_json, {}),
             job_id=record.job_id,
             run_id=record.run_id,
         )
