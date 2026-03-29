@@ -167,8 +167,10 @@ The app can keep summaries in digest-only mode or route them through:
 The resulting narrative, metadata, and any errors are stored in `analysis_json.summary`.
 
 Supported external news services currently ingested by the app-native pipeline:
-- NewsAPI: https://newsapi.org/
+- Google News RSS: https://news.google.com/
+- Yahoo Finance: https://finance.yahoo.com/
 - Finnhub: https://finnhub.io/
+- NewsAPI: https://newsapi.org/ (disabled by default because the free plan is delayed)
 
 Weight optimization also runs entirely inside the app and stores backup metadata for rollback.
 

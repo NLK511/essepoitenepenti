@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from statistics import pstdev
 from typing import ClassVar, Iterable
-from urllib.parse import quote
+from urllib.parse import urlparse
 
 import httpx
 import yfinance as yf
@@ -21,6 +21,7 @@ SUMMARY_METHOD_NEWS_DIGEST = "news_digest"
 
 NEWS_API_BASE_URL = "https://newsapi.org/v2/everything"
 FINNHUB_NEWS_URL = "https://finnhub.io/api/v1/company-news"
+DISABLED_PROVIDER_KEYS = {"newsapi"}
 
 HIGH_QUALITY_NEWS_DOMAINS = [
     "bloomberg.com", "reuters.com", "wsj.com", "ft.com", "cnbc.com",
@@ -218,6 +219,30 @@ def _cleanup_text(value: str | None) -> str:
     return value.strip()
 
 
+def _first_non_empty(*values: object) -> str:
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _domain_from_url(raw_url: str | None) -> str:
+    if not raw_url:
+        return ""
+    try:
+        hostname = urlparse(raw_url).hostname or ""
+    except ValueError:
+        return ""
+    return hostname.lower().lstrip("www.")
+
+
+def _is_whitelisted_domain(raw_url: str | None) -> bool:
+    hostname = _domain_from_url(raw_url)
+    if not hostname:
+        return False
+    return any(hostname == domain or hostname.endswith(f".{domain}") for domain in HIGH_QUALITY_NEWS_DOMAINS)
+
+
 def _tokenize(text: str | None) -> list[str]:
     if not text:
         return []
@@ -368,26 +393,43 @@ class YahooFinanceProvider(NewsProvider):
         for entry in raw_news:
             if not isinstance(entry, dict):
                 continue
-            
-            # Extract standard yfinance news fields
-            title = _cleanup_text(entry.get("title"))
-            summary = _cleanup_text(entry.get("summary"))
-            publisher = _cleanup_text(entry.get("provider", {}).get("displayName") if isinstance(entry.get("provider"), dict) else None)
-            
-            link_obj = entry.get("clickThroughUrl") or entry.get("canonicalUrl")
+            content = entry.get("content") if isinstance(entry.get("content"), dict) else {}
+
+            title = _cleanup_text(_first_non_empty(entry.get("title"), content.get("title")))
+            summary = _cleanup_text(
+                _first_non_empty(
+                    entry.get("summary"),
+                    entry.get("description"),
+                    content.get("summary"),
+                    content.get("description"),
+                )
+            )
+            publisher = _cleanup_text(
+                _first_non_empty(
+                    entry.get("provider", {}).get("displayName") if isinstance(entry.get("provider"), dict) else None,
+                    content.get("provider", {}).get("displayName") if isinstance(content.get("provider"), dict) else None,
+                )
+            )
+
+            link_obj = entry.get("clickThroughUrl") or entry.get("canonicalUrl") or content.get("clickThroughUrl") or content.get("canonicalUrl") or {}
             link = _cleanup_text(link_obj.get("url") if isinstance(link_obj, dict) else None)
 
             published = None
-            raw_date = entry.get("pubDate")
-            if isinstance(raw_date, str):
+            for raw_date in (content.get("pubDate"), content.get("displayTime"), entry.get("pubDate"), entry.get("displayTime")):
+                if not isinstance(raw_date, str):
+                    continue
                 try:
                     published = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+                    break
                 except ValueError:
-                    pass
+                    continue
+
+            if not title and not summary:
+                continue
 
             articles.append(
                 NewsArticle(
-                    title=title,
+                    title=title or summary,
                     summary=summary,
                     publisher=publisher or "Yahoo Finance",
                     link=link,
@@ -411,17 +453,20 @@ class GoogleNewsProvider(NewsProvider):
     def _fetch_query(self, query: str, limit: int) -> list[NewsArticle]:
         domain_filters = " OR ".join(f"site:{domain}" for domain in HIGH_QUALITY_NEWS_DOMAINS)
         full_query = f"{query} ({domain_filters}) when:7d"
-        url = f"https://news.google.com/rss/search?q={quote(full_query)}&hl=en-US&gl=US&ceid=US:en"
-        
-        response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
+        response = httpx.get(
+            "https://news.google.com/rss/search",
+            params={"q": full_query, "hl": "en-US", "gl": "US", "ceid": "US:en"},
+            timeout=self.timeout,
+            follow_redirects=True,
+        )
         if response.status_code != 200:
             raise NewsFetchError(f"unexpected status {response.status_code} from Google News")
-            
+
         try:
             root = ET.fromstring(response.text)
         except ET.ParseError as exc:
             raise NewsFetchError(f"failed to parse Google News XML: {exc}") from exc
-            
+
         articles: list[NewsArticle] = []
         for item in root.findall(".//item"):
             title_elem = item.find("title")
@@ -430,16 +475,18 @@ class GoogleNewsProvider(NewsProvider):
             desc_elem = item.find("description")
             source_elem = item.find("source")
 
+            source_url = source_elem.attrib.get("url") if source_elem is not None else None
+            if source_url and not _is_whitelisted_domain(source_url):
+                continue
+
             title = _cleanup_text(title_elem.text if title_elem is not None else None)
             link = _cleanup_text(link_elem.text if link_elem is not None else None)
-            
-            # Clean description (usually contains HTML, we strip simple tags)
             desc_raw = desc_elem.text if desc_elem is not None else ""
-            summary = _cleanup_text(re.sub(r'<[^>]+>', '', desc_raw))
+            summary = _cleanup_text(re.sub(r"<[^>]+>", "", desc_raw))
 
             publisher = "Google News"
-            if source_elem is not None and source_elem.text:
-                publisher = _cleanup_text(source_elem.text)
+            if source_elem is not None:
+                publisher = _cleanup_text(source_elem.text or source_url or "") or "Google News"
 
             published = None
             if pub_date_elem is not None and pub_date_elem.text:
@@ -448,8 +495,9 @@ class GoogleNewsProvider(NewsProvider):
                 except (TypeError, ValueError):
                     pass
 
-            # Filter out non-whitelist sites based on publisher domain fallback if needed,
-            # though Google should enforce this via the site: operators.
+            if not title:
+                continue
+
             articles.append(
                 NewsArticle(
                     title=title,
@@ -573,7 +621,14 @@ class NewsIngestionService:
     @classmethod
     def from_provider_credentials(cls, provider_credentials: dict[str, ProviderCredential], *, max_articles: int = 12) -> "NewsIngestionService":
         providers: list[NewsProvider] = []
+
+        # Always include the free, real-time providers by default
+        providers.append(GoogleNewsProvider(credential=ProviderCredential(provider="googlenews")))
+        providers.append(YahooFinanceProvider(credential=ProviderCredential(provider="yahoofinance")))
+
         for key, builder in PROVIDER_BUILDERS.items():
+            if key in DISABLED_PROVIDER_KEYS or key in (GoogleNewsProvider.provider_key, YahooFinanceProvider.provider_key):
+                continue
             credential = provider_credentials.get(key)
             if credential and (credential.api_key or credential.api_secret):
                 providers.append(builder(credential))

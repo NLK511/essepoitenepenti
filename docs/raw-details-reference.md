@@ -16,7 +16,7 @@ The main sections are:
 - `metadata`: timestamps, version, and ticker
 - `trade`: direction, confidence, entry, stop-loss, and take-profit
 - `summary`: digest or LLM narrative text plus generation metadata such as method, backend, model, runtime, fallback text, and errors
-- `news`: unified items, feed usage, feed errors, item counts, and keyword-sentiment diagnostics
+- `news`: unified items, feed usage, feed errors, item counts, and keyword-sentiment diagnostics. Free news now comes primarily from Google News RSS (topic queries) and Yahoo Finance (ticker queries); NewsAPI remains wired in the codebase but disabled by default because the free tier is delayed.
 - `signals`: normalized cross-source signal payloads when additional signal providers are enabled
 - `social`: social/Nitter-focused diagnostics when enabled
 - `sentiment`: stored sentiment layers and enhanced/fused sentiment metadata

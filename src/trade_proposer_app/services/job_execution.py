@@ -238,7 +238,7 @@ class JobExecutionService:
             raise RunExecutionFailed(exc, timing) from exc
 
         persistence_started = perf_counter()
-        snapshot = result
+        snapshot = result.get("snapshot") if isinstance(result, dict) else result
         context_snapshot = None
         summary = {
             "scope": "macro",
@@ -246,7 +246,7 @@ class JobExecutionService:
             "subject_label": getattr(snapshot, "subject_label", None),
             "score": getattr(snapshot, "score", 0.0),
             "label": getattr(snapshot, "label", "NEUTRAL"),
-            "computed_at": (snapshot.computed_at.isoformat() if snapshot and snapshot.computed_at else None),
+            "computed_at": (snapshot.computed_at.isoformat() if snapshot and getattr(snapshot, "computed_at", None) else None),
         }
         if snapshot is not None and self.macro_context is not None:
             context_snapshot = self.macro_context.create_from_support_snapshot(
@@ -292,7 +292,12 @@ class JobExecutionService:
             raise RunExecutionFailed(exc, timing) from exc
 
         persistence_started = perf_counter()
-        snapshots = result or []
+        if isinstance(result, dict):
+            snapshots = list(result.get("snapshots") or [])
+            support_summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+        else:
+            snapshots = list(result or [])
+            support_summary = {}
         summary = {
             "scope": "industry",
             "snapshot_count": len(snapshots),
@@ -306,6 +311,7 @@ class JobExecutionService:
                 for s in snapshots
             ],
         }
+        summary.update({k: v for k, v in support_summary.items() if k not in summary})
         context_snapshots = []
         if self.industry_context is not None:
             for snapshot in snapshots:

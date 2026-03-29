@@ -73,8 +73,10 @@ flowchart LR
     end
 
     subgraph External[External services]
-        NewsAPI[NewsAPI]
+        GoogleNews[Google News RSS]
+        YahooFinance[Yahoo Finance]
         Finnhub[Finnhub]
+        NewsAPI[NewsAPI (disabled)]
         OptionalLLM[OpenAI / Pi CLI]
     end
 
@@ -108,8 +110,10 @@ flowchart LR
     RefreshServices --> Snapshots
     SnapshotResolver --> Snapshots
 
-    NewsIngestionService --> NewsAPI
+    NewsIngestionService --> GoogleNews
+    NewsIngestionService --> YahooFinance
     NewsIngestionService --> Finnhub
+    NewsIngestionService --> NewsAPI
     ProposalService --> OptionalLLM
 
     ProposalService -->|shared helper methods only| Services

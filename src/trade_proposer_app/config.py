@@ -11,6 +11,7 @@ class AppSettings(BaseSettings):
     secret_key: str = "change-me"
     weights_file_path: str = ""
     run_stale_after_seconds: int = 1800
+    worker_heartbeat_interval_seconds: int = 30
     single_user_auth_enabled: bool = True
     single_user_auth_token: str = "change-me"
     single_user_auth_allowlist_paths: str | None = None

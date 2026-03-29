@@ -102,7 +102,9 @@ The same cleanup now applies to summary semantics inside the transmission payloa
 If the relevant macro or industry artifact is missing or stale, the methodology falls back to neutral values and explicit warnings. Transitional support snapshots still support that shared-artifact layer and freshness reporting.
 
 ### 3. News ingestion and live ticker sentiment
-`NewsIngestionService` fetches provider-backed articles, deduplicates them, normalizes them, and records feed usage and feed failures.
+`NewsIngestionService` now prefers free, near-real-time providers first: Google News RSS for topic-based macro/industry coverage and Yahoo Finance for ticker-led coverage, while keeping NewsAPI disabled by default because the unpaid plan is delayed.
+
+The service still deduplicates articles, normalizes them, and records feed usage and feed failures.
 
 Ticker-level sentiment is then derived from the available articles.
 
