@@ -553,8 +553,8 @@ class TickerDeepAnalysisService:
         industry_score = TickerDeepAnalysisService._industry_support_score(context)
         ticker_score = float(context.get("ticker_sentiment_score", 0.0) or 0.0)
         profile = context.get("ticker_profile") if isinstance(context.get("ticker_profile"), dict) else {}
-        macro_events = TickerDeepAnalysisService._context_events(context.get("macro_context_events"))
-        industry_events = TickerDeepAnalysisService._context_events(context.get("industry_context_events"))
+        macro_events = TickerDeepAnalysisService._context_events(context.get("macro_context_events") or context.get("macro_context_active_themes"))
+        industry_events = TickerDeepAnalysisService._context_events(context.get("industry_context_events") or context.get("industry_context_active_drivers"))
         directional_multiplier = 1.0 if direction == RecommendationDirection.LONG else -1.0
         score_alignment = ((macro_score * 0.35) + (industry_score * 0.4) + (ticker_score * 0.25)) * directional_multiplier
         base_alignment_percent = max(0.0, min(100.0, 50.0 + (score_alignment * 50.0)))

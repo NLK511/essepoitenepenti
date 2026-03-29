@@ -83,3 +83,17 @@ async def create_watchlist(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/{watchlist_id}")
+async def delete_watchlist(
+    watchlist_id: int,
+    session: Session = Depends(get_db_session),
+) -> dict:
+    try:
+        WatchlistRepository(session).delete(watchlist_id)
+        return {"status": "success", "message": f"Watchlist {watchlist_id} deleted"}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

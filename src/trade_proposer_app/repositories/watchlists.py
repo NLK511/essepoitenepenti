@@ -90,6 +90,13 @@ class WatchlistRepository:
             optimize_evaluation_timing=optimize_evaluation_timing,
         )
 
+    def delete(self, watchlist_id: int) -> None:
+        record = self.session.get(WatchlistRecord, watchlist_id)
+        if record is None:
+            raise ValueError(f"Watchlist {watchlist_id} not found")
+        self.session.delete(record)
+        self.session.commit()
+
     def get(self, watchlist_id: int) -> Watchlist:
         record = self.session.get(WatchlistRecord, watchlist_id)
         if record is None:
