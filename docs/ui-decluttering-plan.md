@@ -56,6 +56,8 @@ A third cleanup pass is now focusing on `run-detail-page.tsx`, especially:
 
 The latest run-detail pass is collapsing the context snapshots into shared compact rows and shortening the shortlist / transmission / calibration helper text so each table cell carries fewer repeated fragments.
 
+The recommendation-plans page is now also being tightened so horizon, setup, calibration, and transmission details use fewer helper lines per row.
+
 The ticker-signals page and the dashboard / ticker overview cards are also in the same cleanup sweep, with the remaining helper-text density being collapsed into fewer lines.
 
 A fourth cleanup pass is now focusing on the dashboard and ticker overview cards, especially the repeated provenance and outcome summaries in the overview surfaces. The latest edits collapsed more of that repeated wording into single-line summaries.
@@ -213,6 +215,9 @@ The long-term shape can still grow into separate provenance / warning / context 
 
 **Outcome**
 - the page remains decision-oriented without re-describing calibration on every row
+
+**Status update**
+- the latest pass compressed the table cells further by merging horizon/setup, transmission channels, and calibration references into shorter combined summaries
 
 ---
 
