@@ -538,6 +538,18 @@ Recent macro and industry context snapshots, plus the transitional macro/industr
 - **Drivers**: main reasons behind the snapshot
 - **Coverage**: how much source material backed it
 - **Saliency**: the normalized 0-1 prominence score for the strongest extracted event; it should vary across events rather than flattening to 1.0
+
+  Quick interpretation:
+
+  | Saliency | Read |
+  |---:|---|
+  | `0.00–0.20` | weak or tentative signal |
+  | `0.20–0.45` | light signal, worth watching |
+  | `0.45–0.70` | meaningful / moderate prominence |
+  | `0.70–0.90` | strong signal |
+  | `0.90–1.00` | dominant or unusually concentrated signal |
+
+  These are guide rails, not hard gates.
 - **Diagnostics**: provider errors, warnings, or source notes
 
 ### How to use it
