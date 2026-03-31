@@ -2435,8 +2435,8 @@ td {
 
 .debugger-run-row {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
 }
 
 .debugger-run-select {
@@ -2447,10 +2447,18 @@ td {
 
 .debugger-run-delete {
   flex: none;
-  margin-top: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border-color: transparent;
+  background: transparent;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(4px) scale(0.96);
+  transform: translateY(2px) scale(0.92);
+}
+
+.debugger-run-delete:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .debugger-run-row:hover .debugger-run-delete,
