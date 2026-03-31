@@ -71,3 +71,29 @@ export function ContextScoreSummary(props: {
     />
   );
 }
+
+export function ContextEventSummary(props: {
+  label: string;
+  value: ReactNode;
+  details?: Array<{ label: string; value: ReactNode }>;
+  channels?: string[];
+}) {
+  return (
+    <div className="data-point">
+      <span className="data-point-label">{props.label}</span>
+      <span className="data-point-value">{props.value}</span>
+      {props.details?.length ? (
+        <div className="helper-text top-gap-small context-inline-metrics">
+          {props.details.map((detail) => (
+            <span key={detail.label} className="context-inline-metric"><strong>{detail.label}:</strong> {detail.value}</span>
+          ))}
+        </div>
+      ) : null}
+      {props.channels && props.channels.length > 0 ? (
+        <div className="helper-text context-inline-metrics">
+          <span className="context-inline-metric"><strong>Channels:</strong> {props.channels.join(" · ")}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}

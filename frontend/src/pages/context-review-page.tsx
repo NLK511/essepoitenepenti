@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
-import { ContextScoreSummary, MetricCluster, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
+import { ContextEventSummary, ContextScoreSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import type { ContextEventRow, IndustryContextSnapshot, MacroContextSnapshot, Run } from "../types";
 import { extractDisplayLabels, formatDate } from "../utils";
 
@@ -60,16 +60,6 @@ function summaryError(snapshot: { metadata?: Record<string, unknown> }): string 
   return typeof snapshot.metadata?.context_summary_error === "string" ? snapshot.metadata.context_summary_error : null;
 }
 
-function provenanceTone(snapshot: { metadata?: Record<string, unknown> }): "ok" | "warning" | "neutral" {
-  if (summaryError(snapshot)) {
-    return "warning";
-  }
-  if (summaryMethod(snapshot) === "llm_summary") {
-    return "ok";
-  }
-  return "neutral";
-}
-
 function provenanceLabel(snapshot: { metadata?: Record<string, unknown> }): string {
   const method = summaryMethod(snapshot);
   if (method === "llm_summary") {
@@ -95,27 +85,6 @@ function docsLink(doc: string, section?: string): string {
 }
 
 const contextReviewDoc = (section?: string) => docsLink("operator-page-field-guide", section);
-
-function LabeledBadge(props: {
-  label: string;
-  value: string;
-  tone?: "ok" | "warning" | "danger" | "neutral" | "info";
-}) {
-  return (
-    <Badge tone={props.tone}>
-      <span className="context-badge-label">{props.label}</span>
-      <span className="context-badge-value">{props.value}</span>
-    </Badge>
-  );
-}
-
-function InlineMetric(props: { label: string; value: string }) {
-  return (
-    <span className="context-inline-metric">
-      <strong>{props.label}:</strong> {props.value}
-    </span>
-  );
-}
 
 export function ContextReviewPage() {
   const { showToast } = useToast();
@@ -409,15 +378,21 @@ function IndustryContextList({ snapshots }: { snapshots: IndustryContextSnapshot
           <li key={snapshot.id ?? `${snapshot.industry_key}-${snapshot.computed_at}`} className="list-item">
             <div className="card-headline">
               <div>
-                <MetricCluster items={[
-                  { label: "status", value: snapshot.status, tone: contextTone(snapshot) },
-                  { label: "industry", value: snapshot.industry_label || snapshot.industry_key, tone: "neutral" },
-                  ...(topDriver ? [{ label: "driver", value: themeString(topDriver.label), tone: "neutral" as const }] : []),
-                ]} />
+                <ContextScoreSummary
+                  confidence={snapshot.confidence_percent}
+                  saliency={snapshot.saliency_score}
+                  coverage={snapshot.active_drivers.length}
+                  freshness={formatDate(snapshot.computed_at)}
+                  tone={contextTone(snapshot)}
+                />
                 <div className="top-gap-small">
-                  <ProvenanceStrip method={summaryMethod(snapshot)} backend={summaryBackend(snapshot)} model={summaryModel(snapshot)} error={summaryError(snapshot)} />
+                  <div className="cluster">
+                    <Badge tone={contextTone(snapshot)}>status {snapshot.status}</Badge>
+                    <Badge tone="neutral">industry {snapshot.industry_label || snapshot.industry_key}</Badge>
+                    {topDriver ? <Badge tone="neutral">driver {themeString(topDriver.label)}</Badge> : null}
+                  </div>
                 </div>
-                <div className="helper-text context-inline-metrics"><span className="context-inline-metric"><strong>Direction:</strong> {snapshot.direction}</span><span className="context-inline-metric"><strong>Saliency:</strong> {snapshot.saliency_score.toFixed(2)}</span><span className="context-inline-metric"><strong>Confidence:</strong> {snapshot.confidence_percent.toFixed(1)}%</span><span className="context-inline-metric"><strong>Computed:</strong> {formatDate(snapshot.computed_at)}</span></div>
+                <div className="helper-text context-inline-metrics"><span className="context-inline-metric"><strong>Direction:</strong> {snapshot.direction}</span><span className="context-inline-metric"><strong>Computed:</strong> {formatDate(snapshot.computed_at)}</span></div>
                 {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
                 <WarningSummary warnings={snapshot.warnings} />
                 {summaryError(snapshot) ? <div className="helper-text top-gap-small">{summaryError(snapshot)}</div> : null}
@@ -443,14 +418,19 @@ function MacroContextList({ snapshots }: { snapshots: MacroContextSnapshot[] }) 
           <li key={snapshot.id ?? snapshot.computed_at} className="list-item">
             <div className="card-headline">
               <div>
-                <MetricCluster items={[
-                  { label: "status", value: snapshot.status, tone: contextTone(snapshot) },
-                  ...(topTheme ? [{ label: "theme", value: themeString(topTheme.label), tone: "neutral" as const }] : []),
-                ]} />
+                <ContextScoreSummary
+                  confidence={snapshot.confidence_percent}
+                  saliency={snapshot.saliency_score}
+                  coverage={snapshot.active_themes.length}
+                  freshness={formatDate(snapshot.computed_at)}
+                  tone={contextTone(snapshot)}
+                />
                 <div className="top-gap-small">
-                  <ProvenanceStrip method={summaryMethod(snapshot)} backend={summaryBackend(snapshot)} model={summaryModel(snapshot)} error={summaryError(snapshot)} />
+                  <div className="cluster">
+                    <Badge tone={contextTone(snapshot)}>status {snapshot.status}</Badge>
+                    {topTheme ? <Badge tone="neutral">theme {themeString(topTheme.label)}</Badge> : null}
+                  </div>
                 </div>
-                <div className="helper-text context-inline-metrics"><span className="context-inline-metric"><strong>Saliency:</strong> {snapshot.saliency_score.toFixed(2)}</span><span className="context-inline-metric"><strong>Confidence:</strong> {snapshot.confidence_percent.toFixed(1)}%</span><span className="context-inline-metric"><strong>Computed:</strong> {formatDate(snapshot.computed_at)}</span></div>
                 {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
                 <WarningSummary warnings={snapshot.warnings} />
                 {summaryError(snapshot) ? <div className="helper-text top-gap-small">{summaryError(snapshot)}</div> : null}
@@ -475,14 +455,22 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
 
   return (
     <div className="stack-page top-gap-small">
-      <MetricCluster items={[
-        { label: "status", value: snapshot.status, tone: contextTone(snapshot) },
-        { label: "industry", value: snapshot.industry_label || snapshot.industry_key, tone: "neutral" },
-        { label: "direction", value: snapshot.direction || "—", tone: "neutral" },
-        { label: "confidence", value: `${snapshot.confidence_percent.toFixed(1)}%`, tone: "neutral" },
-        ...(snapshot.warnings.length > 0 ? [{ label: "warnings", value: String(snapshot.warnings.length), tone: "warning" as const }] : []),
-        ...(snapshot.missing_inputs.length > 0 ? [{ label: "missing", value: String(snapshot.missing_inputs.length), tone: "warning" as const }] : []),
-      ]} />
+      <ContextScoreSummary
+        confidence={snapshot.confidence_percent}
+        saliency={snapshot.saliency_score}
+        coverage={snapshot.active_drivers.length}
+        freshness={formatDate(snapshot.computed_at)}
+        tone={contextTone(snapshot)}
+      />
+      <div className="top-gap-small">
+        <div className="cluster">
+          <Badge tone={contextTone(snapshot)}>status {snapshot.status}</Badge>
+          <Badge tone="neutral">industry {snapshot.industry_label || snapshot.industry_key}</Badge>
+          <Badge tone="neutral">direction {snapshot.direction || "—"}</Badge>
+          {snapshot.warnings.length > 0 ? <Badge tone="warning">warnings {snapshot.warnings.length}</Badge> : null}
+          {snapshot.missing_inputs.length > 0 ? <Badge tone="warning">missing {snapshot.missing_inputs.length}</Badge> : null}
+        </div>
+      </div>
       <div className="top-gap-small">
         <ProvenanceStrip method={summaryMethod(snapshot)} backend={summaryBackend(snapshot)} model={summaryModel(snapshot)} error={summaryError(snapshot)} />
       </div>
@@ -514,12 +502,16 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
               {drivers.map((driver, index) => {
                 const channels = extractDisplayLabels(driver, "transmission_channel_details", "transmission_channels").slice(0, 4);
                 return (
-                  <div key={`${themeString(driver.label)}-${index}`} className="data-point">
-                    <span className="data-point-label">Driver {index + 1}</span>
-                    <span className="data-point-value">{themeString(driver.label)}</span>
-                    <div className="helper-text top-gap-small context-inline-metrics"><span className="context-inline-metric"><strong>Window:</strong> {detailLabel(driver.window_hint_detail, driver.window_hint)}</span><span className="context-inline-metric"><strong>Source:</strong> {detailLabel(driver.source_priority_detail, driver.source_priority)}</span></div>
-                    {channels.length > 0 ? <div className="helper-text context-inline-metrics"><span className="context-inline-metric"><strong>Channels:</strong> {channels.join(" · ")}</span></div> : null}
-                  </div>
+                  <ContextEventSummary
+                    key={`${themeString(driver.label)}-${index}`}
+                    label={`Driver ${index + 1}`}
+                    value={themeString(driver.label)}
+                    details={[
+                      { label: "Window", value: detailLabel(driver.window_hint_detail, driver.window_hint) },
+                      { label: "Source", value: detailLabel(driver.source_priority_detail, driver.source_priority) },
+                    ]}
+                    channels={channels}
+                  />
                 );
               })}
             </div>
@@ -568,14 +560,21 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
 
   return (
     <div className="stack-page top-gap-small">
-      <MetricCluster items={[
-        { label: "status", value: snapshot.status, tone: contextTone(snapshot) },
-        ...(topTheme ? [{ label: "theme", value: themeString(topTheme.label), tone: "neutral" as const }] : []),
-        { label: "confidence", value: `${snapshot.confidence_percent.toFixed(1)}%`, tone: "neutral" },
-        { label: "saliency", value: snapshot.saliency_score.toFixed(2), tone: "neutral" },
-        ...(snapshot.warnings.length > 0 ? [{ label: "warnings", value: String(snapshot.warnings.length), tone: "warning" as const }] : []),
-        ...(snapshot.missing_inputs.length > 0 ? [{ label: "missing", value: String(snapshot.missing_inputs.length), tone: "warning" as const }] : []),
-      ]} />
+      <ContextScoreSummary
+        confidence={snapshot.confidence_percent}
+        saliency={snapshot.saliency_score}
+        coverage={snapshot.active_themes.length}
+        freshness={formatDate(snapshot.computed_at)}
+        tone={contextTone(snapshot)}
+      />
+      <div className="top-gap-small">
+        <div className="cluster">
+          <Badge tone={contextTone(snapshot)}>status {snapshot.status}</Badge>
+          {topTheme ? <Badge tone="neutral">theme {themeString(topTheme.label)}</Badge> : null}
+          {snapshot.warnings.length > 0 ? <Badge tone="warning">warnings {snapshot.warnings.length}</Badge> : null}
+          {snapshot.missing_inputs.length > 0 ? <Badge tone="warning">missing {snapshot.missing_inputs.length}</Badge> : null}
+        </div>
+      </div>
       <div className="top-gap-small">
         <ProvenanceStrip method={summaryMethod(snapshot)} backend={summaryBackend(snapshot)} model={summaryModel(snapshot)} error={summaryError(snapshot)} />
       </div>
@@ -607,13 +606,17 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
               {themes.map((theme, index) => {
                 const channels = extractDisplayLabels(theme, "transmission_channel_details", "transmission_channels").slice(0, 4);
                 return (
-                  <div key={`${themeString(theme.label)}-${index}`} className="data-point">
-                    <span className="data-point-label">Theme {index + 1}</span>
-                    <span className="data-point-value">{themeString(theme.label)}</span>
-                    <div className="helper-text top-gap-small context-inline-metrics"><span className="context-inline-metric"><strong>State:</strong> {detailLabel(theme.persistence_state_detail, theme.persistence_state)}</span><span className="context-inline-metric"><strong>Window:</strong> {detailLabel(theme.window_hint_detail, theme.window_hint)}</span></div>
-                    <div className="helper-text context-inline-metrics"><span className="context-inline-metric"><strong>Source:</strong> {detailLabel(theme.source_priority_detail, theme.source_priority)}</span></div>
-                    {channels.length > 0 ? <div className="helper-text context-inline-metrics"><span className="context-inline-metric"><strong>Channels:</strong> {channels.join(" · ")}</span></div> : null}
-                  </div>
+                  <ContextEventSummary
+                    key={`${themeString(theme.label)}-${index}`}
+                    label={`Theme ${index + 1}`}
+                    value={themeString(theme.label)}
+                    details={[
+                      { label: "State", value: detailLabel(theme.persistence_state_detail, theme.persistence_state) },
+                      { label: "Window", value: detailLabel(theme.window_hint_detail, theme.window_hint) },
+                      { label: "Source", value: detailLabel(theme.source_priority_detail, theme.source_priority) },
+                    ]}
+                    channels={channels}
+                  />
                 );
               })}
             </div>

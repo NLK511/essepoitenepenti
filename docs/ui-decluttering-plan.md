@@ -30,8 +30,8 @@ Use progressive disclosure so operators see:
 The first refactor pass is underway in the frontend:
 
 - `frontend/src/components/decision-surface.tsx` now provides shared compact surfaces for scores, metric clusters, warnings, and provenance
-- the context review page now uses the shared score / provenance / warning surfaces for history and summary cards
-- the run detail, recommendation plans, and ticker signals pages are being gradually collapsed toward the same compact patterns
+- the context review page now uses the shared score / provenance / warning surfaces for history and summary cards, and the latest cleanup pass is collapsing the remaining macro / industry event summaries into shared compact rows
+- the run detail, recommendation plans, ticker signals, dashboard, and ticker detail pages are being gradually collapsed toward the same compact patterns
 
 This plan remains the checklist for the remaining declutter work.
 
@@ -57,6 +57,8 @@ A third cleanup pass is now focusing on `run-detail-page.tsx`, especially:
 The ticker-signals page and the dashboard / ticker overview cards are also in the same cleanup sweep, with the remaining helper-text density being collapsed into fewer lines.
 
 A fourth cleanup pass is now focusing on the dashboard and ticker overview cards, especially the repeated provenance and outcome summaries in the overview surfaces. The latest edits collapsed more of that repeated wording into single-line summaries.
+
+The next cleanup pass is tightening the context review history blocks by using shared compact event summary rows instead of repeating the same label/value scaffolding in each list item.
 
 This pass should leave the run page as the deep forensic surface, but with much less repeated phrasing inside each row.
 
@@ -119,6 +121,8 @@ Current exports:
   - LLM / fallback provenance strip with optional summary warning flag
 - `ContextScoreSummary`
   - compact macro / industry score summary row
+- `ContextEventSummary`
+  - compact summary row for a single context event / driver / theme
 
 The long-term shape can still grow into separate provenance / warning / context modules if the patterns continue to expand.
 
