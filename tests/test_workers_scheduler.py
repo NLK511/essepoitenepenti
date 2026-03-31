@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import patch
 
-from sqlalchemy import create_engine, update
+from sqlalchemy import create_engine, text, update
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.config import settings
@@ -14,7 +14,7 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.runs import enqueue_enabled_jobs
-from trade_proposer_app.workers.tasks import process_once
+from trade_proposer_app.workers.tasks import WorkerRuntimeState, _write_worker_heartbeat, process_once
 
 
 class StubProposalService:
@@ -491,6 +491,27 @@ class WorkerSchedulerTests(unittest.TestCase):
             processed = process_once()
 
         self.assertFalse(processed)
+
+    def test_worker_heartbeat_write_marks_worker_active(self) -> None:
+        session = self.create_session()
+        state = WorkerRuntimeState(active_run_id=77)
+
+        with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
+            "trade_proposer_app.workers.tasks.socket.gethostname", return_value="worker-host"), patch(
+            "trade_proposer_app.workers.tasks.os.getpid", return_value=12345
+        ):
+            _write_worker_heartbeat("worker-test", state)
+
+        row = session.execute(
+            text("select worker_id, hostname, pid, status, active_run_id from worker_heartbeats where worker_id = 'worker-test'")
+        ).mappings().first()
+        self.assertIsNotNone(row)
+        assert row is not None
+        self.assertEqual("worker-test", row["worker_id"])
+        self.assertEqual("worker-host", row["hostname"])
+        self.assertEqual(12345, row["pid"])
+        self.assertEqual("running", row["status"])
+        self.assertEqual(77, row["active_run_id"])
 
 
 if __name__ == "__main__":

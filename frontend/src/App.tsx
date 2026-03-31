@@ -14,6 +14,7 @@ import { SettingsPage } from "./pages/settings-page";
 import { TickerPage } from "./pages/ticker-page";
 import { TickerSignalsPage } from "./pages/ticker-signals-page";
 import { WatchlistsPage } from "./pages/watchlists-page";
+import { WorkerLogsPage } from "./pages/worker-logs-page";
 import { RequireAuth } from "./auth";
 
 function NotFoundPage() {
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="docs" element={<DocsPage />} />
           <Route path="runs/:runId" element={<RunDetailPage />} />
+          <Route path="workers/:workerId" element={<WorkerLogsPage />} />
           <Route path="recommendations/:recommendationId" element={<Navigate to="/jobs/recommendation-plans" replace />} />
           <Route path="tickers/:ticker" element={<TickerPage />} />
           <Route path="*" element={<NotFoundPage />} />

@@ -1,9 +1,13 @@
-import traceback
-import time
-import socket
 import os
+import socket
+import threading
+import time
+import traceback
 import uuid
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
+from trade_proposer_app.config import settings
 from trade_proposer_app.db import SessionLocal
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
@@ -19,6 +23,7 @@ from trade_proposer_app.services.builders import (
     create_proposal_service,
     create_watchlist_orchestration_service,
 )
+from trade_proposer_app.domain.models import WorkerHeartbeat
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
@@ -27,8 +32,51 @@ from trade_proposer_app.services.recommendation_plan_evaluations import Recommen
 from trade_proposer_app.services.optimizations import WeightOptimizationService
 
 
-def process_once(worker_id: str | None = None) -> bool:
+@dataclass
+class WorkerRuntimeState:
+    active_run_id: int | None = None
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def set_active_run_id(self, run_id: int | None) -> None:
+        with self.lock:
+            self.active_run_id = run_id
+
+    def get_active_run_id(self) -> int | None:
+        with self.lock:
+            return self.active_run_id
+
+
+def _write_worker_heartbeat(worker_id: str, state: WorkerRuntimeState) -> None:
     session = SessionLocal()
+    try:
+        runs = RunRepository(session)
+        runs.upsert_heartbeat(
+            WorkerHeartbeat(
+                worker_id=worker_id,
+                hostname=socket.gethostname(),
+                pid=os.getpid(),
+                status="running" if state.get_active_run_id() is not None else "idle",
+                last_heartbeat_at=datetime.now(timezone.utc),
+                started_at=datetime.now(timezone.utc),
+                active_run_id=state.get_active_run_id(),
+            )
+        )
+    finally:
+        session.close()
+
+
+def _heartbeat_loop(worker_id: str, state: WorkerRuntimeState, stop_event: threading.Event) -> None:
+    interval_seconds = max(5, int(settings.worker_heartbeat_interval_seconds))
+    while not stop_event.wait(interval_seconds):
+        try:
+            _write_worker_heartbeat(worker_id, state)
+        except Exception:
+            traceback.print_exc()
+
+
+def process_once(worker_id: str | None = None, state: WorkerRuntimeState | None = None) -> bool:
+    session = SessionLocal()
+    state = state or WorkerRuntimeState()
     try:
         settings_repository = SettingsRepository(session)
         proposal_service = create_proposal_service(session)
@@ -56,10 +104,18 @@ def process_once(worker_id: str | None = None) -> bool:
             ),
         )
         try:
-            run, _recommendations = service.process_next_queued_run(worker_id=worker_id)
-            return run is not None
+            run = service.runs.claim_next_queued_run(worker_id=worker_id)
+            if run is None:
+                return False
+            state.set_active_run_id(run.id)
+            try:
+                service.execute_claimed_run(run, worker_id=worker_id)
+            finally:
+                state.set_active_run_id(None)
+            return True
         except Exception as exc:
-            print(f"worker error: run processing failed: {exc}")
+            prefix = f"[{worker_id}] " if worker_id else ""
+            print(f"{prefix}worker error: run processing failed: {exc}")
             traceback.print_exc()
             return True
     finally:
@@ -67,12 +123,21 @@ def process_once(worker_id: str | None = None) -> bool:
 
 
 def main() -> None:
-    worker_id = f"worker-{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
-    print(f"worker started: {worker_id}")
-    while True:
-        processed = process_once(worker_id=worker_id)
-        if not processed:
-            time.sleep(2)
+    worker_id = os.getenv("WORKER_ID") or f"worker-{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    state = WorkerRuntimeState()
+    stop_event = threading.Event()
+    heartbeat_thread = threading.Thread(target=_heartbeat_loop, args=(worker_id, state, stop_event), daemon=True)
+    print(f"worker started: {worker_id}", flush=True)
+    _write_worker_heartbeat(worker_id, state)
+    heartbeat_thread.start()
+    try:
+        while True:
+            processed = process_once(worker_id=worker_id, state=state)
+            if not processed:
+                time.sleep(2)
+    finally:
+        stop_event.set()
+        heartbeat_thread.join(timeout=5)
 
 
 if __name__ == "__main__":

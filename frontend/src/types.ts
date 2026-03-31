@@ -139,6 +139,37 @@ export interface AppHealthResponse {
   };
 }
 
+export interface WorkerHeartbeat {
+  worker_id: string;
+  hostname: string;
+  pid: number;
+  status: string;
+  last_heartbeat_at: string;
+  started_at: string;
+  version: string | null;
+  active_run_id: number | null;
+  metadata_json: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ActiveWorkersResponse {
+  status: string;
+  count: number;
+  stale_seconds: number;
+  workers: WorkerHeartbeat[];
+}
+
+export interface WorkerLogsResponse {
+  worker_id: string;
+  log_path: string;
+  tail: number;
+  line_count: number;
+  truncated: boolean;
+  updated_at: string;
+  lines: string[];
+}
+
 export interface AppPreflightReport {
   status: string;
   checked_at: string;

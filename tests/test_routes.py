@@ -23,6 +23,7 @@ from trade_proposer_app.domain.models import (
     RecommendationPlanOutcome,
     Run,
     TickerSignalSnapshot,
+    WorkerHeartbeat,
 )
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
@@ -320,10 +321,56 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(check["name"] == "module:pandas" for check in payload["checks"]))
         self.assertTrue(any(check["name"] == "support_snapshot:macro" for check in payload["checks"]))
 
+    async def test_active_workers_endpoint_lists_worker_heartbeats(self) -> None:
+        session = Session(bind=self.engine)
+        try:
+            RunRepository(session).upsert_heartbeat(
+                WorkerHeartbeat(
+                    worker_id="worker-test",
+                    hostname="worker-host",
+                    pid=1234,
+                    status="running",
+                    last_heartbeat_at=datetime.now(timezone.utc),
+                    started_at=datetime.now(timezone.utc),
+                    active_run_id=99,
+                )
+            )
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/api/workers/active")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["workers"][0]["worker_id"], "worker-test")
+        self.assertEqual(payload["workers"][0]["active_run_id"], 99)
+
+    async def test_worker_logs_endpoint_returns_tail(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_dir = Path(temp_dir) / ".dev-run" / "workers"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            log_file = log_dir / "worker-test.log"
+            log_file.write_text("line one\nline two\nline three\n", encoding="utf-8")
+
+            with patch("trade_proposer_app.api.routes.workers.WORKER_LOG_DIRECTORIES", (log_dir,)):
+                transport = httpx.ASGITransport(app=app)
+                async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                    response = await client.get("/api/workers/worker-test/logs?tail=1")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["worker_id"], "worker-test")
+        self.assertEqual(payload["line_count"], 3)
+        self.assertTrue(payload["truncated"])
+        self.assertEqual(payload["lines"], ["line three"])
+
     async def test_spa_shell_routes_render(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            for path in ("/", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/context", "/context/sentiment/1", "/context/macro/1", "/sentiment", "/sentiment/1", "/runs/1", "/recommendation-plans", "/tickers/AAPL"):
+            for path in ("/", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/context", "/context/sentiment/1", "/context/macro/1", "/sentiment", "/sentiment/1", "/runs/1", "/workers/worker-test", "/recommendation-plans", "/tickers/AAPL"):
                 response = await client.get(path)
                 self.assertEqual(response.status_code, 200)
                 self.assertIn("<title>Trade Proposer App</title>", response.text)

@@ -220,6 +220,7 @@ The current limits matter:
 - ticker deep analysis still reuses some older proposal internals
 - the methodology still uses a transitional support-snapshot-backed resolver layer for shared macro and industry context, though it now bridges redesign-native events into these records
 - confidence calibration is active and influences plan construction based on historical outcomes
+- evaluation/recompute semantics, including the point-in-time compromise between daily and intraday bars, are documented in `recommendation-plan-evaluation-recompute-notes.md`
 
 ## See also
 

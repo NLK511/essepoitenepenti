@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import KeyLabelDetail, RecommendationPlanOutcome
@@ -15,34 +16,33 @@ class RecommendationOutcomeRepository:
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
     def upsert_outcome(self, outcome: RecommendationPlanOutcome) -> RecommendationPlanOutcome:
-        record = self.session.scalar(
-            select(RecommendationOutcomeRecord).where(
-                RecommendationOutcomeRecord.recommendation_plan_id == outcome.recommendation_plan_id
+        self.session.rollback()
+        try:
+            record = self.session.scalar(
+                select(RecommendationOutcomeRecord).where(
+                    RecommendationOutcomeRecord.recommendation_plan_id == outcome.recommendation_plan_id
+                )
             )
-        )
-        if record is None:
-            record = RecommendationOutcomeRecord(recommendation_plan_id=outcome.recommendation_plan_id)
-            self.session.add(record)
-        record.outcome = outcome.outcome
-        record.status = outcome.status
-        record.evaluated_at = self._normalize_datetime(outcome.evaluated_at)
-        record.entry_touched = outcome.entry_touched
-        record.stop_loss_hit = outcome.stop_loss_hit
-        record.take_profit_hit = outcome.take_profit_hit
-        record.horizon_return_1d = outcome.horizon_return_1d
-        record.horizon_return_3d = outcome.horizon_return_3d
-        record.horizon_return_5d = outcome.horizon_return_5d
-        record.max_favorable_excursion = outcome.max_favorable_excursion
-        record.max_adverse_excursion = outcome.max_adverse_excursion
-        record.realized_holding_period_days = outcome.realized_holding_period_days
-        record.direction_correct = outcome.direction_correct
-        record.confidence_bucket = outcome.confidence_bucket
-        record.setup_family = outcome.setup_family
-        record.notes = outcome.notes
-        record.run_id = outcome.run_id
-        self.session.commit()
-        self.session.refresh(record)
-        return self._to_model(record)
+            if record is None:
+                record = RecommendationOutcomeRecord(recommendation_plan_id=outcome.recommendation_plan_id)
+                self.session.add(record)
+            self._apply_outcome(record, outcome)
+            self.session.commit()
+            self.session.refresh(record)
+            return self._to_model(record)
+        except IntegrityError:
+            self.session.rollback()
+            record = self.session.scalar(
+                select(RecommendationOutcomeRecord).where(
+                    RecommendationOutcomeRecord.recommendation_plan_id == outcome.recommendation_plan_id
+                )
+            )
+            if record is None:
+                raise
+            self._apply_outcome(record, outcome)
+            self.session.commit()
+            self.session.refresh(record)
+            return self._to_model(record)
 
     def list_outcomes(
         self,
@@ -54,6 +54,7 @@ class RecommendationOutcomeRepository:
         setup_family: str | None = None,
         limit: int = 50,
     ) -> list[RecommendationPlanOutcome]:
+        self.session.rollback()
         query = select(RecommendationOutcomeRecord, RecommendationPlanRecord).join(
             RecommendationPlanRecord,
             RecommendationOutcomeRecord.recommendation_plan_id == RecommendationPlanRecord.id,
@@ -74,6 +75,7 @@ class RecommendationOutcomeRepository:
         return [self._to_joined_model(outcome_record, plan_record) for outcome_record, plan_record in rows]
 
     def get_outcomes_by_plan_ids(self, plan_ids: list[int]) -> dict[int, RecommendationPlanOutcome]:
+        self.session.rollback()
         normalized = [plan_id for plan_id in plan_ids if isinstance(plan_id, int)]
         if not normalized:
             return {}
@@ -94,6 +96,25 @@ class RecommendationOutcomeRepository:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
+
+    def _apply_outcome(self, record: RecommendationOutcomeRecord, outcome: RecommendationPlanOutcome) -> None:
+        record.outcome = outcome.outcome
+        record.status = outcome.status
+        record.evaluated_at = self._normalize_datetime(outcome.evaluated_at)
+        record.entry_touched = outcome.entry_touched
+        record.stop_loss_hit = outcome.stop_loss_hit
+        record.take_profit_hit = outcome.take_profit_hit
+        record.horizon_return_1d = outcome.horizon_return_1d
+        record.horizon_return_3d = outcome.horizon_return_3d
+        record.horizon_return_5d = outcome.horizon_return_5d
+        record.max_favorable_excursion = outcome.max_favorable_excursion
+        record.max_adverse_excursion = outcome.max_adverse_excursion
+        record.realized_holding_period_days = outcome.realized_holding_period_days
+        record.direction_correct = outcome.direction_correct
+        record.confidence_bucket = outcome.confidence_bucket
+        record.setup_family = outcome.setup_family
+        record.notes = outcome.notes
+        record.run_id = outcome.run_id
 
     def _to_model(self, record: RecommendationOutcomeRecord) -> RecommendationPlanOutcome:
         return RecommendationPlanOutcome(

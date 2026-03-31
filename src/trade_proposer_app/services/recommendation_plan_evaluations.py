@@ -1,32 +1,62 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Iterable
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import yfinance as yf
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.models import EvaluationRunResult, RecommendationPlan, RecommendationPlanOutcome
+from trade_proposer_app.domain.models import EvaluationRunResult, HistoricalMarketBar, RecommendationPlan, RecommendationPlanOutcome
 from trade_proposer_app.persistence.models import RecommendationPlanRecord
+from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
+from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
 class RecommendationPlanEvaluationService:
+    _preferred_timeframes = ("1d", "1wk", "1mo", "1h", "60m", "30m", "15m", "5m", "2m", "1m")
+    _intraday_timeframes = ("1m", "2m", "5m", "15m", "30m", "60m", "1h")
+    _intraday_interval = "5m"
+    _market_open_time = time(9, 30)
+    _market_close_time = time(16, 0)
+    _market_timezone_by_region = {
+        "US": "America/New_York",
+        "USA": "America/New_York",
+        "CA": "America/Toronto",
+        "CANADA": "America/Toronto",
+        "UK": "Europe/London",
+        "GB": "Europe/London",
+        "DE": "Europe/Berlin",
+        "FR": "Europe/Paris",
+        "EU": "Europe/Berlin",
+        "JP": "Asia/Tokyo",
+        "AU": "Australia/Sydney",
+    }
+
     def __init__(self, session: Session) -> None:
         self.session = session
         self.plans = RecommendationPlanRepository(session)
         self.outcomes = RecommendationOutcomeRepository(session)
+        self.market_data = HistoricalMarketDataRepository(session)
+        self.taxonomy = TickerTaxonomyService()
 
-    def run_evaluation(self, recommendation_plan_ids: list[int] | None = None, *, run_id: int | None = None) -> EvaluationRunResult:
+    def run_evaluation(
+        self,
+        recommendation_plan_ids: list[int] | None = None,
+        *,
+        run_id: int | None = None,
+        as_of: datetime | None = None,
+    ) -> EvaluationRunResult:
         plans = self._list_plans(recommendation_plan_ids)
         if not plans:
             return EvaluationRunResult(output="no recommendation plans available for evaluation")
 
-        price_history_cache, price_errors = self._prepare_price_histories(plans)
+        price_history_cache, price_errors = self._prepare_price_histories(plans, as_of=as_of)
         processed = 0
         synced = 0
         detail_lines: list[str] = []
@@ -34,7 +64,12 @@ class RecommendationPlanEvaluationService:
 
         for plan in plans:
             processed += 1
-            price_data = price_history_cache.get(plan.ticker)
+            ticker = (plan.ticker or "").strip().upper()
+            current_market_date = self._current_market_date(plan, as_of=as_of)
+            use_intraday = self._uses_intraday_evaluation(plan, current_market_date)
+            price_data = price_history_cache.get((ticker, use_intraday))
+            if price_data is None and use_intraday:
+                price_data = price_history_cache.get((ticker, False))
             outcome = self._evaluate_plan(plan, price_data, run_id=run_id)
             stored = self.outcomes.upsert_outcome(outcome)
             synced += 1
@@ -62,9 +97,14 @@ class RecommendationPlanEvaluationService:
             rows = [row for row in rows if row.action in {"long", "short", "no_action", "watchlist"}]
         return [self.plans._to_model(row) for row in rows]
 
-    def _prepare_price_histories(self, plans: list[RecommendationPlan]) -> tuple[dict[str, pd.DataFrame | None], list[str]]:
+    def _prepare_price_histories(
+        self,
+        plans: list[RecommendationPlan],
+        *,
+        as_of: datetime | None = None,
+    ) -> tuple[dict[tuple[str, bool], pd.DataFrame | None], list[str]]:
         groups = self._group_by_ticker(plans)
-        cache: dict[str, pd.DataFrame | None] = {}
+        cache: dict[tuple[str, bool], pd.DataFrame | None] = {}
         errors: list[str] = []
         end_time = datetime.now(timezone.utc)
         for ticker, grouped_plans in groups.items():
@@ -74,17 +114,24 @@ class RecommendationPlanEvaluationService:
                 continue
             earliest = min(normalized_times)
             start_time = earliest - timedelta(days=2)
+            current_market_date = self._current_market_date(grouped_plans[0], as_of=as_of)
+            needs_daily = any(not self._uses_intraday_evaluation(plan, current_market_date) for plan in grouped_plans)
+            needs_intraday = any(self._uses_intraday_evaluation(plan, current_market_date) for plan in grouped_plans)
             try:
-                data = self._download_price_history(ticker, start_time, end_time)
+                if needs_daily:
+                    daily_data = self._load_price_history(ticker, start_time, end_time, intraday_only=False)
+                    cache[(ticker, False)] = daily_data.sort_index() if daily_data is not None and not daily_data.empty else None
+                    if cache[(ticker, False)] is None:
+                        errors.append(f"{ticker}: daily price history is unavailable")
+                if needs_intraday:
+                    intraday_data = self._load_price_history(ticker, start_time, end_time, intraday_only=True)
+                    cache[(ticker, True)] = intraday_data.sort_index() if intraday_data is not None and not intraday_data.empty else None
+                    if cache[(ticker, True)] is None:
+                        errors.append(f"{ticker}: intraday price history is unavailable")
             except Exception as exc:  # pragma: no cover
-                cache[ticker] = None
+                cache[(ticker, False)] = None
+                cache[(ticker, True)] = None
                 errors.append(f"{ticker}: {exc}")
-                continue
-            if data is None or data.empty:
-                cache[ticker] = None
-                errors.append(f"{ticker}: price history is unavailable")
-                continue
-            cache[ticker] = data.sort_index()
         return cache, errors
 
     @staticmethod
@@ -344,11 +391,24 @@ class RecommendationPlanEvaluationService:
     def _last_timestamp(data: pd.DataFrame) -> datetime | None:
         if data.empty:
             return None
+        if "available_at" in data.columns:
+            available = RecommendationPlanEvaluationService._normalize_datetime(data.iloc[-1].get("available_at"))
+            if available is not None:
+                return available
         return RecommendationPlanEvaluationService._normalize_datetime(data.index[-1])
 
     @staticmethod
     def _rows_on_or_after(data: pd.DataFrame, start_at: datetime) -> pd.DataFrame:
-        normalized_start = RecommendationPlanEvaluationService._normalize_datetime(start_at) or start_at
+        normalized_start = RecommendationPlanEvaluationService._normalize_datetime(start_at)
+        if normalized_start is None:
+            return pd.DataFrame(columns=data.columns)
+
+        if "available_at" in data.columns:
+            normalized_available = data["available_at"].apply(RecommendationPlanEvaluationService._normalize_datetime)
+            mask = normalized_available.map(lambda value: value is not None and value >= normalized_start)
+            rows = data.loc[mask]
+            return rows if not rows.empty else pd.DataFrame(columns=data.columns)
+
         rows = []
         for timestamp, row in data.iterrows():
             normalized_timestamp = RecommendationPlanEvaluationService._normalize_datetime(timestamp)
@@ -394,18 +454,162 @@ class RecommendationPlanEvaluationService:
             return dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc)
 
+    def _uses_intraday_evaluation(self, plan: RecommendationPlan, current_market_date: date | None = None) -> bool:
+        local_zone = self._market_timezone_for_plan(plan)
+        if local_zone is None:
+            return False
+        computed_at = self._normalize_datetime(plan.computed_at)
+        if computed_at is None:
+            return False
+        local_computed = computed_at.astimezone(local_zone)
+        if local_computed.weekday() >= 5:
+            return False
+        if current_market_date is not None and local_computed.date() != current_market_date:
+            return False
+        local_time = local_computed.timetz().replace(tzinfo=None)
+        return self._market_open_time <= local_time < self._market_close_time
+
+    def _market_timezone_for_plan(self, plan: RecommendationPlan) -> ZoneInfo | None:
+        profile = self.taxonomy.get_ticker_profile(plan.ticker)
+        region = str(profile.get("region") or "").strip().upper()
+        timezone_name = self._market_timezone_by_region.get(region)
+        if not timezone_name:
+            return None
+        try:
+            return ZoneInfo(timezone_name)
+        except Exception:  # pragma: no cover - invalid zone fallback
+            return None
+
+    def _current_market_date(self, plan: RecommendationPlan, as_of: datetime | None = None) -> date | None:
+        local_zone = self._market_timezone_for_plan(plan)
+        if local_zone is None:
+            return None
+        if as_of is None:
+            return datetime.now(local_zone).date()
+        normalized_as_of = self._normalize_datetime(as_of)
+        if normalized_as_of is None:
+            return None
+        return normalized_as_of.astimezone(local_zone).date()
+
+    def _load_price_history(
+        self,
+        ticker: str,
+        start_date: datetime,
+        end_date: datetime,
+        *,
+        intraday_only: bool = False,
+    ) -> pd.DataFrame:
+        persisted = self._load_persisted_price_history(ticker, start_date, end_date, intraday_only=intraday_only)
+        if persisted is not None and not persisted.empty:
+            return persisted
+        return self._download_price_history(ticker, start_date, end_date, intraday_only=intraday_only)
+
+    def _load_persisted_price_history(
+        self,
+        ticker: str,
+        start_date: datetime,
+        end_date: datetime,
+        *,
+        intraday_only: bool = False,
+    ) -> pd.DataFrame | None:
+        timeframes = self._intraday_timeframes if intraday_only else self._preferred_timeframes
+        for timeframe in timeframes:
+            bars = self.market_data.list_bars(
+                ticker=ticker,
+                timeframe=timeframe,
+                start_at=start_date,
+                end_at=end_date,
+                available_at=end_date,
+                limit=2000,
+            )
+            if not bars:
+                continue
+            frame = self._bars_to_frame(bars, start_date=start_date)
+            if frame is not None and not frame.empty:
+                return frame
+        return None
+
     @staticmethod
-    def _download_price_history(ticker: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+    def _bars_to_frame(bars: list[HistoricalMarketBar], *, start_date: datetime) -> pd.DataFrame | None:
+        records: list[dict[str, object]] = []
+        normalized_start = RecommendationPlanEvaluationService._normalize_datetime(start_date)
+        if normalized_start is None:
+            return None
+        for bar in bars:
+            available_at = RecommendationPlanEvaluationService._normalize_datetime(bar.available_at or bar.bar_time)
+            bar_time = RecommendationPlanEvaluationService._normalize_datetime(bar.bar_time)
+            if available_at is None or bar_time is None:
+                continue
+            if available_at < normalized_start:
+                continue
+            records.append(
+                {
+                    "bar_time": bar_time,
+                    "available_at": available_at,
+                    "Open": bar.open_price,
+                    "High": bar.high_price,
+                    "Low": bar.low_price,
+                    "Close": bar.close_price,
+                    "Volume": bar.volume,
+                    "timeframe": bar.timeframe,
+                    "source": bar.source,
+                }
+            )
+        if not records:
+            return None
+        frame = pd.DataFrame.from_records(records)
+        frame = frame.sort_values(by=["available_at", "bar_time"]).set_index("bar_time")
+        return frame
+
+    @classmethod
+    def _download_price_history(
+        cls,
+        ticker: str,
+        start_date: datetime,
+        end_date: datetime,
+        *,
+        intraday_only: bool = False,
+    ) -> pd.DataFrame:
         start_str = start_date.strftime("%Y-%m-%d")
         end_str = (end_date + timedelta(days=1)).strftime("%Y-%m-%d")
-        return yf.download(
+        interval = cls._intraday_interval if intraday_only else "1d"
+        frame = yf.download(
             ticker,
             start=start_str,
             end=end_str,
-            interval="1d",
+            interval=interval,
             progress=False,
             auto_adjust=False,
         )
+        if frame is None or frame.empty:
+            return frame
+        frame = frame.copy()
+        if isinstance(frame.columns, pd.MultiIndex):
+            if len(frame.columns.levels) > 1:
+                ticker_level = None
+                for candidate in ("Ticker", "ticker"):
+                    if candidate in frame.columns.names:
+                        ticker_level = frame.columns.names.index(candidate)
+                        break
+                if ticker_level is None:
+                    ticker_level = 1 if frame.columns.nlevels > 1 else 0
+                try:
+                    frame = frame.xs(ticker, axis=1, level=ticker_level)
+                except Exception:
+                    # Fall back to the first ticker slice for single-ticker downloads.
+                    frame = frame.xs(frame.columns.levels[ticker_level][0], axis=1, level=ticker_level)
+            if isinstance(frame.columns, pd.MultiIndex):
+                frame.columns = [column[0] if isinstance(column, tuple) else column for column in frame.columns]
+        normalized_index = pd.to_datetime(frame.index, utc=True)
+        frame.index = normalized_index
+        if intraday_only:
+            bar_delta = pd.to_timedelta(interval)
+            frame["available_at"] = [ts + bar_delta for ts in normalized_index]
+        else:
+            frame["available_at"] = [
+                datetime.combine(ts.date(), datetime.max.time().replace(microsecond=0), tzinfo=timezone.utc) for ts in normalized_index
+            ]
+        return frame
 
     @staticmethod
     def _build_output(processed: int, details: list[str], errors: list[str]) -> str:

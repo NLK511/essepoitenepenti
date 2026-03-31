@@ -1,6 +1,9 @@
 import json
 import unittest
 from datetime import datetime, timezone
+from unittest.mock import patch
+
+from sqlalchemy.exc import IntegrityError
 
 from sqlalchemy import create_engine, update
 from sqlalchemy.orm import Session
@@ -25,6 +28,7 @@ from trade_proposer_app.domain.models import (
     TickerSignalSourceBreakdown,
 )
 from trade_proposer_app.persistence.models import Base, JobRecord, ProviderCredentialRecord, RunRecord
+from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
@@ -590,6 +594,189 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(plans[0].latest_outcome.transmission_bias_detail["label"], "unknown")
         self.assertEqual(plans[0].latest_outcome.context_regime_label, "mixed context")
         self.assertEqual(plans[0].latest_outcome.context_regime_detail["label"], "mixed context")
+
+    def test_recommendation_outcome_upsert_recovers_from_integrity_error(self) -> None:
+        session = create_session()
+        context_repository = ContextSnapshotRepository(session)
+        plan_repository = RecommendationPlanRepository(session)
+        outcome_repository = RecommendationOutcomeRepository(session)
+
+        ticker_signal = context_repository.create_ticker_signal_snapshot(
+            TickerSignalSnapshot(
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                direction="long",
+                swing_probability_percent=62.0,
+                confidence_percent=66.0,
+                attention_score=77.0,
+                diagnostics={"stage": "retry-path"},
+            )
+        )
+        plan = plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                status="ok",
+                confidence_percent=66.0,
+                entry_price_low=180.0,
+                entry_price_high=181.0,
+                stop_loss=176.0,
+                take_profit=188.0,
+                holding_period_days=5,
+                risk_reward_ratio=1.8,
+                thesis_summary="Retry coverage",
+                rationale_summary="Testing retry behavior",
+                risks=["market noise"],
+                signal_breakdown={"setup_family": "momentum"},
+                ticker_signal_snapshot_id=ticker_signal.id,
+            )
+        )
+        outcome_repository.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=plan.id or 0,
+                ticker="AAPL",
+                action="long",
+                outcome="win",
+                status="resolved",
+                confidence_bucket="65_to_79",
+                setup_family="momentum",
+            )
+        )
+
+        original_commit = session.commit
+        commit_calls = {"count": 0}
+
+        def commit_side_effect():
+            commit_calls["count"] += 1
+            if commit_calls["count"] == 1:
+                raise IntegrityError("stmt", "params", Exception("duplicate"))
+            return original_commit()
+
+        with patch.object(session, "commit", side_effect=commit_side_effect), patch.object(session, "rollback", wraps=session.rollback) as rollback_mock:
+            stored = outcome_repository.upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=plan.id or 0,
+                    ticker="AAPL",
+                    action="long",
+                    outcome="loss",
+                    status="resolved",
+                    confidence_bucket="65_to_79",
+                    setup_family="momentum",
+                    notes="updated after retry",
+                )
+            )
+
+        self.assertEqual(stored.outcome, "loss")
+        self.assertGreaterEqual(rollback_mock.call_count, 1)
+
+    def test_recommendation_outcome_upsert_overwrites_resolved_outcome_on_recompute(self) -> None:
+        session = create_session()
+        outcome_repository = RecommendationOutcomeRepository(session)
+        plan_repository = RecommendationPlanRepository(session)
+
+        plan = plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="EOG",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=67.95,
+                entry_price_low=151.8925,
+                entry_price_high=151.8925,
+                stop_loss=149.0889,
+                take_profit=156.2066,
+                signal_breakdown={"setup_family": "catalyst_follow_through"},
+                computed_at=datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc),
+            )
+        )
+        outcome_repository.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=plan.id or 0,
+                ticker="EOG",
+                action="long",
+                outcome="loss",
+                status="resolved",
+                confidence_bucket="65_to_79",
+                setup_family="catalyst_follow_through",
+            )
+        )
+
+        stored = outcome_repository.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=plan.id or 0,
+                ticker="EOG",
+                action="long",
+                outcome="no_entry",
+                status="open",
+                confidence_bucket="65_to_79",
+                setup_family="catalyst_follow_through",
+                notes="recomputed with updated algorithm",
+            )
+        )
+
+        self.assertEqual(stored.outcome, "no_entry")
+        self.assertEqual(stored.status, "open")
+        self.assertEqual(stored.notes, "recomputed with updated algorithm")
+
+    def test_historical_market_data_list_bars_handles_missing_available_at_column(self) -> None:
+        engine = create_engine("sqlite:///:memory:", future=True)
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                """
+                CREATE TABLE historical_market_bars (
+                    id INTEGER PRIMARY KEY,
+                    ticker VARCHAR(32) NOT NULL,
+                    timeframe VARCHAR(16) NOT NULL,
+                    bar_time DATETIME NOT NULL,
+                    open_price FLOAT NOT NULL,
+                    high_price FLOAT NOT NULL,
+                    low_price FLOAT NOT NULL,
+                    close_price FLOAT NOT NULL,
+                    volume FLOAT NOT NULL,
+                    adjusted_close FLOAT,
+                    source VARCHAR(64) NOT NULL,
+                    source_tier VARCHAR(32) NOT NULL,
+                    point_in_time_confidence FLOAT NOT NULL,
+                    metadata_json TEXT NOT NULL,
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL
+                )
+                """
+            )
+            connection.exec_driver_sql(
+                """
+                INSERT INTO historical_market_bars (
+                    id, ticker, timeframe, bar_time, open_price, high_price, low_price, close_price,
+                    volume, adjusted_close, source, source_tier, point_in_time_confidence, metadata_json,
+                    created_at, updated_at
+                ) VALUES
+                    (1, 'EOG', '1d', '2026-03-28 00:00:00', 150.0, 151.0, 149.0, 150.5, 1000.0, NULL, 'seed', 'research', 1.0, '{}', '2026-03-28 00:00:00', '2026-03-28 00:00:00'),
+                    (2, 'EOG', '1d', '2026-03-29 00:00:00', 151.0, 152.0, 150.0, 151.5, 1000.0, NULL, 'seed', 'research', 1.0, '{}', '2026-03-29 00:00:00', '2026-03-29 00:00:00'),
+                    (3, 'EOG', '1d', '2026-03-30 00:00:00', 152.0, 153.0, 151.0, 152.5, 1000.0, NULL, 'seed', 'research', 1.0, '{}', '2026-03-30 00:00:00', '2026-03-30 00:00:00')
+                """
+            )
+        repo = HistoricalMarketDataRepository(Session(bind=engine))
+        bars = repo.list_bars(
+            ticker="EOG",
+            timeframe="1d",
+            end_at=datetime(2026, 3, 31, tzinfo=timezone.utc),
+            available_at=datetime(2026, 3, 31, tzinfo=timezone.utc),
+            limit=2,
+        )
+
+        self.assertEqual(len(bars), 2)
+        self.assertEqual(bars[0].bar_time, datetime(2026, 3, 29, tzinfo=timezone.utc))
+        self.assertEqual(bars[1].bar_time, datetime(2026, 3, 30, tzinfo=timezone.utc))
+        self.assertEqual(bars[1].available_at, datetime(2026, 3, 30, 23, 59, 59, tzinfo=timezone.utc))
+        self.assertEqual(bars[1].high_price, 153.0)
+
+    def test_historical_market_data_infers_intraday_available_at(self) -> None:
+        inferred = HistoricalMarketDataRepository._infer_available_at(
+            datetime(2026, 3, 31, 15, 0, tzinfo=timezone.utc),
+            "5m",
+        )
+
+        self.assertEqual(inferred, datetime(2026, 3, 31, 15, 5, tzinfo=timezone.utc))
 
     def test_job_execution_enqueues_and_processes_run(self) -> None:
         session = create_session()

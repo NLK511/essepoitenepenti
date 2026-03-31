@@ -42,6 +42,10 @@ These docs define the current product truth.
   - context and support-snapshot layers
   - scoring and risk logic
   - methodology limits
+- `recommendation-plan-evaluation-recompute-notes.md`
+  - point-in-time evaluation compromises and recompute semantics
+  - pitfalls encountered during the EOG regression work
+  - blind spots to keep in mind for future evaluator changes
 
 ### Current architecture
 - `architecture.md`

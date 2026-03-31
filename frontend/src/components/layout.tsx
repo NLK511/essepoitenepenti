@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth";
 import { getJson } from "../api";
-import { AppHealthResponse } from "../types";
+import { Badge } from "../components/ui";
+import { ActiveWorkersResponse, AppHealthResponse, WorkerHeartbeat } from "../types";
 
 const THEME_KEY = "trade-proposer-theme";
 
@@ -126,6 +127,13 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
       description: "Follow the full execution path from cheap scan to context objects, signals, and plans.",
     };
   }
+  if (pathname.startsWith("/workers/")) {
+    return {
+      eyebrow: "Worker diagnostics",
+      title: "Worker logs",
+      description: "Inspect live worker output and follow a running worker’s progress in real time.",
+    };
+  }
   if (pathname.startsWith("/tickers/")) {
     return {
       eyebrow: "Ticker review",
@@ -161,6 +169,43 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
   };
 }
 
+function workerStatusTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
+  if (status === "running") {
+    return "ok";
+  }
+  if (status === "idle") {
+    return "warning";
+  }
+  if (status === "stale") {
+    return "warning";
+  }
+  return "neutral";
+}
+
+function workerStatusLabel(worker: WorkerHeartbeat): string {
+  if (worker.active_run_id !== null && worker.active_run_id !== undefined) {
+    return `run ${worker.active_run_id}`;
+  }
+  return worker.status;
+}
+
+function summarizeWorkers(workers: WorkerHeartbeat[]): { label: string; tone: "ok" | "warning" | "danger" | "neutral" | "info" } {
+  const running = workers.filter((worker) => worker.status === "running").length;
+  const idle = workers.filter((worker) => worker.status === "idle").length;
+  const stale = workers.filter((worker) => worker.status === "stale").length;
+
+  if (running > 0) {
+    return { label: `${running} running`, tone: "ok" };
+  }
+  if (idle > 0) {
+    return { label: `${idle} idle`, tone: "warning" };
+  }
+  if (stale > 0) {
+    return { label: `${stale} stale`, tone: "warning" };
+  }
+  return { label: "No active workers", tone: "neutral" };
+}
+
 export function AppLayout() {
   const [theme, setTheme] = useState<Theme>(() => readInitialTheme());
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -189,6 +234,9 @@ export function AppLayout() {
 
   const meta = useMemo(() => routeMeta(location.pathname), [location.pathname]);
   const [health, setHealth] = useState<AppHealthResponse | null>(null);
+  const [activeWorkers, setActiveWorkers] = useState<WorkerHeartbeat[]>([]);
+  const [workerPopoverHovered, setWorkerPopoverHovered] = useState(false);
+  const [workerPopoverPinned, setWorkerPopoverPinned] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -200,8 +248,20 @@ export function AppLayout() {
         .catch((err) => console.error("Health fetch failed", err));
     };
 
+    const fetchWorkers = () => {
+      getJson<ActiveWorkersResponse>("/api/workers/active")
+        .then((data) => {
+          if (mounted) setActiveWorkers(data.workers);
+        })
+        .catch((err) => console.error("Worker list fetch failed", err));
+    };
+
     fetchHealth();
-    const interval = setInterval(fetchHealth, 30000);
+    fetchWorkers();
+    const interval = setInterval(() => {
+      fetchHealth();
+      fetchWorkers();
+    }, 30000);
     return () => {
       mounted = false;
       clearInterval(interval);
@@ -209,65 +269,130 @@ export function AppLayout() {
   }, []);
 
   const workerStatus = health?.workers?.status || "unknown";
-  const workerCount = health?.workers?.count || 0;
+  const workerCount = activeWorkers.length || health?.workers?.count || 0;
+  const workerPopoverOpen = workerPopoverPinned || workerPopoverHovered;
+  const workerSummary = summarizeWorkers(activeWorkers);
 
   const jobsSectionActive = location.pathname === "/jobs" || location.pathname.startsWith("/jobs/");
 
   return (
     <div className="workspace-shell">
       <aside className="sidebar-shell">
-        <div className="sidebar-brand">
-          <NavLink to="/" className="brand-mark brand-mark-large">
-            TP
-          </NavLink>
-          <div className="brand-copy">
-            <div className="brand-title">Trade Proposer</div>
-            <div className="brand-subtitle">Context-first recommendation workspace</div>
-          </div>
-        </div>
-
-        <div className="sidebar-status-card">
-          <div className="kicker">Current mode</div>
-          <h2>Operator copilot</h2>
-          <p>
-            Review watchlists, shortlist candidates, and inspect recommendation plans with outcome-aware evidence.
-          </p>
-
-          <div className="sidebar-status-indicator-group">
-            <div className={`status-dot ${workerStatus === "ok" ? "is-ok" : "is-warning"}`} />
-            <div className="status-indicator-label">
-              {workerStatus === "ok" ? `${workerCount} worker${workerCount !== 1 ? "s" : ""} active` : "No workers active"}
+        <div className="sidebar-shell-content">
+          <div className="sidebar-brand">
+            <NavLink to="/" className="brand-mark brand-mark-large">
+              TP
+            </NavLink>
+            <div className="brand-copy">
+              <div className="brand-title">Trade Proposer</div>
+              <div className="brand-subtitle">Context-first recommendation workspace</div>
             </div>
           </div>
 
-          <a href="/api/health" className="button-subtle sidebar-status-link" target="_blank" rel="noreferrer">
-            Open API health
-          </a>
-        </div>
+          <div
+            className="sidebar-status-wrap"
+            onMouseEnter={() => setWorkerPopoverHovered(true)}
+            onMouseLeave={() => setWorkerPopoverHovered(false)}
+          >
+            <div className="sidebar-status-card">
+              <div className="kicker">Current mode</div>
+              <h2>Operator copilot</h2>
+              <p>
+                Review watchlists, shortlist candidates, and inspect recommendation plans with outcome-aware evidence.
+              </p>
 
-        <nav className="sidebar-nav" aria-label="Primary navigation">
-          {navSections.map((section) => (
-            <div key={section.label} className="sidebar-nav-section">
-              <div className="sidebar-section-label">{section.label}</div>
-              <div className="sidebar-link-list">
-                {section.items.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.end}
-                    className={() => `sidebar-link${isItemActive(item, location.pathname) ? " is-active" : ""}`}
-                  >
-                    <span className="sidebar-link-icon" aria-hidden="true">{item.icon}</span>
-                    <span className="sidebar-link-copy">
-                      <span className="sidebar-link-label">{item.label}</span>
-                      <span className="sidebar-link-short">{item.shortLabel}</span>
-                    </span>
-                  </NavLink>
-                ))}
+              <div className="sidebar-status-indicator-group">
+                <div className={`status-dot ${workerSummary.tone === "ok" ? "is-ok" : "is-warning"}`} />
+                <div className="status-indicator-label">
+                  {workerSummary.label === "No active workers"
+                    ? workerStatus === "ok"
+                      ? `${workerCount} worker${workerCount !== 1 ? "s" : ""} active`
+                      : "No workers active"
+                    : workerSummary.label}
+                </div>
+              </div>
+
+              <div className="sidebar-status-actions">
+                <button
+                  type="button"
+                  className="button-subtle sidebar-status-link worker-popover-toggle"
+                  aria-expanded={workerPopoverOpen}
+                  onClick={() => setWorkerPopoverPinned((current) => !current)}
+                >
+                  {workerPopoverPinned ? "Unpin workers" : "Show workers"}
+                </button>
+                <a href="/api/health" className="button-subtle sidebar-status-link" target="_blank" rel="noreferrer">
+                  Open API health
+                </a>
               </div>
             </div>
-          ))}
-        </nav>
+
+            {workerPopoverOpen ? (
+              <div className="worker-status-popover" role="dialog" aria-label="Running workers">
+                <div className="worker-status-popover-header">
+                  <div>
+                    <div className="kicker">Active workers</div>
+                    <div className="worker-status-popover-title">{workerSummary.label}</div>
+                  </div>
+                  <div className="worker-status-popover-actions">
+                    <div className={`status-dot ${workerSummary.tone === "ok" ? "is-ok" : "is-warning"}`} />
+                    {workerPopoverPinned ? (
+                      <button
+                        type="button"
+                        className="button-subtle worker-status-popover-close"
+                        onClick={() => setWorkerPopoverPinned(false)}
+                        aria-label="Close worker popover"
+                      >
+                        ✕
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                {activeWorkers.length === 0 ? (
+                  <div className="empty-state worker-status-empty">No active workers detected.</div>
+                ) : (
+                  <div className="worker-status-list">
+                    {activeWorkers.map((worker) => (
+                      <Link key={worker.worker_id} to={`/workers/${worker.worker_id}`} className="worker-status-item" onClick={() => setWorkerPopoverPinned(false)}>
+                        <div className="worker-status-item-topline">
+                          <div className="worker-status-item-title">{worker.worker_id}</div>
+                          <Badge tone={workerStatusTone(worker.status)}>{workerStatusLabel(worker)}</Badge>
+                        </div>
+                        <div className="worker-status-item-meta">{worker.hostname} · pid {worker.pid}</div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="sidebar-nav-scroll">
+            <nav className="sidebar-nav" aria-label="Primary navigation">
+              {navSections.map((section) => (
+                <div key={section.label} className="sidebar-nav-section">
+                  <div className="sidebar-section-label">{section.label}</div>
+                  <div className="sidebar-link-list">
+                    {section.items.map((item) => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        end={item.end}
+                        className={() => `sidebar-link${isItemActive(item, location.pathname) ? " is-active" : ""}`}
+                      >
+                        <span className="sidebar-link-icon" aria-hidden="true">{item.icon}</span>
+                        <span className="sidebar-link-copy">
+                          <span className="sidebar-link-label">{item.label}</span>
+                          <span className="sidebar-link-short">{item.shortLabel}</span>
+                        </span>
+                      </NavLink>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </nav>
+          </div>
+        </div>
       </aside>
 
       <div className="content-shell">

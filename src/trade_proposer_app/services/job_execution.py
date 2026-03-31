@@ -429,18 +429,24 @@ class JobExecutionService:
                 float(exc.timing.get("total_execution_seconds") or 0.0),
                 6,
             )
-            current_run = self.runs.get_run(run.id or 0)
-            self.runs.set_artifact(
-                run.id or 0,
-                self._build_failure_artifact(current_run, run, exc),
-            )
-            self.runs.update_status(run.id or 0, RunStatus.FAILED.value, error_message=str(exc.cause), timing=exc.timing)
-            exc.timing["finalize_seconds"] = round(perf_counter() - finalize_started, 6)
-            exc.timing["total_execution_seconds"] = round(
-                float(exc.timing.get("total_execution_seconds") or 0.0) + float(exc.timing["finalize_seconds"]),
-                6,
-            )
-            self.runs.set_timing(run.id or 0, exc.timing)
+            try:
+                self.runs.session.rollback()
+                current_run = self.runs.get_run(run.id or 0)
+                self.runs.set_artifact(
+                    run.id or 0,
+                    self._build_failure_artifact(current_run, run, exc),
+                )
+                self.runs.update_status(run.id or 0, RunStatus.FAILED.value, error_message=str(exc.cause), timing=exc.timing)
+                exc.timing["finalize_seconds"] = round(perf_counter() - finalize_started, 6)
+                exc.timing["total_execution_seconds"] = round(
+                    float(exc.timing.get("total_execution_seconds") or 0.0) + float(exc.timing["finalize_seconds"]),
+                    6,
+                )
+                self.runs.set_timing(run.id or 0, exc.timing)
+            except Exception as finalize_exc:
+                self.runs.session.rollback()
+                print(f"failed to finalize run {run.id}: {finalize_exc}")
+                traceback.print_exc()
             raise exc.cause
 
     def _finalize_success(
