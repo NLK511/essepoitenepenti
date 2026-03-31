@@ -62,11 +62,6 @@ export function DebuggerPage() {
   }, [runs]);
 
   const selectedRunId = searchParams.get("run_id");
-  const selectedRun = useMemo(
-    () => runs?.find((run) => run.id !== null && run.id !== undefined && String(run.id) === selectedRunId) ?? null,
-    [runs, selectedRunId],
-  );
-
   async function handleDeleteRun(runId: number) {
     if (
       !window.confirm(
@@ -121,18 +116,6 @@ export function DebuggerPage() {
             kicker="Recent runs"
             title="Choose a run"
             subtitle="Pick a run from the left, then scan the summary on the right before opening the full run page."
-            actions={
-              selectedRun?.id ? (
-                <button
-                  type="button"
-                  className="button button-small button-danger"
-                  disabled={isDeletingRun}
-                  onClick={() => handleDeleteRun(selectedRun.id as number)}
-                >
-                  {isDeletingRun ? "Deleting…" : "Delete selected run"}
-                </button>
-              ) : null
-            }
           />
           {deleteError ? <ErrorState message={deleteError} /> : null}
           {!runs && !error ? <LoadingState message="Loading runs…" /> : null}
@@ -140,22 +123,39 @@ export function DebuggerPage() {
           {runs ? (
             <div className="data-stack top-gap-small">
               {runs.map((run) => (
-                <button
-                  key={run.id ?? run.created_at}
-                  type="button"
-                  className={`data-card link-button${selectedRunId === String(run.id) ? " is-selected" : ""}`}
-                  onClick={() => run.id && setSearchParams({ run_id: String(run.id) })}
-                >
-                  <div className="data-card-header">
-                    <div>
-                      <div className="data-card-title">Run #{run.id}</div>
-                      <div className="helper-text">{jobTypeLabel(run.job_type)} · job {run.job_id}</div>
+                <div key={run.id ?? run.created_at} className={`debugger-run-row${selectedRunId === String(run.id) ? " is-selected" : ""}`}>
+                  <button
+                    type="button"
+                    className={`data-card link-button debugger-run-select${selectedRunId === String(run.id) ? " is-selected" : ""}`}
+                    onClick={() => run.id && setSearchParams({ run_id: String(run.id) })}
+                  >
+                    <div className="data-card-header">
+                      <div>
+                        <div className="data-card-title">Run #{run.id}</div>
+                        <div className="helper-text">{jobTypeLabel(run.job_type)} · job {run.job_id}</div>
+                      </div>
+                      <Badge tone={runTone(run.status)}>{run.status}</Badge>
                     </div>
-                    <Badge tone={runTone(run.status)}>{run.status}</Badge>
-                  </div>
-                  <div className="helper-text">Created {formatDate(run.created_at)}</div>
-                  {run.scheduled_for ? <div className="helper-text">Scheduled {formatDate(run.scheduled_for)}</div> : null}
-                </button>
+                    <div className="helper-text">Created {formatDate(run.created_at)}</div>
+                    {run.scheduled_for ? <div className="helper-text">Scheduled {formatDate(run.scheduled_for)}</div> : null}
+                  </button>
+                  {run.id ? (
+                    <button
+                      type="button"
+                      className="icon-button icon-button-danger debugger-run-delete"
+                      aria-label={`Delete run #${run.id}`}
+                      title={`Delete run #${run.id}`}
+                      disabled={isDeletingRun}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void handleDeleteRun(run.id as number);
+                      }}
+                    >
+                      🗑
+                    </button>
+                  ) : null}
+                </div>
               ))}
             </div>
           ) : null}

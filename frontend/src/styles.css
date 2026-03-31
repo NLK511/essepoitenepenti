@@ -2433,6 +2433,33 @@ td {
   gap: 14px;
 }
 
+.debugger-run-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.debugger-run-select {
+  flex: 1 1 auto;
+  width: 100%;
+  text-align: left;
+}
+
+.debugger-run-delete {
+  flex: none;
+  margin-top: 10px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px) scale(0.96);
+}
+
+.debugger-run-row:hover .debugger-run-delete,
+.debugger-run-row:focus-within .debugger-run-delete {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
 .data-card {
   padding: 18px;
   border: 1px solid var(--border);
