@@ -44,6 +44,7 @@ class PostgresMigrationIntegrationTest(unittest.TestCase):
             self.assertIn("runs", table_names)
             self.assertIn("recommendation_plans", table_names)
             self.assertIn("recommendation_outcomes", table_names)
+            self.assertIn("recommendation_decision_samples", table_names)
             self.assertNotIn("recommendations", table_names)
         finally:
             engine.dispose()

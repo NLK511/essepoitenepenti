@@ -32,6 +32,7 @@ from trade_proposer_app.repositories.historical_market_data import HistoricalMar
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.support_snapshots import SupportSnapshotRepository
@@ -828,6 +829,7 @@ class RepositoryTests(unittest.TestCase):
         orchestration = WatchlistOrchestrationService(
             context_snapshots=ContextSnapshotRepository(session),
             recommendation_plans=RecommendationPlanRepository(session),
+            decision_samples=RecommendationDecisionSampleRepository(session),
             cheap_scan_service=CheapScanProposalService(),
             deep_analysis_service=TickerDeepAnalysisService(DeepAnalysisProposalService()),
             confidence_threshold=60.0,
@@ -871,8 +873,10 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(decisions["TSLA"]["reasons"], ["below_confidence_threshold", "below_attention_threshold", "below_catalyst_lane_threshold"])
         ticker_signals = ContextSnapshotRepository(session).list_ticker_signal_snapshots(limit=10)
         plans = RecommendationPlanRepository(session).list_plans(limit=10)
+        samples = RecommendationDecisionSampleRepository(session).list_samples(limit=10)
         self.assertEqual(len(ticker_signals), 3)
         self.assertEqual(len(plans), 3)
+        self.assertEqual(len(samples), 3)
         action_map = {plan.ticker: plan.action for plan in plans}
         self.assertEqual(action_map["AAPL"], "long")
         self.assertEqual(action_map["MSFT"], "no_action")

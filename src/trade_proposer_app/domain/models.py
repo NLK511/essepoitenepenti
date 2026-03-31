@@ -497,6 +497,39 @@ class RecommendationPlanOutcome(BaseModel):
     run_id: int | None = None
 
 
+class RecommendationDecisionSample(BaseModel):
+    id: int | None = None
+    recommendation_plan_id: int
+    ticker: str
+    horizon: str
+    action: str
+    decision_type: str = "no_action"
+    decision_reason: str = ""
+    shortlisted: bool = False
+    shortlist_rank: int | None = None
+    shortlist_decision: dict[str, object] = Field(default_factory=dict)
+    confidence_percent: float = 0.0
+    calibrated_confidence_percent: float | None = None
+    effective_threshold_percent: float | None = None
+    confidence_gap_percent: float | None = None
+    setup_family: str = ""
+    transmission_bias: str | None = None
+    context_regime: str | None = None
+    review_priority: str = "normal"
+    review_label: str | None = None
+    review_notes: str = ""
+    reviewed_at: datetime | None = None
+    decision_context: dict[str, object] = Field(default_factory=dict)
+    signal_breakdown: dict[str, object] = Field(default_factory=dict)
+    evidence_summary: dict[str, object] = Field(default_factory=dict)
+    run_id: int | None = None
+    job_id: int | None = None
+    watchlist_id: int | None = None
+    ticker_signal_snapshot_id: int | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class RecommendationPlan(BaseModel):
     id: int | None = None
     ticker: str

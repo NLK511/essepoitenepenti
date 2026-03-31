@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.support_snapshots import SupportSnapshotRepository
@@ -72,6 +73,7 @@ def create_watchlist_orchestration_service(
     return WatchlistOrchestrationService(
         context_snapshots=ContextSnapshotRepository(session),
         recommendation_plans=RecommendationPlanRepository(session),
+        decision_samples=RecommendationDecisionSampleRepository(session),
         cheap_scan_service=CheapScanSignalService(),
         deep_analysis_service=create_ticker_deep_analysis_service(session, proposal_service=proposal_service),
         confidence_threshold=confidence_threshold,
