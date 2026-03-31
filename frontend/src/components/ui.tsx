@@ -1,4 +1,5 @@
 import type { PropsWithChildren, ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 export function PageHeader(props: {
   kicker: string;
@@ -31,7 +32,16 @@ export function EmptyState(props: { message: string }) {
 }
 
 export function LoadingState(props: { message?: string }) {
-  return <div className="empty-state">{props.message ?? "Loading…"}</div>;
+  return (
+    <div className="empty-state loading-state">
+      <div className="loading-dots" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+      <div>{props.message ?? "Loading…"}</div>
+    </div>
+  );
 }
 
 export function ErrorState(props: { message: string }) {
@@ -48,5 +58,51 @@ export function SectionTitle(props: { kicker?: string; title: string; subtitle?:
       </div>
       {props.actions ? <div className="cluster">{props.actions}</div> : null}
     </div>
+  );
+}
+
+export function StatCard(props: { label: string; value: ReactNode; helper?: string }) {
+  return (
+    <Card>
+      <div className="metric-label">{props.label}</div>
+      <div className="metric-value">{props.value}</div>
+      {props.helper ? <div className="helper-text">{props.helper}</div> : null}
+    </Card>
+  );
+}
+
+export function SegmentedTabs<T extends string>(props: {
+  value: T;
+  options: Array<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="segmented-tabs" role="tablist" aria-label="Section tabs">
+      {props.options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          className={`segmented-tab${props.value === option.value ? " is-active" : ""}`}
+          onClick={() => props.onChange(option.value)}
+          role="tab"
+          aria-selected={props.value === option.value}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function HelpHint(props: { tooltip: string; to: string; ariaLabel?: string }) {
+  return (
+    <Link
+      to={props.to}
+      className="help-hint"
+      aria-label={props.ariaLabel ?? `${props.tooltip}. Open related documentation.`}
+    >
+      <span className="help-hint-icon" aria-hidden="true">?</span>
+      <span className="help-hint-tooltip" role="tooltip">{props.tooltip}</span>
+    </Link>
   );
 }

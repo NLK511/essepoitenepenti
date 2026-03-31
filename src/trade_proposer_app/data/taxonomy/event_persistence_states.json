@@ -1,0 +1,6 @@
+{
+  "new": {"label": "new"},
+  "escalating": {"label": "escalating"},
+  "persistent": {"label": "persistent"},
+  "fading": {"label": "fading"}
+}

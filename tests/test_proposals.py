@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 
 from trade_proposer_app.domain.enums import RecommendationDirection
+import json
+
 from trade_proposer_app.domain.models import NewsArticle, NewsBundle
 from trade_proposer_app.services.news import SUMMARY_METHOD_NEWS_DIGEST
 from trade_proposer_app.services.proposals import DEFAULT_SUMMARY_METHOD, ProposalExecutionError, ProposalService
@@ -42,6 +44,52 @@ class _StubSummaryService:
 
     def summarize(self, request: object) -> SummaryResult:
         return self.result
+
+
+class _StubSnapshotResolver:
+    def resolve_macro_snapshot(self) -> dict[str, object]:
+        return {
+            "score": -0.2,
+            "label": "NEGATIVE",
+            "source": "snapshot_plus_context",
+            "snapshot_id": 3,
+            "subject_key": "global_macro",
+            "subject_label": "Global Macro",
+            "coverage": {"social_count": 4},
+            "source_breakdown": {"social": {"score": -0.2, "item_count": 4}},
+            "drivers": ["rates rising"],
+            "context_snapshot_id": 13,
+            "context_summary": "Macro context summary",
+            "context_saliency_score": 0.74,
+            "context_confidence_percent": 81.0,
+            "context_regime_tags": ["risk_off"],
+            "context_lifecycle": {"escalating_event_count": 1},
+            "context_contradictory_event_labels": ["Oil and energy"],
+            "context_active_events": [{"key": "bond_yields", "window_hint": "2d_5d"}],
+            "diagnostics": {"warnings": ["macro snapshot used"]},
+        }
+
+    def resolve_industry_snapshot(self, ticker: str) -> dict[str, object]:
+        return {
+            "score": 0.3,
+            "label": "POSITIVE",
+            "source": "snapshot_plus_context",
+            "snapshot_id": 5,
+            "subject_key": "consumer_electronics",
+            "subject_label": "Consumer Electronics",
+            "coverage": {"social_count": 6},
+            "source_breakdown": {"social": {"score": 0.3, "item_count": 6}},
+            "drivers": [f"industry snapshot for {ticker}"],
+            "context_snapshot_id": 15,
+            "context_summary": "Industry context summary",
+            "context_saliency_score": 0.68,
+            "context_confidence_percent": 77.0,
+            "context_regime_tags": ["rates"],
+            "context_lifecycle": {"new_event_count": 1},
+            "context_contradictory_event_labels": ["Guidance"],
+            "context_active_events": [{"key": "guidance", "window_hint": "2d_5d"}],
+            "diagnostics": {"warnings": ["industry snapshot used"]},
+        }
 
 
 class ProposalServiceTests(unittest.TestCase):
@@ -203,6 +251,63 @@ class ProposalServiceTests(unittest.TestCase):
         self.assertEqual(context["summary_method"], SUMMARY_METHOD_NEWS_DIGEST)
         self.assertEqual(context["news_items"], [])
         self.assertEqual(context["news_point_count"], 0)
+
+    def test_generate_uses_macro_and_industry_snapshots_in_analysis_payload(self) -> None:
+        history = make_sample_history()
+        article = NewsArticle(
+            title="Apple update",
+            summary="Mixed outlook",
+            publisher="Provider",
+            link="https://example.com/apple",
+            published_at=None,
+        )
+        bundle = NewsBundle(ticker="", articles=[article], feeds_used=["NewsAPI"])
+        service = ProposalService(
+            news_service=_FakeNewsService(bundle),
+            snapshot_resolver=_StubSnapshotResolver(),
+            summary_service=_StubSummaryService(
+                SummaryResult(
+                    summary="Apple sentiment digest",
+                    method="news_digest",
+                    backend="test",
+                    model=None,
+                    llm_error=None,
+                    metadata={},
+                    duration_seconds=None,
+                )
+            ),
+        )
+        service.sentiment_analyzer.analyze = MagicMock(
+            return_value={
+                "score": 0.1,
+                "label": "POSITIVE",
+                "contexts": [],
+                "context_flags": {"context_tag_industry": 1.0},
+                "sentiment_volatility": 0.0,
+                "polarity_trend": 0.0,
+                "sources": ["NewsAPI"],
+                "news_items": [{"title": "Apple update", "compound": 0.1}],
+                "problems": [],
+                "coverage_insights": [],
+                "keyword_hits": 1,
+            }
+        )
+
+        with patch.object(ProposalService, "_fetch_price_history", return_value=history):
+            output = service.generate("AAPL")
+
+        analysis = json.loads(output.diagnostics.analysis_json or "{}")
+        sentiment = analysis.get("sentiment", {})
+        self.assertEqual(sentiment.get("macro", {}).get("source"), "snapshot_plus_context")
+        self.assertEqual(sentiment.get("macro", {}).get("snapshot_id"), 3)
+        self.assertEqual(sentiment.get("macro", {}).get("context_snapshot_id"), 13)
+        self.assertEqual(sentiment.get("macro", {}).get("context_lifecycle", {}).get("escalating_event_count"), 1)
+        self.assertEqual(sentiment.get("industry", {}).get("source"), "snapshot_plus_context")
+        self.assertEqual(sentiment.get("industry", {}).get("snapshot_id"), 5)
+        self.assertEqual(sentiment.get("industry", {}).get("context_snapshot_id"), 15)
+        self.assertEqual(sentiment.get("industry", {}).get("subject_key"), "consumer_electronics")
+        self.assertEqual(sentiment.get("ticker", {}).get("source"), "live")
+        self.assertIn("industry snapshot used", sentiment.get("industry", {}).get("coverage_insights", []))
 
 
 if __name__ == "__main__":

@@ -1,126 +1,141 @@
 # User Journeys
 
+**Status:** canonical workflow framing
+
+These journeys describe how the product is meant to be used today.
+
+They are here to keep UI and workflow decisions tied to real operator tasks instead of wishlist features.
+
 ## Journey 1: First-time setup
 
 ### Persona
-Solo trader running the app on a VPS.
+Solo trader or operator bringing up the app locally or on a VPS.
 
 ### Steps
-1. User opens the app.
-2. User configures provider credentials.
-3. User verifies service health.
-4. User creates one or more watchlists.
-5. User creates a scheduled analysis job.
-6. User lands on the dashboard and waits for the first run.
-7. User reviews the recommendations produced by that run.
+1. User starts the app.
+2. User logs in.
+3. User opens Settings and verifies health/preflight.
+4. User configures provider credentials and summary settings if needed.
+5. User creates a watchlist.
+6. User creates a proposal job.
+7. User runs the job.
+8. User reviews the resulting trade outputs and the source run.
 
 ### Success outcome
-The user gets the first trade recommendation without reading logs or running shell commands.
+The user gets the first recommendation or recommendation plan without needing to inspect raw logs or manually orchestrate backend components.
 
 ## Journey 2: Daily monitoring
 
 ### Persona
-Active user checking recommendations each morning.
+Active user checking the system each day.
 
 ### Steps
-1. User opens dashboard.
-2. User scans latest recommendations as the primary trade objects.
-3. User uses latest runs as execution context, not as the trade record itself.
-4. User opens only the problematic runs that need investigation.
-5. User reviews the recommendation archive if needed.
+1. User opens the dashboard.
+2. User scans the latest trade outputs as the primary trade objects.
+3. User scans recent runs as execution context.
+4. User notices whether health or snapshot freshness is degraded.
+5. User opens only problematic runs or recommendation plans for deeper inspection.
 
 ### Success outcome
-The user can triage execution issues quickly without confusing runs with recommendations.
+The user can separate trade decisions from system diagnostics without confusion.
 
-## Journey 3: Investigating a problematic run behind a recommendation
+## Journey 3: Investigating a degraded trade output
 
 ### Persona
-User sees that a recommendation came from a degraded or failed execution path.
+User sees that a recommendation plan came from a warning-heavy or partially degraded execution path.
 
 ### Steps
-1. User opens the recommendation first to review the trade-ready output.
-2. User follows the link back to the source run, debugger, or run detail.
-3. User reviews structured diagnostics.
-4. User sees if the issue came from:
-   - missing provider credentials
-   - provider timeout
-   - summary failure
-   - partial feed ingestion failure
-5. User decides whether the recommendation is still usable.
+1. User opens the recommendation-plan browser or run detail redesign section first.
+2. User reviews the trade-ready object and stored diagnostics.
+3. User checks linked shared context objects first, then the supporting refresh snapshots when present.
+4. User follows the link back to the source run.
+5. User reviews structured diagnostics to determine whether the issue came from missing providers, poor news coverage, stale snapshots, summary failure, or data retrieval problems.
+6. User decides whether the trade output is still usable.
 
 ### Success outcome
-The user understands whether the source run was degraded but acceptable, or truly failed, without losing the distinction between trade output and execution record.
+The user can judge whether a trade output is degraded-but-usable or should be ignored.
 
-## Journey 4: Recommendation archive and evaluation review
+## Journey 4: Reviewing historical quality
 
 ### Persona
-User wants to inspect low-confidence archived recommendations and see which ones eventually won or lost.
+User wants to inspect archive quality and outcome quality over time.
 
 ### Steps
-1. User opens recommendation history.
-2. User filters by ticker, direction, recommendation state, or warning state.
-3. User runs evaluation when needed so older `PENDING` recommendations can settle into `WIN` or `LOSS`.
-4. User sorts by confidence or timestamp.
-5. User opens individual ticker pages or recommendation pages for deeper review.
+1. User opens recommendation plans.
+2. User filters by ticker, action, run, setup family, or calibration slice.
+3. User runs or reviews evaluation workflows so older plans settle into stored recommendation-plan outcomes.
+4. User reviews setup-family cohort surfaces or sorts by confidence / timestamp through the available operator views.
+5. User opens ticker pages or run detail for deeper review.
 
 ### Success outcome
-The user can inspect historical recommendation quality and outcome state without direct DB access.
+The user can inspect recommendation-plan quality and outcome state without direct database access.
 
-## Journey 5: Scheduled self-improvement
+## Journey 5: Running the self-improvement loop
 
 ### Persona
-User or operator who wants the strategy to learn from outcomes on a regular cadence.
+Operator who wants evaluation and optimization to run on a cadence.
 
 ### Steps
-1. User creates or enables a scheduled evaluation workflow.
-2. The app runs evaluation automatically and settles older recommendations when due.
-3. User creates or enables a scheduled optimization workflow.
-4. The app runs optimization automatically when its schedule and guardrails allow it, using the run history stored in the app to adjust the tracked `weights.json` plus backups.
-5. User reviews evaluation and optimization run history, outputs, failures, and any resulting weight changes.
+1. User enables or schedules evaluation workflows.
+2. The app evaluates older recommendation plans through the normal run system.
+3. User enables or schedules optimization workflows.
+4. The app updates `weights.json` using resolved recommendation-plan outcomes and stores backup metadata.
+5. User reviews run outputs, failures, and resulting weight changes.
 
 ### Success outcome
-The self-improvement loop operates entirely inside the product—no prototype scripts or manual shell actions are required—while providing audit-ready summaries of every optimization batch.
+The self-improvement loop runs entirely inside the product with auditable records.
 
-## Journey 6: System operation
+## Journey 6: Managing shared market context
 
 ### Persona
-Operator maintaining the deployment.
+Operator responsible for keeping macro and industry context fresh.
 
 ### Steps
-1. Operator deploys app via Docker Compose.
-2. Operator provides `.env` configuration.
-3. Operator checks API health and the internal pipeline preflight endpoint.
-4. Operator monitors worker process status, logs, and queue behavior.
+1. User opens the Context review page.
+2. User reviews recent macro and industry context snapshots plus the supporting refresh history.
+3. User notices freshness warnings or missing coverage.
+4. User queues a refresh or uses the run-now action.
+5. User opens context detail pages, support snapshot detail pages, or related runs when investigating quality problems.
+
+### Success outcome
+Shared context becomes an inspectable system artifact rather than hidden background state, while the transitional support-snapshot layer remains auditable.
+
+## Journey 7: Operating the deployment
+
+### Persona
+Operator maintaining a real deployment.
+
+### Steps
+1. Operator deploys the app and configures `.env`.
+2. Operator checks `/api/health` and `/api/health/preflight`.
+3. Operator monitors API, worker, and scheduler behavior.
+4. Operator investigates failures through runs, diagnostics, and logs.
 5. Operator upgrades the app without changing the product model.
 
 ### Success outcome
-The app remains easy to run and debug.
+The app remains understandable to operate even when background workflows are active.
 
-## Journey 7: In-app documentation use
+## Journey 8: Using the in-app docs
 
 ### Persona
-Operator or trader trying to understand setup, diagnostics, or recommendation logic without leaving the app.
+Operator or trader trying to understand setup, diagnostics, or methodology without leaving the product.
 
 ### Steps
 1. User opens the docs page.
-2. User searches for a topic such as setup, raw details, or recommendation methodology.
-3. User selects a document from the sidebar.
-4. User jumps directly to an inner section within the selected document.
-5. User returns to settings, debugger, or history with the needed context.
+2. User searches for setup, raw details, roadmap, or methodology.
+3. User opens the relevant document.
+4. User jumps to the needed section.
+5. User returns to the workflow page with enough context to proceed.
 
 ### Success outcome
-The user can answer most operational or methodology questions from inside the product UI.
+The user can answer most product and operations questions from inside the app.
 
-## Journey 8: Future evolution to multi-user product
+## Deferred journey: multi-user collaboration
 
-### Persona
-Small team using the app collaboratively.
+This is intentionally not a current product journey. Multi-user collaboration, RBAC, and tenancy remain future expansion topics and should not shape present-day workflow decisions until the single-user operational model is fully hardened.
 
-### Steps
-1. Each user logs in.
-2. Users create workspace-scoped watchlists and jobs.
-3. Access is controlled by role.
-4. Alerts and recommendations become workspace-aware.
+## See also
 
-### Success outcome
-The product grows into a team tool without requiring core architectural replacement.
+- `operator-page-field-guide.md` — page-by-page workflow guidance
+- `features-and-capabilities.md` — what is available today
+- `getting-started.md` — first-time setup and startup

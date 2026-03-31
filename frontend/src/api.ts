@@ -3,8 +3,6 @@ import { readStoredToken } from "./token-storage";
 type JsonObject = Record<string, unknown>;
 type FormValue = string | number | boolean | null | undefined;
 
-const ENV_API_AUTH_TOKEN = (import.meta.env.VITE_API_AUTH_TOKEN ?? "").trim();
-
 export class ApiError extends Error {
   status: number;
 
@@ -16,11 +14,7 @@ export class ApiError extends Error {
 }
 
 function getAuthToken(): string {
-  const stored = readStoredToken();
-  if (stored) {
-    return stored;
-  }
-  return ENV_API_AUTH_TOKEN;
+  return readStoredToken() ?? "";
 }
 
 function isJsonObject(value: unknown): value is JsonObject {

@@ -1,6 +1,6 @@
 """recommendation states and summary
 
-Revision ID: 0006_recommendation_states_and_summary
+Revision ID: 0006_rec_states_summary
 Revises: 0005_run_timing_breakdown
 Create Date: 2026-03-12 23:58:00
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0006_recommendation_states_and_summary"
+revision = "0006_rec_states_summary"
 down_revision = "0005_run_timing_breakdown"
 branch_labels = None
 depends_on = None

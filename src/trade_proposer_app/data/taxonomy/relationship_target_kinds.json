@@ -1,0 +1,22 @@
+{
+  "industry": {
+    "label": "industry",
+    "aliases": ["industry_key"]
+  },
+  "sector": {
+    "label": "sector",
+    "aliases": ["sector_key"]
+  },
+  "macro_channel": {
+    "label": "macro channel",
+    "aliases": ["macro", "macro_factor"]
+  },
+  "theme": {
+    "label": "theme",
+    "aliases": ["theme_key"]
+  },
+  "ticker": {
+    "label": "ticker",
+    "aliases": ["equity", "symbol"]
+  }
+}

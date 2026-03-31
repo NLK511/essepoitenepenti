@@ -4,10 +4,35 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from trade_proposer_app.migrations import HEAD_REVISION, try_repair_partial_sqlite_schema
+from trade_proposer_app.migrations import HEAD_REVISION, normalize_alembic_revision_ids, try_repair_partial_sqlite_schema
 
 
 class MigrationRepairTests(unittest.TestCase):
+    def test_normalize_alembic_revision_ids_updates_legacy_revision_value(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = os.path.join(tmpdir, "normalize.db")
+            connection = sqlite3.connect(db_path)
+            try:
+                cursor = connection.cursor()
+                cursor.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
+                cursor.execute("INSERT INTO alembic_version (version_num) VALUES ('0015_drop_legacy_recommendations_table')")
+                connection.commit()
+            finally:
+                connection.close()
+
+            with patch("trade_proposer_app.migrations.settings.database_url", f"sqlite:///{db_path}"):
+                normalized = normalize_alembic_revision_ids()
+
+            self.assertTrue(normalized)
+
+            connection = sqlite3.connect(db_path)
+            try:
+                cursor = connection.cursor()
+                cursor.execute("SELECT version_num FROM alembic_version")
+                self.assertEqual(cursor.fetchone()[0], HEAD_REVISION)
+            finally:
+                connection.close()
+
     def test_try_repair_partial_sqlite_schema_repairs_0003_partial_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = os.path.join(tmpdir, "repair.db")

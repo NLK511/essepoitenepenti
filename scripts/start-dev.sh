@@ -31,13 +31,44 @@ fail() {
   exit 1
 }
 
+ensure_database_connection() {
+  local database_url="$1"
+  if [[ "$database_url" == sqlite:* ]]; then
+    log "using SQLite database: ${database_url}"
+    return 0
+  fi
+  if [[ "$database_url" != postgresql* && "$database_url" != postgres:* ]]; then
+    fail "unsupported DATABASE_URL backend: ${database_url}"
+  fi
+  log "checking PostgreSQL connectivity"
+  if ! DATABASE_URL_TO_CHECK="$database_url" "$VENV_PYTHON" - <<'PY'
+import os
+import sys
+from sqlalchemy import create_engine, text
+
+url = os.environ["DATABASE_URL_TO_CHECK"]
+engine = create_engine(url, future=True)
+try:
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+except Exception as exc:  # pragma: no cover - script path
+    print(exc, file=sys.stderr)
+    sys.exit(1)
+finally:
+    engine.dispose()
+PY
+  then
+    fail "could not connect to PostgreSQL. Start local services with 'docker compose up -d postgres redis' or switch DATABASE_URL to a SQLite URL for no-service local mode."
+  fi
+}
+
 usage() {
   cat <<EOF
 Usage: scripts/start-dev.sh [options]
 
 Options:
   --run-scheduler-once        Run the scheduler enqueue pass before starting services
-  --allow-degraded-preflight  Allow startup even if the internal pipeline preflight reports failure (alias --allow-degraded-prototype)
+  --allow-degraded-preflight  Allow startup even if the internal pipeline preflight reports failure (legacy alias --allow-degraded-prototype)
   --backend-only              Start only the API and worker, not the Vite frontend dev server
   --host <host>               Host for uvicorn (default: APP_HOST or 0.0.0.0)
   --port <port>               Port for uvicorn (default: APP_PORT or 8000)
@@ -104,7 +135,7 @@ done
 [[ -f "$ENV_FILE" ]] || fail "missing ${ENV_FILE}; run ./scripts/setup.sh first"
 
 read_env_value() {
-  python - "$1" "$2" <<'PY'
+  "$VENV_PYTHON" - "$1" "$2" <<'PY'
 import sys
 from pathlib import Path
 
@@ -125,8 +156,8 @@ PY
 
 VENV_PYTHON="${VENV_DIR}/bin/python"
 [[ -x "$VENV_PYTHON" ]] || fail "missing ${VENV_PYTHON}; run ./scripts/setup.sh first"
+DATABASE_URL_VALUE="$(read_env_value DATABASE_URL "$ENV_FILE")"
 FILE_AUTH_TOKEN="$(read_env_value SINGLE_USER_AUTH_TOKEN "$ENV_FILE")"
-FRONTEND_AUTH_TOKEN="${VITE_API_AUTH_TOKEN:-${SINGLE_USER_AUTH_TOKEN:-$FILE_AUTH_TOKEN}}"
 
 if [[ "$START_FRONTEND" == "true" ]]; then
   command -v npm >/dev/null 2>&1 || fail "npm is required to start the frontend dev server"
@@ -185,6 +216,8 @@ cleanup() {
 }
 
 trap cleanup EXIT INT TERM
+
+ensure_database_connection "$DATABASE_URL_VALUE"
 
 log "applying database migrations"
 (
@@ -251,7 +284,7 @@ if [[ "$START_FRONTEND" == "true" ]]; then
   log "starting frontend dev server on ${FRONTEND_PORT}"
   (
     cd "$FRONTEND_DIR"
-    VITE_API_AUTH_TOKEN="${FRONTEND_AUTH_TOKEN}" exec npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT"
+    exec npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT"
   ) &
   FRONTEND_PID=$!
   printf '%s\n' "$FRONTEND_PID" > "$FRONTEND_PID_FILE"

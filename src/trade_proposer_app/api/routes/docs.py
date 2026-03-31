@@ -6,7 +6,7 @@ from fastapi import APIRouter
 router = APIRouter(prefix="/docs", tags=["docs"])
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-DOC_PATHS = [REPO_ROOT / "README.md", *sorted((REPO_ROOT / "docs").glob("*.md"))]
+DOC_PATHS = [REPO_ROOT / "README.md", *sorted((REPO_ROOT / "docs").rglob("*.md"))]
 HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 
 
@@ -43,9 +43,16 @@ def extract_sections(content: str) -> list[dict[str, object]]:
 
 
 def build_slug(path: Path) -> str:
-    if path.name == "README.md":
+    if path == REPO_ROOT / "README.md":
         return "readme"
-    return path.stem
+
+    relative_path = path.relative_to(REPO_ROOT)
+    if relative_path.parts and relative_path.parts[0] == "docs":
+        relative_path = Path(*relative_path.parts[1:])
+
+    stem_path = relative_path.with_suffix("")
+    parts = [part.lower() for part in stem_path.parts]
+    return "-".join(parts)
 
 
 @router.get("")

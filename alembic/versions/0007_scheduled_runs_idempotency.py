@@ -1,7 +1,7 @@
 """scheduled runs idempotency
 
-Revision ID: 0007_scheduled_runs_idempotency
-Revises: 0006_recommendation_states_and_summary
+Revision ID: 0007_sched_runs_idempotency
+Revises: 0006_rec_states_summary
 Create Date: 2026-03-14 12:30:00
 """
 
@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0007_scheduled_runs_idempotency"
-down_revision = "0006_recommendation_states_and_summary"
+revision = "0007_sched_runs_idempotency"
+down_revision = "0006_rec_states_summary"
 branch_labels = None
 depends_on = None
 

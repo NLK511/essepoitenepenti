@@ -1,6 +1,6 @@
 import mermaid from "mermaid";
-import { ChangeEvent, ReactNode, createElement, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { ChangeEvent, ReactNode, createElement, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson } from "../api";
 import { Card, EmptyState, ErrorState, LoadingState, PageHeader } from "../components/ui";
@@ -18,6 +18,11 @@ interface DocGroup {
   title: string;
   description: string;
   documents: DocDocument[];
+}
+
+interface GlossaryEntry {
+  term: string;
+  definition: string;
 }
 
 const DOC_GROUPS: DocGroupDefinition[] = [
@@ -61,11 +66,171 @@ const DOC_GROUP_LOOKUP = new Map(
 
 let mermaidDiagramCounter = 0;
 
-function inlineNodes(text: string, keyPrefix: string): ReactNode[] {
+function normalizeDocPath(path: string): string {
+  const segments: string[] = [];
+  for (const part of path.split("/")) {
+    if (!part || part === ".") {
+      continue;
+    }
+    if (part === "..") {
+      segments.pop();
+      continue;
+    }
+    segments.push(part);
+  }
+  return segments.join("/");
+}
+
+function resolveInternalDocTarget(
+  href: string,
+  currentDocument: DocDocument,
+  documents: DocDocument[],
+): { slug: string; sectionId?: string } | null {
+  if (!href || href.startsWith("#") || /^[a-z]+:/i.test(href)) {
+    return null;
+  }
+
+  const [rawPath, rawHash] = href.split("#", 2);
+  if (!rawPath.endsWith(".md")) {
+    return null;
+  }
+
+  const currentDir = currentDocument.path.includes("/")
+    ? currentDocument.path.slice(0, currentDocument.path.lastIndexOf("/") + 1)
+    : "";
+  const resolvedPath = normalizeDocPath(rawPath.startsWith("/") ? rawPath.slice(1) : `${currentDir}${rawPath}`);
+  const match = documents.find((document) => document.path === resolvedPath);
+  if (!match) {
+    return null;
+  }
+
+  const sectionId = rawHash ? rawHash.trim() : undefined;
+  return { slug: match.slug, sectionId };
+}
+
+function stripMarkdownFormatting(text: string): string {
+  return text
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/^[-*]\s+/, "")
+    .trim();
+}
+
+function extractGlossaryEntries(documents: DocDocument[]): GlossaryEntry[] {
+  const glossaryDocument = documents.find((document) => document.slug === "glossary");
+  if (!glossaryDocument) {
+    return [];
+  }
+
+  const entries: GlossaryEntry[] = [];
+  const lines = glossaryDocument.content.split(/\r?\n/);
+  let currentTerm = "";
+  let currentDefinitionLines: string[] = [];
+
+  const flush = () => {
+    const definition = currentDefinitionLines
+      .map((line) => stripMarkdownFormatting(line))
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    if (currentTerm && definition) {
+      entries.push({ term: currentTerm, definition });
+    }
+    currentTerm = "";
+    currentDefinitionLines = [];
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("### ")) {
+      flush();
+      currentTerm = stripMarkdownFormatting(trimmed.slice(4));
+      continue;
+    }
+    if (trimmed.startsWith("## ")) {
+      flush();
+      continue;
+    }
+    if (!currentTerm || trimmed === "---") {
+      continue;
+    }
+    currentDefinitionLines.push(trimmed);
+  }
+  flush();
+
+  return entries.sort((left, right) => right.term.length - left.term.length);
+}
+
+function isGlossaryBoundary(character: string | undefined): boolean {
+  return !character || !/[a-z0-9]/i.test(character);
+}
+
+function applyGlossaryTooltips(text: string, keyPrefix: string, glossaryEntries: GlossaryEntry[]): ReactNode[] {
+  if (!text || glossaryEntries.length === 0) {
+    return [text];
+  }
+
+  const pattern = new RegExp(glossaryEntries.map((entry) => entry.term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "gi");
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  let match: RegExpExecArray | null = pattern.exec(text);
+
+  while (match) {
+    const matchedText = match[0];
+    const start = match.index;
+    const end = start + matchedText.length;
+    const before = text[start - 1];
+    const after = text[end];
+
+    if (!isGlossaryBoundary(before) || !isGlossaryBoundary(after)) {
+      match = pattern.exec(text);
+      continue;
+    }
+
+    if (start > cursor) {
+      nodes.push(text.slice(cursor, start));
+    }
+
+    const glossaryEntry = glossaryEntries.find((entry) => entry.term.toLowerCase() === matchedText.toLowerCase());
+    if (glossaryEntry) {
+      nodes.push(
+        <span
+          key={`${keyPrefix}-glossary-${nodes.length}`}
+          className="glossary-term"
+          tabIndex={0}
+          data-definition={glossaryEntry.definition}
+          aria-label={`${matchedText}: ${glossaryEntry.definition}`}
+        >
+          {matchedText}
+        </span>,
+      );
+    } else {
+      nodes.push(matchedText);
+    }
+    cursor = end;
+    match = pattern.exec(text);
+  }
+
+  if (cursor < text.length) {
+    nodes.push(text.slice(cursor));
+  }
+
+  return nodes.length > 0 ? nodes : [text];
+}
+
+function inlineNodes(
+  text: string,
+  keyPrefix: string,
+  currentDocument: DocDocument,
+  documents: DocDocument[],
+  glossaryEntries: GlossaryEntry[],
+): ReactNode[] {
   const tokenPattern = /(`[^`]+`|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|\*[^*]+\*)/g;
   const matches = Array.from(text.matchAll(tokenPattern));
   if (matches.length === 0) {
-    return [text];
+    return applyGlossaryTooltips(text, keyPrefix, glossaryEntries);
   }
 
   const nodes: ReactNode[] = [];
@@ -74,26 +239,63 @@ function inlineNodes(text: string, keyPrefix: string): ReactNode[] {
     const token = match[0];
     const start = match.index ?? 0;
     if (start > cursor) {
-      nodes.push(text.slice(cursor, start));
+      nodes.push(...applyGlossaryTooltips(text.slice(cursor, start), `${keyPrefix}-text-${index}`, glossaryEntries));
     }
 
     if (token.startsWith("`") && token.endsWith("`")) {
-      nodes.push(<code key={`${keyPrefix}-code-${index}`}>{token.slice(1, -1)}</code>);
+      const codeText = token.slice(1, -1);
+      const internalTarget = resolveInternalDocTarget(codeText, currentDocument, documents);
+      if (internalTarget) {
+        const params = new URLSearchParams({ doc: internalTarget.slug });
+        if (internalTarget.sectionId) {
+          params.set("section", internalTarget.sectionId);
+        }
+        nodes.push(
+          <Link key={`${keyPrefix}-code-link-${index}`} to={`/docs?${params.toString()}`}>
+            <code>{codeText}</code>
+          </Link>,
+        );
+      } else {
+        nodes.push(<code key={`${keyPrefix}-code-${index}`}>{codeText}</code>);
+      }
     } else if (token.startsWith("[")) {
       const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (linkMatch) {
-        nodes.push(
-          <a key={`${keyPrefix}-link-${index}`} href={linkMatch[2]} target="_blank" rel="noreferrer">
-            {linkMatch[1]}
-          </a>,
-        );
+        const label = linkMatch[1];
+        const href = linkMatch[2];
+        const internalTarget = resolveInternalDocTarget(href, currentDocument, documents);
+        if (internalTarget) {
+          const params = new URLSearchParams({ doc: internalTarget.slug });
+          if (internalTarget.sectionId) {
+            params.set("section", internalTarget.sectionId);
+          }
+          nodes.push(
+            <Link key={`${keyPrefix}-link-${index}`} to={`/docs?${params.toString()}`}>
+              {label}
+            </Link>,
+          );
+        } else {
+          nodes.push(
+            <a key={`${keyPrefix}-link-${index}`} href={href} target="_blank" rel="noreferrer">
+              {label}
+            </a>,
+          );
+        }
       } else {
         nodes.push(token);
       }
     } else if (token.startsWith("**") && token.endsWith("**")) {
-      nodes.push(<strong key={`${keyPrefix}-strong-${index}`}>{token.slice(2, -2)}</strong>);
+      nodes.push(
+        <strong key={`${keyPrefix}-strong-${index}`}>
+          {applyGlossaryTooltips(token.slice(2, -2), `${keyPrefix}-strong-${index}`, glossaryEntries)}
+        </strong>,
+      );
     } else if (token.startsWith("*") && token.endsWith("*")) {
-      nodes.push(<em key={`${keyPrefix}-em-${index}`}>{token.slice(1, -1)}</em>);
+      nodes.push(
+        <em key={`${keyPrefix}-em-${index}`}>
+          {applyGlossaryTooltips(token.slice(1, -1), `${keyPrefix}-em-${index}`, glossaryEntries)}
+        </em>,
+      );
     } else {
       nodes.push(token);
     }
@@ -118,9 +320,25 @@ function isSpecialLine(line: string): boolean {
   );
 }
 
+function normalizeMermaidChart(chart: string): string {
+  const lines = chart.replace(/\r\n/g, "\n").split("\n");
+  while (lines.length > 0 && lines[0].trim() === "") {
+    lines.shift();
+  }
+  while (lines.length > 0 && lines[lines.length - 1].trim() === "") {
+    lines.pop();
+  }
+  const indents = lines
+    .filter((line) => line.trim().length > 0)
+    .map((line) => line.match(/^\s*/)?.[0].length ?? 0);
+  const commonIndent = indents.length > 0 ? Math.min(...indents) : 0;
+  return lines.map((line) => line.slice(commonIndent)).join("\n");
+}
+
 function MermaidDiagram(props: { chart: string }) {
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const normalizedChart = useMemo(() => normalizeMermaidChart(props.chart), [props.chart]);
   const diagramId = useMemo(() => {
     mermaidDiagramCounter += 1;
     return `mermaid-diagram-${mermaidDiagramCounter}`;
@@ -128,34 +346,58 @@ function MermaidDiagram(props: { chart: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    const mermaidModule = mermaid as typeof mermaid & { parseError?: ((error: unknown) => void) | undefined };
+    const previousParseError = mermaidModule.parseError;
 
     async function renderDiagram() {
       try {
-        mermaid.initialize({ startOnLoad: false, securityLevel: "loose", theme: "default" });
-        const rendered = await mermaid.render(diagramId, props.chart);
-        if (!cancelled) {
-          setSvg(rendered.svg);
-          setError(null);
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "strict",
+          theme: "default",
+          flowchart: { htmlLabels: false },
+          suppressErrors: true,
+        });
+        mermaidModule.parseError = () => undefined;
+
+        const parsed = await mermaid.parse(normalizedChart, { suppressErrors: true });
+        if (!parsed) {
+          throw new Error("Mermaid diagram syntax could not be parsed");
         }
+
+        const rendered = await mermaid.render(diagramId, normalizedChart);
+        if (cancelled) {
+          return;
+        }
+
+        if (rendered.svg.includes("Syntax error in text")) {
+          throw new Error("Mermaid diagram syntax error");
+        }
+
+        setSvg(rendered.svg);
+        setError(null);
       } catch (renderError) {
         if (!cancelled) {
           setSvg(null);
           setError(renderError instanceof Error ? renderError.message : "Failed to render Mermaid diagram");
         }
+      } finally {
+        mermaidModule.parseError = previousParseError;
       }
     }
 
     void renderDiagram();
     return () => {
       cancelled = true;
+      mermaidModule.parseError = previousParseError;
     };
-  }, [diagramId, props.chart]);
+  }, [diagramId, normalizedChart]);
 
   if (error) {
     return (
       <div className="mermaid-error-block">
         <div className="helper-text">Mermaid diagram could not be rendered.</div>
-        <pre>{props.chart}</pre>
+        <pre>{normalizedChart}</pre>
         <div className="warning-text top-gap-small">{error}</div>
       </div>
     );
@@ -168,7 +410,12 @@ function MermaidDiagram(props: { chart: string }) {
   return <div className="mermaid-diagram" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
-function renderMarkdown(document: DocDocument, activeSectionId: string): ReactNode[] {
+function renderMarkdown(
+  document: DocDocument,
+  activeSectionId: string,
+  documents: DocDocument[],
+  glossaryEntries: GlossaryEntry[],
+): ReactNode[] {
   const lines = document.content.split(/\r?\n/);
   const nodes: ReactNode[] = [];
   let index = 0;
@@ -221,7 +468,7 @@ function renderMarkdown(document: DocDocument, activeSectionId: string): ReactNo
             id: headingId,
             className: `markdown-heading markdown-heading-${level}${activeSectionId === headingId ? " is-active-target" : ""}`,
           },
-          inlineNodes(text, `heading-${nodes.length}`),
+          inlineNodes(text, `heading-${nodes.length}`, document, documents, glossaryEntries),
         ),
       );
       index += 1;
@@ -243,7 +490,9 @@ function renderMarkdown(document: DocDocument, activeSectionId: string): ReactNo
           listTag,
           { key: `list-${nodes.length}`, className: "markdown-list" },
           items.map((item, itemIndex) => (
-            <li key={`list-item-${nodes.length}-${itemIndex}`}>{inlineNodes(item, `list-${nodes.length}-${itemIndex}`)}</li>
+            <li key={`list-item-${nodes.length}-${itemIndex}`}>
+              {inlineNodes(item, `list-${nodes.length}-${itemIndex}`, document, documents, glossaryEntries)}
+            </li>
           )),
         ),
       );
@@ -258,7 +507,7 @@ function renderMarkdown(document: DocDocument, activeSectionId: string): ReactNo
     }
     nodes.push(
       <p key={`paragraph-${nodes.length}`} className="markdown-paragraph">
-        {inlineNodes(paragraphLines.join(" "), `paragraph-${nodes.length}`)}
+        {inlineNodes(paragraphLines.join(" "), `paragraph-${nodes.length}`, document, documents, glossaryEntries)}
       </p>,
     );
   }
@@ -313,6 +562,7 @@ export function DocsPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [expandedDocuments, setExpandedDocuments] = useState<Record<string, boolean>>({});
+  const articleRef = useRef<HTMLElement | null>(null);
 
   const query = searchParams.get("q") ?? "";
   const selectedSlug = searchParams.get("doc") ?? "";
@@ -347,6 +597,7 @@ export function DocsPage() {
   }, [documents, query]);
 
   const groupedDocuments = useMemo(() => buildDocGroups(filteredDocuments), [filteredDocuments]);
+  const glossaryEntries = useMemo(() => (documents ? extractGlossaryEntries(documents) : []), [documents]);
 
   const selectedDocument = useMemo(() => {
     if (filteredDocuments.length === 0) {
@@ -357,13 +608,24 @@ export function DocsPage() {
   }, [filteredDocuments, selectedSlug]);
 
   useEffect(() => {
-    if (!selectedSectionId) {
+    if (!selectedDocument) {
       return;
     }
-    const element = window.document.getElementById(selectedSectionId);
-    if (element) {
-      element.scrollIntoView({ block: "start", behavior: "smooth" });
-    }
+
+    const scrollTarget = () => {
+      if (selectedSectionId) {
+        const element = window.document.getElementById(selectedSectionId);
+        if (element) {
+          element.scrollIntoView({ block: "start", behavior: "smooth" });
+          return;
+        }
+      }
+
+      articleRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    };
+
+    const frame = window.requestAnimationFrame(scrollTarget);
+    return () => window.cancelAnimationFrame(frame);
   }, [selectedDocument, selectedSectionId]);
 
   useEffect(() => {
@@ -525,14 +787,14 @@ export function DocsPage() {
           </Card>
           <Card className="docs-content-panel">
             {selectedDocument ? (
-              <article className="docs-article markdown-viewer">
+              <article ref={articleRef} className="docs-article markdown-viewer">
                 <div className="docs-article-header">
                   <div>
                     <div className="kicker">{selectedDocument.path}</div>
                     <h2 className="section-title">{selectedDocument.title}</h2>
                   </div>
                 </div>
-                <div className="markdown-content">{renderMarkdown(selectedDocument, selectedSectionId)}</div>
+                <div className="markdown-content">{renderMarkdown(selectedDocument, selectedSectionId, documents, glossaryEntries)}</div>
               </article>
             ) : (
               <EmptyState message="Select a document to read." />

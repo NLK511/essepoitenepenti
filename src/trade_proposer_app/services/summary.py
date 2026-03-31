@@ -64,28 +64,58 @@ class SummaryService:
                 metadata={"reason": "no news items"},
                 duration_seconds=None,
             )
+        prompt = self._build_prompt(request)
+        fallback_summary = self._headline_digest(request.news_items)
+        return self.summarize_prompt(
+            prompt,
+            fallback_summary=fallback_summary,
+            fallback_metadata={"news_item_count": len(request.news_items)},
+        )
+
+    def summarize_prompt(
+        self,
+        prompt: str,
+        *,
+        fallback_summary: str,
+        fallback_metadata: dict[str, object] | None = None,
+    ) -> SummaryResult:
+        metadata = dict(fallback_metadata or {})
         if self.backend == "openai_api":
-            return self._summarize_with_openai(request)
+            return self._summarize_with_openai_prompt(prompt, fallback_summary=fallback_summary, fallback_metadata=metadata)
         if self.backend == "pi_agent":
-            return self._summarize_with_pi_agent(request)
-        return self._news_digest_result(request)
+            return self._summarize_with_pi_prompt(prompt, fallback_summary=fallback_summary, fallback_metadata=metadata)
+        return self._fallback_result(fallback_summary, metadata=metadata)
 
     def _summarize_with_openai(self, request: SummaryRequest) -> SummaryResult:
+        return self._summarize_with_openai_prompt(
+            self._build_prompt(request),
+            fallback_summary=self._headline_digest(request.news_items),
+            fallback_metadata={"news_item_count": len(request.news_items)},
+        )
+
+    def _summarize_with_openai_prompt(
+        self,
+        prompt: str,
+        *,
+        fallback_summary: str,
+        fallback_metadata: dict[str, object],
+    ) -> SummaryResult:
         try:
             import openai
         except ImportError:  # pragma: no cover - optional dependency
-            return self._news_digest_result(
-                request,
+            return self._fallback_result(
+                fallback_summary,
                 llm_error="openai package is not installed",
+                metadata=fallback_metadata,
             )
         api_key = self._credentials.get("openai")
         if not api_key or not api_key.api_key:
-            return self._news_digest_result(
-                request,
+            return self._fallback_result(
+                fallback_summary,
                 llm_error="openai api key is not configured",
+                metadata=fallback_metadata,
             )
         openai.api_key = api_key.api_key
-        prompt = self._build_prompt(request)
         start = perf_counter()
         try:
             response = openai.ChatCompletion.create(
@@ -97,17 +127,19 @@ class SummaryService:
             )
         except Exception as exc:  # pragma: no cover - best effort
             duration = round(perf_counter() - start, 4)
-            return self._news_digest_result(
-                request,
+            return self._fallback_result(
+                fallback_summary,
                 llm_error=str(exc),
+                metadata=fallback_metadata,
                 duration_seconds=duration,
             )
         duration = round(perf_counter() - start, 4)
         choices = response.choices if hasattr(response, "choices") else []
         if not choices:
-            return self._news_digest_result(
-                request,
+            return self._fallback_result(
+                fallback_summary,
                 llm_error="openai response missing choices",
+                metadata=fallback_metadata,
                 duration_seconds=duration,
             )
         text = (
@@ -116,9 +148,10 @@ class SummaryService:
             else getattr(choices[0], "text", "")
         ).strip()
         if not text:
-            return self._news_digest_result(
-                request,
+            return self._fallback_result(
+                fallback_summary,
                 llm_error="openai returned an empty response",
+                metadata=fallback_metadata,
                 duration_seconds=duration,
             )
         return SummaryResult(
@@ -127,20 +160,33 @@ class SummaryService:
             backend=self.backend,
             model=self.model,
             llm_error=None,
-            metadata={"news_item_count": len(request.news_items)},
+            metadata=dict(fallback_metadata),
             duration_seconds=duration,
         )
 
     def _summarize_with_pi_agent(self, request: SummaryRequest) -> SummaryResult:
-        prompt = self._build_prompt(request)
+        return self._summarize_with_pi_prompt(
+            self._build_prompt(request),
+            fallback_summary=self._headline_digest(request.news_items),
+            fallback_metadata={"news_item_count": len(request.news_items)},
+        )
+
+    def _summarize_with_pi_prompt(
+        self,
+        prompt: str,
+        *,
+        fallback_summary: str,
+        fallback_metadata: dict[str, object],
+    ) -> SummaryResult:
         cmd = [self.pi_command]
         if self.pi_cli_args:
             try:
                 cmd.extend(shlex.split(self.pi_cli_args))
             except ValueError as exc:  # pragma: no cover - best effort
-                return self._news_digest_result(
-                    request,
+                return self._fallback_result(
+                    fallback_summary,
                     llm_error=f"invalid pi CLI args: {exc}",
+                    metadata=fallback_metadata,
                 )
         cmd.extend(["-p", prompt, "--mode", "json", "--no-session"])
         env = os.environ.copy()
@@ -159,45 +205,51 @@ class SummaryService:
             )
         except subprocess.TimeoutExpired:
             duration = round(perf_counter() - start, 4)
-            return self._news_digest_result(
-                request,
+            return self._fallback_result(
+                fallback_summary,
                 llm_error=f"pi_agent CLI timed out after {self.timeout}s",
+                metadata=fallback_metadata,
                 duration_seconds=duration,
             )
         except FileNotFoundError as exc:
             duration = round(perf_counter() - start, 4)
-            return self._news_digest_result(
-                request,
+            return self._fallback_result(
+                fallback_summary,
                 llm_error=f"pi_agent CLI command not found: {exc}",
+                metadata=fallback_metadata,
                 duration_seconds=duration,
             )
         except OSError as exc:  # pragma: no cover - best effort
             duration = round(perf_counter() - start, 4)
-            return self._news_digest_result(
-                request,
+            return self._fallback_result(
+                fallback_summary,
                 llm_error=f"pi_agent CLI failed to start: {exc}",
+                metadata=fallback_metadata,
                 duration_seconds=duration,
             )
         duration = round(perf_counter() - start, 4)
         if completed.returncode != 0:
             error_message = completed.stderr.strip() or f"return code {completed.returncode}"
-            return self._news_digest_result(
-                request,
+            return self._fallback_result(
+                fallback_summary,
                 llm_error=f"pi_agent CLI failed: {error_message}",
+                metadata=fallback_metadata,
                 duration_seconds=duration,
             )
         try:
             summary_text, metadata = self._parse_pi_output(completed.stdout)
         except json.JSONDecodeError as exc:
-            return self._news_digest_result(
-                request,
+            return self._fallback_result(
+                fallback_summary,
                 llm_error=f"pi_agent output parse failed: {exc}",
+                metadata=fallback_metadata,
                 duration_seconds=duration,
             )
         if not summary_text:
-            return self._news_digest_result(
-                request,
+            return self._fallback_result(
+                fallback_summary,
                 llm_error="pi_agent response did not include text",
+                metadata=fallback_metadata,
                 duration_seconds=duration,
             )
         return SummaryResult(
@@ -207,7 +259,7 @@ class SummaryService:
             model=metadata.get("model"),
             llm_error=None,
             metadata={
-                "news_item_count": len(request.news_items),
+                **fallback_metadata,
                 **metadata,
             },
             duration_seconds=duration,
@@ -263,22 +315,39 @@ class SummaryService:
         llm_error: str | None = None,
         duration_seconds: float | None = None,
     ) -> SummaryResult:
-        digest = " | ".join(
-            item.get("title", "")
-            for item in request.news_items[:NEWS_SUMMARY_ARTICLE_LIMIT]
-            if item.get("title")
+        return self._fallback_result(
+            self._headline_digest(request.news_items),
+            llm_error=llm_error,
+            metadata={"news_item_count": len(request.news_items)},
+            duration_seconds=duration_seconds,
         )
+
+    def _fallback_result(
+        self,
+        fallback_summary: str,
+        *,
+        llm_error: str | None = None,
+        metadata: dict[str, object] | None = None,
+        duration_seconds: float | None = None,
+    ) -> SummaryResult:
+        payload = dict(metadata or {})
+        payload["reason"] = llm_error or "fallback"
         return SummaryResult(
-            summary=digest,
+            summary=fallback_summary,
             method="news_digest",
             backend=self.backend,
             model=self.model,
             llm_error=llm_error,
-            metadata={
-                "news_item_count": len(request.news_items),
-                "reason": llm_error or "fallback",
-            },
+            metadata=payload,
             duration_seconds=duration_seconds,
+        )
+
+    @staticmethod
+    def _headline_digest(news_items: list[dict[str, object]]) -> str:
+        return " | ".join(
+            item.get("title", "")
+            for item in news_items[:NEWS_SUMMARY_ARTICLE_LIMIT]
+            if item.get("title")
         )
 
     def _build_prompt(self, request: SummaryRequest) -> str:

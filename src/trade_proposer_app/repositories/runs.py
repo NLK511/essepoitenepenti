@@ -1,12 +1,22 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, select, update
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.enums import JobType, RecommendationState, RunStatus
-from trade_proposer_app.domain.models import Recommendation, RecommendationHistoryItem, Run, RunDiagnostics, RunOutput
-from trade_proposer_app.persistence.models import JobRecord, RecommendationRecord, RunRecord
+from trade_proposer_app.domain.enums import JobType, RunStatus
+from trade_proposer_app.domain.models import Run, WorkerHeartbeat
+from trade_proposer_app.persistence.models import (
+    IndustryContextSnapshotRecord,
+    JobRecord,
+    MacroContextSnapshotRecord,
+    RecommendationOutcomeRecord,
+    RecommendationPlanRecord,
+    RunRecord,
+    SupportSnapshotRecord,
+    TickerSignalSnapshotRecord,
+    WorkerHeartbeatRecord,
+)
 
 
 ACTIVE_RUN_STATUSES = (RunStatus.QUEUED.value, RunStatus.RUNNING.value)
@@ -36,7 +46,7 @@ class RunRepository:
             job_type=resolved_job_type.value,
             status=status,
             error_message=error_message or "",
-            scheduled_for=scheduled_for,
+            scheduled_for=self._normalize_optional_datetime(scheduled_for),
         )
         self.session.add(record)
         self.session.commit()
@@ -78,7 +88,7 @@ class RunRepository:
         record = self.session.scalars(
             select(RunRecord)
             .where(RunRecord.job_id == job_id)
-            .where(RunRecord.scheduled_for == scheduled_for)
+            .where(RunRecord.scheduled_for == self._normalize_datetime(scheduled_for))
             .order_by(RunRecord.created_at.desc())
             .limit(1)
         ).first()
@@ -101,7 +111,7 @@ class RunRepository:
             return None
         return self._to_run_model(record)
 
-    def claim_next_queued_run(self) -> Run | None:
+    def claim_next_queued_run(self, worker_id: str | None = None, lease_seconds: int = 300) -> Run | None:
         while True:
             candidate_id = self.session.scalars(
                 select(RunRecord.id)
@@ -112,25 +122,108 @@ class RunRepository:
             if candidate_id is None:
                 return None
 
-            started_at = datetime.now(timezone.utc)
-            result = self.session.execute(
-                update(RunRecord)
-                .where(RunRecord.id == candidate_id)
-                .where(RunRecord.status == RunStatus.QUEUED.value)
-                .values(
-                    status=RunStatus.RUNNING.value,
-                    error_message="",
-                    started_at=started_at,
-                    completed_at=None,
-                    duration_seconds=None,
-                )
+            claimed = self.claim_queued_run(candidate_id, worker_id=worker_id, lease_seconds=lease_seconds)
+            if claimed is not None:
+                return claimed
+
+    def recover_stale_running_runs(
+        self,
+        *,
+        stale_after_seconds: int,
+        now: datetime | None = None,
+    ) -> list[Run]:
+        if stale_after_seconds <= 0:
+            return []
+        reference_now = self._normalize_optional_datetime(now) or datetime.now(timezone.utc)
+        stale_before = reference_now - timedelta(seconds=stale_after_seconds)
+
+        # Recover based on lease expiration
+        lease_stale_records = list(
+            self.session.scalars(
+                select(RunRecord)
+                .where(RunRecord.status == RunStatus.RUNNING.value)
+                .where(RunRecord.lease_expires_at.is_not(None))
+                .where(RunRecord.lease_expires_at < reference_now)
+            ).all()
+        )
+
+        # Recover based on legacy started_at timeout (for runs without leases)
+        started_at_stale_records = list(
+            self.session.scalars(
+                select(RunRecord)
+                .where(RunRecord.status == RunStatus.RUNNING.value)
+                .where(RunRecord.lease_expires_at.is_(None))
+                .where(RunRecord.started_at.is_not(None))
+                .where(RunRecord.completed_at.is_(None))
+                .where(RunRecord.started_at < stale_before)
+                .order_by(RunRecord.started_at.asc())
+            ).all()
+        )
+
+        stale_records = list({r.id: r for r in (lease_stale_records + started_at_stale_records)}.values())
+        recovered: list[Run] = []
+        for record in stale_records:
+            timing = self._deserialize_json_object(record.timing_json)
+            strategy = "lease_timeout" if record.lease_expires_at else "started_at_timeout"
+            timing["recovery"] = {
+                "recovered_at": reference_now.isoformat(),
+                "strategy": strategy,
+                "stale_after_seconds": stale_after_seconds,
+                "previous_status": record.status,
+            }
+            record.status = RunStatus.FAILED.value
+            previous_error = (record.error_message or "").strip()
+            timeout_error = (
+                f"Recovered stale running run via {strategy}."
             )
+            record.error_message = f"{previous_error} | {timeout_error}" if previous_error else timeout_error
+            record.timing_json = self._serialize_timing(timing)
+            record.completed_at = reference_now
+            started_at = self._normalize_optional_datetime(record.started_at)
+            record.duration_seconds = (
+                max(0.0, (reference_now - started_at).total_seconds()) if started_at is not None else None
+            )
+            recovered.append(self._to_run_model(record))
+        if stale_records:
             self.session.commit()
-            if result.rowcount == 1:
-                record = self.session.get(RunRecord, candidate_id)
-                if record is None:
-                    return None
-                return self._to_run_model(record)
+            recovered = [self._to_run_model(record) for record in stale_records]
+        return recovered
+
+    def claim_queued_run(self, run_id: int, worker_id: str | None = None, lease_seconds: int = 300) -> Run | None:
+        started_at = datetime.now(timezone.utc)
+        lease_expires_at = started_at + timedelta(seconds=lease_seconds)
+        result = self.session.execute(
+            update(RunRecord)
+            .where(RunRecord.id == run_id)
+            .where(RunRecord.status == RunStatus.QUEUED.value)
+            .values(
+                status=RunStatus.RUNNING.value,
+                error_message="",
+                started_at=self._normalize_datetime(started_at),
+                completed_at=None,
+                duration_seconds=None,
+                worker_id=worker_id,
+                lease_expires_at=lease_expires_at,
+            )
+        )
+        self.session.commit()
+        if result.rowcount != 1:
+            return None
+        record = self.session.get(RunRecord, run_id)
+        if record is None:
+            return None
+        return self._to_run_model(record)
+
+    def renew_lease(self, run_id: int, lease_seconds: int = 300) -> bool:
+        new_expiry = self._normalize_datetime(datetime.now(timezone.utc)) + timedelta(seconds=lease_seconds)
+        result = self.session.execute(
+            update(RunRecord)
+            .where(RunRecord.id == run_id)
+            .where(RunRecord.status == RunStatus.RUNNING.value)
+            .values(lease_expires_at=new_expiry)
+        )
+        self.session.commit()
+        return result.rowcount == 1
 
     def update_status(
         self,
@@ -147,7 +240,8 @@ class RunRepository:
         if timing is not None:
             record.timing_json = self._serialize_timing(timing)
         if status in TERMINAL_RUN_STATUSES:
-            record.completed_at = datetime.now(timezone.utc)
+            record.completed_at = self._normalize_datetime(datetime.now(timezone.utc))
+            record.lease_expires_at = None
             if record.started_at is not None:
                 completed_at = self._normalize_datetime(record.completed_at)
                 started_at = self._normalize_datetime(record.started_at)
@@ -161,14 +255,16 @@ class RunRepository:
         return [self._to_run_model(row) for row in rows]
 
     def list_latest_runs_above_confidence_threshold(self, confidence_threshold: float, limit: int = 20) -> list[Run]:
-        rows = self.session.scalars(
-            select(RunRecord)
-            .options(selectinload(RunRecord.recommendations))
-            .order_by(RunRecord.created_at.desc())
-        ).all()
+        rows = self.session.scalars(select(RunRecord).order_by(RunRecord.created_at.desc())).all()
         filtered: list[Run] = []
         for row in rows:
-            if any(recommendation.confidence >= confidence_threshold for recommendation in row.recommendations):
+            has_confident_plan = self.session.scalars(
+                select(RecommendationPlanRecord.id)
+                .where(RecommendationPlanRecord.run_id == row.id)
+                .where(RecommendationPlanRecord.confidence_percent >= confidence_threshold)
+                .limit(1)
+            ).first()
+            if has_confident_plan is not None:
                 filtered.append(self._to_run_model(row))
             if len(filtered) >= limit:
                 break
@@ -201,188 +297,96 @@ class RunRepository:
         self.session.refresh(record)
         return self._to_run_model(record)
 
-    def add_recommendation(self, run_id: int, recommendation: Recommendation, diagnostics: RunDiagnostics) -> Recommendation:
-        record = RecommendationRecord(
-            run_id=run_id,
-            ticker=recommendation.ticker,
-            direction=recommendation.direction.value,
-            confidence=recommendation.confidence,
-            entry_price=recommendation.entry_price,
-            stop_loss=recommendation.stop_loss,
-            take_profit=recommendation.take_profit,
-            indicator_summary=recommendation.indicator_summary,
-            evaluation_state=recommendation.state.value,
-            evaluated_at=recommendation.evaluated_at,
-            warnings_json="\n".join(diagnostics.warnings),
-            provider_errors_json="\n".join(diagnostics.provider_errors),
-            problems_json="\n".join(diagnostics.problems),
-            news_feed_errors_json="\n".join(diagnostics.news_feed_errors),
-            summary_error=diagnostics.summary_error or "",
-            llm_error=diagnostics.llm_error or "",
-            analysis_json=diagnostics.analysis_json or "",
-            raw_output=diagnostics.raw_output or "",
-            feature_vector_json=diagnostics.feature_vector_json or "",
-            normalized_feature_vector_json=diagnostics.normalized_feature_vector_json or "",
-            aggregations_json=diagnostics.aggregations_json or "",
-            confidence_weights_json=diagnostics.confidence_weights_json or "",
-            summary_method=diagnostics.summary_method or "",
-        )
-        self.session.add(record)
+    def upsert_heartbeat(self, heartbeat: WorkerHeartbeat) -> None:
+        record = self.session.get(WorkerHeartbeatRecord, heartbeat.worker_id)
+        now = datetime.now(timezone.utc)
+        if record is None:
+            record = WorkerHeartbeatRecord(
+                worker_id=heartbeat.worker_id,
+                hostname=heartbeat.hostname,
+                pid=heartbeat.pid,
+                status=heartbeat.status,
+                last_heartbeat_at=self._normalize_datetime(now),
+                started_at=self._normalize_optional_datetime(heartbeat.started_at) or self._normalize_datetime(now),
+                version=heartbeat.version,
+                active_run_id=heartbeat.active_run_id,
+                metadata_json=heartbeat.metadata_json,
+            )
+            self.session.add(record)
+        else:
+            record.status = heartbeat.status
+            record.last_heartbeat_at = self._normalize_datetime(now)
+            if record.started_at is not None:
+                record.started_at = self._normalize_datetime(record.started_at)
+            record.active_run_id = heartbeat.active_run_id
+            record.metadata_json = heartbeat.metadata_json
+            if heartbeat.version:
+                record.version = heartbeat.version
         self.session.commit()
-        self.session.refresh(record)
-        return self._to_recommendation_model(record)
 
-    def list_latest_recommendations(self, limit: int = 20) -> list[Recommendation]:
+    def list_active_workers(self, stale_seconds: int = 60) -> list[WorkerHeartbeat]:
+        stale_before = datetime.now(timezone.utc) - timedelta(seconds=stale_seconds)
         rows = self.session.scalars(
-            select(RecommendationRecord)
-            .order_by(RecommendationRecord.created_at.desc())
-            .limit(limit)
+            select(WorkerHeartbeatRecord)
+            .where(WorkerHeartbeatRecord.last_heartbeat_at >= stale_before)
+            .order_by(WorkerHeartbeatRecord.last_heartbeat_at.desc())
         ).all()
-        return [self._to_recommendation_model(row) for row in rows]
-
-    def get_recommendation(self, recommendation_id: int) -> Recommendation:
-        record = self.session.get(RecommendationRecord, recommendation_id)
-        if record is None:
-            raise ValueError(f"Recommendation {recommendation_id} not found")
-        return self._to_recommendation_model(record)
-
-    def get_recommendation_diagnostics(self, recommendation_id: int) -> RunDiagnostics:
-        record = self.session.get(RecommendationRecord, recommendation_id)
-        if record is None:
-            raise ValueError(f"Recommendation {recommendation_id} not found")
-        return self._to_diagnostics_model(record)
-
-    def list_outputs_for_run(self, run_id: int) -> list[RunOutput]:
-        rows = self.session.scalars(
-            select(RecommendationRecord)
-            .where(RecommendationRecord.run_id == run_id)
-            .order_by(RecommendationRecord.created_at.desc())
-        ).all()
-        return [RunOutput(recommendation=self._to_recommendation_model(row), diagnostics=self._to_diagnostics_model(row)) for row in rows]
-
-    def list_recommendations_for_run(self, run_id: int) -> list[Recommendation]:
-        return [output.recommendation for output in self.list_outputs_for_run(run_id)]
-
-    def list_recommendation_history(self) -> list[RecommendationHistoryItem]:
-        rows = self.session.execute(
-            select(RecommendationRecord, RunRecord)
-            .join(RunRecord, RecommendationRecord.run_id == RunRecord.id)
-            .order_by(RecommendationRecord.created_at.desc())
-        ).all()
-        return [self._to_recommendation_history_item(recommendation_record, run_record) for recommendation_record, run_record in rows]
-
-    def set_recommendation_state(
-        self,
-        recommendation_id: int,
-        state: RecommendationState,
-        evaluated_at: datetime | None = None,
-    ) -> Recommendation:
-        record = self.session.get(RecommendationRecord, recommendation_id)
-        if record is None:
-            raise ValueError(f"Recommendation {recommendation_id} not found")
-        record.evaluation_state = state.value
-        record.evaluated_at = evaluated_at
-        self.session.commit()
-        self.session.refresh(record)
-        return self._to_recommendation_model(record)
-
-    def list_recommendation_history_for_ticker(self, ticker: str) -> list[RecommendationHistoryItem]:
-        rows = self.session.execute(
-            select(RecommendationRecord, RunRecord)
-            .join(RunRecord, RecommendationRecord.run_id == RunRecord.id)
-            .where(RecommendationRecord.ticker == ticker)
-            .order_by(RecommendationRecord.created_at.desc())
-        ).all()
-        return [self._to_recommendation_history_item(recommendation_record, run_record) for recommendation_record, run_record in rows]
+        return [self._to_heartbeat_model(row) for row in rows]
 
     def delete_run(self, run_id: int) -> None:
         record = self.session.get(RunRecord, run_id)
         if record is None:
             raise ValueError(f"Run {run_id} not found")
-        self.session.execute(delete(RecommendationRecord).where(RecommendationRecord.run_id == run_id))
+        plan_ids = list(
+            self.session.scalars(
+                select(RecommendationPlanRecord.id).where(RecommendationPlanRecord.run_id == run_id)
+            ).all()
+        )
+        if plan_ids:
+            self.session.execute(
+                delete(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.recommendation_plan_id.in_(plan_ids))
+            )
+            self.session.execute(delete(RecommendationPlanRecord).where(RecommendationPlanRecord.id.in_(plan_ids)))
+        self.session.execute(delete(TickerSignalSnapshotRecord).where(TickerSignalSnapshotRecord.run_id == run_id))
+        self.session.execute(delete(MacroContextSnapshotRecord).where(MacroContextSnapshotRecord.run_id == run_id))
+        self.session.execute(delete(IndustryContextSnapshotRecord).where(IndustryContextSnapshotRecord.run_id == run_id))
+        self.session.execute(delete(SupportSnapshotRecord).where(SupportSnapshotRecord.run_id == run_id))
         self.session.delete(record)
         self.session.commit()
 
-    @classmethod
-    def _to_run_model(cls, record: RunRecord) -> Run:
+    def _to_run_model(self, record: RunRecord) -> Run:
         return Run(
             id=record.id,
             job_id=record.job_id,
             job_type=JobType(record.job_type or JobType.PROPOSAL_GENERATION.value),
             status=record.status,
             error_message=record.error_message or None,
-            scheduled_for=cls._normalize_optional_datetime(record.scheduled_for),
+            scheduled_for=self._normalize_optional_datetime(record.scheduled_for),
             summary_json=record.summary_json or None,
             artifact_json=record.artifact_json or None,
-            created_at=cls._normalize_datetime(record.created_at),
-            updated_at=cls._normalize_datetime(record.updated_at),
-            started_at=cls._normalize_optional_datetime(record.started_at),
-            completed_at=cls._normalize_optional_datetime(record.completed_at),
+            created_at=self._normalize_datetime(record.created_at),
+            updated_at=self._normalize_datetime(record.updated_at),
+            started_at=self._normalize_optional_datetime(record.started_at),
+            completed_at=self._normalize_optional_datetime(record.completed_at),
             duration_seconds=record.duration_seconds,
+            worker_id=record.worker_id,
+            lease_expires_at=self._normalize_optional_datetime(record.lease_expires_at),
             timing_json=record.timing_json or None,
         )
 
-    @classmethod
-    def _to_recommendation_model(cls, record: RecommendationRecord) -> Recommendation:
-        return Recommendation(
-            id=record.id,
-            run_id=record.run_id,
-            ticker=record.ticker,
-            direction=record.direction,
-            confidence=record.confidence,
-            entry_price=record.entry_price,
-            stop_loss=record.stop_loss,
-            take_profit=record.take_profit,
-            indicator_summary=record.indicator_summary or "",
-            state=record.evaluation_state or RecommendationState.PENDING.value,
-            created_at=record.created_at,
-            evaluated_at=record.evaluated_at,
-        )
-
-    @classmethod
-    def _to_diagnostics_model(cls, record: RecommendationRecord) -> RunDiagnostics:
-        return RunDiagnostics(
-            warnings=cls._split_lines(record.warnings_json),
-            provider_errors=cls._split_lines(record.provider_errors_json),
-            problems=cls._split_lines(record.problems_json),
-            news_feed_errors=cls._split_lines(record.news_feed_errors_json),
-            summary_error=record.summary_error or None,
-            llm_error=record.llm_error or None,
-            raw_output=record.raw_output or None,
-            analysis_json=record.analysis_json or None,
-            feature_vector_json=record.feature_vector_json or None,
-            normalized_feature_vector_json=record.normalized_feature_vector_json or None,
-            aggregations_json=record.aggregations_json or None,
-            confidence_weights_json=record.confidence_weights_json or None,
-            summary_method=record.summary_method or None,
-        )
-
-    @classmethod
-    def _to_recommendation_history_item(
-        cls,
-        recommendation_record: RecommendationRecord,
-        run_record: RunRecord,
-    ) -> RecommendationHistoryItem:
-        warnings = cls._split_lines(recommendation_record.warnings_json)
-        provider_errors = cls._split_lines(recommendation_record.provider_errors_json)
-        return RecommendationHistoryItem(
-            recommendation_id=recommendation_record.id,
-            run_id=run_record.id,
-            run_status=run_record.status,
-            ticker=recommendation_record.ticker,
-            direction=recommendation_record.direction,
-            confidence=recommendation_record.confidence,
-            entry_price=recommendation_record.entry_price,
-            stop_loss=recommendation_record.stop_loss,
-            take_profit=recommendation_record.take_profit,
-            indicator_summary=recommendation_record.indicator_summary or "",
-            state=recommendation_record.evaluation_state or RecommendationState.PENDING.value,
-            created_at=recommendation_record.created_at,
-            evaluated_at=recommendation_record.evaluated_at,
-            warnings=warnings,
-            provider_errors=provider_errors,
-            summary_error=recommendation_record.summary_error or None,
-            llm_error=recommendation_record.llm_error or None,
+    def _to_heartbeat_model(self, record: WorkerHeartbeatRecord) -> WorkerHeartbeat:
+        return WorkerHeartbeat(
+            worker_id=record.worker_id,
+            hostname=record.hostname,
+            pid=record.pid,
+            status=record.status,
+            last_heartbeat_at=self._normalize_datetime(record.last_heartbeat_at),
+            started_at=self._normalize_datetime(record.started_at),
+            version=record.version,
+            active_run_id=record.active_run_id,
+            metadata_json=record.metadata_json,
+            created_at=self._normalize_datetime(record.created_at),
+            updated_at=self._normalize_datetime(record.updated_at),
         )
 
     def _resolve_job_type(self, job_id: int, job_type: JobType | None) -> JobType:
@@ -394,12 +398,18 @@ class RunRepository:
         return JobType(job.job_type or JobType.PROPOSAL_GENERATION.value)
 
     @staticmethod
-    def _split_lines(value: str) -> list[str]:
-        return [item for item in value.split("\n") if item]
-
-    @staticmethod
     def _serialize_timing(timing: dict[str, object]) -> str:
         return json.dumps(timing, indent=2, sort_keys=True)
+
+    @staticmethod
+    def _deserialize_json_object(payload: str | None) -> dict[str, object]:
+        if not payload:
+            return {}
+        try:
+            parsed = json.loads(payload)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
 
     @staticmethod
     def _normalize_datetime(value: datetime) -> datetime:
@@ -407,8 +417,7 @@ class RunRepository:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
 
-    @classmethod
-    def _normalize_optional_datetime(cls, value: datetime | None) -> datetime | None:
+    def _normalize_optional_datetime(self, value: datetime | None) -> datetime | None:
         if value is None:
             return None
-        return cls._normalize_datetime(value)
+        return self._normalize_datetime(value)

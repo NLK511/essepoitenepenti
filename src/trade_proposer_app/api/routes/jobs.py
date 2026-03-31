@@ -4,14 +4,22 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.domain.models import Job, Run, Watchlist
+from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
-from trade_proposer_app.services.builders import create_proposal_service
+from trade_proposer_app.services.builders import (
+    create_industry_context_service,
+    create_industry_support_service,
+    create_macro_context_service,
+    create_macro_support_service,
+)
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
-from trade_proposer_app.services.evaluations import RecommendationEvaluationService
+from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.optimizations import WeightOptimizationService
 from trade_proposer_app.services.scheduling import CronSchedule, ScheduleParseError
 
@@ -52,8 +60,9 @@ def normalize_job_type(job_type: str | None) -> JobType:
         raise HTTPException(
             status_code=400,
             detail=(
-                "invalid job_type: use proposal_generation, "
-                "recommendation_evaluation, or weight_optimization"
+                "invalid job_type: use proposal_generation, recommendation_evaluation, "
+                "weight_optimization, macro_sentiment_refresh (macro context refresh), "
+                "industry_sentiment_refresh (industry context refresh), or historical_replay"
             ),
         ) from exc
 
@@ -145,9 +154,20 @@ async def execute_job(job_id: int, session: Session = Depends(get_db_session)) -
     service = JobExecutionService(
         jobs=JobRepository(session),
         runs=RunRepository(session),
-        proposals=create_proposal_service(session),
-        evaluations=EvaluationExecutionService(RecommendationEvaluationService(session)),
+        evaluations=EvaluationExecutionService(
+            recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
+        ),
         optimizations=create_optimization_service(session),
+        macro_support=create_macro_support_service(session),
+        industry_support=create_industry_support_service(session),
+        macro_context=create_macro_context_service(session),
+        industry_context=create_industry_context_service(session),
+        recommendation_plans=RecommendationPlanRepository(session),
+        historical_replay=HistoricalReplayService(
+            historical_replays=HistoricalReplayRepository(session),
+            jobs=JobRepository(session),
+            runs=RunRepository(session),
+        ),
     )
     return service.enqueue_job(job_id)
 

@@ -1,0 +1,42 @@
+{
+  "belongs_to_sector": {
+    "label": "belongs to sector",
+    "aliases": ["sector_membership"]
+  },
+  "belongs_to_industry": {
+    "label": "belongs to industry",
+    "aliases": ["industry_membership"]
+  },
+  "peer_of": {
+    "label": "peer of",
+    "aliases": ["peer", "competes with"]
+  },
+  "supplier_to": {
+    "label": "supplier to",
+    "aliases": ["supplies", "supplier"]
+  },
+  "customer_of": {
+    "label": "customer of",
+    "aliases": ["customer", "buys from"]
+  },
+  "benefits_from": {
+    "label": "benefits from",
+    "aliases": ["beneficiary_of"]
+  },
+  "hurt_by": {
+    "label": "hurt by",
+    "aliases": ["pressured_by", "weighed_by"]
+  },
+  "sensitive_to": {
+    "label": "sensitive to",
+    "aliases": ["exposed_to"]
+  },
+  "exposed_to_theme": {
+    "label": "exposed to theme",
+    "aliases": ["theme_exposure"]
+  },
+  "linked_macro_channel": {
+    "label": "linked macro channel",
+    "aliases": ["macro_link", "macro_sensitivity_link"]
+  }
+}

@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
+import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { Job, JobType, Run, Watchlist } from "../types";
 import { jobTypeLabel, tickerTone } from "../utils";
 
@@ -150,9 +150,9 @@ export function JobsPage() {
   return (
     <>
       <PageHeader
-        kicker="Automation journey"
-        title="Create jobs, enqueue runs, and manage scheduled execution."
-        subtitle="Jobs define what should be analyzed. Each execution creates a run, and each successful run can produce one or more trade recommendations."
+        kicker="Automation"
+        title="Jobs and execution"
+        subtitle="Jobs define what gets analyzed and when. Use this page to create repeatable workflows, launch manual runs, and keep execution organized around watchlists and recommendation plans."
         actions={
           <Link to="/jobs/watchlists" className="button-secondary">
             Manage watchlists
@@ -160,9 +160,15 @@ export function JobsPage() {
         }
       />
       {error ? <ErrorState message={error} /> : null}
-      <section className="two-column">
-        <Card>
-          <SectionTitle kicker="Create" title="New job" />
+      <section className="metrics-grid top-gap">
+        <StatCard label="Jobs" value={data?.jobs.length ?? "—"} helper="Saved automation workflows" />
+        <StatCard label="Watchlists" value={data?.watchlists.length ?? "—"} helper="Reusable ticker universes available to proposal jobs" />
+        <StatCard label="Proposal jobs" value={data?.jobs.filter((job) => job.job_type === "proposal_generation").length ?? "—"} helper="Jobs that create signals and plans" />
+        <StatCard label="Enabled" value={data?.jobs.filter((job) => job.enabled).length ?? "—"} helper="Workflows currently active for scheduling or manual execution" />
+      </section>
+      <section className="two-column top-gap">
+        <Card className="sticky-toolbar">
+          <SectionTitle kicker="Create" title="New job" subtitle="Keep the form minimal: choose the workflow type, then define either a watchlist or manual tickers only when the job actually needs them." />
           <form className="stack-form" onSubmit={handleCreateJob}>
             <div className="form-grid">
               <label className="form-field">
@@ -175,6 +181,8 @@ export function JobsPage() {
                   <option value="proposal_generation">Proposal generation</option>
                   <option value="recommendation_evaluation">Recommendation evaluation</option>
                   <option value="weight_optimization">Weight optimization</option>
+                  <option value="macro_sentiment_refresh">Macro context refresh</option>
+                  <option value="industry_sentiment_refresh">Industry context refresh</option>
                 </select>
               </label>
             </div>
@@ -211,7 +219,7 @@ export function JobsPage() {
           </form>
         </Card>
         <Card>
-          <SectionTitle kicker="Saved jobs" title="Run, edit, and delete" subtitle="Scheduled jobs can be edited and deleted inline." />
+          <SectionTitle kicker="Saved jobs" title="Run, edit, and delete" subtitle="Use enqueue for action, edit only when the schedule or source assumptions actually need to change." />
         {!data && !error ? <LoadingState message="Loading jobs…" /> : null}
         {data && data.jobs.length === 0 ? <EmptyState message="No jobs created yet." /> : null}
         {data ? (
@@ -312,6 +320,8 @@ export function JobsPage() {
                                     <option value="proposal_generation">Proposal generation</option>
                                     <option value="recommendation_evaluation">Recommendation evaluation</option>
                                     <option value="weight_optimization">Weight optimization</option>
+                                    <option value="macro_sentiment_refresh">Macro context refresh</option>
+                                    <option value="industry_sentiment_refresh">Industry context refresh</option>
                                   </select>
                                 </label>
                               </div>

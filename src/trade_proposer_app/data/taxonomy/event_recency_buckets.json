@@ -1,0 +1,6 @@
+{
+  "fresh": {"label": "fresh"},
+  "recent": {"label": "recent"},
+  "stale": {"label": "stale"},
+  "unknown": {"label": "unknown"}
+}

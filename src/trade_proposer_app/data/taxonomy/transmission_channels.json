@@ -1,0 +1,648 @@
+{
+  "ad_spend": {
+    "label": "ad spend",
+    "aliases": [
+      "ad_spend"
+    ]
+  },
+  "aftermarket_activity": {
+    "label": "aftermarket activity",
+    "aliases": [
+      "aftermarket_activity"
+    ]
+  },
+  "ai_attach": {
+    "label": "ai attach",
+    "aliases": [
+      "ai_attach"
+    ]
+  },
+  "ai_capex": {
+    "label": "ai capex",
+    "aliases": [
+      "ai_capex"
+    ]
+  },
+  "air_travel": {
+    "label": "air travel",
+    "aliases": [
+      "air_travel"
+    ]
+  },
+  "aluminum_prices": {
+    "label": "aluminum prices",
+    "aliases": [
+      "aluminum_prices"
+    ]
+  },
+  "attention_leader": {
+    "label": "attention leader",
+    "aliases": [
+      "attention_leader"
+    ]
+  },
+  "auto_credit": {
+    "label": "auto credit",
+    "aliases": [
+      "auto_credit"
+    ]
+  },
+  "auto_demand": {
+    "label": "auto demand",
+    "aliases": [
+      "auto_demand"
+    ]
+  },
+  "backlog": {
+    "label": "backlog",
+    "aliases": []
+  },
+  "battery_supply": {
+    "label": "battery supply",
+    "aliases": [
+      "battery_supply"
+    ]
+  },
+  "capacity_utilization": {
+    "label": "capacity utilization",
+    "aliases": [
+      "capacity_utilization"
+    ]
+  },
+  "capital_markets": {
+    "label": "capital markets",
+    "aliases": [
+      "capital_markets"
+    ]
+  },
+  "china_consumer": {
+    "label": "china consumer",
+    "aliases": [
+      "china_consumer"
+    ]
+  },
+  "china_demand": {
+    "label": "china demand",
+    "aliases": [
+      "china_demand"
+    ]
+  },
+  "cloud_demand": {
+    "label": "cloud demand",
+    "aliases": [
+      "cloud_demand"
+    ]
+  },
+  "cloud_spend": {
+    "label": "cloud spend",
+    "aliases": [
+      "cloud_spend"
+    ]
+  },
+  "cloud_transition": {
+    "label": "cloud transition",
+    "aliases": [
+      "cloud_transition"
+    ]
+  },
+  "commodity_capex": {
+    "label": "commodity capex",
+    "aliases": [
+      "commodity_capex"
+    ]
+  },
+  "commodity_prices": {
+    "label": "commodity prices",
+    "aliases": [
+      "commodity_prices"
+    ]
+  },
+  "component_availability": {
+    "label": "component availability",
+    "aliases": [
+      "component_availability"
+    ]
+  },
+  "compute_demand": {
+    "label": "compute demand",
+    "aliases": [
+      "compute_demand"
+    ]
+  },
+  "construction_demand": {
+    "label": "construction demand",
+    "aliases": [
+      "construction_demand"
+    ]
+  },
+  "consumer_credit": {
+    "label": "consumer credit",
+    "aliases": [
+      "consumer_credit"
+    ]
+  },
+  "consumer_spending": {
+    "label": "consumer spending",
+    "aliases": [
+      "consumer_spending"
+    ]
+  },
+  "context_linked": {
+    "label": "context linked",
+    "aliases": [
+      "context_linked"
+    ]
+  },
+  "copper_prices": {
+    "label": "copper prices",
+    "aliases": [
+      "copper_prices"
+    ]
+  },
+  "creator_demand": {
+    "label": "creator demand",
+    "aliases": [
+      "creator_demand"
+    ]
+  },
+  "credit_cycle": {
+    "label": "credit cycle",
+    "aliases": [
+      "credit_cycle"
+    ]
+  },
+  "credit_spreads": {
+    "label": "credit spreads",
+    "aliases": [
+      "credit_spreads"
+    ]
+  },
+  "cross_border": {
+    "label": "cross border",
+    "aliases": [
+      "cross_border"
+    ]
+  },
+  "cross_border_logistics": {
+    "label": "cross border logistics",
+    "aliases": [
+      "cross_border_logistics"
+    ]
+  },
+  "deal_activity": {
+    "label": "deal activity",
+    "aliases": [
+      "deal_activity"
+    ]
+  },
+  "dealer_inventory": {
+    "label": "dealer inventory",
+    "aliases": [
+      "dealer_inventory"
+    ]
+  },
+  "defense_spend": {
+    "label": "defense spend",
+    "aliases": [
+      "defense_spend"
+    ]
+  },
+  "deposit_trends": {
+    "label": "deposit trends",
+    "aliases": [
+      "deposit_trends"
+    ]
+  },
+  "device_cycle": {
+    "label": "device cycle",
+    "aliases": [
+      "device_cycle"
+    ]
+  },
+  "drug_demand": {
+    "label": "drug demand",
+    "aliases": [
+      "drug_demand"
+    ]
+  },
+  "ecommerce_demand": {
+    "label": "ecommerce demand",
+    "aliases": [
+      "ecommerce_demand"
+    ]
+  },
+  "energy_costs": {
+    "label": "energy costs",
+    "aliases": [
+      "energy_costs"
+    ]
+  },
+  "engagement_trends": {
+    "label": "engagement trends",
+    "aliases": [
+      "engagement_trends"
+    ]
+  },
+  "enterprise_software": {
+    "label": "enterprise software",
+    "aliases": [
+      "enterprise_software"
+    ]
+  },
+  "enterprise_spend": {
+    "label": "enterprise spend",
+    "aliases": [
+      "enterprise_spend"
+    ]
+  },
+  "equipment_cycle": {
+    "label": "equipment cycle",
+    "aliases": [
+      "equipment_cycle"
+    ]
+  },
+  "event_follow_through": {
+    "label": "event follow through",
+    "aliases": [
+      "event_follow_through"
+    ]
+  },
+  "export_controls": {
+    "label": "export controls",
+    "aliases": [
+      "export_controls"
+    ]
+  },
+  "fab_capex": {
+    "label": "fab capex",
+    "aliases": [
+      "fab_capex"
+    ]
+  },
+  "farm_income": {
+    "label": "farm income",
+    "aliases": [
+      "farm_income"
+    ]
+  },
+  "foundry_capex": {
+    "label": "foundry capex",
+    "aliases": [
+      "foundry_capex"
+    ]
+  },
+  "fuel_costs": {
+    "label": "fuel costs",
+    "aliases": [
+      "fuel_costs"
+    ]
+  },
+  "fx": {
+    "label": "fx",
+    "aliases": []
+  },
+  "gaming_cycle": {
+    "label": "gaming cycle",
+    "aliases": [
+      "gaming_cycle"
+    ]
+  },
+  "geopolitical_risk": {
+    "label": "geopolitical risk",
+    "aliases": [
+      "geopolitical_risk"
+    ]
+  },
+  "geopolitics": {
+    "label": "geopolitics",
+    "aliases": []
+  },
+  "global_growth": {
+    "label": "global growth",
+    "aliases": [
+      "global_growth"
+    ]
+  },
+  "grocery_mix": {
+    "label": "grocery mix",
+    "aliases": [
+      "grocery_mix"
+    ]
+  },
+  "housing_turnover": {
+    "label": "housing turnover",
+    "aliases": [
+      "housing_turnover"
+    ]
+  },
+  "industrial_production": {
+    "label": "industrial production",
+    "aliases": [
+      "industrial_production"
+    ]
+  },
+  "industry_demand": {
+    "label": "industry demand",
+    "aliases": [
+      "industry_demand"
+    ]
+  },
+  "industry_read_through": {
+    "label": "industry read through",
+    "aliases": [
+      "industry_read_through"
+    ]
+  },
+  "infrastructure_spend": {
+    "label": "infrastructure spend",
+    "aliases": [
+      "infrastructure_spend"
+    ]
+  },
+  "international_growth": {
+    "label": "international growth",
+    "aliases": [
+      "international_growth"
+    ]
+  },
+  "inventory": {
+    "label": "inventory",
+    "aliases": []
+  },
+  "labor_costs": {
+    "label": "labor costs",
+    "aliases": [
+      "labor_costs"
+    ]
+  },
+  "leading_edge_nodes": {
+    "label": "leading edge nodes",
+    "aliases": [
+      "leading_edge_nodes"
+    ]
+  },
+  "lng_prices": {
+    "label": "lng prices",
+    "aliases": [
+      "lng_prices"
+    ]
+  },
+  "logistics": {
+    "label": "logistics",
+    "aliases": []
+  },
+  "logistics_demand": {
+    "label": "logistics demand",
+    "aliases": [
+      "logistics_demand"
+    ]
+  },
+  "macro_regime": {
+    "label": "macro regime",
+    "aliases": [
+      "macro_regime"
+    ]
+  },
+  "market_volatility": {
+    "label": "market volatility",
+    "aliases": [
+      "market_volatility"
+    ]
+  },
+  "medical_cost_trend": {
+    "label": "medical cost trend",
+    "aliases": [
+      "medical_cost_trend"
+    ]
+  },
+  "network_investment": {
+    "label": "network investment",
+    "aliases": [
+      "network_investment"
+    ]
+  },
+  "news_catalyst": {
+    "label": "news catalyst",
+    "aliases": [
+      "news_catalyst"
+    ]
+  },
+  "occupancy": {
+    "label": "occupancy",
+    "aliases": []
+  },
+  "payment_mix": {
+    "label": "payment mix",
+    "aliases": [
+      "payment_mix"
+    ]
+  },
+  "pc_refresh": {
+    "label": "pc refresh",
+    "aliases": [
+      "pc_refresh"
+    ]
+  },
+  "power_demand": {
+    "label": "power demand",
+    "aliases": [
+      "power_demand"
+    ]
+  },
+  "price_gaps": {
+    "label": "price gaps",
+    "aliases": [
+      "price_gaps"
+    ]
+  },
+  "pricing": {
+    "label": "pricing",
+    "aliases": []
+  },
+  "production_growth": {
+    "label": "production growth",
+    "aliases": [
+      "production_growth"
+    ]
+  },
+  "promotion_intensity": {
+    "label": "promotion intensity",
+    "aliases": [
+      "promotion_intensity"
+    ]
+  },
+  "promotions": {
+    "label": "promotions",
+    "aliases": []
+  },
+  "rates": {
+    "label": "rates",
+    "aliases": []
+  },
+  "refining_margins": {
+    "label": "refining margins",
+    "aliases": [
+      "refining_margins"
+    ]
+  },
+  "regulation": {
+    "label": "regulation",
+    "aliases": []
+  },
+  "regulatory_risk": {
+    "label": "regulatory risk",
+    "aliases": [
+      "regulatory_risk"
+    ]
+  },
+  "reimbursement": {
+    "label": "reimbursement",
+    "aliases": []
+  },
+  "repair_spend": {
+    "label": "repair spend",
+    "aliases": [
+      "repair_spend"
+    ]
+  },
+  "retail_traffic": {
+    "label": "retail traffic",
+    "aliases": [
+      "retail_traffic"
+    ]
+  },
+  "risk_appetite": {
+    "label": "risk appetite",
+    "aliases": [
+      "risk_appetite"
+    ]
+  },
+  "seat_growth": {
+    "label": "seat growth",
+    "aliases": [
+      "seat_growth"
+    ]
+  },
+  "semiconductor_cycle": {
+    "label": "semiconductor cycle",
+    "aliases": [
+      "semiconductor_cycle"
+    ]
+  },
+  "server_demand": {
+    "label": "server demand",
+    "aliases": [
+      "server_demand"
+    ]
+  },
+  "services_attach": {
+    "label": "services attach",
+    "aliases": [
+      "services_attach"
+    ]
+  },
+  "software_consolidation": {
+    "label": "software consolidation",
+    "aliases": [
+      "software_consolidation"
+    ]
+  },
+  "software_spend": {
+    "label": "software spend",
+    "aliases": [
+      "software_spend"
+    ]
+  },
+  "steel_prices": {
+    "label": "steel prices",
+    "aliases": [
+      "steel_prices"
+    ]
+  },
+  "supply_chain": {
+    "label": "supply chain",
+    "aliases": [
+      "supply_chain"
+    ]
+  },
+  "supply_constraints": {
+    "label": "supply constraints",
+    "aliases": [
+      "supply_constraints"
+    ]
+  },
+  "take_rate": {
+    "label": "take rate",
+    "aliases": [
+      "take_rate"
+    ]
+  },
+  "tenant_health": {
+    "label": "tenant health",
+    "aliases": [
+      "tenant_health"
+    ]
+  },
+  "theme_attention": {
+    "label": "theme attention",
+    "aliases": [
+      "theme_attention"
+    ]
+  },
+  "ticker_sentiment": {
+    "label": "ticker sentiment",
+    "aliases": [
+      "ticker_sentiment"
+    ]
+  },
+  "trade_policy": {
+    "label": "trade policy",
+    "aliases": [
+      "trade_policy"
+    ]
+  },
+  "traffic": {
+    "label": "traffic",
+    "aliases": []
+  },
+  "travel_demand": {
+    "label": "travel demand",
+    "aliases": [
+      "travel_demand"
+    ]
+  },
+  "travel_recovery": {
+    "label": "travel recovery",
+    "aliases": [
+      "travel_recovery"
+    ]
+  },
+  "trial_data": {
+    "label": "trial data",
+    "aliases": [
+      "trial_data"
+    ]
+  },
+  "utilization": {
+    "label": "utilization",
+    "aliases": []
+  },
+  "valuation_duration": {
+    "label": "valuation duration",
+    "aliases": [
+      "valuation_duration"
+    ]
+  },
+  "wealth_flows": {
+    "label": "wealth flows",
+    "aliases": [
+      "wealth_flows"
+    ]
+  },
+  "yield_curve": {
+    "label": "yield curve",
+    "aliases": [
+      "yield_curve"
+    ]
+  }
+}

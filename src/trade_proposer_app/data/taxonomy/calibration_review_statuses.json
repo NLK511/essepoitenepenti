@@ -1,0 +1,7 @@
+{
+  "disabled": {"label": "disabled"},
+  "insufficient_data": {"label": "insufficient data"},
+  "heuristic_limited": {"label": "heuristic limited"},
+  "usable_for_gating": {"label": "usable for gating"},
+  "strong_for_gating": {"label": "strong for gating"}
+}

@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.domain.enums import StrategyHorizon
 from trade_proposer_app.domain.models import Watchlist
 from trade_proposer_app.persistence.models import WatchlistRecord
 
@@ -13,21 +14,60 @@ class WatchlistRepository:
         rows = self.session.scalars(select(WatchlistRecord).order_by(WatchlistRecord.name)).all()
         return [self._to_model(row) for row in rows]
 
-    def create(self, name: str, tickers: list[str]) -> Watchlist:
-        normalized_tickers = [ticker for ticker in tickers if ticker]
+    def create(
+        self,
+        name: str,
+        tickers: list[str],
+        *,
+        description: str = "",
+        region: str = "",
+        exchange: str = "",
+        timezone: str = "",
+        default_horizon: StrategyHorizon = StrategyHorizon.ONE_WEEK,
+        allow_shorts: bool = True,
+        optimize_evaluation_timing: bool = False,
+    ) -> Watchlist:
+        normalized_name = name.strip()
+        if not normalized_name:
+            raise ValueError("watchlist name is required")
+
+        normalized_tickers = self._normalize_tickers(tickers)
         if not normalized_tickers:
             raise ValueError("watchlist requires at least one ticker")
         duplicate_tickers = self._find_tickers_already_assigned(normalized_tickers)
         if duplicate_tickers:
             duplicates = ", ".join(duplicate_tickers)
             raise ValueError(f"ticker already assigned to another watchlist: {duplicates}")
-        record = WatchlistRecord(name=name, tickers_csv=",".join(normalized_tickers))
+
+        record = WatchlistRecord(
+            name=normalized_name,
+            description=description.strip(),
+            region=region.strip(),
+            exchange=exchange.strip(),
+            timezone=timezone.strip(),
+            default_horizon=default_horizon.value,
+            allow_shorts=allow_shorts,
+            optimize_evaluation_timing=optimize_evaluation_timing,
+            tickers_csv=",".join(normalized_tickers),
+        )
         self.session.add(record)
         self.session.commit()
         self.session.refresh(record)
         return self._to_model(record)
 
-    def create_unique(self, base_name: str, tickers: list[str]) -> Watchlist:
+    def create_unique(
+        self,
+        base_name: str,
+        tickers: list[str],
+        *,
+        description: str = "",
+        region: str = "",
+        exchange: str = "",
+        timezone: str = "",
+        default_horizon: StrategyHorizon = StrategyHorizon.ONE_WEEK,
+        allow_shorts: bool = True,
+        optimize_evaluation_timing: bool = False,
+    ) -> Watchlist:
         normalized_base_name = base_name.strip()
         if not normalized_base_name:
             raise ValueError("watchlist name is required")
@@ -38,7 +78,24 @@ class WatchlistRepository:
         while candidate in existing_names:
             candidate = f"{normalized_base_name} ({suffix})"
             suffix += 1
-        return self.create(candidate, tickers)
+        return self.create(
+            candidate,
+            tickers,
+            description=description,
+            region=region,
+            exchange=exchange,
+            timezone=timezone,
+            default_horizon=default_horizon,
+            allow_shorts=allow_shorts,
+            optimize_evaluation_timing=optimize_evaluation_timing,
+        )
+
+    def delete(self, watchlist_id: int) -> None:
+        record = self.session.get(WatchlistRecord, watchlist_id)
+        if record is None:
+            raise ValueError(f"Watchlist {watchlist_id} not found")
+        self.session.delete(record)
+        self.session.commit()
 
     def get(self, watchlist_id: int) -> Watchlist:
         record = self.session.get(WatchlistRecord, watchlist_id)
@@ -58,9 +115,33 @@ class WatchlistRepository:
         return duplicates
 
     @staticmethod
+    def _normalize_tickers(tickers: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for ticker in tickers:
+            candidate = ticker.strip().upper()
+            if not candidate or candidate in seen:
+                continue
+            seen.add(candidate)
+            normalized.append(candidate)
+        return normalized
+
+    @staticmethod
     def _to_model(record: WatchlistRecord) -> Watchlist:
+        default_horizon_value = (record.default_horizon or StrategyHorizon.ONE_WEEK.value).strip()
+        try:
+            default_horizon = StrategyHorizon(default_horizon_value)
+        except ValueError:
+            default_horizon = StrategyHorizon.ONE_WEEK
         return Watchlist(
             id=record.id,
             name=record.name,
+            description=record.description or "",
+            region=record.region or "",
+            exchange=record.exchange or "",
+            timezone=record.timezone or "",
+            default_horizon=default_horizon,
+            allow_shorts=bool(record.allow_shorts),
+            optimize_evaluation_timing=bool(record.optimize_evaluation_timing),
             tickers=[ticker for ticker in record.tickers_csv.split(",") if ticker],
         )

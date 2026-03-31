@@ -1,16 +1,29 @@
 from datetime import datetime, timezone
 
+from trade_proposer_app.config import settings
 from trade_proposer_app.db import SessionLocal
 from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.services.builders import create_proposal_service
+from trade_proposer_app.repositories.watchlists import WatchlistRepository
+from trade_proposer_app.services.builders import (
+    create_industry_context_service,
+    create_macro_context_service,
+    create_watchlist_orchestration_service,
+)
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
-from trade_proposer_app.services.evaluations import RecommendationEvaluationService
 from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.optimizations import WeightOptimizationService
-from trade_proposer_app.services.scheduling import ScheduleParseError, latest_due_at, normalize_schedule_time
+from trade_proposer_app.services.scheduling import (
+    ScheduleParseError,
+    latest_due_at,
+    latest_due_at_in_timezone,
+    normalize_schedule_time,
+)
+from trade_proposer_app.services.watchlist_policy import WatchlistPolicyService
 
 
 def enqueue_enabled_jobs(now: datetime | None = None) -> int:
@@ -19,26 +32,51 @@ def enqueue_enabled_jobs(now: datetime | None = None) -> int:
         jobs_repository = JobRepository(session)
         runs_repository = RunRepository(session)
         settings_repository = SettingsRepository(session)
+        watchlists_repository = WatchlistRepository(session)
+        policy_service = WatchlistPolicyService()
         jobs = jobs_repository.list_enabled()
         service = JobExecutionService(
             jobs=jobs_repository,
             runs=runs_repository,
-            proposals=create_proposal_service(session),
-            evaluations=EvaluationExecutionService(RecommendationEvaluationService(session)),
+            evaluations=EvaluationExecutionService(
+                recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
+            ),
             optimizations=WeightOptimizationService(
                 session=session,
                 minimum_resolved_trades=settings_repository.get_optimization_minimum_resolved_trades(),
             ),
+            watchlist_orchestration=create_watchlist_orchestration_service(session),
+            recommendation_plans=RecommendationPlanRepository(session),
         )
         normalized_now = normalize_schedule_time(now or datetime.now(timezone.utc))
+        runs_repository.recover_stale_running_runs(
+            stale_after_seconds=settings.run_stale_after_seconds,
+            now=normalized_now,
+        )
         count = 0
         for job in jobs:
-            if not job.cron:
+            watchlist = None
+            if job.watchlist_id is not None:
+                try:
+                    watchlist = watchlists_repository.get(job.watchlist_id)
+                except ValueError as exc:
+                    print(f"scheduler: skipping job {job.id} ({job.name}) because watchlist lookup failed: {exc}")
+                    continue
+            resolved_schedule = policy_service.resolve_job_schedule(job, watchlist)
+            if resolved_schedule is None:
                 continue
+            schedule_expression, schedule_timezone, schedule_source = resolved_schedule
             try:
-                scheduled_for = latest_due_at(job.cron, normalized_now)
+                scheduled_for = (
+                    latest_due_at(schedule_expression, normalized_now)
+                    if schedule_timezone == "UTC"
+                    else latest_due_at_in_timezone(schedule_expression, normalized_now, schedule_timezone)
+                )
             except ScheduleParseError as exc:
-                print(f"scheduler: skipping job {job.id} ({job.name}) due to invalid schedule '{job.cron}': {exc}")
+                print(
+                    f"scheduler: skipping job {job.id} ({job.name}) due to invalid schedule "
+                    f"'{schedule_expression}' from {schedule_source}: {exc}"
+                )
                 continue
             if scheduled_for is None:
                 continue

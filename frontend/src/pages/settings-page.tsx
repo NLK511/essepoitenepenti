@@ -79,6 +79,7 @@ export function SettingsPage() {
         max_tokens: String(formData.get("max_tokens") ?? "220"),
         pi_command: String(formData.get("pi_command") ?? "pi"),
         pi_agent_dir: String(formData.get("pi_agent_dir") ?? ""),
+        pi_cli_args: String(formData.get("pi_cli_args") ?? ""),
         pi_api_url: String(formData.get("pi_api_url") ?? ""),
         pi_api_key: String(formData.get("pi_api_key") ?? ""),
         prompt: String(formData.get("prompt") ?? ""),
@@ -122,6 +123,61 @@ export function SettingsPage() {
       await loadData();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to roll back weights");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function saveNewsSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    try {
+      setSaving("news");
+      setError(null);
+      setNotice(null);
+      await postForm<{ settings: Record<string, string> }>("/api/settings/news", {
+        macro_article_limit: String(formData.get("macro_article_limit") ?? "12"),
+        industry_article_limit: String(formData.get("industry_article_limit") ?? "12"),
+        ticker_article_limit: String(formData.get("ticker_article_limit") ?? "12"),
+      });
+      setNotice("News settings saved");
+      await loadData();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save news settings");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function saveSocialSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    try {
+      setSaving("social");
+      setError(null);
+      setNotice(null);
+      await postForm<{ settings: Record<string, string> }>("/api/settings/social", {
+        sentiment_enabled: formData.get("sentiment_enabled") ? "true" : "false",
+        nitter_enabled: formData.get("nitter_enabled") ? "true" : "false",
+        nitter_base_url: String(formData.get("nitter_base_url") ?? settingMap.social_nitter_base_url ?? "http://127.0.0.1:8080"),
+        nitter_timeout_seconds: String(formData.get("nitter_timeout_seconds") ?? settingMap.social_nitter_timeout_seconds ?? "6"),
+        nitter_max_items_per_query: String(formData.get("nitter_max_items_per_query") ?? settingMap.social_nitter_max_items_per_query ?? "12"),
+        nitter_query_window_hours: String(formData.get("nitter_query_window_hours") ?? settingMap.social_nitter_query_window_hours ?? "12"),
+        nitter_include_replies: formData.get("nitter_include_replies") ? "true" : "false",
+        nitter_enable_ticker: formData.get("nitter_enable_ticker") ? "true" : "false",
+        weight_news: settingMap.social_weight_news ?? "1.0",
+        weight_social: settingMap.social_weight_social ?? "0.6",
+        weight_macro: settingMap.social_weight_macro ?? "0.2",
+        weight_industry: settingMap.social_weight_industry ?? "0.3",
+        weight_ticker: settingMap.social_weight_ticker ?? "0.5",
+        enable_author_weighting: settingMap.social_enable_author_weighting ?? "true",
+        enable_engagement_weighting: settingMap.social_enable_engagement_weighting ?? "true",
+        enable_duplicate_suppression: settingMap.social_enable_duplicate_suppression ?? "true",
+      });
+      setNotice("Social settings saved");
+      await loadData();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save social settings");
     } finally {
       setSaving(null);
     }
@@ -180,10 +236,10 @@ export function SettingsPage() {
             </Card>
 
             <Card>
-              <SectionTitle kicker="Optimization guardrails" title="Weight optimization safety controls" subtitle="These settings affect scheduled and manual optimization runs. Each optimization now creates a rollback-capable backup of weights.json before the prototype script mutates it." />
+              <SectionTitle kicker="Optimization guardrails" title="Weight optimization safety controls" subtitle="These settings affect scheduled and manual optimization runs. Each optimization now creates a rollback-capable backup of weights.json before the app mutates it using resolved recommendation-plan outcomes." />
               <form className="stack-form" onSubmit={saveOptimizationSettings}>
                 <label className="form-field">
-                  <span>Minimum resolved trades</span>
+                  <span>Minimum resolved plan outcomes</span>
                   <input name="minimum_resolved_trades" defaultValue={String(data.optimization.minimum_resolved_trades)} />
                 </label>
                 <div className="helper-text">Current weights file: {data.optimization.weights_path}</div>
@@ -265,6 +321,49 @@ export function SettingsPage() {
                 <button className="button" type="submit" disabled={saving === "summary"}>{saving === "summary" ? "Saving…" : "Save summary settings"}</button>
               </form>
             </Card>
+
+            <Card>
+              <SectionTitle kicker="News providers" title="News limits" subtitle="Configure maximum number of articles fetched per context level." />
+              <form className="stack-form" onSubmit={saveNewsSettings}>
+                <div className="form-grid">
+                  <label className="form-field"><span>Macro limit</span><input name="macro_article_limit" defaultValue={settingMap.news_macro_article_limit ?? "12"} /></label>
+                  <label className="form-field"><span>Industry limit</span><input name="industry_article_limit" defaultValue={settingMap.news_industry_article_limit ?? "12"} /></label>
+                  <label className="form-field"><span>Ticker limit</span><input name="ticker_article_limit" defaultValue={settingMap.news_ticker_article_limit ?? "12"} /></label>
+                </div>
+                <div className="helper-text">Set how many articles are aggregated into the news bundle for macro, industry, and ticker analysis. Higher values provide more context to the LLM but cost more tokens and take longer.</div>
+                <button className="button" type="submit" disabled={saving === "news"}>{saving === "news" ? "Saving…" : "Save news settings"}</button>
+              </form>
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Social signals" title="Nitter-powered macro & industry context" subtitle="Enable the native social pipeline and point it at your Nitter instance so support/context refresh jobs can pull macro and industry posts directly." />
+              <form className="stack-form" onSubmit={saveSocialSettings}>
+                <div className="form-grid">
+                  <label className="checkbox-field">
+                    <span>Social signal stack enabled</span>
+                    <input type="checkbox" name="sentiment_enabled" value="true" defaultChecked={settingMap.social_sentiment_enabled === "true"} />
+                  </label>
+                  <label className="checkbox-field">
+                    <span>Nitter source enabled</span>
+                    <input type="checkbox" name="nitter_enabled" value="true" defaultChecked={settingMap.social_nitter_enabled === "true"} />
+                  </label>
+                  <label className="form-field"><span>Nitter base URL</span><input name="nitter_base_url" defaultValue={settingMap.social_nitter_base_url ?? "http://127.0.0.1:8080"} /></label>
+                  <label className="form-field"><span>Request timeout (s)</span><input name="nitter_timeout_seconds" defaultValue={settingMap.social_nitter_timeout_seconds ?? "6"} /></label>
+                  <label className="form-field"><span>Results per query</span><input name="nitter_max_items_per_query" defaultValue={settingMap.social_nitter_max_items_per_query ?? "12"} /></label>
+                  <label className="form-field"><span>Query window (h)</span><input name="nitter_query_window_hours" defaultValue={settingMap.social_nitter_query_window_hours ?? "12"} /></label>
+                  <label className="checkbox-field">
+                    <span>Include replies</span>
+                    <input type="checkbox" name="nitter_include_replies" value="true" defaultChecked={settingMap.social_nitter_include_replies === "true"} />
+                  </label>
+                  <label className="checkbox-field">
+                    <span>Use Nitter for ticker sentiment</span>
+                    <input type="checkbox" name="nitter_enable_ticker" value="true" defaultChecked={settingMap.social_nitter_enable_ticker === "true"} />
+                  </label>
+                </div>
+                <div className="helper-text">Enable the social signal stack plus the Nitter source, then adjust the timeout, window, and item limits so support/context refresh jobs can reach your instance reliably. Use the ticker toggle to keep Nitter restricted to macro and industry support snapshots when you do not want it influencing live ticker sentiment.</div>
+                <button className="button" type="submit" disabled={saving === "social"}>{saving === "social" ? "Saving…" : "Save social settings"}</button>
+              </form>
+            </Card>
           </section>
 
           <Card>
@@ -294,7 +393,7 @@ export function SettingsPage() {
           </Card>
 
           <Card key={`providers-${dataVersion}`}>
-            <SectionTitle kicker="Provider credentials" title="Encrypted credential storage" subtitle="These values are stored encrypted at rest and injected into the prototype subprocess when relevant." />
+            <SectionTitle kicker="Provider credentials" title="Encrypted credential storage" subtitle="These values are stored encrypted at rest and supplied to the app’s provider clients only when relevant." />
             <div className="stack-page">
               {data.providers.map((provider) => (
                 <form key={provider.provider} className="provider-form" onSubmit={(event) => void saveProvider(event, provider.provider)}>

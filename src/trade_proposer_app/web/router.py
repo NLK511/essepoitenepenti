@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from fastapi import APIRouter
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 router = APIRouter(tags=["web"])
 
@@ -15,6 +15,10 @@ SPA_ROUTE_PREFIXES = {
     "debugger",
     "settings",
     "docs",
+    "context",
+    "sentiment",
+    "recommendation-plans",
+    "ticker-signals",
 }
 
 
@@ -60,11 +64,9 @@ async def ticker_detail_spa(ticker: str) -> HTMLResponse:
     return FileResponse(FRONTEND_INDEX_FILE)
 
 
-@router.get("/recommendations/{recommendation_id}", response_class=HTMLResponse)
-async def recommendation_detail_spa(recommendation_id: int) -> HTMLResponse:
-    if not FRONTEND_INDEX_FILE.exists():
-        return build_frontend_missing_response()
-    return FileResponse(FRONTEND_INDEX_FILE)
+@router.get("/recommendations/{recommendation_id}")
+async def recommendation_detail_spa(recommendation_id: int) -> RedirectResponse:
+    return RedirectResponse(url="/jobs/recommendation-plans", status_code=307)
 
 
 @router.get("/{path:path}", response_class=HTMLResponse)
