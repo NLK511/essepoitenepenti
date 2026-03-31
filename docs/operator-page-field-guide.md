@@ -128,6 +128,7 @@ Treat warnings as part of the output, not as decoration.
 #### Metrics cards
 Typical cards include:
 - **Plans waiting for review**: recently persisted recommendation plans
+- **Decision samples**: review/tuning snapshots for generated plans, usually with a quick priority count
 - **Active watchlists**: how many tracked universes you currently have
 - **Configured jobs**: saved workflows
 - **Recent runs**: latest execution records
@@ -390,6 +391,7 @@ These are useful for understanding rank mechanics:
 - fast run triage
 - inspect recent failures and warning-heavy runs
 - choose which run needs deeper review
+- remove a selected run from the sidebar when you are cleaning up a diagnostic session
 
 ### Main sections
 
@@ -400,6 +402,7 @@ Shows recent runs with:
 - job id
 - status
 - created/scheduled time
+- a hover-only trash icon for deleting each run row, with confirmation before removal
 
 #### Selected run summary
 Shows:
@@ -413,6 +416,7 @@ Shows:
 The debugger is for **fast investigation**, not for full trade review.
 For proposal runs:
 - use debugger to find the interesting run
+- delete obviously bad runs from the sidebar if you need to clean up an investigation trail
 - then move to **Run detail**, **Recommendation plans**, or **Ticker signals**
 
 ### Suggested use cases

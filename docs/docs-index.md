@@ -16,6 +16,7 @@ If you are new to the repo or the app, read these first:
   - local setup, startup, auth basics, first-run checks
 - `operator-page-field-guide.md`
   - what each major UI page is for and how to use it
+  - where to find the debugger, decision samples, and other review surfaces
 - `glossary.md`
   - shared vocabulary across runs, signals, plans, outcomes, and snapshots
 
@@ -35,6 +36,7 @@ These docs define the current product truth.
   - what operators can do now
   - current strengths
   - current weaknesses
+  - includes recommendation decision-sample review and debugger cleanup affordances
 
 ### Recommendation logic
 - `recommendation-methodology.md`
@@ -105,6 +107,7 @@ These are useful after you already understand the product shape.
   - run artifacts
   - shared context and transitional support-snapshot payloads
   - diagnostics and timing
+  - recommendation decision-sample payloads and review identifiers
 
 ### Database structure
 - `er-model.md`

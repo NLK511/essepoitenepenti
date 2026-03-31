@@ -211,19 +211,17 @@ These outcomes are written back into the main database and attached to plan read
 
 ### Decision-sample collection for tuning
 
-To make tuning possible when only a few plans are actionable, the app also stores a separate `RecommendationDecisionSample` row for every generated recommendation plan.
+Every generated recommendation plan also produces a `RecommendationDecisionSample` row. This is a tuning and review artifact, not a final outcome record.
 
-That sample is meant for model tuning and review triage, not for final outcome scoring. It captures:
-- the final plan action and decision type
-- whether the ticker was shortlisted
-- shortlist rank and shortlist decision payload
-- raw, calibrated, and threshold confidence values
-- the confidence gap to the effective threshold
+It stores the main decision context for later analysis, including:
+- plan action and decision type
+- shortlist status and shortlist rank
+- confidence, calibrated confidence, threshold, and gap
 - setup family, transmission bias, and context regime
-- a compact decision-context snapshot plus the plan’s evidence and signal breakdown payloads
-- a `review_priority` value so borderline no-action plans can be reviewed first
+- compact decision, signal, and evidence snapshots
+- `review_priority` for borderline cases that deserve human review
 
-The idea is to keep the live planner conservative while still collecting enough structured examples to study near-misses and low-volume action cases.
+The goal is to keep the live planner conservative while still collecting enough structured examples to study near-misses and low-volume action cases.
 
 ## Methodology limits
 

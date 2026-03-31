@@ -61,13 +61,31 @@ We normalized that output before evaluation so the evaluator can always access:
 
 Without this, the evaluator could silently read the wrong columns or fail to classify entry/exit.
 
-### 4. Gap-through entry handling
+### 4. Persisted-history completeness fallback
+
+A later regression showed that persisted daily history can be present but still incomplete for the requested recompute window.
+
+For example, plan `635` had only `2026-03-30` persisted daily bars available even though the recompute `as_of` was `2026-03-31`, so trusting the cache produced a false `no post-plan bars` result.
+
+The evaluator now checks whether the persisted frame actually covers the requested window. If it does not, it falls back to `yfinance` instead of using a partial cache.
+
+The fallback is logged with:
+- ticker
+- plan ids
+- intraday vs daily mode
+- row count
+- first and last persisted timestamps
+- the requested cutoff
+
+That keeps the recompute path point-in-time correct without pretending an incomplete cache is authoritative.
+
+### 5. Gap-through entry handling
 
 Entry detection was tightened so a bar that opens through the entry zone can count as a valid fill.
 
 That fixed a real class of false `no_entry` outcomes.
 
-### 5. Recompute overwrite semantics
+### 6. Recompute overwrite semantics
 
 We explicitly allow recomputation to overwrite the stored outcome.
 
@@ -192,6 +210,7 @@ We added and ran coverage for:
 - recompute overwrite behavior
 - a real Postgres integration test for EOG plans `315` and `635`
 - an explicit real Postgres regression test showing plan `315` resolves to a stop loss when the recompute happens after market close
+- a regression test showing incomplete persisted daily history falls back to `yfinance` instead of being trusted as a complete recompute window
 
 ## Practical takeaway
 
@@ -201,7 +220,8 @@ If you are changing the evaluator in the future, remember:
 2. **Do not rely on daily bars when the plan is effectively intraday.**
 3. **Recompute is allowed to overwrite the stored outcome.**
 4. **The current session heuristic is a compromise, not a perfect calendar.**
-5. **Keep a regression test for the real EOG plans, not just synthetic fixtures.**
+5. **Treat incomplete persisted history as incomplete; fall back instead of guessing.**
+6. **Keep a regression test for the real EOG plans, not just synthetic fixtures.**
 
 ## Related files
 

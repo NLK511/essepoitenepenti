@@ -20,7 +20,7 @@ This only works if it keeps three things true:
 - worker and scheduler entrypoints
 - repository-based persistence access
 - app-native proposal, evaluation, optimization, and macro/industry refresh workflows
-- shared support-snapshot storage plus redesign-native macro/industry/ticker context persistence
+- shared support-snapshot storage plus redesign-native macro/industry/ticker context persistence and recommendation decision-sample storage
 - snapshot-aware health/preflight reporting
 
 ### Target deployment runtime

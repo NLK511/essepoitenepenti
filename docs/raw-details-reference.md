@@ -51,6 +51,7 @@ The redesign path persists these main trade-review objects:
 - `TickerSignalSnapshot`
 - `RecommendationPlan`
 - `RecommendationPlanOutcome`
+- `RecommendationDecisionSample`, a tuning/review snapshot stored for every generated recommendation plan. It keeps the key decision context for later analysis, including decision type/reason, shortlist status, confidence and threshold values, setup family, transmission bias, context regime, review priority, and compact decision/evidence snapshots, plus the linked run/job/watchlist/ticker-signal identifiers used for triage and filtering
 
 Important stored fields include:
 - context lifecycle metadata such as `event_lifecycle_summary`, `contradictory_event_labels`, and per-event `persistence_state` / `window_hint`
@@ -138,7 +139,7 @@ Common stored diagnostic fields include:
 - `weights.json` lives in `src/trade_proposer_app/data/` and is used for scoring runs.
 - `/api/health/preflight` reports dependency readiness and shared support-snapshot freshness.
 - operators configure the summary backend via `/settings` using `news_digest`, `openai_api`, or `pi_agent`.
-- the same stored payloads support the debugger, run detail pages, recommendation-plan pages, ticker pages, and health views.
+- the same stored payloads support the debugger, run detail pages, recommendation-plan pages, ticker pages, decision-sample review, and health views.
 
 ## See also
 

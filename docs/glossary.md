@@ -380,6 +380,9 @@ A run that has been created and stored but not yet claimed by the worker.
 ### Recommendation plan
 The redesign-native trade object storing action, confidence, entry, stop, target, thesis, warnings, and related evidence.
 
+### Recommendation decision sample
+A tuning and review snapshot recorded for each generated recommendation plan, used to study near-misses, borderline cases, and review priority.
+
 ### Recommendation-plan outcome
 The redesign-native evaluation object storing what happened after a plan was produced.
 
@@ -393,7 +396,7 @@ The implied reward relative to defined downside, based on target and stop placem
 An execution record created when a job is queued or executed.
 
 ### Run debugger
-A quick-triage page for recent runs.
+A quick-triage page for recent runs, including row-level deletion for the selected run.
 
 ### Run detail
 The full execution-review page for a specific run.

@@ -23,13 +23,15 @@ The product is currently a short-horizon analysis and trade-planning tool. It he
 - Run proposal generation, recommendation evaluation, weight optimization, and macro/industry context refresh jobs through the same run system.
 - Convert proposal jobs into watchlists and schedule them.
 - Inspect queued, running, completed, failed, cancelled, and warning-heavy runs from the debugger and run detail pages.
+- Delete an individual run directly from the debugger sidebar with a hover-only per-row trash icon and confirmation prompt.
 - Review persisted run timing, summary, artifact, failure-phase metadata, and error details after execution finishes or fails.
 
 ### Recommendation workflow
 - Persist proposal outputs as `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`.
 - Store structured diagnostics beside those objects.
 - Evaluate recommendation plans through the app-native price-history path.
-- Review plans and outcomes through redesign-native pages instead of the old recommendation-history flow.
+- Review plans and outcomes through redesign-native pages instead of the legacy recommendation-history flow.
+- Review recommendation decision samples on their own page and from the dashboard card to triage near-misses and review-priority cases.
 - Use ticker drill-down pages to review plan history and latest outcomes for a single name.
 
 ### Shared context workflow
@@ -108,7 +110,7 @@ The main limits are still practical ones:
 - auth, RBAC, tenancy, and credential lifecycle are still incomplete; the current security model is single-user and frontend auth tokens are stored in local storage
 - context extraction is still heuristic rather than a mature event model
 - ticker deep analysis still reuses some older proposal-engine internals
-- support snapshots are no longer the main review UX, but they still remain in refresh, resolver, and health paths as a transitional backend dependency
+- support snapshots are transitional; they still power refresh, resolver, and health paths even though the main review UX now uses context snapshots
 - confidence calibration is present, but it still needs more evidence over time
 
 There is also one analytical limit:
