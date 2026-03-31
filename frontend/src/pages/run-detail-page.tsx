@@ -567,10 +567,8 @@ export function RunDetailPage() {
                                     <div className="helper-text top-gap-small">{plan.thesis_summary || plan.rationale_summary || "No thesis stored."}</div>
                                     <div className="helper-text">setup {setupFamily ?? "—"} · reason {actionReason ?? "—"}</div>
                                     <div className="helper-text">{actionReasonDetail ?? "No family-specific action note stored."}</div>
-                                    <div className="helper-text">entry style {entryStyle ?? "—"} · timing {timingExpectation ?? "—"}</div>
-                                    <div className="helper-text">stop style {stopStyle ?? "—"} · target style {targetStyle ?? "—"}</div>
-                                    <div className="helper-text">invalidation {invalidationSummary ?? "—"}</div>
-                                    <div className="helper-text">review focus {evaluationFocus.length > 0 ? evaluationFocus.join(" · ") : "—"}</div>
+                                    <div className="helper-text">entry {entryStyle ?? "—"} · stop {stopStyle ?? "—"} · target {targetStyle ?? "—"} · timing {timingExpectation ?? "—"}</div>
+                                    <div className="helper-text">invalidation {invalidationSummary ?? "—"} · review {evaluationFocus.length > 0 ? evaluationFocus.join(" · ") : "—"}</div>
                                   </div>
                                 </td>
                                 <td><Badge tone={plan.action === "long" ? "ok" : plan.action === "short" ? "warning" : "neutral"}>{plan.action}</Badge></td>
@@ -585,13 +583,10 @@ export function RunDetailPage() {
                                 </td>
                                 <td>
                                   <Badge tone={biasTone(transmissionBias)}>{transmissionBiasLabel}</Badge>
-                                  <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
-                                  <div className="helper-text">window {expectedWindow}</div>
+                                  <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"} · window {expectedWindow}</div>
                                   <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
-                                  <div className="helper-text">industry channels {industryExposureChannels.length > 0 ? industryExposureChannels.join(" · ") : "none"}</div>
-                                  <div className="helper-text">ticker channels {tickerExposureChannels.length > 0 ? tickerExposureChannels.join(" · ") : "none"}</div>
-                                  <div className="helper-text">ticker relationships {relationshipSummary(plan)}</div>
-                                  <div className="helper-text">conflicts {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
+                                  <div className="helper-text">industry {industryExposureChannels.length > 0 ? industryExposureChannels.join(" · ") : "none"} · ticker {tickerExposureChannels.length > 0 ? tickerExposureChannels.join(" · ") : "none"}</div>
+                                  <div className="helper-text">relationships {relationshipSummary(plan)} · conflicts {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
                                   <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
                                 </td>
                                 <td>
@@ -607,7 +602,7 @@ export function RunDetailPage() {
                                   {plan.latest_outcome ? (
                                     <>
                                       <Badge tone={plan.latest_outcome.outcome === "win" ? "ok" : plan.latest_outcome.outcome === "loss" ? "danger" : "neutral"}>{plan.latest_outcome.outcome}</Badge>
-                                      <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}%</div>
+                                      <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}% · MFE {plan.latest_outcome.max_favorable_excursion ?? "—"}% · MAE {plan.latest_outcome.max_adverse_excursion ?? "—"}%</div>
                                       <div className="helper-text">bias {detailLabel(plan.latest_outcome.transmission_bias_detail, plan.latest_outcome.transmission_bias_label ?? plan.latest_outcome.transmission_bias, false) ?? "—"} · regime {detailLabel(plan.latest_outcome.context_regime_detail, plan.latest_outcome.context_regime_label ?? plan.latest_outcome.context_regime, false) ?? "—"}</div>
                                     </>
                                   ) : "—"}
@@ -662,8 +657,7 @@ export function RunDetailPage() {
                           {contextSummaryError(item.metadata) ? <div className="helper-text top-gap-small">{contextSummaryError(item.metadata)}</div> : null}
                           {lifecycle ? (
                             <div className="helper-text top-gap-small">
-                              lifecycle: new {String(lifecycle.new_event_count ?? 0)} · escalating {String(lifecycle.escalating_event_count ?? 0)} · fading {String(lifecycle.fading_event_count ?? 0)}
-                              {contradictory.length > 0 ? ` · contradictions ${contradictory.join(", ")}` : ""}
+                              lifecycle new {String(lifecycle.new_event_count ?? 0)} · escalating {String(lifecycle.escalating_event_count ?? 0)} · fading {String(lifecycle.fading_event_count ?? 0)}{contradictory.length > 0 ? ` · contradictions ${contradictory.join(", ")}` : ""}
                             </div>
                           ) : null}
                         </div>
@@ -689,8 +683,7 @@ export function RunDetailPage() {
                           {contextSummaryError(item.metadata) ? <div className="helper-text top-gap-small">{contextSummaryError(item.metadata)}</div> : null}
                           {lifecycle ? (
                             <div className="helper-text top-gap-small">
-                              lifecycle: new {String(lifecycle.new_event_count ?? 0)} · escalating {String(lifecycle.escalating_event_count ?? 0)} · fading {String(lifecycle.fading_event_count ?? 0)}
-                              {contradictory.length > 0 ? ` · contradictions ${contradictory.join(", ")}` : ""}
+                              lifecycle new {String(lifecycle.new_event_count ?? 0)} · escalating {String(lifecycle.escalating_event_count ?? 0)} · fading {String(lifecycle.fading_event_count ?? 0)}{contradictory.length > 0 ? ` · contradictions ${contradictory.join(", ")}` : ""}
                             </div>
                           ) : null}
                         </div>

@@ -45,6 +45,17 @@ The next pass is focusing on the remaining table-density and row-density issues,
 
 The goal is to keep the pages rich, but make each row say one thing instead of five versions of the same thing.
 
+## Third-pass status
+
+A third cleanup pass is now focusing on `run-detail-page.tsx`, especially:
+
+- plan table row density
+- context row density
+- compressed lifecycle / warning summaries
+- keeping the canonical links while trimming repeated helper text
+
+This pass should leave the run page as the deep forensic surface, but with much less repeated phrasing inside each row.
+
 ## Core rules
 
 ### 1. One canonical surface per concept
