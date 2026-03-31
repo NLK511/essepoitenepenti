@@ -274,7 +274,13 @@ class RecommendationPlanEvaluationService:
                 run_id=run_id,
             )
 
-        sliced = self._rows_on_or_after(price_data, plan.computed_at, intraday_only=intraday_only)
+        sliced = self._rows_on_or_after(
+            price_data,
+            plan.computed_at,
+            intraday_only=intraday_only,
+            plan_id=plan.id,
+            ticker=plan.ticker,
+        )
         if sliced.empty:
             logger.warning(
                 "evaluate_plan no post-plan bars: plan_id=%s ticker=%s computed_at=%s as_of=%s price_rows=%s first_available_at=%s last_available_at=%s first_bar_time=%s last_bar_time=%s",
@@ -540,7 +546,14 @@ class RecommendationPlanEvaluationService:
         return RecommendationPlanEvaluationService._format_datetime(value)
 
     @staticmethod
-    def _rows_on_or_after(data: pd.DataFrame, start_at: datetime, *, intraday_only: bool = False) -> pd.DataFrame:
+    def _rows_on_or_after(
+        data: pd.DataFrame,
+        start_at: datetime,
+        *,
+        intraday_only: bool = False,
+        plan_id: int | None = None,
+        ticker: str | None = None,
+    ) -> pd.DataFrame:
         normalized_start = RecommendationPlanEvaluationService._normalize_datetime(start_at)
         if normalized_start is None:
             return pd.DataFrame(columns=data.columns)
@@ -561,7 +574,9 @@ class RecommendationPlanEvaluationService:
                 fallback_rows = data.loc[date_mask]
                 if not fallback_rows.empty:
                     logger.info(
-                        "rows_on_or_after daily-date fallback used: start_at=%s rows=%s first_available_at=%s last_available_at=%s",
+                        "rows_on_or_after daily-date fallback used: plan_id=%s ticker=%s start_at=%s rows=%s first_available_at=%s last_available_at=%s",
+                        plan_id,
+                        ticker,
                         RecommendationPlanEvaluationService._format_datetime(normalized_start),
                         len(fallback_rows),
                         RecommendationPlanEvaluationService._format_datetime(fallback_rows.iloc[0].get("available_at")),
