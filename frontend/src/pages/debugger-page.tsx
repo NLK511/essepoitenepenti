@@ -68,11 +68,11 @@ export function DebuggerPage() {
       />
       {error ? <ErrorState message={error} /> : null}
 
-      <section className="metrics-grid top-gap">
-        <StatCard label="Runs loaded" value={runStats.total} helper="Recent execution records available for inspection" />
-        <StatCard label="Failed" value={runStats.failed} helper="Runs that ended in failure" />
-        <StatCard label="Warnings" value={runStats.warnings} helper="Runs that completed but need review" />
-        <StatCard label="Active" value={runStats.active} helper="Queued or currently running workflows" />
+      <section className="metrics-grid debugger-metrics-grid top-gap">
+        <StatCard className="stat-card-compact" label="Runs loaded" value={runStats.total} />
+        <StatCard className="stat-card-compact" label="Failed" value={runStats.failed} />
+        <StatCard className="stat-card-compact" label="Warnings" value={runStats.warnings} />
+        <StatCard className="stat-card-compact" label="Active" value={runStats.active} />
       </section>
 
       <section className="two-column debugger-layout top-gap">
@@ -108,11 +108,11 @@ export function DebuggerPage() {
           {!detail && !error ? <LoadingState message="Select a run to inspect." /> : null}
           {detail ? (
             <>
-              <section className="metrics-grid">
-                <StatCard label="Status" value={detail.run.status} helper="Execution health for the selected run" />
-                <StatCard label="Duration" value={formatDuration(detail.run.duration_seconds)} helper="Total runtime" />
-                <StatCard label="Plans written" value={detail.recommendation_plans.length} helper="Canonical plan objects created by this run" />
-                <StatCard label="Signals written" value={detail.ticker_signal_snapshots.length} helper="Signal snapshots available for deeper inspection" />
+              <section className="metrics-grid debugger-metrics-grid">
+                <StatCard className="stat-card-compact" label="Status" value={detail.run.status} />
+                <StatCard className="stat-card-compact" label="Duration" value={formatDuration(detail.run.duration_seconds)} />
+                <StatCard className="stat-card-compact" label="Plans written" value={detail.recommendation_plans.length} />
+                <StatCard className="stat-card-compact" label="Signals written" value={detail.ticker_signal_snapshots.length} />
               </section>
 
               <Card>

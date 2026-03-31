@@ -61,9 +61,9 @@ export function SectionTitle(props: { kicker?: string; title: string; subtitle?:
   );
 }
 
-export function StatCard(props: { label: string; value: ReactNode; helper?: string }) {
+export function StatCard(props: { label: string; value: ReactNode; helper?: string; className?: string }) {
   return (
-    <Card>
+    <Card className={props.className}>
       <div className="metric-label">{props.label}</div>
       <div className="metric-value">{props.value}</div>
       {props.helper ? <div className="helper-text">{props.helper}</div> : null}

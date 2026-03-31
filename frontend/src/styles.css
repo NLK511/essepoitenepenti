@@ -363,6 +363,10 @@ html[data-theme="light"] .topbar {
   gap: 18px;
 }
 
+.debugger-metrics-grid {
+  gap: 12px;
+}
+
 .metrics-grid {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
@@ -1949,8 +1953,26 @@ html[data-theme="light"] .content-topbar {
   letter-spacing: -0.03em;
 }
 
+.stat-card-compact {
+  padding: 14px 16px;
+}
+
+.stat-card-compact .metric-value {
+  margin-top: 6px;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.stat-card-compact .helper-text {
+  display: none;
+}
+
 .metrics-grid {
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.debugger-metrics-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .table-wrap {
@@ -2022,6 +2044,10 @@ td {
   .docs-article-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .debugger-metrics-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   }
 
   .content-topbar-title {
