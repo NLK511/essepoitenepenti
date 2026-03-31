@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
+import { ContextEventSummary, ContextScoreSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import type { IndustryContextSnapshot, MacroContextSnapshot } from "../types";
 import { extractDisplayLabels, formatDate } from "../utils";
 
@@ -203,19 +204,18 @@ export function ContextSnapshotDetailPage() {
           ) : null}
 
           <Card>
-            <div className="cluster">
+            <ContextScoreSummary
+              confidence={snapshot.confidence_percent}
+              saliency={snapshot.saliency_score}
+              coverage={isIndustrySnapshot(snapshot) ? snapshot.active_drivers.length : snapshot.active_themes.length}
+              freshness={formatDate(snapshot.computed_at)}
+              tone={contextTone(snapshot)}
+            />
+            <div className="cluster top-gap-small">
               <Badge tone="info">{scope}</Badge>
               <Badge tone={contextTone(snapshot)}>{snapshot.status}</Badge>
               <Badge>#{snapshot.id}</Badge>
               {isIndustrySnapshot(snapshot) ? <Badge>{snapshot.industry_label || snapshot.industry_key}</Badge> : null}
-            </div>
-            <div className="summary-grid top-gap-small">
-              <div className="summary-item"><span className="summary-label">Computed</span><span className="summary-value">{formatDate(snapshot.computed_at)}</span></div>
-              <div className="summary-item"><span className="summary-label">Saliency</span><span className="summary-value">{snapshot.saliency_score.toFixed(2)}</span></div>
-              <div className="summary-item"><span className="summary-label">Confidence</span><span className="summary-value">{snapshot.confidence_percent.toFixed(1)}%</span></div>
-              <div className="summary-item"><span className="summary-label">Run</span><span className="summary-value">{snapshot.run_id ?? "—"}</span></div>
-              <div className="summary-item"><span className="summary-label">Job</span><span className="summary-value">{snapshot.job_id ?? "—"}</span></div>
-              {isIndustrySnapshot(snapshot) ? <div className="summary-item"><span className="summary-label">Direction</span><span className="summary-value">{snapshot.direction}</span></div> : null}
             </div>
             {snapshot.summary_text ? (
               <div className="summary-text-block top-gap-small">
@@ -227,23 +227,15 @@ export function ContextSnapshotDetailPage() {
           <section className="card-grid">
             <Card>
               <SectionTitle kicker="Summary provenance" title="How the summary was generated" />
-              <div className="summary-grid">
-                <div className="summary-item"><span className="summary-label">Method</span><span className="summary-value">{summaryMethod}</span></div>
-                <div className="summary-item"><span className="summary-label">Backend</span><span className="summary-value">{summaryBackend}</span></div>
-                <div className="summary-item"><span className="summary-label">Model</span><span className="summary-value">{summaryModel}</span></div>
-                <div className="summary-item"><span className="summary-label">Duration</span><span className="summary-value">{summaryDuration !== null ? `${summaryDuration.toFixed(2)}s` : "—"}</span></div>
-              </div>
-              {summaryError ? <div className="helper-text top-gap-small">Fallback reason: {summaryError}</div> : null}
+              <ProvenanceStrip method={summaryMethod} backend={summaryBackend} model={summaryModel} error={summaryError} />
+              <div className="helper-text top-gap-small">Duration {summaryDuration !== null ? `${summaryDuration.toFixed(2)}s` : "—"} · metadata payload below</div>
               <pre className="markdown-code-block top-gap-small">{JSON.stringify(snapshot.metadata?.context_summary_metadata ?? {}, null, 2)}</pre>
             </Card>
             <Card>
               <SectionTitle kicker="Lifecycle" title="Event lifecycle and contradiction state" />
               {lifecycle ? (
                 <div className="summary-grid">
-                  <div className="summary-item"><span className="summary-label">New</span><span className="summary-value">{String(lifecycle.new_event_count ?? 0)}</span></div>
-                  <div className="summary-item"><span className="summary-label">Escalating</span><span className="summary-value">{String(lifecycle.escalating_event_count ?? 0)}</span></div>
-                  <div className="summary-item"><span className="summary-label">Persistent</span><span className="summary-value">{String(lifecycle.persistent_event_count ?? 0)}</span></div>
-                  <div className="summary-item"><span className="summary-label">Fading</span><span className="summary-value">{String(lifecycle.fading_event_count ?? 0)}</span></div>
+                  <div className="summary-item"><span className="summary-label">Lifecycle counts</span><span className="summary-value">{String(lifecycle.new_event_count ?? 0)} / {String(lifecycle.escalating_event_count ?? 0)} / {String(lifecycle.persistent_event_count ?? 0)} / {String(lifecycle.fading_event_count ?? 0)}</span></div>
                   <div className="summary-item"><span className="summary-label">Contradictions</span><span className="summary-value">{String(lifecycle.contradiction_count ?? 0)}</span></div>
                 </div>
               ) : <EmptyState message="No lifecycle summary stored on this snapshot." />}
@@ -274,20 +266,23 @@ export function ContextSnapshotDetailPage() {
                   const eventTitle = contextEventTitle(row, index, isIndustrySnapshot(snapshot) ? "Industry driver" : "Macro event");
                   const eventKeyLabel = eventLabel(row.key);
                   const eventLabelText = eventLabel(row.label);
+                  const eventValue = eventLabelText !== "—" && eventLabelText !== eventTitle
+                    ? `${eventLabelText}${eventKeyLabel !== "—" ? ` · ${eventKeyLabel}` : ""}`
+                    : eventTitle;
                   return (
                     <li key={`${index}-${eventKeyLabel}`} className="list-item">
-                      <div className="top-gap-small"><strong>{eventTitle}</strong></div>
-                      {eventLabelText !== "—" && eventLabelText !== eventTitle ? <div className="helper-text">Label: {eventLabelText}</div> : null}
-                      {eventKeyLabel !== "—" && eventKeyLabel !== eventTitle && eventKeyLabel !== eventLabelText ? <div className="helper-text">Key: {eventKeyLabel}</div> : null}
-                      <div className="cluster top-gap-small">
-                        <Badge>{eventLabel(row.label)}</Badge>
-                        <Badge>{persistenceLabel}</Badge>
-                        <Badge>{sourcePriorityLabel}</Badge>
-                        <Badge>{windowLabel}</Badge>
-                        <Badge>{recencyLabel}</Badge>
-                        {typeof row.saliency_weight === "number" ? <Badge>saliency {row.saliency_weight}</Badge> : null}
-                      </div>
-                      {channels.length > 0 ? <div className="helper-text top-gap-small">Channels: {channels.join(", ")}</div> : null}
+                      <ContextEventSummary
+                        label={eventTitle}
+                        value={eventValue}
+                        details={[
+                          { label: "Persistence", value: persistenceLabel },
+                          { label: "Source", value: sourcePriorityLabel },
+                          { label: "Window", value: windowLabel },
+                          { label: "Recency", value: recencyLabel },
+                          ...(typeof row.saliency_weight === "number" ? [{ label: "Saliency", value: String(row.saliency_weight) }] : []),
+                        ]}
+                        channels={channels}
+                      />
                       {contradictionReasons.length > 0 ? <div className="helper-text top-gap-small">Contradiction reasons: {contradictionReasons.join(", ")}</div> : null}
                       {Array.isArray(row.evidence_samples) && row.evidence_samples.length > 0 ? (
                         <div className="helper-text top-gap-small">Evidence: {row.evidence_samples.slice(0, 3).join(" | ")}</div>
@@ -306,11 +301,11 @@ export function ContextSnapshotDetailPage() {
                 <ul className="list-reset">
                   {triagedEvidence.map((item, index) => (
                     <li key={`${index}-${eventLabel(item.title)}`} className="list-item">
-                      <div className="cluster">
-                        <Badge>{eventLabel(item.source_priority)}</Badge>
-                        <span>{eventLabel(item.publisher)}</span>
-                      </div>
-                      <div className="top-gap-small"><strong>{eventLabel(item.title)}</strong></div>
+                      <ContextEventSummary
+                        label={eventLabel(item.title)}
+                        value={eventLabel(item.publisher)}
+                        details={[{ label: "Source priority", value: eventLabel(item.source_priority) }]}
+                      />
                       {typeof item.summary === "string" && item.summary.trim() ? <div className="helper-text top-gap-small">{item.summary}</div> : null}
                     </li>
                   ))}
@@ -321,11 +316,7 @@ export function ContextSnapshotDetailPage() {
               <SectionTitle kicker="Warnings" title="Warnings and missing inputs" />
               {snapshot.warnings.length === 0 && snapshot.missing_inputs.length === 0 ? <EmptyState message="No warnings or missing inputs recorded." /> : (
                 <>
-                  {snapshot.warnings.length > 0 ? (
-                    <ul className="list-reset">
-                      {snapshot.warnings.map((warning) => <li key={warning} className="list-item compact-item">{warning}</li>)}
-                    </ul>
-                  ) : null}
+                  <WarningSummary warnings={snapshot.warnings} />
                   {snapshot.missing_inputs.length > 0 ? <div className="helper-text top-gap-small">Missing inputs: {snapshot.missing_inputs.join(", ")}</div> : null}
                 </>
               )}

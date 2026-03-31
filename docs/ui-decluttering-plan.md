@@ -66,6 +66,8 @@ A fourth cleanup pass is now focusing on the dashboard and ticker overview cards
 
 The latest dashboard pass condensed the freshness/context cards and the recommendation-plan cards. The latest ticker pass condensed the overview and history cards so the most important summary facts stay in one line.
 
+The context snapshot detail page is now the next cleanup area, with the top summary, provenance, event list, and warnings being moved onto the same shared compact primitives used elsewhere.
+
 The next cleanup pass is tightening the context review history blocks by using shared compact event summary rows instead of repeating the same label/value scaffolding in each list item.
 
 The dashboard and ticker overview cards are now the final remaining cleanup area in this phase.
@@ -282,6 +284,9 @@ The long-term shape can still grow into separate provenance / warning / context 
 
 **Outcome**
 - the detail page stays readable even when the snapshot has many events
+
+**Status update**
+- the latest pass is moving the detail page onto shared score, provenance, event, and warning primitives so the top summary and event list stay compact without losing the stored payloads
 
 ---
 
