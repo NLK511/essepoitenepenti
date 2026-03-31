@@ -107,7 +107,7 @@ class RecommendationPlanEvaluationService:
                 source_mode,
                 0 if price_data is None else len(price_data),
             )
-            outcome = self._evaluate_plan(plan, price_data, run_id=run_id)
+            outcome = self._evaluate_plan(plan, price_data, run_id=run_id, as_of=as_of)
             stored = self.outcomes.upsert_outcome(outcome)
             synced += 1
             outcome_labels.append(stored.outcome)
@@ -225,6 +225,7 @@ class RecommendationPlanEvaluationService:
         price_data: pd.DataFrame | None,
         *,
         run_id: int | None,
+        as_of: datetime | None = None,
     ) -> RecommendationPlanOutcome:
         setup_family = self._setup_family(plan)
         confidence_bucket = self._confidence_bucket(plan.confidence_percent)
@@ -252,7 +253,13 @@ class RecommendationPlanEvaluationService:
                 run_id=run_id,
             )
         if price_data is None or price_data.empty:
-            logger.warning("evaluate_plan missing price data: plan_id=%s ticker=%s action=%s", plan.id, plan.ticker, plan.action)
+            logger.warning(
+                "evaluate_plan missing price data: plan_id=%s ticker=%s action=%s as_of=%s",
+                plan.id,
+                plan.ticker,
+                plan.action,
+                self._format_datetime(as_of),
+            )
             return RecommendationPlanOutcome(
                 recommendation_plan_id=plan.id or 0,
                 ticker=plan.ticker,
@@ -269,10 +276,16 @@ class RecommendationPlanEvaluationService:
         sliced = self._rows_on_or_after(price_data, plan.computed_at)
         if sliced.empty:
             logger.warning(
-                "evaluate_plan no post-plan bars: plan_id=%s ticker=%s computed_at=%s",
+                "evaluate_plan no post-plan bars: plan_id=%s ticker=%s computed_at=%s as_of=%s price_rows=%s first_available_at=%s last_available_at=%s first_bar_time=%s last_bar_time=%s",
                 plan.id,
                 plan.ticker,
                 self._format_datetime(plan.computed_at),
+                self._format_datetime(as_of),
+                0 if price_data is None else len(price_data),
+                self._frame_bound(price_data, "first", "available_at"),
+                self._frame_bound(price_data, "last", "available_at"),
+                self._frame_bound(price_data, "first", "bar_time"),
+                self._frame_bound(price_data, "last", "bar_time"),
             )
             return RecommendationPlanOutcome(
                 recommendation_plan_id=plan.id or 0,
@@ -512,6 +525,18 @@ class RecommendationPlanEvaluationService:
             if available is not None:
                 return available
         return RecommendationPlanEvaluationService._normalize_datetime(data.index[-1])
+
+    @staticmethod
+    def _frame_bound(data: pd.DataFrame | None, position: str, column: str) -> str:
+        if data is None or data.empty:
+            return "None"
+        row = data.iloc[0] if position == "first" else data.iloc[-1]
+        value: object
+        if column == "bar_time":
+            value = data.index[0] if position == "first" else data.index[-1]
+        else:
+            value = row.get(column)
+        return RecommendationPlanEvaluationService._format_datetime(value)
 
     @staticmethod
     def _rows_on_or_after(data: pd.DataFrame, start_at: datetime) -> pd.DataFrame:
