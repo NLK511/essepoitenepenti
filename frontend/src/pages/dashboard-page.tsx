@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
 import { ProvenanceStrip } from "../components/decision-surface";
-import type { DashboardResponse, IndustryContextSnapshot, MacroContextSnapshot } from "../types";
+import type { DashboardResponse, IndustryContextSnapshot, MacroContextSnapshot, RecommendationDecisionSample } from "../types";
 import { directionTone, formatDate, formatDuration, jobTypeLabel, recommendationStateTone, runTone, tickerTone } from "../utils";
 
 function contextSummaryMethod(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
@@ -27,20 +27,23 @@ export function DashboardPage() {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [latestMacroContext, setLatestMacroContext] = useState<MacroContextSnapshot | null>(null);
   const [latestIndustryContext, setLatestIndustryContext] = useState<IndustryContextSnapshot | null>(null);
+  const [latestDecisionSamples, setLatestDecisionSamples] = useState<RecommendationDecisionSample[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
         setError(null);
-        const [dashboard, macroContexts, industryContexts] = await Promise.all([
+        const [dashboard, macroContexts, industryContexts, decisionSamples] = await Promise.all([
           getJson<DashboardResponse>("/api/dashboard"),
           getJson<MacroContextSnapshot[]>("/api/context/macro?limit=1"),
           getJson<IndustryContextSnapshot[]>("/api/context/industry?limit=1"),
+          getJson<RecommendationDecisionSample[]>("/api/recommendation-decision-samples?limit=5"),
         ]);
         setData(dashboard);
         setLatestMacroContext(macroContexts[0] ?? null);
         setLatestIndustryContext(industryContexts[0] ?? null);
+        setLatestDecisionSamples(decisionSamples);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
       }
@@ -231,6 +234,30 @@ export function DashboardPage() {
                     </li>
                   ))}
                 </ul>
+              )}
+            </Card>
+          </section>
+
+          <section className="card-grid">
+            <Card>
+              <SectionTitle kicker="Tuning" title="Decision samples" subtitle="Near misses and actionable plans for calibration work." actions={<Link to="/jobs/decision-samples" className="button-secondary">Open samples</Link>} />
+              {latestDecisionSamples.length === 0 ? (
+                <EmptyState message="No decision samples yet." />
+              ) : (
+                <div className="data-stack top-gap-small">
+                  {latestDecisionSamples.map((sample) => (
+                    <div key={sample.id ?? `${sample.ticker}-${sample.created_at}`} className="data-card">
+                      <div className="data-card-header">
+                        <div>
+                          <div className="data-card-title">{sample.ticker}</div>
+                          <div className="helper-text">{sample.decision_type} · {sample.review_priority} priority</div>
+                        </div>
+                        <Badge tone={sample.review_priority === "high" ? "danger" : sample.review_priority === "medium" ? "warning" : "neutral"}>{sample.shortlisted ? "shortlisted" : "rejected"}</Badge>
+                      </div>
+                      <div className="helper-text">{sample.decision_reason || "No decision reason stored."}</div>
+                    </div>
+                  ))}
+                </div>
               )}
             </Card>
           </section>

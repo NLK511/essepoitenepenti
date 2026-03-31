@@ -450,6 +450,39 @@ export interface RecommendationPlanOutcome {
   run_id: number | null;
 }
 
+export interface RecommendationDecisionSample {
+  id: number | null;
+  recommendation_plan_id: number;
+  ticker: string;
+  horizon: string;
+  action: string;
+  decision_type: string;
+  decision_reason: string;
+  shortlisted: boolean;
+  shortlist_rank: number | null;
+  shortlist_decision: Record<string, unknown>;
+  confidence_percent: number;
+  calibrated_confidence_percent: number | null;
+  effective_threshold_percent: number | null;
+  confidence_gap_percent: number | null;
+  setup_family: string;
+  transmission_bias: string | null;
+  context_regime: string | null;
+  review_priority: string;
+  review_label: string | null;
+  review_notes: string;
+  reviewed_at: string | null;
+  decision_context: Record<string, unknown>;
+  signal_breakdown: Record<string, unknown>;
+  evidence_summary: Record<string, unknown>;
+  run_id: number | null;
+  job_id: number | null;
+  watchlist_id: number | null;
+  ticker_signal_snapshot_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RecommendationPlan {
   id: number | null;
   ticker: string;

@@ -7,6 +7,7 @@ import { DebuggerPage } from "./pages/debugger-page";
 import { DocsPage } from "./pages/docs-page";
 import { ContextSnapshotDetailPage } from "./pages/context-snapshot-detail-page";
 import { JobsPage } from "./pages/jobs-page";
+import { RecommendationDecisionSamplesPage } from "./pages/recommendation-decision-samples-page";
 import { RecommendationPlansPage } from "./pages/recommendation-plans-page";
 import { RunDetailPage } from "./pages/run-detail-page";
 import { ContextReviewPage } from "./pages/context-review-page";
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="jobs/history" element={<Navigate to="/jobs/recommendation-plans" replace />} />
           <Route path="jobs/ticker-signals" element={<TickerSignalsPage />} />
           <Route path="jobs/recommendation-plans" element={<RecommendationPlansPage />} />
+          <Route path="jobs/decision-samples" element={<RecommendationDecisionSamplesPage />} />
           <Route path="jobs/debugger" element={<DebuggerPage />} />
           <Route path="watchlists" element={<Navigate to="/jobs/watchlists" replace />} />
           <Route path="history" element={<Navigate to="/jobs/recommendation-plans" replace />} />
