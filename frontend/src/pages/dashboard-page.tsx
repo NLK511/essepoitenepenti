@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
+import { ProvenanceStrip } from "../components/decision-surface";
 import type { DashboardResponse, IndustryContextSnapshot, MacroContextSnapshot } from "../types";
 import { directionTone, formatDate, formatDuration, jobTypeLabel, recommendationStateTone, runTone, tickerTone } from "../utils";
 
@@ -20,24 +21,6 @@ function contextSummaryModel(snapshot: MacroContextSnapshot | IndustryContextSna
 
 function contextSummaryError(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string | null {
   return snapshot && typeof snapshot.metadata?.context_summary_error === "string" ? snapshot.metadata.context_summary_error : null;
-}
-
-function contextProvenanceTone(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): "ok" | "warning" | "neutral" {
-  if (contextSummaryError(snapshot)) {
-    return "warning";
-  }
-  if (contextSummaryMethod(snapshot) === "llm_summary") {
-    return "ok";
-  }
-  return "neutral";
-}
-
-function contextProvenanceLabel(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
-  if (contextSummaryMethod(snapshot) === "llm_summary") {
-    const model = contextSummaryModel(snapshot);
-    return `LLM · ${contextSummaryBackend(snapshot)}${model !== "—" ? ` · ${model}` : ""}`;
-  }
-  return `fallback · ${contextSummaryBackend(snapshot)}`;
 }
 
 export function DashboardPage() {
@@ -117,9 +100,8 @@ export function DashboardPage() {
               <div className="metric-value">{latestMacroContext ? latestMacroContext.status : "—"}</div>
               <div className="helper-text">{latestMacroContext ? formatDate(latestMacroContext.computed_at) : "no context snapshot"}</div>
               {latestMacroContext ? (
-                <div className="top-gap-small cluster">
-                  <Badge tone={contextProvenanceTone(latestMacroContext)}>{contextProvenanceLabel(latestMacroContext)}</Badge>
-                  {contextSummaryError(latestMacroContext) ? <Badge tone="warning">summary warning</Badge> : null}
+                <div className="top-gap-small">
+                  <ProvenanceStrip method={contextSummaryMethod(latestMacroContext)} backend={contextSummaryBackend(latestMacroContext)} model={contextSummaryModel(latestMacroContext)} error={contextSummaryError(latestMacroContext)} />
                 </div>
               ) : null}
             </Card>
@@ -128,9 +110,8 @@ export function DashboardPage() {
               <div className="metric-value">{latestIndustryContext ? latestIndustryContext.industry_label || latestIndustryContext.industry_key : "—"}</div>
               <div className="helper-text">{latestIndustryContext ? `${latestIndustryContext.status} · ${formatDate(latestIndustryContext.computed_at)}` : "no context snapshot"}</div>
               {latestIndustryContext ? (
-                <div className="top-gap-small cluster">
-                  <Badge tone={contextProvenanceTone(latestIndustryContext)}>{contextProvenanceLabel(latestIndustryContext)}</Badge>
-                  {contextSummaryError(latestIndustryContext) ? <Badge tone="warning">summary warning</Badge> : null}
+                <div className="top-gap-small">
+                  <ProvenanceStrip method={contextSummaryMethod(latestIndustryContext)} backend={contextSummaryBackend(latestIndustryContext)} model={contextSummaryModel(latestIndustryContext)} error={contextSummaryError(latestIndustryContext)} />
                 </div>
               ) : null}
             </Card>
@@ -156,9 +137,9 @@ export function DashboardPage() {
             <Card>
               <SectionTitle kicker="Context review" title="Check the market backdrop" subtitle="Best for macro and industry awareness." />
               <div className="helper-text">Review stored context snapshots before over-weighting any one ticker setup. Macro and industry context are saliency-first, not sentiment theater.</div>
-              <div className="top-gap-small cluster">
-                {latestMacroContext ? <Badge tone={contextProvenanceTone(latestMacroContext)}>macro {contextProvenanceLabel(latestMacroContext)}</Badge> : null}
-                {latestIndustryContext ? <Badge tone={contextProvenanceTone(latestIndustryContext)}>industry {contextProvenanceLabel(latestIndustryContext)}</Badge> : null}
+              <div className="top-gap-small">
+                {latestMacroContext ? <ProvenanceStrip method={contextSummaryMethod(latestMacroContext)} backend={contextSummaryBackend(latestMacroContext)} model={contextSummaryModel(latestMacroContext)} error={contextSummaryError(latestMacroContext)} /> : null}
+                {latestIndustryContext ? <div className="top-gap-small"><ProvenanceStrip method={contextSummaryMethod(latestIndustryContext)} backend={contextSummaryBackend(latestIndustryContext)} model={contextSummaryModel(latestIndustryContext)} error={contextSummaryError(latestIndustryContext)} /></div> : null}
               </div>
               <div className="cluster top-gap-small">
                 <Link to="/context" className="button-secondary">Context review</Link>

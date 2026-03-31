@@ -54,7 +54,9 @@ A third cleanup pass is now focusing on `run-detail-page.tsx`, especially:
 - compressed lifecycle / warning summaries
 - keeping the canonical links while trimming repeated helper text
 
-The ticker-signals page is also in the same cleanup sweep, with the remaining helper-text density being collapsed into fewer lines.
+The ticker-signals page and the dashboard / ticker overview cards are also in the same cleanup sweep, with the remaining helper-text density being collapsed into fewer lines.
+
+A fourth cleanup pass is now focusing on the dashboard and ticker overview cards, especially the repeated provenance and outcome summaries in the overview surfaces. The latest edits collapsed more of that repeated wording into single-line summaries.
 
 This pass should leave the run page as the deep forensic surface, but with much less repeated phrasing inside each row.
 
