@@ -153,11 +153,12 @@ export function TickerPage() {
                               {item.run_id ? <Link to={`/runs/${item.run_id}`} className="badge badge-info badge-link">run #{item.run_id}</Link> : null}
                             </div>
                             <div className="cluster top-gap-small"><ScoreBadge label="Confidence" value={`${item.confidence_percent}%`} tone="info" /><Badge tone={item.latest_outcome?.outcome === "win" ? "ok" : item.latest_outcome?.outcome === "loss" ? "danger" : "neutral"}>{item.latest_outcome?.outcome ?? "open"}</Badge><Badge tone={item.latest_outcome?.status === "resolved" ? "ok" : "warning"}>{item.latest_outcome?.status ?? "pending"}</Badge></div>
-                            <div className="helper-text">{formatDate(item.computed_at)} · relationships {relationshipSummary(item)}</div>
+                            <div className="helper-text">{formatDate(item.computed_at)} · relationships {relationshipSummary(item)} · status {item.latest_outcome?.status ?? "pending"}</div>
                           </div>
                         </div>
                         <div className="helper-text">{item.thesis_summary || item.rationale_summary || "No thesis summary stored."}</div>
-                        <div className="helper-text top-gap-small">relationships {relationshipSummary(item)} · entry {item.entry_price_low ?? item.entry_price_high ?? "—"}{item.entry_price_high && item.entry_price_low && item.entry_price_high !== item.entry_price_low ? ` to ${item.entry_price_high}` : ""} · stop {item.stop_loss ?? "—"} · take {item.take_profit ?? "—"} · outcome {item.latest_outcome?.notes || (item.warnings.length > 0 ? `${item.warnings.length} warning(s)` : "—")} · analytics {item.latest_outcome ? `${outcomeBias} · ${outcomeRegime}` : "—"}</div>
+                        <div className="helper-text top-gap-small">relationships {relationshipSummary(item)} · entry {item.entry_price_low ?? item.entry_price_high ?? "—"}{item.entry_price_high && item.entry_price_low && item.entry_price_high !== item.entry_price_low ? ` to ${item.entry_price_high}` : ""} · stop {item.stop_loss ?? "—"} · take {item.take_profit ?? "—"}</div>
+                        <div className="helper-text">outcome {item.latest_outcome?.notes || (item.warnings.length > 0 ? `${item.warnings.length} warning(s)` : "—")} · analytics {item.latest_outcome ? `${outcomeBias} · ${outcomeRegime}` : "—"}</div>
                       </article>
                     );
                   })}

@@ -62,9 +62,13 @@ The ticker-signals page has moved into its cleanup pass, with shortlist, transmi
 
 The dashboard / ticker overview cards are also in the same cleanup sweep, with the remaining helper-text density being collapsed into fewer lines.
 
-A fourth cleanup pass is now focusing on the dashboard and ticker overview cards, especially the repeated provenance and outcome summaries in the overview surfaces. The latest edits collapsed more of that repeated wording into single-line summaries.
+A fourth cleanup pass is now focusing on the dashboard and ticker overview cards, especially the repeated provenance and outcome summaries in the overview surfaces. The latest edits collapsed more of that repeated wording into single-line summaries, and the final pass is trimming the remaining overview-card copy.
+
+The latest dashboard pass condensed the freshness/context cards and the recommendation-plan cards. The latest ticker pass condensed the overview and history cards so the most important summary facts stay in one line.
 
 The next cleanup pass is tightening the context review history blocks by using shared compact event summary rows instead of repeating the same label/value scaffolding in each list item.
+
+The dashboard and ticker overview cards are now the final remaining cleanup area in this phase.
 
 This pass should leave the run page as the deep forensic surface, but with much less repeated phrasing inside each row.
 

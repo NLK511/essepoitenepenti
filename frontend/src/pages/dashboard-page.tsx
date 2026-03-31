@@ -98,22 +98,14 @@ export function DashboardPage() {
             <Card>
               <div className="metric-label">Macro context freshness</div>
               <div className="metric-value">{latestMacroContext ? latestMacroContext.status : "—"}</div>
-              <div className="helper-text">{latestMacroContext ? formatDate(latestMacroContext.computed_at) : "no context snapshot"}</div>
-              {latestMacroContext ? (
-                <div className="top-gap-small">
-                  <ProvenanceStrip method={contextSummaryMethod(latestMacroContext)} backend={contextSummaryBackend(latestMacroContext)} model={contextSummaryModel(latestMacroContext)} error={contextSummaryError(latestMacroContext)} />
-                </div>
-              ) : null}
+              <div className="helper-text">{latestMacroContext ? `${formatDate(latestMacroContext.computed_at)} · ${contextSummaryMethod(latestMacroContext)}` : "no context snapshot"}</div>
+              {latestMacroContext ? <ProvenanceStrip method={contextSummaryMethod(latestMacroContext)} backend={contextSummaryBackend(latestMacroContext)} model={contextSummaryModel(latestMacroContext)} error={contextSummaryError(latestMacroContext)} /> : null}
             </Card>
             <Card>
               <div className="metric-label">Industry context freshness</div>
               <div className="metric-value">{latestIndustryContext ? latestIndustryContext.industry_label || latestIndustryContext.industry_key : "—"}</div>
-              <div className="helper-text">{latestIndustryContext ? `${latestIndustryContext.status} · ${formatDate(latestIndustryContext.computed_at)}` : "no context snapshot"}</div>
-              {latestIndustryContext ? (
-                <div className="top-gap-small">
-                  <ProvenanceStrip method={contextSummaryMethod(latestIndustryContext)} backend={contextSummaryBackend(latestIndustryContext)} model={contextSummaryModel(latestIndustryContext)} error={contextSummaryError(latestIndustryContext)} />
-                </div>
-              ) : null}
+              <div className="helper-text">{latestIndustryContext ? `${latestIndustryContext.status} · ${formatDate(latestIndustryContext.computed_at)} · ${contextSummaryMethod(latestIndustryContext)}` : "no context snapshot"}</div>
+              {latestIndustryContext ? <ProvenanceStrip method={contextSummaryMethod(latestIndustryContext)} backend={contextSummaryBackend(latestIndustryContext)} model={contextSummaryModel(latestIndustryContext)} error={contextSummaryError(latestIndustryContext)} /> : null}
             </Card>
           </section>
 
@@ -136,10 +128,10 @@ export function DashboardPage() {
             </Card>
             <Card>
               <SectionTitle kicker="Context review" title="Check the market backdrop" subtitle="Best for macro and industry awareness." />
-              <div className="helper-text">Review stored context snapshots before over-weighting any one ticker setup. Macro and industry context are saliency-first, not sentiment theater.</div>
+              <div className="helper-text">Review stored context snapshots before over-weighting any one ticker setup. Macro and industry context stay canonical here; the detail pages own the full backdrop.</div>
               <div className="top-gap-small">
                 {latestMacroContext ? <ProvenanceStrip method={contextSummaryMethod(latestMacroContext)} backend={contextSummaryBackend(latestMacroContext)} model={contextSummaryModel(latestMacroContext)} error={contextSummaryError(latestMacroContext)} /> : null}
-                {latestIndustryContext ? <div className="top-gap-small"><ProvenanceStrip method={contextSummaryMethod(latestIndustryContext)} backend={contextSummaryBackend(latestIndustryContext)} model={contextSummaryModel(latestIndustryContext)} error={contextSummaryError(latestIndustryContext)} /></div> : null}
+                {latestIndustryContext ? <ProvenanceStrip method={contextSummaryMethod(latestIndustryContext)} backend={contextSummaryBackend(latestIndustryContext)} model={contextSummaryModel(latestIndustryContext)} error={contextSummaryError(latestIndustryContext)} /> : null}
               </div>
               <div className="cluster top-gap-small">
                 <Link to="/context" className="button-secondary">Context review</Link>
@@ -268,16 +260,14 @@ export function DashboardPage() {
                             {item.latest_outcome?.outcome ?? item.status}
                           </Badge>
                         </div>
-                        <h3 className="subsection-title">{item.confidence_percent}% confidence</h3>
+                        <div className="cluster top-gap-small"><Badge tone="info">confidence {item.confidence_percent}%</Badge></div>
                       </div>
                       <Link to={item.run_id ? `/runs/${item.run_id}` : "/jobs/recommendation-plans"} className="button-secondary">
                         Open run
                       </Link>
                     </div>
                     <div className="summary-grid">
-                      <div className="summary-item"><span className="summary-label">Entry</span><span className="summary-value">{item.entry_price_low ?? item.entry_price_high ?? "—"}</span></div>
-                      <div className="summary-item"><span className="summary-label">Stop</span><span className="summary-value">{item.stop_loss ?? "—"}</span></div>
-                      <div className="summary-item"><span className="summary-label">Take profit</span><span className="summary-value">{item.take_profit ?? "—"}</span></div>
+                      <div className="summary-item"><span className="summary-label">Entry / stop / take</span><span className="summary-value">{item.entry_price_low ?? item.entry_price_high ?? "—"} · {item.stop_loss ?? "—"} · {item.take_profit ?? "—"}</span></div>
                     </div>
                     <div className="helper-text">{item.thesis_summary || "No thesis summary captured for this recommendation plan."}</div>
                   </article>
