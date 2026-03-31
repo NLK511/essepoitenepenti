@@ -56,7 +56,7 @@ A third cleanup pass is now focusing on `run-detail-page.tsx`, especially:
 
 The latest run-detail pass is collapsing the context snapshots into shared compact rows and shortening the shortlist / transmission / calibration helper text so each table cell carries fewer repeated fragments.
 
-The recommendation-plans page is now also being tightened so horizon, setup, calibration, and transmission details use fewer helper lines per row.
+The recommendation-plans page is now also being tightened so horizon, setup, calibration, and transmission details use fewer helper lines per row, and the latest pass is turning each plan row into a compact summary with an expandable detail panel so entry, stop, and take-profit fields stay visible at a glance.
 
 The ticker-signals page has moved into its cleanup pass, with shortlist, transmission, and cheap-scan details being collapsed into fewer shared summary lines per card.
 

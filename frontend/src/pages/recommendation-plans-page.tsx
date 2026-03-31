@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { Fragment, FormEvent, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
@@ -72,6 +72,16 @@ function calibrationSliceSummary(calibrationReview: unknown, key: string): strin
 
 function joinSummary(items: string[], empty = "none"): string {
   return items.length > 0 ? items.join(" · ") : empty;
+}
+
+function formatPriceRange(low: number | null | undefined, high: number | null | undefined): string {
+  if (low === null || low === undefined) {
+    return "—";
+  }
+  if (high === null || high === undefined || high === low) {
+    return String(low);
+  }
+  return `${low} – ${high}`;
 }
 
 function contextSummaryMethod(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null | undefined): string {
@@ -224,6 +234,7 @@ export function RecommendationPlansPage() {
   const [evaluationMessage, setEvaluationMessage] = useState<string | null>(null);
   const [evaluating, setEvaluating] = useState(false);
   const [evaluatingPlanId, setEvaluatingPlanId] = useState<number | null>(null);
+  const [expandedPlanRows, setExpandedPlanRows] = useState<Record<string, boolean>>({});
   const [reviewSection, setReviewSection] = useState<"overview" | "calibration" | "baselines" | "evidence" | "families">("overview");
 
   useEffect(() => {
@@ -296,6 +307,13 @@ export function RecommendationPlansPage() {
       setEvaluating(false);
       setEvaluatingPlanId(null);
     }
+  }
+
+  function togglePlanRow(planKey: string) {
+    setExpandedPlanRows((current) => ({
+      ...current,
+      [planKey]: !current[planKey],
+    }));
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -645,6 +663,7 @@ export function RecommendationPlansPage() {
                   <th><HelpLabel label="Latest outcome" tooltip="The most recent stored evaluation result for this plan, if one exists." to={recommendationPlansDoc("outcome-fields")} /></th>
                   <th><HelpLabel label="Thesis" tooltip="The summary of why the plan exists, what could invalidate it, and what to focus on during review." to={recommendationPlansDoc("explanation-fields")} /></th>
                   <th><HelpLabel label="Run" tooltip="The workflow run that produced this plan." to={glossaryDoc("run")} /></th>
+                  <th>More</th>
                 </tr>
               </thead>
               <tbody>
@@ -702,78 +721,113 @@ export function RecommendationPlansPage() {
                   const calibrationReasons = extractDisplayLabels(calibrationReview, "reason_details", "reasons");
                   const macroContext = plan.run_id ? macroContextByRun[plan.run_id] : null;
                   const industryContext = plan.run_id ? industryContextByRun[plan.run_id] : null;
+                  const planKey = plan.id !== null && plan.id !== undefined ? String(plan.id) : `${plan.ticker}-${plan.computed_at}`;
+                  const isExpanded = expandedPlanRows[planKey] ?? false;
+                  const entryRange = formatPriceRange(plan.entry_price_low, plan.entry_price_high);
+                  const stopLabel = plan.stop_loss !== null && plan.stop_loss !== undefined ? String(plan.stop_loss) : "—";
+                  const takeLabel = plan.take_profit !== null && plan.take_profit !== undefined ? String(plan.take_profit) : "—";
                   return (
-                    <tr key={plan.id ?? `${plan.ticker}-${plan.computed_at}`}>
-                      <td>{formatDate(plan.computed_at)}</td>
-                      <td>
-                        <div className="cluster">
-                          <Link to={`/tickers/${plan.ticker}`} className="badge badge-info badge-link">{plan.ticker}</Link>
-                          <Badge tone={plan.warnings.length > 0 ? "warning" : "ok"}>{plan.status}</Badge>
-                        </div>
-                        <div className="helper-text top-gap-small">horizon {plan.horizon}</div>
-                        <div className="helper-text">setup {setupFamily}</div>
-                      </td>
-                      <td>
-                        <Badge tone={actionTone(plan.action)}>{plan.action}</Badge>
-                        <div className="helper-text top-gap-small">reason {actionReason}</div>
-                        <div className="helper-text">{actionReasonDetail}</div>
-                      </td>
-                      <td>
-                        <ScoreBadge label="Confidence" value={`${plan.confidence_percent.toFixed(1)}%`} tone="info" />
-                        <div className="helper-text top-gap-small">raw {rawConfidence !== null ? `${rawConfidence.toFixed(1)}%` : "—"} · calibrated {calibratedConfidence !== null ? `${calibratedConfidence.toFixed(1)}%` : "—"} · adjust {confidenceAdjustment !== null ? `${confidenceAdjustment > 0 ? "+" : ""}${confidenceAdjustment.toFixed(1)} pts` : "—"}</div>
-                        <div className="helper-text">threshold {effectiveThreshold !== null ? `${effectiveThreshold.toFixed(1)}%` : "—"} · calibration {calibrationReviewStatus} · reasons {joinSummary(calibrationReasons)}</div>
-                        <div className="helper-text">horizon {calibrationSliceSummary(calibrationReview, "horizon")} · setup {calibrationSliceSummary(calibrationReview, "setup_family")}</div>
-                        <div className="helper-text">bucket {calibrationSliceSummary(calibrationReview, "confidence_bucket")}</div>
-                      </td>
-                      <td>
-                        <div className="helper-text">entry {plan.entry_price_low ?? "—"}{plan.entry_price_high !== null && plan.entry_price_high !== plan.entry_price_low ? ` – ${plan.entry_price_high}` : ""} · style {entryStyle}</div>
-                        <div className="helper-text">stop {plan.stop_loss ?? "—"} · {stopStyle} · take {plan.take_profit ?? "—"} · {targetStyle} · timing {timingExpectation}</div>
-                      </td>
-                      <td>
-                        <Badge tone={biasTone(transmissionBias)}>{transmissionBiasLabel}</Badge>
-                        <div className="top-gap-small cluster">
-                          {macroContext ? <Badge tone={contextProvenanceTone(macroContext)}>macro {contextProvenanceLabel(macroContext)}</Badge> : null}
-                          {industryContext ? <Badge tone={contextProvenanceTone(industryContext)}>industry {contextProvenanceLabel(industryContext)}</Badge> : null}
-                        </div>
-                        {contextSummaryError(macroContext) ? <div className="helper-text top-gap-small">macro fallback: {contextSummaryError(macroContext)}</div> : null}
-                        {contextSummaryError(industryContext) ? <div className="helper-text top-gap-small">industry fallback: {contextSummaryError(industryContext)}</div> : null}
-                        <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"} · window {expectedWindow}</div>
-                        <div className="helper-text">drivers {joinSummary(primaryDrivers)} · industry {joinSummary(industryExposureChannels)} · ticker {joinSummary(tickerExposureChannels)}</div>
-                        <div className="helper-text">relationships {relationshipSummary(plan)} · conflicts {joinSummary(conflictFlags)} · tags {joinSummary(transmissionTags)}</div>
-                      </td>
-                      <td>
-                        {plan.latest_outcome ? (
-                          <>
-                            <div className="cluster">
-                              <Badge tone={plan.latest_outcome.outcome === "win" ? "ok" : plan.latest_outcome.outcome === "loss" ? "danger" : "neutral"}>{plan.latest_outcome.outcome}</Badge>
-                              <span className="helper-text">{plan.latest_outcome.status}</span>
-                            </div>
-                            <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}% · MFE {plan.latest_outcome.max_favorable_excursion ?? "—"}% · MAE {plan.latest_outcome.max_adverse_excursion ?? "—"}%</div>
-                            <div className="helper-text">bias {detailLabel(plan.latest_outcome.transmission_bias_detail, plan.latest_outcome.transmission_bias_label ?? plan.latest_outcome.transmission_bias, false) ?? "—"} · regime {detailLabel(plan.latest_outcome.context_regime_detail, plan.latest_outcome.context_regime_label ?? plan.latest_outcome.context_regime, false) ?? "—"}</div>
-                          </>
-                        ) : (
-                          <div className="helper-text">No outcome stored yet.</div>
-                        )}
-                      </td>
-                      <td>
-                        <div>{plan.thesis_summary || "No thesis stored."}</div>
-                        {plan.rationale_summary ? <div className="helper-text top-gap-small">{plan.rationale_summary}</div> : null}
-                        <div className="helper-text top-gap-small">invalidation {invalidationSummary} · review {joinSummary(evaluationFocus, "—")}</div>
-                        {plan.id ? (
-                          <div className="helper-text top-gap-small">
-                            <button
-                              type="button"
-                              className="button-subtle"
-                              disabled={evaluatingPlanId === plan.id}
-                              onClick={() => void queueEvaluation(plan.id ?? undefined)}
-                            >
-                              {evaluatingPlanId === plan.id ? "Queueing evaluation…" : "Evaluate this plan"}
-                            </button>
+                    <Fragment key={planKey}>
+                      <tr className={`recommendation-plan-row${isExpanded ? " is-expanded" : ""}`}>
+                        <td>{formatDate(plan.computed_at)}</td>
+                        <td>
+                          <div className="cluster">
+                            <Link to={`/tickers/${plan.ticker}`} className="badge badge-info badge-link">{plan.ticker}</Link>
+                            <Badge tone={plan.warnings.length > 0 ? "warning" : "ok"}>{plan.status}</Badge>
                           </div>
-                        ) : null}
-                      </td>
-                      <td>{plan.run_id ? <Link to={`/runs/${plan.run_id}`}>#{plan.run_id}</Link> : "—"}</td>
-                    </tr>
+                          <div className="helper-text top-gap-small">horizon {plan.horizon} · setup {setupFamily}</div>
+                        </td>
+                        <td>
+                          <Badge tone={actionTone(plan.action)}>{plan.action}</Badge>
+                          <div className="helper-text top-gap-small">{actionReason}</div>
+                        </td>
+                        <td>
+                          <ScoreBadge label="Confidence" value={`${plan.confidence_percent.toFixed(1)}%`} tone="info" />
+                          <div className="helper-text top-gap-small">raw {rawConfidence !== null ? `${rawConfidence.toFixed(1)}%` : "—"} · calibrated {calibratedConfidence !== null ? `${calibratedConfidence.toFixed(1)}%` : "—"}</div>
+                        </td>
+                        <td>
+                          <div className="cluster">
+                            <ScoreBadge label="Entry" value={entryRange} tone="info" />
+                            <ScoreBadge label="Stop" value={stopLabel} tone="warning" />
+                            <ScoreBadge label="Take" value={takeLabel} tone="ok" />
+                          </div>
+                        </td>
+                        <td>
+                          <Badge tone={biasTone(transmissionBias)}>{transmissionBiasLabel}</Badge>
+                          <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"} · window {expectedWindow}</div>
+                        </td>
+                        <td>
+                          {plan.latest_outcome ? (
+                            <>
+                              <div className="cluster">
+                                <Badge tone={plan.latest_outcome.outcome === "win" ? "ok" : plan.latest_outcome.outcome === "loss" ? "danger" : "neutral"}>{plan.latest_outcome.outcome}</Badge>
+                                <span className="helper-text">{plan.latest_outcome.status}</span>
+                              </div>
+                              <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}%</div>
+                            </>
+                          ) : (
+                            <div className="helper-text">No outcome stored yet.</div>
+                          )}
+                        </td>
+                        <td>
+                          <div>{plan.thesis_summary || "No thesis stored."}</div>
+                        </td>
+                        <td>{plan.run_id ? <Link to={`/runs/${plan.run_id}`}>#{plan.run_id}</Link> : "—"}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="button-subtle"
+                            onClick={() => togglePlanRow(planKey)}
+                            aria-expanded={isExpanded}
+                          >
+                            {isExpanded ? "Hide details" : "Show details"}
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded ? (
+                        <tr className="recommendation-plan-expanded-row">
+                          <td colSpan={10}>
+                            <div className="recommendation-plan-expanded-panel">
+                              <div className="summary-grid">
+                                <div className="summary-item"><span className="summary-label">Action reason</span><span className="summary-value">{actionReason}</span></div>
+                                <div className="summary-item"><span className="summary-label">Action detail</span><span className="summary-value">{actionReasonDetail}</span></div>
+                                <div className="summary-item"><span className="summary-label">Confidence gate</span><span className="summary-value">{effectiveThreshold !== null ? `${effectiveThreshold.toFixed(1)}%` : "—"}</span></div>
+                                <div className="summary-item"><span className="summary-label">Calibration</span><span className="summary-value">{calibrationReviewStatus}</span></div>
+                                <div className="summary-item"><span className="summary-label">Adjust</span><span className="summary-value">{confidenceAdjustment !== null ? `${confidenceAdjustment > 0 ? "+" : ""}${confidenceAdjustment.toFixed(1)} pts` : "—"}</span></div>
+                                <div className="summary-item"><span className="summary-label">Calibration reasons</span><span className="summary-value">{joinSummary(calibrationReasons, "—")}</span></div>
+                                <div className="summary-item"><span className="summary-label">Entry style</span><span className="summary-value">{entryStyle}</span></div>
+                                <div className="summary-item"><span className="summary-label">Stop style</span><span className="summary-value">{stopStyle}</span></div>
+                                <div className="summary-item"><span className="summary-label">Take style</span><span className="summary-value">{targetStyle}</span></div>
+                                <div className="summary-item"><span className="summary-label">Timing</span><span className="summary-value">{timingExpectation}</span></div>
+                                <div className="summary-item"><span className="summary-label">Macro / industry</span><span className="summary-value">{macroContext ? contextProvenanceLabel(macroContext) : "—"} · {industryContext ? contextProvenanceLabel(industryContext) : "—"}</span></div>
+                                <div className="summary-item"><span className="summary-label">Transmission</span><span className="summary-value">drivers {joinSummary(primaryDrivers)} · industry {joinSummary(industryExposureChannels)} · ticker {joinSummary(tickerExposureChannels)}</span></div>
+                                <div className="summary-item"><span className="summary-label">Relationships</span><span className="summary-value">{relationshipSummary(plan)}</span></div>
+                                <div className="summary-item"><span className="summary-label">Conflicts</span><span className="summary-value">{joinSummary(conflictFlags)}</span></div>
+                                <div className="summary-item"><span className="summary-label">Tags</span><span className="summary-value">{joinSummary(transmissionTags)}</span></div>
+                                <div className="summary-item"><span className="summary-label">Outcome bias / regime</span><span className="summary-value">{plan.latest_outcome ? `${detailLabel(plan.latest_outcome.transmission_bias_detail, plan.latest_outcome.transmission_bias_label ?? plan.latest_outcome.transmission_bias, false) ?? "—"} · ${detailLabel(plan.latest_outcome.context_regime_detail, plan.latest_outcome.context_regime_label ?? plan.latest_outcome.context_regime, false) ?? "—"}` : "—"}</span></div>
+                                <div className="summary-item"><span className="summary-label">Invalidation</span><span className="summary-value">{invalidationSummary}</span></div>
+                                <div className="summary-item"><span className="summary-label">Review focus</span><span className="summary-value">{joinSummary(evaluationFocus, "—")}</span></div>
+                              </div>
+                              {contextSummaryError(macroContext) ? <div className="helper-text top-gap-small">macro fallback: {contextSummaryError(macroContext)}</div> : null}
+                              {contextSummaryError(industryContext) ? <div className="helper-text top-gap-small">industry fallback: {contextSummaryError(industryContext)}</div> : null}
+                              {plan.rationale_summary ? <div className="helper-text top-gap-small">{plan.rationale_summary}</div> : null}
+                              {plan.id ? (
+                                <div className="top-gap-small">
+                                  <button
+                                    type="button"
+                                    className="button-subtle"
+                                    disabled={evaluatingPlanId === plan.id}
+                                    onClick={() => void queueEvaluation(plan.id ?? undefined)}
+                                  >
+                                    {evaluatingPlanId === plan.id ? "Queueing evaluation…" : "Evaluate this plan"}
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
                   );
                 })}
               </tbody>
