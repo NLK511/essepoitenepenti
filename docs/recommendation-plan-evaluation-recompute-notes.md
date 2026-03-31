@@ -190,6 +190,7 @@ We added and ran coverage for:
 - persisted-bar availability handling
 - recompute overwrite behavior
 - a real Postgres integration test for EOG plans `315` and `635`
+- an explicit real Postgres regression test showing plan `315` resolves to a stop loss when the recompute happens after market close
 
 ## Practical takeaway
 

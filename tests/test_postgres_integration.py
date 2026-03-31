@@ -121,3 +121,70 @@ class PostgresMigrationIntegrationTest(unittest.TestCase):
                 session.close()
         finally:
             engine.dispose()
+
+    def test_recompute_actual_eog_plan_315_after_close_uses_daily_bars_and_stop_loss(self) -> None:
+        database_url = os.environ["POSTGRES_TEST_DATABASE_URL"]
+        engine = create_engine(database_url, future=True)
+        try:
+            session = Session(bind=engine)
+            try:
+                plan_rows = session.scalars(select(RecommendationPlanRecord).where(RecommendationPlanRecord.id == 315)).all()
+                self.assertEqual({row.id for row in plan_rows if row.id is not None}, {315})
+
+                market_data = HistoricalMarketDataRepository(session)
+                market_data.upsert_bar(
+                    HistoricalMarketBar(
+                        ticker="EOG",
+                        timeframe="1d",
+                        bar_time=datetime(2026, 3, 30, 0, 0, tzinfo=timezone.utc),
+                        available_at=datetime(2026, 3, 30, 23, 59, 59, tzinfo=timezone.utc),
+                        open_price=151.03,
+                        high_price=152.18,
+                        low_price=148.75,
+                        close_price=150.98,
+                        volume=1_000_000,
+                        source="integration_test",
+                        source_tier="research",
+                    )
+                )
+                market_data.upsert_bar(
+                    HistoricalMarketBar(
+                        ticker="EOG",
+                        timeframe="5m",
+                        bar_time=datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc),
+                        available_at=datetime(2026, 3, 30, 15, 5, tzinfo=timezone.utc),
+                        open_price=151.90,
+                        high_price=151.95,
+                        low_price=151.80,
+                        close_price=151.88,
+                        volume=122_807,
+                        source="integration_test",
+                        source_tier="research",
+                    )
+                )
+
+                jobs = JobRepository(session)
+                runs = RunRepository(session)
+                job = jobs.create(f"Integration evaluation recompute after close {uuid4()}", ["EOG"], None, enabled=False)
+                run = runs.enqueue(job.id or 0)
+
+                result = RecommendationPlanEvaluationService(session).run_evaluation(
+                    recommendation_plan_ids=[315],
+                    run_id=run.id,
+                    as_of=datetime(2026, 3, 30, 21, 30, tzinfo=timezone.utc),
+                )
+
+                self.assertEqual(result.evaluated_recommendation_plans, 1)
+                self.assertEqual(result.loss_recommendation_plan_outcomes, 1)
+                self.assertEqual(result.pending_recommendation_plan_outcomes, 0)
+
+                outcomes = RecommendationOutcomeRepository(session).get_outcomes_by_plan_ids([315])
+                self.assertEqual(outcomes[315].outcome, "loss")
+                self.assertEqual(outcomes[315].run_id, run.id)
+                self.assertTrue(outcomes[315].entry_touched)
+                self.assertTrue(outcomes[315].stop_loss_hit)
+                self.assertFalse(outcomes[315].take_profit_hit)
+            finally:
+                session.close()
+        finally:
+            engine.dispose()
