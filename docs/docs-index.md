@@ -62,6 +62,10 @@ These docs define the current product truth.
 - `historical-replay-implementation-checklist.md`
   - codebase-specific implementation checklist for historical replay
   - schema, services, repositories, jobs, and MVP delivery order
+- `ui-decluttering-plan.md`
+  - review of repeated information across pages
+  - proposed shared UI primitives and page-by-page decluttering order
+  - canonical hierarchy for summaries, details, and raw diagnostics
 
 ### Setup and operations
 - `getting-started.md`

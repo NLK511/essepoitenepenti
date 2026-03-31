@@ -13,6 +13,7 @@ Use this guide when you already understand the product at a high level and want 
 For payload-level storage details, see `raw-details-reference.md`.
 For product behavior and limits, see `features-and-capabilities.md`.
 For methodology, see `recommendation-methodology.md`.
+For a UI-specific decluttering pass and shared component plan, see `ui-decluttering-plan.md`.
 
 ---
 
