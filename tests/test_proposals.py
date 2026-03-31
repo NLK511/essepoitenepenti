@@ -51,13 +51,21 @@ class _StubSnapshotResolver:
         return {
             "score": -0.2,
             "label": "NEGATIVE",
-            "source": "snapshot",
+            "source": "snapshot_plus_context",
             "snapshot_id": 3,
             "subject_key": "global_macro",
             "subject_label": "Global Macro",
             "coverage": {"social_count": 4},
             "source_breakdown": {"social": {"score": -0.2, "item_count": 4}},
             "drivers": ["rates rising"],
+            "context_snapshot_id": 13,
+            "context_summary": "Macro context summary",
+            "context_saliency_score": 0.74,
+            "context_confidence_percent": 81.0,
+            "context_regime_tags": ["risk_off"],
+            "context_lifecycle": {"escalating_event_count": 1},
+            "context_contradictory_event_labels": ["Oil and energy"],
+            "context_active_events": [{"key": "bond_yields", "window_hint": "2d_5d"}],
             "diagnostics": {"warnings": ["macro snapshot used"]},
         }
 
@@ -65,13 +73,21 @@ class _StubSnapshotResolver:
         return {
             "score": 0.3,
             "label": "POSITIVE",
-            "source": "snapshot",
+            "source": "snapshot_plus_context",
             "snapshot_id": 5,
             "subject_key": "consumer_electronics",
             "subject_label": "Consumer Electronics",
             "coverage": {"social_count": 6},
             "source_breakdown": {"social": {"score": 0.3, "item_count": 6}},
             "drivers": [f"industry snapshot for {ticker}"],
+            "context_snapshot_id": 15,
+            "context_summary": "Industry context summary",
+            "context_saliency_score": 0.68,
+            "context_confidence_percent": 77.0,
+            "context_regime_tags": ["rates"],
+            "context_lifecycle": {"new_event_count": 1},
+            "context_contradictory_event_labels": ["Guidance"],
+            "context_active_events": [{"key": "guidance", "window_hint": "2d_5d"}],
             "diagnostics": {"warnings": ["industry snapshot used"]},
         }
 
@@ -282,10 +298,13 @@ class ProposalServiceTests(unittest.TestCase):
 
         analysis = json.loads(output.diagnostics.analysis_json or "{}")
         sentiment = analysis.get("sentiment", {})
-        self.assertEqual(sentiment.get("macro", {}).get("source"), "snapshot")
+        self.assertEqual(sentiment.get("macro", {}).get("source"), "snapshot_plus_context")
         self.assertEqual(sentiment.get("macro", {}).get("snapshot_id"), 3)
-        self.assertEqual(sentiment.get("industry", {}).get("source"), "snapshot")
+        self.assertEqual(sentiment.get("macro", {}).get("context_snapshot_id"), 13)
+        self.assertEqual(sentiment.get("macro", {}).get("context_lifecycle", {}).get("escalating_event_count"), 1)
+        self.assertEqual(sentiment.get("industry", {}).get("source"), "snapshot_plus_context")
         self.assertEqual(sentiment.get("industry", {}).get("snapshot_id"), 5)
+        self.assertEqual(sentiment.get("industry", {}).get("context_snapshot_id"), 15)
         self.assertEqual(sentiment.get("industry", {}).get("subject_key"), "consumer_electronics")
         self.assertEqual(sentiment.get("ticker", {}).get("source"), "live")
         self.assertIn("industry snapshot used", sentiment.get("industry", {}).get("coverage_insights", []))

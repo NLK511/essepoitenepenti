@@ -9,13 +9,15 @@ ENV_EXAMPLE_FILE="${ROOT_DIR}/.env.example"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 APP_PORT="${APP_PORT:-8000}"
 APP_HOST="${APP_HOST:-0.0.0.0}"
-DATABASE_URL_DEFAULT="sqlite:///./trade_proposer.db"
+DATABASE_BACKEND="sqlite"
+SQLITE_DATABASE_URL_DEFAULT="sqlite:///./trade_proposer.db"
+POSTGRES_DATABASE_URL_DEFAULT="postgresql+psycopg://postgres:postgres@localhost:5432/trade_proposer"
 REDIS_URL_DEFAULT="redis://localhost:6379/0"
-PROTOTYPE_REPO_PATH_DEFAULT="${PROTOTYPE_REPO_PATH:-}"
-PROTOTYPE_PYTHON_EXECUTABLE_DEFAULT="${PROTOTYPE_PYTHON_EXECUTABLE:-}"
 FORCE_ENV_WRITE="false"
-SKIP_PROTOTYPE_DEPS="false"
 SKIP_FRONTEND_DEPS="false"
+INSTALL_DEV_DEPS="false"
+INSTALL_OPENAI_DEPS="false"
+LEGACY_PROTOTYPE_PATH="${PROTOTYPE_REPO_PATH:-}"
 
 log() {
   printf '[setup] %s\n' "$1"
@@ -31,23 +33,99 @@ usage() {
 Usage: scripts/setup.sh [options]
 
 Options:
-  --force-env            Overwrite .env with generated local defaults
-  --python <binary>      Python executable to use (default: python3)
-  --prototype <path>     Path to pi-mono repository
-  --skip-prototype-deps  Skip installing prototype requirements into the app venv
-  --skip-frontend-deps   Skip installing frontend npm dependencies
-  --help                 Show this help
+  --force-env                 Overwrite .env with generated local defaults
+  --python <binary>           Python executable to use (default: python3)
+  --database <postgres|sqlite>
+                              Database backend to generate in .env (default: sqlite)
+  --skip-frontend-deps        Skip installing frontend npm dependencies
+  --with-dev-deps             Install Python developer dependencies (pytest, ruff, mypy)
+  --with-openai               Install optional OpenAI dependency for summary integrations
+  --help                      Show this help
 
-What this script does:
+What this script does for the redesigned app:
   1. Creates .venv if needed
   2. Installs the Python app in editable mode
-  3. Installs frontend npm dependencies unless skipped
-  4. Installs prototype requirements into the same venv when available
+  3. Optionally installs dev/OpenAI extras
+  4. Installs frontend npm dependencies unless skipped
   5. Creates or updates local .env defaults
   6. Generates a random SECRET_KEY if writing .env
-  7. Defaults to SQLite for easiest first run
+  7. Defaults local startup to SQLite for easiest first run
   8. Runs database migrations
 EOF
+}
+
+build_database_url() {
+  local backend="$1"
+  case "$backend" in
+    postgres)
+      printf '%s' "$POSTGRES_DATABASE_URL_DEFAULT"
+      ;;
+    sqlite)
+      printf '%s' "$SQLITE_DATABASE_URL_DEFAULT"
+      ;;
+    *)
+      fail "unsupported database backend: ${backend}"
+      ;;
+  esac
+}
+
+database_backend_from_url() {
+  local value="$1"
+  case "$value" in
+    sqlite:*)
+      printf 'sqlite'
+      ;;
+    postgresql*|postgres:*)
+      printf 'postgres'
+      ;;
+    *)
+      printf 'unknown'
+      ;;
+  esac
+}
+
+read_env_setting() {
+  local key="$1"
+  local path="$2"
+  [[ -f "$path" ]] || return 0
+  local line
+  line="$(grep -E "^${key}=" "$path" | tail -n 1 || true)"
+  printf '%s' "${line#*=}"
+}
+
+ensure_database_connection() {
+  local backend="$1"
+  local database_url="$2"
+
+  if [[ "$backend" == "sqlite" ]]; then
+    log "using SQLite database: ${database_url}"
+    return 0
+  fi
+
+  if [[ "$backend" != "postgres" ]]; then
+    fail "unsupported DATABASE_URL backend in ${ENV_FILE}: ${database_url}"
+  fi
+
+  log "checking PostgreSQL connectivity"
+  if ! DATABASE_URL_TO_CHECK="$database_url" "$VENV_PYTHON" - <<'PY'
+import os
+import sys
+from sqlalchemy import create_engine, text
+
+url = os.environ["DATABASE_URL_TO_CHECK"]
+engine = create_engine(url, future=True)
+try:
+    with engine.connect() as connection:
+        connection.execute(text("SELECT 1"))
+except Exception as exc:  # pragma: no cover - script path
+    print(exc, file=sys.stderr)
+    sys.exit(1)
+finally:
+    engine.dispose()
+PY
+  then
+    fail "could not connect to PostgreSQL using DATABASE_URL=${database_url}. Start local services with 'docker compose up -d postgres redis' or rerun setup with '--database sqlite' for a no-service local fallback."
+  fi
 }
 
 while [[ $# -gt 0 ]]; do
@@ -62,18 +140,22 @@ while [[ $# -gt 0 ]]; do
       PYTHON_BIN="$1"
       shift
       ;;
-    --prototype)
+    --database)
       shift
-      [[ $# -gt 0 ]] || fail "missing value for --prototype"
-      PROTOTYPE_REPO_PATH_DEFAULT="$1"
-      shift
-      ;;
-    --skip-prototype-deps)
-      SKIP_PROTOTYPE_DEPS="true"
+      [[ $# -gt 0 ]] || fail "missing value for --database"
+      DATABASE_BACKEND="$1"
       shift
       ;;
     --skip-frontend-deps)
       SKIP_FRONTEND_DEPS="true"
+      shift
+      ;;
+    --with-dev-deps)
+      INSTALL_DEV_DEPS="true"
+      shift
+      ;;
+    --with-openai)
+      INSTALL_OPENAI_DEPS="true"
       shift
       ;;
     --help)
@@ -85,6 +167,14 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+case "$DATABASE_BACKEND" in
+  postgres|sqlite)
+    ;;
+  *)
+    fail "--database must be 'postgres' or 'sqlite'"
+    ;;
+esac
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"
@@ -104,16 +194,9 @@ case "$PYTHON_VERSION" in
     ;;
 esac
 
-if [[ -z "$PROTOTYPE_REPO_PATH_DEFAULT" ]]; then
-  if [[ -d "${ROOT_DIR}/../pi-mono" ]]; then
-    PROTOTYPE_REPO_PATH_DEFAULT="$(cd "${ROOT_DIR}/../pi-mono" && pwd)"
-  elif [[ -d "/home/aurelio/workspace/pi-mono" ]]; then
-    PROTOTYPE_REPO_PATH_DEFAULT="/home/aurelio/workspace/pi-mono"
-  fi
-fi
-
 log "repo root: ${ROOT_DIR}"
 log "using python: ${PYTHON_BIN}"
+log "requested database backend: ${DATABASE_BACKEND}"
 
 if [[ ! -d "$VENV_DIR" ]]; then
   log "creating virtual environment"
@@ -128,12 +211,18 @@ VENV_PIP="${VENV_DIR}/bin/pip"
 [[ -x "$VENV_PYTHON" ]] || fail "virtualenv python not found at ${VENV_PYTHON}"
 [[ -x "$VENV_PIP" ]] || fail "virtualenv pip not found at ${VENV_PIP}"
 
-if [[ -z "$PROTOTYPE_PYTHON_EXECUTABLE_DEFAULT" ]]; then
-  PROTOTYPE_PYTHON_EXECUTABLE_DEFAULT="$VENV_PYTHON"
+log "installing base project dependencies"
+"$VENV_PIP" install -e "$ROOT_DIR"
+
+if [[ "$INSTALL_DEV_DEPS" == "true" ]]; then
+  log "installing Python developer dependencies"
+  "$VENV_PIP" install -e "$ROOT_DIR[dev]"
 fi
 
-log "installing project dependencies"
-"$VENV_PIP" install -e "$ROOT_DIR[prototype]"
+if [[ "$INSTALL_OPENAI_DEPS" == "true" ]]; then
+  log "installing optional OpenAI integration dependencies"
+  "$VENV_PIP" install -e "$ROOT_DIR[prototype]"
+fi
 
 if [[ "$SKIP_FRONTEND_DEPS" == "true" ]]; then
   log "skipping frontend dependency installation"
@@ -144,36 +233,21 @@ else
   fail "missing frontend directory: ${FRONTEND_DIR}"
 fi
 
-PROTOTYPE_REQUIREMENTS_FILE=""
-if [[ -n "$PROTOTYPE_REPO_PATH_DEFAULT" ]]; then
-  candidate_requirements="${PROTOTYPE_REPO_PATH_DEFAULT}/.pi/skills/trade-proposer/requirements.txt"
-  if [[ -f "$candidate_requirements" ]]; then
-    PROTOTYPE_REQUIREMENTS_FILE="$candidate_requirements"
-  fi
-fi
-
-if [[ "$SKIP_PROTOTYPE_DEPS" == "true" ]]; then
-  log "skipping prototype dependency installation"
-elif [[ -n "$PROTOTYPE_REQUIREMENTS_FILE" ]]; then
-  log "installing prototype dependencies from ${PROTOTYPE_REQUIREMENTS_FILE}"
-  "$VENV_PIP" install -r "$PROTOTYPE_REQUIREMENTS_FILE"
-else
-  log "prototype requirements file not found; skipping prototype dependency installation"
-fi
-
 write_env_file() {
   local secret_key
+  local database_url
   secret_key="$($VENV_PYTHON -c 'import secrets; print(secrets.token_urlsafe(32))')"
+  database_url="$(build_database_url "$DATABASE_BACKEND")"
   cat > "$ENV_FILE" <<EOF
 APP_NAME=Trade Proposer App
 APP_ENV=development
 APP_HOST=${APP_HOST}
 APP_PORT=${APP_PORT}
-DATABASE_URL=${DATABASE_URL_DEFAULT}
+DATABASE_URL=${database_url}
 REDIS_URL=${REDIS_URL_DEFAULT}
 SECRET_KEY=${secret_key}
-PROTOTYPE_REPO_PATH=${PROTOTYPE_REPO_PATH_DEFAULT}
-PROTOTYPE_PYTHON_EXECUTABLE=${PROTOTYPE_PYTHON_EXECUTABLE_DEFAULT}
+PROTOTYPE_REPO_PATH=
+PROTOTYPE_PYTHON_EXECUTABLE=${VENV_PYTHON}
 SINGLE_USER_AUTH_ENABLED=true
 SINGLE_USER_AUTH_TOKEN=change-me
 SINGLE_USER_AUTH_ALLOWLIST_PATHS=/api/health,/api/health/preflight,/api/health/prototype
@@ -210,12 +284,18 @@ if [[ ! -f "$ENV_FILE" || "$FORCE_ENV_WRITE" == "true" ]]; then
   log "writing ${ENV_FILE}"
   write_env_file
 else
-  log ".env already exists, updating prototype defaults"
-  update_or_append_env_setting "PROTOTYPE_REPO_PATH" "$PROTOTYPE_REPO_PATH_DEFAULT"
-  update_or_append_env_setting "PROTOTYPE_PYTHON_EXECUTABLE" "$PROTOTYPE_PYTHON_EXECUTABLE_DEFAULT"
+  log ".env already exists, preserving DATABASE_URL and updating local execution defaults"
+  update_or_append_env_setting "PROTOTYPE_PYTHON_EXECUTABLE" "$VENV_PYTHON"
 fi
 
 [[ -f "$ENV_EXAMPLE_FILE" ]] || fail "missing ${ENV_EXAMPLE_FILE}"
+
+CURRENT_DATABASE_URL="$(read_env_setting DATABASE_URL "$ENV_FILE")"
+if [[ -z "$CURRENT_DATABASE_URL" ]]; then
+  CURRENT_DATABASE_URL="$(build_database_url "$DATABASE_BACKEND")"
+fi
+CURRENT_DATABASE_BACKEND="$(database_backend_from_url "$CURRENT_DATABASE_URL")"
+ensure_database_connection "$CURRENT_DATABASE_BACKEND" "$CURRENT_DATABASE_URL"
 
 log "running database migrations"
 (
@@ -224,16 +304,17 @@ log "running database migrations"
 )
 
 MANUAL_TASKS=()
-if [[ -z "$PROTOTYPE_REPO_PATH_DEFAULT" ]]; then
-  MANUAL_TASKS+=("set PROTOTYPE_REPO_PATH in .env to your local pi-mono checkout")
-elif [[ ! -f "${PROTOTYPE_REPO_PATH_DEFAULT}/.pi/skills/trade-proposer/scripts/propose_trade.py" ]]; then
-  MANUAL_TASKS+=("verify PROTOTYPE_REPO_PATH in .env because the trade-proposer prototype script was not found there")
-fi
-if [[ -z "$PROTOTYPE_REQUIREMENTS_FILE" && "$SKIP_PROTOTYPE_DEPS" != "true" ]]; then
-  MANUAL_TASKS+=("install prototype dependencies manually because .pi/skills/trade-proposer/requirements.txt was not found")
-fi
 if [[ "$SKIP_FRONTEND_DEPS" == "true" ]]; then
   MANUAL_TASKS+=("run npm --prefix frontend install before starting the React frontend")
+fi
+if [[ "$INSTALL_OPENAI_DEPS" != "true" ]]; then
+  MANUAL_TASKS+=("install optional summary-provider dependencies later with ./scripts/setup.sh --with-openai if you want OpenAI-backed summaries")
+fi
+if [[ -n "$LEGACY_PROTOTYPE_PATH" ]]; then
+  MANUAL_TASKS+=("legacy PROTOTYPE_REPO_PATH was detected in your environment; the redesigned app no longer requires an external prototype checkout for normal operation")
+fi
+if [[ "$CURRENT_DATABASE_BACKEND" == "postgres" ]]; then
+  MANUAL_TASKS+=("keep PostgreSQL and Redis running for local startup, e.g. docker compose up -d postgres redis")
 fi
 
 log "setup complete"
@@ -244,6 +325,7 @@ printf '\n'
 printf 'Primary local URLs after startup:\n'
 printf '  frontend: http://localhost:5173/\n'
 printf '  api:      http://localhost:%s/api/health\n' "$APP_PORT"
+printf '  preflight: http://localhost:%s/api/health/preflight\n' "$APP_PORT"
 printf '\n'
 
 if [[ ${#MANUAL_TASKS[@]} -gt 0 ]]; then
@@ -254,7 +336,7 @@ if [[ ${#MANUAL_TASKS[@]} -gt 0 ]]; then
   printf '\n'
 else
   printf 'Manual tasks remaining:\n'
-  printf '  - verify the prototype environment can run recommendation generation\n'
-  printf '  - optionally add provider credentials in /settings\n'
+  printf '  - optionally add provider credentials in /settings for NewsAPI, Finnhub, or summary backends\n'
+  printf '  - create a watchlist and run a proposal job to exercise the redesign path\n'
   printf '\n'
 fi

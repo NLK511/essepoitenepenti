@@ -97,7 +97,7 @@ This makes it easier to distinguish between:
 
 Relevance ranking improves signal quality, but it does not guarantee high-quality macro coverage if the underlying query set is too broad or the Nitter instance is sparse.
 
-For macro sentiment, the strongest results usually come from more specific phrasing such as:
+For macro support/context refreshes, the strongest results usually come from more specific phrasing such as:
 - `ECB rates`
 - `European Central Bank`
 - `rate cut`

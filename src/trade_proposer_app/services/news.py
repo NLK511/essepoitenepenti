@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import re
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from statistics import pstdev
 from typing import ClassVar, Iterable
+from urllib.parse import urlparse
 
 import httpx
+import yfinance as yf
 
 from trade_proposer_app.domain.models import NewsArticle, NewsBundle, ProviderCredential
 from trade_proposer_app.services.constants import DEFAULT_CONTEXT_FLAGS
@@ -17,6 +21,19 @@ SUMMARY_METHOD_NEWS_DIGEST = "news_digest"
 
 NEWS_API_BASE_URL = "https://newsapi.org/v2/everything"
 FINNHUB_NEWS_URL = "https://finnhub.io/api/v1/company-news"
+DISABLED_PROVIDER_KEYS = {"newsapi"}
+
+HIGH_QUALITY_NEWS_DOMAINS = [
+    "bloomberg.com", "reuters.com", "wsj.com", "ft.com", "cnbc.com",
+    "barrons.com", "marketwatch.com", "nikkei.com", "scmp.com",
+    "spglobal.com", "thefly.com", "apnews.com", "bbc.com",
+    "nytimes.com", "washingtonpost.com", "aljazeera.com",
+    "techcrunch.com", "theinformation.com", "arstechnica.com",
+    "digitimes.com", "theregister.com", "statnews.com",
+    "fiercepharma.com", "fiercebiotech.com", "biopharmadive.com",
+    "endpointsnews.com", "freightwaves.com", "supplychaindive.com",
+    "oilprice.com", "utilitydive.com", "automotivenews.com",
+]
 
 CONTINUOUS_CONTEXT_KEYWORDS: dict[str, str] = {
     "earnings": "context_tag_earnings",
@@ -202,6 +219,30 @@ def _cleanup_text(value: str | None) -> str:
     return value.strip()
 
 
+def _first_non_empty(*values: object) -> str:
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _domain_from_url(raw_url: str | None) -> str:
+    if not raw_url:
+        return ""
+    try:
+        hostname = urlparse(raw_url).hostname or ""
+    except ValueError:
+        return ""
+    return hostname.lower().lstrip("www.")
+
+
+def _is_whitelisted_domain(raw_url: str | None) -> bool:
+    hostname = _domain_from_url(raw_url)
+    if not hostname:
+        return False
+    return any(hostname == domain or hostname.endswith(f".{domain}") for domain in HIGH_QUALITY_NEWS_DOMAINS)
+
+
 def _tokenize(text: str | None) -> list[str]:
     if not text:
         return []
@@ -239,9 +280,13 @@ class NewsProvider:
 
     name: ClassVar[str] = "generic"
     provider_key: ClassVar[str] = ""
+    supports_topic: ClassVar[bool] = True
 
     def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
         raise NotImplementedError
+
+    def fetch_topic(self, topic: str, limit: int) -> list[NewsArticle]:
+        raise NewsFetchError(f"{self.name} does not support topic queries")
 
 
 class NewsAPIProvider(NewsProvider):
@@ -249,16 +294,23 @@ class NewsAPIProvider(NewsProvider):
     provider_key: ClassVar[str] = "newsapi"
 
     def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
+        return self._fetch_query(f"{ticker} stock", limit)
+
+    def fetch_topic(self, topic: str, limit: int) -> list[NewsArticle]:
+        return self._fetch_query(topic, limit)
+
+    def _fetch_query(self, query: str, limit: int) -> list[NewsArticle]:
         api_key = (self.credential.api_key or "").strip()
         if not api_key:
             raise NewsFetchError("missing NewsAPI api key")
         params = {
             "apiKey": api_key,
-            "q": f"{ticker} stock",
+            "q": query,
             "language": "en",
             "sortBy": "publishedAt",
             "pageSize": min(limit, MAX_ARTICLES_PER_PROVIDER),
             "page": 1,
+            "domains": ",".join(HIGH_QUALITY_NEWS_DOMAINS),
         }
         response = httpx.get(NEWS_API_BASE_URL, params=params, timeout=self.timeout)
         if response.status_code != 200:
@@ -286,6 +338,7 @@ class NewsAPIProvider(NewsProvider):
 class FinnhubProvider(NewsProvider):
     name: ClassVar[str] = "Finnhub"
     provider_key: ClassVar[str] = "finnhub"
+    supports_topic: ClassVar[bool] = False
 
     def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
         api_key = (self.credential.api_key or "").strip()
@@ -322,8 +375,145 @@ class FinnhubProvider(NewsProvider):
         return articles[:limit]
 
 
+class YahooFinanceProvider(NewsProvider):
+    name: ClassVar[str] = "YahooFinance"
+    provider_key: ClassVar[str] = "yahoofinance"
+    supports_topic: ClassVar[bool] = False
+
+    def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
+        try:
+            raw_news = yf.Ticker(ticker).news
+        except Exception as exc:
+            raise NewsFetchError(f"failed to fetch news for {ticker} from Yahoo Finance: {exc}") from exc
+
+        if not isinstance(raw_news, list):
+            raise NewsFetchError("unexpected response from Yahoo Finance")
+
+        articles: list[NewsArticle] = []
+        for entry in raw_news:
+            if not isinstance(entry, dict):
+                continue
+            content = entry.get("content") if isinstance(entry.get("content"), dict) else {}
+
+            title = _cleanup_text(_first_non_empty(entry.get("title"), content.get("title")))
+            summary = _cleanup_text(
+                _first_non_empty(
+                    entry.get("summary"),
+                    entry.get("description"),
+                    content.get("summary"),
+                    content.get("description"),
+                )
+            )
+            publisher = _cleanup_text(
+                _first_non_empty(
+                    entry.get("provider", {}).get("displayName") if isinstance(entry.get("provider"), dict) else None,
+                    content.get("provider", {}).get("displayName") if isinstance(content.get("provider"), dict) else None,
+                )
+            )
+
+            link_obj = entry.get("clickThroughUrl") or entry.get("canonicalUrl") or content.get("clickThroughUrl") or content.get("canonicalUrl") or {}
+            link = _cleanup_text(link_obj.get("url") if isinstance(link_obj, dict) else None)
+
+            published = None
+            for raw_date in (content.get("pubDate"), content.get("displayTime"), entry.get("pubDate"), entry.get("displayTime")):
+                if not isinstance(raw_date, str):
+                    continue
+                try:
+                    published = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+                    break
+                except ValueError:
+                    continue
+
+            if not title and not summary:
+                continue
+
+            articles.append(
+                NewsArticle(
+                    title=title or summary,
+                    summary=summary,
+                    publisher=publisher or "Yahoo Finance",
+                    link=link,
+                    published_at=published,
+                )
+            )
+        return articles[:limit]
+
+
+class GoogleNewsProvider(NewsProvider):
+    name: ClassVar[str] = "GoogleNews"
+    provider_key: ClassVar[str] = "googlenews"
+    supports_topic: ClassVar[bool] = True
+
+    def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
+        return self._fetch_query(f"{ticker} stock", limit)
+
+    def fetch_topic(self, topic: str, limit: int) -> list[NewsArticle]:
+        return self._fetch_query(topic, limit)
+
+    def _fetch_query(self, query: str, limit: int) -> list[NewsArticle]:
+        domain_filters = " OR ".join(f"site:{domain}" for domain in HIGH_QUALITY_NEWS_DOMAINS)
+        full_query = f"{query} ({domain_filters}) when:7d"
+        response = httpx.get(
+            "https://news.google.com/rss/search",
+            params={"q": full_query, "hl": "en-US", "gl": "US", "ceid": "US:en"},
+            timeout=self.timeout,
+            follow_redirects=True,
+        )
+        if response.status_code != 200:
+            raise NewsFetchError(f"unexpected status {response.status_code} from Google News")
+
+        try:
+            root = ET.fromstring(response.text)
+        except ET.ParseError as exc:
+            raise NewsFetchError(f"failed to parse Google News XML: {exc}") from exc
+
+        articles: list[NewsArticle] = []
+        for item in root.findall(".//item"):
+            title_elem = item.find("title")
+            link_elem = item.find("link")
+            pub_date_elem = item.find("pubDate")
+            desc_elem = item.find("description")
+            source_elem = item.find("source")
+
+            source_url = source_elem.attrib.get("url") if source_elem is not None else None
+            if source_url and not _is_whitelisted_domain(source_url):
+                continue
+
+            title = _cleanup_text(title_elem.text if title_elem is not None else None)
+            link = _cleanup_text(link_elem.text if link_elem is not None else None)
+            desc_raw = desc_elem.text if desc_elem is not None else ""
+            summary = _cleanup_text(re.sub(r"<[^>]+>", "", desc_raw))
+
+            publisher = "Google News"
+            if source_elem is not None:
+                publisher = _cleanup_text(source_elem.text or source_url or "") or "Google News"
+
+            published = None
+            if pub_date_elem is not None and pub_date_elem.text:
+                try:
+                    published = parsedate_to_datetime(pub_date_elem.text)
+                except (TypeError, ValueError):
+                    pass
+
+            if not title:
+                continue
+
+            articles.append(
+                NewsArticle(
+                    title=title,
+                    summary=summary,
+                    publisher=publisher,
+                    link=link,
+                    published_at=published,
+                )
+            )
+        return articles[:limit]
+
+
 PROVIDER_BUILDERS[NewsAPIProvider.provider_key] = NewsAPIProvider
 PROVIDER_BUILDERS[FinnhubProvider.provider_key] = FinnhubProvider
+PROVIDER_BUILDERS[YahooFinanceProvider.provider_key] = YahooFinanceProvider
+PROVIDER_BUILDERS[GoogleNewsProvider.provider_key] = GoogleNewsProvider
 
 
 class NaiveSentimentAnalyzer:
@@ -431,7 +621,14 @@ class NewsIngestionService:
     @classmethod
     def from_provider_credentials(cls, provider_credentials: dict[str, ProviderCredential], *, max_articles: int = 12) -> "NewsIngestionService":
         providers: list[NewsProvider] = []
+
+        # Always include the free, real-time providers by default
+        providers.append(GoogleNewsProvider(credential=ProviderCredential(provider="googlenews")))
+        providers.append(YahooFinanceProvider(credential=ProviderCredential(provider="yahoofinance")))
+
         for key, builder in PROVIDER_BUILDERS.items():
+            if key in DISABLED_PROVIDER_KEYS or key in (GoogleNewsProvider.provider_key, YahooFinanceProvider.provider_key):
+                continue
             credential = provider_credentials.get(key)
             if credential and (credential.api_key or credential.api_secret):
                 providers.append(builder(credential))
@@ -449,17 +646,71 @@ class NewsIngestionService:
             except Exception as exc:  # noqa: BLE001
                 bundle.feed_errors.append(f"{provider.name}: {exc}")
                 continue
-            unique_articles = []
-            for article in articles:
-                link = article.link or ""
-                if link and link in seen_links:
-                    continue
-                if link:
-                    seen_links.add(link)
-                unique_articles.append(article)
-            if unique_articles:
-                bundle.articles.extend(unique_articles)
-            bundle.feeds_used.append(provider.name)
+            self._merge_articles(bundle, articles, seen_links)
+            if articles:
+                bundle.feeds_used.append(provider.name)
+        bundle.articles = bundle.articles[: self.max_articles]
+        return bundle
+
+    def fetch_topic(self, topic: str, *, limit: int | None = None) -> NewsBundle:
+        bundle = NewsBundle(ticker=topic)
+        if not self.providers:
+            bundle.feed_errors.append("news: no providers configured")
+            return bundle
+        seen_links: set[str] = set()
+        fetch_limit = min(limit or self.max_articles, self.max_articles)
+        for provider in self.providers:
+            if not getattr(provider, "supports_topic", True):
+                continue
+            try:
+                articles = provider.fetch_topic(topic, fetch_limit)
+            except Exception as exc:  # noqa: BLE001
+                bundle.feed_errors.append(f"{provider.name}: {exc}")
+                continue
+            self._merge_articles(bundle, articles, seen_links)
+            if articles:
+                bundle.feeds_used.append(provider.name)
+        bundle.articles = bundle.articles[:fetch_limit]
+        return bundle
+
+    def fetch_topics(self, subject: str, queries: list[str], *, per_query_limit: int = 4) -> NewsBundle:
+        bundle = NewsBundle(ticker=subject)
+        if not self.providers:
+            bundle.feed_errors.append("news: no providers configured")
+            return bundle
+        seen_links: set[str] = set()
+        normalized_queries = [query.strip() for query in queries if isinstance(query, str) and query.strip()]
+        if not normalized_queries:
+            normalized_queries = [subject]
+        for query in normalized_queries[:5]:
+            query_bundle = self.fetch_topic(query, limit=per_query_limit)
+            self._merge_articles(bundle, query_bundle.articles, seen_links)
+            bundle.feeds_used.extend(query_bundle.feeds_used)
+            bundle.feed_errors.extend(query_bundle.feed_errors)
+            if len(bundle.articles) >= self.max_articles:
+                break
+        bundle.feeds_used = list(dict.fromkeys(bundle.feeds_used))
+        bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
+        bundle.articles = bundle.articles[: self.max_articles]
+        return bundle
+
+    def fetch_many(self, symbols: list[str], *, per_symbol_limit: int = 3) -> NewsBundle:
+        subject = ", ".join(symbols[:4]) if symbols else "news"
+        bundle = NewsBundle(ticker=subject)
+        if not self.providers:
+            bundle.feed_errors.append("news: no providers configured")
+            return bundle
+        seen_links: set[str] = set()
+        normalized_symbols = [symbol.strip().upper() for symbol in symbols if isinstance(symbol, str) and symbol.strip()]
+        for symbol in list(dict.fromkeys(normalized_symbols))[:6]:
+            symbol_bundle = self.fetch(symbol)
+            self._merge_articles(bundle, symbol_bundle.articles[:per_symbol_limit], seen_links)
+            bundle.feeds_used.extend(symbol_bundle.feeds_used)
+            bundle.feed_errors.extend(symbol_bundle.feed_errors)
+            if len(bundle.articles) >= self.max_articles:
+                break
+        bundle.feeds_used = list(dict.fromkeys(bundle.feeds_used))
+        bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
         bundle.articles = bundle.articles[: self.max_articles]
         return bundle
 
@@ -467,3 +718,19 @@ class NewsIngestionService:
         bundle = self.fetch(ticker)
         sentiment = self._sentiment_analyzer.analyze(bundle)
         return {"bundle": bundle, "sentiment": sentiment}
+
+    def analyze_bundle(self, bundle: NewsBundle) -> dict[str, object]:
+        return {"bundle": bundle, "sentiment": self._sentiment_analyzer.analyze(bundle)}
+
+    @staticmethod
+    def _merge_articles(bundle: NewsBundle, articles: list[NewsArticle], seen_links: set[str]) -> None:
+        unique_articles = []
+        for article in articles:
+            link = article.link or ""
+            if link and link in seen_links:
+                continue
+            if link:
+                seen_links.add(link)
+            unique_articles.append(article)
+        if unique_articles:
+            bundle.articles.extend(unique_articles)

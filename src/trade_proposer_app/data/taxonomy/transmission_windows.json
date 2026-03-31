@@ -1,0 +1,21 @@
+{
+  "intraday": {
+    "label": "intraday",
+    "aliases": ["same_day"]
+  },
+  "1d": {
+    "label": "1d",
+    "aliases": ["one_day"]
+  },
+  "2d_5d": {
+    "label": "2d-5d",
+    "aliases": ["2_5d", "two_to_five_days"]
+  },
+  "1w_plus": {
+    "label": "1w+",
+    "aliases": ["one_week_plus", "week_plus"]
+  },
+  "unknown": {
+    "label": "unknown"
+  }
+}

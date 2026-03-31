@@ -1,0 +1,192 @@
+{
+  "consumer_electronics": [
+    "product_cycle",
+    "channel_checks",
+    "pricing",
+    "services_growth",
+    "gaming_demand",
+    "fx",
+    "inventory"
+  ],
+  "semiconductors": [
+    "ai_theme",
+    "pricing",
+    "capacity",
+    "demand",
+    "export_controls",
+    "product_cycle",
+    "market_share",
+    "enterprise_spend",
+    "share_shift",
+    "supply_chain",
+    "geopolitics"
+  ],
+  "semiconductor_equipment": [
+    "capacity",
+    "export_controls",
+    "tool_shipments",
+    "capex"
+  ],
+  "software": [
+    "cloud_demand",
+    "enterprise_budgets",
+    "ai_attach",
+    "productivity_software",
+    "guidance",
+    "pricing",
+    "subscription_growth",
+    "cloud_growth",
+    "backlog"
+  ],
+  "interactive_media_and_services": [
+    "ad_demand",
+    "cloud_growth",
+    "ai_theme",
+    "regulation",
+    "pricing",
+    "engagement"
+  ],
+  "broadline_retail": [
+    "consumer_demand",
+    "cloud_demand",
+    "pricing",
+    "fulfillment",
+    "cloud_growth",
+    "regulation",
+    "stimulus",
+    "promotions",
+    "logistics"
+  ],
+  "banks": [
+    "rates",
+    "deposit_trends",
+    "credit_quality",
+    "trading_revenue",
+    "loan_growth"
+  ],
+  "capital_markets": [
+    "capital_markets_activity",
+    "trading_revenue",
+    "deal_activity",
+    "wealth_flows"
+  ],
+  "payments": [
+    "payment_volume",
+    "cross_border",
+    "consumer_spend",
+    "take_rate",
+    "checkout_trends"
+  ],
+  "oil_and_gas": [
+    "commodity_prices",
+    "geopolitics",
+    "production",
+    "refining_margins",
+    "capex",
+    "lng"
+  ],
+  "machinery": [
+    "dealer_inventory",
+    "order_trends",
+    "pricing",
+    "backlog",
+    "demand"
+  ],
+  "aerospace_and_defense": [
+    "backlog",
+    "deliveries",
+    "supply_chain",
+    "aftermarket",
+    "defense_orders",
+    "geopolitics",
+    "regulation"
+  ],
+  "airlines": [
+    "travel_demand",
+    "fuel_costs",
+    "capacity",
+    "pricing"
+  ],
+  "automobiles": [
+    "deliveries",
+    "pricing",
+    "inventory",
+    "battery_supply",
+    "credit",
+    "production",
+    "supply_chain"
+  ],
+  "retail": [
+    "traffic",
+    "pricing",
+    "inventory",
+    "consumer_trade_down",
+    "membership"
+  ],
+  "home_improvement_retail": [
+    "housing_turnover",
+    "consumer_demand",
+    "pricing"
+  ],
+  "apparel": [
+    "inventory",
+    "pricing",
+    "wholesale_orders",
+    "brand_momentum",
+    "traffic",
+    "international_growth"
+  ],
+  "restaurants": [
+    "traffic",
+    "pricing",
+    "labor_costs",
+    "china_demand"
+  ],
+  "pharmaceuticals": [
+    "trial_data",
+    "pricing",
+    "regulation",
+    "demand"
+  ],
+  "managed_care": [
+    "utilization",
+    "reimbursement",
+    "regulation",
+    "cost_trend"
+  ],
+  "industrial_reits": [
+    "occupancy",
+    "rent_spread",
+    "rates",
+    "supply"
+  ],
+  "retail_reits": [
+    "occupancy",
+    "rent_spread",
+    "rates",
+    "traffic"
+  ],
+  "net_lease_reits": [
+    "cap_rates",
+    "rates",
+    "occupancy",
+    "credit"
+  ],
+  "utilities": [
+    "rate_base",
+    "power_demand",
+    "regulation",
+    "rates"
+  ],
+  "metals_and_mining": [
+    "commodity_prices",
+    "supply",
+    "china_demand",
+    "production",
+    "pricing",
+    "demand",
+    "spreads",
+    "capacity",
+    "energy_costs"
+  ]
+}

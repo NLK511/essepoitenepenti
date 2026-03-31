@@ -1,0 +1,5 @@
+{
+  "mixed_directional_evidence": {"label": "mixed directional evidence"},
+  "ambiguous_evidence_text": {"label": "ambiguous evidence text"},
+  "direction_changed_vs_previous_snapshot": {"label": "direction changed vs previous snapshot"}
+}

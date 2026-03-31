@@ -2,14 +2,12 @@ import type {
   AppSetting,
   JobType,
   RecommendationDirection,
-  RecommendationHistoryItem,
   RecommendationState,
   RunDiagnostics,
-  RunOutput,
   RunStatus,
 } from "./types";
 
-export interface SentimentSnapshotReference {
+export interface SupportSnapshotReference {
   scope: string;
   snapshotId: number;
   subjectKey: string | null;
@@ -17,6 +15,11 @@ export interface SentimentSnapshotReference {
   source: string | null;
   label: string | null;
   score: number | null;
+}
+
+export interface KeyLabelDetail {
+  key: string;
+  label: string;
 }
 
 export function formatDate(value: string | null): string {
@@ -69,10 +72,10 @@ export function jobTypeLabel(jobType: JobType | string): string {
     return "Weight optimization";
   }
   if (jobType === "macro_sentiment_refresh") {
-    return "Macro sentiment refresh";
+    return "Macro context refresh";
   }
   if (jobType === "industry_sentiment_refresh") {
-    return "Industry sentiment refresh";
+    return "Industry context refresh";
   }
   return jobType;
 }
@@ -141,20 +144,6 @@ export function diagnosticsMessages(diagnostics: RunDiagnostics): string[] {
   return messages;
 }
 
-export function warningCount(item: RecommendationHistoryItem | RunOutput): number {
-  if ("diagnostics" in item) {
-    return diagnosticsMessages(item.diagnostics).length;
-  }
-  const messages = [...item.warnings, ...item.provider_errors];
-  if (item.summary_error) {
-    messages.push(item.summary_error);
-  }
-  if (item.llm_error) {
-    messages.push(item.llm_error);
-  }
-  return new Set(messages.filter(Boolean)).size;
-}
-
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -204,13 +193,13 @@ export function parseJsonRecord(value: string | null): Record<string, unknown> |
   }
 }
 
-export function extractSentimentSnapshotReferences(value: string | null): SentimentSnapshotReference[] {
+export function extractSupportSnapshotReferences(value: string | null): SupportSnapshotReference[] {
   const parsed = parseJsonRecord(value);
   const sentiment = parsed && isRecord(parsed.sentiment) ? parsed.sentiment : null;
   if (!sentiment) {
     return [];
   }
-  const references: SentimentSnapshotReference[] = [];
+  const references: SupportSnapshotReference[] = [];
   for (const scope of ["macro", "industry"]) {
     const section = sentiment[scope];
     if (!isRecord(section)) {
@@ -231,4 +220,69 @@ export function extractSentimentSnapshotReferences(value: string | null): Sentim
     });
   }
   return references;
+}
+
+function humanizeKey(value: string): string {
+  return value.replace(/_/g, " ");
+}
+
+export function extractKeyLabelDetails(value: unknown): KeyLabelDetail[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const details: KeyLabelDetail[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!isRecord(item)) {
+      continue;
+    }
+    const key = typeof item.key === "string" && item.key.trim() ? item.key.trim() : null;
+    const label = typeof item.label === "string" && item.label.trim()
+      ? item.label.trim()
+      : key ? humanizeKey(key) : null;
+    if (!key || !label || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    details.push({ key, label });
+  }
+  return details;
+}
+
+export function detailLabel(detail: unknown, fallback?: string | null, humanizeFallback = true): string | null {
+  if (isRecord(detail) && typeof detail.label === "string" && detail.label.trim()) {
+    return detail.label.trim();
+  }
+  if (typeof fallback === "string" && fallback.trim()) {
+    return humanizeFallback ? humanizeKey(fallback.trim()) : fallback.trim();
+  }
+  return null;
+}
+
+export function extractDisplayLabels(
+  source: Record<string, unknown> | null | undefined,
+  detailKey: string,
+  fallbackKey: string,
+): string[] {
+  const detailLabels = extractKeyLabelDetails(source?.[detailKey]).map((item) => item.label);
+  if (detailLabels.length > 0) {
+    return detailLabels;
+  }
+  if (!Array.isArray(source?.[fallbackKey])) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const labels: string[] = [];
+  for (const item of source[fallbackKey] as unknown[]) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const value = item.trim();
+    if (!value || seen.has(value)) {
+      continue;
+    }
+    seen.add(value);
+    labels.push(humanizeKey(value));
+  }
+  return labels;
 }

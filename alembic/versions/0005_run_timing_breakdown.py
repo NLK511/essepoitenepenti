@@ -1,7 +1,7 @@
 """run timing breakdown
 
 Revision ID: 0005_run_timing_breakdown
-Revises: 0004_jobs_watchlists_and_run_errors
+Revises: 0004_jobs_watchlists_run_errs
 Create Date: 2026-03-15 00:20:00
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "0005_run_timing_breakdown"
-down_revision = "0004_jobs_watchlists_and_run_errors"
+down_revision = "0004_jobs_watchlists_run_errs"
 branch_labels = None
 depends_on = None
 

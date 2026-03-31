@@ -3,9 +3,19 @@ from datetime import datetime, timezone
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.enums import JobType
+from trade_proposer_app.domain.enums import JobType, StrategyHorizon
 from trade_proposer_app.domain.models import Job
-from trade_proposer_app.persistence.models import JobRecord, RecommendationRecord, RunRecord, WatchlistRecord
+from trade_proposer_app.persistence.models import (
+    IndustryContextSnapshotRecord,
+    JobRecord,
+    MacroContextSnapshotRecord,
+    RecommendationOutcomeRecord,
+    RecommendationPlanRecord,
+    RunRecord,
+    SupportSnapshotRecord,
+    TickerSignalSnapshotRecord,
+    WatchlistRecord,
+)
 
 
 SYSTEM_JOB_PREFIX = "__system__:"
@@ -112,7 +122,20 @@ class JobRepository:
             ).all()
         )
         if run_ids:
-            self.session.execute(delete(RecommendationRecord).where(RecommendationRecord.run_id.in_(run_ids)))
+            plan_ids = list(
+                self.session.scalars(
+                    select(RecommendationPlanRecord.id).where(RecommendationPlanRecord.run_id.in_(run_ids))
+                ).all()
+            )
+            if plan_ids:
+                self.session.execute(
+                    delete(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.recommendation_plan_id.in_(plan_ids))
+                )
+                self.session.execute(delete(RecommendationPlanRecord).where(RecommendationPlanRecord.id.in_(plan_ids)))
+            self.session.execute(delete(TickerSignalSnapshotRecord).where(TickerSignalSnapshotRecord.run_id.in_(run_ids)))
+            self.session.execute(delete(MacroContextSnapshotRecord).where(MacroContextSnapshotRecord.run_id.in_(run_ids)))
+            self.session.execute(delete(IndustryContextSnapshotRecord).where(IndustryContextSnapshotRecord.run_id.in_(run_ids)))
+            self.session.execute(delete(SupportSnapshotRecord).where(SupportSnapshotRecord.run_id.in_(run_ids)))
             self.session.execute(delete(RunRecord).where(RunRecord.id.in_(run_ids)))
 
         self.session.execute(delete(JobRecord).where(JobRecord.id == job_id))
@@ -175,14 +198,21 @@ class JobRepository:
 
     @staticmethod
     def _to_model(record: JobRecord) -> Job:
-        watchlist_name = record.watchlist.name if record.watchlist is not None else None
+        watchlist = record.watchlist
         return Job(
             id=record.id,
             name=record.name,
             job_type=JobType(record.job_type or JobType.PROPOSAL_GENERATION.value),
             tickers=[ticker for ticker in record.tickers_csv.split(",") if ticker],
             watchlist_id=record.watchlist_id,
-            watchlist_name=watchlist_name,
+            watchlist_name=watchlist.name if watchlist is not None else None,
+            watchlist_description=watchlist.description if watchlist is not None else "",
+            watchlist_region=watchlist.region if watchlist is not None else "",
+            watchlist_exchange=watchlist.exchange if watchlist is not None else "",
+            watchlist_timezone=watchlist.timezone if watchlist is not None else "",
+            watchlist_default_horizon=(StrategyHorizon(watchlist.default_horizon) if watchlist is not None else None),
+            watchlist_allow_shorts=watchlist.allow_shorts if watchlist is not None else True,
+            watchlist_optimize_evaluation_timing=watchlist.optimize_evaluation_timing if watchlist is not None else False,
             enabled=record.enabled,
             cron=record.schedule,
             last_enqueued_at=record.last_enqueued_at,

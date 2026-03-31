@@ -1,7 +1,7 @@
 """add sentiment snapshots
 
 Revision ID: 0010_sentiment_snapshots
-Revises: 0009_recommendation_feature_vectors
+Revises: 0009_rec_feature_vectors
 Create Date: 2026-03-22 00:00:00
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "0010_sentiment_snapshots"
-down_revision = "0009_recommendation_feature_vectors"
+down_revision = "0009_rec_feature_vectors"
 branch_labels = None
 depends_on = None
 

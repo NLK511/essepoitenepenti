@@ -128,6 +128,27 @@ export function SettingsPage() {
     }
   }
 
+  async function saveNewsSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    try {
+      setSaving("news");
+      setError(null);
+      setNotice(null);
+      await postForm<{ settings: Record<string, string> }>("/api/settings/news", {
+        macro_article_limit: String(formData.get("macro_article_limit") ?? "12"),
+        industry_article_limit: String(formData.get("industry_article_limit") ?? "12"),
+        ticker_article_limit: String(formData.get("ticker_article_limit") ?? "12"),
+      });
+      setNotice("News settings saved");
+      await loadData();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save news settings");
+    } finally {
+      setSaving(null);
+    }
+  }
+
   async function saveSocialSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -215,10 +236,10 @@ export function SettingsPage() {
             </Card>
 
             <Card>
-              <SectionTitle kicker="Optimization guardrails" title="Weight optimization safety controls" subtitle="These settings affect scheduled and manual optimization runs. Each optimization now creates a rollback-capable backup of weights.json before the prototype script mutates it." />
+              <SectionTitle kicker="Optimization guardrails" title="Weight optimization safety controls" subtitle="These settings affect scheduled and manual optimization runs. Each optimization now creates a rollback-capable backup of weights.json before the app mutates it using resolved recommendation-plan outcomes." />
               <form className="stack-form" onSubmit={saveOptimizationSettings}>
                 <label className="form-field">
-                  <span>Minimum resolved trades</span>
+                  <span>Minimum resolved plan outcomes</span>
                   <input name="minimum_resolved_trades" defaultValue={String(data.optimization.minimum_resolved_trades)} />
                 </label>
                 <div className="helper-text">Current weights file: {data.optimization.weights_path}</div>
@@ -302,11 +323,24 @@ export function SettingsPage() {
             </Card>
 
             <Card>
-              <SectionTitle kicker="Social signals" title="Nitter-powered macro & industry context" subtitle="Enable the native social pipeline and point it at your Nitter instance so refresh jobs can pull macro/industry posts directly." />
+              <SectionTitle kicker="News providers" title="News limits" subtitle="Configure maximum number of articles fetched per context level." />
+              <form className="stack-form" onSubmit={saveNewsSettings}>
+                <div className="form-grid">
+                  <label className="form-field"><span>Macro limit</span><input name="macro_article_limit" defaultValue={settingMap.news_macro_article_limit ?? "12"} /></label>
+                  <label className="form-field"><span>Industry limit</span><input name="industry_article_limit" defaultValue={settingMap.news_industry_article_limit ?? "12"} /></label>
+                  <label className="form-field"><span>Ticker limit</span><input name="ticker_article_limit" defaultValue={settingMap.news_ticker_article_limit ?? "12"} /></label>
+                </div>
+                <div className="helper-text">Set how many articles are aggregated into the news bundle for macro, industry, and ticker analysis. Higher values provide more context to the LLM but cost more tokens and take longer.</div>
+                <button className="button" type="submit" disabled={saving === "news"}>{saving === "news" ? "Saving…" : "Save news settings"}</button>
+              </form>
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Social signals" title="Nitter-powered macro & industry context" subtitle="Enable the native social pipeline and point it at your Nitter instance so support/context refresh jobs can pull macro and industry posts directly." />
               <form className="stack-form" onSubmit={saveSocialSettings}>
                 <div className="form-grid">
                   <label className="checkbox-field">
-                    <span>Social sentiment enabled</span>
+                    <span>Social signal stack enabled</span>
                     <input type="checkbox" name="sentiment_enabled" value="true" defaultChecked={settingMap.social_sentiment_enabled === "true"} />
                   </label>
                   <label className="checkbox-field">
@@ -326,7 +360,7 @@ export function SettingsPage() {
                     <input type="checkbox" name="nitter_enable_ticker" value="true" defaultChecked={settingMap.social_nitter_enable_ticker === "true"} />
                   </label>
                 </div>
-                <div className="helper-text">Enable the social sentiment stack plus the Nitter source, then adjust the timeout, window, and item limits so the refresh jobs can reach your instance reliably. Use the ticker toggle to keep Nitter restricted to macro and industry sentiment when you do not want it influencing individual ticker sentiment.</div>
+                <div className="helper-text">Enable the social signal stack plus the Nitter source, then adjust the timeout, window, and item limits so support/context refresh jobs can reach your instance reliably. Use the ticker toggle to keep Nitter restricted to macro and industry support snapshots when you do not want it influencing live ticker sentiment.</div>
                 <button className="button" type="submit" disabled={saving === "social"}>{saving === "social" ? "Saving…" : "Save social settings"}</button>
               </form>
             </Card>
@@ -359,7 +393,7 @@ export function SettingsPage() {
           </Card>
 
           <Card key={`providers-${dataVersion}`}>
-            <SectionTitle kicker="Provider credentials" title="Encrypted credential storage" subtitle="These values are stored encrypted at rest and injected into the prototype subprocess when relevant." />
+            <SectionTitle kicker="Provider credentials" title="Encrypted credential storage" subtitle="These values are stored encrypted at rest and supplied to the app’s provider clients only when relevant." />
             <div className="stack-page">
               {data.providers.map((provider) => (
                 <form key={provider.provider} className="provider-form" onSubmit={(event) => void saveProvider(event, provider.provider)}>

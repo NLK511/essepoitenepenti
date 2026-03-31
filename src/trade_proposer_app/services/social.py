@@ -148,7 +148,7 @@ class NitterProvider(SocialProvider):
         scored_items.sort(
             key=lambda pair: (
                 pair[0],
-                pair[1].published_at or datetime.min.replace(tzinfo=timezone.utc),
+                self._normalize_datetime(pair[1].published_at) or datetime.min.replace(tzinfo=timezone.utc),
                 pair[1].engagement.retweets,
                 pair[1].engagement.likes,
             ),
@@ -175,10 +175,12 @@ class NitterProvider(SocialProvider):
         title_hits = sum(1 for term in query_terms if term and term in title_text)
         phrase_hits = sum(1 for term in query_terms if " " in term and term in text)
         word_count = len(text.split())
-        if item.published_at is None:
+        published_at = self._normalize_datetime(item.published_at)
+        reference_now = self._normalize_datetime(reference_now) or reference_now
+        if published_at is None:
             recency_score = 0.55
         else:
-            age_hours = max((reference_now - item.published_at).total_seconds() / 3600.0, 0.0)
+            age_hours = max((reference_now - published_at).total_seconds() / 3600.0, 0.0)
             recency_score = max(0.35, 1.0 - min(age_hours / self.query_window_hours, 1.0) * 0.65)
         engagement = item.engagement.likes + (item.engagement.retweets * 2) + item.engagement.replies
         engagement_score = 1.0 + min(engagement / 250.0, 0.25)
@@ -241,7 +243,10 @@ class NitterProvider(SocialProvider):
             filtered_items = [
                 item
                 for item in items
-                if (item.published_at is None or item.published_at >= cutoff)
+                if (
+                    item.published_at is None
+                    or (self._normalize_datetime(item.published_at) or item.published_at) >= cutoff
+                )
                 and not any(term in item.body.lower() for term in query_profile.get("exclude_keywords", []))
             ]
             query_stats.append(
@@ -496,6 +501,14 @@ class SocialSentimentAnalyzer:
         }
 
     @staticmethod
+    def _normalize_datetime(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    @staticmethod
     def _label_score(score: float) -> str:
         if score > 0.15:
             return "POSITIVE"
@@ -507,8 +520,9 @@ class SocialSentimentAnalyzer:
         engagement = item.engagement.likes + (item.engagement.retweets * 2) + item.engagement.replies
         engagement_weight = 1.0 + min(engagement / 200.0, 0.3)
         recency_weight = 1.0
-        if item.published_at is not None:
-            age_hours = max((datetime.now(timezone.utc) - item.published_at).total_seconds() / 3600.0, 0.0)
+        published_at = self._normalize_datetime(item.published_at)
+        if published_at is not None:
+            age_hours = max((datetime.now(timezone.utc) - published_at).total_seconds() / 3600.0, 0.0)
             recency_weight = max(0.35, 1.0 - min(age_hours / 24.0, 0.65))
         credibility_weight = max(0.35, float(item.credibility_score or 0.0))
         quality_weight = max(0.35, float(item.quality_score or 0.0))

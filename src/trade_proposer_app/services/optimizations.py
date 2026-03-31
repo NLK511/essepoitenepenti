@@ -8,8 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.config import settings
-from trade_proposer_app.domain.enums import RecommendationState
-from trade_proposer_app.persistence.models import RecommendationRecord
+from trade_proposer_app.persistence.models import RecommendationOutcomeRecord, RecommendationPlanRecord
 
 
 class WeightOptimizationError(Exception):
@@ -33,25 +32,14 @@ class WeightOptimizationService:
         return self.weights_path.parent / "weight_backups"
 
     @staticmethod
-    def _prototype_weights_path() -> Path:
-        return (
-            Path(settings.prototype_repo_path)
-            / ".pi"
-            / "skills"
-            / "trade-proposer"
-            / "data"
-            / "weights.json"
-        )
-
-    @staticmethod
     def _app_weights_path() -> Path:
+        configured_path = settings.weights_file_path.strip()
+        if configured_path:
+            return Path(configured_path)
         return Path(__file__).resolve().parents[1] / "data" / "weights.json"
 
     @classmethod
     def _default_weights_path(cls) -> Path:
-        prototype_path = cls._prototype_weights_path()
-        if prototype_path.exists():
-            return prototype_path
         return cls._app_weights_path()
 
     def execute(self) -> tuple[dict[str, object], dict[str, object]]:
@@ -59,7 +47,7 @@ class WeightOptimizationService:
         if resolved_count < self.minimum_resolved_trades:
             raise WeightOptimizationError(
                 "weight optimization skipped: only "
-                f"{resolved_count} resolved trades available, minimum is {self.minimum_resolved_trades}"
+                f"{resolved_count} resolved recommendation-plan outcomes available, minimum is {self.minimum_resolved_trades}"
             )
 
         weights_path = self.weights_path
@@ -82,10 +70,10 @@ class WeightOptimizationService:
 
         summary = {
             "status": "completed",
-            "resolved_trade_count": resolved_count,
-            "minimum_resolved_trades": self.minimum_resolved_trades,
-            "win_recommendations": win_count,
-            "loss_recommendations": loss_count,
+            "resolved_recommendation_plan_outcomes": resolved_count,
+            "minimum_resolved_recommendation_plan_outcomes": self.minimum_resolved_trades,
+            "win_recommendation_plan_outcomes": win_count,
+            "loss_recommendation_plan_outcomes": loss_count,
             "delta_ratio": delta_ratio,
             "momentum_multiplier": momentum_multiplier,
             "risk_multiplier": risk_multiplier,
@@ -101,15 +89,19 @@ class WeightOptimizationService:
         return summary, artifact
 
     def count_resolved_trades(self) -> tuple[int, int, int]:
-        resolved_states = {RecommendationState.WIN.value, RecommendationState.LOSS.value}
         query = (
-            select(RecommendationRecord.evaluation_state, func.count())
-            .where(RecommendationRecord.evaluation_state.in_(resolved_states))
-            .group_by(RecommendationRecord.evaluation_state)
+            select(RecommendationOutcomeRecord.outcome, func.count())
+            .join(
+                RecommendationPlanRecord,
+                RecommendationOutcomeRecord.recommendation_plan_id == RecommendationPlanRecord.id,
+            )
+            .where(RecommendationOutcomeRecord.outcome.in_({"win", "loss"}))
+            .where(RecommendationPlanRecord.action.in_({"long", "short"}))
+            .group_by(RecommendationOutcomeRecord.outcome)
         )
         results = {state: count for state, count in self.session.execute(query)}
-        win_count = int(results.get(RecommendationState.WIN.value, 0))
-        loss_count = int(results.get(RecommendationState.LOSS.value, 0))
+        win_count = int(results.get("win", 0))
+        loss_count = int(results.get("loss", 0))
         return win_count, loss_count, win_count + loss_count
 
     def describe_state(self) -> dict[str, object]:
@@ -118,9 +110,9 @@ class WeightOptimizationService:
         backups = self.list_backups(limit=10)
         return {
             "minimum_resolved_trades": self.minimum_resolved_trades,
-            "resolved_trade_count": resolved_count,
-            "win_recommendations": win_count,
-            "loss_recommendations": loss_count,
+            "resolved_recommendation_plan_outcomes": resolved_count,
+            "win_recommendation_plan_outcomes": win_count,
+            "loss_recommendation_plan_outcomes": loss_count,
             "delta_ratio": delta_ratio,
             "weights_path": str(self.weights_path),
             "weights": self._fingerprint_file(self.weights_path),

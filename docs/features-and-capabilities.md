@@ -1,92 +1,122 @@
 # Features and Capabilities
 
-Trade Proposer App already covers the main operator loop: define what to watch, enqueue work, inspect recommendations, understand degraded runs, evaluate outcomes, review history, refresh shared sentiment, and adjust configuration without leaving the product.
+**Status:** canonical current product behavior
 
-## Governing principle: signal integrity
+This document answers one question:
+> what can the app do today?
 
-Any component that contributes to recommendation generation must be transparent about missing inputs. When keywords, providers, snapshots, or aggregators are unavailable the app emits explicit `NEUTRAL`/zero outputs and surfaces diagnostics rather than inventing fallback heuristics that could hide upstream problems.
+Trade Proposer App covers the main operator loop inside one product:
+- define watchlists
+- create and run jobs
+- inspect ticker signals and recommendation plans
+- review degraded runs and missing inputs
+- evaluate outcomes later
+- refresh shared context
+- adjust settings without leaving the app
 
-This principle is consistently applied in the best parts of the product. It is also the right constraint to keep, even when it makes the outputs look less flattering, because it preserves operator trust.
+The product is currently a short-horizon analysis and trade-planning tool. It helps rank names, frame trades, and keep an audit trail. It is not yet a proven short-horizon prediction engine.
 
 ## What operators can do now
 
 ### Workflow operations
 - Create, edit, delete, and execute jobs.
-- Run proposal generation, recommendation evaluation, weight optimization, and sentiment refresh through the same auditable run system.
+- Run proposal generation, recommendation evaluation, weight optimization, and macro/industry context refresh jobs through the same run system.
 - Convert proposal jobs into watchlists and schedule them.
 - Inspect queued, running, completed, failed, cancelled, and warning-heavy runs from the debugger and run detail pages.
+- Review persisted run timing, summary, artifact, failure-phase metadata, and error details after execution finishes or fails.
 
-### Recommendation lifecycle
-- Persist proposal outputs with direction, confidence, entry, stop loss, take profit, recommendation state, and compact indicator summaries.
-- Store structured diagnostics beside each recommendation (`analysis_json`, feature vectors, aggregations, confidence weights, warnings, and raw output).
-- Evaluate recommendations through the app-native price-history path rather than a prototype script.
-- Review ticker pages with recommendation history and app-derived outcome summaries.
+### Recommendation workflow
+- Persist proposal outputs as `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`.
+- Store structured diagnostics beside those objects.
+- Evaluate recommendation plans through the app-native price-history path.
+- Review plans and outcomes through redesign-native pages instead of the old recommendation-history flow.
+- Use ticker drill-down pages to review plan history and latest outcomes for a single name.
 
-### Shared sentiment operations
-- Persist shared macro and industry sentiment as reusable snapshots.
-- Generate a short snapshot summary for each macro/industry refresh that stays anchored to the prior snapshot's summary so operators can see continuity and the latest change in one glance.
-- Inspect recent snapshots from the sentiment page and open snapshot detail views.
-- Manually queue or immediately execute macro and industry refresh workflows.
-- Trace which snapshot IDs were used by a run or recommendation through the detail views.
-- Surface snapshot freshness in `/api/health` and `/api/health/preflight` so stale shared context shows up before operators trust new proposals.
-- Macro refresh themes currently include U.S. rates/inflation, European monetary policy, and geopolitical risk topics such as war or military tensions.
-- Nitter results are ranked by a relevance scorer so the strongest, most informative posts are kept first; see `docs/nitter-social-relevance-scoring.md`.
-- A settings toggle can restrict Nitter to macro and industry sentiment only, leaving ticker sentiment to other sources.
+### Shared context workflow
+- Persist shared macro and industry support snapshots plus redesign-native macro and industry context snapshots.
+- Seed industry refresh from a richer taxonomy layer that now includes per-ticker profiles, explicit industry definitions, sector definitions, and first-pass relationship edges.
+- Inspect recent context snapshots from the Context review page and open detail views for macro or industry context objects.
+- Review stored industry ontology context in detail views, including sector, peer-industry framing, risk flags, and matched transmission edges.
+- Store ticker-level relationship provenance in deep-analysis diagnostics so peer, supplier, and customer read-through is available in raw trade-review payloads.
+- Surface matched ticker relationships on recommendation-review pages so operators can see supplier, customer, or peer read-through without opening raw JSON first.
+- Use matched ticker relationships inside stored plan explanation text so operator-facing rationale and risk framing can reflect ticker-specific read-through when the current evidence supports it.
+- Show dedicated ticker relationship read-through cards on key review pages so operators can inspect the matched peer / supplier / customer edges without digging into raw diagnostics.
+- Normalize taxonomy themes and macro-channel values against governed registries so ontology consumers use a controlled vocabulary instead of only ad hoc free-form strings.
+- Normalize transmission-channel values against a governed registry too, so ticker exposure and relationship channel fields move toward fully governed ontology values instead of drifting as free-form strings.
+- Govern ontology relationship types and target kinds too, then derive structural edges like sector membership, macro-channel links, and theme exposure so more of the ontology graph uses controlled values instead of ad hoc strings.
+- Keep deep-analysis transmission summaries closer to governed channel semantics by labeling exposure channels and avoiding the old habit of mixing theme or macro-sensitivity tags into channel lists.
+- Govern transmission-summary tags, primary drivers, and conflict flags too, so operator review surfaces rely less on ad hoc strings and more on controlled summary semantics.
+- Render governed labels for transmission tags, drivers, conflicts, and exposure channels on ticker-signal, recommendation-plan, and run-detail pages so operators can review readable summaries without opening raw JSON.
+- Render governed transmission-channel labels on context snapshot detail pages too, including stored event rows and industry ontology profile channels.
+- Use governed context-regime semantics in recommendation analytics slices too, so calibration and setup-family review cohorts rely less on duplicated ad hoc derivation.
+- Govern transmission-bias analytics semantics too, and expose readable evidence-concentration slice labels so operator review surfaces rely less on raw backend keys.
+- Carry readable analytics labels on stored latest-outcome payloads and calibration buckets too, so recommendation review pages can show governed bias/regime names instead of raw keys.
+- Carry readable shortlist and calibration explanation labels too, including shortlist reason details, selection-lane labels, calibration review-status labels, and governed calibration reason details.
+- Carry readable action-reason and contradiction-reason labels too, so recommendation-plan and context-detail pages rely less on raw internal codes.
+- Carry readable event lifecycle/status labels too, so context event rows can show governed source priority, persistence state, window, and recency semantics instead of raw keys.
+- Use narrower frontend context-event typing on review pages too, reducing dependence on ad hoc record casting when rendering governed event metadata.
+- Use narrower frontend recommendation-plan and ticker-signal typing for governed diagnostics/evidence substructures too, reducing UI dependence on loosely typed payload blobs.
+- Preserve those same governed recommendation/ticker substructures as typed backend payloads too, so persisted plans and signal snapshots round-trip with readable labels and more explicit nested semantics.
+- Render governed transmission-window labels on recommendation and ticker review pages too, replacing raw values like `2d_5d` with readable registry-backed labels like `2d-5d` where available.
+- Render governed latest-outcome analytics labels on ticker/run/recommendation review pages too, so bias/regime summaries can rely on structured detail objects rather than only raw stored keys.
+- Queue macro and industry refresh workflows manually from the operator UI.
+- Execute macro and industry refresh workflows asynchronously through the shared queued run path; immediate `run-now` endpoints still exist in the backend but are no longer the primary operator workflow.
+- Trace which shared artifacts were used by a run or recommendation plan.
+- See support-snapshot freshness in `/api/health` and `/api/health/preflight`; context objects are reviewable through the context APIs and UI.
+- Optionally use Nitter as supporting social input for macro and industry context.
 
-> **Enable the Nitter source**
->
-> Toggle `social_sentiment_enabled` and `social_nitter_enabled` to `true` through the Settings screen (or POST `/api/settings/social`).
-> Point `social_nitter_base_url` at your running Nitter instance and adjust the timeout, item, and window controls (`social_nitter_timeout_seconds`,
-> `social_nitter_max_items_per_query`, `social_nitter_query_window_hours`, `social_nitter_include_replies`) as needed. Once those settings are saved, the macro and industry refresh jobs query the configured Nitter endpoint for the macro/industry keyword profiles.
+### Watchlist workflow
+- Persist watchlists with metadata such as `description`, `region`, `exchange`, `timezone`, `default_horizon`, `allow_shorts`, and `optimize_evaluation_timing`.
+- Delete watchlists directly from the UI, provided they are not currently required by active background jobs.
+- Seed a curated default watchlist pack through `scripts/deploy_watchlists.py`, covering 300 equities split across U.S., Europe, and Asia-Pacific continent-plus-macro-industry buckets; see `default-watchlists.md` for the rationale.
+- Inspect watchlist policy and timing assumptions through the API and UI.
+- Run watchlist-backed proposal jobs through a staged flow:
+  1. cheap scan across the watchlist
+  2. shortlist selection
+  3. deep analysis for shortlisted names
+  4. persistence of signals and plans
+- Browse ticker signals and recommendation plans outside the run page.
+- Filter redesign-native objects by `run_id`.
+- Review shortlist rules, rejection counts, shortlist decisions, transmission fields, and warnings in operator views.
+- Queue recommendation-plan evaluation runs from the recommendation-plans page.
 
-### Diagnostics and explainability
-- Render structured `analysis_json` sections in the run detail UI instead of forcing operators to parse raw blobs.
-- Show news coverage, sentiment coverage, context flags, feature vectors, aggregations, and weights.
-- Keep workflow-specific cards for evaluation and optimization runs so those outputs are not hidden inside opaque JSON.
-- Preserve warnings, provider errors, and timing metadata as first-class investigation artifacts.
+### Diagnostics and docs
+- Inspect structured `analysis_json` sections in the UI.
+- Review news coverage, support/context coverage, feature vectors, aggregations, weights, warnings, and timing metadata.
+- Browse markdown docs in-app.
+- Configure summarization and providers from the settings page.
 
-### Documentation and operator UX
-- Browse markdown docs in-app with full-text search.
-- Use responsive navigation and condensed layouts on smaller screens.
-- Configure summarization and providers from the settings UI.
+## What is in place
 
-## Analysis pipeline
-
-Recommendation generation now flows entirely through the app-native pipeline. `ProposalService` fetches price history via `yfinance`, builds technical features with `pandas`, normalizes them, applies the stored weights (`src/trade_proposer_app/data/weights.json`), and combines them with sentiment context.
-
-That sentiment context is layered:
-- **macro sentiment** comes from the latest shared macro snapshot
-- **industry sentiment** comes from the latest shared industry snapshot for the ticker's mapped industry
-- **ticker sentiment** is computed live during proposal generation
-- **enhanced sentiment** may incorporate the summary narrative and technical context
-
-News ingestion runs through `NewsIngestionService`, which pulls configured articles, deduplicates links, normalizes them into a unified `news_items` structure, and emits sentiment diagnostics that feed both the feature vector and the operator-facing payloads.
-
-When operators select the `openai_api` or `pi_agent` backend, the app sends the digest and a concise technical snapshot to the summarizer. The resulting narrative and metadata are stored in `analysis_json.summary`; any failures are stored there too.
-
-## What is strong
-
-The product is most effective where one workflow feeds the next without leaving the app:
+These parts of the product are already in place and connected:
 - proposal creation and execution
 - auditable run persistence
-- evaluation and optimization on the same data path
-- structured diagnostics visible in the UI
-- shared sentiment snapshots reused across many recommendations
+- redesign-native signal and plan storage
+- recommendation-plan outcome evaluation
+- persisted recommendation calibration, baseline, setup-family review, and evidence-concentration summaries derived from stored outcomes
+- weight optimization inside the app
+- shared support snapshots and context snapshots reused across runs
+- operator-visible shortlist reasoning
+- in-app docs and settings
+- single-user bearer-token API protection plus encrypted provider credentials at rest
 
-That combination gives the app a clear operational identity instead of leaving it as a prototype shell.
+## Current limits
 
-## What is still weak or partial
+The main limits are still practical ones:
+- scheduler and worker reliability still need more hardening; the app now recovers obviously stale `running` runs with a started-at timeout, but it still lacks heartbeat-based liveness tracking and finer-grained crash recovery
+- observability is still thin for a multi-process workflow app because logs are not yet structured and daemon liveness is not surfaced explicitly
+- auth, RBAC, tenancy, and credential lifecycle are still incomplete; the current security model is single-user and frontend auth tokens are stored in local storage
+- context extraction is still heuristic rather than a mature event model
+- ticker deep analysis still reuses some older proposal-engine internals
+- support snapshots are no longer the main review UX, but they still remain in refresh, resolver, and health paths as a transitional backend dependency
+- confidence calibration is present, but it still needs more evidence over time
 
-The weakest areas are operational rather than analytical:
-- scheduler and worker reliability still need more hardening around overlaps, crash recovery, and partial failures
-- optimization thresholds and tuning controls are still not sufficiently operator-configurable
-- auth, RBAC, tenancy, and broader deployment observability remain incomplete
-- credential lifecycle work is behind the product's growing provider surface
+There is also one analytical limit:
+- coherent output is not the same as measured edge
 
-The sentiment stack is also now coherent enough that the biggest remaining question is not feature completeness but measured effectiveness. More sentiment sources and heuristics should not be added faster than the team can evaluate whether they improve recommendation quality.
+## See also
 
-## Critical assessment
-
-The overall feature set is directionally consistent with the stated goal of a self-contained, operator-facing trade workflow system. The strongest consistency is that proposal generation, evaluation, optimization, diagnostics, and shared sentiment now all live inside one product boundary.
-
-The main inconsistency to avoid going forward is roadmap drift: once a capability is delivered, it should stop appearing as a major future deliverable in multiple docs. This repository had accumulated some of that drift around structured diagnostics, LLM summaries, and shared sentiment snapshots. Those duplicates have been reduced so the docs focus on current behavior and the remaining gaps.
+- `operator-page-field-guide.md` — where these workflows show up in the UI
+- `recommendation-methodology.md` — how the pipeline works
+- `raw-details-reference.md` — stored fields and payloads
+- `roadmap.md` — current priorities

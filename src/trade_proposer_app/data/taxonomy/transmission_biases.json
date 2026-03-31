@@ -1,0 +1,18 @@
+{
+  "tailwind": {
+    "label": "tailwind",
+    "aliases": ["supportive", "positive_bias"]
+  },
+  "headwind": {
+    "label": "headwind",
+    "aliases": ["negative_bias", "pressured"]
+  },
+  "mixed": {
+    "label": "mixed",
+    "aliases": ["balanced", "mixed_bias"]
+  },
+  "unknown": {
+    "label": "unknown",
+    "aliases": ["unclear", "unclassified"]
+  }
+}

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 DAY_OF_WEEK_ALIASES: dict[str, int] = {
     "SUN": 0,
@@ -129,7 +130,33 @@ class CronSchedule:
         self.day_of_week = CronFieldMatcher(parts[4], 0, 6, aliases=DAY_OF_WEEK_ALIASES)
 
     def matches(self, moment: datetime) -> bool:
-        normalized = normalize_schedule_time(moment)
+        return self._matches_fields(normalize_schedule_time(moment))
+
+    def matches_in_timezone(self, moment: datetime, timezone_name: str) -> bool:
+        return self._matches_fields(normalize_schedule_time_in_timezone(moment, timezone_name))
+
+    def latest_due_at(self, now: datetime, lookback_minutes: int = 366 * 24 * 60) -> datetime | None:
+        candidate = normalize_schedule_time(now)
+        for _ in range(lookback_minutes + 1):
+            if self._matches_fields(candidate):
+                return candidate
+            candidate -= timedelta(minutes=1)
+        return None
+
+    def latest_due_at_in_timezone(
+        self,
+        now: datetime,
+        timezone_name: str,
+        lookback_minutes: int = 366 * 24 * 60,
+    ) -> datetime | None:
+        candidate = normalize_schedule_time_in_timezone(now, timezone_name)
+        for _ in range(lookback_minutes + 1):
+            if self._matches_fields(candidate):
+                return candidate.astimezone(timezone.utc)
+            candidate -= timedelta(minutes=1)
+        return None
+
+    def _matches_fields(self, normalized: datetime) -> bool:
         cron_day_of_week = (normalized.weekday() + 1) % 7
         return (
             self.minute.matches(normalized.minute)
@@ -139,14 +166,6 @@ class CronSchedule:
             and self.day_of_week.matches(cron_day_of_week)
         )
 
-    def latest_due_at(self, now: datetime, lookback_minutes: int = 366 * 24 * 60) -> datetime | None:
-        candidate = normalize_schedule_time(now)
-        for _ in range(lookback_minutes + 1):
-            if self.matches(candidate):
-                return candidate
-            candidate -= timedelta(minutes=1)
-        return None
-
 
 def normalize_schedule_time(value: datetime) -> datetime:
     if value.tzinfo is None:
@@ -154,5 +173,19 @@ def normalize_schedule_time(value: datetime) -> datetime:
     return value.astimezone(timezone.utc).replace(second=0, microsecond=0)
 
 
+def normalize_schedule_time_in_timezone(value: datetime, timezone_name: str) -> datetime:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    try:
+        zone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError as exc:
+        raise ScheduleParseError(f"unknown timezone: {timezone_name}") from exc
+    return value.astimezone(zone).replace(second=0, microsecond=0)
+
+
 def latest_due_at(expression: str, now: datetime) -> datetime | None:
     return CronSchedule(expression).latest_due_at(now)
+
+
+def latest_due_at_in_timezone(expression: str, now: datetime, timezone_name: str) -> datetime | None:
+    return CronSchedule(expression).latest_due_at_in_timezone(now, timezone_name)

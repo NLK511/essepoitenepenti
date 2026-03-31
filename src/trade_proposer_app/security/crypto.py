@@ -1,7 +1,7 @@
 import base64
 import hashlib
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 from trade_proposer_app.config import settings
 
@@ -19,7 +19,12 @@ class CredentialCipher:
     def decrypt(self, value: str) -> str:
         if not value:
             return ""
-        return self._fernet.decrypt(value.encode("utf-8")).decode("utf-8")
+        try:
+            return self._fernet.decrypt(value.encode("utf-8")).decode("utf-8")
+        except InvalidToken as exc:
+            raise RuntimeError(
+                "failed to decrypt stored provider credentials; the SECRET_KEY likely changed after the values were saved"
+            ) from exc
 
 
 credential_cipher = CredentialCipher(settings.secret_key)

@@ -6,14 +6,15 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.enums import JobType, RecommendationDirection, RecommendationState, RunStatus
-from trade_proposer_app.domain.models import Recommendation, RunDiagnostics
-from trade_proposer_app.persistence.models import Base, RecommendationRecord
+from trade_proposer_app.domain.enums import JobType, RunStatus, StrategyHorizon
+from trade_proposer_app.domain.models import RecommendationPlan, RecommendationPlanOutcome
+from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
+from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.optimizations import WeightOptimizationError, WeightOptimizationService
-from trade_proposer_app.services.proposals import ProposalService
 
 
 def create_session() -> Session:
@@ -29,31 +30,47 @@ class WeightOptimizationServiceTests(unittest.TestCase):
         self.session = Session(bind=self.engine)
         self.jobs = JobRepository(self.session)
         self.runs = RunRepository(self.session)
+        self.plan_repository = RecommendationPlanRepository(self.session)
+        self.outcome_repository = RecommendationOutcomeRepository(self.session)
         self.job = self.jobs.create("Optimization Job", [], None, job_type=JobType.WEIGHT_OPTIMIZATION)
 
     def tearDown(self) -> None:
         self.session.close()
 
-    def _add_recommendation(self, state: RecommendationState) -> int:
+    def _add_plan_outcome(self, outcome: str, *, action: str = "long") -> int:
         run = self.runs.create(self.job.id or 0, RunStatus.COMPLETED.value)
-        recommendation = self.runs.add_recommendation(
-            run.id or 0,
-            Recommendation(
+        plan = self.plan_repository.create_plan(
+            RecommendationPlan(
                 ticker="AAPL",
-                direction=RecommendationDirection.LONG,
-                confidence=70.0,
-                entry_price=100.0,
+                horizon=StrategyHorizon.ONE_WEEK,
+                action=action,
+                status="ok",
+                confidence_percent=70.0,
+                entry_price_low=100.0,
+                entry_price_high=101.0,
                 stop_loss=95.0,
                 take_profit=110.0,
-                indicator_summary="test",
-            ),
-            RunDiagnostics(),
+                holding_period_days=5,
+                risk_reward_ratio=1.8,
+                thesis_summary="test thesis",
+                rationale_summary="test rationale",
+                run_id=run.id,
+                job_id=self.job.id,
+            )
         )
-        record = self.session.get(RecommendationRecord, recommendation.id)
-        assert record is not None
-        record.evaluation_state = state.value
-        self.session.commit()
-        return recommendation.id or 0
+        stored = self.outcome_repository.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=plan.id or 0,
+                ticker="AAPL",
+                action=action,
+                outcome=outcome,
+                status="resolved" if outcome in {"win", "loss", "no_action", "watchlist"} else "open",
+                confidence_bucket="65_to_79",
+                setup_family="continuation",
+                run_id=run.id,
+            )
+        )
+        return stored.id or 0
 
     def _create_weights_file(self, temp_dir: Path, overrides: dict | None = None) -> Path:
         weights_path = temp_dir / "weights.json"
@@ -73,8 +90,10 @@ class WeightOptimizationServiceTests(unittest.TestCase):
         return weights_path
 
     def test_count_resolved_trades_reports_win_and_loss_totals(self) -> None:
-        self._add_recommendation(RecommendationState.WIN)
-        self._add_recommendation(RecommendationState.LOSS)
+        self._add_plan_outcome("win")
+        self._add_plan_outcome("loss")
+        self._add_plan_outcome("no_action", action="no_action")
+        self._add_plan_outcome("watchlist", action="watchlist")
         with tempfile.TemporaryDirectory() as temp_dir:
             weights_path = self._create_weights_file(Path(temp_dir))
             service = WeightOptimizationService(
@@ -88,7 +107,7 @@ class WeightOptimizationServiceTests(unittest.TestCase):
         self.assertEqual(resolved_count, 2)
 
     def test_execute_raises_when_not_enough_resolved_trades(self) -> None:
-        self._add_recommendation(RecommendationState.WIN)
+        self._add_plan_outcome("win")
         with tempfile.TemporaryDirectory() as temp_dir:
             weights_path = self._create_weights_file(Path(temp_dir))
             service = WeightOptimizationService(
@@ -101,9 +120,9 @@ class WeightOptimizationServiceTests(unittest.TestCase):
         self.assertIn("minimum is 2", str(context.exception))
 
     def test_execute_adjusts_weights_when_wins_outnumber_losses(self) -> None:
-        self._add_recommendation(RecommendationState.WIN)
-        self._add_recommendation(RecommendationState.WIN)
-        self._add_recommendation(RecommendationState.LOSS)
+        self._add_plan_outcome("win")
+        self._add_plan_outcome("win")
+        self._add_plan_outcome("loss")
         with tempfile.TemporaryDirectory() as temp_dir:
             weights_path = self._create_weights_file(Path(temp_dir))
             service = WeightOptimizationService(
@@ -113,10 +132,10 @@ class WeightOptimizationServiceTests(unittest.TestCase):
             )
             summary, artifact = service.execute()
             new_weights = json.loads(weights_path.read_text())
-        self.assertEqual(summary["resolved_trade_count"], 3)
-        self.assertEqual(summary["minimum_resolved_trades"], 3)
-        self.assertEqual(summary["win_recommendations"], 2)
-        self.assertEqual(summary["loss_recommendations"], 1)
+        self.assertEqual(summary["resolved_recommendation_plan_outcomes"], 3)
+        self.assertEqual(summary["minimum_resolved_recommendation_plan_outcomes"], 3)
+        self.assertEqual(summary["win_recommendation_plan_outcomes"], 2)
+        self.assertEqual(summary["loss_recommendation_plan_outcomes"], 1)
         self.assertTrue(summary["weights_changed"])
         self.assertGreater(new_weights["confidence"]["momentum_medium"], 1.0)
         self.assertGreater(new_weights["aggregators"]["direction"]["short_momentum"], 1.0)
@@ -146,15 +165,14 @@ class WeightOptimizationServiceTests(unittest.TestCase):
         self.assertEqual(rollback["after"]["exists"], True)
 
     def test_job_execution_uses_internal_data_for_optimization_runs(self) -> None:
-        self._add_recommendation(RecommendationState.WIN)
-        self._add_recommendation(RecommendationState.LOSS)
-        self._add_recommendation(RecommendationState.WIN)
+        self._add_plan_outcome("win")
+        self._add_plan_outcome("loss")
+        self._add_plan_outcome("win")
         with tempfile.TemporaryDirectory() as temp_dir:
             weights_path = self._create_weights_file(Path(temp_dir))
             service = JobExecutionService(
                 jobs=self.jobs,
                 runs=self.runs,
-                proposals=ProposalService(),
                 optimizations=WeightOptimizationService(
                     session=self.session,
                     minimum_resolved_trades=3,
@@ -170,7 +188,7 @@ class WeightOptimizationServiceTests(unittest.TestCase):
         stored_run = self.runs.get_run(processed_run.id or 0)
         summary = json.loads(stored_run.summary_json or "{}")
         artifact = json.loads(stored_run.artifact_json or "{}")
-        self.assertEqual(summary.get("resolved_trade_count"), 3)
+        self.assertEqual(summary.get("resolved_recommendation_plan_outcomes"), 3)
         self.assertTrue(summary.get("weights_changed"))
         self.assertEqual(artifact.get("weights_path"), str(weights_path))
         self.assertTrue(artifact.get("rollback_available"))

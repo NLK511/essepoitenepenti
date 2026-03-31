@@ -123,13 +123,15 @@ function EvaluationResultView({ summary, artifact, rawSummary, rawArtifact }: {
   return (
     <div className="stack-page">
       <Card>
-        <SectionTitle kicker="Evaluation summary" title="Outcome" subtitle="Evaluation workflows settle pending recommendations and record summary counts on the run." />
+        <SectionTitle kicker="Evaluation summary" title="Outcome" subtitle="Evaluation workflows settle recommendation-plan outcomes and record summary counts on the run." />
         <div className="summary-grid">
-          <div className="summary-item"><span className="summary-label">Trade log entries evaluated</span><span className="summary-value">{String(summary?.evaluated_trade_log_entries ?? "—")}</span></div>
-          <div className="summary-item"><span className="summary-label">Recommendations synced</span><span className="summary-value">{String(summary?.synced_recommendations ?? "—")}</span></div>
-          <div className="summary-item"><span className="summary-label">Still pending</span><Badge tone="warning">{String(summary?.pending_recommendations ?? "—")}</Badge></div>
-          <div className="summary-item"><span className="summary-label">WIN outcomes</span><Badge tone="ok">{String(summary?.win_recommendations ?? "—")}</Badge></div>
-          <div className="summary-item"><span className="summary-label">LOSS outcomes</span><Badge tone="danger">{String(summary?.loss_recommendations ?? "—")}</Badge></div>
+          <div className="summary-item"><span className="summary-label">Plans evaluated</span><span className="summary-value">{String(summary?.evaluated_recommendation_plans ?? "—")}</span></div>
+          <div className="summary-item"><span className="summary-label">Plan outcomes synced</span><span className="summary-value">{String(summary?.synced_recommendation_plan_outcomes ?? "—")}</span></div>
+          <div className="summary-item"><span className="summary-label">Plan outcomes pending</span><Badge tone="warning">{String(summary?.pending_recommendation_plan_outcomes ?? "—")}</Badge></div>
+          <div className="summary-item"><span className="summary-label">Plan wins</span><Badge tone="ok">{String(summary?.win_recommendation_plan_outcomes ?? "—")}</Badge></div>
+          <div className="summary-item"><span className="summary-label">Plan losses</span><Badge tone="danger">{String(summary?.loss_recommendation_plan_outcomes ?? "—")}</Badge></div>
+          <div className="summary-item"><span className="summary-label">No-action plans</span><Badge tone="neutral">{String(summary?.no_action_recommendation_plan_outcomes ?? "—")}</Badge></div>
+          <div className="summary-item"><span className="summary-label">Watchlist plans</span><Badge tone="neutral">{String(summary?.watchlist_recommendation_plan_outcomes ?? "—")}</Badge></div>
         </div>
         {output ? (
           <details className="top-gap-small" open>
@@ -177,11 +179,11 @@ function OptimizationResultView({ summary, artifact, rawSummary, rawArtifact }: 
   return (
     <div className="stack-page">
       <Card>
-        <SectionTitle kicker="Optimization summary" title="Outcome" subtitle="Optimization workflows update prototype weights and persist before/after fingerprint metadata for audit and rollback." />
+        <SectionTitle kicker="Optimization summary" title="Outcome" subtitle="Optimization workflows update weights using resolved recommendation-plan outcomes and persist before/after fingerprint metadata for audit and rollback." />
         <div className="summary-grid">
           <div className="summary-item"><span className="summary-label">Status</span><span className="summary-value">{String(summary?.status ?? "—")}</span></div>
-          <div className="summary-item"><span className="summary-label">Resolved trades</span><span className="summary-value">{String(summary?.resolved_trade_count ?? "—")}</span></div>
-          <div className="summary-item"><span className="summary-label">Minimum required</span><span className="summary-value">{String(summary?.minimum_resolved_trades ?? "—")}</span></div>
+          <div className="summary-item"><span className="summary-label">Resolved plan outcomes</span><span className="summary-value">{String(summary?.resolved_recommendation_plan_outcomes ?? summary?.resolved_trade_count ?? "—")}</span></div>
+          <div className="summary-item"><span className="summary-label">Minimum required</span><span className="summary-value">{String(summary?.minimum_resolved_recommendation_plan_outcomes ?? summary?.minimum_resolved_trades ?? "—")}</span></div>
           <div className="summary-item"><span className="summary-label">Weights changed</span><Badge tone={weightsChanged === true ? "ok" : "warning"}>{weightsChanged === true ? "yes" : weightsChanged === false ? "no" : "—"}</Badge></div>
           <div className="summary-item"><span className="summary-label">Rollback available</span><Badge tone={rollbackAvailable === true ? "ok" : "neutral"}>{rollbackAvailable === true ? "yes" : rollbackAvailable === false ? "no" : "—"}</Badge></div>
           <div className="summary-item"><span className="summary-label">Weights path</span><span className="summary-value">{String(artifact?.weights_path ?? "—")}</span></div>
@@ -259,7 +261,7 @@ export function WorkflowRunResults({ jobType, summaryJson, artifactJson }: { job
   }
   return (
     <div className="stack-page">
-      <div className="helper-text">This run is a {jobTypeLabel(jobType).toLowerCase()} workflow. It stores summary and artifact metadata on the run instead of recommendation rows.</div>
+      <div className="helper-text">This run is a {jobTypeLabel(jobType).toLowerCase()} workflow. It stores summary and artifact metadata on the run instead of legacy recommendation rows.</div>
       <GenericWorkflowResultView rawSummary={summaryJson} rawArtifact={artifactJson} />
     </div>
   );

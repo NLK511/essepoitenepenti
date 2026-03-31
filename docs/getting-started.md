@@ -1,8 +1,14 @@
 # Getting Started
 
-Trade Proposer App is a FastAPI backend, a React/Vite frontend, a worker, and a scheduler. The recommendation pipeline runs entirely inside this repository: it uses `pandas` and `yfinance` for app-native scoring, applies the bundled `weights.json`, reuses shared macro and industry sentiment snapshots, and stores auditable diagnostics for every workflow.
+**Status:** canonical setup and operations guide
 
-This guide focuses on the fastest path to a healthy local install and the minimum checks that matter when something goes wrong.
+This guide covers local setup, startup, and the first checks to run when something looks wrong.
+
+The app has four main pieces:
+- FastAPI backend
+- React/Vite frontend
+- worker
+- scheduler
 
 ## What to remember
 
@@ -36,10 +42,12 @@ What these scripts do:
 - `setup.sh`
   - creates `.venv`
   - installs the Python project in editable mode
+  - optionally installs dev and OpenAI extras
   - installs frontend dependencies in `frontend/`
   - creates or refreshes `.env`
   - generates a random `SECRET_KEY`
-  - defaults local startup to SQLite
+  - defaults local startup to SQLite for easiest first run
+  - keeps PostgreSQL available through `--database postgres` when you want a production-like local database
   - runs migrations
 - `start-dev.sh`
   - runs migrations again for safety
@@ -53,7 +61,11 @@ Useful options:
 ./scripts/setup.sh --help
 ./scripts/setup.sh --python python3.12
 ./scripts/setup.sh --force-env
+./scripts/setup.sh --database sqlite
+./scripts/setup.sh --database postgres
 ./scripts/setup.sh --skip-frontend-deps
+./scripts/setup.sh --with-dev-deps
+./scripts/setup.sh --with-openai
 
 ./scripts/start-dev.sh --allow-degraded-preflight
 ./scripts/start-dev.sh --run-scheduler-once
@@ -81,8 +93,8 @@ A good first pass is:
 5. create a proposal job
 6. run the job
 7. confirm the worker processes the run
-8. review the result in dashboard, run detail, recommendation detail, and history
-9. open the sentiment page and confirm shared snapshots are present or clearly marked stale/missing
+8. review the result in dashboard, run detail, recommendation plans, and ticker drill-downs
+9. open the Context review page and confirm shared context and support-refresh artifacts are present or clearly marked stale/missing
 
 ## Frontend development model
 
@@ -109,12 +121,25 @@ APP_PORT=8000
 DATABASE_URL=sqlite:///./trade_proposer.db
 REDIS_URL=redis://localhost:6379/0
 SECRET_KEY=replace-this-with-a-long-random-secret
+WEIGHTS_FILE_PATH=
 SINGLE_USER_AUTH_ENABLED=true
 SINGLE_USER_AUTH_TOKEN=
-SINGLE_USER_AUTH_ALLOWLIST_PATHS=/api/health,/api/health/preflight,/api/health/prototype
+SINGLE_USER_AUTH_ALLOWLIST_PATHS=/api/health,/api/health/preflight
 SINGLE_USER_AUTH_USERNAME=admin
 SINGLE_USER_AUTH_PASSWORD=change-me
 ```
+
+If you want a production-like local database instead, start local services and switch `DATABASE_URL` to Postgres:
+
+```bash
+docker compose up -d postgres redis
+```
+
+```env
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/trade_proposer
+```
+
+`WEIGHTS_FILE_PATH` is optional. Leave it blank to use the app-managed default at `src/trade_proposer_app/data/weights.json`, or point it at another writable `weights.json` location if you want optimization runs to manage a different file.
 
 ## Single-user authentication
 
@@ -127,28 +152,29 @@ You should:
 Every `/api` request must carry `Authorization: Bearer <token>`, except for allowlisted paths such as:
 - `/api/health`
 - `/api/health/preflight`
-- `/api/health/prototype`
 - `/api/login`
 
 The React UI routes unauthenticated visitors to `/login`. The login page exchanges the configured username/password for the same bearer token and stores it locally for future API requests.
 
-When using Vite manually, make sure `VITE_API_AUTH_TOKEN` matches `SINGLE_USER_AUTH_TOKEN`.
+The frontend now requires an explicit login session; do not bake a bearer token into the client bundle.
 
 ## Summary engine and external services
 
 The app can keep summaries in digest-only mode or route them through:
-- `openai_api`
+- `openai_api` (install optional support with `./scripts/setup.sh --with-openai`)
 - `pi_agent`
 
 The resulting narrative, metadata, and any errors are stored in `analysis_json.summary`.
 
 Supported external news services currently ingested by the app-native pipeline:
-- NewsAPI: https://newsapi.org/
+- Google News RSS: https://news.google.com/
+- Yahoo Finance: https://finance.yahoo.com/
 - Finnhub: https://finnhub.io/
+- NewsAPI: https://newsapi.org/ (disabled by default because the free plan is delayed)
 
 Weight optimization also runs entirely inside the app and stores backup metadata for rollback.
 
-For stored fields and diagnostics, see `docs/raw-details-reference.md`.
+For stored fields and diagnostics, see `raw-details-reference.md`.
 
 ## Manual startup without helper scripts
 
@@ -181,6 +207,30 @@ cd frontend
 npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
+Production-style local stop helper:
+
+```bash
+./scripts/stop-prod.sh
+```
+
+## Seeding the default watchlists
+
+If you want the repo's curated default watchlist pack, run:
+
+```bash
+.venv/bin/python scripts/deploy_watchlists.py
+```
+
+This seeds:
+- 15 default watchlists
+- 18 matching scheduled `Auto: ...` jobs
+  - 15 proposal-generation jobs, plus 2 macro refresh jobs and 1 industry refresh job
+- 300 total equities split across U.S., Europe, and Asia-Pacific
+- compact continent-plus-macro-industry buckets such as `US-Tech`, `EU-Fin`, and `APAC-Cyc`
+
+Design rationale and schedule map:
+- `default-watchlists.md`
+
 ## Validation
 
 Backend:
@@ -190,13 +240,53 @@ python3 -m compileall src tests alembic
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
+Optional Postgres migration integration test:
+
+```bash
+docker compose up -d postgres
+POSTGRES_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/trade_proposer_test \
+  .venv/bin/python -m unittest tests.test_postgres_integration -v
+```
+
+What this covers:
+- bootstrapping an empty Postgres schema
+- running Alembic migrations to head
+- verifying the main current tables exist
+- verifying the legacy `recommendations` table does not come back
+- verifying the migration chain works with the Postgres-safe Alembic revision ids now used by the repo
+
 Frontend:
 
 ```bash
 npm --prefix frontend run check
 ```
 
+## Manual GitHub workflow for the Postgres integration test
+
+The repo includes a GitHub Actions workflow at:
+- `.github/workflows/postgres-integration.yml`
+
+Current status:
+- kept in the repo as operational reference
+- disabled for automatic `push` / `pull_request` runs
+- available only through manual `workflow_dispatch`
+
 ## Common first-run issues
+
+### `setup.sh` or `start-dev.sh` cannot connect to PostgreSQL
+This only applies when you intentionally selected Postgres with `--database postgres` or set a Postgres `DATABASE_URL` yourself.
+
+Start local dependencies first:
+
+```bash
+docker compose up -d postgres redis
+```
+
+If you want to avoid local services entirely, regenerate `.env` with SQLite instead:
+
+```bash
+./scripts/setup.sh --force-env --database sqlite
+```
 
 ### `start-dev.sh` refuses to start because preflight failed
 Inspect `/api/health/preflight`, rerun `./scripts/setup.sh`, and fix dependency issues. Use `--allow-degraded-preflight` only as a temporary override.
@@ -213,3 +303,9 @@ Verify that:
 
 ### Health is green but proposals still look degraded
 Check the snapshot freshness warnings in `/api/health` or the Settings page. Proposal generation can still run when shared macro or industry snapshots are stale, but the app should tell you that sentiment context is degraded.
+
+## See also
+
+- `operator-page-field-guide.md` — where to go in the UI after startup
+- `glossary.md` — shared terms used across the app
+- `roadmap.md` — what is still being improved

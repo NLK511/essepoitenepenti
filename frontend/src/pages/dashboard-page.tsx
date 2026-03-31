@@ -3,35 +3,61 @@ import { Link } from "react-router-dom";
 
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { DashboardResponse, SentimentSnapshotListResponse } from "../types";
+import type { DashboardResponse, IndustryContextSnapshot, MacroContextSnapshot } from "../types";
 import { directionTone, formatDate, formatDuration, jobTypeLabel, recommendationStateTone, runTone, tickerTone } from "../utils";
+
+function contextSummaryMethod(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
+  return snapshot && typeof snapshot.metadata?.context_summary_method === "string" ? snapshot.metadata.context_summary_method : "unknown";
+}
+
+function contextSummaryBackend(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
+  return snapshot && typeof snapshot.metadata?.context_summary_backend === "string" ? snapshot.metadata.context_summary_backend : "—";
+}
+
+function contextSummaryModel(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
+  return snapshot && typeof snapshot.metadata?.context_summary_model === "string" ? snapshot.metadata.context_summary_model : "—";
+}
+
+function contextSummaryError(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string | null {
+  return snapshot && typeof snapshot.metadata?.context_summary_error === "string" ? snapshot.metadata.context_summary_error : null;
+}
+
+function contextProvenanceTone(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): "ok" | "warning" | "neutral" {
+  if (contextSummaryError(snapshot)) {
+    return "warning";
+  }
+  if (contextSummaryMethod(snapshot) === "llm_summary") {
+    return "ok";
+  }
+  return "neutral";
+}
+
+function contextProvenanceLabel(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
+  if (contextSummaryMethod(snapshot) === "llm_summary") {
+    const model = contextSummaryModel(snapshot);
+    return `LLM · ${contextSummaryBackend(snapshot)}${model !== "—" ? ` · ${model}` : ""}`;
+  }
+  return `fallback · ${contextSummaryBackend(snapshot)}`;
+}
 
 export function DashboardPage() {
   const [data, setData] = useState<DashboardResponse | null>(null);
-  const [latestMacroLabel, setLatestMacroLabel] = useState<string>("—");
-  const [latestIndustryLabel, setLatestIndustryLabel] = useState<string>("—");
+  const [latestMacroContext, setLatestMacroContext] = useState<MacroContextSnapshot | null>(null);
+  const [latestIndustryContext, setLatestIndustryContext] = useState<IndustryContextSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
         setError(null);
-        const [dashboard, macroSnapshots, industrySnapshots] = await Promise.all([
+        const [dashboard, macroContexts, industryContexts] = await Promise.all([
           getJson<DashboardResponse>("/api/dashboard"),
-          getJson<SentimentSnapshotListResponse>("/api/sentiment-snapshots/macro?limit=1"),
-          getJson<SentimentSnapshotListResponse>("/api/sentiment-snapshots/industry?limit=1"),
+          getJson<MacroContextSnapshot[]>("/api/context/macro?limit=1"),
+          getJson<IndustryContextSnapshot[]>("/api/context/industry?limit=1"),
         ]);
         setData(dashboard);
-        setLatestMacroLabel(
-          macroSnapshots.snapshots[0]
-            ? `${macroSnapshots.snapshots[0].label.toLowerCase()} · ${formatDate(macroSnapshots.snapshots[0].computed_at)}`
-            : "no snapshot"
-        );
-        setLatestIndustryLabel(
-          industrySnapshots.snapshots[0]
-            ? `${industrySnapshots.snapshots[0].subject_label} · ${industrySnapshots.snapshots[0].label.toLowerCase()}`
-            : "no snapshot"
-        );
+        setLatestMacroContext(macroContexts[0] ?? null);
+        setLatestIndustryContext(industryContexts[0] ?? null);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
       }
@@ -42,19 +68,19 @@ export function DashboardPage() {
   return (
     <>
       <PageHeader
-        kicker="Daily monitoring"
-        title="Review trade recommendations separately from the runs that produced them."
-        subtitle="Runs are execution records for jobs. Recommendations are the trade-ready outputs. The dashboard keeps both views visible without mixing their roles."
+        kicker="Workspace overview"
+        title="Know what to review next."
+        subtitle="This workspace is built for operator triage: check execution health, inspect the latest context, review recommendation plans, and move quickly to the runs or tickers that need attention."
         actions={
           <>
             <Link to="/jobs" className="button">
-              Create or run jobs
+              Run workflows
             </Link>
-            <Link to="/sentiment" className="button-secondary">
-              Inspect snapshots
+            <Link to="/jobs/recommendation-plans" className="button-secondary">
+              Review plans
             </Link>
             <Link to="/settings" className="button-subtle">
-              Review setup
+              Setup
             </Link>
           </>
         }
@@ -67,49 +93,96 @@ export function DashboardPage() {
         <div className="stack-page">
           <section className="metrics-grid">
             <Card>
-              <div className="metric-label">Latest recommendations</div>
-              <div className="metric-value">{data.recommendations.length}</div>
+              <div className="metric-label">Plans waiting for review</div>
+              <div className="metric-value">{data.recommendation_plans.length}</div>
+              <div className="helper-text">Latest persisted recommendation plans</div>
             </Card>
             <Card>
-              <div className="metric-label">Configured watchlists</div>
+              <div className="metric-label">Active watchlists</div>
               <div className="metric-value">{data.watchlists.length}</div>
+              <div className="helper-text">Reusable universes feeding proposal jobs</div>
             </Card>
             <Card>
               <div className="metric-label">Configured jobs</div>
               <div className="metric-value">{data.jobs.length}</div>
+              <div className="helper-text">Scheduled and manual workflows</div>
             </Card>
             <Card>
               <div className="metric-label">Recent runs</div>
               <div className="metric-value">{data.latest_runs.length}</div>
+              <div className="helper-text">Most recent execution records</div>
             </Card>
             <Card>
-              <div className="metric-label">Latest macro snapshot</div>
-              <div className="metric-value">{latestMacroLabel.split(" · ")[0]}</div>
-              <div className="helper-text">{latestMacroLabel}</div>
+              <div className="metric-label">Macro context freshness</div>
+              <div className="metric-value">{latestMacroContext ? latestMacroContext.status : "—"}</div>
+              <div className="helper-text">{latestMacroContext ? formatDate(latestMacroContext.computed_at) : "no context snapshot"}</div>
+              {latestMacroContext ? (
+                <div className="top-gap-small cluster">
+                  <Badge tone={contextProvenanceTone(latestMacroContext)}>{contextProvenanceLabel(latestMacroContext)}</Badge>
+                  {contextSummaryError(latestMacroContext) ? <Badge tone="warning">summary warning</Badge> : null}
+                </div>
+              ) : null}
             </Card>
             <Card>
-              <div className="metric-label">Latest industry snapshot</div>
-              <div className="metric-value">{latestIndustryLabel.split(" · ")[0]}</div>
-              <div className="helper-text">{latestIndustryLabel}</div>
+              <div className="metric-label">Industry context freshness</div>
+              <div className="metric-value">{latestIndustryContext ? latestIndustryContext.industry_label || latestIndustryContext.industry_key : "—"}</div>
+              <div className="helper-text">{latestIndustryContext ? `${latestIndustryContext.status} · ${formatDate(latestIndustryContext.computed_at)}` : "no context snapshot"}</div>
+              {latestIndustryContext ? (
+                <div className="top-gap-small cluster">
+                  <Badge tone={contextProvenanceTone(latestIndustryContext)}>{contextProvenanceLabel(latestIndustryContext)}</Badge>
+                  {contextSummaryError(latestIndustryContext) ? <Badge tone="warning">summary warning</Badge> : null}
+                </div>
+              ) : null}
+            </Card>
+          </section>
+
+          <section className="card-grid">
+            <Card>
+              <SectionTitle kicker="Start here" title="Run the workflow" subtitle="Best for day-to-day operations." />
+              <div className="helper-text">Open jobs to queue a proposal run, then move into run review or recommendation plans once execution completes.</div>
+              <div className="cluster top-gap-small">
+                <Link to="/jobs" className="button">Open jobs</Link>
+                <Link to="/jobs/debugger" className="button-subtle">Open debugger</Link>
+              </div>
+            </Card>
+            <Card>
+              <SectionTitle kicker="Decision review" title="Inspect plans and signals" subtitle="Best for short-horizon trade framing." />
+              <div className="helper-text">Use recommendation plans for final operator review and ticker signals when you want to understand why a name was promoted or blocked.</div>
+              <div className="cluster top-gap-small">
+                <Link to="/jobs/recommendation-plans" className="button-secondary">Recommendation plans</Link>
+                <Link to="/jobs/ticker-signals" className="button-subtle">Ticker signals</Link>
+              </div>
+            </Card>
+            <Card>
+              <SectionTitle kicker="Context review" title="Check the market backdrop" subtitle="Best for macro and industry awareness." />
+              <div className="helper-text">Review stored context snapshots before over-weighting any one ticker setup. Macro and industry context are saliency-first, not sentiment theater.</div>
+              <div className="top-gap-small cluster">
+                {latestMacroContext ? <Badge tone={contextProvenanceTone(latestMacroContext)}>macro {contextProvenanceLabel(latestMacroContext)}</Badge> : null}
+                {latestIndustryContext ? <Badge tone={contextProvenanceTone(latestIndustryContext)}>industry {contextProvenanceLabel(latestIndustryContext)}</Badge> : null}
+              </div>
+              <div className="cluster top-gap-small">
+                <Link to="/context" className="button-secondary">Context review</Link>
+                <Link to="/docs" className="button-subtle">Docs</Link>
+              </div>
             </Card>
           </section>
 
           <section className="two-column">
             <Card>
               <SectionTitle
-                kicker="Setup path"
-                title="Recommended onboarding flow"
-                subtitle="Settings → watchlists → jobs → first run."
+                kicker="Operator path"
+                title="Recommended workflow"
+                subtitle="Setup → scan → review → evaluate."
               />
               <ol className="checklist">
-                <li>Configure provider credentials and summary backend in Settings.</li>
-                <li>Create reusable ticker groups in Watchlists.</li>
-                <li>Create a job from a watchlist or manual tickers.</li>
-                <li>Run the job to create recommendations, then evaluate them later to settle PENDING into WIN or LOSS.</li>
+                <li>Configure providers and defaults in Settings.</li>
+                <li>Create reusable watchlists for the markets you actually monitor.</li>
+                <li>Run jobs to generate ticker signals and recommendation plans.</li>
+                <li>Evaluate plans later so calibration and evidence review stay grounded in outcomes.</li>
               </ol>
             </Card>
             <Card>
-              <SectionTitle kicker="Latest runs" title="Execution triage" />
+              <SectionTitle kicker="Latest runs" title="Execution triage" subtitle="Jump straight into the most recent workflow outputs." />
               {data.latest_runs.length === 0 ? (
                 <EmptyState message="No runs yet." />
               ) : (
@@ -192,38 +265,40 @@ export function DashboardPage() {
           <Card>
             <SectionTitle
               kicker="Latest output"
-              title="Trade recommendations"
+              title="Recommendation plans"
               actions={
-                <Link to="/jobs/history" className="button-secondary">
-                  Full history
+                <Link to="/jobs/recommendation-plans" className="button-secondary">
+                  Browse plans
                 </Link>
               }
             />
-            {data.recommendations.length === 0 ? (
-              <EmptyState message="No recommendations persisted yet." />
+            {data.recommendation_plans.length === 0 ? (
+              <EmptyState message="No recommendation plans persisted yet." />
             ) : (
               <div className="card-grid">
-                {data.recommendations.map((item) => (
-                  <article key={item.id ?? `${item.ticker}-${item.created_at}`} className="recommendation-card">
+                {data.recommendation_plans.map((item) => (
+                  <article key={item.id ?? `${item.ticker}-${item.computed_at}`} className="recommendation-card">
                     <div className="card-headline">
                       <div>
                         <div className="cluster">
                           <Link to={`/tickers/${item.ticker}`} className="badge badge-info badge-link">{item.ticker}</Link>
-                          <Badge tone={directionTone(item.direction)}>{item.direction}</Badge>
-                          <Badge tone={recommendationStateTone(item.state)}>{item.state}</Badge>
+                          <Badge tone={directionTone(item.action === "short" ? "SHORT" : item.action === "long" ? "LONG" : "NEUTRAL")}>{item.action}</Badge>
+                          <Badge tone={recommendationStateTone(item.latest_outcome?.outcome === "win" ? "WIN" : item.latest_outcome?.outcome === "loss" ? "LOSS" : "PENDING")}>
+                            {item.latest_outcome?.outcome ?? item.status}
+                          </Badge>
                         </div>
-                        <h3 className="subsection-title">{item.confidence}% confidence</h3>
+                        <h3 className="subsection-title">{item.confidence_percent}% confidence</h3>
                       </div>
-                      <Link to={`/recommendations/${item.id}`} className="button-secondary">
-                        Open
+                      <Link to={item.run_id ? `/runs/${item.run_id}` : "/jobs/recommendation-plans"} className="button-secondary">
+                        Open run
                       </Link>
                     </div>
                     <div className="summary-grid">
-                      <div className="summary-item"><span className="summary-label">Entry</span><span className="summary-value">{item.entry_price}</span></div>
-                      <div className="summary-item"><span className="summary-label">Stop</span><span className="summary-value">{item.stop_loss}</span></div>
-                      <div className="summary-item"><span className="summary-label">Take profit</span><span className="summary-value">{item.take_profit}</span></div>
+                      <div className="summary-item"><span className="summary-label">Entry</span><span className="summary-value">{item.entry_price_low ?? item.entry_price_high ?? "—"}</span></div>
+                      <div className="summary-item"><span className="summary-label">Stop</span><span className="summary-value">{item.stop_loss ?? "—"}</span></div>
+                      <div className="summary-item"><span className="summary-label">Take profit</span><span className="summary-value">{item.take_profit ?? "—"}</span></div>
                     </div>
-                    <div className="helper-text">{item.indicator_summary || "No indicator summary captured for this recommendation."}</div>
+                    <div className="helper-text">{item.thesis_summary || "No thesis summary captured for this recommendation plan."}</div>
                   </article>
                 ))}
               </div>

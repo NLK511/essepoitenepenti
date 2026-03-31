@@ -2,50 +2,158 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from trade_proposer_app.domain.models import NewsArticle, NewsBundle, ProviderCredential
-from trade_proposer_app.services.news import NewsIngestionService, NaiveSentimentAnalyzer
+from trade_proposer_app.services.news import GoogleNewsProvider, NewsIngestionService, NaiveSentimentAnalyzer, YahooFinanceProvider
 
 
 class NewsIngestionServiceTests(unittest.TestCase):
-    def test_fetch_without_providers_returns_empty_bundle(self):
+    @patch("trade_proposer_app.services.news.yf.Ticker")
+    @patch("trade_proposer_app.services.news.httpx.get")
+    def test_fetch_uses_google_and_yahoo_by_default(self, mock_get, mock_ticker):
+        google_response = MagicMock()
+        google_response.status_code = 200
+        google_response.text = """<?xml version="1.0" encoding="UTF-8"?>
+        <rss><channel>
+            <item>
+                <title>Google News Article</title>
+                <link>https://example.com/gnews</link>
+                <pubDate>Thu, 26 Mar 2026 00:00:00 GMT</pubDate>
+                <description><![CDATA[<p>Some description</p>]]></description>
+                <source url="https://reuters.com">Reuters</source>
+            </item>
+        </channel></rss>"""
+
+        def google_side_effect(url, *args, **kwargs):
+            self.assertEqual(url, "https://news.google.com/rss/search")
+            params = kwargs["params"]
+            self.assertIn("site:reuters.com", params["q"])
+            self.assertIn("when:7d", params["q"])
+            return google_response
+
+        mock_get.side_effect = google_side_effect
+
+        yahoo_ticker = MagicMock()
+        yahoo_ticker.news = [
+            {
+                "content": {
+                    "title": "Yahoo Finance Article",
+                    "summary": "Yahoo summary",
+                    "pubDate": "2026-03-26T00:00:00Z",
+                },
+                "provider": {"displayName": "Yahoo Finance"},
+                "clickThroughUrl": {"url": "https://example.com/yfinance"},
+            }
+        ]
+        mock_ticker.return_value = yahoo_ticker
+
         service = NewsIngestionService.from_provider_credentials({})
         bundle = service.fetch("AAPL")
+
         self.assertEqual(bundle.ticker, "AAPL")
-        self.assertEqual(bundle.articles, [])
-        self.assertTrue(bundle.feed_errors)
-        self.assertIn("no providers configured", bundle.feed_errors[0])
+        self.assertEqual(len(bundle.articles), 2)
+        self.assertEqual(set(bundle.feeds_used), {"GoogleNews", "YahooFinance"})
+        self.assertFalse(bundle.feed_errors)
+        self.assertIn("Google News Article", [article.title for article in bundle.articles])
+        self.assertIn("Yahoo Finance Article", [article.title for article in bundle.articles])
 
     @patch("trade_proposer_app.services.news.httpx.get")
-    def test_newsapi_provider_parses_articles(self, mock_get):
+    def test_google_news_provider_filters_to_whitelisted_sources(self, mock_get):
         response = MagicMock()
         response.status_code = 200
-        response.json.return_value = {
-            "status": "ok",
-            "articles": [
-                {
-                    "title": "Company beats estimates",
-                    "description": "Revenue surged ahead of guidance",
-                    "source": {"name": "NewsAPI"},
-                    "url": "https://example.com/news",
-                    "publishedAt": "2026-03-15T12:00:00Z",
-                }
-            ],
-        }
+        response.text = """<?xml version="1.0" encoding="UTF-8"?>
+        <rss><channel>
+            <item>
+                <title>Allowed source story</title>
+                <link>https://news.google.com/rss/articles/1</link>
+                <pubDate>Thu, 26 Mar 2026 00:00:00 GMT</pubDate>
+                <description>Allowed</description>
+                <source url="https://bloomberg.com">Bloomberg</source>
+            </item>
+            <item>
+                <title>Blocked source story</title>
+                <link>https://news.google.com/rss/articles/2</link>
+                <pubDate>Thu, 26 Mar 2026 00:00:00 GMT</pubDate>
+                <description>Blocked</description>
+                <source url="https://example.com">Example</source>
+            </item>
+        </channel></rss>"""
         mock_get.return_value = response
 
-        credentials = {
-            "newsapi": ProviderCredential(provider="newsapi", api_key="key", api_secret="")
-        }
-        service = NewsIngestionService.from_provider_credentials(credentials)
-        bundle = service.fetch("AAPL")
+        provider = GoogleNewsProvider(ProviderCredential(provider="googlenews"))
+        articles = provider.fetch_topic("inflation", 10)
 
-        self.assertEqual(bundle.ticker, "AAPL")
-        self.assertEqual(len(bundle.articles), 1)
-        article = bundle.articles[0]
-        self.assertEqual(article.title, "Company beats estimates")
-        self.assertEqual(article.publisher, "NewsAPI")
-        self.assertEqual(article.link, "https://example.com/news")
-        self.assertFalse(bundle.feed_errors)
-        self.assertEqual(bundle.feeds_used, ["NewsAPI"])
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0].title, "Allowed source story")
+        self.assertEqual(articles[0].publisher, "Bloomberg")
+        called_params = mock_get.call_args.kwargs["params"]
+        self.assertIn("site:bloomberg.com", called_params["q"])
+        self.assertIn("site:reuters.com", called_params["q"])
+        self.assertIn("when:7d", called_params["q"])
+
+    def test_yahoo_finance_provider_parses_nested_news_payload(self):
+        provider = YahooFinanceProvider(ProviderCredential(provider="yahoofinance"))
+        with patch("trade_proposer_app.services.news.yf.Ticker") as mock_ticker:
+            mock_ticker.return_value.news = [
+                {
+                    "content": {
+                        "title": "Yahoo headline",
+                        "summary": "Yahoo summary",
+                        "pubDate": "2026-03-26T00:00:00Z",
+                    },
+                    "provider": {"displayName": "Yahoo Finance"},
+                    "clickThroughUrl": {"url": "https://finance.yahoo.com/news/yahoo-headline"},
+                }
+            ]
+            articles = provider.fetch("AAPL", 10)
+
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0].title, "Yahoo headline")
+        self.assertEqual(articles[0].summary, "Yahoo summary")
+        self.assertEqual(articles[0].publisher, "Yahoo Finance")
+        self.assertEqual(articles[0].link, "https://finance.yahoo.com/news/yahoo-headline")
+
+    @patch("trade_proposer_app.services.news.httpx.get")
+    def test_newsapi_is_disabled_by_default_even_when_credentials_exist(self, mock_get):
+        response = MagicMock()
+        response.status_code = 200
+        response.text = """<?xml version="1.0" encoding="UTF-8"?><rss><channel></channel></rss>"""
+        mock_get.return_value = response
+
+        with patch("trade_proposer_app.services.news.yf.Ticker") as mock_ticker:
+            mock_ticker.return_value.news = []
+            service = NewsIngestionService.from_provider_credentials(
+                {"newsapi": ProviderCredential(provider="newsapi", api_key="key", api_secret="")}
+            )
+            bundle = service.fetch("AAPL")
+
+        self.assertNotIn("NewsAPI", bundle.feeds_used)
+        self.assertFalse(any("newsapi.org" in str(call.args[0]) for call in mock_get.call_args_list))
+
+    @patch("trade_proposer_app.services.news.httpx.get")
+    def test_finnhub_topic_queries_are_skipped(self, mock_get):
+        def side_effect(url, *args, **kwargs):
+            self.assertEqual(url, "https://news.google.com/rss/search")
+            self.assertIn("site:reuters.com", kwargs["params"]["q"])
+            response = MagicMock()
+            response.status_code = 200
+            response.text = """<?xml version="1.0" encoding="UTF-8"?><rss><channel><item>
+                <title>Inflation headline</title>
+                <link>https://news.google.com/rss/articles/1</link>
+                <pubDate>Thu, 26 Mar 2026 00:00:00 GMT</pubDate>
+                <description>Inflation story</description>
+                <source url="https://reuters.com">Reuters</source>
+            </item></channel></rss>"""
+            return response
+
+        mock_get.side_effect = side_effect
+
+        service = NewsIngestionService.from_provider_credentials(
+            {"finnhub": ProviderCredential(provider="finnhub", api_key="key", api_secret="")}
+        )
+        bundle = service.fetch_topic("inflation")
+
+        self.assertEqual(bundle.ticker, "inflation")
+        self.assertEqual(set(bundle.feeds_used), {"GoogleNews"})
+        self.assertFalse(any("finnhub" in error.lower() for error in bundle.feed_errors))
 
     def test_naive_sentiment_analyzer_scores_positive_headlines(self) -> None:
         analyzer = NaiveSentimentAnalyzer()

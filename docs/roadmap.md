@@ -1,74 +1,119 @@
 # Roadmap
 
-## Current status
+**Status:** canonical current-priority roadmap
 
-Trade Proposer App now executes its critical workflows entirely inside this repository:
-- **Persistent state**: watchlists, jobs, runs, recommendations, settings, and sentiment snapshots live in one schema and remain queryable from the UI or API.
-- **Operator UI**: the React/Vite SPA provides dashboard, jobs, history, debugger, settings, docs, ticker, and sentiment pages for the core operator workflows.
-- **Execution model**: the worker-backed queue persists job metadata, honors concurrency controls, and logs timing/diagnostic payloads for reproducibility.
-- **Feature-rich diagnostics**: every run emits structured `analysis_json`, feature vectors, aggregations, confidence weights, warnings, and workflow summaries.
-- **Shared sentiment context**: macro and industry refresh workflows persist reusable snapshots, proposal generation links back to those snapshots, and health/preflight now reports snapshot freshness.
-- **Signal integrity policy**: missing data becomes explicit neutral/warning output rather than an invented fallback.
+This roadmap is short on purpose.
 
-## Phase 1: Operational hardening (partially complete)
+It covers three things only:
+- what is shipped now
+- what still needs work
+- what is clearly later
 
-Foundational execution is in place, but this phase should still be treated as active because production hardening is not finished.
+Detailed completed-phase history is in `archive/roadmap-history.md`.
 
-Completed or largely in place:
-- scheduler-backed queueing and atomic claiming
-- structured pipeline contracts and stored diagnostics
-- worker-visible warning and failure categories
-- preflight guardrails for core dependencies and snapshot freshness
+## Current shipped baseline
+
+Trade Proposer App already has its core workflow in place:
+- watchlists, jobs, runs, settings, support snapshots, ticker signals, recommendation plans, and recommendation-plan outcomes all persist inside one app-owned schema
+- the React/Vite operator UI supports dashboard, watchlists, jobs, debugger, run detail, context review, ticker signals, recommendation plans, ticker drill-down, settings, and docs browsing
+- proposal generation, evaluation, optimization, and macro/industry refresh runs all execute inside this repository through the worker-backed run system
+- recommendation review is now centered on redesign-native objects: `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`
+- health and preflight surface degraded dependencies and snapshot freshness rather than hiding them
+- optimization already uses redesign-native outcomes rather than legacy recommendation history
+
+## Active priorities
+
+## 1. Reliability
+Highest current priority.
+
+Foundations already in place:
+- scheduled runs have a persisted `scheduled_for` slot and a database uniqueness guard on `(job_id, scheduled_for)`
+- run claiming is atomic at the row-update level, so two workers should not both flip the same queued run to `running`
+- enqueue paths already avoid obvious duplicate active runs for the same job, and weight optimization has an explicit single-active-run guard
+- run timing, status, error fields, and failure-phase artifact metadata are persisted so failed executions are inspectable after the fact
+- worker heartbeats and run leases are implemented, ensuring active runs are tied to a specific worker and safely recovered if that worker crashes
+- scheduler and worker entry paths now recover stale `running` runs by failing them once their active lease expires (or via a legacy `started_at` timeout fallback), unblocking fresh scheduled or manual reruns
 
 Still needed:
-- stronger overlap and crash-recovery semantics
-- clearer production health signals and structured logging
-- tighter concurrency guarantees if multiple workers/processes are introduced
+- clearer recovery semantics when a run fails after partially persisting summary, artifact, or downstream objects
+- stronger coordination guarantees if scheduler or worker concurrency increases beyond the current simple polling/claim model
 
-## Phase 2: Self-contained intelligence (mostly complete)
+## 2. Observability
+The product is now feature-complete enough that runtime clarity matters more than additional surface area.
 
-This phase is no longer primarily about replacing prototype dependencies; that part is mostly done.
+Foundations already in place:
+- runs persist timing, summary, artifact, status, duration, and error payloads, and the operator UI can inspect them through run detail views
+- health and preflight endpoints already surface dependency checks and degraded state instead of silently masking missing inputs
+- context and recommendation review flows now expose warnings, provenance, and degraded summaries in the main UI
+- worker heartbeats are persisted to the database to provide operational visibility into active background processes
 
-Delivered:
-- app-native proposal generation
-- app-native evaluation
-- app-native weight optimization
-- configurable summarization via digest/OpenAI/Pi CLI
-- structured diagnostics surfaced in the UI
-- shared macro and industry sentiment snapshots reused during proposal generation (currently derived from social/Nitter refreshes, with news-based coverage listed as a future extension)
+Still needed:
+- structured logs and explicit run correlation across API, worker, and scheduler processes; current daemon logging is still mostly `print(...)`/traceback output
+- clearer production-facing health signals that distinguish app health from refresh freshness and legacy support-snapshot status
+- exposing worker heartbeat status and active lease counts in the `/api/health` endpoint
+- easier diagnosis of provider failures and degraded states across processes without relying on manual log inspection or per-run drill-down
 
-Remaining:
-- validate the effectiveness of the expanded sentiment stack instead of only expanding it
-- continue tightening UI/schema consistency as diagnostics evolve
-- finish eliminating any remaining documentation drift that still describes shipped work as future work
+## 3. Security and credential lifecycle
+The app should not expand provider surface area faster than it improves secret handling.
 
-## Phase 3: Security and production readiness
+Foundations already in place:
+- API access is guarded by a single-user bearer-token middleware with a login endpoint for the operator UI
+- provider credentials are encrypted at rest in the database using the app secret rather than stored as plaintext
 
-Highest-value remaining non-analytical work:
-- **Credential lifecycle**: rotation, re-encryption, and optional external secret backends
-- **Authentication baseline**: strengthen the single-user auth path and define the minimum acceptable operator model before adding RBAC/tenancy
-- **Observability**: structured logging, run-level correlation IDs, worker/scheduler heartbeats, and deployment-facing health reporting
+Still needed:
+- stronger single-user auth hardening; the current model is still shared-secret based and the frontend stores the bearer token in local storage
+- clearer credential rotation and re-encryption workflow; changing the app secret currently changes the encryption key, but there is no built-in rekey path for existing provider credentials
+- safer production defaults and deployment guidance so placeholder auth credentials and tokens are not acceptable long-term
+- optional external secret-backend support if deployment needs justify it
 
-## Phase 4: Expansion (only after the above)
+## 4. Measured recommendation quality
+The redesign path now has enough persistence and review plumbing that the next question is evidence quality, not raw feature quantity.
 
-Lower-priority growth items:
-- additional provider integrations where they demonstrably improve signal quality
-- historical exports and reporting helpers
-- retry/dead-letter behavior for transient external failures
-- selective service extraction only if scale demands it
+Foundations already in place:
+- recommendation-plan evaluation persists first-class `RecommendationPlanOutcome` records rather than relying on ad hoc historical review
+- the backend already computes calibration summaries, baseline cohorts, setup-family reviews, and evidence-concentration summaries from stored outcomes
+- watchlist orchestration already consumes calibration summaries to adjust confidence and gating thresholds when enough evidence exists
 
-## Roadmap discipline
+Still needed:
+- accumulate more resolved recommendation-plan outcomes over time; most of the measurement logic is in place, but sample size remains the limiting factor
+- keep using calibration summaries to improve operator trust and confidence discipline without overstating thin buckets
+- keep comparing actual trade-plan behavior against simple baseline cohorts and prune baselines that are no longer informative
+- verify which setup families, horizons, transmission conditions, and regimes are actually working in live accumulated data, not just in the scoring design
 
-A useful roadmap should separate three things clearly:
-- what is shipped
-- what is incomplete but necessary
-- what is merely possible later
+## 5. Redesign maturation
+The redesign is already the active product path, but it still needs deeper evidence and cleaner narrowing of transitional concepts.
 
-The project had started to blur those categories in a few docs. This roadmap keeps them separate so the near-term priority stays clear: improve reliability, security, observability, and evidence of model quality before broadening feature scope.
+Foundations already in place:
+- recommendation-plan review is the main operator-facing decision workflow
+- context snapshots now have dedicated review/detail flows, clearer macro-vs-industry navigation, and explicit industry selection
+- operator-facing support-snapshot UI has already been removed from the main review flow
 
-## Related docs
-- `architecture.md`: system design and component boundaries
-- `getting-started.md`: setup and local development guide
-- `features-and-capabilities.md`: current product behavior and limits
-- `phase-2-app-native.md`: self-contained pipeline goals and remaining gaps
-- `raw-details-reference.md`: stored diagnostics and payload reference
+Still needed:
+- continue improving ticker-analysis quality without reopening generic legacy patterns
+- continue retiring the legacy support-snapshot dependency in backend flow:
+  - macro/industry refresh jobs still create support snapshots first and derive context snapshots from them
+  - proposal and ticker-context resolution still depend on `SupportSnapshotResolver`, which blends legacy support data with newer context data
+  - health and freshness reporting still treat support snapshots as a primary operational artifact
+  - remove the remaining support-snapshot dependency from refresh, health, and scoring paths so the legacy layer can be deleted cleanly
+- keep recommendation-plan review as the clear canonical workflow
+- avoid reintroducing duplicate legacy-vs-redesign terminology
+
+## Explicitly later
+These are lower-priority until the active priorities above improve:
+- additional providers that mainly increase source count without measured quality gains
+- broader automation beyond current operator workflows
+- multi-user scope, RBAC, or tenancy before the single-user model is operationally stronger
+- service extraction unless scale or operational pressure clearly justifies it
+- expansion of predictive claims before outcome history and calibration support them
+
+## Maintenance rule
+If a feature is shipped, describe it in the canonical product docs and remove it from the active roadmap unless unfinished follow-through remains.
+
+If a detailed historical record is still useful, move it to archive rather than leaving it in the main reading path.
+
+## See also
+- `product-thesis.md` — product intent and decision rules
+- `features-and-capabilities.md` — current behavior
+- `recommendation-methodology.md` — current pipeline logic
+- `architecture.md` — current system structure
+- `archive/roadmap-history.md` — detailed historical roadmap record
