@@ -11,7 +11,7 @@ import {
 import { WorkflowRunResults } from "../components/workflow-run-results";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
-import { ProvenanceStrip, WarningSummary } from "../components/decision-surface";
+import { ContextEventSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import type { Job, RunDetailResponse, WatchlistEvaluationPolicy } from "../types";
 import { detailLabel, extractDisplayLabels, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, runTone } from "../utils";
 
@@ -63,22 +63,27 @@ function contextSummaryError(metadata: unknown): string | null {
   return isRecord(metadata) && typeof metadata.context_summary_error === "string" ? metadata.context_summary_error : null;
 }
 
-function contextProvenanceTone(metadata: unknown): "ok" | "warning" | "neutral" {
-  if (contextSummaryError(metadata)) {
-    return "warning";
-  }
-  if (contextSummaryMethod(metadata) === "llm_summary") {
-    return "ok";
-  }
-  return "neutral";
-}
-
 function contextProvenanceLabel(metadata: unknown): string {
   if (contextSummaryMethod(metadata) === "llm_summary") {
     const model = contextSummaryModel(metadata);
     return `LLM · ${contextSummaryBackend(metadata)}${model !== "—" ? ` · ${model}` : ""}`;
   }
   return `fallback · ${contextSummaryBackend(metadata)}`;
+}
+
+function lifecycleSummary(lifecycle: Record<string, unknown> | null, contradictory: string[]): string {
+  if (!lifecycle) {
+    return contradictory.length > 0 ? `contradictions ${contradictory.join(", ")}` : "—";
+  }
+  const parts = [
+    `new ${String(lifecycle.new_event_count ?? 0)}`,
+    `escalating ${String(lifecycle.escalating_event_count ?? 0)}`,
+    `fading ${String(lifecycle.fading_event_count ?? 0)}`,
+  ];
+  if (contradictory.length > 0) {
+    parts.push(`contradictions ${contradictory.join(", ")}`);
+  }
+  return parts.join(" · ");
 }
 
 export function RunDetailPage() {
@@ -279,13 +284,8 @@ export function RunDetailPage() {
                       {orchestrationEffectiveHorizon ? <Badge tone="info">effective horizon: {orchestrationEffectiveHorizon}</Badge> : null}
                     </div>
                     {orchestrationSourceKind === "manual_tickers" ? (
-                      <div className="top-gap-small">
-                        <div className="helper-text">
-                          Manual ticker jobs now run through redesign orchestration using an explicit synthetic wrapper instead of the old legacy-only loop.
-                        </div>
-                        <div className="helper-text">
-                          Recommendation plans and outcomes are the canonical review path; new proposal runs no longer emit legacy recommendation artifacts.
-                        </div>
+                      <div className="helper-text top-gap-small">
+                        Manual ticker jobs now run through redesign orchestration using an explicit synthetic wrapper instead of the old legacy-only loop. Recommendation plans and outcomes are the canonical review path; new proposal runs no longer emit legacy recommendation artifacts.
                       </div>
                     ) : null}
                     {manualJobDefaults ? (
@@ -463,28 +463,18 @@ export function RunDetailPage() {
                                 </td>
                                 <td>{item.attention_score.toFixed(1)}</td>
                                 <td>
-                                  <div className="helper-text">{shortlisted ? `rank ${typeof item.diagnostics.shortlist_rank === "number" ? item.diagnostics.shortlist_rank : "—"}` : "not shortlisted"}</div>
-                                  <div className="helper-text">lane {selectionLane ?? "—"}</div>
-                                  <div className="helper-text">{shortlistReasons.length > 0 ? shortlistReasons.join(" · ") : "eligible"}</div>
-                                  <div className="helper-text">catalyst proxy {catalystProxyScore !== null ? catalystProxyScore.toFixed(1) : "—"}</div>
+                                  <div className="helper-text">{shortlisted ? `rank ${typeof item.diagnostics.shortlist_rank === "number" ? item.diagnostics.shortlist_rank : "—"}` : "not shortlisted"} · lane {selectionLane ?? "—"}</div>
+                                  <div className="helper-text">{shortlistReasons.length > 0 ? shortlistReasons.join(" · ") : "eligible"} · catalyst proxy {catalystProxyScore !== null ? catalystProxyScore.toFixed(1) : "—"}</div>
                                 </td>
                                 <td>
                                   <Badge tone={biasTone(transmissionBias)}>{transmissionBiasLabel}</Badge>
-                                  <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
-                                  <div className="helper-text">window {expectedWindow}</div>
-                                  <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
-                                  <div className="helper-text">industry channels {industryExposureChannels.length > 0 ? industryExposureChannels.join(" · ") : "none"}</div>
-                                  <div className="helper-text">ticker channels {tickerExposureChannels.length > 0 ? tickerExposureChannels.join(" · ") : "none"}</div>
-                                  <div className="helper-text">conflicts {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
-                                  <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
+                                  <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"} · window {expectedWindow}</div>
+                                  <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"} · industry {industryExposureChannels.length > 0 ? industryExposureChannels.join(" · ") : "none"}</div>
+                                  <div className="helper-text">ticker {tickerExposureChannels.length > 0 ? tickerExposureChannels.join(" · ") : "none"} · conflicts {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"} · tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
                                 </td>
                                 <td>
-                                  <div className="helper-text">trend {trendScore !== null ? trendScore.toFixed(0) : "—"}</div>
-                                  <div className="helper-text">momentum {momentumScore !== null ? momentumScore.toFixed(0) : "—"}</div>
-                                  <div className="helper-text">breakout {breakoutScore !== null ? breakoutScore.toFixed(0) : "—"}</div>
-                                  <div className="helper-text">volatility {volatilityScore !== null ? volatilityScore.toFixed(0) : "—"}</div>
-                                  <div className="helper-text">liquidity {liquidityScore !== null ? liquidityScore.toFixed(0) : "—"}</div>
-                                  <div className="helper-text">directional {directionalScore !== null ? directionalScore.toFixed(2) : "—"}</div>
+                                  <div className="helper-text">trend {trendScore !== null ? trendScore.toFixed(0) : "—"} · momentum {momentumScore !== null ? momentumScore.toFixed(0) : "—"} · breakout {breakoutScore !== null ? breakoutScore.toFixed(0) : "—"}</div>
+                                  <div className="helper-text">volatility {volatilityScore !== null ? volatilityScore.toFixed(0) : "—"} · liquidity {liquidityScore !== null ? liquidityScore.toFixed(0) : "—"} · directional {directionalScore !== null ? directionalScore.toFixed(2) : "—"}</div>
                                 </td>
                                 <td><Badge tone={item.warnings.length > 0 ? "warning" : "ok"}>{item.status}</Badge></td>
                               </tr>
@@ -647,19 +637,18 @@ export function RunDetailPage() {
                         : [];
                       return (
                         <div key={item.id ?? item.computed_at} className="top-gap-small">
-                          <div className="cluster">
-                            <Badge tone={item.warnings.length > 0 ? "warning" : "ok"}>macro context</Badge>
-                            <ProvenanceStrip method={contextSummaryMethod(item.metadata)} backend={contextSummaryBackend(item.metadata)} model={contextSummaryModel(item.metadata)} error={contextSummaryError(item.metadata)} />
+                          <ContextEventSummary
+                            label="macro context"
+                            value={item.summary_text || "No macro summary stored."}
+                            details={[
+                              { label: "Warnings", value: String(item.warnings.length) },
+                              { label: "Lifecycle", value: lifecycleSummary(lifecycle, contradictory) },
+                              { label: "Provenance", value: contextProvenanceLabel(item.metadata) },
+                            ]}
+                          />
+                          <div className="cluster top-gap-small">
                             {item.id ? <Link to={`/context/macro/${item.id}`} className="button-subtle">Open detail</Link> : null}
                           </div>
-                          <div className="helper-text top-gap-small">{item.summary_text || "No macro summary stored."}</div>
-                          <WarningSummary warnings={item.warnings} title="Macro warnings" />
-                          {contextSummaryError(item.metadata) ? <div className="helper-text top-gap-small">{contextSummaryError(item.metadata)}</div> : null}
-                          {lifecycle ? (
-                            <div className="helper-text top-gap-small">
-                              lifecycle new {String(lifecycle.new_event_count ?? 0)} · escalating {String(lifecycle.escalating_event_count ?? 0)} · fading {String(lifecycle.fading_event_count ?? 0)}{contradictory.length > 0 ? ` · contradictions ${contradictory.join(", ")}` : ""}
-                            </div>
-                          ) : null}
                         </div>
                       );
                     })}
@@ -672,20 +661,18 @@ export function RunDetailPage() {
                         : [];
                       return (
                         <div key={item.id ?? `${item.industry_key}-${item.computed_at}`} className="top-gap-small">
-                          <div className="cluster">
-                            <Badge tone={item.warnings.length > 0 ? "warning" : "ok"}>{item.industry_label || item.industry_key}</Badge>
-                            <Badge tone={contextProvenanceTone(item.metadata)}>{contextProvenanceLabel(item.metadata)}</Badge>
-                            {contextSummaryError(item.metadata) ? <Badge tone="warning">summary warning</Badge> : null}
+                          <ContextEventSummary
+                            label={item.industry_label || item.industry_key}
+                            value={item.summary_text || "No industry summary stored."}
+                            details={[
+                              { label: "Warnings", value: String(item.warnings.length) },
+                              { label: "Lifecycle", value: lifecycleSummary(lifecycle, contradictory) },
+                              { label: "Provenance", value: contextProvenanceLabel(item.metadata) },
+                            ]}
+                          />
+                          <div className="cluster top-gap-small">
                             {item.id ? <Link to={`/context/industry/${item.id}`} className="button-subtle">Open detail</Link> : null}
                           </div>
-                          <div className="helper-text top-gap-small">{item.summary_text || "No industry summary stored."}</div>
-                          <WarningSummary warnings={item.warnings} title="Industry warnings" />
-                          {contextSummaryError(item.metadata) ? <div className="helper-text top-gap-small">{contextSummaryError(item.metadata)}</div> : null}
-                          {lifecycle ? (
-                            <div className="helper-text top-gap-small">
-                              lifecycle new {String(lifecycle.new_event_count ?? 0)} · escalating {String(lifecycle.escalating_event_count ?? 0)} · fading {String(lifecycle.fading_event_count ?? 0)}{contradictory.length > 0 ? ` · contradictions ${contradictory.join(", ")}` : ""}
-                            </div>
-                          ) : null}
                         </div>
                       );
                     })}
