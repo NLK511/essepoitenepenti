@@ -351,10 +351,10 @@ class MacroContextService:
         social_provider_count = len(diagnostics.get("providers", [])) if isinstance(diagnostics, dict) and isinstance(diagnostics.get("providers"), list) else 0
         high_saliency_events = count_events_above_saliency(active_themes)
         confidence = (
-            22.0
-            + (len(active_themes) * 7.0)
+            15.0
+            + (len(active_themes) * 5.0)
             + (high_saliency_events * 6.0)
-            + (min(news_item_count, 6) * 6.0)
+            + (min(news_item_count, 8) * 5.0)
             + (min(social_item_count, 4) * 1.5)
             + (social_provider_count * 2.0)
             + (primary_source_counts.get("official", 0) * 5.0)
@@ -371,7 +371,7 @@ class MacroContextService:
             confidence -= min(10.0, contradiction_count * 4.0)
         if feed_errors:
             confidence -= min(12.0, len(feed_errors) * 4.0)
-        return round(max(5.0, min(92.0, confidence)), 1)
+        return round(max(5.0, min(98.0, confidence)), 1)
 
     @classmethod
     def _fallback_summary_text(
