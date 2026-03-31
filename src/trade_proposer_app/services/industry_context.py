@@ -627,27 +627,27 @@ class IndustryContextService:
         social_provider_count = len(diagnostics.get("providers", [])) if isinstance(diagnostics, dict) and isinstance(diagnostics.get("providers"), list) else 0
         high_saliency_drivers = count_events_above_saliency(active_drivers)
         confidence = (
-            15.0
-            + (len(active_drivers) * 5.0)
-            + (high_saliency_drivers * 6.0)
-            + (min(news_item_count, 8) * 5.0)
-            + (min(social_item_count, 4) * 1.5)
-            + (social_provider_count * 2.0)
-            + (primary_source_counts.get("trade", 0) * 5.0)
-            + (primary_source_counts.get("official", 0) * 4.0)
-            + (primary_source_counts.get("major", 0) * 3.0)
+            10.0
+            + (len(active_drivers) * 4.0)
+            + (high_saliency_drivers * 4.5)
+            + (min(news_item_count, 8) * 4.0)
+            + (min(social_item_count, 4) * 1.0)
+            + (social_provider_count * 1.5)
+            + (primary_source_counts.get("trade", 0) * 4.0)
+            + (primary_source_counts.get("official", 0) * 3.0)
+            + (primary_source_counts.get("major", 0) * 2.5)
         )
         if any(item.get("persistence_state") == "escalating" for item in active_drivers):
-            confidence += 4.0
+            confidence += 3.0
         if news_item_count == 0:
-            confidence -= 18.0
+            confidence -= 20.0
         if primary_source_counts.get("trade", 0) == 0 and primary_source_counts.get("official", 0) == 0 and primary_source_counts.get("major", 0) == 0:
-            confidence -= 8.0
+            confidence -= 10.0
         if contradiction_count > 0:
-            confidence -= min(10.0, contradiction_count * 4.0)
+            confidence -= min(15.0, contradiction_count * 5.0)
         if feed_errors:
-            confidence -= min(12.0, len(feed_errors) * 4.0)
-        return round(max(5.0, min(98.0, confidence)), 1)
+            confidence -= min(15.0, len(feed_errors) * 5.0)
+        return round(max(0.0, min(100.0, confidence)), 1)
 
     @staticmethod
     def _fallback_summary_text(
