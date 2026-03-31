@@ -513,6 +513,45 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
         self.assertTrue(stored[0].stop_loss_hit)
         self.assertFalse(stored[0].take_profit_hit)
 
+    def test_run_evaluation_allows_same_day_daily_bar_fallback_after_close_even_when_available_at_is_midnight(self) -> None:
+        self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="EOG",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=67.95,
+                entry_price_low=151.8925,
+                entry_price_high=151.8925,
+                stop_loss=149.0889,
+                take_profit=156.2066,
+                signal_breakdown={"setup_family": "catalyst_follow_through"},
+                computed_at=datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc),
+            )
+        )
+        daily_history = pd.DataFrame(
+            {
+                "Open": [151.03],
+                "High": [152.18],
+                "Low": [148.75],
+                "Close": [150.98],
+                "available_at": pd.to_datetime(["2026-03-30T00:00:00Z"], utc=True),
+            },
+            index=pd.to_datetime(["2026-03-30T00:00:00Z"], utc=True),
+        )
+
+        with patch.object(RecommendationPlanEvaluationService, "_download_price_history", return_value=daily_history):
+            result = RecommendationPlanEvaluationService(self.session).run_evaluation(
+                as_of=datetime(2026, 3, 30, 21, 30, tzinfo=timezone.utc)
+            )
+
+        self.assertEqual(result.evaluated_recommendation_plans, 1)
+        self.assertEqual(result.loss_recommendation_plan_outcomes, 1)
+        stored = self.outcomes.list_outcomes(ticker="EOG", limit=10)
+        self.assertEqual(stored[0].outcome, "loss")
+        self.assertTrue(stored[0].entry_touched)
+        self.assertTrue(stored[0].stop_loss_hit)
+        self.assertFalse(stored[0].take_profit_hit)
+
     def test_run_evaluation_uses_as_of_as_the_price_history_upper_bound(self) -> None:
         self.plan_repository.create_plan(
             RecommendationPlan(

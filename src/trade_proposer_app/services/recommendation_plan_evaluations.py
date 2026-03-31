@@ -107,7 +107,7 @@ class RecommendationPlanEvaluationService:
                 source_mode,
                 0 if price_data is None else len(price_data),
             )
-            outcome = self._evaluate_plan(plan, price_data, run_id=run_id, as_of=as_of)
+            outcome = self._evaluate_plan(plan, price_data, run_id=run_id, as_of=as_of, intraday_only=use_intraday)
             stored = self.outcomes.upsert_outcome(outcome)
             synced += 1
             outcome_labels.append(stored.outcome)
@@ -226,6 +226,7 @@ class RecommendationPlanEvaluationService:
         *,
         run_id: int | None,
         as_of: datetime | None = None,
+        intraday_only: bool = False,
     ) -> RecommendationPlanOutcome:
         setup_family = self._setup_family(plan)
         confidence_bucket = self._confidence_bucket(plan.confidence_percent)
@@ -273,7 +274,7 @@ class RecommendationPlanEvaluationService:
                 run_id=run_id,
             )
 
-        sliced = self._rows_on_or_after(price_data, plan.computed_at)
+        sliced = self._rows_on_or_after(price_data, plan.computed_at, intraday_only=intraday_only)
         if sliced.empty:
             logger.warning(
                 "evaluate_plan no post-plan bars: plan_id=%s ticker=%s computed_at=%s as_of=%s price_rows=%s first_available_at=%s last_available_at=%s first_bar_time=%s last_bar_time=%s",
@@ -539,7 +540,7 @@ class RecommendationPlanEvaluationService:
         return RecommendationPlanEvaluationService._format_datetime(value)
 
     @staticmethod
-    def _rows_on_or_after(data: pd.DataFrame, start_at: datetime) -> pd.DataFrame:
+    def _rows_on_or_after(data: pd.DataFrame, start_at: datetime, *, intraday_only: bool = False) -> pd.DataFrame:
         normalized_start = RecommendationPlanEvaluationService._normalize_datetime(start_at)
         if normalized_start is None:
             return pd.DataFrame(columns=data.columns)
@@ -548,7 +549,26 @@ class RecommendationPlanEvaluationService:
             normalized_available = data["available_at"].apply(RecommendationPlanEvaluationService._normalize_datetime)
             mask = normalized_available.map(lambda value: value is not None and value >= normalized_start)
             rows = data.loc[mask]
-            return rows if not rows.empty else pd.DataFrame(columns=data.columns)
+            if not rows.empty:
+                return rows
+            if not intraday_only:
+                date_mask = data.index.map(
+                    lambda timestamp: (
+                        (normalized_timestamp := RecommendationPlanEvaluationService._normalize_datetime(timestamp)) is not None
+                        and normalized_timestamp.date() >= normalized_start.date()
+                    )
+                )
+                fallback_rows = data.loc[date_mask]
+                if not fallback_rows.empty:
+                    logger.debug(
+                        "rows_on_or_after daily-date fallback used: start_at=%s rows=%s first_available_at=%s last_available_at=%s",
+                        RecommendationPlanEvaluationService._format_datetime(normalized_start),
+                        len(fallback_rows),
+                        RecommendationPlanEvaluationService._format_datetime(fallback_rows.iloc[0].get("available_at")),
+                        RecommendationPlanEvaluationService._format_datetime(fallback_rows.iloc[-1].get("available_at")),
+                    )
+                    return fallback_rows
+            return pd.DataFrame(columns=data.columns)
 
         rows = []
         for timestamp, row in data.iterrows():

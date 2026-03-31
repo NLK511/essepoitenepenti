@@ -12,7 +12,7 @@ class EvaluationExecutionService:
         self.recommendation_evaluations = recommendation_evaluations
         self.recommendation_plan_evaluations = recommendation_plan_evaluations
 
-    def execute(self, run: Run) -> EvaluationRunResult:
+    def execute(self, run: Run, *, as_of: object | None = None) -> EvaluationRunResult:
         recommendation_plan_ids = self._extract_ids(run, key="recommendation_plan_ids")
         logger.info(
             "evaluation execution started: run_id=%s job_id=%s recommendation_plan_ids=%s scope=%s",
@@ -27,6 +27,7 @@ class EvaluationExecutionService:
             recommendation_plan_result = self.recommendation_plan_evaluations.run_evaluation(
                 recommendation_plan_ids=recommendation_plan_ids,
                 run_id=run.id,
+                as_of=as_of,
             )
         logger.info(
             "evaluation execution completed: run_id=%s evaluated=%s synced=%s pending=%s win=%s loss=%s no_action=%s watchlist=%s",

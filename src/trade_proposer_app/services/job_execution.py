@@ -183,8 +183,16 @@ class JobExecutionService:
         }
 
         evaluation_started = perf_counter()
+        evaluation_as_of = self._normalize_datetime(run.scheduled_for) or self._normalize_datetime(run.started_at) or datetime.now(timezone.utc)
+        logger.debug(
+            "job execution evaluation as_of resolved: run_id=%s scheduled_for=%s started_at=%s as_of=%s",
+            run.id,
+            self._normalize_datetime(run.scheduled_for),
+            self._normalize_datetime(run.started_at),
+            evaluation_as_of,
+        )
         try:
-            result = self.evaluations.execute(run)
+            result = self.evaluations.execute(run, as_of=evaluation_as_of)
             timing["evaluation_seconds"] = round(perf_counter() - evaluation_started, 6)
         except Exception as exc:
             timing["evaluation_seconds"] = round(perf_counter() - evaluation_started, 6)
