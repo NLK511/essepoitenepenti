@@ -451,6 +451,68 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
         self.assertEqual(outcome_by_plan_id[previous_plan.id or 0], "loss")
         self.assertEqual(outcome_by_plan_id[current_plan.id or 0], "no_entry")
 
+    def test_run_evaluation_uses_daily_history_after_market_close_for_same_day_plans(self) -> None:
+        self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="EOG",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=67.95,
+                entry_price_low=151.8925,
+                entry_price_high=151.8925,
+                stop_loss=149.0889,
+                take_profit=156.2066,
+                signal_breakdown={"setup_family": "catalyst_follow_through"},
+                computed_at=datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc),
+            )
+        )
+        daily_history = pd.DataFrame(
+            {
+                "Open": [151.03, 149.0],
+                "High": [152.18, 151.279999],
+                "Low": [148.75, 141.75],
+                "Close": [150.98, 143.369995],
+                "available_at": pd.to_datetime(
+                    ["2026-03-30T23:59:59Z", "2026-03-31T23:59:59Z"],
+                    utc=True,
+                ),
+            },
+            index=pd.to_datetime(["2026-03-30T00:00:00Z", "2026-03-31T00:00:00Z"], utc=True),
+        )
+        intraday_history = pd.DataFrame(
+            {
+                "Open": [150.54, 150.63, 150.51],
+                "High": [150.78, 150.73, 150.57],
+                "Low": [150.52, 150.32, 150.01],
+                "Close": [150.57, 150.52, 150.12],
+                "available_at": pd.to_datetime(
+                    ["2026-03-30T15:05:00Z", "2026-03-30T15:10:00Z", "2026-03-30T15:15:00Z"],
+                    utc=True,
+                ),
+            },
+            index=pd.to_datetime(
+                ["2026-03-30T15:00:00Z", "2026-03-30T15:05:00Z", "2026-03-30T15:10:00Z"],
+                utc=True,
+            ),
+        )
+
+        def fake_download(ticker: str, start_date: datetime, end_date: datetime, *, intraday_only: bool = False) -> pd.DataFrame:
+            self.assertEqual(ticker, "EOG")
+            return intraday_history if intraday_only else daily_history
+
+        with patch.object(RecommendationPlanEvaluationService, "_download_price_history", side_effect=fake_download):
+            result = RecommendationPlanEvaluationService(self.session).run_evaluation(
+                as_of=datetime(2026, 3, 30, 21, 30, tzinfo=timezone.utc)
+            )
+
+        self.assertEqual(result.evaluated_recommendation_plans, 1)
+        self.assertEqual(result.loss_recommendation_plan_outcomes, 1)
+        stored = self.outcomes.list_outcomes(ticker="EOG", limit=10)
+        self.assertEqual(stored[0].outcome, "loss")
+        self.assertTrue(stored[0].entry_touched)
+        self.assertTrue(stored[0].stop_loss_hit)
+        self.assertFalse(stored[0].take_profit_hit)
+
     def test_evaluate_plan_matrix_covers_core_entry_stop_take_combinations(self) -> None:
         service = RecommendationPlanEvaluationService(self.session)
         computed_at = datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc)

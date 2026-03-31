@@ -38,8 +38,9 @@ That matters because:
 ### 2. Daily vs intraday selection
 
 We settled on a compromise:
-- **current-session plans** may use intraday bars
+- **current-session plans** may use intraday bars while the evaluation run is still inside market hours
 - **prior-session plans** use daily bars
+- once the evaluation run is **after the market close**, same-day plans should be resolved from daily bars so a real stop-loss can be captured instead of leaving the plan pending
 
 This was done because using intraday for all plans was too aggressive and caused earlier plans like `315` to lose their daily-bar loss classification.
 

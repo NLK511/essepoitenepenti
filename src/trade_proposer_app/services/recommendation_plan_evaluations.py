@@ -66,7 +66,7 @@ class RecommendationPlanEvaluationService:
             processed += 1
             ticker = (plan.ticker or "").strip().upper()
             current_market_date = self._current_market_date(plan, as_of=as_of)
-            use_intraday = self._uses_intraday_evaluation(plan, current_market_date)
+            use_intraday = self._uses_intraday_evaluation(plan, current_market_date, as_of=as_of)
             price_data = price_history_cache.get((ticker, use_intraday))
             if price_data is None and use_intraday:
                 price_data = price_history_cache.get((ticker, False))
@@ -115,8 +115,8 @@ class RecommendationPlanEvaluationService:
             earliest = min(normalized_times)
             start_time = earliest - timedelta(days=2)
             current_market_date = self._current_market_date(grouped_plans[0], as_of=as_of)
-            needs_daily = any(not self._uses_intraday_evaluation(plan, current_market_date) for plan in grouped_plans)
-            needs_intraday = any(self._uses_intraday_evaluation(plan, current_market_date) for plan in grouped_plans)
+            needs_daily = any(not self._uses_intraday_evaluation(plan, current_market_date, as_of=as_of) for plan in grouped_plans)
+            needs_intraday = any(self._uses_intraday_evaluation(plan, current_market_date, as_of=as_of) for plan in grouped_plans)
             try:
                 if needs_daily:
                     daily_data = self._load_price_history(ticker, start_time, end_time, intraday_only=False)
@@ -454,7 +454,13 @@ class RecommendationPlanEvaluationService:
             return dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc)
 
-    def _uses_intraday_evaluation(self, plan: RecommendationPlan, current_market_date: date | None = None) -> bool:
+    def _uses_intraday_evaluation(
+        self,
+        plan: RecommendationPlan,
+        current_market_date: date | None = None,
+        *,
+        as_of: datetime | None = None,
+    ) -> bool:
         local_zone = self._market_timezone_for_plan(plan)
         if local_zone is None:
             return False
@@ -467,7 +473,19 @@ class RecommendationPlanEvaluationService:
         if current_market_date is not None and local_computed.date() != current_market_date:
             return False
         local_time = local_computed.timetz().replace(tzinfo=None)
-        return self._market_open_time <= local_time < self._market_close_time
+        if not (self._market_open_time <= local_time < self._market_close_time):
+            return False
+        if as_of is not None:
+            normalized_as_of = self._normalize_datetime(as_of)
+            if normalized_as_of is None:
+                return False
+            local_as_of = normalized_as_of.astimezone(local_zone)
+            if local_as_of.date() != current_market_date:
+                return False
+            local_as_of_time = local_as_of.timetz().replace(tzinfo=None)
+            if not (self._market_open_time <= local_as_of_time < self._market_close_time):
+                return False
+        return True
 
     def _market_timezone_for_plan(self, plan: RecommendationPlan) -> ZoneInfo | None:
         profile = self.taxonomy.get_ticker_profile(plan.ticker)
