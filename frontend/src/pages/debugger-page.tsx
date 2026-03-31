@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { getJson } from "../api";
+import { deleteJson, getJson } from "../api";
 import { WorkflowRunResults } from "../components/workflow-run-results";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { useToast } from "../components/toast";
 import type { Run, RunDetailResponse } from "../types";
 import { formatDate, formatDuration, jobTypeLabel, runTone } from "../utils";
 
@@ -12,6 +13,9 @@ export function DebuggerPage() {
   const [runs, setRuns] = useState<Run[] | null>(null);
   const [detail, setDetail] = useState<RunDetailResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeletingRun, setIsDeletingRun] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     async function loadRuns() {
@@ -58,6 +62,42 @@ export function DebuggerPage() {
   }, [runs]);
 
   const selectedRunId = searchParams.get("run_id");
+  const selectedRun = useMemo(
+    () => runs?.find((run) => run.id !== null && run.id !== undefined && String(run.id) === selectedRunId) ?? null,
+    [runs, selectedRunId],
+  );
+
+  async function handleDeleteRun(runId: number) {
+    if (
+      !window.confirm(
+        `Delete run #${runId}? This will permanently remove the run and its associated recommendation plans, outcomes, context objects, signals, and diagnostics.`,
+      )
+    ) {
+      return;
+    }
+    setDeleteError(null);
+    setIsDeletingRun(true);
+    try {
+      await deleteJson<{ deleted: boolean; run_id: number }>(`/api/runs/${runId}`);
+      showToast({ message: `Run #${runId} deleted`, tone: "success" });
+      setRuns((currentRuns) => {
+        const remainingRuns = currentRuns?.filter((run) => run.id !== runId) ?? null;
+        if (selectedRunId === String(runId)) {
+          if (remainingRuns?.[0]?.id) {
+            setSearchParams({ run_id: String(remainingRuns[0].id) }, { replace: true });
+          } else {
+            setSearchParams({}, { replace: true });
+          }
+        }
+        return remainingRuns;
+      });
+      setDetail((currentDetail) => (currentDetail?.run.id === runId ? null : currentDetail));
+    } catch (deleteErr) {
+      setDeleteError(deleteErr instanceof Error ? deleteErr.message : "Failed to delete run");
+    } finally {
+      setIsDeletingRun(false);
+    }
+  }
 
   return (
     <>
@@ -77,7 +117,24 @@ export function DebuggerPage() {
 
       <section className="two-column debugger-layout top-gap">
         <Card className="sticky-toolbar">
-          <SectionTitle kicker="Recent runs" title="Choose a run" subtitle="Pick a run from the left, then scan the summary on the right before opening the full run page." />
+          <SectionTitle
+            kicker="Recent runs"
+            title="Choose a run"
+            subtitle="Pick a run from the left, then scan the summary on the right before opening the full run page."
+            actions={
+              selectedRun?.id ? (
+                <button
+                  type="button"
+                  className="button button-small button-danger"
+                  disabled={isDeletingRun}
+                  onClick={() => handleDeleteRun(selectedRun.id as number)}
+                >
+                  {isDeletingRun ? "Deleting…" : "Delete selected run"}
+                </button>
+              ) : null
+            }
+          />
+          {deleteError ? <ErrorState message={deleteError} /> : null}
           {!runs && !error ? <LoadingState message="Loading runs…" /> : null}
           {runs && runs.length === 0 ? <EmptyState message="No runs available." /> : null}
           {runs ? (
