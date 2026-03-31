@@ -668,8 +668,9 @@ export function RecommendationPlansPage() {
         {!plans && !error ? <LoadingState message="Loading recommendation plans…" /> : null}
         {plans && plans.length === 0 ? <EmptyState message="No recommendation plans match the current filters." /> : null}
         {plans ? (
-          <div className="table-wrap">
-            <table className="recommendation-plans-table">
+          <div className="table-wrap recommendation-plans-table-wrap">
+            <div className="recommendation-plans-table-scroll">
+              <table className="recommendation-plans-table">
               <colgroup>
                 <col style={{ width: "96px" }} />
                 <col style={{ width: "160px" }} />
@@ -905,7 +906,8 @@ export function RecommendationPlansPage() {
                   );
                 })}
               </tbody>
-            </table>
+              </table>
+            </div>
           </div>
         ) : null}
       </Card>

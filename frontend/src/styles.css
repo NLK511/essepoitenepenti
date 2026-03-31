@@ -712,6 +712,15 @@ table {
   border-collapse: collapse;
 }
 
+.recommendation-plans-table-wrap {
+  overflow: visible;
+}
+
+.recommendation-plans-table-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
 .recommendation-plans-table {
   table-layout: fixed;
   min-width: 1618px;
@@ -1289,6 +1298,7 @@ details summary {
   color: var(--text-subtle);
   text-decoration: none;
   outline: none;
+  z-index: 0;
 }
 
 .help-hint:hover,
@@ -1314,7 +1324,7 @@ details summary {
   position: absolute;
   left: 50%;
   top: calc(100% + 10px);
-  z-index: 200;
+  z-index: 5000;
   width: min(280px, 70vw);
   padding: 10px 12px;
   border-radius: 12px;
@@ -1329,6 +1339,11 @@ details summary {
   transform: translate(-50%, -4px);
   pointer-events: none;
   transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.help-hint:hover,
+.help-hint:focus-visible {
+  z-index: 5001;
 }
 
 .help-hint:hover .help-hint-tooltip,
@@ -1949,6 +1964,7 @@ th {
   top: 0;
   background: var(--bg-panel);
   z-index: 1;
+  overflow: visible;
 }
 
 td {
