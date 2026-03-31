@@ -108,12 +108,24 @@ export function DebuggerPage() {
           {!detail && !error ? <LoadingState message="Select a run to inspect." /> : null}
           {detail ? (
             <>
-              <section className="metrics-grid debugger-metrics-grid">
-                <StatCard className="stat-card-compact" label="Status" value={detail.run.status} />
-                <StatCard className="stat-card-compact" label="Duration" value={formatDuration(detail.run.duration_seconds)} />
-                <StatCard className="stat-card-compact" label="Plans written" value={detail.recommendation_plans.length} />
-                <StatCard className="stat-card-compact" label="Signals written" value={detail.ticker_signal_snapshots.length} />
-              </section>
+              <div className="debugger-stat-strip top-gap" aria-label="Selected run summary">
+                <div className="debugger-stat-inline">
+                  <span className="debugger-stat-label">Status</span>
+                  <Badge tone={runTone(detail.run.status)}>{detail.run.status}</Badge>
+                </div>
+                <div className="debugger-stat-inline">
+                  <span className="debugger-stat-label">Duration</span>
+                  <span className="debugger-stat-value">{formatDuration(detail.run.duration_seconds)}</span>
+                </div>
+                <div className="debugger-stat-inline">
+                  <span className="debugger-stat-label">Plans written</span>
+                  <span className="debugger-stat-value">{detail.recommendation_plans.length}</span>
+                </div>
+                <div className="debugger-stat-inline">
+                  <span className="debugger-stat-label">Signals written</span>
+                  <span className="debugger-stat-value">{detail.ticker_signal_snapshots.length}</span>
+                </div>
+              </div>
 
               <Card>
                 <SectionTitle
