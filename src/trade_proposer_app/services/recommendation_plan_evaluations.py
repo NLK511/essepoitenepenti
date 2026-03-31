@@ -560,7 +560,7 @@ class RecommendationPlanEvaluationService:
                 )
                 fallback_rows = data.loc[date_mask]
                 if not fallback_rows.empty:
-                    logger.debug(
+                    logger.info(
                         "rows_on_or_after daily-date fallback used: start_at=%s rows=%s first_available_at=%s last_available_at=%s",
                         RecommendationPlanEvaluationService._format_datetime(normalized_start),
                         len(fallback_rows),
