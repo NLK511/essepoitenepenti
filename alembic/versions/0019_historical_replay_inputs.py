@@ -1,6 +1,6 @@
 """extend historical replay batch inputs and market bar availability
 
-Revision ID: 0019_historical_replay_batch_inputs
+Revision ID: 0019_historical_replay_inputs
 Revises: 0018_historical_market_bars
 Create Date: 2026-03-24 00:30:00
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0019_historical_replay_batch_inputs"
+revision = "0019_historical_replay_inputs"
 down_revision = "0018_historical_market_bars"
 branch_labels = None
 depends_on = None
