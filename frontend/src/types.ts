@@ -533,6 +533,16 @@ export interface RecommendationCalibrationBucket {
   average_mae: number | null;
 }
 
+export interface RecommendationPlanStats {
+  total_plans: number;
+  resolved_outcomes: number;
+  open_outcomes: number;
+  win_outcomes: number;
+  loss_outcomes: number;
+  no_action_outcomes: number;
+  watchlist_outcomes: number;
+}
+
 export interface RecommendationCalibrationSummary {
   total_outcomes: number;
   resolved_outcomes: number;

@@ -74,6 +74,20 @@ class JobExecutionService:
 
     def execute_run(self, run_id: int, worker_id: str | None = None) -> tuple[list[Recommendation], dict[str, object]]:
         run = self.runs.get_run(run_id)
+        logger.info(
+            "job execution dispatch started: run_id=%s job_id=%s job_type=%s worker_id=%s",
+            run.id,
+            run.job_id,
+            run.job_type.value,
+            worker_id,
+        )
+        logger.debug(
+            "job execution dispatch payload: run_id=%s scheduled_for=%s started_at=%s artifact=%s",
+            run.id,
+            self._normalize_datetime(run.scheduled_for),
+            self._normalize_datetime(run.started_at),
+            self._get_run_artifact(run),
+        )
         if worker_id:
             self.runs.upsert_heartbeat(WorkerHeartbeat(
                 worker_id=worker_id,
@@ -99,6 +113,19 @@ class JobExecutionService:
         raise RuntimeError(f"unsupported job_type execution: {run.job_type.value}")
 
     def _execute_proposal_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
+        logger.info(
+            "job execution proposal started: run_id=%s job_id=%s worker=%s",
+            run.id,
+            run.job_id,
+            socket.gethostname(),
+        )
+        logger.debug(
+            "job execution proposal run payload: run_id=%s scheduled_for=%s started_at=%s artifact=%s",
+            run.id,
+            self._normalize_datetime(run.scheduled_for),
+            self._normalize_datetime(run.started_at),
+            self._get_run_artifact(run),
+        )
         execution_started = perf_counter()
         timing: dict[str, object] = {
             "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
@@ -114,6 +141,19 @@ class JobExecutionService:
         job = self.jobs.get(run.job_id)
         tickers = self.jobs.resolve_tickers(run.job_id)
         watchlist = self._resolve_execution_watchlist(job, tickers)
+        logger.info(
+            "job execution proposal inputs resolved: run_id=%s job_id=%s ticker_count=%s source_kind=%s watchlist_id=%s",
+            run.id,
+            run.job_id,
+            len(tickers),
+            getattr(watchlist, "source_kind", None),
+            getattr(watchlist, "id", None),
+        )
+        logger.debug(
+            "job execution proposal watchlist payload: run_id=%s watchlist=%s",
+            run.id,
+            watchlist,
+        )
         timing["resolve_tickers_seconds"] = round(perf_counter() - resolve_started, 6)
 
         warnings_found = False
@@ -128,6 +168,19 @@ class JobExecutionService:
                 tickers,
                 job_id=run.job_id,
                 run_id=run.id,
+            )
+            logger.info(
+                "job execution proposal orchestration finished: run_id=%s job_id=%s warnings_found=%s",
+                run.id,
+                run.job_id,
+                bool(orchestration.get("warnings_found")),
+            )
+            logger.debug(
+                "job execution proposal orchestration payload: run_id=%s keys=%s summary_keys=%s artifact_keys=%s",
+                run.id,
+                sorted(orchestration.keys()),
+                sorted(orchestration.get("summary", {}).keys()) if isinstance(orchestration.get("summary"), dict) else None,
+                sorted(orchestration.get("artifact", {}).keys()) if isinstance(orchestration.get("artifact"), dict) else None,
             )
             ticker_generation.extend(orchestration.get("ticker_generation", []))
             warnings_found = bool(orchestration.get("warnings_found"))
@@ -146,6 +199,12 @@ class JobExecutionService:
             if isinstance(partial_ticker_generation, list):
                 self._get_ticker_generation_list(timing).extend(partial_ticker_generation)
             timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
+            logger.exception(
+                "job execution proposal failed: run_id=%s job_id=%s elapsed_seconds=%s",
+                run.id,
+                run.job_id,
+                timing["recommendation_generation_seconds"],
+            )
             raise RunExecutionFailed(exc, timing) from exc
 
         persistence_started = perf_counter()
@@ -154,6 +213,19 @@ class JobExecutionService:
 
         final_status = RunStatus.COMPLETED_WITH_WARNINGS.value if warnings_found else RunStatus.COMPLETED.value
         self._finalize_success(run.id or 0, final_status, timing, execution_started)
+        logger.info(
+            "job execution proposal finished: run_id=%s job_id=%s final_status=%s warnings_found=%s total_execution_seconds=%s",
+            run.id,
+            run.job_id,
+            final_status,
+            warnings_found,
+            timing["total_execution_seconds"],
+        )
+        logger.debug(
+            "job execution proposal timing: run_id=%s timing=%s",
+            run.id,
+            timing,
+        )
         return stored, timing
 
     def _execute_evaluation_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:

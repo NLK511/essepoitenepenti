@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.domain.models import RecommendationBaselineSummary, RecommendationPlan, Run
+from trade_proposer_app.domain.models import RecommendationBaselineSummary, RecommendationPlan, RecommendationPlanStats, Run
 from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.runs import RunRepository
@@ -14,6 +15,14 @@ from trade_proposer_app.services.recommendation_plan_baselines import Recommenda
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 
 router = APIRouter(prefix="/recommendation-plans", tags=["recommendation-plans"])
+
+
+@router.get("/stats")
+async def recommendation_plan_stats(session: Session = Depends(get_db_session)) -> RecommendationPlanStats:
+    plans = RecommendationPlanRepository(session)
+    outcomes = RecommendationOutcomeRepository(session)
+    counts = outcomes.count_outcomes()
+    return RecommendationPlanStats(total_plans=plans.count_plans(), **counts)
 
 
 @router.get("")

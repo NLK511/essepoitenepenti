@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -43,6 +43,35 @@ class RecommendationOutcomeRepository:
             self.session.commit()
             self.session.refresh(record)
             return self._to_model(record)
+
+    def count_outcomes(self) -> dict[str, int]:
+        self.session.rollback()
+        total = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord)) or 0)
+        resolved = int(
+            self.session.scalar(
+                select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome.in_(["win", "loss"]))
+            )
+            or 0
+        )
+        open_outcomes = int(
+            self.session.scalar(
+                select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.status == "open")
+            )
+            or 0
+        )
+        wins = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == "win")) or 0)
+        losses = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == "loss")) or 0)
+        no_action = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == "no_action")) or 0)
+        watchlist = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == "watchlist")) or 0)
+        return {
+            "total_outcomes": total,
+            "resolved_outcomes": resolved,
+            "open_outcomes": open_outcomes,
+            "win_outcomes": wins,
+            "loss_outcomes": losses,
+            "no_action_outcomes": no_action,
+            "watchlist_outcomes": watchlist,
+        }
 
     def list_outcomes(
         self,

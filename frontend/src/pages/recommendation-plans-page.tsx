@@ -12,6 +12,7 @@ import type {
   RecommendationCalibrationSummary,
   RecommendationEvidenceConcentrationSummary,
   RecommendationPlan,
+  RecommendationPlanStats,
   RecommendationSetupFamilyReviewSummary,
   Run,
 } from "../types";
@@ -231,6 +232,7 @@ function SetupFamilySliceTable({
 export function RecommendationPlansPage() {
   const [searchParams, setSearchParams] = useSearchParams({ limit: "100" });
   const [plans, setPlans] = useState<RecommendationPlan[] | null>(null);
+  const [planStats, setPlanStats] = useState<RecommendationPlanStats | null>(null);
   const [macroContextByRun, setMacroContextByRun] = useState<Record<number, MacroContextSnapshot | null>>({});
   const [industryContextByRun, setIndustryContextByRun] = useState<Record<number, IndustryContextSnapshot | null>>({});
   const [calibration, setCalibration] = useState<RecommendationCalibrationSummary | null>(null);
@@ -262,8 +264,12 @@ export function RecommendationPlansPage() {
           summaryParams.set("setup_family", setupFamily);
         }
         const summaryQuery = summaryParams.toString();
-        const planResults = await getJson<RecommendationPlan[]>(buildQuery(searchParams));
+        const [planResults, stats] = await Promise.all([
+          getJson<RecommendationPlan[]>(buildQuery(searchParams)),
+          getJson<RecommendationPlanStats>("/api/recommendation-plans/stats"),
+        ]);
         setPlans(planResults);
+        setPlanStats(stats);
         setCalibration(await getJson<RecommendationCalibrationSummary>(`/api/recommendation-outcomes/summary?${summaryQuery}`));
         setBaselines(await getJson<RecommendationBaselineSummary>(`/api/recommendation-plans/baselines?${summaryQuery}`));
         setFamilyReview(await getJson<RecommendationSetupFamilyReviewSummary>(`/api/recommendation-outcomes/setup-family-review?${summaryQuery}`));
@@ -361,9 +367,9 @@ export function RecommendationPlansPage() {
       {error ? <ErrorState message={error} /> : null}
       {evaluationMessage ? <Card><div className="helper-text">{evaluationMessage}</div></Card> : null}
       <section className="metrics-grid top-gap">
-        <StatCard label="Loaded plans" value={plans?.length ?? "—"} helper="Current result set under the active filters" />
-        <StatCard label="Resolved outcomes" value={calibration?.resolved_outcomes ?? "—"} helper="Evidence currently available for calibration review" />
-        <StatCard label="Overall win rate" value={`${calibration?.overall_win_rate_percent ?? "—"}${calibration ? "%" : ""}`} helper="Resolved trade-plan win rate across the filtered review set" />
+        <StatCard label="Total plans" value={planStats?.total_plans ?? "—"} helper={`Loaded result set: ${plans?.length ?? "—"}`} />
+        <StatCard label="Resolved outcomes" value={planStats?.resolved_outcomes ?? "—"} helper="Across all stored recommendation plans" />
+        <StatCard label="Overall win rate" value={planStats && planStats.resolved_outcomes > 0 ? `${Math.round((planStats.win_outcomes / planStats.resolved_outcomes) * 1000) / 10}%` : "—"} helper="Across all stored recommendation plans" />
         <StatCard label="Evidence concentration" value={evidenceConcentration ? (evidenceConcentration.ready_for_expansion ? "Ready" : "Focused") : "—"} helper="Whether the current cohort mix supports broader usage or tighter selectivity" />
       </section>
 
@@ -411,7 +417,7 @@ export function RecommendationPlansPage() {
                 <div>
                   <h3 className="data-card-title"><HelpLabel label="Calibration posture" tooltip="Shows whether stored outcomes are sufficient to trust current confidence and threshold behavior." to={glossaryDoc("calibration")} /></h3>
                 </div>
-                <Badge tone={calibration && calibration.resolved_outcomes >= 10 ? "ok" : "warning"}>{calibration?.resolved_outcomes ?? 0} resolved</Badge>
+                <Badge tone={planStats && planStats.resolved_outcomes >= 10 ? "ok" : "warning"}>{planStats?.resolved_outcomes ?? 0} resolved</Badge>
               </div>
               <div className="data-points">
                 <div className="data-point"><span className="data-point-label">overall win rate</span><span className="data-point-value">{calibration?.overall_win_rate_percent ?? "—"}%</span></div>

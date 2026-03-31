@@ -580,6 +580,16 @@ class RecommendationCalibrationBucket(DictLikeModel):
     average_mae: float | None = None
 
 
+class RecommendationPlanStats(BaseModel):
+    total_plans: int = 0
+    resolved_outcomes: int = 0
+    open_outcomes: int = 0
+    win_outcomes: int = 0
+    loss_outcomes: int = 0
+    no_action_outcomes: int = 0
+    watchlist_outcomes: int = 0
+
+
 class RecommendationCalibrationSummary(BaseModel):
     total_outcomes: int = 0
     resolved_outcomes: int = 0

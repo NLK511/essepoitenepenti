@@ -2,7 +2,7 @@ import json
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import StrategyHorizon
@@ -59,6 +59,10 @@ class RecommendationPlanRepository:
         outcome_map = self.outcomes.get_outcomes_by_plan_ids([record.id])
         plan.latest_outcome = outcome_map.get(record.id)
         return plan
+
+    def count_plans(self) -> int:
+        query = select(func.count()).select_from(RecommendationPlanRecord)
+        return int(self.session.scalar(query) or 0)
 
     def list_plans(
         self,
