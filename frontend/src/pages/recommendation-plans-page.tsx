@@ -84,6 +84,13 @@ function formatPriceRange(low: number | null | undefined, high: number | null | 
   return `${low} – ${high}`;
 }
 
+function truncateText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
 function contextSummaryMethod(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null | undefined): string {
   return snapshot && typeof snapshot.metadata?.context_summary_method === "string" ? snapshot.metadata.context_summary_method : "unknown";
 }
@@ -651,7 +658,7 @@ export function RecommendationPlansPage() {
         {plans && plans.length === 0 ? <EmptyState message="No recommendation plans match the current filters." /> : null}
         {plans ? (
           <div className="table-wrap">
-            <table>
+            <table className="recommendation-plans-table">
               <thead>
                 <tr>
                   <th><HelpLabel label="Computed" tooltip="When this recommendation plan was persisted." to={recommendationPlansDoc("results-table")} /></th>
@@ -661,7 +668,7 @@ export function RecommendationPlansPage() {
                   <th><HelpLabel label="Execution" tooltip="How the trade is framed: entry zone, stop, take profit, and timing expectations." to={recommendationPlansDoc("execution-style-fields")} /></th>
                   <th><HelpLabel label="Transmission" tooltip="How macro and industry context is expected to carry through to this ticker setup." to={glossaryDoc("transmission")} /></th>
                   <th><HelpLabel label="Latest outcome" tooltip="The most recent stored evaluation result for this plan, if one exists." to={recommendationPlansDoc("outcome-fields")} /></th>
-                  <th><HelpLabel label="Thesis" tooltip="The summary of why the plan exists, what could invalidate it, and what to focus on during review." to={recommendationPlansDoc("explanation-fields")} /></th>
+                  <th className="recommendation-plan-thesis-col"><HelpLabel label="Thesis" tooltip="The summary of why the plan exists, what could invalidate it, and what to focus on during review." to={recommendationPlansDoc("explanation-fields")} /></th>
                   <th><HelpLabel label="Run" tooltip="The workflow run that produced this plan." to={glossaryDoc("run")} /></th>
                   <th>More</th>
                 </tr>
@@ -769,8 +776,10 @@ export function RecommendationPlansPage() {
                             <div className="helper-text">No outcome stored yet.</div>
                           )}
                         </td>
-                        <td>
-                          <div>{plan.thesis_summary || "No thesis stored."}</div>
+                        <td className="recommendation-plan-thesis-col">
+                          <div className="recommendation-plan-thesis-preview" title={plan.thesis_summary || "No thesis stored."}>
+                            {truncateText(plan.thesis_summary || "No thesis stored.", 180)}
+                          </div>
                         </td>
                         <td>{plan.run_id ? <Link to={`/runs/${plan.run_id}`}>#{plan.run_id}</Link> : "—"}</td>
                         <td>
@@ -810,7 +819,8 @@ export function RecommendationPlansPage() {
                               </div>
                               {contextSummaryError(macroContext) ? <div className="helper-text top-gap-small">macro fallback: {contextSummaryError(macroContext)}</div> : null}
                               {contextSummaryError(industryContext) ? <div className="helper-text top-gap-small">industry fallback: {contextSummaryError(industryContext)}</div> : null}
-                              {plan.rationale_summary ? <div className="helper-text top-gap-small">{plan.rationale_summary}</div> : null}
+                              <div className="helper-text top-gap-small">Thesis: {plan.thesis_summary || "No thesis stored."}</div>
+                              {plan.rationale_summary ? <div className="helper-text top-gap-small">Rationale: {plan.rationale_summary}</div> : null}
                               {plan.id ? (
                                 <div className="top-gap-small">
                                   <button

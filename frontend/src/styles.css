@@ -712,12 +712,34 @@ table {
   border-collapse: collapse;
 }
 
+.recommendation-plans-table {
+  table-layout: fixed;
+}
+
 th,
 td {
   padding: 14px 12px;
   text-align: left;
   vertical-align: top;
   border-bottom: 1px solid var(--border);
+}
+
+.recommendation-plan-thesis-col {
+  width: 28%;
+}
+
+.recommendation-plans-table th.recommendation-plan-thesis-col,
+.recommendation-plans-table td.recommendation-plan-thesis-col {
+  min-width: 320px;
+}
+
+.recommendation-plan-thesis-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  word-break: break-word;
 }
 
 th {
