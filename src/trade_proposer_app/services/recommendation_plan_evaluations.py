@@ -106,7 +106,7 @@ class RecommendationPlanEvaluationService:
         groups = self._group_by_ticker(plans)
         cache: dict[tuple[str, bool], pd.DataFrame | None] = {}
         errors: list[str] = []
-        end_time = datetime.now(timezone.utc)
+        end_time = self._normalize_datetime(as_of) or datetime.now(timezone.utc)
         for ticker, grouped_plans in groups.items():
             computed_times = [self._normalize_datetime(plan.computed_at) for plan in grouped_plans]
             normalized_times = [dt for dt in computed_times if dt is not None]

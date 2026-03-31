@@ -513,6 +513,54 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
         self.assertTrue(stored[0].stop_loss_hit)
         self.assertFalse(stored[0].take_profit_hit)
 
+    def test_run_evaluation_uses_as_of_as_the_price_history_upper_bound(self) -> None:
+        self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="EOG",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=67.95,
+                entry_price_low=151.8925,
+                entry_price_high=151.8925,
+                stop_loss=149.0889,
+                take_profit=156.2066,
+                signal_breakdown={"setup_family": "catalyst_follow_through"},
+                computed_at=datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc),
+            )
+        )
+        captured: list[tuple[datetime, datetime, bool]] = []
+
+        def fake_load_price_history(
+            ticker: str,
+            start_date: datetime,
+            end_date: datetime,
+            *,
+            intraday_only: bool = False,
+        ) -> pd.DataFrame:
+            self.assertEqual(ticker, "EOG")
+            captured.append((start_date, end_date, intraday_only))
+            return pd.DataFrame(
+                {
+                    "Open": [151.03],
+                    "High": [152.18],
+                    "Low": [148.75],
+                    "Close": [150.98],
+                    "available_at": pd.to_datetime(["2026-03-30T23:59:59Z"], utc=True),
+                },
+                index=pd.to_datetime(["2026-03-30T00:00:00Z"], utc=True),
+            )
+
+        as_of = datetime(2026, 3, 30, 21, 30, tzinfo=timezone.utc)
+        with patch.object(RecommendationPlanEvaluationService, "_load_price_history", side_effect=fake_load_price_history):
+            result = RecommendationPlanEvaluationService(self.session).run_evaluation(as_of=as_of)
+
+        self.assertEqual(result.evaluated_recommendation_plans, 1)
+        self.assertEqual(result.loss_recommendation_plan_outcomes, 1)
+        self.assertEqual(len(captured), 1)
+        _, end_date, intraday_only = captured[0]
+        self.assertFalse(intraday_only)
+        self.assertEqual(end_date, as_of)
+
     def test_evaluate_plan_matrix_covers_core_entry_stop_take_combinations(self) -> None:
         service = RecommendationPlanEvaluationService(self.session)
         computed_at = datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc)
