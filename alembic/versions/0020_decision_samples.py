@@ -1,6 +1,6 @@
 """add recommendation decision samples
 
-Revision ID: 0020_recommendation_decision_samples
+Revision ID: 0020_decision_samples
 Revises: 0019_historical_replay_inputs
 Create Date: 2026-03-29 00:00:00
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0020_recommendation_decision_samples"
+revision = "0020_decision_samples"
 down_revision = "0019_historical_replay_inputs"
 branch_labels = None
 depends_on = None
