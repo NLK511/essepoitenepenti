@@ -23,6 +23,24 @@ This checklist covers:
 This checklist does **not** lock in final field names for every table or JSON payload.
 It defines the implementation direction and minimum required capabilities.
 
+## Current implementation status
+
+Implemented in the repo now:
+- `historical_replay` job type
+- `HistoricalReplayBatch` and `HistoricalReplaySlice` domain models
+- persistence tables and Alembic migration for replay batches/slices
+- repository and service scaffolding for batch creation, daily-slice planning, queueing, and resolved explicit ticker universes
+- API endpoints for create/list/detail/execute replay batches plus universe-preset discovery and batch market-data hydration
+- worker/job-execution integration for replay slice runs
+- replay run summaries/artifacts now include entry timing, provider, source tier, market-data coverage, and a clearly labeled dummy signal payload used only until the app-native signal pipeline is wired in
+- `HistoricalMarketBar` domain model plus repository/persistence scaffolding for Phase 2 market replay inputs
+- Yahoo-style free-provider daily-bar integration for research-grade market-data hydration
+- curated explicit universe presets: `us_large_cap_top20_v1` and `eu_large_cap_top20_v1`
+- `next_open` / `next_close` entry-timing support with `next_open` as the canonical default
+- dummy replay signal scaffolding with explicit documentation that it is temporary and must be aligned to the app-native signal pipeline later
+
+This means **Phase 1 is complete**, and **Phase 2 has crossed into working market-data input hydration**, while true replay signal generation and outcome evaluation remain open.
+
 ---
 
 ## Uncompromisable implementation rule
@@ -91,6 +109,13 @@ Purpose:
 - `name`
 - `status`
 - `mode` (`strict` or `research`)
+- `universe_mode`
+- `universe_preset`
+- `tickers_json`
+- `entry_timing`
+- `price_provider`
+- `price_source_tier`
+- `bar_timeframe`
 - `started_at`
 - `completed_at`
 - `as_of_start`
@@ -536,20 +561,20 @@ A useful first slice should backtest without depending on historical tweets or f
 - [ ] define provenance payload shape shared across replay objects
 
 ## Phase 1 — schema and job skeleton
-- [ ] add replay job type enums
-- [ ] add `HistoricalReplayBatch` and `HistoricalReplaySlice` domain models
-- [ ] add replay batch/slice persistence tables
-- [ ] add repositories for replay batches/slices
-- [ ] add API endpoints for create/list/detail/execute replay batches
-- [ ] add replay branch in `JobExecutionService`
+- [x] add replay job type enums
+- [x] add `HistoricalReplayBatch` and `HistoricalReplaySlice` domain models
+- [x] add replay batch/slice persistence tables
+- [x] add repositories for replay batches/slices
+- [x] add API endpoints for create/list/detail/execute replay batches
+- [x] add replay branch in `JobExecutionService`
 
 ## Phase 2 — market-data replay MVP
-- [ ] add `historical_market_bars` table and repository
-- [ ] implement bar ingestion service
-- [ ] implement replay input assembly for bars up to `as_of`
+- [x] add `historical_market_bars` table and repository
+- [x] implement free-provider daily-bar ingestion service
+- [x] implement replay input assembly for bars up to `as_of`
 - [ ] implement technical indicator computation using only prior bars
 - [ ] implement recommendation-plan generation for one replay slice
-- [ ] persist run summary/artifact with replay metadata
+- [x] persist run summary/artifact with replay metadata
 
 ## Phase 3 — macro and industry proxy context
 - [ ] add `historical_macro_events` table and repository

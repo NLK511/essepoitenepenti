@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from trade_proposer_app.migrations import HEAD_REVISION, normalize_alembic_revision_ids, try_repair_partial_sqlite_schema
+from trade_proposer_app.migrations import HEAD_REVISION, LEGACY_REVISION_MAP, normalize_alembic_revision_ids, try_repair_partial_sqlite_schema
 
 
 class MigrationRepairTests(unittest.TestCase):
@@ -29,7 +29,10 @@ class MigrationRepairTests(unittest.TestCase):
             try:
                 cursor = connection.cursor()
                 cursor.execute("SELECT version_num FROM alembic_version")
-                self.assertEqual(cursor.fetchone()[0], HEAD_REVISION)
+                self.assertEqual(
+                    cursor.fetchone()[0],
+                    LEGACY_REVISION_MAP["0015_drop_legacy_recommendations_table"],
+                )
             finally:
                 connection.close()
 

@@ -460,9 +460,14 @@ Results from research backtests must never be presented as equivalent to strict 
 
 The fastest useful MVP is:
 - daily replay granularity
+- free-provider daily OHLCV as a research-grade source
+- explicit ticker-list universes only
+- first curated presets: `us_large_cap_top20_v1` and `eu_large_cap_top20_v1`
+- canonical entry timing: `next_open`, with `next_close` supported as a research fallback
 - OHLCV + technical indicators
 - macro event calendar and market-regime proxies
 - industry relative-strength proxies
+- a deliberately dummy placeholder signal rule for the first replay slice runner, documented as temporary and intended to be replaced by the app-native signal pipeline later
 - historical headlines with timestamps and source
 - optional article text when available
 - no dependency on full tweet/X coverage

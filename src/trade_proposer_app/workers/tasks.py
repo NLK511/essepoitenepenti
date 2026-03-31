@@ -5,6 +5,7 @@ import os
 import uuid
 
 from trade_proposer_app.db import SessionLocal
+from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
@@ -19,6 +20,7 @@ from trade_proposer_app.services.builders import (
     create_watchlist_orchestration_service,
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
+from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
@@ -50,6 +52,7 @@ def process_once(worker_id: str | None = None) -> bool:
                 historical_replays=HistoricalReplayRepository(session),
                 jobs=JobRepository(session),
                 runs=RunRepository(session),
+                historical_market_data=HistoricalMarketDataService(HistoricalMarketDataRepository(session)),
             ),
         )
         try:
