@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { ScoreBadge, WarningSummary } from "../components/decision-surface";
 import type { TickerSignalSnapshot } from "../types";
 import { detailLabel, extractDisplayLabels, formatDate } from "../utils";
 
@@ -144,7 +145,7 @@ export function TickerSignalsPage() {
                         <Badge tone={directionTone(signal.direction)}>{signal.direction}</Badge>
                         <Badge tone={mode === "deep_analysis" ? "info" : "neutral"}>{mode}</Badge>
                       </div>
-                      <h3 className="data-card-title top-gap-small">{signal.confidence_percent.toFixed(1)}% confidence · {signal.attention_score.toFixed(1)} attention</h3>
+                      <div className="cluster top-gap-small"><ScoreBadge label="Confidence" value={`${signal.confidence_percent.toFixed(1)}%`} tone="info" /><Badge tone="neutral">attention {signal.attention_score.toFixed(1)}</Badge></div>
                       <div className="helper-text">{formatDate(signal.computed_at)} · horizon {signal.horizon} · run {signal.run_id ? `#${signal.run_id}` : "—"}</div>
                     </div>
                     <div className="data-card-meta">
@@ -160,14 +161,11 @@ export function TickerSignalsPage() {
                     <div className="data-point"><span className="data-point-label">window</span><span className="data-point-value">{expectedWindow}</span></div>
                   </div>
 
-                  <div className="helper-text top-gap-small">shortlist reasons: {shortlistReasons.length > 0 ? shortlistReasons.join(" · ") : "eligible"}</div>
-                  <div className="helper-text">drivers: {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
-                  <div className="helper-text">industry channels: {industryExposureChannels.length > 0 ? industryExposureChannels.join(" · ") : "none"}</div>
-                  <div className="helper-text">ticker channels: {tickerExposureChannels.length > 0 ? tickerExposureChannels.join(" · ") : "none"}</div>
-                  <div className="helper-text">conflicts: {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
-                  <div className="helper-text">tags: {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
+                  <div className="helper-text top-gap-small">shortlist {shortlistReasons.length > 0 ? shortlistReasons.join(" · ") : "eligible"} · drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
+                  <div className="helper-text">industry {industryExposureChannels.length > 0 ? industryExposureChannels.join(" · ") : "none"} · ticker {tickerExposureChannels.length > 0 ? tickerExposureChannels.join(" · ") : "none"}</div>
+                  <div className="helper-text">flags {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"} · tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
                   <div className="helper-text">cheap scan: trend {typeof components?.trend_score === "number" ? components.trend_score.toFixed(0) : "—"} · momentum {typeof components?.momentum_score === "number" ? components.momentum_score.toFixed(0) : "—"} · breakout {typeof components?.breakout_score === "number" ? components.breakout_score.toFixed(0) : "—"}</div>
-                  {signal.warnings.length > 0 ? <div className="helper-text warning-text top-gap-small">warnings: {signal.warnings.join(" · ")}</div> : null}
+                  <WarningSummary warnings={signal.warnings} />
                 </article>
               );
             })}

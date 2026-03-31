@@ -11,6 +11,7 @@ import {
 import { WorkflowRunResults } from "../components/workflow-run-results";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
+import { ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import type { Job, RunDetailResponse, WatchlistEvaluationPolicy } from "../types";
 import { detailLabel, extractDisplayLabels, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, runTone } from "../utils";
 
@@ -322,13 +323,7 @@ export function RunDetailPage() {
                     {watchlistPolicy.secondary_window_label ? (
                       <div className="helper-text">Secondary window: {watchlistPolicy.secondary_window_label}</div>
                     ) : null}
-                    {watchlistPolicy.warnings.length > 0 ? (
-                      <div className="cluster top-gap-small">
-                        {watchlistPolicy.warnings.map((warning) => (
-                          <Badge key={warning} tone="warning">{warning}</Badge>
-                        ))}
-                      </div>
-                    ) : null}
+                    <WarningSummary warnings={watchlistPolicy.warnings} />
                   </section>
                 ) : null}
 
@@ -659,11 +654,11 @@ export function RunDetailPage() {
                         <div key={item.id ?? item.computed_at} className="top-gap-small">
                           <div className="cluster">
                             <Badge tone={item.warnings.length > 0 ? "warning" : "ok"}>macro context</Badge>
-                            <Badge tone={contextProvenanceTone(item.metadata)}>{contextProvenanceLabel(item.metadata)}</Badge>
-                            {contextSummaryError(item.metadata) ? <Badge tone="warning">summary warning</Badge> : null}
+                            <ProvenanceStrip method={contextSummaryMethod(item.metadata)} backend={contextSummaryBackend(item.metadata)} model={contextSummaryModel(item.metadata)} error={contextSummaryError(item.metadata)} />
                             {item.id ? <Link to={`/context/macro/${item.id}`} className="button-subtle">Open detail</Link> : null}
                           </div>
                           <div className="helper-text top-gap-small">{item.summary_text || "No macro summary stored."}</div>
+                          <WarningSummary warnings={item.warnings} title="Macro warnings" />
                           {contextSummaryError(item.metadata) ? <div className="helper-text top-gap-small">{contextSummaryError(item.metadata)}</div> : null}
                           {lifecycle ? (
                             <div className="helper-text top-gap-small">
@@ -690,6 +685,7 @@ export function RunDetailPage() {
                             {item.id ? <Link to={`/context/industry/${item.id}`} className="button-subtle">Open detail</Link> : null}
                           </div>
                           <div className="helper-text top-gap-small">{item.summary_text || "No industry summary stored."}</div>
+                          <WarningSummary warnings={item.warnings} title="Industry warnings" />
                           {contextSummaryError(item.metadata) ? <div className="helper-text top-gap-small">{contextSummaryError(item.metadata)}</div> : null}
                           {lifecycle ? (
                             <div className="helper-text top-gap-small">

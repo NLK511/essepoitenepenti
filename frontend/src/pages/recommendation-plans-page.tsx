@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { relationshipSummary } from "../components/ticker-relationship-readthrough";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
+import { ScoreBadge } from "../components/decision-surface";
 import type {
   IndustryContextSnapshot,
   MacroContextSnapshot,

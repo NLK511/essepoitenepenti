@@ -25,6 +25,16 @@ Use progressive disclosure so operators see:
 2. one compact explanation second
 3. the raw details only when they expand them
 
+## Implementation status
+
+The first refactor pass is underway in the frontend:
+
+- `frontend/src/components/decision-surface.tsx` now provides shared compact surfaces for scores, metric clusters, warnings, and provenance
+- the context review page now uses the shared score / provenance / warning surfaces for history and summary cards
+- the run detail, recommendation plans, and ticker signals pages are being gradually collapsed toward the same compact patterns
+
+This plan remains the checklist for the remaining declutter work.
+
 ## Core rules
 
 ### 1. One canonical surface per concept
@@ -70,54 +80,22 @@ Create a small set of reusable frontend primitives so pages stop hand-building t
 
 ### `frontend/src/components/decision-surface.tsx`
 
-Purpose: reusable summary chips and explanation blocks for dense decision pages.
+Purpose: reusable compact surfaces for dense decision pages.
 
-Add these exports:
+Current exports:
 
-- `DecisionMetricRow`
+- `ScoreBadge`
+  - one-line labeled score display with optional tone
+- `MetricCluster`
   - compact row for 2–5 key metrics
-  - used for confidence / saliency / attention / coverage / freshness
-- `ScoreChip`
-  - one-line score display with optional tone
-- `InfoChipList`
-  - compact list of chips for small structured arrays
-- `ExpandableDetailBlock`
-  - collapsible wrapper for warnings, diagnostics, and raw JSON
-
-### `frontend/src/components/provenance-strip.tsx`
-
-Purpose: standardize LLM / backend / model / timing display.
-
-Add these exports:
-
-- `ProvenanceStrip`
-  - shows backend, model, timestamp, and status in one line
-- `ProvenanceDetails`
-  - optional expanded section for summary errors, prompt source, and timings
-
-### `frontend/src/components/warning-summary.tsx`
-
-Purpose: one compact warning pattern used everywhere.
-
-Add these exports:
-
 - `WarningSummary`
-  - shows count + short summary line
-- `WarningListExpander`
-  - reveals the full warning list only when expanded
-
-### `frontend/src/components/context-summary.tsx`
-
-Purpose: reusable macro / industry context summary blocks.
-
-Add these exports:
-
+  - warning count plus optional one-line list
+- `ProvenanceStrip`
+  - LLM / fallback provenance strip with optional summary warning flag
 - `ContextScoreSummary`
-  - label, score, saliency, freshness, coverage
-- `ContextEventSummary`
-  - one-line event summary with label, direction, and saliency
-- `ContextEventList`
-  - expanded list of active events / drivers
+  - compact macro / industry score summary row
+
+The long-term shape can still grow into separate provenance / warning / context modules if the patterns continue to expand.
 
 ---
 
