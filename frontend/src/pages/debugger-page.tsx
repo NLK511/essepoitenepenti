@@ -104,8 +104,13 @@ export function DebuggerPage() {
           ) : null}
         </Card>
 
-        <div className="stack-page">
-          {!detail && !error ? <LoadingState message="Select a run to inspect." /> : null}
+        <div className="stack-page debugger-detail-panel">
+          {!detail && !error ? (
+            <Card>
+              <SectionTitle kicker="Selected run" title="Choose a run" subtitle="The right panel stays compact until you select a run from the left-hand list." />
+              <EmptyState message="Select a run to inspect its summary, run context, and persisted objects." />
+            </Card>
+          ) : null}
           {detail ? (
             <>
               <div className="debugger-stat-strip top-gap" aria-label="Selected run summary">
