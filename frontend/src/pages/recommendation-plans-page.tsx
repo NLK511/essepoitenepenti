@@ -822,30 +822,67 @@ export function RecommendationPlansPage() {
                         <tr className="recommendation-plan-expanded-row">
                           <td colSpan={10}>
                             <div className="recommendation-plan-expanded-panel">
-                              <div className="summary-grid">
+                              <div className="summary-grid recommendation-plan-compact-grid">
                                 <div className="summary-item"><span className="summary-label">Action reason</span><span className="summary-value">{actionReason}</span></div>
-                                <div className="summary-item"><span className="summary-label">Action detail</span><span className="summary-value">{actionReasonDetail}</span></div>
                                 <div className="summary-item"><span className="summary-label">Confidence gate</span><span className="summary-value">{effectiveThreshold !== null ? `${effectiveThreshold.toFixed(1)}%` : "—"}</span></div>
                                 <div className="summary-item"><span className="summary-label">Calibration</span><span className="summary-value">{calibrationReviewStatus}</span></div>
                                 <div className="summary-item"><span className="summary-label">Adjust</span><span className="summary-value">{confidenceAdjustment !== null ? `${confidenceAdjustment > 0 ? "+" : ""}${confidenceAdjustment.toFixed(1)} pts` : "—"}</span></div>
-                                <div className="summary-item"><span className="summary-label">Calibration reasons</span><span className="summary-value">{joinSummary(calibrationReasons, "—")}</span></div>
                                 <div className="summary-item"><span className="summary-label">Entry style</span><span className="summary-value">{entryStyle}</span></div>
                                 <div className="summary-item"><span className="summary-label">Stop style</span><span className="summary-value">{stopStyle}</span></div>
                                 <div className="summary-item"><span className="summary-label">Take style</span><span className="summary-value">{targetStyle}</span></div>
                                 <div className="summary-item"><span className="summary-label">Timing</span><span className="summary-value">{timingExpectation}</span></div>
                                 <div className="summary-item"><span className="summary-label">Macro / industry</span><span className="summary-value">{macroContext ? contextProvenanceLabel(macroContext) : "—"} · {industryContext ? contextProvenanceLabel(industryContext) : "—"}</span></div>
-                                <div className="summary-item"><span className="summary-label">Transmission</span><span className="summary-value">drivers {joinSummary(primaryDrivers)} · industry {joinSummary(industryExposureChannels)} · ticker {joinSummary(tickerExposureChannels)}</span></div>
-                                <div className="summary-item"><span className="summary-label">Relationships</span><span className="summary-value">{relationshipSummary(plan)}</span></div>
-                                <div className="summary-item"><span className="summary-label">Conflicts</span><span className="summary-value">{joinSummary(conflictFlags)}</span></div>
-                                <div className="summary-item"><span className="summary-label">Tags</span><span className="summary-value">{joinSummary(transmissionTags)}</span></div>
-                                <div className="summary-item"><span className="summary-label">Outcome bias / regime</span><span className="summary-value">{plan.latest_outcome ? `${detailLabel(plan.latest_outcome.transmission_bias_detail, plan.latest_outcome.transmission_bias_label ?? plan.latest_outcome.transmission_bias, false) ?? "—"} · ${detailLabel(plan.latest_outcome.context_regime_detail, plan.latest_outcome.context_regime_label ?? plan.latest_outcome.context_regime, false) ?? "—"}` : "—"}</span></div>
-                                <div className="summary-item"><span className="summary-label">Invalidation</span><span className="summary-value">{invalidationSummary}</span></div>
-                                <div className="summary-item"><span className="summary-label">Review focus</span><span className="summary-value">{joinSummary(evaluationFocus, "—")}</span></div>
                               </div>
-                              {contextSummaryError(macroContext) ? <div className="helper-text top-gap-small">macro fallback: {contextSummaryError(macroContext)}</div> : null}
-                              {contextSummaryError(industryContext) ? <div className="helper-text top-gap-small">industry fallback: {contextSummaryError(industryContext)}</div> : null}
-                              <div className="helper-text top-gap-small">Thesis: {plan.thesis_summary || "No thesis stored."}</div>
-                              {plan.rationale_summary ? <div className="helper-text top-gap-small">Rationale: {plan.rationale_summary}</div> : null}
+                              <div className="recommendation-plan-detail-stack top-gap-small">
+                                <div className="recommendation-plan-detail-block">
+                                  <div className="recommendation-plan-detail-label">Action detail</div>
+                                  <div className="recommendation-plan-detail-value">{actionReasonDetail}</div>
+                                </div>
+                                <div className="recommendation-plan-detail-block">
+                                  <div className="recommendation-plan-detail-label">Calibration reasons</div>
+                                  <div className="recommendation-plan-detail-value">{joinSummary(calibrationReasons, "—")}</div>
+                                </div>
+                                <div className="recommendation-plan-detail-block">
+                                  <div className="recommendation-plan-detail-label">Transmission</div>
+                                  <div className="recommendation-plan-detail-value">drivers {joinSummary(primaryDrivers)} · industry {joinSummary(industryExposureChannels)} · ticker {joinSummary(tickerExposureChannels)}</div>
+                                </div>
+                                <div className="recommendation-plan-detail-block">
+                                  <div className="recommendation-plan-detail-label">Relationships</div>
+                                  <div className="recommendation-plan-detail-value">{relationshipSummary(plan)}</div>
+                                </div>
+                                <div className="recommendation-plan-detail-block">
+                                  <div className="recommendation-plan-detail-label">Conflicts</div>
+                                  <div className="recommendation-plan-detail-value">{joinSummary(conflictFlags)}</div>
+                                </div>
+                                <div className="recommendation-plan-detail-block">
+                                  <div className="recommendation-plan-detail-label">Tags</div>
+                                  <div className="recommendation-plan-detail-value">{joinSummary(transmissionTags)}</div>
+                                </div>
+                                <div className="recommendation-plan-detail-block">
+                                  <div className="recommendation-plan-detail-label">Outcome bias / regime</div>
+                                  <div className="recommendation-plan-detail-value">{plan.latest_outcome ? `${detailLabel(plan.latest_outcome.transmission_bias_detail, plan.latest_outcome.transmission_bias_label ?? plan.latest_outcome.transmission_bias, false) ?? "—"} · ${detailLabel(plan.latest_outcome.context_regime_detail, plan.latest_outcome.context_regime_label ?? plan.latest_outcome.context_regime, false) ?? "—"}` : "—"}</div>
+                                </div>
+                                <div className="recommendation-plan-detail-block">
+                                  <div className="recommendation-plan-detail-label">Invalidation</div>
+                                  <div className="recommendation-plan-detail-value">{invalidationSummary}</div>
+                                </div>
+                                <div className="recommendation-plan-detail-block">
+                                  <div className="recommendation-plan-detail-label">Review focus</div>
+                                  <div className="recommendation-plan-detail-value">{joinSummary(evaluationFocus, "—")}</div>
+                                </div>
+                                {contextSummaryError(macroContext) ? <div className="helper-text">macro fallback: {contextSummaryError(macroContext)}</div> : null}
+                                {contextSummaryError(industryContext) ? <div className="helper-text">industry fallback: {contextSummaryError(industryContext)}</div> : null}
+                                <div className="recommendation-plan-detail-block">
+                                  <div className="recommendation-plan-detail-label">Thesis</div>
+                                  <div className="recommendation-plan-detail-value">{plan.thesis_summary || "No thesis stored."}</div>
+                                </div>
+                                {plan.rationale_summary ? (
+                                  <div className="recommendation-plan-detail-block">
+                                    <div className="recommendation-plan-detail-label">Rationale</div>
+                                    <div className="recommendation-plan-detail-value">{plan.rationale_summary}</div>
+                                  </div>
+                                ) : null}
+                              </div>
                               {plan.id ? (
                                 <div className="top-gap-small">
                                   <button

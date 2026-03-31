@@ -762,6 +762,38 @@ td {
   word-break: break-word;
 }
 
+.recommendation-plan-expanded-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.recommendation-plan-detail-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.recommendation-plan-detail-block {
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+}
+
+.recommendation-plan-detail-label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-subtle);
+}
+
+.recommendation-plan-detail-value {
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 th {
   color: var(--text-subtle);
   font-size: 12px;
