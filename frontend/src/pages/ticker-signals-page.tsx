@@ -36,6 +36,10 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
+function joinSummary(items: string[], empty = "none"): string {
+  return items.length > 0 ? items.join(" · ") : empty;
+}
+
 export function TickerSignalsPage() {
   const [searchParams, setSearchParams] = useSearchParams({ limit: "100" });
   const [signals, setSignals] = useState<TickerSignalSnapshot[] | null>(null);
@@ -94,7 +98,7 @@ export function TickerSignalsPage() {
       </section>
 
       <Card className="sticky-toolbar">
-        <SectionTitle kicker="Filters" title="Find signal snapshots" subtitle="Filter by ticker or run, then scan the compact cards below to see shortlist outcome, transmission quality, and cheap-scan composition at a glance." />
+        <SectionTitle kicker="Filters" title="Find signal snapshots" subtitle="Filter by ticker or run, then scan the compact cards below to see shortlist outcome and transmission quality at a glance." />
         <form className="form-grid" onSubmit={handleSubmit}>
           <label className="form-field"><span>Ticker</span><input name="ticker" defaultValue={searchParams.get("ticker") ?? ""} placeholder="AAPL" /></label>
           <label className="form-field"><span>Run id</span><input name="run_id" defaultValue={searchParams.get("run_id") ?? ""} placeholder="145" /></label>
@@ -145,8 +149,8 @@ export function TickerSignalsPage() {
                         <Badge tone={directionTone(signal.direction)}>{signal.direction}</Badge>
                         <Badge tone={mode === "deep_analysis" ? "info" : "neutral"}>{mode}</Badge>
                       </div>
-                      <div className="cluster top-gap-small"><ScoreBadge label="Confidence" value={`${signal.confidence_percent.toFixed(1)}%`} tone="info" /><Badge tone="neutral">attention {signal.attention_score.toFixed(1)}</Badge></div>
-                      <div className="helper-text">{formatDate(signal.computed_at)} · horizon {signal.horizon} · run {signal.run_id ? `#${signal.run_id}` : "—"}</div>
+                      <div className="cluster top-gap-small"><ScoreBadge label="Confidence" value={`${signal.confidence_percent.toFixed(1)}%`} tone="info" /><ScoreBadge label="Attention" value={signal.attention_score.toFixed(1)} tone="neutral" /></div>
+                      <div className="helper-text">{formatDate(signal.computed_at)} · horizon {signal.horizon} · run {signal.run_id ? `#${signal.run_id}` : "—"} · mode {mode}</div>
                     </div>
                     <div className="data-card-meta">
                       <Badge tone={shortlisted ? "info" : "neutral"}>{shortlisted ? `shortlisted${shortlistRank !== null ? ` #${shortlistRank}` : ""}` : "not shortlisted"}</Badge>
@@ -161,9 +165,9 @@ export function TickerSignalsPage() {
                     <div className="data-point"><span className="data-point-label">window</span><span className="data-point-value">{expectedWindow}</span></div>
                   </div>
 
-                  <div className="helper-text top-gap-small">shortlist {shortlistReasons.length > 0 ? shortlistReasons.join(" · ") : "eligible"} · drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
-                  <div className="helper-text">industry {industryExposureChannels.length > 0 ? industryExposureChannels.join(" · ") : "none"} · ticker {tickerExposureChannels.length > 0 ? tickerExposureChannels.join(" · ") : "none"}</div>
-                  <div className="helper-text">flags {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"} · tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"} · cheap scan trend {typeof components?.trend_score === "number" ? components.trend_score.toFixed(0) : "—"} / momentum {typeof components?.momentum_score === "number" ? components.momentum_score.toFixed(0) : "—"} / breakout {typeof components?.breakout_score === "number" ? components.breakout_score.toFixed(0) : "—"}</div>
+                  <div className="helper-text top-gap-small">shortlist {joinSummary(shortlistReasons, "eligible")} · drivers {joinSummary(primaryDrivers)} · industry {joinSummary(industryExposureChannels)} · ticker {joinSummary(tickerExposureChannels)}</div>
+                  <div className="helper-text">flags {joinSummary(conflictFlags)} · tags {joinSummary(transmissionTags)} · cheap scan trend {typeof components?.trend_score === "number" ? components.trend_score.toFixed(0) : "—"} / momentum {typeof components?.momentum_score === "number" ? components.momentum_score.toFixed(0) : "—"} / breakout {typeof components?.breakout_score === "number" ? components.breakout_score.toFixed(0) : "—"}</div>
+                  <div className="helper-text">selection {selectionLane ?? "—"} · catalyst proxy {catalystProxyScore !== null ? catalystProxyScore.toFixed(1) : "—"} · alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"} · window {expectedWindow}</div>
                   <WarningSummary warnings={signal.warnings} />
                 </article>
               );

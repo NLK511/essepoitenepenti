@@ -58,7 +58,9 @@ The latest run-detail pass is collapsing the context snapshots into shared compa
 
 The recommendation-plans page is now also being tightened so horizon, setup, calibration, and transmission details use fewer helper lines per row.
 
-The ticker-signals page and the dashboard / ticker overview cards are also in the same cleanup sweep, with the remaining helper-text density being collapsed into fewer lines.
+The ticker-signals page has moved into its cleanup pass, with shortlist, transmission, and cheap-scan details being collapsed into fewer shared summary lines per card.
+
+The dashboard / ticker overview cards are also in the same cleanup sweep, with the remaining helper-text density being collapsed into fewer lines.
 
 A fourth cleanup pass is now focusing on the dashboard and ticker overview cards, especially the repeated provenance and outcome summaries in the overview surfaces. The latest edits collapsed more of that repeated wording into single-line summaries.
 
@@ -247,6 +249,9 @@ The long-term shape can still grow into separate provenance / warning / context 
 
 **Outcome**
 - the page becomes a scanning surface first and a detail surface second
+
+**Status update**
+- the latest pass condensed the signal cards into fewer summary lines for shortlist, transmission, and cheap-scan state
 
 ---
 
