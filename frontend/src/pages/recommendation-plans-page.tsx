@@ -346,8 +346,15 @@ export function RecommendationPlansPage() {
         title="Recommendation plans"
         subtitle="Use this page as the main decision-review surface: filter plans, inspect calibrated confidence, compare cohorts, and queue evaluation runs without digging through raw run payloads."
         actions={
-          <button type="button" className="button" onClick={() => void queueEvaluation()} disabled={evaluating}>
-            {evaluating ? "Queueing…" : "Queue plan evaluation"}
+          <button
+            type="button"
+            className="icon-button icon-button-primary"
+            onClick={() => void queueEvaluation()}
+            disabled={evaluating}
+            title={evaluating ? "Queueing plan evaluation" : "Queue plan evaluation"}
+            aria-label={evaluating ? "Queueing plan evaluation" : "Queue plan evaluation"}
+          >
+            ↻
           </button>
         }
       />
@@ -368,7 +375,11 @@ export function RecommendationPlansPage() {
           <label className="form-field"><span>Run id</span><input name="run_id" defaultValue={searchParams.get("run_id") ?? ""} placeholder="145" /></label>
           <label className="form-field"><span>Setup family</span><select name="setup_family" defaultValue={searchParams.get("setup_family") ?? ""}><option value="">All</option><option value="breakout">breakout</option><option value="continuation">continuation</option><option value="mean_reversion">mean_reversion</option><option value="breakdown">breakdown</option><option value="catalyst_follow_through">catalyst_follow_through</option><option value="macro_beneficiary_loser">macro_beneficiary_loser</option></select></label>
           <label className="form-field"><span>Limit</span><select name="limit" defaultValue={searchParams.get("limit") ?? "100"}><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option></select></label>
-          <div className="form-actions"><button className="button" type="submit">Apply</button></div>
+          <div className="form-actions">
+            <button className="icon-button icon-button-primary" type="submit" title="Apply filters" aria-label="Apply filters">
+              ✓
+            </button>
+          </div>
         </form>
       </Card>
 
@@ -682,7 +693,7 @@ export function RecommendationPlansPage() {
                   <th><HelpLabel label="Latest outcome" tooltip="The most recent stored evaluation result for this plan, if one exists." to={recommendationPlansDoc("outcome-fields")} /></th>
                   <th className="recommendation-plan-thesis-col"><HelpLabel label="Thesis" tooltip="The summary of why the plan exists, what could invalidate it, and what to focus on during review." to={recommendationPlansDoc("explanation-fields")} /></th>
                   <th><HelpLabel label="Run" tooltip="The workflow run that produced this plan." to={glossaryDoc("run")} /></th>
-                  <th>More</th>
+                  <th>⋯</th>
                 </tr>
               </thead>
               <tbody>
@@ -797,11 +808,13 @@ export function RecommendationPlansPage() {
                         <td>
                           <button
                             type="button"
-                            className="button-subtle"
+                            className="icon-button"
                             onClick={() => togglePlanRow(planKey)}
                             aria-expanded={isExpanded}
+                            aria-label={isExpanded ? "Hide details" : "Show details"}
+                            title={isExpanded ? "Hide details" : "Show details"}
                           >
-                            {isExpanded ? "Hide details" : "Show details"}
+                            {isExpanded ? "▴" : "▾"}
                           </button>
                         </td>
                       </tr>
@@ -837,11 +850,13 @@ export function RecommendationPlansPage() {
                                 <div className="top-gap-small">
                                   <button
                                     type="button"
-                                    className="button-subtle"
+                                    className="icon-button icon-button-primary"
                                     disabled={evaluatingPlanId === plan.id}
                                     onClick={() => void queueEvaluation(plan.id ?? undefined)}
+                                    aria-label={evaluatingPlanId === plan.id ? "Queueing plan evaluation" : "Evaluate this plan"}
+                                    title={evaluatingPlanId === plan.id ? "Queueing plan evaluation" : "Evaluate this plan"}
                                   >
-                                    {evaluatingPlanId === plan.id ? "Queueing evaluation…" : "Evaluate this plan"}
+                                    ↻
                                   </button>
                                 </div>
                               ) : null}

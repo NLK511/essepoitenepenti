@@ -724,6 +724,18 @@ table {
   word-break: break-word;
 }
 
+.recommendation-plans-table th,
+.recommendation-plans-table th * {
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
+.recommendation-plans-table .help-label {
+  white-space: nowrap;
+}
+
 th,
 td {
   padding: 14px 12px;
@@ -1855,7 +1867,8 @@ html[data-theme="light"] .content-topbar {
 }
 
 .page-shell {
-  max-width: var(--page-max-width);
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
   padding: 28px 32px 72px;
 }
