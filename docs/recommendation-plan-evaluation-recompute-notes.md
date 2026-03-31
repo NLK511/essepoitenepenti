@@ -28,12 +28,13 @@ This is important because the algorithm is still evolving. If the evaluator impr
 
 ### 1. Point-in-time bar selection
 
-The evaluator now uses `available_at` where possible instead of relying on bar timestamps alone.
+The evaluator now uses `available_at` where possible instead of relying on bar timestamps alone, and it also respects the `as_of` cutoff when loading history for recomputes.
 
 That matters because:
 - a bar’s timestamp is not always the same as when it became available
 - daily data and intraday data have different visibility rules
 - persisted historical bars need to be filtered by availability, not just by date
+- recomputes should not accidentally peek past the requested `as_of` timestamp
 
 ### 2. Daily vs intraday selection
 
