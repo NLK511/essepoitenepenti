@@ -659,6 +659,18 @@ export function RecommendationPlansPage() {
         {plans ? (
           <div className="table-wrap">
             <table className="recommendation-plans-table">
+              <colgroup>
+                <col style={{ width: "96px" }} />
+                <col style={{ width: "160px" }} />
+                <col style={{ width: "100px" }} />
+                <col style={{ width: "170px" }} />
+                <col style={{ width: "220px" }} />
+                <col style={{ width: "190px" }} />
+                <col style={{ width: "150px" }} />
+                <col style={{ width: "340px" }} />
+                <col style={{ width: "96px" }} />
+                <col style={{ width: "96px" }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th><HelpLabel label="Computed" tooltip="When this recommendation plan was persisted." to={recommendationPlansDoc("results-table")} /></th>

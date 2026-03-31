@@ -714,6 +714,14 @@ table {
 
 .recommendation-plans-table {
   table-layout: fixed;
+  min-width: 1618px;
+}
+
+.recommendation-plans-table th,
+.recommendation-plans-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
 }
 
 th,
@@ -725,12 +733,12 @@ td {
 }
 
 .recommendation-plan-thesis-col {
-  width: 28%;
+  width: 340px;
 }
 
 .recommendation-plans-table th.recommendation-plan-thesis-col,
 .recommendation-plans-table td.recommendation-plan-thesis-col {
-  min-width: 320px;
+  min-width: 340px;
 }
 
 .recommendation-plan-thesis-preview {
