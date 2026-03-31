@@ -203,17 +203,23 @@ class JobExecutionService:
         if artifact:
             summary["scope"] = artifact.get("scope")
             summary["trigger"] = artifact.get("trigger")
+        timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
+        debug_bundle = self._build_evaluation_debug_bundle(run, result, timing, summary, artifact)
+        summary["debug_bundle"] = debug_bundle
+        artifact["debug_bundle"] = debug_bundle
         self.runs.set_summary(run.id or 0, summary)
+        self.runs.set_artifact(run.id or 0, artifact)
         timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
 
         self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
         logger.info(
-            "job execution evaluation finished: run_id=%s job_id=%s evaluation_seconds=%s persistence_seconds=%s total_execution_seconds=%s",
+            "job execution evaluation finished: run_id=%s job_id=%s evaluation_seconds=%s persistence_seconds=%s total_execution_seconds=%s debug_bundle_chars=%s",
             run.id,
             run.job_id,
             timing["evaluation_seconds"],
             timing["persistence_seconds"],
             timing["total_execution_seconds"],
+            len(debug_bundle),
         )
         return [], timing
 
@@ -544,6 +550,33 @@ class JobExecutionService:
             "watchlist_recommendation_plan_outcomes": result.watchlist_recommendation_plan_outcomes,
             "output": result.output,
         }
+
+    @classmethod
+    def _build_evaluation_debug_bundle(
+        cls,
+        run: Run,
+        result: EvaluationRunResult,
+        timing: dict[str, object],
+        summary: dict[str, object],
+        artifact: dict[str, object],
+    ) -> str:
+        scheduled_for = cls._normalize_datetime(run.scheduled_for)
+        lines: list[str] = [
+            f"run_id={run.id}",
+            f"job_id={run.job_id}",
+            f"job_type={run.job_type.value}",
+            f"scheduled_for={scheduled_for.isoformat() if scheduled_for is not None else 'None'}",
+            f"summary={json.dumps(summary, sort_keys=True, default=str)}",
+            f"artifact={json.dumps(artifact, sort_keys=True, default=str)}",
+            f"timing={json.dumps(timing, sort_keys=True, default=str)}",
+            "decision_trace:",
+        ]
+        output = (result.output or "").strip()
+        if output:
+            lines.append(output)
+        else:
+            lines.append("<empty>")
+        return "\n".join(lines)
 
     @staticmethod
     def _get_run_artifact(run: Run) -> dict[str, object]:
