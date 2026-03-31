@@ -183,7 +183,7 @@ class RecommendationPlanEvaluationService:
             )
             try:
                 if needs_daily:
-                    daily_data = self._load_price_history(ticker, start_time, end_time, intraday_only=False)
+                    daily_data = self._load_price_history(ticker, start_time, end_time, intraday_only=False, require_full_coverage=as_of is not None)
                     cache[(ticker, False)] = daily_data.sort_index() if daily_data is not None and not daily_data.empty else None
                     logger.debug(
                         "price history loaded: ticker=%s mode=daily rows=%s first=%s last=%s",
@@ -195,7 +195,7 @@ class RecommendationPlanEvaluationService:
                     if cache[(ticker, False)] is None:
                         errors.append(f"{ticker}: daily price history is unavailable")
                 if needs_intraday:
-                    intraday_data = self._load_price_history(ticker, start_time, end_time, intraday_only=True)
+                    intraday_data = self._load_price_history(ticker, start_time, end_time, intraday_only=True, require_full_coverage=as_of is not None)
                     cache[(ticker, True)] = intraday_data.sort_index() if intraday_data is not None and not intraday_data.empty else None
                     logger.debug(
                         "price history loaded: ticker=%s mode=intraday rows=%s first=%s last=%s",
@@ -712,6 +712,7 @@ class RecommendationPlanEvaluationService:
         end_date: datetime,
         *,
         intraday_only: bool = False,
+        require_full_coverage: bool = False,
     ) -> pd.DataFrame:
         logger.debug(
             "load_price_history request: ticker=%s intraday_only=%s start=%s end=%s",
@@ -722,15 +723,25 @@ class RecommendationPlanEvaluationService:
         )
         persisted = self._load_persisted_price_history(ticker, start_date, end_date, intraday_only=intraday_only)
         if persisted is not None and not persisted.empty:
-            logger.debug(
-                "load_price_history source=persisted ticker=%s intraday_only=%s rows=%s first=%s last=%s",
+            if not require_full_coverage or self._persisted_history_covers_window(persisted, end_date=end_date, intraday_only=intraday_only):
+                logger.debug(
+                    "load_price_history source=persisted ticker=%s intraday_only=%s rows=%s first=%s last=%s",
+                    ticker,
+                    intraday_only,
+                    len(persisted),
+                    self._format_datetime(persisted.index[0]),
+                    self._format_datetime(persisted.index[-1]),
+                )
+                return persisted
+            logger.info(
+                "load_price_history persisted history incomplete; falling back to yfinance ticker=%s intraday_only=%s rows=%s first=%s last=%s end=%s",
                 ticker,
                 intraday_only,
                 len(persisted),
                 self._format_datetime(persisted.index[0]),
                 self._format_datetime(persisted.index[-1]),
+                self._format_datetime(end_date),
             )
-            return persisted
         logger.debug(
             "load_price_history source=yfinance ticker=%s intraday_only=%s",
             ticker,
@@ -762,6 +773,22 @@ class RecommendationPlanEvaluationService:
             if frame is not None and not frame.empty:
                 return frame
         return None
+
+    @staticmethod
+    def _persisted_history_covers_window(data: pd.DataFrame, *, end_date: datetime, intraday_only: bool) -> bool:
+        if data.empty:
+            return False
+        normalized_end = RecommendationPlanEvaluationService._normalize_datetime(end_date)
+        if normalized_end is None:
+            return False
+        last_available = RecommendationPlanEvaluationService._normalize_datetime(data.iloc[-1].get("available_at"))
+        if last_available is None:
+            last_available = RecommendationPlanEvaluationService._normalize_datetime(data.index[-1])
+        if last_available is None:
+            return False
+        if intraday_only:
+            return last_available >= normalized_end
+        return last_available.date() >= normalized_end.date()
 
     @staticmethod
     def _bars_to_frame(bars: list[HistoricalMarketBar], *, start_date: datetime) -> pd.DataFrame | None:

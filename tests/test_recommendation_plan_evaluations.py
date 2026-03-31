@@ -552,6 +552,55 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
         self.assertTrue(stored[0].stop_loss_hit)
         self.assertFalse(stored[0].take_profit_hit)
 
+    def test_run_evaluation_falls_back_to_yfinance_when_persisted_daily_history_is_incomplete(self) -> None:
+        self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="EOG",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=67.95,
+                entry_price_low=151.8925,
+                entry_price_high=151.8925,
+                stop_loss=149.0889,
+                take_profit=156.2066,
+                signal_breakdown={"setup_family": "catalyst_follow_through"},
+                computed_at=datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc),
+            )
+        )
+        persisted_history = pd.DataFrame(
+            {
+                "Open": [151.03],
+                "High": [152.18],
+                "Low": [148.75],
+                "Close": [150.98],
+                "available_at": pd.to_datetime(["2026-03-30T23:59:59Z"], utc=True),
+            },
+            index=pd.to_datetime(["2026-03-30T00:00:00Z"], utc=True),
+        )
+        downloaded_history = pd.DataFrame(
+            {
+                "Open": [151.03],
+                "High": [152.18],
+                "Low": [148.75],
+                "Close": [150.98],
+                "available_at": pd.to_datetime(["2026-03-31T23:59:59Z"], utc=True),
+            },
+            index=pd.to_datetime(["2026-03-31T00:00:00Z"], utc=True),
+        )
+        with patch.object(RecommendationPlanEvaluationService, "_load_persisted_price_history", return_value=persisted_history) as persisted_mock:
+            with patch.object(RecommendationPlanEvaluationService, "_download_price_history", return_value=downloaded_history) as download_mock:
+                result = RecommendationPlanEvaluationService(self.session).run_evaluation(as_of=datetime(2026, 3, 31, 21, 18, 53, 29509, tzinfo=timezone.utc))
+
+        self.assertEqual(result.evaluated_recommendation_plans, 1)
+        self.assertEqual(result.loss_recommendation_plan_outcomes, 1)
+        persisted_mock.assert_called_once()
+        download_mock.assert_called_once()
+        stored = self.outcomes.list_outcomes(ticker="EOG", limit=10)
+        self.assertEqual(stored[0].outcome, "loss")
+        self.assertTrue(stored[0].entry_touched)
+        self.assertTrue(stored[0].stop_loss_hit)
+        self.assertFalse(stored[0].take_profit_hit)
+
     def test_run_evaluation_uses_as_of_as_the_price_history_upper_bound(self) -> None:
         self.plan_repository.create_plan(
             RecommendationPlan(
@@ -575,6 +624,7 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
             end_date: datetime,
             *,
             intraday_only: bool = False,
+            require_full_coverage: bool = False,
         ) -> pd.DataFrame:
             self.assertEqual(ticker, "EOG")
             captured.append((start_date, end_date, intraday_only))
