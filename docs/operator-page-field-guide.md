@@ -537,6 +537,7 @@ Recent macro and industry context snapshots, plus the transitional macro/industr
 - **Expires**: freshness boundary
 - **Drivers**: main reasons behind the snapshot
 - **Coverage**: how much source material backed it
+- **Saliency**: the normalized 0-1 prominence score for the strongest extracted event; it should vary across events rather than flattening to 1.0
 - **Diagnostics**: provider errors, warnings, or source notes
 
 ### How to use it

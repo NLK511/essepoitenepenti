@@ -29,8 +29,8 @@ The main sections are:
 This section mixes live ticker sentiment with shared support-snapshot inputs.
 
 Typical shape:
-- `macro`: shared macro support snapshot data with fields such as `snapshot_id`, `subject_key`, `label`, `score`, and freshness/source metadata; when available it may also carry `context_snapshot_id`, `context_summary`, `context_events`, `context_lifecycle`, and contradiction labels from the redesign-native macro context object. The `score` is a heuristic confidence percent on a 0-100 scale, not a probability.
-- `industry`: shared industry support snapshot data with the same kind of fields and optional context-object metadata. The `score` follows the same 0-100 heuristic confidence scale.
+- `macro`: shared macro support snapshot data with fields such as `snapshot_id`, `subject_key`, `label`, `score`, and freshness/source metadata; when available it may also carry `context_snapshot_id`, `context_summary`, `context_events`, `context_lifecycle`, and contradiction labels from the redesign-native macro context object. The `score` is a heuristic confidence percent on a 0-100 scale, not a probability. Extracted context events also carry `saliency_weight`, a normalized 0-1 prominence score derived from source priority, recency, and match strength.
+- `industry`: shared industry support snapshot data with the same kind of fields and optional context-object metadata. The `score` follows the same 0-100 heuristic confidence scale, and its extracted drivers also carry `saliency_weight` on the same normalized 0-1 scale.
 - `ticker`: live per-proposal ticker sentiment
 - `enhanced`: the fused sentiment result used by scoring, plus component contributions
 - `coverage_insights` / `keyword_hits`: transparency fields for sparse or neutral coverage
