@@ -715,21 +715,17 @@ export function RecommendationPlansPage() {
                         <div className="helper-text">{actionReasonDetail}</div>
                       </td>
                       <td>
-                        <div>{plan.confidence_percent.toFixed(1)}%</div>
-                        <div className="helper-text top-gap-small">raw {rawConfidence !== null ? `${rawConfidence.toFixed(1)}%` : "—"} · calibrated {calibratedConfidence !== null ? `${calibratedConfidence.toFixed(1)}%` : "—"}</div>
-                        <div className="helper-text">adjustment {confidenceAdjustment !== null ? `${confidenceAdjustment > 0 ? "+" : ""}${confidenceAdjustment.toFixed(1)} pts` : "—"}</div>
-                        <div className="helper-text">threshold {effectiveThreshold !== null ? `${effectiveThreshold.toFixed(1)}%` : "—"}</div>
-                        <div className="helper-text">calibration {calibrationReviewStatus}</div>
+                        <ScoreBadge label="Confidence" value={`${plan.confidence_percent.toFixed(1)}%`} tone="info" />
+                        <div className="helper-text top-gap-small">raw {rawConfidence !== null ? `${rawConfidence.toFixed(1)}%` : "—"} · calibrated {calibratedConfidence !== null ? `${calibratedConfidence.toFixed(1)}%` : "—"} · adjust {confidenceAdjustment !== null ? `${confidenceAdjustment > 0 ? "+" : ""}${confidenceAdjustment.toFixed(1)} pts` : "—"}</div>
+                        <div className="helper-text">threshold {effectiveThreshold !== null ? `${effectiveThreshold.toFixed(1)}%` : "—"} · calibration {calibrationReviewStatus}</div>
                         <div className="helper-text">horizon {calibrationSliceSummary(calibrationReview, "horizon")}</div>
                         <div className="helper-text">setup {calibrationSliceSummary(calibrationReview, "setup_family")}</div>
                         <div className="helper-text">bucket {calibrationSliceSummary(calibrationReview, "confidence_bucket")}</div>
                         <div className="helper-text">reasons {calibrationReasons.length > 0 ? calibrationReasons.join(" · ") : "none"}</div>
                       </td>
                       <td>
-                        <div className="helper-text">entry {plan.entry_price_low ?? "—"}{plan.entry_price_high !== null && plan.entry_price_high !== plan.entry_price_low ? ` – ${plan.entry_price_high}` : ""}</div>
-                        <div className="helper-text">entry style {entryStyle}</div>
-                        <div className="helper-text">stop {plan.stop_loss ?? "—"} · {stopStyle}</div>
-                        <div className="helper-text">take {plan.take_profit ?? "—"} · {targetStyle}</div>
+                        <div className="helper-text">entry {plan.entry_price_low ?? "—"}{plan.entry_price_high !== null && plan.entry_price_high !== plan.entry_price_low ? ` – ${plan.entry_price_high}` : ""} · style {entryStyle}</div>
+                        <div className="helper-text">stop {plan.stop_loss ?? "—"} · {stopStyle} · take {plan.take_profit ?? "—"} · {targetStyle}</div>
                         <div className="helper-text">timing {timingExpectation}</div>
                       </td>
                       <td>
@@ -740,13 +736,10 @@ export function RecommendationPlansPage() {
                         </div>
                         {contextSummaryError(macroContext) ? <div className="helper-text top-gap-small">macro fallback: {contextSummaryError(macroContext)}</div> : null}
                         {contextSummaryError(industryContext) ? <div className="helper-text top-gap-small">industry fallback: {contextSummaryError(industryContext)}</div> : null}
-                        <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"}</div>
-                        <div className="helper-text">window {expectedWindow}</div>
+                        <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"} · window {expectedWindow}</div>
                         <div className="helper-text">drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
-                        <div className="helper-text">industry channels {industryExposureChannels.length > 0 ? industryExposureChannels.join(" · ") : "none"}</div>
-                        <div className="helper-text">ticker channels {tickerExposureChannels.length > 0 ? tickerExposureChannels.join(" · ") : "none"}</div>
-                        <div className="helper-text">ticker relationships {relationshipSummary(plan)}</div>
-                        <div className="helper-text">conflicts {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
+                        <div className="helper-text">industry {industryExposureChannels.length > 0 ? industryExposureChannels.join(" · ") : "none"} · ticker {tickerExposureChannels.length > 0 ? tickerExposureChannels.join(" · ") : "none"}</div>
+                        <div className="helper-text">relationships {relationshipSummary(plan)} · conflicts {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
                         <div className="helper-text">tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
                       </td>
                       <td>
@@ -756,9 +749,8 @@ export function RecommendationPlansPage() {
                               <Badge tone={plan.latest_outcome.outcome === "win" ? "ok" : plan.latest_outcome.outcome === "loss" ? "danger" : "neutral"}>{plan.latest_outcome.outcome}</Badge>
                               <span className="helper-text">{plan.latest_outcome.status}</span>
                             </div>
-                            <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}%</div>
+                            <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}% · MFE {plan.latest_outcome.max_favorable_excursion ?? "—"}% · MAE {plan.latest_outcome.max_adverse_excursion ?? "—"}%</div>
                             <div className="helper-text">bias {detailLabel(plan.latest_outcome.transmission_bias_detail, plan.latest_outcome.transmission_bias_label ?? plan.latest_outcome.transmission_bias, false) ?? "—"} · regime {detailLabel(plan.latest_outcome.context_regime_detail, plan.latest_outcome.context_regime_label ?? plan.latest_outcome.context_regime, false) ?? "—"}</div>
-                            <div className="helper-text top-gap-small">MFE {plan.latest_outcome.max_favorable_excursion ?? "—"}% · MAE {plan.latest_outcome.max_adverse_excursion ?? "—"}%</div>
                           </>
                         ) : (
                           <div className="helper-text">No outcome stored yet.</div>
@@ -767,8 +759,7 @@ export function RecommendationPlansPage() {
                       <td>
                         <div>{plan.thesis_summary || "No thesis stored."}</div>
                         {plan.rationale_summary ? <div className="helper-text top-gap-small">{plan.rationale_summary}</div> : null}
-                        <div className="helper-text top-gap-small">invalidation {invalidationSummary}</div>
-                        <div className="helper-text">review focus {evaluationFocus.length > 0 ? evaluationFocus.join(" · ") : "—"}</div>
+                        <div className="helper-text top-gap-small">invalidation {invalidationSummary} · review {evaluationFocus.length > 0 ? evaluationFocus.join(" · ") : "—"}</div>
                         {plan.id ? (
                           <div className="helper-text top-gap-small">
                             <button

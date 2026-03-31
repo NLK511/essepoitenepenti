@@ -35,6 +35,16 @@ The first refactor pass is underway in the frontend:
 
 This plan remains the checklist for the remaining declutter work.
 
+## Second-pass status
+
+The next pass is focusing on the remaining table-density and row-density issues, especially:
+
+- recommendation-plan confidence / execution / transmission columns
+- run-detail plan and context rows
+- any remaining shortlist / transmission helper-text duplication in signal tables
+
+The goal is to keep the pages rich, but make each row say one thing instead of five versions of the same thing.
+
 ## Core rules
 
 ### 1. One canonical surface per concept
