@@ -532,7 +532,7 @@ Recent macro and industry context snapshots, plus the transitional macro/industr
 
 ### Important snapshot fields
 - **Label**: high-level polarity or state
-- **Score**: numeric support value stored by the refresh artifact
+- **Score**: numeric support value stored by the refresh artifact; this is a heuristic confidence score on a 0-100 scale, not a probability, and it can now use the full range instead of clustering at a fixed ceiling
 - **Computed**: when it was produced
 - **Expires**: freshness boundary
 - **Drivers**: main reasons behind the snapshot
