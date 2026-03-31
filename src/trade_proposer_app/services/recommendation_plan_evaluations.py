@@ -183,7 +183,14 @@ class RecommendationPlanEvaluationService:
             )
             try:
                 if needs_daily:
-                    daily_data = self._load_price_history(ticker, start_time, end_time, intraday_only=False, require_full_coverage=as_of is not None)
+                    daily_data = self._load_price_history(
+                        ticker,
+                        start_time,
+                        end_time,
+                        intraday_only=False,
+                        require_full_coverage=as_of is not None,
+                        plan_ids=[plan.id for plan in grouped_plans if plan.id is not None],
+                    )
                     cache[(ticker, False)] = daily_data.sort_index() if daily_data is not None and not daily_data.empty else None
                     logger.debug(
                         "price history loaded: ticker=%s mode=daily rows=%s first=%s last=%s",
@@ -195,7 +202,14 @@ class RecommendationPlanEvaluationService:
                     if cache[(ticker, False)] is None:
                         errors.append(f"{ticker}: daily price history is unavailable")
                 if needs_intraday:
-                    intraday_data = self._load_price_history(ticker, start_time, end_time, intraday_only=True, require_full_coverage=as_of is not None)
+                    intraday_data = self._load_price_history(
+                        ticker,
+                        start_time,
+                        end_time,
+                        intraday_only=True,
+                        require_full_coverage=as_of is not None,
+                        plan_ids=[plan.id for plan in grouped_plans if plan.id is not None],
+                    )
                     cache[(ticker, True)] = intraday_data.sort_index() if intraday_data is not None and not intraday_data.empty else None
                     logger.debug(
                         "price history loaded: ticker=%s mode=intraday rows=%s first=%s last=%s",
@@ -713,6 +727,7 @@ class RecommendationPlanEvaluationService:
         *,
         intraday_only: bool = False,
         require_full_coverage: bool = False,
+        plan_ids: list[int] | None = None,
     ) -> pd.DataFrame:
         logger.debug(
             "load_price_history request: ticker=%s intraday_only=%s start=%s end=%s",
@@ -734,8 +749,9 @@ class RecommendationPlanEvaluationService:
                 )
                 return persisted
             logger.info(
-                "load_price_history persisted history incomplete; falling back to yfinance ticker=%s intraday_only=%s rows=%s first=%s last=%s end=%s",
+                "load_price_history persisted history incomplete; falling back to yfinance ticker=%s plan_ids=%s intraday_only=%s rows=%s first=%s last=%s end=%s",
                 ticker,
+                plan_ids,
                 intraday_only,
                 len(persisted),
                 self._format_datetime(persisted.index[0]),

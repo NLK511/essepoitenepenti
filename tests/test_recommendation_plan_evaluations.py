@@ -625,6 +625,7 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
             *,
             intraday_only: bool = False,
             require_full_coverage: bool = False,
+            plan_ids: list[int] | None = None,
         ) -> pd.DataFrame:
             self.assertEqual(ticker, "EOG")
             captured.append((start_date, end_date, intraday_only))
