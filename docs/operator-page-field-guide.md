@@ -532,11 +532,24 @@ Recent macro and industry context snapshots, plus the transitional macro/industr
 
 ### Important snapshot fields
 - **Label**: high-level polarity or state
-- **Score**: numeric support value stored by the refresh artifact
+- **Score**: numeric support value stored by the refresh artifact; this is a heuristic confidence score on a 0-100 scale, not a probability, and it can now use the full range instead of clustering at a fixed ceiling
 - **Computed**: when it was produced
 - **Expires**: freshness boundary
 - **Drivers**: main reasons behind the snapshot
 - **Coverage**: how much source material backed it
+- **Saliency**: the normalized 0-1 prominence score for the strongest extracted event; it should vary across events rather than flattening to 1.0
+
+  Quick interpretation:
+
+  | Saliency | Read |
+  |---:|---|
+  | `0.00–0.20` | weak or tentative signal |
+  | `0.20–0.45` | light signal, worth watching |
+  | `0.45–0.70` | meaningful / moderate prominence |
+  | `0.70–0.90` | strong signal |
+  | `0.90–1.00` | dominant or unusually concentrated signal |
+
+  These are guide rails, not hard gates.
 - **Diagnostics**: provider errors, warnings, or source notes
 
 ### How to use it

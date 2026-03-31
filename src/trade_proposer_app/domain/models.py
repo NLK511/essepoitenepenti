@@ -662,6 +662,13 @@ class HistoricalReplayBatch(BaseModel):
     name: str
     status: str = "planned"
     mode: str = "research"
+    universe_mode: str = "explicit"
+    universe_preset: str | None = None
+    tickers_json: str = "[]"
+    entry_timing: str = "next_open"
+    price_provider: str = "yahoo"
+    price_source_tier: str = "research"
+    bar_timeframe: str = "1d"
     as_of_start: datetime
     as_of_end: datetime
     cadence: str = "daily"
@@ -687,5 +694,25 @@ class HistoricalReplaySlice(BaseModel):
     input_summary_json: str = "{}"
     output_summary_json: str = "{}"
     timing_json: str = "{}"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class HistoricalMarketBar(BaseModel):
+    id: int | None = None
+    ticker: str
+    timeframe: str = "1d"
+    bar_time: datetime
+    available_at: datetime | None = None
+    open_price: float
+    high_price: float
+    low_price: float
+    close_price: float
+    volume: float = 0.0
+    adjusted_close: float | None = None
+    source: str = ""
+    source_tier: str = "tier_a"
+    point_in_time_confidence: float = 1.0
+    metadata_json: str = "{}"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

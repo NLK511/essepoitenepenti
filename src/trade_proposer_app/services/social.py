@@ -69,6 +69,14 @@ class SocialProvider:
     def fetch_subject(self, subject_key: str, queries: list[str], *, scope_tag: str) -> SignalBundle:
         raise NotImplementedError
 
+    @staticmethod
+    def _normalize_datetime(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
 
 class NitterProvider(SocialProvider):
     name: ClassVar[str] = "Nitter"

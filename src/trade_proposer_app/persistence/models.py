@@ -93,6 +93,13 @@ class HistoricalReplayBatchRecord(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(160), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="planned", index=True)
     mode: Mapped[str] = mapped_column(String(32), default="research", index=True)
+    universe_mode: Mapped[str] = mapped_column(String(32), default="explicit")
+    universe_preset: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    tickers_json: Mapped[str] = mapped_column(Text, default="[]")
+    entry_timing: Mapped[str] = mapped_column(String(32), default="next_open")
+    price_provider: Mapped[str] = mapped_column(String(64), default="yahoo")
+    price_source_tier: Mapped[str] = mapped_column(String(32), default="research")
+    bar_timeframe: Mapped[str] = mapped_column(String(16), default="1d")
     as_of_start: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     as_of_end: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
     cadence: Mapped[str] = mapped_column(String(32), default="daily")
@@ -119,6 +126,27 @@ class HistoricalReplaySliceRecord(Base, TimestampMixin):
     input_summary_json: Mapped[str] = mapped_column(Text, default="{}")
     output_summary_json: Mapped[str] = mapped_column(Text, default="{}")
     timing_json: Mapped[str] = mapped_column(Text, default="{}")
+
+
+class HistoricalMarketBarRecord(Base, TimestampMixin):
+    __tablename__ = "historical_market_bars"
+    __table_args__ = (UniqueConstraint("ticker", "timeframe", "bar_time", name="uq_historical_market_bars_ticker_timeframe_bar_time"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(32), index=True)
+    timeframe: Mapped[str] = mapped_column(String(16), default="1d", index=True)
+    bar_time: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    available_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    open_price: Mapped[float] = mapped_column(Float, default=0.0)
+    high_price: Mapped[float] = mapped_column(Float, default=0.0)
+    low_price: Mapped[float] = mapped_column(Float, default=0.0)
+    close_price: Mapped[float] = mapped_column(Float, default=0.0)
+    volume: Mapped[float] = mapped_column(Float, default=0.0)
+    adjusted_close: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str] = mapped_column(String(64), default="")
+    source_tier: Mapped[str] = mapped_column(String(32), default="tier_a")
+    point_in_time_confidence: Mapped[float] = mapped_column(Float, default=1.0)
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
 
 
 class AppSettingRecord(Base, TimestampMixin):

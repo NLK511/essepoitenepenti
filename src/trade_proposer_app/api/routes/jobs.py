@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.domain.models import Job, Run, Watchlist
+from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
@@ -17,6 +18,7 @@ from trade_proposer_app.services.builders import (
     create_macro_support_service,
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
+from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
@@ -167,6 +169,7 @@ async def execute_job(job_id: int, session: Session = Depends(get_db_session)) -
             historical_replays=HistoricalReplayRepository(session),
             jobs=JobRepository(session),
             runs=RunRepository(session),
+            historical_market_data=HistoricalMarketDataService(HistoricalMarketDataRepository(session)),
         ),
     )
     return service.enqueue_job(job_id)

@@ -369,7 +369,7 @@ class JobExecutionService:
 
         execution_phase_started = perf_counter()
         try:
-            input_summary, output_summary = self.historical_replay.build_stub_execution_payload(batch_id, slice_id)
+            input_summary, output_summary = self.historical_replay.build_slice_execution_payload(batch_id, slice_id)
             timing["replay_execution_seconds"] = round(perf_counter() - execution_phase_started, 6)
         except Exception as exc:
             timing["replay_execution_seconds"] = round(perf_counter() - execution_phase_started, 6)
@@ -384,8 +384,12 @@ class JobExecutionService:
             "as_of": input_summary.get("as_of"),
             "mode": input_summary.get("mode"),
             "cadence": input_summary.get("cadence"),
+            "entry_timing": input_summary.get("entry_timing"),
+            "price_provider": input_summary.get("price_provider"),
+            "price_source_tier": input_summary.get("price_source_tier"),
             "status": "completed",
             "message": output_summary.get("message"),
+            "coverage_ratio": output_summary.get("coverage_ratio"),
         }
         replay_artifact = {
             **artifact,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import math
 import re
 
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
@@ -190,7 +191,9 @@ def extract_ranked_events(
                 "trade_source_count": trade_count,
                 "major_source_count": major_count,
                 "event_score": event_score,
-                "saliency_weight": round(min(1.0, event_score / 3.2), 3),
+                # Spread saliency across the 0-1 range instead of flattening most
+                # multi-source events to 1.0. A score of ~4.5 now maps to ~0.63.
+                "saliency_weight": round(1.0 - math.exp(-event_score / 4.5), 3),
                 "regime_tags": list(definition.tags),
                 "transmission_channels": list(definition.transmission_channels),
                 "beneficiary_tags": list(definition.beneficiary_tags),

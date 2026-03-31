@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -17,6 +17,13 @@ class HistoricalReplayRepository:
         *,
         name: str,
         mode: str,
+        universe_mode: str,
+        universe_preset: str | None,
+        tickers: list[str],
+        entry_timing: str,
+        price_provider: str,
+        price_source_tier: str,
+        bar_timeframe: str,
         as_of_start: datetime,
         as_of_end: datetime,
         cadence: str,
@@ -28,6 +35,13 @@ class HistoricalReplayRepository:
             name=name,
             status=status,
             mode=mode,
+            universe_mode=universe_mode,
+            universe_preset=universe_preset,
+            tickers_json=self._serialize_list(tickers),
+            entry_timing=entry_timing,
+            price_provider=price_provider,
+            price_source_tier=price_source_tier,
+            bar_timeframe=bar_timeframe,
             as_of_start=self._normalize(as_of_start),
             as_of_end=self._normalize(as_of_end),
             cadence=cadence,
@@ -86,18 +100,20 @@ class HistoricalReplayRepository:
         existing = self.list_slices(batch_id)
         if existing:
             return existing
-        cursor = batch.as_of_start
+        cursor_date = batch.as_of_start.date()
+        end_date = batch.as_of_end.date()
         created: list[HistoricalReplaySlice] = []
-        while cursor <= batch.as_of_end:
+        while cursor_date <= end_date:
+            slice_as_of = datetime.combine(cursor_date, time(23, 59, 59), tzinfo=timezone.utc)
             record = HistoricalReplaySliceRecord(
                 replay_batch_id=batch_id,
-                as_of=self._normalize(cursor),
+                as_of=self._normalize(slice_as_of),
                 status="planned",
             )
             self.session.add(record)
             self.session.flush()
             created.append(self._to_slice_model(record))
-            cursor = cursor + timedelta(days=1)
+            cursor_date = cursor_date + timedelta(days=1)
         self.session.commit()
         return created
 
@@ -197,6 +213,10 @@ class HistoricalReplayRepository:
         return json.dumps(payload, indent=2, sort_keys=True)
 
     @staticmethod
+    def _serialize_list(payload: list[object]) -> str:
+        return json.dumps(payload, indent=2)
+
+    @staticmethod
     def _normalize(value: datetime) -> datetime:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
@@ -209,6 +229,13 @@ class HistoricalReplayRepository:
             name=record.name,
             status=record.status,
             mode=record.mode,
+            universe_mode=getattr(record, "universe_mode", "explicit"),
+            universe_preset=getattr(record, "universe_preset", None),
+            tickers_json=getattr(record, "tickers_json", "[]") or "[]",
+            entry_timing=getattr(record, "entry_timing", "next_open"),
+            price_provider=getattr(record, "price_provider", "yahoo"),
+            price_source_tier=getattr(record, "price_source_tier", "research"),
+            bar_timeframe=getattr(record, "bar_timeframe", "1d"),
             as_of_start=cls._normalize(record.as_of_start),
             as_of_end=cls._normalize(record.as_of_end),
             cadence=record.cadence,
