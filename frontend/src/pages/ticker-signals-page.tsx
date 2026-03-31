@@ -163,8 +163,7 @@ export function TickerSignalsPage() {
 
                   <div className="helper-text top-gap-small">shortlist {shortlistReasons.length > 0 ? shortlistReasons.join(" · ") : "eligible"} · drivers {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
                   <div className="helper-text">industry {industryExposureChannels.length > 0 ? industryExposureChannels.join(" · ") : "none"} · ticker {tickerExposureChannels.length > 0 ? tickerExposureChannels.join(" · ") : "none"}</div>
-                  <div className="helper-text">flags {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"} · tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
-                  <div className="helper-text">cheap scan: trend {typeof components?.trend_score === "number" ? components.trend_score.toFixed(0) : "—"} · momentum {typeof components?.momentum_score === "number" ? components.momentum_score.toFixed(0) : "—"} · breakout {typeof components?.breakout_score === "number" ? components.breakout_score.toFixed(0) : "—"}</div>
+                  <div className="helper-text">flags {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"} · tags {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"} · cheap scan trend {typeof components?.trend_score === "number" ? components.trend_score.toFixed(0) : "—"} / momentum {typeof components?.momentum_score === "number" ? components.momentum_score.toFixed(0) : "—"} / breakout {typeof components?.breakout_score === "number" ? components.breakout_score.toFixed(0) : "—"}</div>
                   <WarningSummary warnings={signal.warnings} />
                 </article>
               );
