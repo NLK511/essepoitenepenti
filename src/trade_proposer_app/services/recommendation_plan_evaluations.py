@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Iterable
@@ -16,6 +17,9 @@ from trade_proposer_app.repositories.historical_market_data import HistoricalMar
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
+
+
+logger = logging.getLogger(__name__)
 
 
 class RecommendationPlanEvaluationService:
@@ -53,10 +57,26 @@ class RecommendationPlanEvaluationService:
         as_of: datetime | None = None,
     ) -> EvaluationRunResult:
         plans = self._list_plans(recommendation_plan_ids)
+        logger.info(
+            "recommendation evaluation started: run_id=%s requested_plan_ids=%s plan_count=%s as_of=%s",
+            run_id,
+            recommendation_plan_ids,
+            len(plans),
+            self._format_datetime(as_of),
+        )
+        if plans:
+            logger.debug(
+                "recommendation evaluation plans: %s",
+                [self._plan_log_summary(plan) for plan in plans],
+            )
         if not plans:
+            logger.info("recommendation evaluation finished: no recommendation plans available")
             return EvaluationRunResult(output="no recommendation plans available for evaluation")
 
         price_history_cache, price_errors = self._prepare_price_histories(plans, as_of=as_of)
+        if price_errors:
+            logger.warning("recommendation evaluation history errors: %s", price_errors)
+        logger.debug("recommendation evaluation history cache keys: %s", sorted(price_history_cache.keys()))
         processed = 0
         synced = 0
         detail_lines: list[str] = []
@@ -68,13 +88,41 @@ class RecommendationPlanEvaluationService:
             current_market_date = self._current_market_date(plan, as_of=as_of)
             use_intraday = self._uses_intraday_evaluation(plan, current_market_date, as_of=as_of)
             price_data = price_history_cache.get((ticker, use_intraday))
+            source_mode = "intraday" if use_intraday else "daily"
             if price_data is None and use_intraday:
+                logger.debug(
+                    "plan %s ticker=%s intraday history missing; falling back to daily",
+                    plan.id,
+                    ticker,
+                )
                 price_data = price_history_cache.get((ticker, False))
+                source_mode = "daily"
+            logger.debug(
+                "plan evaluation input: plan_id=%s ticker=%s action=%s computed_at=%s market_date=%s source_mode=%s price_rows=%s",
+                plan.id,
+                ticker,
+                plan.action,
+                self._format_datetime(plan.computed_at),
+                current_market_date,
+                source_mode,
+                0 if price_data is None else len(price_data),
+            )
             outcome = self._evaluate_plan(plan, price_data, run_id=run_id)
             stored = self.outcomes.upsert_outcome(outcome)
             synced += 1
             outcome_labels.append(stored.outcome)
             detail_lines.append(f"{plan.ticker}: {stored.outcome} ({stored.status})")
+            logger.info(
+                "plan evaluated: plan_id=%s ticker=%s outcome=%s status=%s entry_touched=%s stop_loss_hit=%s take_profit_hit=%s evaluated_at=%s",
+                stored.recommendation_plan_id,
+                stored.ticker,
+                stored.outcome,
+                stored.status,
+                stored.entry_touched,
+                stored.stop_loss_hit,
+                stored.take_profit_hit,
+                self._format_datetime(stored.evaluated_at),
+            )
 
         output = self._build_output(processed, detail_lines, price_errors)
         return EvaluationRunResult(
@@ -107,6 +155,12 @@ class RecommendationPlanEvaluationService:
         cache: dict[tuple[str, bool], pd.DataFrame | None] = {}
         errors: list[str] = []
         end_time = self._normalize_datetime(as_of) or datetime.now(timezone.utc)
+        logger.debug(
+            "price history preparation started: groups=%s as_of=%s end_time=%s",
+            len(groups),
+            self._format_datetime(as_of),
+            self._format_datetime(end_time),
+        )
         for ticker, grouped_plans in groups.items():
             computed_times = [self._normalize_datetime(plan.computed_at) for plan in grouped_plans]
             normalized_times = [dt for dt in computed_times if dt is not None]
@@ -117,15 +171,39 @@ class RecommendationPlanEvaluationService:
             current_market_date = self._current_market_date(grouped_plans[0], as_of=as_of)
             needs_daily = any(not self._uses_intraday_evaluation(plan, current_market_date, as_of=as_of) for plan in grouped_plans)
             needs_intraday = any(self._uses_intraday_evaluation(plan, current_market_date, as_of=as_of) for plan in grouped_plans)
+            logger.debug(
+                "price history group: ticker=%s plan_ids=%s earliest=%s start=%s current_market_date=%s needs_daily=%s needs_intraday=%s",
+                ticker,
+                [plan.id for plan in grouped_plans],
+                self._format_datetime(earliest),
+                self._format_datetime(start_time),
+                current_market_date,
+                needs_daily,
+                needs_intraday,
+            )
             try:
                 if needs_daily:
                     daily_data = self._load_price_history(ticker, start_time, end_time, intraday_only=False)
                     cache[(ticker, False)] = daily_data.sort_index() if daily_data is not None and not daily_data.empty else None
+                    logger.debug(
+                        "price history loaded: ticker=%s mode=daily rows=%s first=%s last=%s",
+                        ticker,
+                        0 if cache[(ticker, False)] is None else len(cache[(ticker, False)]),
+                        self._format_datetime(None if cache[(ticker, False)] is None or cache[(ticker, False)].empty else cache[(ticker, False)].index[0]),
+                        self._format_datetime(None if cache[(ticker, False)] is None or cache[(ticker, False)].empty else self._last_timestamp(cache[(ticker, False)])),
+                    )
                     if cache[(ticker, False)] is None:
                         errors.append(f"{ticker}: daily price history is unavailable")
                 if needs_intraday:
                     intraday_data = self._load_price_history(ticker, start_time, end_time, intraday_only=True)
                     cache[(ticker, True)] = intraday_data.sort_index() if intraday_data is not None and not intraday_data.empty else None
+                    logger.debug(
+                        "price history loaded: ticker=%s mode=intraday rows=%s first=%s last=%s",
+                        ticker,
+                        0 if cache[(ticker, True)] is None else len(cache[(ticker, True)]),
+                        self._format_datetime(None if cache[(ticker, True)] is None or cache[(ticker, True)].empty else cache[(ticker, True)].index[0]),
+                        self._format_datetime(None if cache[(ticker, True)] is None or cache[(ticker, True)].empty else self._last_timestamp(cache[(ticker, True)])),
+                    )
                     if cache[(ticker, True)] is None:
                         errors.append(f"{ticker}: intraday price history is unavailable")
             except Exception as exc:  # pragma: no cover
@@ -150,7 +228,17 @@ class RecommendationPlanEvaluationService:
     ) -> RecommendationPlanOutcome:
         setup_family = self._setup_family(plan)
         confidence_bucket = self._confidence_bucket(plan.confidence_percent)
+        logger.debug(
+            "evaluate_plan start: plan_id=%s ticker=%s action=%s confidence=%s bucket=%s price_rows=%s",
+            plan.id,
+            plan.ticker,
+            plan.action,
+            plan.confidence_percent,
+            confidence_bucket,
+            0 if price_data is None else len(price_data),
+        )
         if plan.action in {"no_action", "watchlist"}:
+            logger.info("evaluate_plan short-circuit: plan_id=%s action=%s outcome=%s", plan.id, plan.action, plan.action)
             return RecommendationPlanOutcome(
                 recommendation_plan_id=plan.id or 0,
                 ticker=plan.ticker,
@@ -164,6 +252,7 @@ class RecommendationPlanEvaluationService:
                 run_id=run_id,
             )
         if price_data is None or price_data.empty:
+            logger.warning("evaluate_plan missing price data: plan_id=%s ticker=%s action=%s", plan.id, plan.ticker, plan.action)
             return RecommendationPlanOutcome(
                 recommendation_plan_id=plan.id or 0,
                 ticker=plan.ticker,
@@ -179,6 +268,12 @@ class RecommendationPlanEvaluationService:
 
         sliced = self._rows_on_or_after(price_data, plan.computed_at)
         if sliced.empty:
+            logger.warning(
+                "evaluate_plan no post-plan bars: plan_id=%s ticker=%s computed_at=%s",
+                plan.id,
+                plan.ticker,
+                self._format_datetime(plan.computed_at),
+            )
             return RecommendationPlanOutcome(
                 recommendation_plan_id=plan.id or 0,
                 ticker=plan.ticker,
@@ -195,6 +290,15 @@ class RecommendationPlanEvaluationService:
         entry_reference = self._entry_reference(plan)
         entry_index = self._find_entry_index(plan, sliced)
         if entry_index is None:
+            logger.info(
+                "evaluate_plan no_entry: plan_id=%s ticker=%s entry_low=%s entry_high=%s rows=%s last_bar=%s",
+                plan.id,
+                plan.ticker,
+                plan.entry_price_low,
+                plan.entry_price_high,
+                len(sliced),
+                self._format_datetime(self._last_timestamp(sliced)),
+            )
             return RecommendationPlanOutcome(
                 recommendation_plan_id=plan.id or 0,
                 ticker=plan.ticker,
@@ -240,6 +344,18 @@ class RecommendationPlanEvaluationService:
             outcome = "loss"
             status = "resolved"
             notes = "Stop loss and take profit were both touched on the same bar; conservative resolution marked as loss."
+
+        logger.debug(
+            "evaluate_plan exit resolution: plan_id=%s ticker=%s entry_index=%s stop_loss_hit=%s take_profit_hit=%s decisive_timestamp=%s outcome=%s status=%s",
+            plan.id,
+            plan.ticker,
+            entry_index,
+            first_stop_hit,
+            first_take_hit,
+            self._format_datetime(decisive_timestamp),
+            outcome,
+            status,
+        )
 
         return RecommendationPlanOutcome(
             recommendation_plan_id=plan.id or 0,
@@ -454,6 +570,26 @@ class RecommendationPlanEvaluationService:
             return dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc)
 
+    @staticmethod
+    def _format_datetime(value: object) -> str:
+        normalized = RecommendationPlanEvaluationService._normalize_datetime(value)
+        return normalized.isoformat() if normalized is not None else "None"
+
+    @staticmethod
+    def _plan_log_summary(plan: RecommendationPlan) -> dict[str, object]:
+        return {
+            "id": plan.id,
+            "ticker": plan.ticker,
+            "action": plan.action,
+            "horizon": plan.horizon,
+            "confidence_percent": plan.confidence_percent,
+            "computed_at": RecommendationPlanEvaluationService._format_datetime(plan.computed_at),
+            "entry_low": plan.entry_price_low,
+            "entry_high": plan.entry_price_high,
+            "stop_loss": plan.stop_loss,
+            "take_profit": plan.take_profit,
+        }
+
     def _uses_intraday_evaluation(
         self,
         plan: RecommendationPlan,
@@ -517,9 +653,29 @@ class RecommendationPlanEvaluationService:
         *,
         intraday_only: bool = False,
     ) -> pd.DataFrame:
+        logger.debug(
+            "load_price_history request: ticker=%s intraday_only=%s start=%s end=%s",
+            ticker,
+            intraday_only,
+            self._format_datetime(start_date),
+            self._format_datetime(end_date),
+        )
         persisted = self._load_persisted_price_history(ticker, start_date, end_date, intraday_only=intraday_only)
         if persisted is not None and not persisted.empty:
+            logger.debug(
+                "load_price_history source=persisted ticker=%s intraday_only=%s rows=%s first=%s last=%s",
+                ticker,
+                intraday_only,
+                len(persisted),
+                self._format_datetime(persisted.index[0]),
+                self._format_datetime(persisted.index[-1]),
+            )
             return persisted
+        logger.debug(
+            "load_price_history source=yfinance ticker=%s intraday_only=%s",
+            ticker,
+            intraday_only,
+        )
         return self._download_price_history(ticker, start_date, end_date, intraday_only=intraday_only)
 
     def _load_persisted_price_history(
@@ -591,6 +747,14 @@ class RecommendationPlanEvaluationService:
         start_str = start_date.strftime("%Y-%m-%d")
         end_str = (end_date + timedelta(days=1)).strftime("%Y-%m-%d")
         interval = cls._intraday_interval if intraday_only else "1d"
+        logger.debug(
+            "download_price_history: ticker=%s intraday_only=%s interval=%s start=%s end=%s",
+            ticker,
+            intraday_only,
+            interval,
+            start_str,
+            end_str,
+        )
         frame = yf.download(
             ticker,
             start=start_str,

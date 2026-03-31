@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import socket
 from datetime import datetime, timezone
@@ -14,6 +15,9 @@ from trade_proposer_app.services.historical_replay import HistoricalReplayServic
 from trade_proposer_app.services.industry_support import IndustrySupportRefreshService
 from trade_proposer_app.services.macro_support import MacroSupportRefreshService
 from trade_proposer_app.services.optimizations import WeightOptimizationService
+
+
+logger = logging.getLogger(__name__)
 
 
 class RunExecutionFailed(Exception):
@@ -156,6 +160,19 @@ class JobExecutionService:
         if self.evaluations is None:
             raise RuntimeError("recommendation evaluation execution service is not configured")
 
+        logger.info(
+            "job execution evaluation started: run_id=%s job_id=%s job_type=%s",
+            run.id,
+            run.job_id,
+            run.job_type.value,
+        )
+        logger.debug(
+            "job execution evaluation run payload: run_id=%s scheduled_for=%s artifact=%s",
+            run.id,
+            self._normalize_datetime(run.scheduled_for),
+            self._get_run_artifact(run),
+        )
+
         execution_started = perf_counter()
         timing: dict[str, object] = {
             "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
@@ -172,6 +189,12 @@ class JobExecutionService:
         except Exception as exc:
             timing["evaluation_seconds"] = round(perf_counter() - evaluation_started, 6)
             timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
+            logger.exception(
+                "job execution evaluation failed: run_id=%s job_id=%s elapsed_seconds=%s",
+                run.id,
+                run.job_id,
+                timing["evaluation_seconds"],
+            )
             raise RunExecutionFailed(exc, timing) from exc
 
         persistence_started = perf_counter()
@@ -184,6 +207,14 @@ class JobExecutionService:
         timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
 
         self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
+        logger.info(
+            "job execution evaluation finished: run_id=%s job_id=%s evaluation_seconds=%s persistence_seconds=%s total_execution_seconds=%s",
+            run.id,
+            run.job_id,
+            timing["evaluation_seconds"],
+            timing["persistence_seconds"],
+            timing["total_execution_seconds"],
+        )
         return [], timing
 
     def _execute_optimization_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
