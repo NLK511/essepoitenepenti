@@ -807,16 +807,30 @@ export function RecommendationPlansPage() {
                         </td>
                         <td>{plan.run_id ? <Link to={`/runs/${plan.run_id}`}>#{plan.run_id}</Link> : "—"}</td>
                         <td>
-                          <button
-                            type="button"
-                            className="icon-button"
-                            onClick={() => togglePlanRow(planKey)}
-                            aria-expanded={isExpanded}
-                            aria-label={isExpanded ? "Hide details" : "Show details"}
-                            title={isExpanded ? "Hide details" : "Show details"}
-                          >
-                            {isExpanded ? "▴" : "▾"}
-                          </button>
+                          <div className="cluster">
+                            <button
+                              type="button"
+                              className="icon-button"
+                              onClick={() => togglePlanRow(planKey)}
+                              aria-expanded={isExpanded}
+                              aria-label={isExpanded ? "Hide details" : "Show details"}
+                              title={isExpanded ? "Hide details" : "Show details"}
+                            >
+                              {isExpanded ? "▴" : "▾"}
+                            </button>
+                            {plan.id ? (
+                              <button
+                                type="button"
+                                className="icon-button icon-button-primary"
+                                disabled={evaluatingPlanId === plan.id}
+                                onClick={() => void queueEvaluation(plan.id ?? undefined)}
+                                aria-label={evaluatingPlanId === plan.id ? "Queueing plan evaluation" : "Evaluate this plan"}
+                                title={evaluatingPlanId === plan.id ? "Queueing plan evaluation" : "Evaluate this plan"}
+                              >
+                                ↻
+                              </button>
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                       {isExpanded ? (
@@ -884,20 +898,6 @@ export function RecommendationPlansPage() {
                                   </div>
                                 ) : null}
                               </div>
-                              {plan.id ? (
-                                <div className="top-gap-small">
-                                  <button
-                                    type="button"
-                                    className="icon-button icon-button-primary"
-                                    disabled={evaluatingPlanId === plan.id}
-                                    onClick={() => void queueEvaluation(plan.id ?? undefined)}
-                                    aria-label={evaluatingPlanId === plan.id ? "Queueing plan evaluation" : "Evaluate this plan"}
-                                    title={evaluatingPlanId === plan.id ? "Queueing plan evaluation" : "Evaluate this plan"}
-                                  >
-                                    ↻
-                                  </button>
-                                </div>
-                              ) : null}
                             </div>
                           </td>
                         </tr>
