@@ -19,7 +19,7 @@ For a UI-specific decluttering pass and shared component plan, see `ui-declutter
 
 ## How to read the product overall
 
-The app is easiest to use if you separate pages into three roles:
+The app is easiest to use if you separate pages into four roles:
 
 1. **Operate**
    - Dashboard
@@ -32,7 +32,12 @@ The app is easiest to use if you separate pages into three roles:
    - Ticker signals
    - Ticker drill-down
 
-3. **Investigate execution and context**
+3. **Research**
+   - Decision samples
+   - later: plan generation tuning
+   - later: backtesting
+
+4. **Investigate execution and context**
    - Run debugger
    - Run detail
    - Context review
@@ -42,6 +47,7 @@ A simple way to think about it is:
 - **Dashboard** shows what to look at next
 - **Recommendation plans** show the actual trade plans
 - **Ticker signals** show why a ticker was promoted, deprioritized, or blocked
+- **Decision samples** are the research surface for tuning and review
 - **Run detail** shows how the workflow got there
 - **Context review** shows the broader market backdrop the app reused
 

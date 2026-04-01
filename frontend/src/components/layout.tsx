@@ -38,9 +38,15 @@ const navSections: NavSection[] = [
     items: [
       { to: "/jobs/ticker-signals", label: "Ticker signals", shortLabel: "Signals", icon: "≈" },
       { to: "/jobs/recommendation-plans", label: "Recommendation plans", shortLabel: "Plans", icon: "↗" },
-      { to: "/jobs/decision-samples", label: "Decision samples", shortLabel: "Samples", icon: "◉" },
       { to: "/jobs/debugger", label: "Run debugger", shortLabel: "Debug", icon: "⌘" },
       { to: "/context", label: "Context review", shortLabel: "Context", icon: "◔" },
+    ],
+  },
+  {
+    label: "Research",
+    items: [
+      { to: "/research", label: "Research home", shortLabel: "Hub", icon: "⌂", end: true },
+      { to: "/research/decision-samples", label: "Decision samples", shortLabel: "Samples", icon: "◉" },
     ],
   },
   {
@@ -57,7 +63,6 @@ const jobsSectionLinks = [
   { to: "/jobs/watchlists", label: "Watchlists" },
   { to: "/jobs/ticker-signals", label: "Signals" },
   { to: "/jobs/recommendation-plans", label: "Plans" },
-  { to: "/jobs/decision-samples", label: "Samples" },
   { to: "/jobs/debugger", label: "Debugger" },
 ];
 
@@ -115,11 +120,18 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
       description: "Review trade plans, calibration state, outcomes, and measured edge in one place.",
     };
   }
-  if (pathname.startsWith("/jobs/decision-samples")) {
+  if (pathname.startsWith("/research/decision-samples")) {
     return {
-      eyebrow: "Recommendation workflow",
+      eyebrow: "Research",
       title: "Decision samples",
       description: "Inspect near-miss and actionable samples to tune the planner with more than just final outcomes.",
+    };
+  }
+  if (pathname.startsWith("/research")) {
+    return {
+      eyebrow: "Research",
+      title: "Research hub",
+      description: "Review tuning, calibration, and backtesting work without mixing it into the operational workflow.",
     };
   }
   if (pathname.startsWith("/jobs/debugger")) {

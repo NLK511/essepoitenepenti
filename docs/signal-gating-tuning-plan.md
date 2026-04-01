@@ -18,9 +18,9 @@ This is a **development-only target plan**, not a live product capability.
 - a state endpoint at `GET /api/signal-gating-tuning`
 - apply / dry-run support, with apply writing the winning tuning values back into active settings
 - live proposal-generation/scoring now reads the active signal gating tuning config and uses it in shortlist thresholds and calibration thresholds
-- settings UI controls for viewing and editing the active signal gating tuning config
-- settings page summary for the latest tuning run, including whether the winner was applied
-- unit and route coverage for scoring, persistence, apply behavior, live-path integration, and settings editing
+- research-page controls for viewing, editing, and running the active signal gating tuning config
+- decision-sample page summary for the latest tuning run, including whether the winner was applied
+- unit and route coverage for scoring, persistence, apply behavior, live-path integration, and research-page editing
 
 ### Current scope
 - the tuning run persists a broader active tuning config, even where downstream consumers do not yet use every field
