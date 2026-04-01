@@ -6,34 +6,34 @@ from datetime import datetime, timezone
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.models import RecommendationAutotuneRun
-from trade_proposer_app.persistence.models import RecommendationAutotuneRunRecord
+from trade_proposer_app.domain.models import RecommendationSignalGatingTuningRun
+from trade_proposer_app.persistence.models import RecommendationSignalGatingTuningRunRecord
 
 
-class RecommendationAutotuneRunRepository:
+class RecommendationSignalGatingTuningRunRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def create_run(self, run: RecommendationAutotuneRun) -> RecommendationAutotuneRun:
-        record = RecommendationAutotuneRunRecord()
+    def create_run(self, run: RecommendationSignalGatingTuningRun) -> RecommendationSignalGatingTuningRun:
+        record = RecommendationSignalGatingTuningRunRecord()
         self._apply(record, run)
         self.session.add(record)
         self.session.commit()
         self.session.refresh(record)
         return self._to_model(record)
 
-    def list_runs(self, limit: int = 20) -> list[RecommendationAutotuneRun]:
+    def list_runs(self, limit: int = 20) -> list[RecommendationSignalGatingTuningRun]:
         rows = self.session.scalars(
-            select(RecommendationAutotuneRunRecord)
-            .order_by(desc(RecommendationAutotuneRunRecord.created_at), desc(RecommendationAutotuneRunRecord.id))
+            select(RecommendationSignalGatingTuningRunRecord)
+            .order_by(desc(RecommendationSignalGatingTuningRunRecord.created_at), desc(RecommendationSignalGatingTuningRunRecord.id))
             .limit(limit)
         ).all()
         return [self._to_model(row) for row in rows]
 
-    def get_latest_run(self) -> RecommendationAutotuneRun | None:
+    def get_latest_run(self) -> RecommendationSignalGatingTuningRun | None:
         row = self.session.scalar(
-            select(RecommendationAutotuneRunRecord)
-            .order_by(desc(RecommendationAutotuneRunRecord.created_at), desc(RecommendationAutotuneRunRecord.id))
+            select(RecommendationSignalGatingTuningRunRecord)
+            .order_by(desc(RecommendationSignalGatingTuningRunRecord.created_at), desc(RecommendationSignalGatingTuningRunRecord.id))
             .limit(1)
         )
         return self._to_model(row) if row is not None else None
@@ -48,18 +48,18 @@ class RecommendationAutotuneRunRepository:
 
     @staticmethod
     def _dump(value: object) -> str:
-        return json.dumps(value, default=RecommendationAutotuneRunRepository._json_default)
+        return json.dumps(value, default=RecommendationSignalGatingTuningRunRepository._json_default)
 
     @staticmethod
     def _json_default(value: object) -> object:
         if isinstance(value, datetime):
-            normalized = RecommendationAutotuneRunRepository._normalize_datetime(value)
+            normalized = RecommendationSignalGatingTuningRunRepository._normalize_datetime(value)
             return normalized.isoformat() if normalized is not None else None
         if hasattr(value, "model_dump"):
             return value.model_dump(mode="json")
         raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
-    def _apply(self, record: RecommendationAutotuneRunRecord, run: RecommendationAutotuneRun) -> None:
+    def _apply(self, record: RecommendationSignalGatingTuningRunRecord, run: RecommendationSignalGatingTuningRun) -> None:
         record.objective_name = run.objective_name
         record.status = run.status
         record.applied = run.applied
@@ -79,8 +79,8 @@ class RecommendationAutotuneRunRepository:
         record.started_at = self._normalize_datetime(run.started_at)
         record.completed_at = self._normalize_datetime(run.completed_at)
 
-    def _to_model(self, record: RecommendationAutotuneRunRecord) -> RecommendationAutotuneRun:
-        return RecommendationAutotuneRun(
+    def _to_model(self, record: RecommendationSignalGatingTuningRunRecord) -> RecommendationSignalGatingTuningRun:
+        return RecommendationSignalGatingTuningRun(
             id=record.id,
             objective_name=record.objective_name,
             status=record.status,

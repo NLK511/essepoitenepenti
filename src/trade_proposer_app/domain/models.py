@@ -680,9 +680,9 @@ class RecommendationSetupFamilyReviewSummary(BaseModel):
     families: list[RecommendationSetupFamilyReview] = Field(default_factory=list)
 
 
-class RecommendationAutotuneRun(BaseModel):
+class RecommendationSignalGatingTuningRun(BaseModel):
     id: int | None = None
-    objective_name: str = "confidence_threshold_raw_grid"
+    objective_name: str = "signal_gating_tuning_raw_grid"
     status: str = "completed"
     applied: bool = False
     filters: dict[str, object] = Field(default_factory=dict)

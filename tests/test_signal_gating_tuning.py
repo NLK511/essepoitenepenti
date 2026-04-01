@@ -18,10 +18,10 @@ from trade_proposer_app.repositories.recommendation_decision_samples import Reco
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.services.recommendation_autotune import RecommendationAutotuneService
+from trade_proposer_app.services.signal_gating_tuning import RecommendationSignalGatingTuningService
 
 
-class RecommendationAutotuneServiceTests(unittest.TestCase):
+class RecommendationSignalGatingTuningServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.engine = create_engine(
             "sqlite://",
@@ -87,10 +87,10 @@ class RecommendationAutotuneServiceTests(unittest.TestCase):
         self._create_resolved_sample(confidence=61.0, outcome="loss", created_at=datetime(2026, 3, 3, tzinfo=timezone.utc))
         self._create_resolved_sample(confidence=55.0, outcome="loss", created_at=datetime(2026, 3, 4, tzinfo=timezone.utc))
 
-        run = RecommendationAutotuneService(self.session).run()
+        run = RecommendationSignalGatingTuningService(self.session).run()
 
         self.assertEqual(run.status, "completed")
-        self.assertEqual(run.objective_name, "confidence_threshold_raw_grid")
+        self.assertEqual(run.objective_name, "signal_gating_tuning_raw_grid")
         self.assertEqual(run.sample_count, 4)
         self.assertEqual(run.resolved_sample_count, 4)
         self.assertGreaterEqual(run.candidate_count, 5)
@@ -101,7 +101,7 @@ class RecommendationAutotuneServiceTests(unittest.TestCase):
         self.assertEqual(len(run.candidate_results), run.candidate_count)
         self.assertTrue(any(candidate["threshold"] == 64.0 for candidate in run.candidate_results))
 
-        stored_latest = RecommendationAutotuneService(self.session).describe()["latest_run"]
+        stored_latest = RecommendationSignalGatingTuningService(self.session).describe()["latest_run"]
         self.assertIsNotNone(stored_latest)
         self.assertEqual(stored_latest.best_threshold, 64.0)
 
@@ -111,7 +111,7 @@ class RecommendationAutotuneServiceTests(unittest.TestCase):
         self._create_resolved_sample(confidence=65.0, outcome="win", created_at=datetime(2026, 3, 2, tzinfo=timezone.utc))
         self._create_resolved_sample(confidence=61.0, outcome="loss", created_at=datetime(2026, 3, 3, tzinfo=timezone.utc))
 
-        run = RecommendationAutotuneService(self.session).run(apply=True)
+        run = RecommendationSignalGatingTuningService(self.session).run(apply=True)
 
         self.assertTrue(run.applied)
         self.assertEqual(self.settings_repository.get_confidence_threshold(), 64.0)
@@ -121,7 +121,7 @@ class RecommendationAutotuneServiceTests(unittest.TestCase):
 
     def test_run_scores_multi_parameter_grid_and_prefers_shortlist_promotion(self) -> None:
         self.settings_repository.set_confidence_threshold(60.0)
-        self.settings_repository.set_autotune_config(
+        self.settings_repository.set_signal_gating_tuning_config(
             threshold_offset=0.0,
             confidence_adjustment=-4.0,
             near_miss_gap_cutoff=0.0,
@@ -175,7 +175,7 @@ class RecommendationAutotuneServiceTests(unittest.TestCase):
                 )
             )
 
-        run = RecommendationAutotuneService(self.session).run()
+        run = RecommendationSignalGatingTuningService(self.session).run()
 
         self.assertGreaterEqual(run.candidate_count, 100)
         self.assertGreater(run.best_score or 0.0, run.baseline_score or 0.0)
@@ -186,7 +186,7 @@ class RecommendationAutotuneServiceTests(unittest.TestCase):
         self.assertTrue(any(candidate["degraded_selected_count"] > 0 for candidate in run.candidate_results))
 
 
-class RecommendationAutotuneRouteTests(unittest.IsolatedAsyncioTestCase):
+class RecommendationSignalGatingTuningRouteTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self._previous_single_user_auth_enabled = settings.single_user_auth_enabled
         settings.single_user_auth_enabled = False
@@ -213,7 +213,7 @@ class RecommendationAutotuneRouteTests(unittest.IsolatedAsyncioTestCase):
         app.dependency_overrides.clear()
         self.engine.dispose()
 
-    async def test_run_endpoint_returns_autotune_run(self) -> None:
+    async def test_run_endpoint_returns_signal_gating_tuning_run(self) -> None:
         session = Session(bind=self.engine)
         try:
             plan_repository = RecommendationPlanRepository(session)

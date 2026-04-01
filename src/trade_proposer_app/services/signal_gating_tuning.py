@@ -6,19 +6,19 @@ from itertools import product
 
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.models import RecommendationAutotuneRun, RecommendationDecisionSample, RecommendationPlanOutcome
-from trade_proposer_app.repositories.recommendation_autotune_runs import RecommendationAutotuneRunRepository
+from trade_proposer_app.domain.models import RecommendationSignalGatingTuningRun, RecommendationDecisionSample, RecommendationPlanOutcome
+from trade_proposer_app.repositories.signal_gating_tuning_runs import RecommendationSignalGatingTuningRunRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 
 
-class RecommendationAutotuneError(Exception):
+class RecommendationSignalGatingTuningError(Exception):
     pass
 
 
 @dataclass(slots=True)
-class AutotuneConfig:
+class SignalGatingTuningConfig:
     threshold_offset: float
     confidence_adjustment: float
     near_miss_gap_cutoff: float
@@ -41,7 +41,7 @@ class AutotuneConfig:
 
 @dataclass(slots=True)
 class EvaluatedCandidate:
-    config: AutotuneConfig
+    config: SignalGatingTuningConfig
     threshold: float
     score: float
     selected_count: int
@@ -92,8 +92,8 @@ class EvaluatedCandidate:
         return payload
 
 
-class RecommendationAutotuneService:
-    OBJECTIVE_NAME = "confidence_threshold_raw_grid"
+class RecommendationSignalGatingTuningService:
+    OBJECTIVE_NAME = "signal_gating_tuning_raw_grid"
     THRESHOLD_OFFSETS = (-6.0, -4.0, -2.0, 0.0, 2.0, 4.0)
     CONFIDENCE_ADJUSTMENTS = (-4.0, -2.0, 0.0, 2.0)
     NEAR_MISS_GAP_CUTOFFS = (0.0, 1.5, 3.0)
@@ -107,7 +107,7 @@ class RecommendationAutotuneService:
         self.settings = SettingsRepository(session)
         self.samples = RecommendationDecisionSampleRepository(session)
         self.outcomes = RecommendationOutcomeRepository(session)
-        self.runs = RecommendationAutotuneRunRepository(session)
+        self.runs = RecommendationSignalGatingTuningRunRepository(session)
 
     def run(
         self,
@@ -121,10 +121,10 @@ class RecommendationAutotuneService:
         created_before: datetime | None = None,
         limit: int = 500,
         apply: bool = False,
-    ) -> RecommendationAutotuneRun:
+    ) -> RecommendationSignalGatingTuningRun:
         started_at = datetime.now(timezone.utc)
         threshold_before = self.settings.get_confidence_threshold()
-        active_tuning = self.settings.get_autotune_config()
+        active_tuning = self.settings.get_signal_gating_tuning_config()
         samples = self.samples.list_samples(
             ticker=ticker,
             run_id=run_id,
@@ -134,12 +134,12 @@ class RecommendationAutotuneService:
         )
         samples = self._filter_samples(samples, setup_family=setup_family, created_after=created_after, created_before=created_before)
         if not samples:
-            raise RecommendationAutotuneError("no decision samples available for autotuning")
+            raise RecommendationSignalGatingTuningError("no decision samples available for signal gating tuning")
 
         outcomes = self.outcomes.get_outcomes_by_plan_ids([sample.recommendation_plan_id for sample in samples])
         scored_samples = self._resolved_samples(samples, outcomes)
         if not scored_samples:
-            raise RecommendationAutotuneError("no resolved recommendation-plan outcomes available for autotuning")
+            raise RecommendationSignalGatingTuningError("no resolved recommendation-plan outcomes available for signal gating tuning")
 
         evaluated_candidates = [self._evaluate_candidate(scored_samples, config, threshold_before) for config in self._candidate_configs(active_tuning)]
         evaluated_candidates.sort(
@@ -147,7 +147,7 @@ class RecommendationAutotuneService:
             reverse=True,
         )
         winner = evaluated_candidates[0]
-        baseline_config = AutotuneConfig(
+        baseline_config = SignalGatingTuningConfig(
             threshold_offset=0.0,
             confidence_adjustment=active_tuning["confidence_adjustment"],
             near_miss_gap_cutoff=active_tuning["near_miss_gap_cutoff"],
@@ -160,7 +160,7 @@ class RecommendationAutotuneService:
         applied_config = None
         if apply:
             applied_threshold = round(winner.threshold, 2)
-            applied_config = self.settings.set_autotune_config(
+            applied_config = self.settings.set_signal_gating_tuning_config(
                 threshold_offset=winner.config.threshold_offset,
                 confidence_adjustment=winner.config.confidence_adjustment,
                 near_miss_gap_cutoff=winner.config.near_miss_gap_cutoff,
@@ -215,7 +215,7 @@ class RecommendationAutotuneService:
             "threshold_after": applied_threshold,
             "active_tuning": active_tuning,
         }
-        run = RecommendationAutotuneRun(
+        run = RecommendationSignalGatingTuningRun(
             objective_name=self.OBJECTIVE_NAME,
             status="completed",
             applied=apply,
@@ -241,13 +241,13 @@ class RecommendationAutotuneService:
         return {
             "objective_name": self.OBJECTIVE_NAME,
             "current_confidence_threshold": self.settings.get_confidence_threshold(),
-            "active_tuning": self.settings.get_autotune_config(),
+            "active_tuning": self.settings.get_signal_gating_tuning_config(),
             "latest_run": latest,
         }
 
     @classmethod
-    def _candidate_configs(cls, active_tuning: dict[str, float]) -> list[AutotuneConfig]:
-        configs: list[AutotuneConfig] = []
+    def _candidate_configs(cls, active_tuning: dict[str, float]) -> list[SignalGatingTuningConfig]:
+        configs: list[SignalGatingTuningConfig] = []
         for threshold_offset, confidence_adjustment, near_miss_gap_cutoff, shortlist_aggressiveness, degraded_penalty in product(
             cls.THRESHOLD_OFFSETS,
             cls.CONFIDENCE_ADJUSTMENTS,
@@ -256,7 +256,7 @@ class RecommendationAutotuneService:
             cls.DEGRADED_PENALTIES,
         ):
             configs.append(
-                AutotuneConfig(
+                SignalGatingTuningConfig(
                     threshold_offset=threshold_offset,
                     confidence_adjustment=confidence_adjustment,
                     near_miss_gap_cutoff=near_miss_gap_cutoff,
@@ -264,7 +264,7 @@ class RecommendationAutotuneService:
                     degraded_penalty=degraded_penalty,
                 )
             )
-        baseline = AutotuneConfig(
+        baseline = SignalGatingTuningConfig(
             threshold_offset=0.0,
             confidence_adjustment=active_tuning["confidence_adjustment"],
             near_miss_gap_cutoff=active_tuning["near_miss_gap_cutoff"],
@@ -310,14 +310,14 @@ class RecommendationAutotuneService:
         return resolved
 
     @staticmethod
-    def _decision_score(sample: RecommendationDecisionSample, config: AutotuneConfig) -> float:
+    def _decision_score(sample: RecommendationDecisionSample, config: SignalGatingTuningConfig) -> float:
         raw_score = float(sample.calibrated_confidence_percent if sample.calibrated_confidence_percent is not None else sample.confidence_percent)
         raw_score += config.confidence_adjustment
         if str(sample.decision_type or "").strip().lower() == "degraded":
             raw_score -= config.degraded_penalty
         return raw_score
 
-    def _effective_threshold(self, sample: RecommendationDecisionSample, base_threshold: float, config: AutotuneConfig) -> float:
+    def _effective_threshold(self, sample: RecommendationDecisionSample, base_threshold: float, config: SignalGatingTuningConfig) -> float:
         threshold = base_threshold + config.threshold_offset
         if sample.shortlisted:
             threshold -= config.shortlist_aggressiveness * 1.5
@@ -328,7 +328,7 @@ class RecommendationAutotuneService:
     def _evaluate_candidate(
         self,
         samples: list[tuple[RecommendationDecisionSample, RecommendationPlanOutcome]],
-        config: AutotuneConfig,
+        config: SignalGatingTuningConfig,
         base_threshold: float,
     ) -> EvaluatedCandidate:
         selected_count = 0

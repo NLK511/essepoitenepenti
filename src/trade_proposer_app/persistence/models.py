@@ -354,11 +354,11 @@ class RecommendationDecisionSampleRecord(Base, TimestampMixin):
     ticker_signal_snapshot_id: Mapped[int | None] = mapped_column(ForeignKey("ticker_signal_snapshots.id"), nullable=True, index=True)
 
 
-class RecommendationAutotuneRunRecord(Base, TimestampMixin):
-    __tablename__ = "recommendation_autotune_runs"
+class RecommendationSignalGatingTuningRunRecord(Base, TimestampMixin):
+    __tablename__ = "signal_gating_tuning_runs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    objective_name: Mapped[str] = mapped_column(String(120), default="confidence_threshold_raw_grid", index=True)
+    objective_name: Mapped[str] = mapped_column(String(120), default="signal_gating_tuning_raw_grid", index=True)
     status: Mapped[str] = mapped_column(String(32), default="completed", index=True)
     applied: Mapped[bool] = mapped_column(Boolean, default=False)
     filters_json: Mapped[str] = mapped_column(Text, default="{}")

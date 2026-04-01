@@ -14,8 +14,8 @@ This is a **development-only target plan**, not a live product capability.
 - a first-pass raw grid-search signal gating tuning service for recommendation decision gating
 - multi-parameter candidate scoring over threshold offset, confidence adjustment, near-miss promotion, shortlist aggressiveness, and degraded penalty
 - persistence for tuning runs, summary data, and candidate comparison results
-- a manual backend trigger at `POST /api/signal-gating-tuning/run` with the older `recommendation-autotune` path kept as a compatibility alias
-- a state endpoint at `GET /api/signal-gating-tuning` with the older `recommendation-autotune` path kept as a compatibility alias
+- a manual backend trigger at `POST /api/signal-gating-tuning/run`
+- a state endpoint at `GET /api/signal-gating-tuning`
 - apply / dry-run support, with apply writing the winning tuning values back into active settings
 - live proposal-generation/scoring now reads the active signal gating tuning config and uses it in shortlist thresholds and calibration thresholds
 - settings UI controls for viewing and editing the active signal gating tuning config
@@ -168,7 +168,7 @@ Store each tuning run with:
 Expose a manual trigger first, such as:
 - `POST /api/signal-gating-tuning/run`
 
-The older `POST /api/recommendation-autotune/run` path remains available as a compatibility alias.
+
 
 ### UI
 Add a simple review page that shows:

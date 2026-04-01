@@ -19,13 +19,12 @@ def create_optimization_service(session: Session, repository: SettingsRepository
 @router.get("")
 async def list_settings(session: Session = Depends(get_db_session)) -> dict[str, object]:
     repository = SettingsRepository(session)
-    signal_gating_tuning = repository.get_autotune_config()
+    signal_gating_tuning = repository.get_signal_gating_tuning_config()
     return {
         "settings": repository.list_settings(),
         "providers": repository.list_provider_credentials(),
         "optimization": create_optimization_service(session, repository).describe_state(),
         "signal_gating_tuning": signal_gating_tuning,
-        "autotune": signal_gating_tuning,
     }
 
 
@@ -157,7 +156,7 @@ def _set_signal_gating_tuning_settings(
     degraded_penalty: str = "0",
 ) -> dict[str, object]:
     try:
-        config = repository.set_autotune_config(
+        config = repository.set_signal_gating_tuning_config(
             threshold_offset=float(threshold_offset.strip() or 0),
             confidence_adjustment=float(confidence_adjustment.strip() or 0),
             near_miss_gap_cutoff=float(near_miss_gap_cutoff.strip() or 0),
@@ -166,30 +165,11 @@ def _set_signal_gating_tuning_settings(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"invalid signal gating tuning settings: {exc}") from exc
-    return {"signal_gating_tuning": config, "autotune": config}
+    return {"signal_gating_tuning": config}
 
 
 @router.post("/signal-gating-tuning")
 async def set_signal_gating_tuning_settings(
-    threshold_offset: str = Form(default="0"),
-    confidence_adjustment: str = Form(default="0"),
-    near_miss_gap_cutoff: str = Form(default="0"),
-    shortlist_aggressiveness: str = Form(default="0"),
-    degraded_penalty: str = Form(default="0"),
-    session: Session = Depends(get_db_session),
-) -> dict[str, object]:
-    return _set_signal_gating_tuning_settings(
-        SettingsRepository(session),
-        threshold_offset=threshold_offset,
-        confidence_adjustment=confidence_adjustment,
-        near_miss_gap_cutoff=near_miss_gap_cutoff,
-        shortlist_aggressiveness=shortlist_aggressiveness,
-        degraded_penalty=degraded_penalty,
-    )
-
-
-@router.post("/autotune")
-async def set_autotune_settings(
     threshold_offset: str = Form(default="0"),
     confidence_adjustment: str = Form(default="0"),
     near_miss_gap_cutoff: str = Form(default="0"),

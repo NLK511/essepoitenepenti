@@ -226,7 +226,7 @@ It stores the main decision context for later analysis, including:
 The goal is to keep the live planner conservative while still collecting enough structured examples to study near-misses and low-volume action cases.
 
 For a practical walkthrough of how to tune the planner from these samples, see `decision-sample-tuning-guide.md`.
-For a development-only autonomous tuning plan, see `decision-autotuning-plan.md`.
+For a development-only signal gating tuning plan, see `signal-gating-tuning-plan.md`.
 
 ## Methodology limits
 

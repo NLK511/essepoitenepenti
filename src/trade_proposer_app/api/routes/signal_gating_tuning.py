@@ -6,21 +6,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.domain.models import RecommendationAutotuneRun
-from trade_proposer_app.services.recommendation_autotune import RecommendationAutotuneError, RecommendationAutotuneService
+from trade_proposer_app.domain.models import RecommendationSignalGatingTuningRun
+from trade_proposer_app.services.signal_gating_tuning import RecommendationSignalGatingTuningError, RecommendationSignalGatingTuningService
 
 router = APIRouter(prefix="/signal-gating-tuning", tags=["signal-gating-tuning"])
-legacy_router = APIRouter(prefix="/recommendation-autotune", tags=["recommendation-autotune"])
 
 
 @router.get("")
-@legacy_router.get("")
 async def get_signal_gating_tuning_state(session: Session = Depends(get_db_session)) -> dict[str, object]:
-    return RecommendationAutotuneService(session).describe()
+    return RecommendationSignalGatingTuningService(session).describe()
 
 
 @router.post("/run")
-@legacy_router.post("/run")
 async def run_signal_gating_tuning(
     ticker: str | None = Query(default=None),
     run_id: int | None = Query(default=None),
@@ -32,9 +29,9 @@ async def run_signal_gating_tuning(
     limit: int = Query(default=500, ge=1, le=5000),
     apply: bool = Query(default=False),
     session: Session = Depends(get_db_session),
-) -> RecommendationAutotuneRun:
+) -> RecommendationSignalGatingTuningRun:
     try:
-        return RecommendationAutotuneService(session).run(
+        return RecommendationSignalGatingTuningService(session).run(
             ticker=ticker,
             run_id=run_id,
             setup_family=setup_family,
@@ -45,5 +42,5 @@ async def run_signal_gating_tuning(
             limit=limit,
             apply=apply,
         )
-    except RecommendationAutotuneError as exc:
+    except RecommendationSignalGatingTuningError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

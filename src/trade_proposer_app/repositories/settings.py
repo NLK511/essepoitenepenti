@@ -14,11 +14,11 @@ DEFAULT_SUMMARY_PROMPT = (
 )
 DEFAULT_APP_SETTINGS = {
     "confidence_threshold": "60",
-    "autotune_threshold_offset": "0",
-    "autotune_confidence_adjustment": "0",
-    "autotune_near_miss_gap_cutoff": "0",
-    "autotune_shortlist_aggressiveness": "0",
-    "autotune_degraded_penalty": "0",
+    "signal_gating_tuning_threshold_offset": "0",
+    "signal_gating_tuning_confidence_adjustment": "0",
+    "signal_gating_tuning_near_miss_gap_cutoff": "0",
+    "signal_gating_tuning_shortlist_aggressiveness": "0",
+    "signal_gating_tuning_degraded_penalty": "0",
     "optimization_minimum_resolved_trades": "50",
     "summary_backend": "pi_agent",
     "summary_model": "",
@@ -126,27 +126,27 @@ class SettingsRepository:
         normalized = f"{float(value):.2f}".rstrip("0").rstrip(".")
         return self.set_setting("confidence_threshold", normalized)
 
-    def get_autotune_config(self) -> dict[str, float]:
+    def get_signal_gating_tuning_config(self) -> dict[str, float]:
         setting_map = self.get_setting_map()
         return {
-            "threshold_offset": self._get_float(setting_map, "autotune_threshold_offset", 0.0),
-            "confidence_adjustment": self._get_float(setting_map, "autotune_confidence_adjustment", 0.0),
-            "near_miss_gap_cutoff": self._get_float(setting_map, "autotune_near_miss_gap_cutoff", 0.0),
-            "shortlist_aggressiveness": self._get_float(setting_map, "autotune_shortlist_aggressiveness", 0.0),
-            "degraded_penalty": self._get_float(setting_map, "autotune_degraded_penalty", 0.0),
+            "threshold_offset": self._get_float(setting_map, "signal_gating_tuning_threshold_offset", 0.0),
+            "confidence_adjustment": self._get_float(setting_map, "signal_gating_tuning_confidence_adjustment", 0.0),
+            "near_miss_gap_cutoff": self._get_float(setting_map, "signal_gating_tuning_near_miss_gap_cutoff", 0.0),
+            "shortlist_aggressiveness": self._get_float(setting_map, "signal_gating_tuning_shortlist_aggressiveness", 0.0),
+            "degraded_penalty": self._get_float(setting_map, "signal_gating_tuning_degraded_penalty", 0.0),
         }
 
-    def set_autotune_config(self, *, threshold_offset: float, confidence_adjustment: float, near_miss_gap_cutoff: float, shortlist_aggressiveness: float, degraded_penalty: float) -> dict[str, float]:
+    def set_signal_gating_tuning_config(self, *, threshold_offset: float, confidence_adjustment: float, near_miss_gap_cutoff: float, shortlist_aggressiveness: float, degraded_penalty: float) -> dict[str, float]:
         self.set_settings(
             {
-                "autotune_threshold_offset": f"{float(threshold_offset):.2f}".rstrip("0").rstrip("."),
-                "autotune_confidence_adjustment": f"{float(confidence_adjustment):.2f}".rstrip("0").rstrip("."),
-                "autotune_near_miss_gap_cutoff": f"{float(near_miss_gap_cutoff):.2f}".rstrip("0").rstrip("."),
-                "autotune_shortlist_aggressiveness": f"{float(shortlist_aggressiveness):.2f}".rstrip("0").rstrip("."),
-                "autotune_degraded_penalty": f"{float(degraded_penalty):.2f}".rstrip("0").rstrip("."),
+                "signal_gating_tuning_threshold_offset": f"{float(threshold_offset):.2f}".rstrip("0").rstrip("."),
+                "signal_gating_tuning_confidence_adjustment": f"{float(confidence_adjustment):.2f}".rstrip("0").rstrip("."),
+                "signal_gating_tuning_near_miss_gap_cutoff": f"{float(near_miss_gap_cutoff):.2f}".rstrip("0").rstrip("."),
+                "signal_gating_tuning_shortlist_aggressiveness": f"{float(shortlist_aggressiveness):.2f}".rstrip("0").rstrip("."),
+                "signal_gating_tuning_degraded_penalty": f"{float(degraded_penalty):.2f}".rstrip("0").rstrip("."),
             }
         )
-        return self.get_autotune_config()
+        return self.get_signal_gating_tuning_config()
 
     def get_optimization_minimum_resolved_trades(self) -> int:
         setting_map = self.get_setting_map()

@@ -1138,10 +1138,10 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("context_regime_underperforming", calibration_review["reasons"])
         self.assertIn("horizon_setup_family_underperforming", calibration_review["reasons"])
 
-    def test_watchlist_orchestration_applies_autotune_config_to_live_action_thresholds(self) -> None:
+    def test_watchlist_orchestration_applies_signal_gating_tuning_config_to_live_action_thresholds(self) -> None:
         session = create_session()
         watchlist = WatchlistRepository(session).create(
-            "Autotune Demo",
+            "SignalGatingTuning Demo",
             ["FOO"],
             default_horizon=StrategyHorizon.ONE_WEEK,
             allow_shorts=True,
@@ -1195,7 +1195,7 @@ class RepositoryTests(unittest.TestCase):
 
         tuned_session = create_session()
         tuned_watchlist = WatchlistRepository(tuned_session).create(
-            "Autotune Demo",
+            "SignalGatingTuning Demo",
             ["FOO"],
             default_horizon=StrategyHorizon.ONE_WEEK,
             allow_shorts=True,
@@ -1206,7 +1206,7 @@ class RepositoryTests(unittest.TestCase):
             cheap_scan_service=TunedCheapScanService(),
             deep_analysis_service=TunedDeepAnalysisService(),
             confidence_threshold=60.0,
-            autotune_config={
+            signal_gating_tuning_config={
                 "threshold_offset": -4.0,
                 "confidence_adjustment": 4.0,
                 "near_miss_gap_cutoff": 2.0,

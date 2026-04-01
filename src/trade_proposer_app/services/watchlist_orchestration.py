@@ -38,7 +38,7 @@ class WatchlistOrchestrationService:
         decision_samples: RecommendationDecisionSampleRepository | None = None,
         deep_analysis_service,
         confidence_threshold: float = 60.0,
-        autotune_config: dict[str, float] | None = None,
+        signal_gating_tuning_config: dict[str, float] | None = None,
         calibration_service: RecommendationPlanCalibrationService | None = None,
         taxonomy_service: TickerTaxonomyService | None = None,
     ) -> None:
@@ -48,12 +48,12 @@ class WatchlistOrchestrationService:
         self.cheap_scan_service = cheap_scan_service
         self.deep_analysis_service = deep_analysis_service
         self.confidence_threshold = confidence_threshold
-        self.autotune_config = self._normalize_autotune_config(autotune_config)
+        self.signal_gating_tuning_config = self._normalize_signal_gating_tuning_config(signal_gating_tuning_config)
         self.calibration_service = calibration_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
     @staticmethod
-    def _normalize_autotune_config(autotune_config: dict[str, float] | None) -> dict[str, float]:
+    def _normalize_signal_gating_tuning_config(signal_gating_tuning_config: dict[str, float] | None) -> dict[str, float]:
         defaults = {
             "threshold_offset": 0.0,
             "confidence_adjustment": 0.0,
@@ -61,20 +61,20 @@ class WatchlistOrchestrationService:
             "shortlist_aggressiveness": 0.0,
             "degraded_penalty": 0.0,
         }
-        if not autotune_config:
+        if not signal_gating_tuning_config:
             return defaults
         normalized = dict(defaults)
         for key, default in defaults.items():
-            raw_value = autotune_config.get(key, default)
+            raw_value = signal_gating_tuning_config.get(key, default)
             try:
                 normalized[key] = float(raw_value)
             except (TypeError, ValueError):
                 normalized[key] = default
         return normalized
 
-    def _autotune_value(self, key: str, default: float) -> float:
+    def _signal_gating_tuning_value(self, key: str, default: float) -> float:
         try:
-            return float(self.autotune_config.get(key, default))
+            return float(self.signal_gating_tuning_config.get(key, default))
         except (TypeError, ValueError):
             return default
 
@@ -1796,8 +1796,8 @@ class WatchlistOrchestrationService:
         transmission_summary: dict[str, object] | None = None,
     ) -> dict[str, object]:
         if calibration_summary is None:
-            threshold_offset = self._autotune_value("threshold_offset", 0.0)
-            confidence_adjustment = self._autotune_value("confidence_adjustment", 0.0)
+            threshold_offset = self._signal_gating_tuning_value("threshold_offset", 0.0)
+            confidence_adjustment = self._signal_gating_tuning_value("confidence_adjustment", 0.0)
             return {
                 "enabled": False,
                 "review_status": "disabled",
@@ -1862,8 +1862,8 @@ class WatchlistOrchestrationService:
             threshold_adjustment += adjustment
             confidence_adjustment += conf_adjustment
             reasons.extend(bucket_reasons)
-        threshold_adjustment += self._autotune_value("threshold_offset", 0.0)
-        confidence_adjustment += self._autotune_value("confidence_adjustment", 0.0)
+        threshold_adjustment += self._signal_gating_tuning_value("threshold_offset", 0.0)
+        confidence_adjustment += self._signal_gating_tuning_value("confidence_adjustment", 0.0)
         threshold_adjustment = max(-6.0, min(15.0, threshold_adjustment))
         confidence_adjustment = max(-4.0, min(2.5, confidence_adjustment))
         effective_threshold = max(45.0, min(90.0, base_threshold + threshold_adjustment))
@@ -2059,10 +2059,10 @@ class WatchlistOrchestrationService:
         elif ticker_count >= 10:
             size_bump = 5.0
         tuning_relief = (
-            self._autotune_value("threshold_offset", 0.0) * 0.35
-            + self._autotune_value("confidence_adjustment", 0.0) * 0.25
-            + self._autotune_value("shortlist_aggressiveness", 1.0) * 1.2
-            + self._autotune_value("near_miss_gap_cutoff", 1.5) * 0.5
+            self._signal_gating_tuning_value("threshold_offset", 0.0) * 0.35
+            + self._signal_gating_tuning_value("confidence_adjustment", 0.0) * 0.25
+            + self._signal_gating_tuning_value("shortlist_aggressiveness", 1.0) * 1.2
+            + self._signal_gating_tuning_value("near_miss_gap_cutoff", 1.5) * 0.5
         )
         return min(95.0, max(35.0, base + size_bump - tuning_relief))
 
@@ -2077,5 +2077,5 @@ class WatchlistOrchestrationService:
             size_bump = 12.0
         elif ticker_count >= 10:
             size_bump = 6.0
-        tuning_relief = self._autotune_value("shortlist_aggressiveness", 1.0) * 1.0
+        tuning_relief = self._signal_gating_tuning_value("shortlist_aggressiveness", 1.0) * 1.0
         return min(95.0, max(35.0, base + size_bump - tuning_relief))
