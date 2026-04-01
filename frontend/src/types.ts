@@ -683,6 +683,37 @@ export interface SignalGatingTuningState {
   degraded_penalty: number;
 }
 
+export interface SignalGatingTuningRun {
+  id: number | null;
+  objective_name: string;
+  status: string;
+  applied: boolean;
+  filters: Record<string, unknown>;
+  sample_count: number;
+  resolved_sample_count: number;
+  candidate_count: number;
+  baseline_threshold: number | null;
+  baseline_score: number | null;
+  best_threshold: number | null;
+  best_score: number | null;
+  winning_config: Record<string, unknown>;
+  candidate_results: Array<Record<string, unknown>>;
+  summary: Record<string, unknown>;
+  artifact: Record<string, unknown>;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SignalGatingTuningResponse {
+  objective_name: string;
+  current_confidence_threshold: number;
+  active_tuning: SignalGatingTuningState;
+  latest_run: SignalGatingTuningRun | null;
+}
+
 export interface SettingsResponse {
   settings: AppSetting[];
   providers: ProviderCredential[];

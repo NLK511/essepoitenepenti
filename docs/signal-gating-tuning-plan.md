@@ -19,6 +19,7 @@ This is a **development-only target plan**, not a live product capability.
 - apply / dry-run support, with apply writing the winning tuning values back into active settings
 - live proposal-generation/scoring now reads the active signal gating tuning config and uses it in shortlist thresholds and calibration thresholds
 - settings UI controls for viewing and editing the active signal gating tuning config
+- settings page summary for the latest tuning run, including whether the winner was applied
 - unit and route coverage for scoring, persistence, apply behavior, live-path integration, and settings editing
 
 ### Current scope

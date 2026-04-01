@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { getJson, postForm } from "../api";
 import { Badge, Card, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { AppSetting, AppPreflightReport, OptimizationState, ProviderCredential, SettingsResponse, SignalGatingTuningState } from "../types";
+import type { AppSetting, AppPreflightReport, OptimizationState, ProviderCredential, SettingsResponse, SignalGatingTuningResponse, SignalGatingTuningState } from "../types";
 import { toSettingMap } from "../utils";
 
 interface SettingsViewData {
@@ -10,6 +10,7 @@ interface SettingsViewData {
   providers: ProviderCredential[];
   optimization: OptimizationState;
   signalGatingTuning: SignalGatingTuningState;
+  signalGatingTuningState: SignalGatingTuningResponse;
   preflight: AppPreflightReport;
 }
 
@@ -24,15 +25,17 @@ export function SettingsPage() {
   async function loadData() {
     try {
       setError(null);
-      const [settingsResponse, preflight] = await Promise.all([
+      const [settingsResponse, preflight, signalGatingTuningState] = await Promise.all([
         getJson<SettingsResponse>("/api/settings"),
         getJson<AppPreflightReport>("/api/health/preflight"),
+        getJson<SignalGatingTuningResponse>("/api/signal-gating-tuning"),
       ]);
       setData({
         settings: settingsResponse.settings,
         providers: settingsResponse.providers,
         optimization: settingsResponse.optimization,
         signalGatingTuning: settingsResponse.signal_gating_tuning,
+        signalGatingTuningState,
         preflight,
       });
       setSelectedBackupPath(settingsResponse.optimization.latest_backup?.path ?? "");
@@ -275,6 +278,27 @@ export function SettingsPage() {
                   <button className="button" type="submit" disabled={saving === "signal-gating-tuning"}>{saving === "signal-gating-tuning" ? "Saving…" : "Save signal gating tuning settings"}</button>
                 </div>
               </form>
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Tuning run history" title="Latest signal gating tuning run" subtitle="This shows the most recent tuning evaluation, including whether the winning candidate was applied and how it compared to the baseline." />
+              {data.signalGatingTuningState.latest_run ? (
+                <div className="stack-page">
+                  <section className="metrics-grid">
+                    <div><div className="metric-label">Status</div><div className="metric-value">{data.signalGatingTuningState.latest_run.status}</div></div>
+                    <div><div className="metric-label">Applied</div><div className="metric-value">{data.signalGatingTuningState.latest_run.applied ? "Yes" : "No"}</div></div>
+                    <div><div className="metric-label">Best threshold</div><div className="metric-value">{data.signalGatingTuningState.latest_run.best_threshold ?? "—"}</div></div>
+                    <div><div className="metric-label">Best score</div><div className="metric-value">{data.signalGatingTuningState.latest_run.best_score ?? "—"}</div></div>
+                  </section>
+                  <div className="helper-text">Objective: {data.signalGatingTuningState.latest_run.objective_name}</div>
+                  <div className="helper-text">Sample count: {data.signalGatingTuningState.latest_run.sample_count} · Resolved samples: {data.signalGatingTuningState.latest_run.resolved_sample_count} · Candidates: {data.signalGatingTuningState.latest_run.candidate_count}</div>
+                  <div className="helper-text">Baseline threshold: {data.signalGatingTuningState.latest_run.baseline_threshold ?? "—"} · Baseline score: {data.signalGatingTuningState.latest_run.baseline_score ?? "—"}</div>
+                  <div className="helper-text">Started: {data.signalGatingTuningState.latest_run.started_at ?? "—"}</div>
+                  <div className="helper-text">Completed: {data.signalGatingTuningState.latest_run.completed_at ?? "—"}</div>
+                </div>
+              ) : (
+                <div className="helper-text">No signal gating tuning run has been recorded yet.</div>
+              )}
             </Card>
 
             <Card>
