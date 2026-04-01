@@ -11,12 +11,17 @@ The goal is to let the app tune itself during development by using stored decisi
 This is a **development-only target plan**, not a live product capability.
 
 ### Implemented so far
-- a first-pass raw grid-search autotune service for confidence threshold tuning
+- a first-pass raw grid-search autotune service for recommendation tuning
+- multi-parameter candidate scoring over confidence offset, calibration adjustment, near-miss promotion, shortlist aggressiveness, and degraded penalty
 - persistence for autotune runs, summary data, and candidate comparison results
 - a manual backend trigger at `POST /api/recommendation-autotune/run`
 - a state endpoint at `GET /api/recommendation-autotune`
-- apply / dry-run support, with apply writing the winning threshold back to `confidence_threshold`
+- apply / dry-run support, with apply writing the winning tuning values back into active settings
 - unit and route coverage for scoring, persistence, and apply behavior
+
+### Current scope
+- the live app still consumes the primary confidence threshold directly
+- the autotune run now persists a broader active tuning config, even where downstream consumers do not yet use every field
 
 ### Expected future work
 - candidate generation and scoring over a broader parameter grid than confidence threshold alone

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from itertools import product
 
 from sqlalchemy.orm import Session
 
@@ -17,7 +18,30 @@ class RecommendationAutotuneError(Exception):
 
 
 @dataclass(slots=True)
+class AutotuneConfig:
+    threshold_offset: float
+    confidence_adjustment: float
+    near_miss_gap_cutoff: float
+    shortlist_aggressiveness: float
+    degraded_penalty: float
+
+    @property
+    def confidence_threshold_delta(self) -> float:
+        return self.threshold_offset
+
+    def to_dict(self) -> dict[str, float]:
+        return {
+            "threshold_offset": round(self.threshold_offset, 2),
+            "confidence_adjustment": round(self.confidence_adjustment, 2),
+            "near_miss_gap_cutoff": round(self.near_miss_gap_cutoff, 2),
+            "shortlist_aggressiveness": round(self.shortlist_aggressiveness, 2),
+            "degraded_penalty": round(self.degraded_penalty, 2),
+        }
+
+
+@dataclass(slots=True)
 class EvaluatedCandidate:
+    config: AutotuneConfig
     threshold: float
     score: float
     selected_count: int
@@ -26,6 +50,9 @@ class EvaluatedCandidate:
     loss_count: int
     skipped_win_count: int
     skipped_loss_count: int
+    shortlisted_selected_count: int
+    near_miss_selected_count: int
+    degraded_selected_count: int
     true_positive_count: int
     false_positive_count: int
     false_negative_count: int
@@ -37,30 +64,41 @@ class EvaluatedCandidate:
         precision = (self.win_count / self.selected_count * 100.0) if self.selected_count else None
         recall = (self.win_count / resolved_total * 100.0) if resolved_total else None
         win_rate = (self.win_count / self.resolved_selected_count * 100.0) if self.resolved_selected_count else None
-        return {
-            "threshold": round(self.threshold, 2),
-            "score": round(self.score, 3),
-            "selected_count": self.selected_count,
-            "resolved_selected_count": self.resolved_selected_count,
-            "resolved_sample_count": resolved_total,
-            "win_count": self.win_count,
-            "loss_count": self.loss_count,
-            "skipped_win_count": self.skipped_win_count,
-            "skipped_loss_count": self.skipped_loss_count,
-            "true_positive_count": self.true_positive_count,
-            "false_positive_count": self.false_positive_count,
-            "false_negative_count": self.false_negative_count,
-            "true_negative_count": self.true_negative_count,
-            "selection_rate_percent": round(selection_rate, 1),
-            "precision_percent": round(precision, 1) if precision is not None else None,
-            "recall_percent": round(recall, 1) if recall is not None else None,
-            "win_rate_percent": round(win_rate, 1) if win_rate is not None else None,
-        }
+        payload = self.config.to_dict()
+        payload.update(
+            {
+                "threshold": round(self.threshold, 2),
+                "score": round(self.score, 3),
+                "selected_count": self.selected_count,
+                "resolved_selected_count": self.resolved_selected_count,
+                "resolved_sample_count": resolved_total,
+                "win_count": self.win_count,
+                "loss_count": self.loss_count,
+                "skipped_win_count": self.skipped_win_count,
+                "skipped_loss_count": self.skipped_loss_count,
+                "shortlisted_selected_count": self.shortlisted_selected_count,
+                "near_miss_selected_count": self.near_miss_selected_count,
+                "degraded_selected_count": self.degraded_selected_count,
+                "true_positive_count": self.true_positive_count,
+                "false_positive_count": self.false_positive_count,
+                "false_negative_count": self.false_negative_count,
+                "true_negative_count": self.true_negative_count,
+                "selection_rate_percent": round(selection_rate, 1),
+                "precision_percent": round(precision, 1) if precision is not None else None,
+                "recall_percent": round(recall, 1) if recall is not None else None,
+                "win_rate_percent": round(win_rate, 1) if win_rate is not None else None,
+            }
+        )
+        return payload
 
 
 class RecommendationAutotuneService:
     OBJECTIVE_NAME = "confidence_threshold_raw_grid"
-    THRESHOLD_OFFSETS = (-6.0, -4.0, -2.0, 0.0, 2.0, 4.0, 6.0)
+    THRESHOLD_OFFSETS = (-6.0, -4.0, -2.0, 0.0, 2.0, 4.0)
+    CONFIDENCE_ADJUSTMENTS = (-4.0, -2.0, 0.0, 2.0)
+    NEAR_MISS_GAP_CUTOFFS = (0.0, 1.5, 3.0)
+    SHORTLIST_AGGRESSIVENESS = (0.0, 1.0, 2.0)
+    DEGRADED_PENALTIES = (0.0, 1.5, 3.0)
     MIN_THRESHOLD = 45.0
     MAX_THRESHOLD = 90.0
 
@@ -86,6 +124,7 @@ class RecommendationAutotuneService:
     ) -> RecommendationAutotuneRun:
         started_at = datetime.now(timezone.utc)
         threshold_before = self.settings.get_confidence_threshold()
+        active_tuning = self.settings.get_autotune_config()
         samples = self.samples.list_samples(
             ticker=ticker,
             run_id=run_id,
@@ -102,18 +141,31 @@ class RecommendationAutotuneService:
         if not scored_samples:
             raise RecommendationAutotuneError("no resolved recommendation-plan outcomes available for autotuning")
 
-        candidate_thresholds = self._candidate_thresholds(threshold_before)
-        evaluated_candidates = [self._evaluate_candidate(scored_samples, threshold) for threshold in candidate_thresholds]
+        evaluated_candidates = [self._evaluate_candidate(scored_samples, config, threshold_before) for config in self._candidate_configs(active_tuning)]
         evaluated_candidates.sort(
             key=lambda item: (item.score, item.win_count, -item.false_positive_count, item.threshold),
             reverse=True,
         )
         winner = evaluated_candidates[0]
-        baseline = self._evaluate_candidate(scored_samples, threshold_before)
+        baseline_config = AutotuneConfig(
+            threshold_offset=0.0,
+            confidence_adjustment=active_tuning["confidence_adjustment"],
+            near_miss_gap_cutoff=active_tuning["near_miss_gap_cutoff"],
+            shortlist_aggressiveness=active_tuning["shortlist_aggressiveness"],
+            degraded_penalty=active_tuning["degraded_penalty"],
+        )
+        baseline = self._evaluate_candidate(scored_samples, baseline_config, threshold_before)
 
         applied_threshold = None
+        applied_config = None
         if apply:
             applied_threshold = round(winner.threshold, 2)
+            applied_config = self.settings.set_autotune_config(
+                confidence_adjustment=winner.config.confidence_adjustment,
+                near_miss_gap_cutoff=winner.config.near_miss_gap_cutoff,
+                shortlist_aggressiveness=winner.config.shortlist_aggressiveness,
+                degraded_penalty=winner.config.degraded_penalty,
+            )
             self.settings.set_confidence_threshold(applied_threshold)
 
         completed_at = datetime.now(timezone.utc)
@@ -145,12 +197,14 @@ class RecommendationAutotuneService:
             "best_delta": round(winner.score - baseline.score, 3),
             "applied": apply,
             "applied_threshold": applied_threshold,
+            "applied_config": applied_config,
             "selected_resolved_count": winner.resolved_selected_count,
             "selected_win_count": winner.win_count,
             "selected_loss_count": winner.loss_count,
             "skipped_win_count": winner.skipped_win_count,
             "skipped_loss_count": winner.skipped_loss_count,
             "selection_rate_percent": winner_dict["selection_rate_percent"],
+            "best_config": winner.config.to_dict(),
         }
         artifact = {
             "objective_name": self.OBJECTIVE_NAME,
@@ -158,6 +212,7 @@ class RecommendationAutotuneService:
             "sample_plan_ids": [sample.recommendation_plan_id for sample, _ in scored_samples],
             "threshold_before": round(threshold_before, 2),
             "threshold_after": applied_threshold,
+            "active_tuning": active_tuning,
         }
         run = RecommendationAutotuneRun(
             objective_name=self.OBJECTIVE_NAME,
@@ -171,7 +226,7 @@ class RecommendationAutotuneService:
             baseline_score=round(baseline.score, 3),
             best_threshold=round(winner.threshold, 2),
             best_score=round(winner.score, 3),
-            winning_config={"confidence_threshold": round(winner.threshold, 2)},
+            winning_config={"confidence_threshold": round(winner.threshold, 2), **winner.config.to_dict()},
             candidate_results=[candidate.to_dict() for candidate in evaluated_candidates],
             summary=summary,
             artifact=artifact,
@@ -185,17 +240,39 @@ class RecommendationAutotuneService:
         return {
             "objective_name": self.OBJECTIVE_NAME,
             "current_confidence_threshold": self.settings.get_confidence_threshold(),
+            "active_tuning": self.settings.get_autotune_config(),
             "latest_run": latest,
         }
 
     @classmethod
-    def _candidate_thresholds(cls, baseline: float) -> list[float]:
-        candidates = {
-            round(max(cls.MIN_THRESHOLD, min(cls.MAX_THRESHOLD, baseline + offset)), 2)
-            for offset in cls.THRESHOLD_OFFSETS
-        }
-        candidates.add(round(max(cls.MIN_THRESHOLD, min(cls.MAX_THRESHOLD, baseline)), 2))
-        return sorted(candidates)
+    def _candidate_configs(cls, active_tuning: dict[str, float]) -> list[AutotuneConfig]:
+        configs: list[AutotuneConfig] = []
+        for threshold_offset, confidence_adjustment, near_miss_gap_cutoff, shortlist_aggressiveness, degraded_penalty in product(
+            cls.THRESHOLD_OFFSETS,
+            cls.CONFIDENCE_ADJUSTMENTS,
+            cls.NEAR_MISS_GAP_CUTOFFS,
+            cls.SHORTLIST_AGGRESSIVENESS,
+            cls.DEGRADED_PENALTIES,
+        ):
+            configs.append(
+                AutotuneConfig(
+                    threshold_offset=threshold_offset,
+                    confidence_adjustment=confidence_adjustment,
+                    near_miss_gap_cutoff=near_miss_gap_cutoff,
+                    shortlist_aggressiveness=shortlist_aggressiveness,
+                    degraded_penalty=degraded_penalty,
+                )
+            )
+        baseline = AutotuneConfig(
+            threshold_offset=0.0,
+            confidence_adjustment=active_tuning["confidence_adjustment"],
+            near_miss_gap_cutoff=active_tuning["near_miss_gap_cutoff"],
+            shortlist_aggressiveness=active_tuning["shortlist_aggressiveness"],
+            degraded_penalty=active_tuning["degraded_penalty"],
+        )
+        if baseline not in configs:
+            configs.append(baseline)
+        return configs
 
     @staticmethod
     def _filter_samples(
@@ -232,13 +309,26 @@ class RecommendationAutotuneService:
         return resolved
 
     @staticmethod
-    def _decision_score(sample: RecommendationDecisionSample) -> float:
-        return float(sample.calibrated_confidence_percent if sample.calibrated_confidence_percent is not None else sample.confidence_percent)
+    def _decision_score(sample: RecommendationDecisionSample, config: AutotuneConfig) -> float:
+        raw_score = float(sample.calibrated_confidence_percent if sample.calibrated_confidence_percent is not None else sample.confidence_percent)
+        raw_score += config.confidence_adjustment
+        if str(sample.decision_type or "").strip().lower() == "degraded":
+            raw_score -= config.degraded_penalty
+        return raw_score
+
+    def _effective_threshold(self, sample: RecommendationDecisionSample, base_threshold: float, config: AutotuneConfig) -> float:
+        threshold = base_threshold + config.threshold_offset
+        if sample.shortlisted:
+            threshold -= config.shortlist_aggressiveness * 1.5
+        if str(sample.decision_type or "").strip().lower() == "near_miss":
+            threshold -= config.near_miss_gap_cutoff
+        return max(self.MIN_THRESHOLD, min(self.MAX_THRESHOLD, threshold))
 
     def _evaluate_candidate(
         self,
         samples: list[tuple[RecommendationDecisionSample, RecommendationPlanOutcome]],
-        threshold: float,
+        config: AutotuneConfig,
+        base_threshold: float,
     ) -> EvaluatedCandidate:
         selected_count = 0
         resolved_selected_count = 0
@@ -246,38 +336,53 @@ class RecommendationAutotuneService:
         loss_count = 0
         skipped_win_count = 0
         skipped_loss_count = 0
+        shortlisted_selected_count = 0
+        near_miss_selected_count = 0
+        degraded_selected_count = 0
         true_positive_count = 0
         false_positive_count = 0
         false_negative_count = 0
         true_negative_count = 0
         score = 0.0
         for sample, outcome in samples:
-            selected = self._decision_score(sample) >= threshold
+            effective_score = self._decision_score(sample, config)
+            threshold = self._effective_threshold(sample, base_threshold, config)
+            selected = effective_score >= threshold
             is_win = outcome.outcome == "win"
             is_loss = outcome.outcome == "loss"
+            if sample.shortlisted and selected:
+                shortlisted_selected_count += 1
+            if str(sample.decision_type or "").strip().lower() == "near_miss" and selected:
+                near_miss_selected_count += 1
+            if str(sample.decision_type or "").strip().lower() == "degraded" and selected:
+                degraded_selected_count += 1
             if selected:
                 selected_count += 1
                 if is_win:
                     resolved_selected_count += 1
                     win_count += 1
                     true_positive_count += 1
-                    score += 3.0
+                    score += 4.0
                 elif is_loss:
                     resolved_selected_count += 1
                     loss_count += 1
                     false_positive_count += 1
-                    score -= 3.0
+                    score -= 4.0
             else:
                 if is_win:
                     skipped_win_count += 1
                     false_negative_count += 1
-                    score -= 1.5
+                    score -= 2.0
                 elif is_loss:
                     skipped_loss_count += 1
                     true_negative_count += 1
-                    score += 0.75
+                    score += 1.0
+        score += shortlisted_selected_count * 0.2
+        score += near_miss_selected_count * 0.1
+        score -= degraded_selected_count * 0.1
         return EvaluatedCandidate(
-            threshold=round(threshold, 2),
+            config=config,
+            threshold=round(base_threshold + config.threshold_offset, 2),
             score=round(score, 3),
             selected_count=selected_count,
             resolved_selected_count=resolved_selected_count,
@@ -285,6 +390,9 @@ class RecommendationAutotuneService:
             loss_count=loss_count,
             skipped_win_count=skipped_win_count,
             skipped_loss_count=skipped_loss_count,
+            shortlisted_selected_count=shortlisted_selected_count,
+            near_miss_selected_count=near_miss_selected_count,
+            degraded_selected_count=degraded_selected_count,
             true_positive_count=true_positive_count,
             false_positive_count=false_positive_count,
             false_negative_count=false_negative_count,

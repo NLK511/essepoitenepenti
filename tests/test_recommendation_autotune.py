@@ -116,6 +116,73 @@ class RecommendationAutotuneServiceTests(unittest.TestCase):
         self.assertTrue(run.applied)
         self.assertEqual(self.settings_repository.get_confidence_threshold(), 64.0)
         self.assertEqual(run.summary["applied_threshold"], 64.0)
+        self.assertIn("shortlist_aggressiveness", run.winning_config)
+        self.assertIn("near_miss_gap_cutoff", run.winning_config)
+
+    def test_run_scores_multi_parameter_grid_and_prefers_shortlist_promotion(self) -> None:
+        self.settings_repository.set_confidence_threshold(60.0)
+        self.settings_repository.set_autotune_config(
+            confidence_adjustment=-4.0,
+            near_miss_gap_cutoff=0.0,
+            shortlist_aggressiveness=0.0,
+            degraded_penalty=3.0,
+        )
+
+        payloads = [
+            (59.0, "win", "near_miss", True, 59.0, datetime(2026, 3, 1, tzinfo=timezone.utc)),
+            (59.0, "loss", "no_action", False, 59.0, datetime(2026, 3, 2, tzinfo=timezone.utc)),
+            (63.0, "win", "actionable", False, 63.0, datetime(2026, 3, 3, tzinfo=timezone.utc)),
+            (52.0, "loss", "degraded", True, 52.0, datetime(2026, 3, 4, tzinfo=timezone.utc)),
+        ]
+        for confidence, outcome, decision_type, shortlisted, calibrated_confidence, created_at in payloads:
+            plan = self.plan_repository.create_plan(
+                RecommendationPlan(
+                    ticker="EOG",
+                    horizon=StrategyHorizon.ONE_WEEK,
+                    action="long",
+                    confidence_percent=confidence,
+                    entry_price_low=100.0,
+                    entry_price_high=100.0,
+                    stop_loss=95.0,
+                    take_profit=110.0,
+                    signal_breakdown={"setup_family": "breakout"},
+                    computed_at=created_at,
+                )
+            )
+            self.sample_repository.upsert_sample(
+                RecommendationDecisionSample(
+                    recommendation_plan_id=plan.id or 0,
+                    ticker="EOG",
+                    horizon=StrategyHorizon.ONE_WEEK.value,
+                    action="long",
+                    decision_type=decision_type,
+                    shortlisted=shortlisted,
+                    confidence_percent=confidence,
+                    calibrated_confidence_percent=calibrated_confidence,
+                    setup_family="breakout",
+                    reviewed_at=created_at,
+                )
+            )
+            self.outcome_repository.upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=plan.id or 0,
+                    outcome=outcome,
+                    status="resolved",
+                    evaluated_at=created_at,
+                    confidence_bucket="high",
+                    setup_family="breakout",
+                )
+            )
+
+        run = RecommendationAutotuneService(self.session).run()
+
+        self.assertGreaterEqual(run.candidate_count, 100)
+        self.assertGreater(run.best_score or 0.0, run.baseline_score or 0.0)
+        self.assertGreater(run.winning_config["shortlist_aggressiveness"], 0)
+        self.assertIn("near_miss_gap_cutoff", run.winning_config)
+        self.assertTrue(any(candidate["shortlisted_selected_count"] > 0 for candidate in run.candidate_results))
+        self.assertTrue(any(candidate["near_miss_selected_count"] > 0 for candidate in run.candidate_results))
+        self.assertTrue(any(candidate["degraded_selected_count"] > 0 for candidate in run.candidate_results))
 
 
 class RecommendationAutotuneRouteTests(unittest.IsolatedAsyncioTestCase):
@@ -209,3 +276,5 @@ class RecommendationAutotuneRouteTests(unittest.IsolatedAsyncioTestCase):
             state_payload = state_response.json()
             self.assertEqual(state_payload["current_confidence_threshold"], 64.0)
             self.assertEqual(state_payload["latest_run"]["best_threshold"], 64.0)
+            self.assertIn("active_tuning", state_payload)
+            self.assertIn("shortlist_aggressiveness", state_payload["active_tuning"])

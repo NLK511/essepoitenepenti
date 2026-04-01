@@ -14,6 +14,10 @@ DEFAULT_SUMMARY_PROMPT = (
 )
 DEFAULT_APP_SETTINGS = {
     "confidence_threshold": "60",
+    "autotune_confidence_adjustment": "0",
+    "autotune_near_miss_gap_cutoff": "1.5",
+    "autotune_shortlist_aggressiveness": "1",
+    "autotune_degraded_penalty": "2.0",
     "optimization_minimum_resolved_trades": "50",
     "summary_backend": "pi_agent",
     "summary_model": "",
@@ -121,6 +125,26 @@ class SettingsRepository:
         normalized = f"{float(value):.2f}".rstrip("0").rstrip(".")
         return self.set_setting("confidence_threshold", normalized)
 
+    def get_autotune_config(self) -> dict[str, float]:
+        setting_map = self.get_setting_map()
+        return {
+            "confidence_adjustment": self._get_float(setting_map, "autotune_confidence_adjustment", 0.0),
+            "near_miss_gap_cutoff": self._get_float(setting_map, "autotune_near_miss_gap_cutoff", 1.5),
+            "shortlist_aggressiveness": self._get_float(setting_map, "autotune_shortlist_aggressiveness", 1.0),
+            "degraded_penalty": self._get_float(setting_map, "autotune_degraded_penalty", 2.0),
+        }
+
+    def set_autotune_config(self, *, confidence_adjustment: float, near_miss_gap_cutoff: float, shortlist_aggressiveness: float, degraded_penalty: float) -> dict[str, float]:
+        self.set_settings(
+            {
+                "autotune_confidence_adjustment": f"{float(confidence_adjustment):.2f}".rstrip("0").rstrip("."),
+                "autotune_near_miss_gap_cutoff": f"{float(near_miss_gap_cutoff):.2f}".rstrip("0").rstrip("."),
+                "autotune_shortlist_aggressiveness": f"{float(shortlist_aggressiveness):.2f}".rstrip("0").rstrip("."),
+                "autotune_degraded_penalty": f"{float(degraded_penalty):.2f}".rstrip("0").rstrip("."),
+            }
+        )
+        return self.get_autotune_config()
+
     def get_optimization_minimum_resolved_trades(self) -> int:
         setting_map = self.get_setting_map()
         raw_value = setting_map.get(
@@ -132,6 +156,14 @@ class SettingsRepository:
         except (TypeError, ValueError):
             parsed = int(DEFAULT_APP_SETTINGS["optimization_minimum_resolved_trades"])
         return max(1, parsed)
+
+    @staticmethod
+    def _get_float(setting_map: dict[str, str], key: str, default: float) -> float:
+        raw_value = setting_map.get(key, str(default))
+        try:
+            return float((raw_value or "").strip())
+        except (TypeError, ValueError):
+            return default
 
     def list_provider_credentials(self) -> list[ProviderCredential]:
         existing = {
