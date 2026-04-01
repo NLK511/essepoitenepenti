@@ -762,6 +762,56 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
         self.assertFalse(intraday_only)
         self.assertEqual(end_date, as_of)
 
+    def test_list_plans_skips_resolved_outcomes_in_batch_mode_but_keeps_explicit_manual_targets(self) -> None:
+        open_plan = self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=72.0,
+                entry_price_low=100.0,
+                entry_price_high=101.0,
+                stop_loss=96.0,
+                take_profit=106.0,
+                signal_breakdown={"setup_family": "continuation"},
+                computed_at=datetime(2024, 1, 1, 15, 0, tzinfo=timezone.utc),
+            )
+        )
+        resolved_plan = self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="MSFT",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=72.0,
+                entry_price_low=100.0,
+                entry_price_high=101.0,
+                stop_loss=96.0,
+                take_profit=106.0,
+                signal_breakdown={"setup_family": "continuation"},
+                computed_at=datetime(2024, 1, 1, 15, 0, tzinfo=timezone.utc),
+            )
+        )
+        self.outcomes.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=resolved_plan.id or 0,
+                ticker="MSFT",
+                action="long",
+                outcome="loss",
+                status="resolved",
+                confidence_bucket="65_to_79",
+                setup_family="continuation",
+                notes="already resolved",
+            )
+        )
+
+        batch_plans = RecommendationPlanEvaluationService(self.session)._list_plans(None)
+        batch_plan_ids = {plan.id for plan in batch_plans}
+        self.assertIn(open_plan.id, batch_plan_ids)
+        self.assertNotIn(resolved_plan.id, batch_plan_ids)
+
+        manual_plans = RecommendationPlanEvaluationService(self.session)._list_plans([resolved_plan.id or 0])
+        self.assertEqual([plan.id for plan in manual_plans], [resolved_plan.id])
+
     def test_evaluate_plan_matrix_covers_core_entry_stop_take_combinations(self) -> None:
         service = RecommendationPlanEvaluationService(self.session)
         computed_at = datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc)
