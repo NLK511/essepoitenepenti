@@ -2,13 +2,14 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { getJson, postForm } from "../api";
 import { Badge, Card, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { AppSetting, AppPreflightReport, OptimizationState, ProviderCredential, SettingsResponse } from "../types";
+import type { AppSetting, AppPreflightReport, AutotuneState, OptimizationState, ProviderCredential, SettingsResponse } from "../types";
 import { toSettingMap } from "../utils";
 
 interface SettingsViewData {
   settings: AppSetting[];
   providers: ProviderCredential[];
   optimization: OptimizationState;
+  autotune: AutotuneState;
   preflight: AppPreflightReport;
 }
 
@@ -31,6 +32,7 @@ export function SettingsPage() {
         settings: settingsResponse.settings,
         providers: settingsResponse.providers,
         optimization: settingsResponse.optimization,
+        autotune: settingsResponse.autotune,
         preflight,
       });
       setSelectedBackupPath(settingsResponse.optimization.latest_backup?.path ?? "");
@@ -105,6 +107,29 @@ export function SettingsPage() {
       await loadData();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to save optimization settings");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function saveAutotuneSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    try {
+      setSaving("autotune");
+      setError(null);
+      setNotice(null);
+      await postForm<{ autotune: AutotuneState }>("/api/settings/autotune", {
+        threshold_offset: String(formData.get("threshold_offset") ?? "0"),
+        confidence_adjustment: String(formData.get("confidence_adjustment") ?? "0"),
+        near_miss_gap_cutoff: String(formData.get("near_miss_gap_cutoff") ?? "0"),
+        shortlist_aggressiveness: String(formData.get("shortlist_aggressiveness") ?? "0"),
+        degraded_penalty: String(formData.get("degraded_penalty") ?? "0"),
+      });
+      setNotice("Autotune settings saved");
+      await loadData();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save autotune settings");
     } finally {
       setSaving(null);
     }
@@ -232,6 +257,23 @@ export function SettingsPage() {
                   <input name="value" defaultValue={settingMap.confidence_threshold ?? "60"} />
                 </label>
                 <button className="button" type="submit" disabled={saving === "app"}>{saving === "app" ? "Saving…" : "Save confidence threshold"}</button>
+              </form>
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Autotuning" title="Active recommendation tuning" subtitle="These values control how the live recommendation path calibrates confidence and shortlist selection. Autotune can write these settings back after a winning run, and operators can also edit them manually here." />
+              <form className="stack-form" onSubmit={saveAutotuneSettings}>
+                <div className="form-grid">
+                  <label className="form-field"><span>Threshold offset</span><input name="threshold_offset" defaultValue={String(data.autotune.threshold_offset)} /></label>
+                  <label className="form-field"><span>Confidence adjustment</span><input name="confidence_adjustment" defaultValue={String(data.autotune.confidence_adjustment)} /></label>
+                  <label className="form-field"><span>Near-miss cutoff</span><input name="near_miss_gap_cutoff" defaultValue={String(data.autotune.near_miss_gap_cutoff)} /></label>
+                  <label className="form-field"><span>Shortlist aggressiveness</span><input name="shortlist_aggressiveness" defaultValue={String(data.autotune.shortlist_aggressiveness)} /></label>
+                  <label className="form-field"><span>Degraded penalty</span><input name="degraded_penalty" defaultValue={String(data.autotune.degraded_penalty)} /></label>
+                </div>
+                <div className="helper-text">Set the threshold offset, confidence adjustment, and shortlist relaxations that the live proposal path should use. Zero values preserve the baseline behavior.</div>
+                <div className="cluster">
+                  <button className="button" type="submit" disabled={saving === "autotune"}>{saving === "autotune" ? "Saving…" : "Save autotune settings"}</button>
+                </div>
               </form>
             </Card>
 

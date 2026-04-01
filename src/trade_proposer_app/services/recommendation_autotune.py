@@ -161,6 +161,7 @@ class RecommendationAutotuneService:
         if apply:
             applied_threshold = round(winner.threshold, 2)
             applied_config = self.settings.set_autotune_config(
+                threshold_offset=winner.config.threshold_offset,
                 confidence_adjustment=winner.config.confidence_adjustment,
                 near_miss_gap_cutoff=winner.config.near_miss_gap_cutoff,
                 shortlist_aggressiveness=winner.config.shortlist_aggressiveness,

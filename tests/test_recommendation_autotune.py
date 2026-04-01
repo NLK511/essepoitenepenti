@@ -122,6 +122,7 @@ class RecommendationAutotuneServiceTests(unittest.TestCase):
     def test_run_scores_multi_parameter_grid_and_prefers_shortlist_promotion(self) -> None:
         self.settings_repository.set_confidence_threshold(60.0)
         self.settings_repository.set_autotune_config(
+            threshold_offset=0.0,
             confidence_adjustment=-4.0,
             near_miss_gap_cutoff=0.0,
             shortlist_aggressiveness=0.0,

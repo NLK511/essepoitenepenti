@@ -675,10 +675,19 @@ export interface OptimizationState {
   recent_backups: OptimizationBackup[];
 }
 
+export interface AutotuneState {
+  threshold_offset: number;
+  confidence_adjustment: number;
+  near_miss_gap_cutoff: number;
+  shortlist_aggressiveness: number;
+  degraded_penalty: number;
+}
+
 export interface SettingsResponse {
   settings: AppSetting[];
   providers: ProviderCredential[];
   optimization: OptimizationState;
+  autotune: AutotuneState;
 }
 
 export interface DocSection {

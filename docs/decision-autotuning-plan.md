@@ -18,7 +18,8 @@ This is a **development-only target plan**, not a live product capability.
 - a state endpoint at `GET /api/recommendation-autotune`
 - apply / dry-run support, with apply writing the winning tuning values back into active settings
 - live proposal-generation/scoring now reads the active autotune config and uses it in shortlist thresholds and calibration thresholds
-- unit and route coverage for scoring, persistence, apply behavior, and live-path integration
+- settings UI controls for viewing and editing the active autotune config
+- unit and route coverage for scoring, persistence, apply behavior, live-path integration, and settings editing
 
 ### Current scope
 - the autotune run now persists a broader active tuning config, even where downstream consumers do not yet use every field
