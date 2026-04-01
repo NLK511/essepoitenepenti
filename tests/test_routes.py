@@ -20,6 +20,7 @@ from trade_proposer_app.domain.models import (
     MacroContextSnapshot,
     PreflightCheck,
     RecommendationDecisionSample,
+    RecommendationDecisionSample,
     RecommendationPlan,
     RecommendationPlanOutcome,
     Run,
@@ -120,7 +121,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     "ticker_generation": [{"ticker": "AAPL", "duration_seconds": 0.03}],
                 },
             )
-            RecommendationPlanRepository(session).create_plan(
+            plan = RecommendationPlanRepository(session).create_plan(
                 RecommendationPlan(
                     ticker="AAPL",
                     horizon="1w",
@@ -137,6 +138,21 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     warnings=["summary timeout", "feed timeout"],
                     signal_breakdown={"setup_family": "continuation"},
                     evidence_summary={"provider_errors": ["feed timeout"]},
+                    run_id=run.id,
+                    job_id=job.id,
+                )
+            )
+            RecommendationDecisionSampleRepository(session).upsert_sample(
+                RecommendationDecisionSample(
+                    recommendation_plan_id=plan.id or 0,
+                    ticker="AAPL",
+                    horizon="1w",
+                    action="long",
+                    decision_type="actionable",
+                    confidence_percent=81.0,
+                    calibrated_confidence_percent=81.0,
+                    setup_family="continuation",
+                    reviewed_at=datetime(2026, 3, 24, tzinfo=timezone.utc),
                     run_id=run.id,
                     job_id=job.id,
                 )

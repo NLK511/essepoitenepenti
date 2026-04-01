@@ -1501,6 +1501,39 @@ class RepositoryTests(unittest.TestCase):
         claimed = runs.claim_next_queued_run()
         assert claimed is not None
         runs.update_status(run.id or 0, "completed")
+        plan = RecommendationPlanRepository(session).create_plan(
+            RecommendationPlan(
+                ticker="AAPL",
+                horizon="1w",
+                action="long",
+                confidence_percent=80.0,
+                entry_price_low=100.0,
+                entry_price_high=101.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                holding_period_days=5,
+                risk_reward_ratio=2.0,
+                thesis_summary="Seeded historical plan",
+                rationale_summary="Repository delete cleanup coverage",
+                run_id=run.id,
+                job_id=job.id,
+            )
+        )
+        RecommendationDecisionSampleRepository(session).upsert_sample(
+            RecommendationDecisionSample(
+                recommendation_plan_id=plan.id or 0,
+                ticker="AAPL",
+                horizon="1w",
+                action="long",
+                decision_type="actionable",
+                confidence_percent=80.0,
+                calibrated_confidence_percent=80.0,
+                setup_family="continuation",
+                reviewed_at=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc),
+                run_id=run.id,
+                job_id=job.id,
+            )
+        )
         SupportSnapshotRepository(session).create_snapshot(
             scope="macro",
             subject_key="global",
@@ -1512,6 +1545,7 @@ class RepositoryTests(unittest.TestCase):
         runs.delete_run(run.id or 0)
 
         self.assertIsNone(session.get(RunRecord, run.id or 0))
+        self.assertEqual(RecommendationDecisionSampleRepository(session).list_samples(limit=10), [])
         self.assertEqual(SupportSnapshotRepository(session).list_recent_snapshots(), [])
 
     def test_run_repository_recovers_stale_running_runs(self) -> None:

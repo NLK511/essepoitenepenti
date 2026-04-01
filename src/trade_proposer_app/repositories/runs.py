@@ -10,6 +10,7 @@ from trade_proposer_app.persistence.models import (
     IndustryContextSnapshotRecord,
     JobRecord,
     MacroContextSnapshotRecord,
+    RecommendationDecisionSampleRecord,
     RecommendationOutcomeRecord,
     RecommendationPlanRecord,
     RunRecord,
@@ -343,6 +344,11 @@ class RunRepository:
             ).all()
         )
         if plan_ids:
+            self.session.execute(
+                delete(RecommendationDecisionSampleRecord).where(
+                    RecommendationDecisionSampleRecord.recommendation_plan_id.in_(plan_ids)
+                )
+            )
             self.session.execute(
                 delete(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.recommendation_plan_id.in_(plan_ids))
             )
