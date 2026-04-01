@@ -25,8 +25,11 @@ Use progressive disclosure so operators see:
 2. one compact explanation second
 3. the raw details only when they expand them
 
-## Implementation status
+## Current implementation snapshot
 
+This document is both a target plan and a status tracker for UI cleanup.
+
+### Already underway
 The first refactor pass is underway in the frontend:
 
 - `frontend/src/components/decision-surface.tsx` now provides shared compact surfaces for scores, metric clusters, warnings, and provenance

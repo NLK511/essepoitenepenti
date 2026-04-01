@@ -5,6 +5,8 @@
 This document answers one question:
 > what can the app do today?
 
+It is a current-state reference, not a roadmap. The sections below separate shipped capabilities from current limits.
+
 Trade Proposer App covers the main operator loop inside one product:
 - define watchlists
 - create and run jobs

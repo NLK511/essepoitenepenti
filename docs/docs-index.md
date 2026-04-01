@@ -44,8 +44,18 @@ These docs define the current product truth.
   - context and support-snapshot layers
   - scoring and risk logic
   - methodology limits
+- `decision-sample-tuning-guide.md`
+  - how to use decision samples to tune thresholds, calibration, shortlist rules, and degradation handling
+  - practical interpretation of confidence gap, review priority, shortlist status, and decision type
+- `decision-autotuning-plan.md`
+  - development-only exploration plan for an autonomous raw tuning loop
+  - candidate search, scoring, persistence, and apply/dry-run flow
+  - not a current product behavior spec
+- `recommendation-plan-resolution-spec.md`
+  - canonical plan resolution semantics for win/loss outcome determination
+  - intraday truth, daily prefiltering, open-plan batch evaluation, and manual closed-plan reevaluation
 - `recommendation-plan-evaluation-recompute-notes.md`
-  - point-in-time evaluation compromises and recompute semantics
+  - point-in-time evaluation implementation notes and recompute semantics
   - pitfalls encountered during the EOG regression work
   - blind spots to keep in mind for future evaluator changes
 
@@ -58,18 +68,18 @@ These docs define the current product truth.
 
 ### Active implementation tracking
 - `ontology-enrichment-plan.md`
-  - planned expansion of ticker, industry, and relationship coverage
-  - tracking page for ontology work progress
+  - active implementation plan and status tracker for ticker, industry, and relationship coverage
   - guidance for validation, reporting, and split file structure
 - `historical-replay-backtesting-plan.md`
-  - phased plan for building a point-in-time historical replay dataset
+  - target plan for building a point-in-time historical replay capability
   - rules for strict vs research backtests
   - guidance for context, news, and social-data feasibility
+  - does not track repo status in detail
 - `historical-replay-implementation-checklist.md`
-  - codebase-specific implementation checklist for historical replay
-  - schema, services, repositories, jobs, and MVP delivery order
+  - codebase-specific implementation checklist and status tracker for historical replay
+  - current implementation snapshot plus schema, services, repositories, jobs, and MVP delivery order
 - `ui-decluttering-plan.md`
-  - review of repeated information across pages
+  - active UI rationalization plan for repeated information across pages
   - proposed shared UI primitives and page-by-page decluttering order
   - canonical hierarchy for summaries, details, and raw diagnostics
 

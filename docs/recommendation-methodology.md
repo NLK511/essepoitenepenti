@@ -5,6 +5,8 @@
 This document answers one question:
 > how does the app produce recommendation outputs?
 
+It is a current-behavior reference. The pipeline below reflects the live recommendation path, while the limits and transitional notes call out where the implementation is still evolving.
+
 The point of the methodology is not to pile on more signals. The point is to produce recommendations that are:
 - reproducible
 - inspectable
@@ -223,6 +225,9 @@ It stores the main decision context for later analysis, including:
 
 The goal is to keep the live planner conservative while still collecting enough structured examples to study near-misses and low-volume action cases.
 
+For a practical walkthrough of how to tune the planner from these samples, see `decision-sample-tuning-guide.md`.
+For a development-only autonomous tuning plan, see `decision-autotuning-plan.md`.
+
 ## Methodology limits
 
 The current limits matter:
@@ -234,7 +239,8 @@ The current limits matter:
 - ticker deep analysis still reuses some older proposal internals
 - the methodology still uses a transitional support-snapshot-backed resolver layer for shared macro and industry context, though it now bridges redesign-native events into these records
 - confidence calibration is active and influences plan construction based on historical outcomes
-- evaluation/recompute semantics, including the point-in-time compromise between daily and intraday bars, are documented in `recommendation-plan-evaluation-recompute-notes.md`
+- canonical plan resolution semantics are defined in `recommendation-plan-resolution-spec.md`
+- evaluation/recompute implementation notes and historical pitfalls are documented in `recommendation-plan-evaluation-recompute-notes.md`
 
 ## See also
 

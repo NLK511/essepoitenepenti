@@ -15,14 +15,32 @@ The bug surfaced because the evaluator was mixing daily bars, intraday bars, and
 
 ## Core architectural choice
 
-We chose to make recommendation-plan evaluation a **derived, recomputable artifact** rather than a one-time immutable judgment.
+Recommendation-plan evaluation is a **derived, recomputable artifact** rather than a one-time immutable judgment.
 
 That means:
 - the source of truth is the stored recommendation plan plus market history
-- the stored outcome is meant to be **replaceable** when the algorithm changes
+- the stored outcome can be refreshed when the evaluator is corrected
 - recomputation is a normal operation, not an exceptional one
 
-This is important because the algorithm is still evolving. If the evaluator improves, we want to be able to run it again and refresh the stored outcome.
+Operationally, scheduled jobs should only process open plans, while manual single-plan evaluation may revisit a previously closed plan when specifically requested.
+
+This document records the implementation history and known pitfalls. The canonical resolution semantics themselves are defined in `recommendation-plan-resolution-spec.md`.
+
+## Current implementation snapshot
+
+This section is a reconciliation aid: it describes what the codebase has already implemented versus what still needs to be aligned to the canonical spec.
+
+### Already implemented
+- outcome rows are derived and recomputable
+- the evaluator stores intraday resolution fields such as entry/stop/take hits
+- recomputation can overwrite stored outcomes
+- daily history fallback handling exists for incomplete persisted windows
+- manual specific-plan evaluation paths exist conceptually through targeted triggers
+
+### Still to reconcile
+- remove or fence off legacy session-based daily-vs-intraday selection as the final decision path
+- enforce batch open-plan filtering in the scheduler/worker path
+- ensure daily bars remain prefilter-only in practice, not just in documentation
 
 ## What changed in the evaluator
 
@@ -38,14 +56,14 @@ That matters because:
 
 ### 2. Daily vs intraday selection
 
-We settled on a compromise:
-- **current-session plans** may use intraday bars while the evaluation run is still inside market hours
-- **prior-session plans** use daily bars
-- once the evaluation run is **after the market close**, same-day plans should be resolved from daily bars so a real stop-loss can be captured instead of leaving the plan pending
+The earlier evaluator tried to switch between daily and intraday bars based on session timing. That is the exact class of behavior that caused the `315` / `635` mismatch.
 
-This was done because using intraday for all plans was too aggressive and caused earlier plans like `315` to lose their daily-bar loss classification.
+Current canonical guidance is now defined in `recommendation-plan-resolution-spec.md`:
+- use daily bars only as a cheap prefilter
+- use intraday bars as the source of truth for final win/loss resolution
+- do not use a daily-bar shortcut as the final outcome path for same-day or post-close plans
 
-The current-session check is a heuristic, not a full exchange-calendar engine.
+This section is kept as historical context only. New evaluator work should follow the resolution spec, not the old session-based compromise.
 
 ### 3. yfinance normalization
 
@@ -95,39 +113,23 @@ This is the key operational compromise:
 
 So if the algorithm changes, the same plan can be reevaluated and the stored outcome updated.
 
-## The compromise we made
+## Historical implementation note
 
-We did **not** implement a full exchange-calendar / session engine.
+The earlier implementation used a session heuristic to decide whether to read daily or intraday bars first.
 
-Instead, we used a pragmatic approximation:
-- infer region/timezone from the ticker taxonomy
-- infer whether the plan is “current session” from local market date and trading hours
-- prefer intraday bars only when that heuristic says the plan is in-session
-
-This is good enough to fix the current bug class, but it is not perfect.
-
-### Why this compromise was acceptable
-
-A proper exchange-calendar implementation would be more accurate, but it would also require:
-- exchange-specific holiday calendars
-- half-day handling
-- premarket/after-hours policy
-- cross-listed instrument rules
-- more maintenance overhead
-
-The current heuristic is a smaller change that preserves most point-in-time behavior while still enabling recomputation.
+That approach is now superseded by the canonical resolution spec. It remains here only so the earlier EOG debugging context is understandable.
 
 ## Pitfalls we encountered
 
-### 1. Same-day daily bar semantics
+### 1. Legacy same-day daily-bar shortcut
 
-A major semantic mismatch was whether same-day daily bars should count for intraday `computed_at` plans.
+A major semantic mismatch was the attempt to treat same-day daily bars as a final resolution source for intraday-style plans.
 
-That question was the root of the `315` vs `635` confusion:
-- if you include same-day daily bars too early, you can manufacture a `loss`
-- if you exclude them too aggressively, you can misclassify a valid loss as `no_entry`
+That was the root of the `315` vs `635` confusion:
+- using same-day daily bars too early can manufacture a loss from incomplete timing information
+- excluding too much intraday information can misclassify a valid loss as `no_entry`
 
-We eventually kept the rule conservative and made current-session logic explicit.
+The fix is to treat daily bars as a prefilter only and resolve the actual outcome from intraday timestamps.
 
 ### 2. Single-ticker `yfinance` can still return `MultiIndex`
 
@@ -217,9 +219,9 @@ We added and ran coverage for:
 If you are changing the evaluator in the future, remember:
 
 1. **Never assume bar timestamps equal bar availability.**
-2. **Do not rely on daily bars when the plan is effectively intraday.**
-3. **Recompute is allowed to overwrite the stored outcome.**
-4. **The current session heuristic is a compromise, not a perfect calendar.**
+2. **Use daily bars only as a prefilter; intraday bars are the resolution source of truth.**
+3. **Recompute is allowed to overwrite the stored outcome when the evaluator or data window was wrong.**
+4. **Do not reintroduce a session-based daily-final-resolution path.**
 5. **Treat incomplete persisted history as incomplete; fall back instead of guessing.**
 6. **Keep a regression test for the real EOG plans, not just synthetic fixtures.**
 

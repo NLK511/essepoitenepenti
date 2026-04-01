@@ -9,6 +9,8 @@ It covers three things only:
 - what still needs work
 - what is clearly later
 
+Anything already shipped should live in the canonical current-state docs, not be re-described here as future work.
+
 Detailed completed-phase history is in `archive/roadmap-history.md`.
 
 ## Current shipped baseline

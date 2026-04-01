@@ -18,7 +18,9 @@ The hard part is the app's differentiated layer:
 - industry context
 - narrative summaries and event interpretation
 
-This document defines a practical and disciplined path to build a historical replay capability without pretending we can perfectly reconstruct every past state.
+This document defines the **target** path for historical replay: the practical and disciplined capability we want to build without pretending we can perfectly reconstruct every past state.
+
+For current repo status, see the implementation snapshot below and `historical-replay-implementation-checklist.md`.
 
 ---
 
@@ -43,6 +45,26 @@ This project does **not** aim to:
 - claim exact reproduction of what the live app would have known on every historical timestamp
 - optimize for maximum data quantity at the expense of point-in-time integrity
 - introduce retrospective summaries that quietly leak future information into the replay
+
+## Current implementation snapshot
+
+This section separates what the repo already has from what this plan still expects.
+
+### Already implemented
+- Phase 1 replay batch/run scaffolding and API flow
+- explicit replay provenance on generated batches and slices
+- market-data hydration for replay inputs
+- curated explicit universe presets
+- `next_open` / `next_close` entry timing support in replay runs
+- dummy replay signal scaffolding pending replacement with app-native signals
+
+### Still expected
+- stronger historical input coverage beyond market bars
+- replay-generated context snapshots and plan outputs
+- explicit outcome labeling and evaluation outputs for replay-generated plans
+- archived provenance for future validation
+
+The live recommendation-plan outcome resolution rules are **not** defined here. They live in `recommendation-plan-resolution-spec.md`.
 
 ---
 
@@ -229,7 +251,7 @@ Define the rules, success criteria, and boundaries before building data pipeline
 - explicit policy for approximate vs strict backtests
 
 ### Key decisions
-- daily vs intraday replay granularity for the MVP
+- replay granularity for the research MVP (daily vs intraday) as a replay-design choice, not a live plan-resolution rule
 - entry timing convention, e.g. close-to-next-open or next-open execution
 - outcome windows, e.g. 1d / 5d / 10d / 20d and excursion metrics
 - whether news/social first-seen time or published time is authoritative when both exist
@@ -459,7 +481,7 @@ Results from research backtests must never be presented as equivalent to strict 
 ## MVP recommendation
 
 The fastest useful MVP is:
-- daily replay granularity
+- **research replay mode with daily granularity** for the initial backtesting slice
 - free-provider daily OHLCV as a research-grade source
 - explicit ticker-list universes only
 - first curated presets: `us_large_cap_top20_v1` and `eu_large_cap_top20_v1`
@@ -471,6 +493,8 @@ The fastest useful MVP is:
 - historical headlines with timestamps and source
 - optional article text when available
 - no dependency on full tweet/X coverage
+
+This MVP is about replay research throughput, not live recommendation-plan win/loss semantics. Live outcome resolution remains governed by `recommendation-plan-resolution-spec.md`.
 
 This MVP is enough to test:
 - whether context-aware plans beat technical-only baselines

@@ -551,6 +551,29 @@ A useful first slice should backtest without depending on historical tweets or f
 
 ---
 
+## Current implementation snapshot
+
+This section separates what is already in the repo from what the remaining checklist still expects.
+
+### Already implemented
+- `historical_replay` job type and replay batch/slice domain models
+- replay batch/slice persistence and API/job-execution plumbing
+- replay batch run artifacts with provenance metadata
+- replay input assembly for point-in-time-valid market data
+- daily-provider market-data hydration for the replay MVP
+- curated universe presets and `next_open` / `next_close` replay timing support
+
+### Still expected
+- technical indicator computation using only prior bars
+- recommendation-plan generation for one replay slice
+- historical macro/event replay inputs and proxy context
+- replay outcome labeling and calibration reporting
+- historical news replay inputs
+- replay-specific operator/research UI
+- social and forward archival work once source quality is acceptable
+
+The phase checklist below is the target build order. Checked items indicate work already completed; unchecked items remain to be done.
+
 ## Recommended phase-by-phase build checklist
 
 ## Phase 0 — definitions and rails

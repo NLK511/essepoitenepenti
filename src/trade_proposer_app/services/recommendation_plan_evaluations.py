@@ -91,12 +91,10 @@ class RecommendationPlanEvaluationService:
             source_mode = "intraday" if use_intraday else "daily"
             if price_data is None and use_intraday:
                 logger.debug(
-                    "plan %s ticker=%s intraday history missing; falling back to daily",
+                    "plan %s ticker=%s intraday history missing; leaving outcome pending rather than falling back to daily",
                     plan.id,
                     ticker,
                 )
-                price_data = price_history_cache.get((ticker, False))
-                source_mode = "daily"
             logger.debug(
                 "plan evaluation input: plan_id=%s ticker=%s action=%s computed_at=%s market_date=%s source_mode=%s price_rows=%s",
                 plan.id,
@@ -143,6 +141,12 @@ class RecommendationPlanEvaluationService:
         rows = list(self.session.scalars(query).all())
         if not recommendation_plan_ids:
             rows = [row for row in rows if row.action in {"long", "short", "no_action", "watchlist"}]
+            outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
+            rows = [
+                row
+                for row in rows
+                if outcome_map.get(row.id or 0) is None or outcome_map[row.id or 0].status != "resolved"
+            ]
         return [self.plans._to_model(row) for row in rows]
 
     def _prepare_price_histories(

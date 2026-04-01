@@ -18,6 +18,19 @@ The ontology started as `src/trade_proposer_app/data/ticker_taxonomy.json`. The 
 
 This plan is here so progress can be tracked in one place instead of being scattered across chat history.
 
+## Current implementation snapshot
+
+This document is a live implementation plan and progress tracker.
+
+### Already in place
+- the ontology is split into ticker, industry, sector, relationship, and event-vocabulary files
+- the taxonomy service already validates governed registries and typed taxonomy payloads
+- many ticker, industry, relationship, and review-label governance tasks are already complete
+
+### Still in progress
+- a few remaining relationship/channel fields still need governed-registry cleanup where practical
+- some taxonomy coverage and query-quality improvements remain unfinished
+
 ## Current baseline
 
 Today the ontology is split into ticker, industry, sector, relationship, and event-vocabulary files, with the ticker layer still carrying fields like:
