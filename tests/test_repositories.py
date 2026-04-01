@@ -15,6 +15,7 @@ from trade_proposer_app.domain.models import (
     IndustryContextSnapshot,
     MacroContextSnapshot,
     Recommendation,
+    RecommendationDecisionSample,
     RecommendationPlan,
     RecommendationPlanEvidenceSummary,
     RecommendationPlanOutcome,
@@ -1443,7 +1444,7 @@ class RepositoryTests(unittest.TestCase):
         claimed = runs.claim_next_queued_run()
         assert claimed is not None
         runs.update_status(run.id or 0, "completed")
-        RecommendationPlanRepository(session).create_plan(
+        plan = RecommendationPlanRepository(session).create_plan(
             RecommendationPlan(
                 ticker="AAPL",
                 horizon="1w",
@@ -1461,6 +1462,21 @@ class RepositoryTests(unittest.TestCase):
                 job_id=job.id,
             )
         )
+        RecommendationDecisionSampleRepository(session).upsert_sample(
+            RecommendationDecisionSample(
+                recommendation_plan_id=plan.id or 0,
+                ticker="AAPL",
+                horizon="1w",
+                action="long",
+                decision_type="actionable",
+                confidence_percent=80.0,
+                calibrated_confidence_percent=80.0,
+                setup_family="continuation",
+                reviewed_at=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc),
+                run_id=run.id,
+                job_id=job.id,
+            )
+        )
         SupportSnapshotRepository(session).create_snapshot(
             scope="macro",
             subject_key="global",
@@ -1473,6 +1489,7 @@ class RepositoryTests(unittest.TestCase):
 
         self.assertIsNone(session.get(JobRecord, job.id or 0))
         self.assertIsNone(session.get(RunRecord, run.id or 0))
+        self.assertEqual(RecommendationDecisionSampleRepository(session).list_samples(limit=10), [])
         self.assertEqual(SupportSnapshotRepository(session).list_recent_snapshots(), [])
 
     def test_run_repository_delete_removes_support_snapshots(self) -> None:

@@ -19,6 +19,7 @@ from trade_proposer_app.domain.models import (
     IndustryContextSnapshot,
     MacroContextSnapshot,
     PreflightCheck,
+    RecommendationDecisionSample,
     RecommendationPlan,
     RecommendationPlanOutcome,
     Run,
@@ -28,6 +29,7 @@ from trade_proposer_app.domain.models import (
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
@@ -640,7 +642,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             claimed = runs.claim_next_queued_run()
             assert claimed is not None
             runs.update_status(run.id or 0, "completed")
-            RecommendationPlanRepository(session).create_plan(
+            plan = RecommendationPlanRepository(session).create_plan(
                 RecommendationPlan(
                     ticker="AAPL",
                     horizon="1w",
@@ -654,6 +656,21 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     risk_reward_ratio=2.0,
                     thesis_summary="Seeded historical plan",
                     rationale_summary="Job delete cleanup coverage",
+                    run_id=run.id,
+                    job_id=job.id,
+                )
+            )
+            RecommendationDecisionSampleRepository(session).upsert_sample(
+                RecommendationDecisionSample(
+                    recommendation_plan_id=plan.id or 0,
+                    ticker="AAPL",
+                    horizon="1w",
+                    action="long",
+                    decision_type="actionable",
+                    confidence_percent=80.0,
+                    calibrated_confidence_percent=80.0,
+                    setup_family="continuation",
+                    reviewed_at=datetime(2026, 3, 24, tzinfo=timezone.utc),
                     run_id=run.id,
                     job_id=job.id,
                 )
