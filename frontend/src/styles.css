@@ -784,6 +784,14 @@ td {
   word-break: break-word;
 }
 
+.recommendation-plan-row.is-highlighted td {
+  background: var(--accent-soft);
+}
+
+.recommendation-plan-row.is-highlighted td:first-child {
+  box-shadow: inset 4px 0 0 var(--accent-strong);
+}
+
 .recommendation-plan-expanded-panel {
   display: grid;
   gap: 12px;

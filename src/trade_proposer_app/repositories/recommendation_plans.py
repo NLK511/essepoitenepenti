@@ -71,6 +71,7 @@ class RecommendationPlanRepository:
         limit: int = 50,
         run_id: int | None = None,
         setup_family: str | None = None,
+        plan_id: int | None = None,
     ) -> list[RecommendationPlan]:
         query = select(RecommendationPlanRecord)
         if ticker:
@@ -79,6 +80,8 @@ class RecommendationPlanRepository:
             query = query.where(RecommendationPlanRecord.action == action)
         if run_id is not None:
             query = query.where(RecommendationPlanRecord.run_id == run_id)
+        if plan_id is not None:
+            query = query.where(RecommendationPlanRecord.id == plan_id)
         fetch_limit = max(limit * 4, limit) if setup_family else limit
         rows = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc()).limit(fetch_limit)).all()
         plans = [self._to_model(row) for row in rows]

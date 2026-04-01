@@ -231,6 +231,7 @@ function SetupFamilySliceTable({
 
 export function RecommendationPlansPage() {
   const [searchParams, setSearchParams] = useSearchParams({ limit: "100" });
+  const focusedPlanId = searchParams.get("plan_id");
   const [plans, setPlans] = useState<RecommendationPlan[] | null>(null);
   const [planStats, setPlanStats] = useState<RecommendationPlanStats | null>(null);
   const [macroContextByRun, setMacroContextByRun] = useState<Record<number, MacroContextSnapshot | null>>({});
@@ -250,10 +251,12 @@ export function RecommendationPlansPage() {
     async function load() {
       try {
         setError(null);
+        setExpandedPlanRows({});
         const summaryParams = new URLSearchParams({ limit: "500" });
         const runId = searchParams.get("run_id");
         const ticker = searchParams.get("ticker");
         const setupFamily = searchParams.get("setup_family");
+        const planId = searchParams.get("plan_id");
         if (runId) {
           summaryParams.set("run_id", runId);
         }
@@ -262,6 +265,9 @@ export function RecommendationPlansPage() {
         }
         if (setupFamily) {
           summaryParams.set("setup_family", setupFamily);
+        }
+        if (planId) {
+          summaryParams.set("plan_id", planId);
         }
         const summaryQuery = summaryParams.toString();
         const [planResults, stats] = await Promise.all([
@@ -276,6 +282,15 @@ export function RecommendationPlansPage() {
         setEvidenceConcentration(await getJson<RecommendationEvidenceConcentrationSummary>(`/api/recommendation-outcomes/evidence-concentration?${summaryQuery}`));
 
         const runIds = Array.from(new Set(planResults.map((item) => item.run_id).filter((value): value is number => typeof value === "number"))).slice(0, 20);
+        if (planId) {
+          const targetPlanId = Number(planId);
+          if (!Number.isNaN(targetPlanId)) {
+            const targetPlan = planResults.find((item) => item.id === targetPlanId);
+            if (targetPlan?.id !== null && targetPlan?.id !== undefined) {
+              setExpandedPlanRows({ [String(targetPlan.id)]: true });
+            }
+          }
+        }
         if (runIds.length === 0) {
           setMacroContextByRun({});
           setIndustryContextByRun({});
@@ -295,6 +310,21 @@ export function RecommendationPlansPage() {
     }
     void load();
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!focusedPlanId || !plans) {
+      return;
+    }
+    const targetPlanId = Number(focusedPlanId);
+    if (Number.isNaN(targetPlanId)) {
+      return;
+    }
+    const row = document.getElementById(`recommendation-plan-row-${targetPlanId}`);
+    if (!row) {
+      return;
+    }
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusedPlanId, plans]);
 
   async function queueEvaluation(planId?: number) {
     try {
@@ -379,6 +409,7 @@ export function RecommendationPlansPage() {
           <label className="form-field"><span>Ticker</span><input name="ticker" defaultValue={searchParams.get("ticker") ?? ""} placeholder="AAPL" /></label>
           <label className="form-field"><span>Action</span><select name="action" defaultValue={searchParams.get("action") ?? ""}><option value="">All</option><option value="long">long</option><option value="short">short</option><option value="no_action">no_action</option></select></label>
           <label className="form-field"><span>Run id</span><input name="run_id" defaultValue={searchParams.get("run_id") ?? ""} placeholder="145" /></label>
+          <label className="form-field"><span>Plan id</span><input name="plan_id" defaultValue={searchParams.get("plan_id") ?? ""} placeholder="812" /></label>
           <label className="form-field"><span>Setup family</span><select name="setup_family" defaultValue={searchParams.get("setup_family") ?? ""}><option value="">All</option><option value="breakout">breakout</option><option value="continuation">continuation</option><option value="mean_reversion">mean_reversion</option><option value="breakdown">breakdown</option><option value="catalyst_follow_through">catalyst_follow_through</option><option value="macro_beneficiary_loser">macro_beneficiary_loser</option></select></label>
           <label className="form-field"><span>Limit</span><select name="limit" defaultValue={searchParams.get("limit") ?? "100"}><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option></select></label>
           <div className="form-actions">
@@ -765,7 +796,10 @@ export function RecommendationPlansPage() {
                   const takeLabel = plan.take_profit !== null && plan.take_profit !== undefined ? String(plan.take_profit) : "—";
                   return (
                     <Fragment key={planKey}>
-                      <tr className={`recommendation-plan-row${isExpanded ? " is-expanded" : ""}`}>
+                      <tr
+                        id={plan.id !== null && plan.id !== undefined ? `recommendation-plan-row-${plan.id}` : undefined}
+                        className={`recommendation-plan-row${isExpanded ? " is-expanded" : ""}${focusedPlanId && plan.id !== null && String(plan.id) === focusedPlanId ? " is-highlighted" : ""}`}
+                      >
                         <td>{formatDate(plan.computed_at)}</td>
                         <td>
                           <div className="cluster">

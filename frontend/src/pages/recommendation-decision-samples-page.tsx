@@ -81,7 +81,7 @@ export function RecommendationDecisionSamplesPage() {
       <PageHeader
         kicker="Recommendation workflow"
         title="Decision samples"
-        subtitle="This page is for tuning and review. It keeps near-misses, rejected setups, and actionable plans in one compact queue so small action counts do not leave you blind to what the planner is doing."
+        subtitle="This page is for tuning and review. It keeps near-misses, rejected setups, and actionable plans in one central review surface so small action counts do not leave you blind to what the planner is doing."
         actions={<Link to="/jobs/recommendation-plans" className="button-secondary">Back to plans</Link>}
       />
 
@@ -98,56 +98,62 @@ export function RecommendationDecisionSamplesPage() {
             <StatCard label="Degraded" value={summary.degraded} helper="Plans produced with missing or failed deep analysis" />
           </section>
 
-          <section className="two-column">
-            <Card>
-              <SectionTitle
-                kicker="Review queue"
-                title="High-priority samples"
-                subtitle="Use this list to inspect borderline no-action plans and the rare actionable cases side by side."
-              />
-              {highPrioritySamples.length === 0 ? (
-                <EmptyState message="No decision samples available yet." />
-              ) : (
-                <div className="data-stack top-gap-small">
-                  {highPrioritySamples.map((sample) => (
-                    <article key={sample.id ?? `${sample.ticker}-${sample.created_at}`} className="data-card">
-                      <div className="data-card-header">
-                        <div className="cluster">
-                          <Link to={`/tickers/${sample.ticker}`} className="badge badge-info badge-link">{sample.ticker}</Link>
-                          <Badge tone={decisionTone(sample.decision_type)}>{sample.decision_type}</Badge>
-                          <Badge tone={priorityTone(sample.review_priority)}>{sample.review_priority}</Badge>
-                        </div>
-                        <div className="helper-text">{formatDate(sample.created_at)}</div>
+          <Card>
+            <SectionTitle
+              kicker="Review queue"
+              title="High-priority samples"
+              subtitle="Use this list to inspect borderline no-action plans and the rare actionable cases side by side."
+            />
+            {highPrioritySamples.length === 0 ? (
+              <EmptyState message="No decision samples available yet." />
+            ) : (
+              <div className="data-stack top-gap-small">
+                {highPrioritySamples.map((sample) => (
+                  <article key={sample.id ?? `${sample.ticker}-${sample.created_at}`} className="data-card">
+                    <div className="data-card-header">
+                      <div className="cluster">
+                        <Link to={`/tickers/${sample.ticker}`} className="badge badge-info badge-link">{sample.ticker}</Link>
+                        <Badge tone={decisionTone(sample.decision_type)}>{sample.decision_type}</Badge>
+                        <Badge tone={priorityTone(sample.review_priority)}>{sample.review_priority}</Badge>
                       </div>
-                      <div className="cluster top-gap-small">
-                        <Badge>{sample.action}</Badge>
-                        <Badge>{sample.horizon}</Badge>
-                        <Badge tone={sample.shortlisted ? "ok" : "neutral"}>{sample.shortlisted ? `shortlist #${sample.shortlist_rank ?? "?"}` : "not shortlisted"}</Badge>
-                        <Badge tone={sample.confidence_gap_percent !== null && sample.confidence_gap_percent >= 0 ? "ok" : "warning"}>{gapLabel(sample.confidence_gap_percent)}</Badge>
-                      </div>
-                      <div className="helper-text top-gap-small">Reason: {sample.decision_reason || "—"}</div>
-                      <div className="helper-text">Notes: {truncate(sample.review_notes || sample.decision_reason || "No review notes stored.")}</div>
-                      <div className="helper-text">Run {sample.run_id ?? "—"} · Job {sample.job_id ?? "—"} · Signal {sample.ticker_signal_snapshot_id ?? "—"}</div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </Card>
+                      <div className="helper-text">{formatDate(sample.created_at)}</div>
+                    </div>
+                    <div className="cluster top-gap-small">
+                      <Badge>{sample.action}</Badge>
+                      <Badge>{sample.horizon}</Badge>
+                      <Badge tone={sample.shortlisted ? "ok" : "neutral"}>{sample.shortlisted ? `shortlist #${sample.shortlist_rank ?? "?"}` : "not shortlisted"}</Badge>
+                      <Badge tone={sample.confidence_gap_percent !== null && sample.confidence_gap_percent >= 0 ? "ok" : "warning"}>{gapLabel(sample.confidence_gap_percent)}</Badge>
+                    </div>
+                    <div className="helper-text top-gap-small">Reason: {sample.decision_reason || "—"}</div>
+                    <div className="helper-text">Notes: {truncate(sample.review_notes || sample.decision_reason || "No review notes stored.")}</div>
+                    <div className="helper-text">Run {sample.run_id ?? "—"} · Job {sample.job_id ?? "—"} · Signal {sample.ticker_signal_snapshot_id ?? "—"}</div>
+                    <div className="cluster top-gap-small">
+                      <Link
+                        to={sample.recommendation_plan_id ? `/jobs/recommendation-plans?plan_id=${sample.recommendation_plan_id}` : "/jobs/recommendation-plans"}
+                        className="button-secondary"
+                      >
+                        Open plan
+                      </Link>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </Card>
 
-            <Card>
-              <SectionTitle
-                kicker="Tuning guidance"
-                title="How to use the samples"
-                subtitle="This dataset is intentionally broader than final outcomes so threshold tuning has enough signal to work with."
-              />
-              <ul className="checklist">
-                <li>Start with high-priority near misses before changing thresholds.</li>
-                <li>Compare actionable samples with rejected samples at similar confidence.</li>
-                <li>Look at the confidence gap and shortlist decision payload to understand why a plan missed escalation.</li>
-                <li>Use the run and ticker links to jump back to the canonical evidence views.</li>
-              </ul>
-            </Card>
-          </section>
+          <Card>
+            <SectionTitle
+              kicker="Tuning guidance"
+              title="How to use the samples"
+              subtitle="This dataset is intentionally broader than final outcomes so threshold tuning has enough signal to work with."
+            />
+            <ul className="checklist">
+              <li>Start with high-priority near misses before changing thresholds.</li>
+              <li>Compare actionable samples with rejected samples at similar confidence.</li>
+              <li>Look at the confidence gap and shortlist decision payload to understand why a plan missed escalation.</li>
+              <li>Use the plan button to jump directly to the canonical recommendation output.</li>
+            </ul>
+          </Card>
         </div>
       ) : null}
     </>
