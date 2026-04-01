@@ -38,6 +38,7 @@ class WatchlistOrchestrationService:
         decision_samples: RecommendationDecisionSampleRepository | None = None,
         deep_analysis_service,
         confidence_threshold: float = 60.0,
+        autotune_config: dict[str, float] | None = None,
         calibration_service: RecommendationPlanCalibrationService | None = None,
         taxonomy_service: TickerTaxonomyService | None = None,
     ) -> None:
@@ -47,8 +48,35 @@ class WatchlistOrchestrationService:
         self.cheap_scan_service = cheap_scan_service
         self.deep_analysis_service = deep_analysis_service
         self.confidence_threshold = confidence_threshold
+        self.autotune_config = self._normalize_autotune_config(autotune_config)
         self.calibration_service = calibration_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
+
+    @staticmethod
+    def _normalize_autotune_config(autotune_config: dict[str, float] | None) -> dict[str, float]:
+        defaults = {
+            "threshold_offset": 0.0,
+            "confidence_adjustment": 0.0,
+            "near_miss_gap_cutoff": 0.0,
+            "shortlist_aggressiveness": 0.0,
+            "degraded_penalty": 0.0,
+        }
+        if not autotune_config:
+            return defaults
+        normalized = dict(defaults)
+        for key, default in defaults.items():
+            raw_value = autotune_config.get(key, default)
+            try:
+                normalized[key] = float(raw_value)
+            except (TypeError, ValueError):
+                normalized[key] = default
+        return normalized
+
+    def _autotune_value(self, key: str, default: float) -> float:
+        try:
+            return float(self.autotune_config.get(key, default))
+        except (TypeError, ValueError):
+            return default
 
     def execute(
         self,
@@ -1768,16 +1796,18 @@ class WatchlistOrchestrationService:
         transmission_summary: dict[str, object] | None = None,
     ) -> dict[str, object]:
         if calibration_summary is None:
+            threshold_offset = self._autotune_value("threshold_offset", 0.0)
+            confidence_adjustment = self._autotune_value("confidence_adjustment", 0.0)
             return {
                 "enabled": False,
                 "review_status": "disabled",
                 "review_status_label": self._calibration_review_status_label("disabled"),
                 "raw_confidence_percent": round(confidence_percent, 2),
-                "calibrated_confidence_percent": round(confidence_percent, 2),
-                "confidence_adjustment": 0.0,
+                "calibrated_confidence_percent": round(confidence_percent + confidence_adjustment, 2),
+                "confidence_adjustment": round(confidence_adjustment, 2),
                 "base_confidence_threshold": round(self.confidence_threshold, 2),
-                "effective_confidence_threshold": round(self.confidence_threshold, 2),
-                "threshold_adjustment": 0.0,
+                "effective_confidence_threshold": round(self.confidence_threshold + threshold_offset, 2),
+                "threshold_adjustment": round(threshold_offset, 2),
                 "reasons": [],
                 "reason_details": [],
             }
@@ -1832,6 +1862,8 @@ class WatchlistOrchestrationService:
             threshold_adjustment += adjustment
             confidence_adjustment += conf_adjustment
             reasons.extend(bucket_reasons)
+        threshold_adjustment += self._autotune_value("threshold_offset", 0.0)
+        confidence_adjustment += self._autotune_value("confidence_adjustment", 0.0)
         threshold_adjustment = max(-6.0, min(15.0, threshold_adjustment))
         confidence_adjustment = max(-4.0, min(2.5, confidence_adjustment))
         effective_threshold = max(45.0, min(90.0, base_threshold + threshold_adjustment))
@@ -1994,8 +2026,7 @@ class WatchlistOrchestrationService:
             return 20
         return 5
 
-    @staticmethod
-    def _shortlist_limit(horizon: StrategyHorizon, ticker_count: int) -> int:
+    def _shortlist_limit(self, horizon: StrategyHorizon, ticker_count: int) -> int:
         if ticker_count <= 0:
             return 0
         if horizon == StrategyHorizon.ONE_DAY:
@@ -2027,10 +2058,15 @@ class WatchlistOrchestrationService:
             size_bump = 10.0
         elif ticker_count >= 10:
             size_bump = 5.0
-        return min(95.0, base + size_bump)
+        tuning_relief = (
+            self._autotune_value("threshold_offset", 0.0) * 0.35
+            + self._autotune_value("confidence_adjustment", 0.0) * 0.25
+            + self._autotune_value("shortlist_aggressiveness", 1.0) * 1.2
+            + self._autotune_value("near_miss_gap_cutoff", 1.5) * 0.5
+        )
+        return min(95.0, max(35.0, base + size_bump - tuning_relief))
 
-    @staticmethod
-    def _minimum_shortlist_attention(horizon: StrategyHorizon, ticker_count: int) -> float:
+    def _minimum_shortlist_attention(self, horizon: StrategyHorizon, ticker_count: int) -> float:
         base = {
             StrategyHorizon.ONE_DAY: 52.0,
             StrategyHorizon.ONE_WEEK: 45.0,
@@ -2041,4 +2077,5 @@ class WatchlistOrchestrationService:
             size_bump = 12.0
         elif ticker_count >= 10:
             size_bump = 6.0
-        return min(95.0, base + size_bump)
+        tuning_relief = self._autotune_value("shortlist_aggressiveness", 1.0) * 1.0
+        return min(95.0, max(35.0, base + size_bump - tuning_relief))

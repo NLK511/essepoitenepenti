@@ -77,6 +77,7 @@ def create_watchlist_orchestration_service(
         cheap_scan_service=CheapScanSignalService(),
         deep_analysis_service=create_ticker_deep_analysis_service(session, proposal_service=proposal_service),
         confidence_threshold=confidence_threshold,
+        autotune_config=settings_repository.get_autotune_config(),
         calibration_service=RecommendationPlanCalibrationService(RecommendationOutcomeRepository(session)),
     )
 

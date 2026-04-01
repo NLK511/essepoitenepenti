@@ -17,10 +17,10 @@ This is a **development-only target plan**, not a live product capability.
 - a manual backend trigger at `POST /api/recommendation-autotune/run`
 - a state endpoint at `GET /api/recommendation-autotune`
 - apply / dry-run support, with apply writing the winning tuning values back into active settings
-- unit and route coverage for scoring, persistence, and apply behavior
+- live proposal-generation/scoring now reads the active autotune config and uses it in shortlist thresholds and calibration thresholds
+- unit and route coverage for scoring, persistence, apply behavior, and live-path integration
 
 ### Current scope
-- the live app still consumes the primary confidence threshold directly
 - the autotune run now persists a broader active tuning config, even where downstream consumers do not yet use every field
 
 ### Expected future work

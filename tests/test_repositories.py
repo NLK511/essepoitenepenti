@@ -114,7 +114,7 @@ class StubEvaluationExecutionService(EvaluationExecutionService):
     def __init__(self) -> None:
         pass
 
-    def execute(self, run=None) -> EvaluationRunResult:
+    def execute(self, run=None, as_of=None) -> EvaluationRunResult:
         return EvaluationRunResult(
             evaluated_recommendation_plans=12,
             synced_recommendation_plan_outcomes=4,
@@ -1137,6 +1137,99 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("transmission_bias_underperforming", calibration_review["reasons"])
         self.assertIn("context_regime_underperforming", calibration_review["reasons"])
         self.assertIn("horizon_setup_family_underperforming", calibration_review["reasons"])
+
+    def test_watchlist_orchestration_applies_autotune_config_to_live_action_thresholds(self) -> None:
+        session = create_session()
+        watchlist = WatchlistRepository(session).create(
+            "Autotune Demo",
+            ["FOO"],
+            default_horizon=StrategyHorizon.ONE_WEEK,
+            allow_shorts=True,
+        )
+
+        class TunedCheapScanService:
+            def score(self, ticker: str, horizon: StrategyHorizon):
+                from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal
+
+                return CheapScanSignal(
+                    ticker=ticker,
+                    horizon=horizon,
+                    directional_bias="long",
+                    directional_score=0.44,
+                    confidence_percent=58.0,
+                    attention_score=68.0,
+                    trend_score=66.0,
+                    momentum_score=64.0,
+                    breakout_score=62.0,
+                    volatility_score=55.0,
+                    liquidity_score=70.0,
+                    diagnostics={"model": "cheap_scan_test"},
+                    indicator_summary="cheap scan FOO",
+                )
+
+        class TunedDeepAnalysisService:
+            def generate(self, ticker: str) -> RunOutput:
+                analysis = {"summary": {"text": f"deep analysis for {ticker}"}, "ticker_deep_analysis": {"transmission_analysis": {"context_bias": "tailwind", "contradiction_count": 0}}}
+                return RunOutput(
+                    recommendation=Recommendation(
+                        ticker=ticker,
+                        direction=RecommendationDirection.LONG,
+                        confidence=58.0,
+                        entry_price=100.0,
+                        stop_loss=95.0,
+                        take_profit=110.0,
+                        indicator_summary="deep analysis",
+                    ),
+                    diagnostics=RunDiagnostics(analysis_json=json.dumps(analysis)),
+                )
+
+        baseline = WatchlistOrchestrationService(
+            context_snapshots=ContextSnapshotRepository(session),
+            recommendation_plans=RecommendationPlanRepository(session),
+            cheap_scan_service=TunedCheapScanService(),
+            deep_analysis_service=TunedDeepAnalysisService(),
+            confidence_threshold=60.0,
+        )
+        baseline_result = baseline.execute(watchlist, watchlist.tickers, run_id=1)
+        baseline_plan = RecommendationPlanRepository(session).list_plans(limit=10)[0]
+
+        tuned_session = create_session()
+        tuned_watchlist = WatchlistRepository(tuned_session).create(
+            "Autotune Demo",
+            ["FOO"],
+            default_horizon=StrategyHorizon.ONE_WEEK,
+            allow_shorts=True,
+        )
+        tuned = WatchlistOrchestrationService(
+            context_snapshots=ContextSnapshotRepository(tuned_session),
+            recommendation_plans=RecommendationPlanRepository(tuned_session),
+            cheap_scan_service=TunedCheapScanService(),
+            deep_analysis_service=TunedDeepAnalysisService(),
+            confidence_threshold=60.0,
+            autotune_config={
+                "threshold_offset": -4.0,
+                "confidence_adjustment": 4.0,
+                "near_miss_gap_cutoff": 2.0,
+                "shortlist_aggressiveness": 2.0,
+                "degraded_penalty": 0.0,
+            },
+        )
+        tuned_result = tuned.execute(tuned_watchlist, tuned_watchlist.tickers, run_id=1)
+        tuned_plan = RecommendationPlanRepository(tuned_session).list_plans(limit=10)[0]
+
+        self.assertEqual(baseline_result["summary"]["shortlist_count"], 1)
+        self.assertEqual(baseline_plan.action, "no_action")
+        self.assertEqual(baseline_plan.evidence_summary["action_reason"], "below_action_confidence_threshold")
+        baseline_calibration = baseline_plan.signal_breakdown["calibration_review"]
+        self.assertEqual(baseline_calibration["effective_confidence_threshold"], 60.0)
+        self.assertEqual(baseline_calibration["calibrated_confidence_percent"], 58.0)
+
+        self.assertEqual(tuned_result["summary"]["shortlist_count"], 1)
+        self.assertEqual(tuned_plan.action, "long")
+        self.assertEqual(tuned_plan.evidence_summary["action_reason"], "actionable_setup")
+        tuned_calibration = tuned_plan.signal_breakdown["calibration_review"]
+        self.assertEqual(tuned_calibration["effective_confidence_threshold"], 56.0)
+        self.assertEqual(tuned_calibration["calibrated_confidence_percent"], 62.0)
 
     def test_job_execution_processes_evaluation_run_and_persists_summary(self) -> None:
         session = create_session()

@@ -15,9 +15,9 @@ DEFAULT_SUMMARY_PROMPT = (
 DEFAULT_APP_SETTINGS = {
     "confidence_threshold": "60",
     "autotune_confidence_adjustment": "0",
-    "autotune_near_miss_gap_cutoff": "1.5",
-    "autotune_shortlist_aggressiveness": "1",
-    "autotune_degraded_penalty": "2.0",
+    "autotune_near_miss_gap_cutoff": "0",
+    "autotune_shortlist_aggressiveness": "0",
+    "autotune_degraded_penalty": "0",
     "optimization_minimum_resolved_trades": "50",
     "summary_backend": "pi_agent",
     "summary_model": "",
