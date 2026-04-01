@@ -9,16 +9,19 @@ from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import RecommendationAutotuneRun
 from trade_proposer_app.services.recommendation_autotune import RecommendationAutotuneError, RecommendationAutotuneService
 
-router = APIRouter(prefix="/recommendation-autotune", tags=["recommendation-autotune"])
+router = APIRouter(prefix="/signal-gating-tuning", tags=["signal-gating-tuning"])
+legacy_router = APIRouter(prefix="/recommendation-autotune", tags=["recommendation-autotune"])
 
 
 @router.get("")
-async def get_recommendation_autotune_state(session: Session = Depends(get_db_session)) -> dict[str, object]:
+@legacy_router.get("")
+async def get_signal_gating_tuning_state(session: Session = Depends(get_db_session)) -> dict[str, object]:
     return RecommendationAutotuneService(session).describe()
 
 
 @router.post("/run")
-async def run_recommendation_autotune(
+@legacy_router.post("/run")
+async def run_signal_gating_tuning(
     ticker: str | None = Query(default=None),
     run_id: int | None = Query(default=None),
     setup_family: str | None = Query(default=None),

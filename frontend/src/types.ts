@@ -675,7 +675,7 @@ export interface OptimizationState {
   recent_backups: OptimizationBackup[];
 }
 
-export interface AutotuneState {
+export interface SignalGatingTuningState {
   threshold_offset: number;
   confidence_adjustment: number;
   near_miss_gap_cutoff: number;
@@ -687,7 +687,7 @@ export interface SettingsResponse {
   settings: AppSetting[];
   providers: ProviderCredential[];
   optimization: OptimizationState;
-  autotune: AutotuneState;
+  signal_gating_tuning: SignalGatingTuningState;
 }
 
 export interface DocSection {

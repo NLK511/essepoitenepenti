@@ -265,14 +265,14 @@ class RecommendationAutotuneRouteTests(unittest.IsolatedAsyncioTestCase):
 
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            response = await client.post("/api/recommendation-autotune/run?apply=true")
+            response = await client.post("/api/signal-gating-tuning/run?apply=true")
             self.assertEqual(response.status_code, 200)
             payload = response.json()
             self.assertTrue(payload["applied"])
             self.assertEqual(payload["best_threshold"], 64.0)
             self.assertEqual(payload["summary"]["applied_threshold"], 64.0)
 
-            state_response = await client.get("/api/recommendation-autotune")
+            state_response = await client.get("/api/signal-gating-tuning")
             self.assertEqual(state_response.status_code, 200)
             state_payload = state_response.json()
             self.assertEqual(state_payload["current_confidence_threshold"], 64.0)

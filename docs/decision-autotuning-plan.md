@@ -1,31 +1,31 @@
-# Decision autotuning plan
+# Signal gating tuning plan
 
 **Status:** development implementation plan
 
-This document describes a first-pass autonomous tuning loop for recommendation decisions.
+This document describes a first-pass tuning loop for recommendation signal gating.
 
-The goal is to let the app tune itself during development by using stored decision samples and outcomes to search a small parameter space, score candidate configurations, and write the best one back into active tuning settings.
+The goal is to let the app tune its live gating thresholds during development by using stored decision samples and outcomes to search a small parameter space, score candidate configurations, and write the best one back into the active signal gating settings.
 
 ## Current implementation snapshot
 
 This is a **development-only target plan**, not a live product capability.
 
 ### Implemented so far
-- a first-pass raw grid-search autotune service for recommendation tuning
-- multi-parameter candidate scoring over confidence offset, calibration adjustment, near-miss promotion, shortlist aggressiveness, and degraded penalty
-- persistence for autotune runs, summary data, and candidate comparison results
-- a manual backend trigger at `POST /api/recommendation-autotune/run`
-- a state endpoint at `GET /api/recommendation-autotune`
+- a first-pass raw grid-search signal gating tuning service for recommendation decision gating
+- multi-parameter candidate scoring over threshold offset, confidence adjustment, near-miss promotion, shortlist aggressiveness, and degraded penalty
+- persistence for tuning runs, summary data, and candidate comparison results
+- a manual backend trigger at `POST /api/signal-gating-tuning/run` with the older `recommendation-autotune` path kept as a compatibility alias
+- a state endpoint at `GET /api/signal-gating-tuning` with the older `recommendation-autotune` path kept as a compatibility alias
 - apply / dry-run support, with apply writing the winning tuning values back into active settings
-- live proposal-generation/scoring now reads the active autotune config and uses it in shortlist thresholds and calibration thresholds
-- settings UI controls for viewing and editing the active autotune config
+- live proposal-generation/scoring now reads the active signal gating tuning config and uses it in shortlist thresholds and calibration thresholds
+- settings UI controls for viewing and editing the active signal gating tuning config
 - unit and route coverage for scoring, persistence, apply behavior, live-path integration, and settings editing
 
 ### Current scope
-- the autotune run now persists a broader active tuning config, even where downstream consumers do not yet use every field
+- the tuning run persists a broader active tuning config, even where downstream consumers do not yet use every field
 
 ### Expected future work
-- candidate generation and scoring over a broader parameter grid than confidence threshold alone
+- candidate generation and scoring over a broader parameter grid than the current threshold-centered surface
 - a read-only review page for comparing the latest run and its candidates
 - richer scoring explanations and comparison summaries
 - production scheduling or automatic rollout behavior
@@ -42,22 +42,22 @@ This plan assumes:
 
 ## What this is for
 
-The first version of autotuning should answer:
+The first version of signal gating tuning should answer:
 
 - is the current threshold too strict or too loose?
 - are near-misses being rejected too often?
 - are weak or degraded cases slipping through?
 - does one setup family need different treatment?
 
-The output should be a new tuning configuration, plus a full record of what was tested and how each candidate scored.
+The output should be a new gating configuration, plus a full record of what was tested and how each candidate scored.
 
 ## What to tune first
 
 Keep the initial tuning surface small.
 
 Suggested parameters:
-- confidence threshold offset
-- calibration adjustment
+- threshold offset
+- confidence adjustment
 - near-miss gap cutoff
 - shortlist promotion bonus or aggressiveness
 - degraded-input penalty
@@ -90,7 +90,7 @@ Use a small, explicit candidate grid.
 
 Example knobs:
 - threshold offset: `[-6, -4, -2, 0, +2]`
-- calibration adjustment: `[-4, -2, 0, +2]`
+- confidence adjustment: `[-4, -2, 0, +2]`
 - near-miss cutoff: `[-8, -5, -3]`
 - shortlist aggressiveness: `[0, 1, 2]`
 
@@ -133,7 +133,7 @@ Pick the highest-scoring candidate and store:
 
 Support two modes:
 - **dry run**: score and persist results only
-- **apply**: write the winning config into active tuning settings
+- **apply**: write the winning config into active signal gating settings
 
 Dry run should be the default at first.
 
@@ -141,8 +141,7 @@ Dry run should be the default at first.
 
 ### Service
 Add a dedicated service such as:
-- `DecisionAutotuneService`
-- or `RecommendationAutotuneService`
+- a signal gating tuning service
 
 Responsibilities:
 - load samples and outcomes
@@ -167,13 +166,13 @@ Store each tuning run with:
 
 ### API or job entry point
 Expose a manual trigger first, such as:
-- `POST /api/recommendation-autotune/run`
+- `POST /api/signal-gating-tuning/run`
 
-A job-based execution path can follow later if useful.
+The older `POST /api/recommendation-autotune/run` path remains available as a compatibility alias.
 
 ### UI
 Add a simple review page that shows:
-- latest autotune run
+- latest signal gating tuning run
 - active config
 - candidate comparison table
 - best-vs-baseline delta
@@ -182,7 +181,7 @@ Add a simple review page that shows:
 ## Recommended implementation order
 
 1. define the tuning config model
-2. add autotune run persistence
+2. add tuning run persistence
 3. implement the candidate scoring engine
 4. wire a manual backend endpoint
 5. build a read-only review page

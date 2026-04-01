@@ -48,7 +48,7 @@ These docs define the current product truth.
   - how to use decision samples to tune thresholds, calibration, shortlist rules, and degradation handling
   - practical interpretation of confidence gap, review priority, shortlist status, and decision type
 - `decision-autotuning-plan.md`
-  - development-only exploration plan for an autonomous raw tuning loop; now has a backend multi-parameter grid-search implementation, run persistence, manual run/apply API, live-path integration for the active tuning config, and settings UI controls
+  - development-only exploration plan for a signal gating tuning loop; now has a backend multi-parameter grid-search implementation, run persistence, manual run/apply API, live-path integration for the active tuning config, and settings UI controls
   - candidate search, scoring, persistence, and apply/dry-run flow
   - not a current product behavior spec
 - `recommendation-plan-resolution-spec.md`

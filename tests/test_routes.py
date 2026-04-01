@@ -947,8 +947,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     "prompt": "very short custom summary prompt",
                 },
             )
-            autotune_response = await client.post(
-                "/api/settings/autotune",
+            signal_gating_tuning_response = await client.post(
+                "/api/settings/signal-gating-tuning",
                 data={
                     "threshold_offset": "-2.5",
                     "confidence_adjustment": "1.5",
@@ -979,7 +979,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(app_setting.status_code, 200)
         self.assertEqual(optimization_response.status_code, 200)
         self.assertEqual(summary_response.status_code, 200)
-        self.assertEqual(autotune_response.status_code, 200)
+        self.assertEqual(signal_gating_tuning_response.status_code, 200)
         self.assertEqual(social_response.status_code, 200)
         self.assertEqual(provider_response.status_code, 200)
         self.assertEqual(listed.status_code, 200)
@@ -992,6 +992,11 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(setting_map["autotune_near_miss_gap_cutoff"], "2")
         self.assertEqual(setting_map["autotune_shortlist_aggressiveness"], "1")
         self.assertEqual(setting_map["autotune_degraded_penalty"], "0.5")
+        self.assertEqual(payload["signal_gating_tuning"]["threshold_offset"], -2.5)
+        self.assertEqual(payload["signal_gating_tuning"]["confidence_adjustment"], 1.5)
+        self.assertEqual(payload["signal_gating_tuning"]["near_miss_gap_cutoff"], 2.0)
+        self.assertEqual(payload["signal_gating_tuning"]["shortlist_aggressiveness"], 1.0)
+        self.assertEqual(payload["signal_gating_tuning"]["degraded_penalty"], 0.5)
         self.assertEqual(setting_map["summary_model"], "anthropic/claude-sonnet-4-5")
         self.assertEqual(setting_map["summary_prompt"], "very short custom summary prompt")
         self.assertEqual(setting_map["social_nitter_enable_ticker"], "true")
@@ -999,11 +1004,6 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["providers"][0]["api_key"], "sk-test")
         self.assertEqual(payload["optimization"]["minimum_resolved_trades"], 80)
         self.assertEqual(payload["optimization"]["weights_path"], str(weights_path))
-        self.assertEqual(payload["autotune"]["threshold_offset"], -2.5)
-        self.assertEqual(payload["autotune"]["confidence_adjustment"], 1.5)
-        self.assertEqual(payload["autotune"]["near_miss_gap_cutoff"], 2.0)
-        self.assertEqual(payload["autotune"]["shortlist_aggressiveness"], 1.0)
-        self.assertEqual(payload["autotune"]["degraded_penalty"], 0.5)
 
     async def test_sentiment_snapshot_routes_list_and_detail(self) -> None:
         snapshot_ids = self.seed_support_snapshots()

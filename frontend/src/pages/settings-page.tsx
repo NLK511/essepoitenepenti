@@ -2,14 +2,14 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { getJson, postForm } from "../api";
 import { Badge, Card, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { AppSetting, AppPreflightReport, AutotuneState, OptimizationState, ProviderCredential, SettingsResponse } from "../types";
+import type { AppSetting, AppPreflightReport, OptimizationState, ProviderCredential, SettingsResponse, SignalGatingTuningState } from "../types";
 import { toSettingMap } from "../utils";
 
 interface SettingsViewData {
   settings: AppSetting[];
   providers: ProviderCredential[];
   optimization: OptimizationState;
-  autotune: AutotuneState;
+  signalGatingTuning: SignalGatingTuningState;
   preflight: AppPreflightReport;
 }
 
@@ -32,7 +32,7 @@ export function SettingsPage() {
         settings: settingsResponse.settings,
         providers: settingsResponse.providers,
         optimization: settingsResponse.optimization,
-        autotune: settingsResponse.autotune,
+        signalGatingTuning: settingsResponse.signal_gating_tuning,
         preflight,
       });
       setSelectedBackupPath(settingsResponse.optimization.latest_backup?.path ?? "");
@@ -112,24 +112,24 @@ export function SettingsPage() {
     }
   }
 
-  async function saveAutotuneSettings(event: FormEvent<HTMLFormElement>) {
+  async function saveSignalGatingTuningSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     try {
-      setSaving("autotune");
+      setSaving("signal-gating-tuning");
       setError(null);
       setNotice(null);
-      await postForm<{ autotune: AutotuneState }>("/api/settings/autotune", {
+      await postForm<{ signal_gating_tuning: SignalGatingTuningState }>("/api/settings/signal-gating-tuning", {
         threshold_offset: String(formData.get("threshold_offset") ?? "0"),
         confidence_adjustment: String(formData.get("confidence_adjustment") ?? "0"),
         near_miss_gap_cutoff: String(formData.get("near_miss_gap_cutoff") ?? "0"),
         shortlist_aggressiveness: String(formData.get("shortlist_aggressiveness") ?? "0"),
         degraded_penalty: String(formData.get("degraded_penalty") ?? "0"),
       });
-      setNotice("Autotune settings saved");
+      setNotice("Signal gating tuning settings saved");
       await loadData();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to save autotune settings");
+      setError(saveError instanceof Error ? saveError.message : "Failed to save signal gating tuning settings");
     } finally {
       setSaving(null);
     }
@@ -261,18 +261,18 @@ export function SettingsPage() {
             </Card>
 
             <Card>
-              <SectionTitle kicker="Autotuning" title="Active recommendation tuning" subtitle="These values control how the live recommendation path calibrates confidence and shortlist selection. Autotune can write these settings back after a winning run, and operators can also edit them manually here." />
-              <form className="stack-form" onSubmit={saveAutotuneSettings}>
+              <SectionTitle kicker="Signal gating tuning" title="Active recommendation gating" subtitle="These values control how the live recommendation path calibrates confidence and shortlist selection. Signal gating tuning can write these settings back after a winning run, and operators can also edit them manually here." />
+              <form className="stack-form" onSubmit={saveSignalGatingTuningSettings}>
                 <div className="form-grid">
-                  <label className="form-field"><span>Threshold offset</span><input name="threshold_offset" defaultValue={String(data.autotune.threshold_offset)} /></label>
-                  <label className="form-field"><span>Confidence adjustment</span><input name="confidence_adjustment" defaultValue={String(data.autotune.confidence_adjustment)} /></label>
-                  <label className="form-field"><span>Near-miss cutoff</span><input name="near_miss_gap_cutoff" defaultValue={String(data.autotune.near_miss_gap_cutoff)} /></label>
-                  <label className="form-field"><span>Shortlist aggressiveness</span><input name="shortlist_aggressiveness" defaultValue={String(data.autotune.shortlist_aggressiveness)} /></label>
-                  <label className="form-field"><span>Degraded penalty</span><input name="degraded_penalty" defaultValue={String(data.autotune.degraded_penalty)} /></label>
+                  <label className="form-field"><span>Threshold offset</span><input name="threshold_offset" defaultValue={String(data.signalGatingTuning.threshold_offset)} /></label>
+                  <label className="form-field"><span>Confidence adjustment</span><input name="confidence_adjustment" defaultValue={String(data.signalGatingTuning.confidence_adjustment)} /></label>
+                  <label className="form-field"><span>Near-miss cutoff</span><input name="near_miss_gap_cutoff" defaultValue={String(data.signalGatingTuning.near_miss_gap_cutoff)} /></label>
+                  <label className="form-field"><span>Shortlist aggressiveness</span><input name="shortlist_aggressiveness" defaultValue={String(data.signalGatingTuning.shortlist_aggressiveness)} /></label>
+                  <label className="form-field"><span>Degraded penalty</span><input name="degraded_penalty" defaultValue={String(data.signalGatingTuning.degraded_penalty)} /></label>
                 </div>
                 <div className="helper-text">Set the threshold offset, confidence adjustment, and shortlist relaxations that the live proposal path should use. Zero values preserve the baseline behavior.</div>
                 <div className="cluster">
-                  <button className="button" type="submit" disabled={saving === "autotune"}>{saving === "autotune" ? "Saving…" : "Save autotune settings"}</button>
+                  <button className="button" type="submit" disabled={saving === "signal-gating-tuning"}>{saving === "signal-gating-tuning" ? "Saving…" : "Save signal gating tuning settings"}</button>
                 </div>
               </form>
             </Card>
