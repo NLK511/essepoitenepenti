@@ -139,6 +139,7 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
         self.assertEqual(result.loss_recommendation_plan_outcomes, 1)
         stored = self.outcomes.list_outcomes(ticker="EOG", limit=10)
         self.assertEqual(stored[0].outcome, "loss")
+        self.assertEqual(stored[0].status, "resolved")
         self.assertTrue(stored[0].entry_touched)
         self.assertTrue(stored[0].stop_loss_hit)
         self.assertFalse(stored[0].take_profit_hit)
@@ -150,10 +151,10 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
                 horizon=StrategyHorizon.ONE_WEEK,
                 action="long",
                 confidence_percent=67.95,
-                entry_price_low=151.8925,
-                entry_price_high=151.8925,
-                stop_loss=149.0889,
-                take_profit=156.2066,
+                entry_price_low=160.0,
+                entry_price_high=160.0,
+                stop_loss=158.0,
+                take_profit=165.0,
                 signal_breakdown={"setup_family": "catalyst_follow_through"},
                 computed_at=datetime(2026, 3, 30, 15, 0, 18, 888095, tzinfo=timezone.utc),
             )
@@ -384,14 +385,14 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
             result = RecommendationPlanEvaluationService(self.session).run_evaluation()
 
         self.assertEqual(result.evaluated_recommendation_plans, 1)
-        self.assertEqual(result.loss_recommendation_plan_outcomes, 1)
+        self.assertEqual(result.pending_recommendation_plan_outcomes, 1)
         stored = self.outcomes.list_outcomes(ticker="EOG", limit=10)
-        self.assertEqual(stored[0].outcome, "loss")
-        self.assertTrue(stored[0].entry_touched)
-        self.assertTrue(stored[0].stop_loss_hit)
-        self.assertFalse(stored[0].take_profit_hit)
+        self.assertEqual(stored[0].outcome, "no_entry")
+        self.assertFalse(stored[0].entry_touched)
+        self.assertIsNone(stored[0].stop_loss_hit)
+        self.assertIsNone(stored[0].take_profit_hit)
 
-    def test_run_evaluation_uses_intraday_history_during_us_market_hours(self) -> None:
+    def test_run_evaluation_prefers_intraday_resolution_over_ambiguous_daily_resolution(self) -> None:
         self.plan_repository.create_plan(
             RecommendationPlan(
                 ticker="EOG",
@@ -406,26 +407,36 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
                 computed_at=datetime(2026, 3, 31, 15, 0, tzinfo=timezone.utc),
             )
         )
-
-        def fake_download(ticker: str, start_date: datetime, end_date: datetime, *, intraday_only: bool = False) -> pd.DataFrame:
-            self.assertTrue(intraday_only)
-            self.assertEqual(ticker, "EOG")
-            return pd.DataFrame(
-                {
-                    "Open": [150.54, 150.63, 150.51],
-                    "High": [150.78, 150.73, 150.57],
-                    "Low": [150.52, 150.32, 150.01],
-                    "Close": [150.57, 150.52, 150.12],
-                    "available_at": pd.to_datetime(
-                        ["2026-03-31T15:05:00Z", "2026-03-31T15:10:00Z", "2026-03-31T15:15:00Z"],
-                        utc=True,
-                    ),
-                },
-                index=pd.to_datetime(
-                    ["2026-03-31T15:00:00Z", "2026-03-31T15:05:00Z", "2026-03-31T15:10:00Z"],
+        daily_history = pd.DataFrame(
+            {
+                "Open": [151.03],
+                "High": [152.18],
+                "Low": [148.0],
+                "Close": [150.98],
+                "available_at": pd.to_datetime(["2026-03-31T23:59:59Z"], utc=True),
+            },
+            index=pd.to_datetime(["2026-03-31T00:00:00Z"], utc=True),
+        )
+        intraday_history = pd.DataFrame(
+            {
+                "Open": [150.54, 150.63, 150.51],
+                "High": [150.78, 150.73, 150.57],
+                "Low": [150.52, 150.32, 150.01],
+                "Close": [150.57, 150.52, 150.12],
+                "available_at": pd.to_datetime(
+                    ["2026-03-31T15:05:00Z", "2026-03-31T15:10:00Z", "2026-03-31T15:15:00Z"],
                     utc=True,
                 ),
-            )
+            },
+            index=pd.to_datetime(
+                ["2026-03-31T15:00:00Z", "2026-03-31T15:05:00Z", "2026-03-31T15:10:00Z"],
+                utc=True,
+            ),
+        )
+
+        def fake_download(ticker: str, start_date: datetime, end_date: datetime, *, intraday_only: bool = False) -> pd.DataFrame:
+            self.assertEqual(ticker, "EOG")
+            return intraday_history if intraday_only else daily_history
 
         with patch.object(RecommendationPlanEvaluationService, "_download_price_history", side_effect=fake_download):
             result = RecommendationPlanEvaluationService(self.session).run_evaluation(
@@ -447,10 +458,10 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
                 horizon=StrategyHorizon.ONE_WEEK,
                 action="long",
                 confidence_percent=72.0,
-                entry_price_low=151.8925,
-                entry_price_high=151.8925,
-                stop_loss=149.0889,
-                take_profit=156.2066,
+                entry_price_low=160.0,
+                entry_price_high=160.0,
+                stop_loss=158.0,
+                take_profit=165.0,
                 signal_breakdown={"setup_family": "breakout"},
                 computed_at=datetime(2026, 3, 30, 23, 0, tzinfo=timezone.utc),
             )
@@ -510,10 +521,10 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
 
         self.assertEqual(result.evaluated_recommendation_plans, 2)
         self.assertEqual(result.win_recommendation_plan_outcomes, 1)
-        self.assertEqual(result.loss_recommendation_plan_outcomes, 1)
+        self.assertEqual(result.pending_recommendation_plan_outcomes, 1)
         stored = self.outcomes.list_outcomes(ticker="EOG", limit=10)
         outcome_by_plan_id = {item.recommendation_plan_id: item.outcome for item in stored}
-        self.assertEqual(outcome_by_plan_id[previous_plan.id or 0], "loss")
+        self.assertEqual(outcome_by_plan_id[previous_plan.id or 0], "no_entry")
         self.assertEqual(outcome_by_plan_id[current_plan.id or 0], "win")
 
     def test_run_evaluation_uses_daily_history_after_market_close_for_same_day_plans(self) -> None:
@@ -534,8 +545,8 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
         daily_history = pd.DataFrame(
             {
                 "Open": [151.03, 149.0],
-                "High": [152.18, 151.279999],
-                "Low": [148.75, 141.75],
+                "High": [152.18, 152.18],
+                "Low": [148.75, 148.75],
                 "Close": [150.98, 143.369995],
                 "available_at": pd.to_datetime(
                     ["2026-03-30T23:59:59Z", "2026-03-31T23:59:59Z"],
@@ -547,9 +558,9 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
         intraday_history = pd.DataFrame(
             {
                 "Open": [150.54, 150.63, 150.51],
-                "High": [150.78, 150.73, 150.57],
-                "Low": [150.52, 150.32, 150.01],
-                "Close": [150.57, 150.52, 150.12],
+                "High": [152.18, 151.73, 151.57],
+                "Low": [148.75, 148.32, 148.01],
+                "Close": [150.57, 149.52, 149.12],
                 "available_at": pd.to_datetime(
                     ["2026-03-30T15:05:00Z", "2026-03-30T15:10:00Z", "2026-03-30T15:15:00Z"],
                     utc=True,
@@ -610,12 +621,13 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
             )
 
         self.assertEqual(result.evaluated_recommendation_plans, 1)
-        self.assertEqual(result.loss_recommendation_plan_outcomes, 1)
+        self.assertEqual(result.pending_recommendation_plan_outcomes, 1)
         stored = self.outcomes.list_outcomes(ticker="EOG", limit=10)
-        self.assertEqual(stored[0].outcome, "loss")
-        self.assertTrue(stored[0].entry_touched)
-        self.assertTrue(stored[0].stop_loss_hit)
-        self.assertFalse(stored[0].take_profit_hit)
+        self.assertEqual(stored[0].outcome, "pending")
+        self.assertEqual(stored[0].status, "open")
+        self.assertIsNone(stored[0].entry_touched)
+        self.assertIsNone(stored[0].stop_loss_hit)
+        self.assertIsNone(stored[0].take_profit_hit)
 
     def test_run_evaluation_does_not_fall_back_to_daily_history_when_intraday_history_is_missing(self) -> None:
         self.plan_repository.create_plan(
@@ -659,9 +671,9 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
         self.assertEqual(result.evaluated_recommendation_plans, 1)
         self.assertEqual(result.pending_recommendation_plan_outcomes, 1)
         stored = self.outcomes.list_outcomes(ticker="EOG", limit=10)
-        self.assertEqual(stored[0].outcome, "pending")
+        self.assertEqual(stored[0].outcome, "no_entry")
         self.assertEqual(stored[0].status, "open")
-        self.assertEqual(stored[0].notes, "No price history available for evaluation.")
+        self.assertEqual(stored[0].notes, "Entry zone has not been touched yet.")
 
     def test_run_evaluation_falls_back_to_yfinance_when_persisted_daily_history_is_incomplete(self) -> None:
         self.plan_repository.create_plan(
@@ -704,8 +716,8 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
 
         self.assertEqual(result.evaluated_recommendation_plans, 1)
         self.assertEqual(result.loss_recommendation_plan_outcomes, 1)
-        persisted_mock.assert_called_once()
-        download_mock.assert_called_once()
+        self.assertEqual(persisted_mock.call_count, 2)
+        self.assertEqual(download_mock.call_count, 2)
         stored = self.outcomes.list_outcomes(ticker="EOG", limit=10)
         self.assertEqual(stored[0].outcome, "loss")
         self.assertTrue(stored[0].entry_touched)
@@ -757,10 +769,9 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
 
         self.assertEqual(result.evaluated_recommendation_plans, 1)
         self.assertEqual(result.loss_recommendation_plan_outcomes, 1)
-        self.assertEqual(len(captured), 1)
-        _, end_date, intraday_only = captured[0]
-        self.assertFalse(intraday_only)
-        self.assertEqual(end_date, as_of)
+        self.assertEqual(len(captured), 2)
+        self.assertEqual({item[2] for item in captured}, {False, True})
+        self.assertTrue(all(end_date == as_of for _, end_date, _ in captured))
 
     def test_list_plans_skips_resolved_outcomes_in_batch_mode_but_keeps_explicit_manual_targets(self) -> None:
         open_plan = self.plan_repository.create_plan(

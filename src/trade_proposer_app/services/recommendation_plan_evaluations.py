@@ -85,27 +85,25 @@ class RecommendationPlanEvaluationService:
         for plan in plans:
             processed += 1
             ticker = (plan.ticker or "").strip().upper()
-            current_market_date = self._current_market_date(plan, as_of=as_of)
-            use_intraday = self._uses_intraday_evaluation(plan, current_market_date, as_of=as_of)
-            price_data = price_history_cache.get((ticker, use_intraday))
-            source_mode = "intraday" if use_intraday else "daily"
-            if price_data is None and use_intraday:
-                logger.debug(
-                    "plan %s ticker=%s intraday history missing; leaving outcome pending rather than falling back to daily",
-                    plan.id,
-                    ticker,
-                )
+            daily_data = price_history_cache.get((ticker, False))
+            intraday_data = price_history_cache.get((ticker, True))
+            outcome, source_mode = self._resolve_plan_outcome(
+                plan,
+                daily_data,
+                intraday_data,
+                run_id=run_id,
+                as_of=as_of,
+            )
             logger.debug(
-                "plan evaluation input: plan_id=%s ticker=%s action=%s computed_at=%s market_date=%s source_mode=%s price_rows=%s",
+                "plan evaluation input: plan_id=%s ticker=%s action=%s computed_at=%s source_mode=%s daily_rows=%s intraday_rows=%s",
                 plan.id,
                 ticker,
                 plan.action,
                 self._format_datetime(plan.computed_at),
-                current_market_date,
                 source_mode,
-                0 if price_data is None else len(price_data),
+                0 if daily_data is None else len(daily_data),
+                0 if intraday_data is None else len(intraday_data),
             )
-            outcome = self._evaluate_plan(plan, price_data, run_id=run_id, as_of=as_of, intraday_only=use_intraday)
             stored = self.outcomes.upsert_outcome(outcome)
             synced += 1
             outcome_labels.append(stored.outcome)
@@ -172,21 +170,17 @@ class RecommendationPlanEvaluationService:
                 continue
             earliest = min(normalized_times)
             start_time = earliest - timedelta(days=2)
-            current_market_date = self._current_market_date(grouped_plans[0], as_of=as_of)
-            needs_daily = any(not self._uses_intraday_evaluation(plan, current_market_date, as_of=as_of) for plan in grouped_plans)
-            needs_intraday = any(self._uses_intraday_evaluation(plan, current_market_date, as_of=as_of) for plan in grouped_plans)
+            needs_history = any(plan.action in {"long", "short"} for plan in grouped_plans)
             logger.debug(
-                "price history group: ticker=%s plan_ids=%s earliest=%s start=%s current_market_date=%s needs_daily=%s needs_intraday=%s",
+                "price history group: ticker=%s plan_ids=%s earliest=%s start=%s needs_history=%s",
                 ticker,
                 [plan.id for plan in grouped_plans],
                 self._format_datetime(earliest),
                 self._format_datetime(start_time),
-                current_market_date,
-                needs_daily,
-                needs_intraday,
+                needs_history,
             )
             try:
-                if needs_daily:
+                if needs_history:
                     daily_data = self._load_price_history(
                         ticker,
                         start_time,
@@ -205,7 +199,6 @@ class RecommendationPlanEvaluationService:
                     )
                     if cache[(ticker, False)] is None:
                         errors.append(f"{ticker}: daily price history is unavailable")
-                if needs_intraday:
                     intraday_data = self._load_price_history(
                         ticker,
                         start_time,
@@ -668,60 +661,77 @@ class RecommendationPlanEvaluationService:
             "take_profit": plan.take_profit,
         }
 
-    def _uses_intraday_evaluation(
+    def _resolve_plan_outcome(
         self,
         plan: RecommendationPlan,
-        current_market_date: date | None = None,
+        daily_data: pd.DataFrame | None,
+        intraday_data: pd.DataFrame | None,
         *,
+        run_id: int | None,
         as_of: datetime | None = None,
-    ) -> bool:
-        local_zone = self._market_timezone_for_plan(plan)
-        if local_zone is None:
-            return False
-        computed_at = self._normalize_datetime(plan.computed_at)
-        if computed_at is None:
-            return False
-        local_computed = computed_at.astimezone(local_zone)
-        if local_computed.weekday() >= 5:
-            return False
-        if current_market_date is not None and local_computed.date() != current_market_date:
-            return False
-        local_time = local_computed.timetz().replace(tzinfo=None)
-        if not (self._market_open_time <= local_time < self._market_close_time):
-            return False
-        if as_of is not None:
-            normalized_as_of = self._normalize_datetime(as_of)
-            if normalized_as_of is None:
-                return False
-            local_as_of = normalized_as_of.astimezone(local_zone)
-            if local_as_of.date() != current_market_date:
-                return False
-            local_as_of_time = local_as_of.timetz().replace(tzinfo=None)
-            if not (self._market_open_time <= local_as_of_time < self._market_close_time):
-                return False
-        return True
+    ) -> tuple[RecommendationPlanOutcome, str]:
+        if plan.action in {"no_action", "watchlist"}:
+            outcome = self._evaluate_plan(plan, None, run_id=run_id, as_of=as_of, intraday_only=False)
+            return outcome, "none"
 
-    def _market_timezone_for_plan(self, plan: RecommendationPlan) -> ZoneInfo | None:
-        profile = self.taxonomy.get_ticker_profile(plan.ticker)
-        region = str(profile.get("region") or "").strip().upper()
-        timezone_name = self._market_timezone_by_region.get(region)
-        if not timezone_name:
-            return None
-        try:
-            return ZoneInfo(timezone_name)
-        except Exception:  # pragma: no cover - invalid zone fallback
-            return None
+        daily_outcome: RecommendationPlanOutcome | None = None
+        if daily_data is not None and not daily_data.empty:
+            daily_outcome = self._evaluate_plan(plan, daily_data, run_id=run_id, as_of=as_of, intraday_only=False)
+            if daily_outcome.outcome in {"no_entry", "open"}:
+                return daily_outcome, "daily"
+            if intraday_data is not None and not intraday_data.empty:
+                return self._evaluate_plan(plan, intraday_data, run_id=run_id, as_of=as_of, intraday_only=True), "intraday"
+            return self._pending_resolution_outcome(
+                plan,
+                run_id=run_id,
+                confidence_bucket=self._confidence_bucket(plan.confidence_percent),
+                setup_family=self._setup_family(plan),
+                notes="Intraday price history is required for final resolution but is unavailable.",
+            ), "pending"
 
-    def _current_market_date(self, plan: RecommendationPlan, as_of: datetime | None = None) -> date | None:
-        local_zone = self._market_timezone_for_plan(plan)
-        if local_zone is None:
-            return None
-        if as_of is None:
-            return datetime.now(local_zone).date()
-        normalized_as_of = self._normalize_datetime(as_of)
-        if normalized_as_of is None:
-            return None
-        return normalized_as_of.astimezone(local_zone).date()
+        if intraday_data is not None and not intraday_data.empty:
+            return self._evaluate_plan(plan, intraday_data, run_id=run_id, as_of=as_of, intraday_only=True), "intraday"
+
+        if daily_outcome is not None:
+            if daily_outcome.outcome in {"no_entry", "open"}:
+                return daily_outcome, "daily"
+            return self._pending_resolution_outcome(
+                plan,
+                run_id=run_id,
+                confidence_bucket=self._confidence_bucket(plan.confidence_percent),
+                setup_family=self._setup_family(plan),
+                notes="Intraday price history is required for final resolution but is unavailable.",
+            ), "pending"
+
+        return self._pending_resolution_outcome(
+            plan,
+            run_id=run_id,
+            confidence_bucket=self._confidence_bucket(plan.confidence_percent),
+            setup_family=self._setup_family(plan),
+            notes="No price history available for evaluation.",
+        ), "pending"
+
+    def _pending_resolution_outcome(
+        self,
+        plan: RecommendationPlan,
+        *,
+        run_id: int | None,
+        confidence_bucket: str,
+        setup_family: str,
+        notes: str,
+    ) -> RecommendationPlanOutcome:
+        return RecommendationPlanOutcome(
+            recommendation_plan_id=plan.id or 0,
+            ticker=plan.ticker,
+            action=plan.action,
+            outcome="pending",
+            status="open",
+            evaluated_at=datetime.now(timezone.utc),
+            confidence_bucket=confidence_bucket,
+            setup_family=setup_family,
+            notes=notes,
+            run_id=run_id,
+        )
 
     def _load_price_history(
         self,
