@@ -1,6 +1,6 @@
-"""add recommendation signal_gating_tuning runs
+"""add recommendation signal gating tuning runs
 
-Revision ID: 0021_signal_gating_tuning_runs
+Revision ID: 0021_sgt_runs
 Revises: 0020_decision_samples
 Create Date: 2026-04-01 00:00:00
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0021_signal_gating_tuning_runs"
+revision = "0021_sgt_runs"
 down_revision = "0020_decision_samples"
 branch_labels = None
 depends_on = None
