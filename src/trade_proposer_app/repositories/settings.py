@@ -108,6 +108,19 @@ class SettingsRepository:
         setting_map = self.get_setting_map()
         return {key: setting_map.get(key, DEFAULT_APP_SETTINGS.get(key, "")) for key in SOCIAL_SETTING_KEYS}
 
+    def get_confidence_threshold(self) -> float:
+        setting_map = self.get_setting_map()
+        raw_value = setting_map.get("confidence_threshold", DEFAULT_APP_SETTINGS["confidence_threshold"])
+        try:
+            parsed = float((raw_value or "").strip())
+        except (TypeError, ValueError):
+            parsed = float(DEFAULT_APP_SETTINGS["confidence_threshold"])
+        return max(0.0, parsed)
+
+    def set_confidence_threshold(self, value: float) -> AppSetting:
+        normalized = f"{float(value):.2f}".rstrip("0").rstrip(".")
+        return self.set_setting("confidence_threshold", normalized)
+
     def get_optimization_minimum_resolved_trades(self) -> int:
         setting_map = self.get_setting_map()
         raw_value = setting_map.get(

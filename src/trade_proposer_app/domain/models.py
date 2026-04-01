@@ -680,6 +680,30 @@ class RecommendationSetupFamilyReviewSummary(BaseModel):
     families: list[RecommendationSetupFamilyReview] = Field(default_factory=list)
 
 
+class RecommendationAutotuneRun(BaseModel):
+    id: int | None = None
+    objective_name: str = "confidence_threshold_raw_grid"
+    status: str = "completed"
+    applied: bool = False
+    filters: dict[str, object] = Field(default_factory=dict)
+    sample_count: int = 0
+    resolved_sample_count: int = 0
+    candidate_count: int = 0
+    baseline_threshold: float | None = None
+    baseline_score: float | None = None
+    best_threshold: float | None = None
+    best_score: float | None = None
+    winning_config: dict[str, object] = Field(default_factory=dict)
+    candidate_results: list[dict[str, object]] = Field(default_factory=list)
+    summary: dict[str, object] = Field(default_factory=dict)
+    artifact: dict[str, object] = Field(default_factory=dict)
+    error_message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class ProviderCredential(BaseModel):
     provider: str
     api_key: str = ""

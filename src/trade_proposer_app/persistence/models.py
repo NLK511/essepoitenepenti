@@ -352,3 +352,27 @@ class RecommendationDecisionSampleRecord(Base, TimestampMixin):
     job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
     watchlist_id: Mapped[int | None] = mapped_column(ForeignKey("watchlists.id"), nullable=True, index=True)
     ticker_signal_snapshot_id: Mapped[int | None] = mapped_column(ForeignKey("ticker_signal_snapshots.id"), nullable=True, index=True)
+
+
+class RecommendationAutotuneRunRecord(Base, TimestampMixin):
+    __tablename__ = "recommendation_autotune_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    objective_name: Mapped[str] = mapped_column(String(120), default="confidence_threshold_raw_grid", index=True)
+    status: Mapped[str] = mapped_column(String(32), default="completed", index=True)
+    applied: Mapped[bool] = mapped_column(Boolean, default=False)
+    filters_json: Mapped[str] = mapped_column(Text, default="{}")
+    sample_count: Mapped[int] = mapped_column(Integer, default=0)
+    resolved_sample_count: Mapped[int] = mapped_column(Integer, default=0)
+    candidate_count: Mapped[int] = mapped_column(Integer, default=0)
+    baseline_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    baseline_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    best_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    best_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    winning_config_json: Mapped[str] = mapped_column(Text, default="{}")
+    candidate_results_json: Mapped[str] = mapped_column(Text, default="[]")
+    summary_json: Mapped[str] = mapped_column(Text, default="{}")
+    artifact_json: Mapped[str] = mapped_column(Text, default="{}")
+    error_message: Mapped[str] = mapped_column(Text, default="")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
