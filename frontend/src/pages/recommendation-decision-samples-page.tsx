@@ -6,6 +6,10 @@ import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionT
 import type { RecommendationDecisionSample, SignalGatingTuningResponse, SignalGatingTuningRun, SignalGatingTuningState } from "../types";
 import { formatDate } from "../utils";
 
+function yahooFinanceUrl(ticker: string): string {
+  return `https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}`;
+}
+
 function decisionTone(decisionType: string): "ok" | "warning" | "danger" | "neutral" | "info" {
   if (decisionType === "actionable") {
     return "ok";
@@ -165,6 +169,7 @@ export function RecommendationDecisionSamplesPage() {
                     <div className="data-card-header">
                       <div className="cluster">
                         <Link to={`/tickers/${sample.ticker}`} className="badge badge-info badge-link">{sample.ticker}</Link>
+                        <a href={yahooFinanceUrl(sample.ticker)} className="button-subtle" target="_blank" rel="noreferrer noopener">Yahoo Finance</a>
                         <Badge tone={decisionTone(sample.decision_type)}>{sample.decision_type}</Badge>
                         <Badge tone={priorityTone(sample.review_priority)}>{sample.review_priority}</Badge>
                       </div>
