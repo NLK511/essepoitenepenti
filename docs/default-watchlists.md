@@ -77,14 +77,15 @@ Group intent:
 ## Scheduling rationale
 
 The seeded schedules are staggered by region and by macro-industry so they do not overlap.
-The default deployment also adds a small support-refresh trio: two macro runs per day in the quiet windows between regional batches, plus one industry refresh in the midday gap.
+The default deployment keeps proposal-generation jobs inside the local opening window for each region and spaces them by **10 minutes** to reduce API quota spikes.
+The deployment also adds a small support-refresh trio: two macro runs per day in the quiet windows between regional batches, plus one industry refresh in the midday gap.
 
 Regional schedule blocks:
-- **Asia-Pacific:** `00:00` to `02:00` UTC
-- **Europe:** `07:00` to `09:00` UTC
-- **United States:** `13:00` to `15:00` UTC
+- **Asia-Pacific:** `00:00` to `00:40` UTC
+- **Europe:** `07:00` to `07:40` UTC
+- **United States:** `13:00` to `13:40` UTC
 
-Within each region, runs are spaced by **30 minutes**.
+Within each region, runs are spaced by **10 minutes**.
 
 Why this matters:
 - avoids multiple seeded jobs firing at the same moment
@@ -103,21 +104,21 @@ Why the order inside a region is not arbitrary:
 
 | Watchlist | Region | Group | UTC schedule | Rationale summary |
 |---|---|---|---:|---|
-| `APAC-Tech` | Asia-Pacific | Tech | `00:00` | near Asia open for immediate platform / semiconductor repricing |
-| `APAC-Fin` | Asia-Pacific | Fin | `00:30` | after initial opening noise for rates / bank sensitivity |
-| `APAC-Health` | Asia-Pacific | Health | `01:00` | after tone stabilizes enough to read defensive rotation |
-| `APAC-Cons` | Asia-Pacific | Cons | `01:30` | once consumer, auto, and travel demand names have real volume |
-| `APAC-Cyc` | Asia-Pacific | Cyc | `02:00` | after commodity and early futures tone become clearer |
-| `EU-Tech` | Europe | Tech | `07:00` | near Europe open for tech, semis, and payments repricing |
-| `EU-Fin` | Europe | Fin | `07:30` | after opening auction pressure settles for banks / insurers |
-| `EU-Health` | Europe | Health | `08:00` | once market preference for defense vs growth is clearer |
-| `EU-Cons` | Europe | Cons | `08:30` | after FX and demand-sensitive signals become more reliable |
-| `EU-Cyc` | Europe | Cyc | `09:00` | later read for autos, industrials, chemicals, and energy |
-| `US-Tech` | United States | Tech | `13:00` | pre-open / early U.S. risk window for large-cap growth tone |
-| `US-Fin` | United States | Fin | `13:30` | after premarket yields and opening futures direction settle |
-| `US-Health` | United States | Health | `14:00` | cleaner view on defensive vs high-beta preference |
-| `US-Cons` | United States | Cons | `14:30` | after leadership rotation shows whether staples / media are favored |
-| `US-Cyc` | United States | Cyc | `15:00` | later read for energy, transports, and macro cyclicals |
+| `APAC-Tech` | Asia-Pacific | Tech | `00:00` | at the Asia open for immediate platform / semiconductor repricing |
+| `APAC-Fin` | Asia-Pacific | Fin | `00:10` | after initial opening noise for rates / bank sensitivity |
+| `APAC-Health` | Asia-Pacific | Health | `00:20` | after tone stabilizes enough to read defensive rotation |
+| `APAC-Cons` | Asia-Pacific | Cons | `00:30` | once consumer, auto, and travel demand names have real volume |
+| `APAC-Cyc` | Asia-Pacific | Cyc | `00:40` | after commodity and early futures tone become clearer |
+| `EU-Tech` | Europe | Tech | `07:00` | at the Europe open for tech, semis, and payments repricing |
+| `EU-Fin` | Europe | Fin | `07:10` | after opening auction pressure settles for banks / insurers |
+| `EU-Health` | Europe | Health | `07:20` | once market preference for defense vs growth is clearer |
+| `EU-Cons` | Europe | Cons | `07:30` | after FX and demand-sensitive signals become more reliable |
+| `EU-Cyc` | Europe | Cyc | `07:40` | later read for autos, industrials, chemicals, and energy |
+| `US-Tech` | United States | Tech | `13:00` | at the U.S. open / early risk window for large-cap growth tone |
+| `US-Fin` | United States | Fin | `13:10` | after premarket yields and opening futures direction settle |
+| `US-Health` | United States | Health | `13:20` | cleaner view on defensive vs high-beta preference |
+| `US-Cons` | United States | Cons | `13:30` | after leadership rotation shows whether staples / media are favored |
+| `US-Cyc` | United States | Cyc | `13:40` | later read for energy, transports, and macro cyclicals |
 
 Support-refresh jobs:
 

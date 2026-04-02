@@ -3,8 +3,8 @@
 Design goals for these defaults:
 - 300 total equities split across U.S., Europe, and Asia/Pacific (100 per region)
 - grouped by compact continent + macro-industry names
-- scheduled in region-appropriate windows that are interesting for analysis
-- fully staggered to avoid overlapping runs and reduce API quota spikes
+- scheduled in region-appropriate opening windows that are interesting for analysis
+- fully staggered in 10-minute increments to avoid overlapping runs and reduce API quota spikes
 - include a small set of daily macro and industry refresh jobs in the quiet windows between regional equity batches
 """
 from __future__ import annotations
@@ -32,7 +32,7 @@ WATCHLIST_SPECS = [
         "region": "Asia/Pacific",
         "macro_industry": "technology and internet platforms",
         "cron": "00 00 * * MON-FRI",
-        "schedule_rationale": "Runs into the Asia open so overnight global macro and the first local platform/semiconductor reactions are visible without colliding with Europe or U.S. batches.",
+        "schedule_rationale": "Runs at the Asia open; the default batch stays in the opening window and leaves 10 minutes before the next regional watchlist job.",
         "tickers": [
             "9988.HK", "0700.HK", "9618.HK", "3690.HK", "1810.HK",
             "9984.T", "6758.T", "6501.T", "8035.T", "7974.T",
@@ -44,8 +44,8 @@ WATCHLIST_SPECS = [
         "name": "APAC-Fin",
         "region": "Asia/Pacific",
         "macro_industry": "banks, insurers, and diversified financials",
-        "cron": "30 00 * * MON-FRI",
-        "schedule_rationale": "Follows the first Asia opening prints so rate-sensitive and bank-sensitive names can be scored after the initial auction noise settles.",
+        "cron": "10 00 * * MON-FRI",
+        "schedule_rationale": "Follows the first Asia open with a 10-minute gap so rate-sensitive and bank-sensitive names are scored after the initial auction noise settles.",
         "tickers": [
             "0005.HK", "1299.HK", "3988.HK", "1398.HK", "3328.HK",
             "8306.T", "8316.T", "8411.T", "8630.T", "8604.T",
@@ -57,8 +57,8 @@ WATCHLIST_SPECS = [
         "name": "APAC-Health",
         "region": "Asia/Pacific",
         "macro_industry": "pharma, medtech, and life sciences",
-        "cron": "00 01 * * MON-FRI",
-        "schedule_rationale": "Sits after the earliest open because defensive healthcare usually benefits more from a cleaner read on session tone than from the very first minutes of price discovery.",
+        "cron": "20 00 * * MON-FRI",
+        "schedule_rationale": "Stays inside the Asia opening window with a 10-minute gap after the prior job so defensive healthcare gets a cleaner read on session tone.",
         "tickers": [
             "4502.T", "4568.T", "4519.T", "4523.T", "4578.T",
             "4507.T", "4543.T", "7741.T", "7733.T", "4901.T",
@@ -70,8 +70,8 @@ WATCHLIST_SPECS = [
         "name": "APAC-Cons",
         "region": "Asia/Pacific",
         "macro_industry": "consumer, autos, transport, and brand-led demand",
-        "cron": "30 01 * * MON-FRI",
-        "schedule_rationale": "Scheduled once the local consumer and auto complex has enough volume to reflect demand sensitivity, travel tone, and retail-risk appetite.",
+        "cron": "30 00 * * MON-FRI",
+        "schedule_rationale": "Keeps the consumer and auto complex in the Asia opening window while preserving a 10-minute gap from neighboring jobs.",
         "tickers": [
             "7203.T", "7267.T", "7269.T", "7211.T", "1211.HK",
             "2333.HK", "0175.HK", "005380.KS", "012330.KS", "000270.KS",
@@ -83,8 +83,8 @@ WATCHLIST_SPECS = [
         "name": "APAC-Cyc",
         "region": "Asia/Pacific",
         "macro_industry": "industrials, energy, materials, and trading houses",
-        "cron": "00 02 * * MON-FRI",
-        "schedule_rationale": "Runs after the first hour so commodity and heavy-industrial names can absorb overnight macro, China-linked demand, and early futures moves without overlapping other regions.",
+        "cron": "40 00 * * MON-FRI",
+        "schedule_rationale": "Runs late in the Asia opening window so commodity and heavy-industrial names can absorb overnight macro and early futures moves without overlapping other regions.",
         "tickers": [
             "BHP.AX", "RIO.AX", "FMG.AX", "WDS.AX", "STO.AX",
             "0883.HK", "0857.HK", "0386.HK", "1605.T", "5020.T",
@@ -97,7 +97,7 @@ WATCHLIST_SPECS = [
         "region": "Europe",
         "macro_industry": "software, semis, payments, and telecom-tech platforms",
         "cron": "00 07 * * MON-FRI",
-        "schedule_rationale": "Starts near the European cash open so the list catches open-driven repricing in semis, enterprise software, and payment-sensitive names before the broader midday cycle.",
+        "schedule_rationale": "Starts at the European cash open so the list catches open-driven repricing in semis, enterprise software, and payment-sensitive names while preserving the 10-minute cadence.",
         "tickers": [
             "ASML.AS", "SAP.DE", "ADYEN.AS", "PRX.AS", "IFX.DE",
             "NOKIA.HE", "ERIC-B.ST", "STM.PA", "BEI.DE", "LOGN.SW",
@@ -109,8 +109,8 @@ WATCHLIST_SPECS = [
         "name": "EU-Fin",
         "region": "Europe",
         "macro_industry": "banks, insurers, exchanges, and asset managers",
-        "cron": "30 07 * * MON-FRI",
-        "schedule_rationale": "European financials are most informative once rates, sovereign spreads, and open auction pressure have started to settle, so this run follows the first open burst.",
+        "cron": "10 07 * * MON-FRI",
+        "schedule_rationale": "European financials are most informative once rates, sovereign spreads, and open auction pressure have started to settle, so this run follows the first open burst by 10 minutes.",
         "tickers": [
             "HSBA.L", "SAN.MC", "BNP.PA", "ALV.DE", "UBSG.SW",
             "ISP.MI", "BBVA.MC", "INGA.AS", "ACA.PA", "BARC.L",
@@ -122,7 +122,7 @@ WATCHLIST_SPECS = [
         "name": "EU-Health",
         "region": "Europe",
         "macro_industry": "pharma, diagnostics, medtech, and healthcare equipment",
-        "cron": "00 08 * * MON-FRI",
+        "cron": "20 07 * * MON-FRI",
         "schedule_rationale": "Healthcare is staggered after tech and banks because it is usually more useful to score once the market has revealed whether it wants defense, growth, or policy-sensitive rotation.",
         "tickers": [
             "NOVO-B.CO", "ROG.SW", "NOVN.SW", "AZN.L", "GSK.L",
@@ -135,7 +135,7 @@ WATCHLIST_SPECS = [
         "name": "EU-Cons",
         "region": "Europe",
         "macro_industry": "consumer staples, luxury, beverage, and retail demand",
-        "cron": "30 08 * * MON-FRI",
+        "cron": "30 07 * * MON-FRI",
         "schedule_rationale": "Consumer and luxury names are checked once Europe has a cleaner macro and FX read, which tends to produce more useful demand-sensitive analysis than an immediate open scan.",
         "tickers": [
             "MC.PA", "OR.PA", "NESN.SW", "ABI.BR", "DGE.L",
@@ -148,7 +148,7 @@ WATCHLIST_SPECS = [
         "name": "EU-Cyc",
         "region": "Europe",
         "macro_industry": "industrials, energy, autos, chemicals, and materials",
-        "cron": "00 09 * * MON-FRI",
+        "cron": "40 07 * * MON-FRI",
         "schedule_rationale": "Cyclicals run after the earlier Europe groups because commodity, industrial, and auto names usually react best once the continental macro tape and sector leadership are clearer.",
         "tickers": [
             "SHEL.L", "BP.L", "TTE.PA", "ENI.MI", "EQNR.OL",
@@ -162,7 +162,7 @@ WATCHLIST_SPECS = [
         "region": "United States",
         "macro_industry": "software, platforms, cloud, and internet growth",
         "cron": "00 13 * * MON-FRI",
-        "schedule_rationale": "Runs into the U.S. pre-open / early risk window so the watchlist can react to overnight news, futures positioning, and large-cap tech tone before the rest of the U.S. groups.",
+        "schedule_rationale": "Runs into the U.S. open so the watchlist can react to overnight news, futures positioning, and large-cap tech tone while preserving the 10-minute cadence.",
         "tickers": [
             "AAPL", "MSFT", "GOOGL", "META", "AMZN",
             "NFLX", "CRM", "ORCL", "ADBE", "NOW",
@@ -174,7 +174,7 @@ WATCHLIST_SPECS = [
         "name": "US-Fin",
         "region": "United States",
         "macro_industry": "banks, brokers, exchanges, and insurers",
-        "cron": "30 13 * * MON-FRI",
+        "cron": "10 13 * * MON-FRI",
         "schedule_rationale": "U.S. financials follow tech so rate-sensitive and credit-sensitive names can be scored once premarket yields and opening futures direction are more visible.",
         "tickers": [
             "JPM", "BAC", "WFC", "C", "GS",
@@ -187,7 +187,7 @@ WATCHLIST_SPECS = [
         "name": "US-Health",
         "region": "United States",
         "macro_industry": "pharma, managed care, medtech, and providers",
-        "cron": "00 14 * * MON-FRI",
+        "cron": "20 13 * * MON-FRI",
         "schedule_rationale": "Healthcare is placed after the initial U.S. open sequence because the first 30 to 60 minutes usually reveal whether the tape prefers defense or high-beta growth.",
         "tickers": [
             "LLY", "UNH", "JNJ", "ABBV", "MRK",
@@ -200,7 +200,7 @@ WATCHLIST_SPECS = [
         "name": "US-Cons",
         "region": "United States",
         "macro_industry": "consumer staples, telecom, media, and household demand",
-        "cron": "30 14 * * MON-FRI",
+        "cron": "30 13 * * MON-FRI",
         "schedule_rationale": "Consumer and defensive demand names are checked after financials and healthcare so the run sees whether the market is rotating toward safety, staples, or communications defensives.",
         "tickers": [
             "WMT", "COST", "PG", "KO", "PEP",
@@ -213,7 +213,7 @@ WATCHLIST_SPECS = [
         "name": "US-Cyc",
         "region": "United States",
         "macro_industry": "industrials, energy, materials, and transport cyclicals",
-        "cron": "00 15 * * MON-FRI",
+        "cron": "40 13 * * MON-FRI",
         "schedule_rationale": "Placed last in the U.S. block so industrial, transport, and energy names can incorporate the clearest read on open leadership, crude tone, and macro risk appetite while still avoiding overlap.",
         "tickers": [
             "CAT", "DE", "GE", "HON", "RTX",
