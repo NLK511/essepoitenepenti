@@ -5,7 +5,7 @@ import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import { ScoreBadge, WarningSummary } from "../components/decision-surface";
 import type { TickerSignalSnapshot } from "../types";
-import { detailLabel, extractDisplayLabels, formatDate } from "../utils";
+import { detailLabel, extractDisplayLabels, formatDate, yahooFinanceUrl } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams): string {
   const query = searchParams.toString();
@@ -144,7 +144,7 @@ export function TickerSignalsPage() {
                   <div className="data-card-header">
                     <div>
                       <div className="cluster">
-                        <Link to={`/tickers/${signal.ticker}`} className="badge badge-info badge-link">{signal.ticker}</Link>
+                        <a href={yahooFinanceUrl(signal.ticker)} className="badge badge-info badge-link" target="_blank" rel="noreferrer noopener">{signal.ticker}</a>
                         <Badge tone={signal.warnings.length > 0 ? "warning" : "ok"}>{signal.status}</Badge>
                         <Badge tone={directionTone(signal.direction)}>{signal.direction}</Badge>
                         <Badge tone={mode === "deep_analysis" ? "info" : "neutral"}>{mode}</Badge>

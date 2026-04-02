@@ -13,7 +13,7 @@ import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import { ContextEventSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import type { Job, RunDetailResponse, WatchlistEvaluationPolicy } from "../types";
-import { detailLabel, extractDisplayLabels, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, runTone } from "../utils";
+import { detailLabel, extractDisplayLabels, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, runTone, yahooFinanceUrl } from "../utils";
 
 function scoreColor(value: number, min = -1, max = 1) {
   if (!Number.isFinite(value) || max <= min) {
@@ -373,7 +373,7 @@ export function RunDetailPage() {
                               const reasons = extractDisplayLabels(isRecord(decision) ? decision : null, "reason_details", "reasons");
                               return (
                                 <tr key={`${ticker}-${index}`}>
-                                  <td><Link to={`/tickers/${ticker}`} className="badge badge-info badge-link">{ticker}</Link></td>
+                                  <td><a href={yahooFinanceUrl(ticker)} className="badge badge-info badge-link" target="_blank" rel="noreferrer noopener">{ticker}</a></td>
                                   <td><Badge tone={shortlisted ? "info" : "neutral"}>{shortlisted ? `shortlisted #${typeof decision.shortlist_rank === "number" ? decision.shortlist_rank : "—"}` : "rejected"}</Badge></td>
                                   <td>{typeof decision.selection_lane_label === "string" && decision.selection_lane_label ? decision.selection_lane_label : typeof decision.selection_lane === "string" ? decision.selection_lane : "—"}</td>
                                   <td>{typeof decision.rank === "number" ? decision.rank : "—"}</td>
@@ -452,7 +452,7 @@ export function RunDetailPage() {
                               <tr key={item.id ?? `${item.ticker}-${item.computed_at}`}>
                                 <td>
                                   <div className="cluster">
-                                    <Link to={`/tickers/${item.ticker}`} className="badge badge-info badge-link">{item.ticker}</Link>
+                                    <a href={yahooFinanceUrl(item.ticker)} className="badge badge-info badge-link" target="_blank" rel="noreferrer noopener">{item.ticker}</a>
                                     {shortlisted ? <Badge tone="info">shortlisted</Badge> : <Badge tone="neutral">not shortlisted</Badge>}
                                   </div>
                                 </td>
@@ -553,7 +553,7 @@ export function RunDetailPage() {
                               <tr key={plan.id ?? `${plan.ticker}-${plan.computed_at}`}>
                                 <td>
                                   <div>
-                                    <Link to={`/tickers/${plan.ticker}`} className="badge badge-info badge-link">{plan.ticker}</Link>
+                                    <a href={yahooFinanceUrl(plan.ticker)} className="badge badge-info badge-link" target="_blank" rel="noreferrer noopener">{plan.ticker}</a>
                                     <div className="helper-text top-gap-small">{plan.thesis_summary || plan.rationale_summary || "No thesis stored."}</div>
                                     <div className="helper-text">setup {setupFamily ?? "—"} · reason {actionReason ?? "—"}</div>
                                     <div className="helper-text">{actionReasonDetail ?? "No family-specific action note stored."}</div>

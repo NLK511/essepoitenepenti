@@ -4,11 +4,7 @@ import { Link } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { RecommendationDecisionSample, SignalGatingTuningResponse, SignalGatingTuningRun, SignalGatingTuningState } from "../types";
-import { formatDate } from "../utils";
-
-function yahooFinanceUrl(ticker: string): string {
-  return `https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}`;
-}
+import { formatDate, yahooFinanceUrl } from "../utils";
 
 function decisionTone(decisionType: string): "ok" | "warning" | "danger" | "neutral" | "info" {
   if (decisionType === "actionable") {
@@ -168,9 +164,8 @@ export function RecommendationDecisionSamplesPage() {
                   <article key={sample.id ?? `${sample.ticker}-${sample.created_at}`} className="data-card">
                     <div className="data-card-header">
                       <div className="cluster">
-                        <Link to={`/tickers/${sample.ticker}`} className="badge badge-info badge-link">{sample.ticker}</Link>
-                        <a href={yahooFinanceUrl(sample.ticker)} className="button-subtle" target="_blank" rel="noreferrer noopener">Yahoo Finance</a>
-                        <Badge tone={decisionTone(sample.decision_type)}>{sample.decision_type}</Badge>
+                        <a href={yahooFinanceUrl(sample.ticker)} className="badge badge-info badge-link" target="_blank" rel="noreferrer noopener">{sample.ticker}</a>
+                                                <Badge tone={decisionTone(sample.decision_type)}>{sample.decision_type}</Badge>
                         <Badge tone={priorityTone(sample.review_priority)}>{sample.review_priority}</Badge>
                       </div>
                       <div className="helper-text">{formatDate(sample.created_at)}</div>

@@ -5,7 +5,7 @@ import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
 import { ProvenanceStrip } from "../components/decision-surface";
 import type { DashboardResponse, IndustryContextSnapshot, MacroContextSnapshot, RecommendationDecisionSample } from "../types";
-import { directionTone, formatDate, formatDuration, jobTypeLabel, recommendationStateTone, runTone, tickerTone } from "../utils";
+import { directionTone, formatDate, formatDuration, jobTypeLabel, recommendationStateTone, runTone, tickerTone, yahooFinanceUrl } from "../utils";
 
 function contextSummaryMethod(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
   return snapshot && typeof snapshot.metadata?.context_summary_method === "string" ? snapshot.metadata.context_summary_method : "unknown";
@@ -281,7 +281,7 @@ export function DashboardPage() {
                     <div className="card-headline">
                       <div>
                         <div className="cluster">
-                          <Link to={`/tickers/${item.ticker}`} className="badge badge-info badge-link">{item.ticker}</Link>
+                          <a href={yahooFinanceUrl(item.ticker)} className="badge badge-info badge-link" target="_blank" rel="noreferrer noopener">{item.ticker}</a>
                           <Badge tone={directionTone(item.action === "short" ? "SHORT" : item.action === "long" ? "LONG" : "NEUTRAL")}>{item.action}</Badge>
                           <Badge tone={recommendationStateTone(item.latest_outcome?.outcome === "win" ? "WIN" : item.latest_outcome?.outcome === "loss" ? "LOSS" : "PENDING")}>
                             {item.latest_outcome?.outcome ?? item.status}

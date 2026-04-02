@@ -13,10 +13,6 @@ import { ScoreBadge } from "../components/decision-surface";
 import type { TickerAnalysisPage as TickerAnalysisPageData } from "../types";
 import { detailLabel, formatDate } from "../utils";
 
-function yahooFinanceUrl(ticker: string): string {
-  return `https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}`;
-}
-
 export function TickerPage() {
   const { ticker } = useParams<{ ticker: string }>();
   const [data, setData] = useState<TickerAnalysisPageData | null>(null);
@@ -57,7 +53,6 @@ export function TickerPage() {
         subtitle="This page is optimized for one question: should this ticker earn more operator attention? Review plan history, outcome mix, and the latest plan context without wading through redundant run-level detail."
         actions={
           <>
-            {ticker ? <a href={yahooFinanceUrl(ticker)} className="button-subtle" target="_blank" rel="noreferrer noopener">Yahoo Finance</a> : null}
             <Link to="/jobs/recommendation-plans" className="button-secondary">Back to plans</Link>
             {data ? <a href={`/api/tickers/${data.ticker}`} className="button-subtle" target="_blank" rel="noreferrer">JSON</a> : null}
           </>

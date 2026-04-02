@@ -16,7 +16,7 @@ import type {
   RecommendationSetupFamilyReviewSummary,
   Run,
 } from "../types";
-import { detailLabel, extractDisplayLabels, formatDate } from "../utils";
+import { detailLabel, extractDisplayLabels, formatDate, yahooFinanceUrl } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams): string {
   const query = searchParams.toString();
@@ -132,10 +132,6 @@ function docsLink(doc: string, section?: string): string {
     params.set("section", section);
   }
   return `/docs?${params.toString()}`;
-}
-
-function yahooFinanceUrl(ticker: string): string {
-  return `https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}`;
 }
 
 const recommendationPlansDoc = (section?: string) => docsLink("operator-page-field-guide", section);
@@ -807,11 +803,8 @@ export function RecommendationPlansPage() {
                         <td>{formatDate(plan.computed_at)}</td>
                         <td>
                           <div className="cluster">
-                            <Link to={`/tickers/${plan.ticker}`} className="badge badge-info badge-link">{plan.ticker}</Link>
-                            <a href={yahooFinanceUrl(plan.ticker)} className="button-subtle" target="_blank" rel="noreferrer noopener">
-                              Yahoo Finance
-                            </a>
-                            <Badge tone={plan.warnings.length > 0 ? "warning" : "ok"}>{plan.status}</Badge>
+                            <a href={yahooFinanceUrl(plan.ticker)} className="badge badge-info badge-link" target="_blank" rel="noreferrer noopener">{plan.ticker}</a>
+                                                        <Badge tone={plan.warnings.length > 0 ? "warning" : "ok"}>{plan.status}</Badge>
                           </div>
                           <div className="helper-text top-gap-small">horizon {plan.horizon} · setup {setupFamily}</div>
                         </td>
@@ -885,10 +878,7 @@ export function RecommendationPlansPage() {
                           <td colSpan={10}>
                             <div className="recommendation-plan-expanded-panel">
                               <div className="cluster top-gap-small">
-                                <a href={yahooFinanceUrl(plan.ticker)} className="button-subtle" target="_blank" rel="noreferrer noopener">
-                                  Yahoo Finance
-                                </a>
-                              </div>
+                                </div>
                               <div className="summary-grid recommendation-plan-compact-grid">
                                 <div className="summary-item"><span className="summary-label">Action reason</span><span className="summary-value">{actionReason}</span></div>
                                 <div className="summary-item"><span className="summary-label">Confidence gate</span><span className="summary-value">{effectiveThreshold !== null ? `${effectiveThreshold.toFixed(1)}%` : "—"}</span></div>

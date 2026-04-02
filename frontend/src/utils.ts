@@ -286,3 +286,7 @@ export function extractDisplayLabels(
   }
   return labels;
 }
+export function yahooFinanceUrl(ticker: string): string {
+  return `https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}`;
+}
+
