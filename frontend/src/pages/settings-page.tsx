@@ -46,25 +46,6 @@ export function SettingsPage() {
 
   const settingMap = useMemo(() => toSettingMap(data?.settings ?? []), [data]);
 
-  async function saveAppSetting(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    try {
-      setSaving("app");
-      setError(null);
-      setNotice(null);
-      await postForm<AppSetting>("/api/settings/app", {
-        key: String(formData.get("key") ?? "confidence_threshold"),
-        value: String(formData.get("value") ?? ""),
-      });
-      await loadData();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to save app setting");
-    } finally {
-      setSaving(null);
-    }
-  }
-
   async function saveSummarySettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -223,19 +204,6 @@ export function SettingsPage() {
           </section>
 
           <section className="card-grid" key={dataVersion}>
-            <Card>
-              <SectionTitle kicker="Application settings" title="Core operator controls" subtitle="Rotating the secret key without a migration path will invalidate stored credentials." />
-              <form className="stack-form" onSubmit={saveAppSetting}>
-                <input type="hidden" name="key" value="confidence_threshold" />
-                <label className="form-field">
-                  <span>Confidence threshold</span>
-                  <input name="value" defaultValue={settingMap.confidence_threshold ?? "60"} />
-                </label>
-                <button className="button" type="submit" disabled={saving === "app"}>{saving === "app" ? "Saving…" : "Save confidence threshold"}</button>
-              </form>
-            </Card>
-
-
             <Card>
               <SectionTitle kicker="Optimization guardrails" title="Weight optimization safety controls" subtitle="These settings affect scheduled and manual optimization runs. Each optimization now creates a rollback-capable backup of weights.json before the app mutates it using resolved recommendation-plan outcomes." />
               <form className="stack-form" onSubmit={saveOptimizationSettings}>

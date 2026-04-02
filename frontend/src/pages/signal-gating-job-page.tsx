@@ -79,7 +79,7 @@ export function SignalGatingJobPage() {
     }
   }
 
-  async function saveSignalGatingTuningSettings(event: FormEvent<HTMLFormElement>) {
+  async function saveSignalGatingSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!tuningState) {
       return;
@@ -88,6 +88,10 @@ export function SignalGatingJobPage() {
     try {
       setSaving("config");
       setError(null);
+      await postForm<{ key: string; value: string }>("/api/settings/app", {
+        key: "confidence_threshold",
+        value: String(formData.get("confidence_threshold") ?? tuningState.current_confidence_threshold),
+      });
       await postForm<{ signal_gating_tuning: SignalGatingTuningState }>("/api/settings/signal-gating-tuning", {
         threshold_offset: String(formData.get("threshold_offset") ?? tuningState.active_tuning.threshold_offset),
         confidence_adjustment: String(formData.get("confidence_adjustment") ?? tuningState.active_tuning.confidence_adjustment),
@@ -97,7 +101,7 @@ export function SignalGatingJobPage() {
       });
       await loadData();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to save signal gating tuning settings");
+      setError(saveError instanceof Error ? saveError.message : "Failed to save signal gating settings");
     } finally {
       setSaving(null);
     }
@@ -133,19 +137,20 @@ export function SignalGatingJobPage() {
             <SectionTitle
               kicker="Configuration"
               title="Signal gating controls"
-              subtitle="Adjust the active gating parameters that shape live recommendation selection."
+              subtitle="Adjust the live base threshold and the tuning parameters that shape recommendation selection."
             />
-            <form className="stack-form" onSubmit={(event) => void saveSignalGatingTuningSettings(event)}>
+            <form className="stack-form" onSubmit={(event) => void saveSignalGatingSettings(event)}>
               <div className="form-grid">
+                <label className="form-field"><span>Confidence threshold</span><input name="confidence_threshold" defaultValue={String(tuningState.current_confidence_threshold)} /></label>
                 <label className="form-field"><span>Threshold offset</span><input name="threshold_offset" defaultValue={String(tuningState.active_tuning.threshold_offset)} /></label>
                 <label className="form-field"><span>Confidence adjustment</span><input name="confidence_adjustment" defaultValue={String(tuningState.active_tuning.confidence_adjustment)} /></label>
                 <label className="form-field"><span>Near-miss cutoff</span><input name="near_miss_gap_cutoff" defaultValue={String(tuningState.active_tuning.near_miss_gap_cutoff)} /></label>
                 <label className="form-field"><span>Shortlist aggressiveness</span><input name="shortlist_aggressiveness" defaultValue={String(tuningState.active_tuning.shortlist_aggressiveness)} /></label>
                 <label className="form-field"><span>Degraded penalty</span><input name="degraded_penalty" defaultValue={String(tuningState.active_tuning.degraded_penalty)} /></label>
               </div>
-              <div className="helper-text">Zeroed settings preserve baseline behavior. Positive loosening values make plan promotion easier.</div>
+              <div className="helper-text">Zeroed settings preserve baseline behavior. The effective live threshold combines the base confidence threshold with the tuning offset.</div>
               <div className="cluster top-gap-small">
-                <button className="button" type="submit" disabled={saving !== null}>{saving === "config" ? "Saving…" : "Save tuning config"}</button>
+                <button className="button" type="submit" disabled={saving !== null}>{saving === "config" ? "Saving…" : "Save gating settings"}</button>
                 <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(false)}>{saving === "run" ? "Running…" : "Run tuning"}</button>
                 <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(true)}>{saving === "apply" ? "Running & applying…" : "Run and apply"}</button>
               </div>
