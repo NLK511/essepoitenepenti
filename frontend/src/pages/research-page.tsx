@@ -16,10 +16,23 @@ export function ResearchPage() {
           <Card>
             <SectionTitle
               kicker="Available now"
-              title="Signal gating"
-              subtitle="The gating subsection groups review samples and the tuning job so you can move between evidence and configuration quickly."
+              title="Decision samples"
+              subtitle="Review near-misses, actionable cases, and the evidence that may feed future tuning and replay workflows."
             />
-            <div className="helper-text">Use the gating subsection when you want to inspect samples, change gating parameters, and review optimization results.</div>
+            <div className="helper-text">This is the shared evidence surface. It is not exclusive to signal gating, even though gating uses it today.</div>
+            <div className="cluster top-gap-small">
+              <Link to="/research/decision-samples" className="button-secondary">Open decision samples</Link>
+              <Badge tone="info">active</Badge>
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle
+              kicker="Available now"
+              title="Signal gating"
+              subtitle="The signal-gating subsection collects the tuning job and supporting review links so the controls stay grouped without owning the samples themselves."
+            />
+            <div className="helper-text">Use the gating subsection when you want to adjust live gating parameters or inspect tuning history.</div>
             <div className="cluster top-gap-small">
               <Link to="/research/signal-gating" className="button-secondary">Open signal gating</Link>
               <Badge tone="info">active</Badge>

@@ -19,9 +19,15 @@ type NavItem = {
   match?: (pathname: string) => boolean;
 };
 
+type NavSubsection = {
+  label: string;
+  items: NavItem[];
+};
+
 type NavSection = {
   label: string;
   items: NavItem[];
+  subsections?: NavSubsection[];
 };
 
 const navSections: NavSection[] = [
@@ -46,14 +52,16 @@ const navSections: NavSection[] = [
     label: "Research",
     items: [
       { to: "/research", label: "Research home", shortLabel: "Hub", icon: "⌂", end: true },
+      { to: "/research/decision-samples", label: "Decision samples", shortLabel: "Samples", icon: "◉" },
     ],
-  },
-  {
-    label: "Signal gating",
-    items: [
-      { to: "/research/signal-gating", label: "Signal gating hub", shortLabel: "Gate", icon: "◉", end: true },
-      { to: "/research/signal-gating/decision-samples", label: "Decision samples", shortLabel: "Samples", icon: "◉" },
-      { to: "/research/signal-gating/gating-job", label: "Gating tuning job", shortLabel: "Tune", icon: "↯" },
+    subsections: [
+      {
+        label: "Signal gating",
+        items: [
+          { to: "/research/signal-gating", label: "Signal gating hub", shortLabel: "Gate", icon: "◉", end: true },
+          { to: "/research/signal-gating/gating-job", label: "Gating tuning job", shortLabel: "Tune", icon: "↯" },
+        ],
+      },
     ],
   },
   {
@@ -430,6 +438,27 @@ export function AppLayout() {
                       </NavLink>
                     ))}
                   </div>
+                  {section.subsections ? section.subsections.map((subsection) => (
+                    <div key={subsection.label} className="sidebar-subsection">
+                      <div className="sidebar-subsection-label">{subsection.label}</div>
+                      <div className="sidebar-link-list sidebar-subsection-links">
+                        {subsection.items.map((item) => (
+                          <NavLink
+                            key={item.to}
+                            to={item.to}
+                            end={item.end}
+                            className={() => `sidebar-link${isItemActive(item, location.pathname) ? " is-active" : ""}`}
+                          >
+                            <span className="sidebar-link-icon" aria-hidden="true">{item.icon}</span>
+                            <span className="sidebar-link-copy">
+                              <span className="sidebar-link-label">{item.label}</span>
+                              <span className="sidebar-link-short">{item.shortLabel}</span>
+                            </span>
+                          </NavLink>
+                        ))}
+                      </div>
+                    </div>
+                  )) : null}
                 </div>
               ))}
             </nav>
@@ -500,6 +529,23 @@ export function AppLayout() {
                     <span>{item.label}</span>
                   </NavLink>
                 ))}
+                {section.subsections ? section.subsections.map((subsection) => (
+                  <div key={subsection.label} className="mobile-nav-subgroup">
+                    <div className="mobile-nav-subgroup-title">{subsection.label}</div>
+                    {subsection.items.map((item) => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        end={item.end}
+                        className={() => `nav-link mobile-nav-link mobile-nav-link-sub${isItemActive(item, location.pathname) ? " is-active" : ""}`}
+                        onClick={() => setMobileNavOpen(false)}
+                      >
+                        <span aria-hidden="true">{item.icon}</span>
+                        <span>{item.label}</span>
+                      </NavLink>
+                    ))}
+                  </div>
+                )) : null}
               </div>
             ))}
           </nav>

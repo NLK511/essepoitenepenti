@@ -240,7 +240,7 @@ export function DashboardPage() {
 
           <section className="card-grid">
             <Card>
-              <SectionTitle kicker="Research" title="Decision samples" subtitle="Near misses and actionable plans for calibration work." actions={<Link to="/research/signal-gating/decision-samples" className="button-secondary">Open samples</Link>} />
+              <SectionTitle kicker="Research" title="Decision samples" subtitle="Near misses and actionable plans for calibration work." actions={<Link to="/research/decision-samples" className="button-secondary">Open samples</Link>} />
               {latestDecisionSamples.length === 0 ? (
                 <EmptyState message="No decision samples yet." />
               ) : (

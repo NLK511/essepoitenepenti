@@ -21,7 +21,7 @@ export function SignalGatingPage() {
             />
             <div className="helper-text">This page is the review surface for samples and can be reused for future research beyond gating.</div>
             <div className="cluster top-gap-small">
-              <Link to="/research/signal-gating/decision-samples" className="button-secondary">Open samples</Link>
+              <Link to="/research/decision-samples" className="button-secondary">Open samples</Link>
               <Badge tone="info">review</Badge>
             </div>
           </Card>

@@ -116,7 +116,7 @@ export function SignalGatingJobPage() {
         actions={
           <>
             <Link to="/research" className="button-subtle">Research hub</Link>
-            <Link to="/research/signal-gating/decision-samples" className="button-secondary">Decision samples</Link>
+            <Link to="/research/decision-samples" className="button-secondary">Decision samples</Link>
           </>
         }
       />

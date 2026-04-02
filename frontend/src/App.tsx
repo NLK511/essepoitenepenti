@@ -37,7 +37,7 @@ export default function App() {
           <Route path="jobs/history" element={<Navigate to="/jobs/recommendation-plans" replace />} />
           <Route path="jobs/ticker-signals" element={<TickerSignalsPage />} />
           <Route path="jobs/recommendation-plans" element={<RecommendationPlansPage />} />
-          <Route path="jobs/decision-samples" element={<Navigate to="/research/signal-gating/decision-samples" replace />} />
+          <Route path="jobs/decision-samples" element={<Navigate to="/research/decision-samples" replace />} />
           <Route path="jobs/debugger" element={<DebuggerPage />} />
           <Route path="watchlists" element={<Navigate to="/jobs/watchlists" replace />} />
           <Route path="history" element={<Navigate to="/jobs/recommendation-plans" replace />} />
@@ -50,9 +50,9 @@ export default function App() {
           <Route path="sentiment/:snapshotId" element={<Navigate to="/context" replace />} />
           <Route path="research" element={<ResearchPage />} />
           <Route path="research/signal-gating" element={<SignalGatingPage />} />
-          <Route path="research/signal-gating/decision-samples" element={<RecommendationDecisionSamplesPage />} />
+          <Route path="research/decision-samples" element={<RecommendationDecisionSamplesPage />} />
+          <Route path="research/signal-gating/decision-samples" element={<Navigate to="/research/decision-samples" replace />} />
           <Route path="research/signal-gating/gating-job" element={<SignalGatingJobPage />} />
-          <Route path="research/decision-samples" element={<Navigate to="/research/signal-gating/decision-samples" replace />} />
           <Route path="research/plan-generation-tuning" element={<Navigate to="/research" replace />} />
           <Route path="research/backtesting" element={<Navigate to="/research" replace />} />
           <Route path="settings" element={<SettingsPage />} />
