@@ -483,6 +483,13 @@ export interface RecommendationDecisionSample {
   updated_at: string;
 }
 
+export interface RecommendationDecisionSampleListResponse {
+  items: RecommendationDecisionSample[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface RecommendationPlan {
   id: number | null;
   ticker: string;
@@ -509,6 +516,13 @@ export interface RecommendationPlan {
   watchlist_id: number | null;
   ticker_signal_snapshot_id: number | null;
   latest_outcome: RecommendationPlanOutcome | null;
+}
+
+export interface RecommendationPlanListResponse {
+  items: RecommendationPlan[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface RecommendationCalibrationBucket {

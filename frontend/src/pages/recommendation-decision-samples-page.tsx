@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
-import type { RecommendationDecisionSample } from "../types";
+import type { RecommendationDecisionSample, RecommendationDecisionSampleListResponse } from "../types";
 import { formatDate, yahooFinanceUrl } from "../utils";
 
 function decisionTone(decisionType: string): "ok" | "warning" | "danger" | "neutral" | "info" {
@@ -43,22 +43,44 @@ function truncate(value: string, max = 180): string {
   return `${value.slice(0, max - 1).trimEnd()}…`;
 }
 
+function buildQuery(searchParams: URLSearchParams): string {
+  const query = new URLSearchParams(searchParams);
+  const limit = Math.max(1, Number(query.get("limit") ?? "50") || 50);
+  const page = Math.max(1, Number(query.get("page") ?? "1") || 1);
+  query.set("limit", String(limit));
+  query.set("offset", String((page - 1) * limit));
+  query.delete("page");
+  const queryString = query.toString();
+  return queryString ? `/api/recommendation-decision-samples?${queryString}` : "/api/recommendation-decision-samples";
+}
+
 export function RecommendationDecisionSamplesPage() {
-  const [samples, setSamples] = useState<RecommendationDecisionSample[] | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams({ limit: "50", page: "1" });
+  const [samplesResponse, setSamplesResponse] = useState<RecommendationDecisionSampleListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const pageSize = Math.max(1, Number(searchParams.get("limit") ?? "50") || 50);
+  const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
 
   useEffect(() => {
     async function load() {
       try {
         setError(null);
-        const loadedSamples = await getJson<RecommendationDecisionSample[]>("/api/recommendation-decision-samples?limit=100");
-        setSamples(loadedSamples);
+        const loadedSamples = await getJson<RecommendationDecisionSampleListResponse>(buildQuery(searchParams));
+        setSamplesResponse(loadedSamples);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load decision samples");
       }
     }
     void load();
-  }, []);
+  }, [searchParams]);
+
+  const samples = samplesResponse?.items ?? null;
+  const totalSamples = samplesResponse?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(totalSamples / pageSize));
+  const pageStart = samples && samples.length > 0 ? (currentPage - 1) * pageSize + 1 : 0;
+  const pageEnd = samples && samples.length > 0 ? pageStart + samples.length - 1 : 0;
+  const hasNextPage = currentPage < pageCount;
 
   const summary = useMemo(() => {
     const items = samples ?? [];
@@ -79,6 +101,19 @@ export function RecommendationDecisionSamplesPage() {
 
   const allSamples = samples ?? [];
 
+  function goToPage(nextPage: number) {
+    const next = new URLSearchParams(searchParams);
+    next.set("page", String(Math.max(1, nextPage)));
+    setSearchParams(next);
+  }
+
+  function handlePageSizeChange(event: ChangeEvent<HTMLSelectElement>) {
+    const next = new URLSearchParams(searchParams);
+    next.set("limit", event.target.value);
+    next.set("page", "1");
+    setSearchParams(next);
+  }
+
   return (
     <>
       <PageHeader
@@ -95,23 +130,23 @@ export function RecommendationDecisionSamplesPage() {
       />
 
       {error ? <ErrorState message={error} /> : null}
-      {!samples && !error ? <LoadingState message="Loading decision samples…" /> : null}
+      {!samplesResponse && !error ? <LoadingState message="Loading decision samples…" /> : null}
 
       {samples ? (
         <div className="stack-page">
           <section className="metrics-grid">
-            <StatCard label="Samples" value={summary.total} helper="Generated recommendation-plan decision rows" />
-            <StatCard label="Actionable" value={summary.actionable} helper="Long and short decisions" />
-            <StatCard label="Near misses" value={summary.nearMiss} helper="High-signal no-action plans" />
-            <StatCard label="High priority" value={summary.highPriority} helper="Review these first" />
-            <StatCard label="Degraded" value={summary.degraded} helper="Plans produced with missing or failed deep analysis" />
+            <StatCard label="Samples on page" value={summary.total} helper={`Showing ${summary.total} of ${totalSamples} filtered samples`} />
+            <StatCard label="Actionable on page" value={summary.actionable} helper="Long and short decisions" />
+            <StatCard label="Near misses on page" value={summary.nearMiss} helper="High-signal no-action plans" />
+            <StatCard label="High priority on page" value={summary.highPriority} helper="Review these first" />
+            <StatCard label="Degraded on page" value={summary.degraded} helper="Plans produced with missing or failed deep analysis" />
           </section>
 
           <Card>
             <SectionTitle
               kicker="Review queue"
               title="High-priority samples"
-              subtitle="Use this list to inspect borderline no-action plans and the rare actionable cases side by side."
+              subtitle="Use this list to inspect borderline no-action plans and the rare actionable cases on the current page side by side."
             />
             {highPrioritySamples.length === 0 ? (
               <EmptyState message="No high-priority samples available yet." />
@@ -150,11 +185,32 @@ export function RecommendationDecisionSamplesPage() {
             )}
           </Card>
 
+          <div className="pagination">
+            <label className="form-field">
+              <span>Page size</span>
+              <select value={String(pageSize)} onChange={handlePageSizeChange}>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+              </select>
+            </label>
+            <button type="button" className="button-subtle" onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1}>
+              Previous
+            </button>
+            <div className="helper-text">
+              Page {currentPage} of {pageCount}{allSamples.length > 0 ? ` · showing ${pageStart}–${pageEnd} of ${totalSamples}` : " · no results on this page"}
+            </div>
+            <button type="button" className="button-subtle" onClick={() => goToPage(currentPage + 1)} disabled={!hasNextPage}>
+              Next
+            </button>
+          </div>
+
           <Card>
             <SectionTitle
               kicker="All samples"
               title="Decision sample archive"
-              subtitle="Browse the complete sample set so older records remain visible for review and future research work."
+              subtitle="Browse the current page of samples so older records remain visible for review and future research work."
             />
             {allSamples.length === 0 ? (
               <EmptyState message="No decision samples available yet." />

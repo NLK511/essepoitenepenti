@@ -60,19 +60,13 @@ class RecommendationPlanRepository:
         plan.latest_outcome = outcome_map.get(record.id)
         return plan
 
-    def count_plans(self) -> int:
-        query = select(func.count()).select_from(RecommendationPlanRecord)
-        return int(self.session.scalar(query) or 0)
-
-    def list_plans(
+    def _base_plan_query(
         self,
         ticker: str | None = None,
         action: str | None = None,
-        limit: int = 50,
         run_id: int | None = None,
-        setup_family: str | None = None,
         plan_id: int | None = None,
-    ) -> list[RecommendationPlan]:
+    ):
         query = select(RecommendationPlanRecord)
         if ticker:
             query = query.where(RecommendationPlanRecord.ticker == ticker.upper())
@@ -82,17 +76,57 @@ class RecommendationPlanRepository:
             query = query.where(RecommendationPlanRecord.run_id == run_id)
         if plan_id is not None:
             query = query.where(RecommendationPlanRecord.id == plan_id)
-        fetch_limit = max(limit * 4, limit) if setup_family else limit
-        rows = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc()).limit(fetch_limit)).all()
-        plans = [self._to_model(row) for row in rows]
+        return query
+
+    def _record_setup_family(self, record: RecommendationPlanRecord) -> str:
+        signal_breakdown = self._load(record.signal_breakdown_json, {})
+        if not isinstance(signal_breakdown, dict):
+            return ""
+        return str(signal_breakdown.get("setup_family") or "").strip().lower()
+
+    def count_plans(
+        self,
+        ticker: str | None = None,
+        action: str | None = None,
+        run_id: int | None = None,
+        setup_family: str | None = None,
+        plan_id: int | None = None,
+    ) -> int:
+        query = self._base_plan_query(ticker=ticker, action=action, run_id=run_id, plan_id=plan_id)
         if setup_family:
+            rows = self.session.scalars(query).all()
+            normalized_setup_family = setup_family.strip().lower()
+            return sum(1 for row in rows if self._record_setup_family(row) == normalized_setup_family)
+        count_query = select(func.count()).select_from(query.subquery())
+        return int(self.session.scalar(count_query) or 0)
+
+    def list_plans(
+        self,
+        ticker: str | None = None,
+        action: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        run_id: int | None = None,
+        setup_family: str | None = None,
+        plan_id: int | None = None,
+    ) -> list[RecommendationPlan]:
+        normalized_limit = max(1, limit)
+        normalized_offset = max(0, offset)
+        query = self._base_plan_query(ticker=ticker, action=action, run_id=run_id, plan_id=plan_id)
+        if setup_family:
+            rows = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc())).all()
             normalized_setup_family = setup_family.strip().lower()
             plans = [
-                plan
-                for plan in plans
-                if str(plan.signal_breakdown.get("setup_family") or "").strip().lower() == normalized_setup_family
+                self._to_model(row)
+                for row in rows
+                if self._record_setup_family(row) == normalized_setup_family
             ]
-        plans = plans[:limit]
+            plans = plans[normalized_offset : normalized_offset + normalized_limit]
+        else:
+            rows = self.session.scalars(
+                query.order_by(RecommendationPlanRecord.computed_at.desc()).offset(normalized_offset).limit(normalized_limit)
+            ).all()
+            plans = [self._to_model(row) for row in rows]
         outcome_map = self.outcomes.get_outcomes_by_plan_ids([plan.id for plan in plans if plan.id is not None])
         for plan in plans:
             if plan.id is not None:

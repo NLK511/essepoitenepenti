@@ -12,6 +12,7 @@ import type {
   RecommendationCalibrationSummary,
   RecommendationEvidenceConcentrationSummary,
   RecommendationPlan,
+  RecommendationPlanListResponse,
   RecommendationPlanStats,
   RecommendationSetupFamilyReviewSummary,
   Run,
@@ -19,8 +20,14 @@ import type {
 import { detailLabel, extractDisplayLabels, formatDate, yahooFinanceUrl } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams): string {
-  const query = searchParams.toString();
-  return query ? `/api/recommendation-plans?${query}` : "/api/recommendation-plans";
+  const query = new URLSearchParams(searchParams);
+  const limit = Math.max(1, Number(query.get("limit") ?? "100") || 100);
+  const page = Math.max(1, Number(query.get("page") ?? "1") || 1);
+  query.set("limit", String(limit));
+  query.set("offset", String((page - 1) * limit));
+  query.delete("page");
+  const queryString = query.toString();
+  return queryString ? `/api/recommendation-plans?${queryString}` : "/api/recommendation-plans";
 }
 
 function actionTone(action: string): "ok" | "warning" | "neutral" {
@@ -230,9 +237,9 @@ function SetupFamilySliceTable({
 }
 
 export function RecommendationPlansPage() {
-  const [searchParams, setSearchParams] = useSearchParams({ limit: "100" });
+  const [searchParams, setSearchParams] = useSearchParams({ limit: "100", page: "1" });
   const focusedPlanId = searchParams.get("plan_id");
-  const [plans, setPlans] = useState<RecommendationPlan[] | null>(null);
+  const [plansResponse, setPlansResponse] = useState<RecommendationPlanListResponse | null>(null);
   const [planStats, setPlanStats] = useState<RecommendationPlanStats | null>(null);
   const [macroContextByRun, setMacroContextByRun] = useState<Record<number, MacroContextSnapshot | null>>({});
   const [industryContextByRun, setIndustryContextByRun] = useState<Record<number, IndustryContextSnapshot | null>>({});
@@ -246,6 +253,14 @@ export function RecommendationPlansPage() {
   const [evaluatingPlanId, setEvaluatingPlanId] = useState<number | null>(null);
   const [expandedPlanRows, setExpandedPlanRows] = useState<Record<string, boolean>>({});
   const [reviewSection, setReviewSection] = useState<"overview" | "calibration" | "baselines" | "evidence" | "families">("overview");
+  const pageSize = Math.max(1, Number(searchParams.get("limit") ?? "100") || 100);
+  const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
+  const plans = plansResponse?.items ?? null;
+  const planTotal = plansResponse?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(planTotal / pageSize));
+  const planStart = plans && plans.length > 0 ? (currentPage - 1) * pageSize + 1 : 0;
+  const planEnd = plans && plans.length > 0 ? planStart + plans.length - 1 : 0;
+  const hasNextPlans = currentPage < pageCount;
 
   useEffect(() => {
     async function load() {
@@ -271,21 +286,21 @@ export function RecommendationPlansPage() {
         }
         const summaryQuery = summaryParams.toString();
         const [planResults, stats] = await Promise.all([
-          getJson<RecommendationPlan[]>(buildQuery(searchParams)),
+          getJson<RecommendationPlanListResponse>(buildQuery(searchParams)),
           getJson<RecommendationPlanStats>("/api/recommendation-plans/stats"),
         ]);
-        setPlans(planResults);
+        setPlansResponse(planResults);
         setPlanStats(stats);
         setCalibration(await getJson<RecommendationCalibrationSummary>(`/api/recommendation-outcomes/summary?${summaryQuery}`));
         setBaselines(await getJson<RecommendationBaselineSummary>(`/api/recommendation-plans/baselines?${summaryQuery}`));
         setFamilyReview(await getJson<RecommendationSetupFamilyReviewSummary>(`/api/recommendation-outcomes/setup-family-review?${summaryQuery}`));
         setEvidenceConcentration(await getJson<RecommendationEvidenceConcentrationSummary>(`/api/recommendation-outcomes/evidence-concentration?${summaryQuery}`));
 
-        const runIds = Array.from(new Set(planResults.map((item) => item.run_id).filter((value): value is number => typeof value === "number"))).slice(0, 20);
+        const runIds = Array.from(new Set(planResults.items.map((item) => item.run_id).filter((value): value is number => typeof value === "number"))).slice(0, 20);
         if (planId) {
           const targetPlanId = Number(planId);
           if (!Number.isNaN(targetPlanId)) {
-            const targetPlan = planResults.find((item) => item.id === targetPlanId);
+            const targetPlan = planResults.items.find((item) => item.id === targetPlanId);
             if (targetPlan?.id !== null && targetPlan?.id !== undefined) {
               setExpandedPlanRows({ [String(targetPlan.id)]: true });
             }
@@ -343,7 +358,7 @@ export function RecommendationPlansPage() {
           ? `Queued recommendation-plan evaluation run #${run.id} for plan #${planId}.`
           : `Queued recommendation-plan evaluation run #${run.id}.`,
       );
-      setPlans(await getJson<RecommendationPlan[]>(buildQuery(searchParams)));
+      setPlansResponse(await getJson<RecommendationPlanListResponse>(buildQuery(searchParams)));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to queue recommendation-plan evaluation");
     } finally {
@@ -372,6 +387,13 @@ export function RecommendationPlansPage() {
     if (!next.has("limit")) {
       next.set("limit", "100");
     }
+    next.set("page", "1");
+    setSearchParams(next);
+  }
+
+  function goToPage(nextPage: number) {
+    const next = new URLSearchParams(searchParams);
+    next.set("page", String(Math.max(1, nextPage)));
     setSearchParams(next);
   }
 
@@ -397,7 +419,7 @@ export function RecommendationPlansPage() {
       {error ? <ErrorState message={error} /> : null}
       {evaluationMessage ? <Card><div className="helper-text">{evaluationMessage}</div></Card> : null}
       <section className="metrics-grid top-gap">
-        <StatCard label="Total plans" value={planStats?.total_plans ?? "—"} helper={`Loaded result set: ${plans?.length ?? "—"}`} />
+        <StatCard label="Total plans" value={planStats?.total_plans ?? "—"} helper={`Showing ${plans?.length ?? 0} of ${planTotal} filtered plans`} />
         <StatCard label="Resolved outcomes" value={planStats?.resolved_outcomes ?? "—"} helper="Across all stored recommendation plans" />
         <StatCard label="Overall win rate" value={planStats && planStats.resolved_outcomes > 0 ? `${Math.round((planStats.win_outcomes / planStats.resolved_outcomes) * 1000) / 10}%` : "—"} helper="Across all stored recommendation plans" />
         <StatCard label="Evidence concentration" value={evidenceConcentration ? (evidenceConcentration.ready_for_expansion ? "Ready" : "Focused") : "—"} helper="Whether the current cohort mix supports broader usage or tighter selectivity" />
@@ -701,14 +723,26 @@ export function RecommendationPlansPage() {
       ) : null}
 
       <Card className="top-gap">
-        <SectionTitle title="Results" subtitle={plans ? `${plans.length} recommendation plan(s)` : undefined} actions={<HelpHint tooltip="The main recommendation-plan table: review action, confidence, execution framing, transmission, outcomes, and thesis together." to={recommendationPlansDoc("results-table")} />} />
+        <SectionTitle title="Results" subtitle={plans ? `${planTotal} recommendation plan(s) · page ${currentPage} of ${pageCount}` : undefined} actions={<HelpHint tooltip="The main recommendation-plan table: review action, confidence, execution framing, transmission, outcomes, and thesis together." to={recommendationPlansDoc("results-table")} />} />
         {!plans && !error ? <LoadingState message="Loading recommendation plans…" /> : null}
         {plans && plans.length === 0 ? <EmptyState message="No recommendation plans match the current filters." /> : null}
         {plans ? (
-          <div className="table-wrap recommendation-plans-table-wrap">
-            <div className="recommendation-plans-table-scroll">
-              <table className="recommendation-plans-table">
-              <colgroup>
+          <>
+            <div className="pagination">
+              <button type="button" className="button-subtle" onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1}>
+                Previous
+              </button>
+              <div className="helper-text">
+                Page {currentPage} of {pageCount}{plans && plans.length > 0 ? ` · showing ${planStart}–${planEnd} of ${planTotal}` : " · no results on this page"}
+              </div>
+              <button type="button" className="button-subtle" onClick={() => goToPage(currentPage + 1)} disabled={!hasNextPlans}>
+                Next
+              </button>
+            </div>
+            <div className="table-wrap recommendation-plans-table-wrap">
+              <div className="recommendation-plans-table-scroll">
+                <table className="recommendation-plans-table">
+                  <colgroup>
                 <col style={{ width: "96px" }} />
                 <col style={{ width: "160px" }} />
                 <col style={{ width: "100px" }} />
@@ -951,6 +985,7 @@ export function RecommendationPlansPage() {
               </table>
             </div>
           </div>
+          </>
         ) : null}
       </Card>
     </>

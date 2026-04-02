@@ -31,21 +31,32 @@ async def list_recommendation_plans(
     action: str | None = Query(default=None),
     setup_family: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     run_id: int | None = Query(default=None),
     plan_id: int | None = Query(default=None),
     session: Session = Depends(get_db_session),
-) -> list[RecommendationPlan]:
+) -> dict[str, object]:
     normalized_ticker = ticker.strip().upper() if ticker else None
     normalized_action = action.strip().lower() if action else None
     normalized_setup_family = setup_family.strip().lower() if setup_family else None
-    return RecommendationPlanRepository(session).list_plans(
+    repository = RecommendationPlanRepository(session)
+    items = repository.list_plans(
         ticker=normalized_ticker,
         action=normalized_action,
         setup_family=normalized_setup_family,
         limit=limit,
+        offset=offset,
         run_id=run_id,
         plan_id=plan_id,
     )
+    total = repository.count_plans(
+        ticker=normalized_ticker,
+        action=normalized_action,
+        setup_family=normalized_setup_family,
+        run_id=run_id,
+        plan_id=plan_id,
+    )
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
 @router.get("/baselines")

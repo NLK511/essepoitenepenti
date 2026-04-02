@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import RecommendationDecisionSample
@@ -53,15 +53,14 @@ class RecommendationDecisionSampleRepository:
         self.session.refresh(record)
         return self._to_model(record)
 
-    def list_samples(
+    def _base_query(
         self,
         *,
         ticker: str | None = None,
         run_id: int | None = None,
         decision_type: str | None = None,
         review_priority: str | None = None,
-        limit: int = 50,
-    ) -> list[RecommendationDecisionSample]:
+    ):
         query = select(RecommendationDecisionSampleRecord)
         if ticker:
             query = query.where(RecommendationDecisionSampleRecord.ticker == ticker.upper())
@@ -71,8 +70,45 @@ class RecommendationDecisionSampleRepository:
             query = query.where(RecommendationDecisionSampleRecord.decision_type == decision_type)
         if review_priority:
             query = query.where(RecommendationDecisionSampleRecord.review_priority == review_priority)
+        return query
+
+    def count_samples(
+        self,
+        *,
+        ticker: str | None = None,
+        run_id: int | None = None,
+        decision_type: str | None = None,
+        review_priority: str | None = None,
+    ) -> int:
+        query = self._base_query(
+            ticker=ticker,
+            run_id=run_id,
+            decision_type=decision_type,
+            review_priority=review_priority,
+        )
+        count_query = select(func.count()).select_from(query.subquery())
+        return int(self.session.scalar(count_query) or 0)
+
+    def list_samples(
+        self,
+        *,
+        ticker: str | None = None,
+        run_id: int | None = None,
+        decision_type: str | None = None,
+        review_priority: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[RecommendationDecisionSample]:
+        normalized_limit = max(1, limit)
+        normalized_offset = max(0, offset)
+        query = self._base_query(
+            ticker=ticker,
+            run_id=run_id,
+            decision_type=decision_type,
+            review_priority=review_priority,
+        )
         rows = self.session.scalars(
-            query.order_by(RecommendationDecisionSampleRecord.created_at.desc()).limit(limit)
+            query.order_by(RecommendationDecisionSampleRecord.created_at.desc()).offset(normalized_offset).limit(normalized_limit)
         ).all()
         return [self._to_model(row) for row in rows]
 

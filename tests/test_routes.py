@@ -1091,14 +1091,14 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(macro_detail.json()["summary_text"], "Fed and yields remain the dominant macro themes.")
         self.assertEqual(industry_detail.json()["industry_key"], "consumer_electronics")
         self.assertEqual(ticker_signals.json()[0]["diagnostics"]["mode"], "deep_analysis")
-        self.assertEqual(plans.json()[0]["action"], "long")
-        self.assertEqual(plans.json()[0]["signal_breakdown"]["technical_setup"], 0.77)
-        self.assertEqual(plans.json()[0]["latest_outcome"]["outcome"], "win")
-        self.assertEqual(plans.json()[0]["latest_outcome"]["setup_family"], "continuation")
-        self.assertEqual(plans.json()[0]["latest_outcome"]["transmission_bias_label"], "tailwind")
-        self.assertEqual(plans.json()[0]["latest_outcome"]["transmission_bias_detail"]["label"], "tailwind")
-        self.assertEqual(plans.json()[0]["latest_outcome"]["context_regime_label"], "context + catalyst")
-        self.assertEqual(plans.json()[0]["latest_outcome"]["context_regime_detail"]["label"], "context + catalyst")
+        self.assertEqual(plans.json()["items"][0]["action"], "long")
+        self.assertEqual(plans.json()["items"][0]["signal_breakdown"]["technical_setup"], 0.77)
+        self.assertEqual(plans.json()["items"][0]["latest_outcome"]["outcome"], "win")
+        self.assertEqual(plans.json()["items"][0]["latest_outcome"]["setup_family"], "continuation")
+        self.assertEqual(plans.json()["items"][0]["latest_outcome"]["transmission_bias_label"], "tailwind")
+        self.assertEqual(plans.json()["items"][0]["latest_outcome"]["transmission_bias_detail"]["label"], "tailwind")
+        self.assertEqual(plans.json()["items"][0]["latest_outcome"]["context_regime_label"], "context + catalyst")
+        self.assertEqual(plans.json()["items"][0]["latest_outcome"]["context_regime_detail"]["label"], "context + catalyst")
     async def test_run_detail_and_filtered_redesign_routes_expose_orchestration_results(self) -> None:
         run_id = self.seed_run_with_diagnostics()
         self.seed_context_and_recommendation_plan_data(run_id=run_id)
@@ -1129,7 +1129,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(macro.json()), 1)
         self.assertEqual(len(industry.json()), 1)
         self.assertEqual(len(ticker_signals.json()), 1)
-        self.assertEqual(len(plans.json()), 2)
+        self.assertEqual(len(plans.json()["items"]), 2)
 
     async def test_recommendation_outcome_routes_and_plan_evaluation_queue_runs(self) -> None:
         self.seed_context_and_recommendation_plan_data()
@@ -1169,7 +1169,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             plans = await client.get("/api/recommendation-plans", params={"ticker": "AAPL"})
-            plan_id = plans.json()[0]["id"]
+            plan_id = plans.json()["items"][0]["id"]
             outcomes = await client.get("/api/recommendation-outcomes", params={"ticker": "AAPL"})
             summary = await client.get("/api/recommendation-outcomes/summary")
             stats = await client.get("/api/recommendation-plans/stats")
@@ -1226,7 +1226,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("slice_label", evidence_concentration.json()["strongest_positive_cohorts"][0])
         self.assertEqual(filtered_plans.status_code, 200)
         self.assertEqual(len(filtered_plans.json()), 1)
-        self.assertEqual(filtered_plans.json()[0]["ticker"], "AAPL")
+        self.assertEqual(filtered_plans.json()["items"][0]["ticker"], "AAPL")
         self.assertEqual(baselines.status_code, 200)
         self.assertEqual(baselines.json()["total_trade_plans_reviewed"], 2)
         baseline_map = {item["key"]: item for item in baselines.json()["comparisons"]}

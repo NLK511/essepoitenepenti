@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
 import { ProvenanceStrip } from "../components/decision-surface";
-import type { DashboardResponse, IndustryContextSnapshot, MacroContextSnapshot, RecommendationDecisionSample } from "../types";
+import type { DashboardResponse, IndustryContextSnapshot, MacroContextSnapshot, RecommendationDecisionSample, RecommendationDecisionSampleListResponse } from "../types";
 import { directionTone, formatDate, formatDuration, jobTypeLabel, recommendationStateTone, runTone, tickerTone, yahooFinanceUrl } from "../utils";
 
 function contextSummaryMethod(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
@@ -38,12 +38,12 @@ export function DashboardPage() {
           getJson<DashboardResponse>("/api/dashboard"),
           getJson<MacroContextSnapshot[]>("/api/context/macro?limit=1"),
           getJson<IndustryContextSnapshot[]>("/api/context/industry?limit=1"),
-          getJson<RecommendationDecisionSample[]>("/api/recommendation-decision-samples?limit=5"),
+          getJson<RecommendationDecisionSampleListResponse>("/api/recommendation-decision-samples?limit=5"),
         ]);
         setData(dashboard);
         setLatestMacroContext(macroContexts[0] ?? null);
         setLatestIndustryContext(industryContexts[0] ?? null);
-        setLatestDecisionSamples(decisionSamples);
+        setLatestDecisionSamples(decisionSamples.items);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
       }
