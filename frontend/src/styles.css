@@ -2483,6 +2483,24 @@ td {
   background: rgba(255, 255, 255, 0.02);
 }
 
+.data-card-button {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.data-card-button:hover {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-1px);
+}
+
+.data-card-selected {
+  border-color: var(--accent);
+  background: rgba(124, 92, 255, 0.12);
+}
+
 .data-card-header {
   display: flex;
   justify-content: space-between;

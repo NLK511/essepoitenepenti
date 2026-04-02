@@ -683,6 +683,35 @@ export interface SignalGatingTuningState {
   degraded_penalty: number;
 }
 
+export interface SignalGatingTuningCandidateResult {
+  threshold: number | null;
+  score: number | null;
+  selected_count: number;
+  resolved_selected_count: number;
+  resolved_sample_count: number;
+  win_count: number;
+  loss_count: number;
+  skipped_win_count: number;
+  skipped_loss_count: number;
+  shortlisted_selected_count: number;
+  near_miss_selected_count: number;
+  degraded_selected_count: number;
+  true_positive_count: number;
+  false_positive_count: number;
+  false_negative_count: number;
+  true_negative_count: number;
+  selection_rate_percent: number | null;
+  precision_percent: number | null;
+  recall_percent: number | null;
+  win_rate_percent: number | null;
+  threshold_offset: number;
+  confidence_adjustment: number;
+  near_miss_gap_cutoff: number;
+  shortlist_aggressiveness: number;
+  degraded_penalty: number;
+  [key: string]: unknown;
+}
+
 export interface SignalGatingTuningRun {
   id: number | null;
   objective_name: string;
@@ -697,7 +726,7 @@ export interface SignalGatingTuningRun {
   best_threshold: number | null;
   best_score: number | null;
   winning_config: Record<string, unknown>;
-  candidate_results: Array<Record<string, unknown>>;
+  candidate_results: SignalGatingTuningCandidateResult[];
   summary: Record<string, unknown>;
   artifact: Record<string, unknown>;
   error_message: string | null;
@@ -712,6 +741,11 @@ export interface SignalGatingTuningResponse {
   current_confidence_threshold: number;
   active_tuning: SignalGatingTuningState;
   latest_run: SignalGatingTuningRun | null;
+}
+
+export interface SignalGatingTuningRunsResponse {
+  runs: SignalGatingTuningRun[];
+  limit: number;
 }
 
 export interface SettingsResponse {

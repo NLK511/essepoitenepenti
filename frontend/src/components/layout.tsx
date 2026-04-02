@@ -46,7 +46,14 @@ const navSections: NavSection[] = [
     label: "Research",
     items: [
       { to: "/research", label: "Research home", shortLabel: "Hub", icon: "⌂", end: true },
-      { to: "/research/decision-samples", label: "Decision samples", shortLabel: "Samples", icon: "◉" },
+    ],
+  },
+  {
+    label: "Signal gating",
+    items: [
+      { to: "/research/signal-gating", label: "Signal gating hub", shortLabel: "Gate", icon: "◉", end: true },
+      { to: "/research/signal-gating/decision-samples", label: "Decision samples", shortLabel: "Samples", icon: "◉" },
+      { to: "/research/signal-gating/gating-job", label: "Gating tuning job", shortLabel: "Tune", icon: "↯" },
     ],
   },
   {
@@ -120,11 +127,25 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
       description: "Review trade plans, calibration state, outcomes, and measured edge in one place.",
     };
   }
-  if (pathname.startsWith("/research/decision-samples")) {
+  if (pathname.startsWith("/research/signal-gating/gating-job")) {
+    return {
+      eyebrow: "Research",
+      title: "Gating tuning job",
+      description: "Edit gating controls, launch tuning runs, and inspect recent optimization history and candidate results.",
+    };
+  }
+  if (pathname.startsWith("/research/signal-gating/decision-samples")) {
     return {
       eyebrow: "Research",
       title: "Decision samples",
       description: "Inspect near-miss and actionable samples to tune the planner with more than just final outcomes.",
+    };
+  }
+  if (pathname.startsWith("/research/signal-gating")) {
+    return {
+      eyebrow: "Research",
+      title: "Signal gating",
+      description: "Move between decision samples and gating tuning without leaving the research workflow.",
     };
   }
   if (pathname.startsWith("/research")) {

@@ -16,14 +16,12 @@ export function ResearchPage() {
           <Card>
             <SectionTitle
               kicker="Available now"
-              title="Decision samples"
-              subtitle="Review near-misses, actionable cases, and the tuning signals that flow from them."
+              title="Signal gating"
+              subtitle="The gating subsection groups review samples and the tuning job so you can move between evidence and configuration quickly."
             />
-            <div className="helper-text">
-              This is the primary research surface today. It keeps sample review close to the tuning controls and the referenced recommendation plans.
-            </div>
+            <div className="helper-text">Use the gating subsection when you want to inspect samples, change gating parameters, and review optimization results.</div>
             <div className="cluster top-gap-small">
-              <Link to="/research/decision-samples" className="button-secondary">Open decision samples</Link>
+              <Link to="/research/signal-gating" className="button-secondary">Open signal gating</Link>
               <Badge tone="info">active</Badge>
             </div>
           </Card>
@@ -44,7 +42,7 @@ export function ResearchPage() {
             <SectionTitle
               kicker="Planned"
               title="Backtesting"
-              subtitle="A future page for historical replay, comparison, and scenario analysis." 
+              subtitle="A future page for historical replay, comparison, and scenario analysis."
             />
             <div className="helper-text">This slot is reserved for replay-style experiments and historical validation workflows.</div>
             <div className="cluster top-gap-small">

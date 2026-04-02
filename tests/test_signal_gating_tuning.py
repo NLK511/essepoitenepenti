@@ -279,3 +279,9 @@ class RecommendationSignalGatingTuningRouteTests(unittest.IsolatedAsyncioTestCas
             self.assertEqual(state_payload["latest_run"]["best_threshold"], 64.0)
             self.assertIn("active_tuning", state_payload)
             self.assertIn("shortlist_aggressiveness", state_payload["active_tuning"])
+
+            runs_response = await client.get("/api/signal-gating-tuning/runs?limit=5")
+            self.assertEqual(runs_response.status_code, 200)
+            runs_payload = runs_response.json()
+            self.assertGreaterEqual(len(runs_payload["runs"]), 1)
+            self.assertEqual(runs_payload["runs"][0]["best_threshold"], 64.0)
