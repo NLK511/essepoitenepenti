@@ -6,11 +6,9 @@ from trade_proposer_app.domain.models import RecommendationBaselineSummary, Reco
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
-from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.job_execution import JobExecutionService
-from trade_proposer_app.services.optimizations import WeightOptimizationService
 from trade_proposer_app.services.recommendation_plan_baselines import RecommendationPlanBaselineService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 
@@ -76,16 +74,11 @@ async def summarize_recommendation_plan_baselines(
 
 
 def create_evaluation_job_execution_service(session: Session) -> JobExecutionService:
-    settings_repository = SettingsRepository(session)
     return JobExecutionService(
         jobs=JobRepository(session),
         runs=RunRepository(session),
         evaluations=EvaluationExecutionService(
             recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
-        ),
-        optimizations=WeightOptimizationService(
-            session=session,
-            minimum_resolved_trades=settings_repository.get_optimization_minimum_resolved_trades(),
         ),
         recommendation_plans=RecommendationPlanRepository(session),
     )

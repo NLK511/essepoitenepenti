@@ -12,6 +12,7 @@ import { RecommendationPlansPage } from "./pages/recommendation-plans-page";
 import { ResearchPage } from "./pages/research-page";
 import { SignalGatingJobPage } from "./pages/signal-gating-job-page";
 import { SignalGatingPage } from "./pages/signal-gating-page";
+import { PlanGenerationTuningPage } from "./pages/plan-generation-tuning-page";
 import { RunDetailPage } from "./pages/run-detail-page";
 import { ContextReviewPage } from "./pages/context-review-page";
 import { SettingsPage } from "./pages/settings-page";
@@ -53,7 +54,7 @@ export default function App() {
           <Route path="research/decision-samples" element={<RecommendationDecisionSamplesPage />} />
           <Route path="research/signal-gating/decision-samples" element={<Navigate to="/research/decision-samples" replace />} />
           <Route path="research/signal-gating/gating-job" element={<SignalGatingJobPage />} />
-          <Route path="research/plan-generation-tuning" element={<Navigate to="/research" replace />} />
+          <Route path="research/plan-generation-tuning" element={<PlanGenerationTuningPage />} />
           <Route path="research/backtesting" element={<Navigate to="/research" replace />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="docs" element={<DocsPage />} />

@@ -3,18 +3,10 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import AppSetting, ProviderCredential
+from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.services.optimizations import WeightOptimizationError, WeightOptimizationService
 
 router = APIRouter(prefix="/settings", tags=["settings"])
-
-
-def create_optimization_service(session: Session, repository: SettingsRepository) -> WeightOptimizationService:
-    return WeightOptimizationService(
-        session=session,
-        minimum_resolved_trades=repository.get_optimization_minimum_resolved_trades(),
-    )
-
 
 @router.get("")
 async def list_settings(session: Session = Depends(get_db_session)) -> dict[str, object]:
@@ -23,8 +15,11 @@ async def list_settings(session: Session = Depends(get_db_session)) -> dict[str,
     return {
         "settings": repository.list_settings(),
         "providers": repository.list_provider_credentials(),
-        "optimization": create_optimization_service(session, repository).describe_state(),
         "signal_gating_tuning": signal_gating_tuning,
+        "plan_generation_tuning": {
+            "settings": repository.get_plan_generation_tuning_settings(),
+            "active_config": repository.get_plan_generation_active_config(PlanGenerationTuningRepository(session)),
+        },
     }
 
 
@@ -129,23 +124,6 @@ async def set_social_settings(
     return {"settings": repository.get_social_settings()}
 
 
-@router.post("/optimization")
-async def set_optimization_settings(
-    minimum_resolved_trades: str = Form(...),
-    session: Session = Depends(get_db_session),
-) -> dict[str, object]:
-    normalized = minimum_resolved_trades.strip()
-    try:
-        parsed = int(normalized)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="minimum_resolved_trades must be an integer") from exc
-    if parsed < 1:
-        raise HTTPException(status_code=400, detail="minimum_resolved_trades must be at least 1")
-    repository = SettingsRepository(session)
-    repository.set_setting("optimization_minimum_resolved_trades", str(parsed))
-    return {"optimization": create_optimization_service(session, repository).describe_state()}
-
-
 def _set_signal_gating_tuning_settings(
     repository: SettingsRepository,
     *,
@@ -185,28 +163,6 @@ async def set_signal_gating_tuning_settings(
         shortlist_aggressiveness=shortlist_aggressiveness,
         degraded_penalty=degraded_penalty,
     )
-
-
-@router.post("/optimization/rollback")
-async def rollback_optimization_weights(
-    backup_path: str = Form(default=""),
-    session: Session = Depends(get_db_session),
-) -> dict[str, object]:
-    repository = SettingsRepository(session)
-    service = create_optimization_service(session, repository)
-    try:
-        normalized_backup_path = backup_path.strip()
-        rollback = (
-            service.restore_backup(normalized_backup_path)
-            if normalized_backup_path
-            else service.rollback_latest_backup()
-        )
-    except WeightOptimizationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {
-        "rollback": rollback,
-        "optimization": service.describe_state(),
-    }
 
 
 @router.post("/providers")

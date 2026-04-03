@@ -253,22 +253,17 @@ class StubOptimizationService:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
-    def execute(self) -> tuple[dict[str, object], dict[str, object]]:
-        return (
-            {
-                "status": "completed",
-                "resolved_trade_count": 88,
-                "minimum_resolved_trades": 50,
-                "weights_changed": True,
-                "stdout": "optimization complete",
-                "stderr": "",
-            },
-            {
-                "weights_path": "/tmp/weights.json",
-                "before": {"exists": True, "sha256": "abc"},
-                "after": {"exists": True, "sha256": "def"},
-            },
-        )
+    def run(self, *args, **kwargs):
+        class StubRun:
+            id = 1
+            winning_candidate_id = 1
+            promoted_config_version_id = None
+            summary = {
+                "winner_candidate_id": 1,
+                "best_config": {"setup_family.breakout.take_profit_distance_multiplier": 1.07},
+            }
+
+        return StubRun()
 
 
 class StubMacroSupportRefreshService:
@@ -397,14 +392,14 @@ class RepositoryTests(unittest.TestCase):
             job_type=JobType.RECOMMENDATION_EVALUATION,
         )
         optimization_job = jobs.create(
-            "Weekly Optimization",
+            "Weekly Plan Generation Tuning",
             [],
             "0 2 * * 0",
-            job_type=JobType.WEIGHT_OPTIMIZATION,
+            job_type=JobType.PLAN_GENERATION_TUNING,
         )
 
         self.assertEqual(evaluation_job.job_type, JobType.RECOMMENDATION_EVALUATION)
-        self.assertEqual(optimization_job.job_type, JobType.WEIGHT_OPTIMIZATION)
+        self.assertEqual(optimization_job.job_type, JobType.PLAN_GENERATION_TUNING)
 
         with self.assertRaises(ValueError):
             jobs.create(
@@ -416,11 +411,11 @@ class RepositoryTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             jobs.create(
-                "Invalid Optimization Watchlist",
+                "Invalid Plan Generation Tuning Watchlist",
                 [],
                 None,
                 watchlist_id=watchlist.id,
-                job_type=JobType.WEIGHT_OPTIMIZATION,
+                job_type=JobType.PLAN_GENERATION_TUNING,
             )
 
     def test_run_repository_persists_job_type_and_run_metadata(self) -> None:
@@ -1265,28 +1260,28 @@ class RepositoryTests(unittest.TestCase):
         jobs = JobRepository(session)
         runs = RunRepository(session)
         job = jobs.create(
-            "Weekly Optimization",
+            "Weekly Plan Generation Tuning",
             [],
             "0 2 * * 0",
-            job_type=JobType.WEIGHT_OPTIMIZATION,
+            job_type=JobType.PLAN_GENERATION_TUNING,
         )
         service = JobExecutionService(
             jobs=jobs,
             runs=runs,
-            optimizations=StubOptimizationService(),
+            plan_generation_tuning=StubOptimizationService(),
         )
         queued_run = service.enqueue_job(job.id or 0)
 
         processed_run, recommendations = service.process_next_queued_run()
 
         self.assertIsNotNone(processed_run)
-        self.assertEqual(processed_run.job_type, JobType.WEIGHT_OPTIMIZATION)
+        self.assertEqual(processed_run.job_type, JobType.PLAN_GENERATION_TUNING)
         self.assertEqual(processed_run.status, "completed")
         self.assertEqual(recommendations, [])
         stored_run = runs.get_run(queued_run.id or 0)
-        self.assertIn('"weights_changed": true', (stored_run.summary_json or "").lower())
-        self.assertIn('"weights_path": "/tmp/weights.json"', stored_run.artifact_json or "")
-        self.assertIn('"optimization_seconds"', stored_run.timing_json or "")
+        self.assertIn('"winner_candidate_id": 1', (stored_run.summary_json or "").lower())
+        self.assertIn('"plan_generation_tuning_run_id": 1', stored_run.artifact_json or "")
+        self.assertIn('"plan_generation_tuning_seconds"', stored_run.timing_json or "")
 
     def test_job_execution_processes_macro_support_refresh_and_persists_snapshot_metadata(self) -> None:
         session = create_session()
@@ -1369,10 +1364,10 @@ class RepositoryTests(unittest.TestCase):
         jobs = JobRepository(session)
         runs = RunRepository(session)
         job = jobs.create(
-            "Weekly Optimization",
+            "Weekly Plan Generation Tuning",
             [],
             None,
-            job_type=JobType.WEIGHT_OPTIMIZATION,
+            job_type=JobType.PLAN_GENERATION_TUNING,
         )
         service = JobExecutionService(jobs=jobs, runs=runs)
         first = service.enqueue_job(job.id or 0)
@@ -1611,7 +1606,8 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(summary_settings["summary_backend"], "pi_agent")
         self.assertEqual(summary_settings["summary_pi_command"], "pi")
         self.assertEqual(summary_settings["summary_timeout_seconds"], "60")
-        self.assertEqual(repository.get_optimization_minimum_resolved_trades(), 50)
+        self.assertEqual(repository.get_plan_generation_tuning_settings()["min_actionable_resolved"], 20)
+        self.assertEqual(repository.get_plan_generation_tuning_settings()["min_validation_resolved"], 8)
         self.assertIn("price fluctuation", summary_settings["summary_prompt"])
         self.assertIn("industry context", summary_settings["summary_prompt"])
         self.assertIn("global macroeconomic stage", summary_settings["summary_prompt"])

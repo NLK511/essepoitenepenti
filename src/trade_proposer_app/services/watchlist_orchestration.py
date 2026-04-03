@@ -13,6 +13,8 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal, CheapScanSignalService
+from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
+from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
 
 
 @dataclass
@@ -39,6 +41,7 @@ class WatchlistOrchestrationService:
         deep_analysis_service,
         confidence_threshold: float = 60.0,
         signal_gating_tuning_config: dict[str, float] | None = None,
+        plan_generation_tuning_config: dict[str, float] | None = None,
         calibration_service: RecommendationPlanCalibrationService | None = None,
         taxonomy_service: TickerTaxonomyService | None = None,
     ) -> None:
@@ -49,6 +52,7 @@ class WatchlistOrchestrationService:
         self.deep_analysis_service = deep_analysis_service
         self.confidence_threshold = confidence_threshold
         self.signal_gating_tuning_config = self._normalize_signal_gating_tuning_config(signal_gating_tuning_config)
+        self.plan_generation_tuning_config = normalize_plan_generation_tuning_config(plan_generation_tuning_config)
         self.calibration_service = calibration_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
@@ -75,6 +79,12 @@ class WatchlistOrchestrationService:
     def _signal_gating_tuning_value(self, key: str, default: float) -> float:
         try:
             return float(self.signal_gating_tuning_config.get(key, default))
+        except (TypeError, ValueError):
+            return default
+
+    def _plan_generation_tuning_value(self, key: str, default: float) -> float:
+        try:
+            return float(self.plan_generation_tuning_config.get(key, default))
         except (TypeError, ValueError):
             return default
 
@@ -1704,27 +1714,16 @@ class WatchlistOrchestrationService:
         action: str,
         transmission_summary: dict[str, object] | None = None,
     ) -> tuple[float, float, float, float]:
-        entry = round(float(recommendation.entry_price), 4)
-        stop = round(float(recommendation.stop_loss), 4)
-        take = round(float(recommendation.take_profit), 4)
-        if entry <= 0:
-            return entry, entry, stop, take
-        risk_distance = abs(entry - stop)
-        reward_distance = abs(take - entry)
         bias = transmission_summary.get("context_bias") if isinstance(transmission_summary, dict) else None
-        if setup_family in {"breakout", "breakdown"} and risk_distance > 0:
-            stop = round(stop + (risk_distance * 0.15 if action == "long" else -risk_distance * 0.15), 4)
-            take = round(take + (reward_distance * 0.12 if action == "long" else -reward_distance * 0.12), 4)
-        elif setup_family == "mean_reversion" and risk_distance > 0:
-            stop = round(stop - (risk_distance * 0.1 if action == "long" else -risk_distance * 0.1), 4)
-            take = round(take - (reward_distance * 0.12 if action == "long" else -reward_distance * 0.12), 4)
-        elif setup_family == "catalyst_follow_through" and reward_distance > 0:
-            take = round(take + (reward_distance * 0.18 if action == "long" else -reward_distance * 0.18), 4)
-        elif setup_family == "macro_beneficiary_loser" and reward_distance > 0:
-            take = round(take + (reward_distance * 0.08 if action == "long" else -reward_distance * 0.08), 4)
-        if bias == "headwind" and risk_distance > 0:
-            stop = round(stop + (risk_distance * 0.08 if action == "long" else -risk_distance * 0.08), 4)
-        return entry, entry, stop, take
+        return family_adjusted_trade_levels(
+            entry_price=float(recommendation.entry_price),
+            stop_loss=float(recommendation.stop_loss),
+            take_profit=float(recommendation.take_profit),
+            setup_family=setup_family,
+            action=action,
+            transmission_context_bias=str(bias) if bias is not None else None,
+            tuning_config=self.plan_generation_tuning_config,
+        )
 
     @staticmethod
     def _plan_risks(

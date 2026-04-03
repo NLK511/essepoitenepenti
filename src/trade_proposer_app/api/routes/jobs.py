@@ -21,8 +21,8 @@ from trade_proposer_app.services.evaluation_execution import EvaluationExecution
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
-from trade_proposer_app.services.optimizations import WeightOptimizationService
 from trade_proposer_app.services.scheduling import CronSchedule, ScheduleParseError
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -46,14 +46,6 @@ def normalize_optional_watchlist_id(value: int | str | None) -> int | None:
     return value
 
 
-def create_optimization_service(session: Session) -> WeightOptimizationService:
-    repository = SettingsRepository(session)
-    return WeightOptimizationService(
-        session=session,
-        minimum_resolved_trades=repository.get_optimization_minimum_resolved_trades(),
-    )
-
-
 def normalize_job_type(job_type: str | None) -> JobType:
     normalized = (job_type or JobType.PROPOSAL_GENERATION.value).strip()
     try:
@@ -63,7 +55,7 @@ def normalize_job_type(job_type: str | None) -> JobType:
             status_code=400,
             detail=(
                 "invalid job_type: use proposal_generation, recommendation_evaluation, "
-                "weight_optimization, macro_sentiment_refresh (macro context refresh), "
+                "plan_generation_tuning, macro_sentiment_refresh (macro context refresh), "
                 "industry_sentiment_refresh (industry context refresh), or historical_replay"
             ),
         ) from exc
@@ -159,7 +151,7 @@ async def execute_job(job_id: int, session: Session = Depends(get_db_session)) -
         evaluations=EvaluationExecutionService(
             recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
         ),
-        optimizations=create_optimization_service(session),
+        plan_generation_tuning=PlanGenerationTuningService(session),
         macro_support=create_macro_support_service(session),
         industry_support=create_industry_support_service(session),
         macro_context=create_macro_context_service(session),

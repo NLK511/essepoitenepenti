@@ -53,7 +53,7 @@ class StubEvaluationExecutionService:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
-    def execute(self, run=None) -> EvaluationRunResult:
+    def execute(self, run=None, as_of=None) -> EvaluationRunResult:
         return EvaluationRunResult(
             evaluated_recommendation_plans=8,
             synced_recommendation_plan_outcomes=3,
@@ -68,22 +68,17 @@ class StubOptimizationService:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
-    def execute(self) -> tuple[dict[str, object], dict[str, object]]:
-        return (
-            {
-                "status": "completed",
-                "resolved_trade_count": 99,
-                "minimum_resolved_trades": 50,
-                "weights_changed": True,
-                "stdout": "scheduled optimization complete",
-                "stderr": "",
-            },
-            {
-                "weights_path": "/tmp/weights.json",
-                "before": {"exists": True, "sha256": "abc"},
-                "after": {"exists": True, "sha256": "def"},
-            },
-        )
+    def run(self, *args, **kwargs):
+        class StubRun:
+            id = 1
+            winning_candidate_id = 1
+            promoted_config_version_id = None
+            summary = {
+                "winner_candidate_id": 1,
+                "best_config": {"setup_family.breakout.take_profit_distance_multiplier": 1.07},
+            }
+
+        return StubRun()
 
 
 class StubMacroSupportRefreshService:
@@ -198,10 +193,10 @@ class WorkerSchedulerTests(unittest.TestCase):
             job_type=JobType.RECOMMENDATION_EVALUATION,
         )
         optimization = jobs.create(
-            "Scheduled Optimization",
+            "Scheduled Plan Generation Tuning",
             [],
             "0 2 * * 0",
-            job_type=JobType.WEIGHT_OPTIMIZATION,
+            job_type=JobType.PLAN_GENERATION_TUNING,
         )
         scheduled_eval = datetime(2026, 3, 14, 18, 0, tzinfo=timezone.utc)
         scheduled_opt = datetime(2026, 3, 15, 2, 0, tzinfo=timezone.utc)
@@ -215,7 +210,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         evaluation_run = next(run for run in runs.list_latest_runs(limit=10) if run.job_id == evaluation.id)
         optimization_run = next(run for run in runs.list_latest_runs(limit=10) if run.job_id == optimization.id)
         self.assertEqual(evaluation_run.job_type, JobType.RECOMMENDATION_EVALUATION)
-        self.assertEqual(optimization_run.job_type, JobType.WEIGHT_OPTIMIZATION)
+        self.assertEqual(optimization_run.job_type, JobType.PLAN_GENERATION_TUNING)
         self.assertEqual(evaluation_run.scheduled_for, scheduled_eval)
         self.assertEqual(optimization_run.scheduled_for, scheduled_opt)
 
@@ -363,27 +358,27 @@ class WorkerSchedulerTests(unittest.TestCase):
         jobs = JobRepository(session)
         runs = RunRepository(session)
         job = jobs.create(
-            "Optimization Job",
+            "Plan Generation Tuning Job",
             [],
             None,
-            job_type=JobType.WEIGHT_OPTIMIZATION,
+            job_type=JobType.PLAN_GENERATION_TUNING,
         )
         run = runs.enqueue(job.id or 0)
 
         with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
             "trade_proposer_app.workers.tasks.create_proposal_service", return_value=StubProposalService()
         ), patch(
-            "trade_proposer_app.workers.tasks.WeightOptimizationService", StubOptimizationService
+            "trade_proposer_app.workers.tasks.PlanGenerationTuningService", StubOptimizationService
         ):
             processed = process_once()
 
         self.assertTrue(processed)
         updated_run = runs.get_run(run.id or 0)
         self.assertEqual(updated_run.status, "completed")
-        self.assertEqual(updated_run.job_type, JobType.WEIGHT_OPTIMIZATION)
-        self.assertIn('"weights_changed": true', (updated_run.summary_json or "").lower())
-        self.assertIn('"weights_path": "/tmp/weights.json"', updated_run.artifact_json or "")
-        self.assertIn('"optimization_seconds"', updated_run.timing_json or "")
+        self.assertEqual(updated_run.job_type, JobType.PLAN_GENERATION_TUNING)
+        self.assertIn('"winner_candidate_id": 1', (updated_run.summary_json or "").lower())
+        self.assertIn('"plan_generation_tuning_run_id": 1', updated_run.artifact_json or "")
+        self.assertIn('"plan_generation_tuning_seconds"', updated_run.timing_json or "")
 
     def test_worker_process_once_processes_macro_support_refresh_run(self) -> None:
         session = self.create_session()
@@ -447,8 +442,8 @@ class WorkerSchedulerTests(unittest.TestCase):
         session = self.create_session()
         jobs = JobRepository(session)
         runs = RunRepository(session)
-        first = jobs.create("Optimization One", [], "0 2 * * *", job_type=JobType.WEIGHT_OPTIMIZATION)
-        second = jobs.create("Optimization Two", [], "0 2 * * *", job_type=JobType.WEIGHT_OPTIMIZATION)
+        first = jobs.create("Plan Tuning One", [], "0 2 * * *", job_type=JobType.PLAN_GENERATION_TUNING)
+        second = jobs.create("Plan Tuning Two", [], "0 2 * * *", job_type=JobType.PLAN_GENERATION_TUNING)
         runs.enqueue(first.id or 0)
         scheduled_now = datetime(2026, 3, 15, 2, 0, tzinfo=timezone.utc)
 
@@ -456,9 +451,9 @@ class WorkerSchedulerTests(unittest.TestCase):
             count = enqueue_enabled_jobs(now=scheduled_now)
 
         self.assertEqual(count, 0)
-        optimization_runs = [run for run in runs.list_latest_runs(limit=10) if run.job_type == JobType.WEIGHT_OPTIMIZATION]
-        self.assertEqual(len(optimization_runs), 1)
-        self.assertEqual(optimization_runs[0].job_id, first.id)
+        plan_tuning_runs = [run for run in runs.list_latest_runs(limit=10) if run.job_type == JobType.PLAN_GENERATION_TUNING]
+        self.assertEqual(len(plan_tuning_runs), 1)
+        self.assertEqual(plan_tuning_runs[0].job_id, first.id)
         self.assertNotEqual(first.id, second.id)
 
     def test_worker_process_once_marks_run_failed_without_crashing_worker(self) -> None:

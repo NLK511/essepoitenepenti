@@ -9,7 +9,7 @@ export type RunStatus =
 export type JobType =
   | "proposal_generation"
   | "recommendation_evaluation"
-  | "weight_optimization"
+  | "plan_generation_tuning"
   | "macro_sentiment_refresh"
   | "industry_sentiment_refresh";
 
@@ -689,6 +689,100 @@ export interface OptimizationState {
   recent_backups: OptimizationBackup[];
 }
 
+export interface PlanGenerationTuningSettingsState {
+  active_config_version_id: number | null;
+  auto_enabled: boolean;
+  auto_promote_enabled: boolean;
+  min_actionable_resolved: number;
+  min_validation_resolved: number;
+}
+
+export interface PlanGenerationTuningCandidate {
+  id: number | null;
+  run_id: number | null;
+  rank: number | null;
+  status: string;
+  is_baseline: boolean;
+  promotion_eligible: boolean;
+  config: Record<string, unknown>;
+  changed_keys: string[];
+  score_summary: Record<string, unknown>;
+  metric_breakdown: Record<string, unknown>;
+  sample_breakdown: Record<string, unknown>;
+  validation_summary: Record<string, unknown>;
+  rejection_reasons: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlanGenerationTuningRun {
+  id: number | null;
+  status: string;
+  mode: string;
+  objective_name: string;
+  promotion_mode: string;
+  baseline_config_version_id: number | null;
+  winning_candidate_id: number | null;
+  promoted_config_version_id: number | null;
+  eligible_record_count: number;
+  eligible_tier_a_count: number;
+  validation_record_count: number;
+  candidate_count: number;
+  summary: Record<string, unknown>;
+  filters: Record<string, unknown>;
+  candidates: PlanGenerationTuningCandidate[];
+  error_message: string | null;
+  code_version: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlanGenerationTuningConfigVersion {
+  id: number | null;
+  version_label: string;
+  status: string;
+  source: string;
+  parent_config_version_id: number | null;
+  source_run_id: number | null;
+  source_candidate_id: number | null;
+  config: Record<string, unknown>;
+  parameter_schema_version: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlanGenerationTuningState {
+  objective_name: string;
+  active_config_version_id: number | null;
+  active_config: Record<string, unknown>;
+  auto_enabled: boolean;
+  auto_promote_enabled: boolean;
+  latest_run: PlanGenerationTuningRun | null;
+}
+
+export interface PlanGenerationTuningResponse {
+  objective_name: string;
+  parameter_schema_version: string;
+  parameters: Array<Record<string, unknown>>;
+  state: PlanGenerationTuningState;
+}
+
+export interface PlanGenerationTuningRunsResponse {
+  items: PlanGenerationTuningRun[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface PlanGenerationTuningConfigsResponse {
+  items: PlanGenerationTuningConfigVersion[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface SignalGatingTuningState {
   threshold_offset: number;
   confidence_adjustment: number;
@@ -765,8 +859,11 @@ export interface SignalGatingTuningRunsResponse {
 export interface SettingsResponse {
   settings: AppSetting[];
   providers: ProviderCredential[];
-  optimization: OptimizationState;
   signal_gating_tuning: SignalGatingTuningState;
+  plan_generation_tuning: {
+    settings: PlanGenerationTuningSettingsState;
+    active_config: Record<string, unknown>;
+  };
 }
 
 export interface DocSection {

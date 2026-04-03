@@ -409,7 +409,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(document["slug"] == "redesign-readme" for document in payload["documents"]))
         methodology = next(document for document in payload["documents"] if document["slug"] == "recommendation-methodology")
         self.assertTrue(any("Pipeline overview" in section["title"] for section in methodology["sections"]))
-        self.assertTrue(any("App-native independence" in section["title"] for section in methodology["sections"]))
+        self.assertTrue(any("Price levels and risk" in section["title"] for section in methodology["sections"]))
 
     async def test_create_watchlist_and_list_via_api(self) -> None:
         transport = httpx.ASGITransport(app=app)
@@ -546,8 +546,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             optimization = await client.post(
                 "/api/jobs",
                 data={
-                    "name": "Weekly Optimization",
-                    "job_type": JobType.WEIGHT_OPTIMIZATION.value,
+                    "name": "Weekly Plan Generation Tuning",
+                    "job_type": JobType.PLAN_GENERATION_TUNING.value,
                     "tickers": "",
                     "watchlist_id": "",
                     "schedule": "0 2 * * 0",
@@ -567,7 +567,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(evaluation.json()["job_type"], JobType.RECOMMENDATION_EVALUATION.value)
         self.assertEqual(evaluation.json()["tickers"], [])
         self.assertEqual(optimization.status_code, 200)
-        self.assertEqual(optimization.json()["job_type"], JobType.WEIGHT_OPTIMIZATION.value)
+        self.assertEqual(optimization.json()["job_type"], JobType.PLAN_GENERATION_TUNING.value)
         self.assertEqual(invalid.status_code, 400)
         self.assertIn("invalid job_type", invalid.text)
 
@@ -964,10 +964,6 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                 "/api/settings/app",
                 data={"key": "confidence_threshold", "value": "75"},
             )
-            optimization_response = await client.post(
-                "/api/settings/optimization",
-                data={"minimum_resolved_trades": "80"},
-            )
             summary_response = await client.post(
                 "/api/settings/summary",
                 data={
@@ -1010,7 +1006,6 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             listed = await client.get("/api/settings")
 
         self.assertEqual(app_setting.status_code, 200)
-        self.assertEqual(optimization_response.status_code, 200)
         self.assertEqual(summary_response.status_code, 200)
         self.assertEqual(signal_gating_tuning_response.status_code, 200)
         self.assertEqual(social_response.status_code, 200)
@@ -1019,7 +1014,6 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         payload = listed.json()
         setting_map = {item["key"]: item["value"] for item in payload["settings"]}
         self.assertEqual(setting_map["confidence_threshold"], "75")
-        self.assertEqual(setting_map["optimization_minimum_resolved_trades"], "80")
         self.assertEqual(setting_map["signal_gating_tuning_threshold_offset"], "-2.5")
         self.assertEqual(setting_map["signal_gating_tuning_confidence_adjustment"], "1.5")
         self.assertEqual(setting_map["signal_gating_tuning_near_miss_gap_cutoff"], "2")
@@ -1035,9 +1029,6 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(setting_map["social_nitter_enable_ticker"], "true")
         self.assertEqual(payload["providers"][0]["provider"], "openai")
         self.assertEqual(payload["providers"][0]["api_key"], "sk-test")
-        self.assertEqual(payload["optimization"]["minimum_resolved_trades"], 80)
-        self.assertEqual(payload["optimization"]["weights_path"], str(weights_path))
-
     async def test_sentiment_snapshot_routes_list_and_detail(self) -> None:
         snapshot_ids = self.seed_support_snapshots()
         transport = httpx.ASGITransport(app=app)
@@ -1225,7 +1216,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("strongest_positive_cohorts", evidence_concentration.json())
         self.assertIn("slice_label", evidence_concentration.json()["strongest_positive_cohorts"][0])
         self.assertEqual(filtered_plans.status_code, 200)
-        self.assertEqual(len(filtered_plans.json()), 1)
+        self.assertEqual(len(filtered_plans.json()["items"]), 1)
         self.assertEqual(filtered_plans.json()["items"][0]["ticker"], "AAPL")
         self.assertEqual(baselines.status_code, 200)
         self.assertEqual(baselines.json()["total_trade_plans_reviewed"], 2)
@@ -1313,11 +1304,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             response = await client.post("/api/settings/optimization/rollback", data={})
 
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["rollback"]["status"], "rolled_back")
-        self.assertEqual(payload["rollback"]["restored_from"], str(backup_path))
-        self.assertEqual(weights_path.read_text(), '{"alpha": 1}')
+        self.assertIn(response.status_code, {404, 405})
 
     async def test_settings_rollback_can_restore_selected_backup_path(self) -> None:
         weights_path = Path(settings.weights_file_path)
@@ -1338,10 +1325,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                 data={"backup_path": str(older_backup)},
             )
 
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["rollback"]["restored_from"], str(older_backup))
-        self.assertEqual(weights_path.read_text(), '{"alpha": 1}')
+        self.assertIn(response.status_code, {404, 405})
 
     async def test_single_user_auth_guarding(self) -> None:
         prev_enabled = settings.single_user_auth_enabled

@@ -704,6 +704,84 @@ class RecommendationSignalGatingTuningRun(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class PlanGenerationTuningCandidate(BaseModel):
+    id: int | None = None
+    run_id: int | None = None
+    rank: int | None = None
+    status: str = "evaluated"
+    is_baseline: bool = False
+    promotion_eligible: bool = False
+    config: dict[str, object] = Field(default_factory=dict)
+    changed_keys: list[str] = Field(default_factory=list)
+    score_summary: dict[str, object] = Field(default_factory=dict)
+    metric_breakdown: dict[str, object] = Field(default_factory=dict)
+    sample_breakdown: dict[str, object] = Field(default_factory=dict)
+    validation_summary: dict[str, object] = Field(default_factory=dict)
+    rejection_reasons: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PlanGenerationTuningConfigVersion(BaseModel):
+    id: int | None = None
+    version_label: str
+    status: str = "candidate"
+    source: str = "manual"
+    parent_config_version_id: int | None = None
+    source_run_id: int | None = None
+    source_candidate_id: int | None = None
+    config: dict[str, object] = Field(default_factory=dict)
+    parameter_schema_version: str = "v1"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PlanGenerationTuningEvent(BaseModel):
+    id: int | None = None
+    event_type: str
+    run_id: int | None = None
+    config_version_id: int | None = None
+    candidate_id: int | None = None
+    actor_type: str = "system"
+    actor_identifier: str | None = None
+    payload: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PlanGenerationTuningRun(BaseModel):
+    id: int | None = None
+    status: str = "completed"
+    mode: str = "manual"
+    objective_name: str = "plan_generation_precision_tuning_v1"
+    promotion_mode: str = "dry_run"
+    baseline_config_version_id: int | None = None
+    winning_candidate_id: int | None = None
+    promoted_config_version_id: int | None = None
+    eligible_record_count: int = 0
+    eligible_tier_a_count: int = 0
+    validation_record_count: int = 0
+    candidate_count: int = 0
+    summary: dict[str, object] = Field(default_factory=dict)
+    filters: dict[str, object] = Field(default_factory=dict)
+    candidates: list[PlanGenerationTuningCandidate] = Field(default_factory=list)
+    error_message: str | None = None
+    code_version: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PlanGenerationTuningState(BaseModel):
+    objective_name: str = "plan_generation_precision_tuning_v1"
+    active_config_version_id: int | None = None
+    active_config: dict[str, object] = Field(default_factory=dict)
+    auto_enabled: bool = False
+    auto_promote_enabled: bool = False
+    latest_run: PlanGenerationTuningRun | None = None
+
+
 class ProviderCredential(BaseModel):
     provider: str
     api_key: str = ""

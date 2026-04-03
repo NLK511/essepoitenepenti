@@ -256,8 +256,8 @@ export function WorkflowRunResults({ jobType, summaryJson, artifactJson }: { job
   if (jobType === "recommendation_evaluation") {
     return <EvaluationResultView summary={summary} artifact={artifact} rawSummary={summaryJson} rawArtifact={artifactJson} />;
   }
-  if (jobType === "weight_optimization") {
-    return <OptimizationResultView summary={summary} artifact={artifact} rawSummary={summaryJson} rawArtifact={artifactJson} />;
+  if (jobType === "plan_generation_tuning") {
+    return <GenericWorkflowResultView rawSummary={summaryJson} rawArtifact={artifactJson} />;
   }
   return (
     <div className="stack-page">

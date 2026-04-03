@@ -156,6 +156,13 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
       description: "Move between decision samples and gating tuning without leaving the research workflow.",
     };
   }
+  if (pathname.startsWith("/research/plan-generation-tuning")) {
+    return {
+      eyebrow: "Research",
+      title: "Plan generation tuning",
+      description: "Inspect active plan-generation configs, ranked backtest candidates, and guarded promotions.",
+    };
+  }
   if (pathname.startsWith("/research")) {
     return {
       eyebrow: "Research",

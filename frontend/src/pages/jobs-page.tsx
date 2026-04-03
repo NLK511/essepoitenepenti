@@ -180,7 +180,7 @@ export function JobsPage() {
                 <select name="job_type" defaultValue="proposal_generation">
                   <option value="proposal_generation">Proposal generation</option>
                   <option value="recommendation_evaluation">Recommendation evaluation</option>
-                  <option value="weight_optimization">Weight optimization</option>
+                  <option value="plan_generation_tuning">Plan generation tuning</option>
                   <option value="macro_sentiment_refresh">Macro context refresh</option>
                   <option value="industry_sentiment_refresh">Industry context refresh</option>
                 </select>
@@ -193,7 +193,7 @@ export function JobsPage() {
               </label>
               <div className="form-field">
                 <span>Source rules</span>
-                <div className="helper-text">Proposal generation uses tickers or a watchlist. Evaluation and optimization ignore ticker sources.</div>
+                <div className="helper-text">Proposal generation uses tickers or a watchlist. Evaluation and plan-generation tuning ignore ticker sources.</div>
               </div>
             </div>
             <div className="form-grid">
@@ -319,7 +319,7 @@ export function JobsPage() {
                                   <select name="job_type" defaultValue={job.job_type}>
                                     <option value="proposal_generation">Proposal generation</option>
                                     <option value="recommendation_evaluation">Recommendation evaluation</option>
-                                    <option value="weight_optimization">Weight optimization</option>
+                                    <option value="plan_generation_tuning">Plan generation tuning</option>
                                     <option value="macro_sentiment_refresh">Macro context refresh</option>
                                     <option value="industry_sentiment_refresh">Industry context refresh</option>
                                   </select>

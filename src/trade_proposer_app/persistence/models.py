@@ -376,3 +376,71 @@ class RecommendationSignalGatingTuningRunRecord(Base, TimestampMixin):
     error_message: Mapped[str] = mapped_column(Text, default="")
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PlanGenerationTuningRunRecord(Base, TimestampMixin):
+    __tablename__ = "plan_generation_tuning_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    status: Mapped[str] = mapped_column(String(32), default="completed", index=True)
+    mode: Mapped[str] = mapped_column(String(32), default="manual", index=True)
+    objective_name: Mapped[str] = mapped_column(String(120), default="plan_generation_precision_tuning_v1", index=True)
+    promotion_mode: Mapped[str] = mapped_column(String(32), default="dry_run")
+    baseline_config_version_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_config_versions.id"), nullable=True, index=True)
+    winning_candidate_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_candidates.id"), nullable=True, index=True)
+    promoted_config_version_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_config_versions.id"), nullable=True, index=True)
+    eligible_record_count: Mapped[int] = mapped_column(Integer, default=0)
+    eligible_tier_a_count: Mapped[int] = mapped_column(Integer, default=0)
+    validation_record_count: Mapped[int] = mapped_column(Integer, default=0)
+    candidate_count: Mapped[int] = mapped_column(Integer, default=0)
+    summary_json: Mapped[str] = mapped_column(Text, default="{}")
+    filters_json: Mapped[str] = mapped_column(Text, default="{}")
+    error_message: Mapped[str] = mapped_column(Text, default="")
+    code_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PlanGenerationTuningCandidateRecord(Base, TimestampMixin):
+    __tablename__ = "plan_generation_tuning_candidates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("plan_generation_tuning_runs.id"), index=True)
+    rank: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(32), default="evaluated", index=True)
+    is_baseline: Mapped[bool] = mapped_column(Boolean, default=False)
+    promotion_eligible: Mapped[bool] = mapped_column(Boolean, default=False)
+    config_json: Mapped[str] = mapped_column(Text, default="{}")
+    changed_keys_json: Mapped[str] = mapped_column(Text, default="[]")
+    score_summary_json: Mapped[str] = mapped_column(Text, default="{}")
+    metric_breakdown_json: Mapped[str] = mapped_column(Text, default="{}")
+    sample_breakdown_json: Mapped[str] = mapped_column(Text, default="{}")
+    validation_summary_json: Mapped[str] = mapped_column(Text, default="{}")
+    rejection_reasons_json: Mapped[str] = mapped_column(Text, default="[]")
+
+
+class PlanGenerationTuningConfigVersionRecord(Base, TimestampMixin):
+    __tablename__ = "plan_generation_tuning_config_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    version_label: Mapped[str] = mapped_column(String(120), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="candidate", index=True)
+    source: Mapped[str] = mapped_column(String(32), default="manual", index=True)
+    parent_config_version_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_config_versions.id"), nullable=True, index=True)
+    source_run_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_runs.id"), nullable=True, index=True)
+    source_candidate_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_candidates.id"), nullable=True, index=True)
+    config_json: Mapped[str] = mapped_column(Text, default="{}")
+    parameter_schema_version: Mapped[str] = mapped_column(String(32), default="v1")
+
+
+class PlanGenerationTuningEventRecord(Base, TimestampMixin):
+    __tablename__ = "plan_generation_tuning_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(64), index=True)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_runs.id"), nullable=True, index=True)
+    config_version_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_config_versions.id"), nullable=True, index=True)
+    candidate_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_candidates.id"), nullable=True, index=True)
+    actor_type: Mapped[str] = mapped_column(String(32), default="system")
+    actor_identifier: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")

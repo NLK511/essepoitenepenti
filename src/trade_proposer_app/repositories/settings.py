@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.domain.models import AppSetting, ProviderCredential
 from trade_proposer_app.persistence.models import AppSettingRecord, ProviderCredentialRecord
 from trade_proposer_app.security import credential_cipher
+from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
 
 DEFAULT_PROVIDERS = ("openai", "anthropic", "newsapi", "finnhub", "alpha_vantage", "alpaca")
 DEFAULT_SUMMARY_PROMPT = (
@@ -19,7 +20,11 @@ DEFAULT_APP_SETTINGS = {
     "signal_gating_tuning_near_miss_gap_cutoff": "0",
     "signal_gating_tuning_shortlist_aggressiveness": "0",
     "signal_gating_tuning_degraded_penalty": "0",
-    "optimization_minimum_resolved_trades": "50",
+    "plan_generation_active_config_version_id": "",
+    "plan_generation_tuning_auto_enabled": "false",
+    "plan_generation_tuning_auto_promote_enabled": "false",
+    "plan_generation_tuning_min_actionable_resolved": "20",
+    "plan_generation_tuning_min_validation_resolved": "8",
     "summary_backend": "pi_agent",
     "summary_model": "",
     "summary_timeout_seconds": "60",
@@ -148,17 +153,50 @@ class SettingsRepository:
         )
         return self.get_signal_gating_tuning_config()
 
-    def get_optimization_minimum_resolved_trades(self) -> int:
+    def get_plan_generation_active_config_version_id(self) -> int | None:
         setting_map = self.get_setting_map()
-        raw_value = setting_map.get(
-            "optimization_minimum_resolved_trades",
-            DEFAULT_APP_SETTINGS["optimization_minimum_resolved_trades"],
-        )
+        raw_value = (setting_map.get("plan_generation_active_config_version_id", "") or "").strip()
+        if not raw_value:
+            return None
         try:
-            parsed = int((raw_value or "").strip())
+            parsed = int(raw_value)
         except (TypeError, ValueError):
-            parsed = int(DEFAULT_APP_SETTINGS["optimization_minimum_resolved_trades"])
-        return max(1, parsed)
+            return None
+        return parsed if parsed > 0 else None
+
+    def set_plan_generation_active_config_version_id(self, config_version_id: int | None) -> AppSetting:
+        return self.set_setting("plan_generation_active_config_version_id", "" if config_version_id is None else str(int(config_version_id)))
+
+    def get_plan_generation_tuning_settings(self) -> dict[str, object]:
+        setting_map = self.get_setting_map()
+        return {
+            "active_config_version_id": self.get_plan_generation_active_config_version_id(),
+            "auto_enabled": self._get_bool(setting_map, "plan_generation_tuning_auto_enabled", False),
+            "auto_promote_enabled": self._get_bool(setting_map, "plan_generation_tuning_auto_promote_enabled", False),
+            "min_actionable_resolved": self._get_int(setting_map, "plan_generation_tuning_min_actionable_resolved", 20),
+            "min_validation_resolved": self._get_int(setting_map, "plan_generation_tuning_min_validation_resolved", 8),
+        }
+
+    def set_plan_generation_tuning_settings(self, *, auto_enabled: bool, auto_promote_enabled: bool, min_actionable_resolved: int, min_validation_resolved: int) -> dict[str, object]:
+        self.set_settings(
+            {
+                "plan_generation_tuning_auto_enabled": str(bool(auto_enabled)).lower(),
+                "plan_generation_tuning_auto_promote_enabled": str(bool(auto_promote_enabled)).lower(),
+                "plan_generation_tuning_min_actionable_resolved": str(max(1, int(min_actionable_resolved))),
+                "plan_generation_tuning_min_validation_resolved": str(max(1, int(min_validation_resolved))),
+            }
+        )
+        return self.get_plan_generation_tuning_settings()
+
+    def get_plan_generation_active_config(self, configs_repository) -> dict[str, float]:
+        config_version_id = self.get_plan_generation_active_config_version_id()
+        if config_version_id is None:
+            return normalize_plan_generation_tuning_config(None)
+        try:
+            version = configs_repository.get_config_version(config_version_id)
+        except ValueError:
+            return normalize_plan_generation_tuning_config(None)
+        return normalize_plan_generation_tuning_config(version.config)
 
     @staticmethod
     def _get_float(setting_map: dict[str, str], key: str, default: float) -> float:
@@ -167,6 +205,23 @@ class SettingsRepository:
             return float((raw_value or "").strip())
         except (TypeError, ValueError):
             return default
+
+    @staticmethod
+    def _get_int(setting_map: dict[str, str], key: str, default: int) -> int:
+        raw_value = setting_map.get(key, str(default))
+        try:
+            return int((raw_value or "").strip())
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _get_bool(setting_map: dict[str, str], key: str, default: bool) -> bool:
+        raw_value = (setting_map.get(key, str(default)) or "").strip().lower()
+        if raw_value in {"1", "true", "yes", "on"}:
+            return True
+        if raw_value in {"0", "false", "no", "off"}:
+            return False
+        return default
 
     def list_provider_credentials(self) -> list[ProviderCredential]:
         existing = {

@@ -14,7 +14,6 @@ from trade_proposer_app.repositories.historical_replay import HistoricalReplayRe
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
-from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.builders import (
     create_industry_context_service,
     create_industry_support_service,
@@ -28,8 +27,8 @@ from trade_proposer_app.services.evaluation_execution import EvaluationExecution
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
-from trade_proposer_app.services.optimizations import WeightOptimizationService
 
 
 @dataclass
@@ -78,7 +77,6 @@ def process_once(worker_id: str | None = None, state: WorkerRuntimeState | None 
     session = SessionLocal()
     state = state or WorkerRuntimeState()
     try:
-        settings_repository = SettingsRepository(session)
         proposal_service = create_proposal_service(session)
         service = JobExecutionService(
             jobs=JobRepository(session),
@@ -86,10 +84,7 @@ def process_once(worker_id: str | None = None, state: WorkerRuntimeState | None 
             evaluations=EvaluationExecutionService(
                 recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
             ),
-            optimizations=WeightOptimizationService(
-                session=session,
-                minimum_resolved_trades=settings_repository.get_optimization_minimum_resolved_trades(),
-            ),
+            plan_generation_tuning=PlanGenerationTuningService(session),
             macro_support=create_macro_support_service(session),
             industry_support=create_industry_support_service(session),
             macro_context=create_macro_context_service(session),

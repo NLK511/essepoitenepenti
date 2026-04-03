@@ -41,13 +41,14 @@ export function ResearchPage() {
 
           <Card>
             <SectionTitle
-              kicker="Planned"
+              kicker="Available now"
               title="Plan generation tuning"
-              subtitle="A future page for experimenting with generation rules, shortlist thresholds, and planner behavior separately from sample review."
+              subtitle="Run candidate-based precision tuning for live entry, stop-loss, and take-profit construction with ranked backtest results."
             />
-            <div className="helper-text">This slot is reserved for research on proposal-generation tuning once we split it out from decision-sample review.</div>
+            <div className="helper-text">Use this page to inspect active config versions, tuning runs, guarded promotions, and the candidate ranking output.</div>
             <div className="cluster top-gap-small">
-              <Badge tone="neutral">coming soon</Badge>
+              <Link to="/research/plan-generation-tuning" className="button-secondary">Open plan generation tuning</Link>
+              <Badge tone="info">active</Badge>
             </div>
           </Card>
 

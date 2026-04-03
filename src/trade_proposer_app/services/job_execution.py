@@ -14,7 +14,7 @@ from trade_proposer_app.services.evaluation_execution import EvaluationExecution
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.industry_support import IndustrySupportRefreshService
 from trade_proposer_app.services.macro_support import MacroSupportRefreshService
-from trade_proposer_app.services.optimizations import WeightOptimizationService
+from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class JobExecutionService:
         jobs: JobRepository,
         runs: RunRepository,
         evaluations: EvaluationExecutionService | None = None,
-        optimizations: WeightOptimizationService | None = None,
+        plan_generation_tuning: PlanGenerationTuningService | None = None,
         macro_support: MacroSupportRefreshService | None = None,
         industry_support: IndustrySupportRefreshService | None = None,
         macro_context=None,
@@ -45,7 +45,7 @@ class JobExecutionService:
         self.jobs = jobs
         self.runs = runs
         self.evaluations = evaluations
-        self.optimizations = optimizations
+        self.plan_generation_tuning = plan_generation_tuning
         self.macro_support = macro_support
         self.industry_support = industry_support
         self.macro_context = macro_context
@@ -61,10 +61,10 @@ class JobExecutionService:
             existing_scheduled_run = self.runs.get_run_for_job_and_scheduled_for(job.id or job_id, scheduled_for)
             if existing_scheduled_run is not None:
                 return existing_scheduled_run
-        if job.job_type == JobType.WEIGHT_OPTIMIZATION:
-            active_optimization_run = self.runs.get_active_run_for_job_type(JobType.WEIGHT_OPTIMIZATION)
-            if active_optimization_run is not None:
-                return active_optimization_run
+        if job.job_type == JobType.PLAN_GENERATION_TUNING:
+            active_tuning_run = self.runs.get_active_run_for_job_type(JobType.PLAN_GENERATION_TUNING)
+            if active_tuning_run is not None:
+                return active_tuning_run
         active_run = self.runs.get_active_run_for_job(job.id or job_id)
         if active_run is not None:
             return active_run
@@ -102,8 +102,8 @@ class JobExecutionService:
             return self._execute_proposal_run(run)
         if run.job_type == JobType.RECOMMENDATION_EVALUATION:
             return self._execute_evaluation_run(run)
-        if run.job_type == JobType.WEIGHT_OPTIMIZATION:
-            return self._execute_optimization_run(run)
+        if run.job_type == JobType.PLAN_GENERATION_TUNING:
+            return self._execute_plan_generation_tuning_run(run)
         if run.job_type == JobType.MACRO_CONTEXT_REFRESH:
             return self._execute_macro_support_run(run)
         if run.job_type == JobType.INDUSTRY_CONTEXT_REFRESH:
@@ -303,28 +303,34 @@ class JobExecutionService:
         )
         return [], timing
 
-    def _execute_optimization_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
-        if self.optimizations is None:
-            raise RuntimeError("weight optimization execution service is not configured")
-        conflicting_run = self.runs.get_active_run_for_job_type(JobType.WEIGHT_OPTIMIZATION, exclude_run_id=run.id or 0)
+    def _execute_plan_generation_tuning_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
+        if self.plan_generation_tuning is None:
+            raise RuntimeError("plan generation tuning execution service is not configured")
+        conflicting_run = self.runs.get_active_run_for_job_type(JobType.PLAN_GENERATION_TUNING, exclude_run_id=run.id or 0)
         if conflicting_run is not None:
-            raise RuntimeError(f"weight optimization already active in run {conflicting_run.id}")
+            raise RuntimeError(f"plan generation tuning already active in run {conflicting_run.id}")
 
         execution_started = perf_counter()
         timing: dict[str, object] = {
             "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
-            "optimization_seconds": 0.0,
+            "plan_generation_tuning_seconds": 0.0,
             "persistence_seconds": 0.0,
             "finalize_seconds": 0.0,
             "total_execution_seconds": 0.0,
         }
 
-        optimization_started = perf_counter()
+        tuning_started = perf_counter()
         try:
-            summary, artifact = self.optimizations.execute()
-            timing["optimization_seconds"] = round(perf_counter() - optimization_started, 6)
+            tuning_run = self.plan_generation_tuning.run(mode="scheduled", apply=False)
+            summary = tuning_run.summary
+            artifact = {
+                "plan_generation_tuning_run_id": tuning_run.id,
+                "winner_candidate_id": tuning_run.winning_candidate_id,
+                "promoted_config_version_id": tuning_run.promoted_config_version_id,
+            }
+            timing["plan_generation_tuning_seconds"] = round(perf_counter() - tuning_started, 6)
         except Exception as exc:
-            timing["optimization_seconds"] = round(perf_counter() - optimization_started, 6)
+            timing["plan_generation_tuning_seconds"] = round(perf_counter() - tuning_started, 6)
             timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
             raise RunExecutionFailed(exc, timing) from exc
 
@@ -333,8 +339,7 @@ class JobExecutionService:
         self.runs.set_artifact(run.id or 0, artifact)
         timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
 
-        final_status = RunStatus.COMPLETED_WITH_WARNINGS.value if summary.get("weights_changed") is False else RunStatus.COMPLETED.value
-        self._finalize_success(run.id or 0, final_status, timing, execution_started)
+        self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
         return [], timing
 
     def _execute_macro_support_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:

@@ -1,24 +1,22 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { getJson, postForm } from "../api";
-import { Badge, Card, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import type { AppSetting, AppPreflightReport, OptimizationState, ProviderCredential, SettingsResponse } from "../types";
+import { Card, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
+import type { AppSetting, AppPreflightReport, ProviderCredential, SettingsResponse } from "../types";
 import { toSettingMap } from "../utils";
 
 interface SettingsViewData {
   settings: AppSetting[];
   providers: ProviderCredential[];
-  optimization: OptimizationState;
   preflight: AppPreflightReport;
+  planGenerationTuning: SettingsResponse["plan_generation_tuning"];
 }
 
 export function SettingsPage() {
   const [data, setData] = useState<SettingsViewData | null>(null);
-  const [dataVersion, setDataVersion] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
-  const [selectedBackupPath, setSelectedBackupPath] = useState<string>("");
 
   async function loadData() {
     try {
@@ -30,11 +28,9 @@ export function SettingsPage() {
       setData({
         settings: settingsResponse.settings,
         providers: settingsResponse.providers,
-        optimization: settingsResponse.optimization,
+        planGenerationTuning: settingsResponse.plan_generation_tuning,
         preflight,
       });
-      setSelectedBackupPath(settingsResponse.optimization.latest_backup?.path ?? "");
-      setDataVersion((v) => v + 1);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load settings");
     }
@@ -61,49 +57,12 @@ export function SettingsPage() {
         pi_command: String(formData.get("pi_command") ?? "pi"),
         pi_agent_dir: String(formData.get("pi_agent_dir") ?? ""),
         pi_cli_args: String(formData.get("pi_cli_args") ?? ""),
-        pi_api_url: String(formData.get("pi_api_url") ?? ""),
-        pi_api_key: String(formData.get("pi_api_key") ?? ""),
         prompt: String(formData.get("prompt") ?? ""),
       });
+      setNotice("Summary settings saved");
       await loadData();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to save summary settings");
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  async function saveOptimizationSettings(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    try {
-      setSaving("optimization");
-      setError(null);
-      setNotice(null);
-      await postForm<{ optimization: OptimizationState }>("/api/settings/optimization", {
-        minimum_resolved_trades: String(formData.get("minimum_resolved_trades") ?? "50"),
-      });
-      await loadData();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to save optimization settings");
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  async function rollbackOptimizationWeights() {
-    try {
-      setSaving("optimization-rollback");
-      setError(null);
-      setNotice(null);
-      const result = await postForm<{ rollback: Record<string, unknown>; optimization: OptimizationState }>("/api/settings/optimization/rollback", {
-        backup_path: selectedBackupPath,
-      });
-      const restoredFrom = typeof result.rollback.restored_from === "string" ? result.rollback.restored_from : selectedBackupPath;
-      setNotice(`Weights restored from backup: ${restoredFrom}`);
-      await loadData();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to roll back weights");
     } finally {
       setSaving(null);
     }
@@ -176,6 +135,7 @@ export function SettingsPage() {
         api_key: String(formData.get("api_key") ?? ""),
         api_secret: String(formData.get("api_secret") ?? ""),
       });
+      setNotice(`${provider} credential saved`);
       await loadData();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : `Failed to save ${provider} credential`);
@@ -188,8 +148,8 @@ export function SettingsPage() {
     <>
       <PageHeader
         kicker="System operation"
-        title="Configure credentials, summary behavior, and internal engine health in one place."
-        subtitle="The settings page remains the control point for first-time setup and troubleshooting, but now uses typed client-side forms over the same backend endpoints."
+        title="Configure providers, summarization, and tuning guardrails."
+        subtitle="The retired weight-optimization job is gone. This page now exposes only active system settings and the new plan-generation tuning controls."
       />
       {error ? <ErrorState message={error} /> : null}
       {notice ? <Card><div className="helper-text">{notice}</div></Card> : null}
@@ -199,187 +159,79 @@ export function SettingsPage() {
           <section className="metrics-grid">
             <Card><div className="metric-label">Internal pipeline health</div><div className="metric-value">{data.preflight.status}</div></Card>
             <Card><div className="metric-label">Summary backend</div><div className="metric-value">{settingMap.summary_backend ?? "news_digest"}</div></Card>
-            <Card><div className="metric-label">Optimization threshold</div><div className="metric-value">{data.optimization.minimum_resolved_trades}</div></Card>
-            <Card><div className="metric-label">Weight backups</div><div className="metric-value">{data.optimization.backup_count}</div></Card>
+            <Card><div className="metric-label">Plan tuning auto mode</div><div className="metric-value">{data.planGenerationTuning.settings.auto_enabled ? "on" : "off"}</div></Card>
+            <Card><div className="metric-label">Active tuning config</div><div className="metric-value">{data.planGenerationTuning.settings.active_config_version_id ?? "baseline"}</div></Card>
           </section>
 
-          <section className="card-grid" key={dataVersion}>
+          <section className="card-grid">
             <Card>
-              <SectionTitle kicker="Optimization guardrails" title="Weight optimization safety controls" subtitle="These settings affect scheduled and manual optimization runs. Each optimization now creates a rollback-capable backup of weights.json before the app mutates it using resolved recommendation-plan outcomes." />
-              <form className="stack-form" onSubmit={saveOptimizationSettings}>
-                <label className="form-field">
-                  <span>Minimum resolved plan outcomes</span>
-                  <input name="minimum_resolved_trades" defaultValue={String(data.optimization.minimum_resolved_trades)} />
-                </label>
-                <div className="helper-text">Current weights file: {data.optimization.weights_path}</div>
-                <div className="helper-text">Backup directory: {data.optimization.backup_dir}</div>
-                <div className="helper-text">Recovery flow: choose a backup below, restore it, then rerun optimization only after verifying the previous run details.</div>
-                <div className="cluster">
-                  <button className="button" type="submit" disabled={saving === "optimization"}>{saving === "optimization" ? "Saving…" : "Save optimization settings"}</button>
-                </div>
-              </form>
-              <div className="top-gap stack-page">
-                <h3 className="subsection-title">Available backups</h3>
-                {data.optimization.recent_backups.length === 0 ? (
-                  <div className="helper-text">No weight backups available yet.</div>
-                ) : (
-                  <>
-                    <div className="table-wrap">
-                      <table>
-                        <thead>
-                          <tr><th>Use</th><th>Created</th><th>Path</th><th>Size</th><th>SHA256</th></tr>
-                        </thead>
-                        <tbody>
-                          {data.optimization.recent_backups.map((backup) => (
-                            <tr key={backup.path}>
-                              <td>
-                                <input
-                                  type="radio"
-                                  name="selected_backup"
-                                  checked={selectedBackupPath === backup.path}
-                                  onChange={() => setSelectedBackupPath(backup.path)}
-                                />
-                              </td>
-                              <td>{backup.created_at}</td>
-                              <td>{backup.path}</td>
-                              <td>{backup.fingerprint.size_bytes ?? "—"}</td>
-                              <td>{backup.fingerprint.sha256 ?? "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="cluster">
-                      <button
-                        className="button-secondary"
-                        type="button"
-                        disabled={saving === "optimization-rollback" || !selectedBackupPath}
-                        onClick={() => void rollbackOptimizationWeights()}
-                      >
-                        {saving === "optimization-rollback" ? "Rolling back…" : "Restore selected backup"}
-                      </button>
-                    </div>
-                    <div className="helper-text">If no backup is selected, the latest known backup is used automatically.</div>
-                  </>
-                )}
-              </div>
+              <SectionTitle kicker="Plan generation tuning" title="Active tuning state" subtitle="These are the live settings for the new candidate-based tuning subsystem." />
+              <div className="helper-text">Auto mode: {data.planGenerationTuning.settings.auto_enabled ? "enabled" : "disabled"}</div>
+              <div className="helper-text">Auto promote: {data.planGenerationTuning.settings.auto_promote_enabled ? "enabled" : "disabled"}</div>
+              <div className="helper-text">Minimum actionable resolved records: {data.planGenerationTuning.settings.min_actionable_resolved}</div>
+              <div className="helper-text">Minimum validation resolved records: {data.planGenerationTuning.settings.min_validation_resolved}</div>
+              <pre className="code-block top-gap-small">{JSON.stringify(data.planGenerationTuning.active_config, null, 2)}</pre>
             </Card>
 
             <Card>
-              <SectionTitle kicker="Summary engine" title="LLM-backed news summarization" subtitle="Choose news_digest for the fallback headline digest, openai_api for OpenAI narratives, or pi_agent to run your Pi CLI locally. The form exposes the `pi` command, working directory, and optional HTTP bridge settings so the pipeline can treat a vanilla Pi tool just like any other LLM provider." />
-              <form className="stack-form" onSubmit={saveSummarySettings}>
+              <SectionTitle kicker="Summary engine" title="LLM-backed news summarization" subtitle="Choose the backend and local Pi CLI settings used for summaries." />
+              <form className="stack-form" onSubmit={(event) => void saveSummarySettings(event)}>
                 <div className="form-grid">
-                  <label className="form-field"><span>Backend</span><select name="backend" defaultValue={settingMap.summary_backend ?? "news_digest"}><option value="news_digest">news_digest (headline digest only)</option><option value="openai_api">openai_api (OpenAI LLM)</option><option value="pi_agent">pi_agent (local Pi LLM)</option></select></label>
-                  <label className="form-field"><span>Model</span><input name="model" defaultValue={settingMap.summary_model ?? ""} placeholder="Leave empty to use the backend defaults" /></label>
+                  <label className="form-field"><span>Backend</span><select name="backend" defaultValue={settingMap.summary_backend ?? "news_digest"}><option value="news_digest">news_digest</option><option value="openai_api">openai_api</option><option value="pi_agent">pi_agent</option></select></label>
+                  <label className="form-field"><span>Model</span><input name="model" defaultValue={settingMap.summary_model ?? ""} /></label>
                   <label className="form-field"><span>Timeout seconds</span><input name="timeout_seconds" defaultValue={settingMap.summary_timeout_seconds ?? "60"} /></label>
                   <label className="form-field"><span>Max tokens</span><input name="max_tokens" defaultValue={settingMap.summary_max_tokens ?? "220"} /></label>
                   <label className="form-field"><span>pi command</span><input name="pi_command" defaultValue={settingMap.summary_pi_command ?? "pi"} /></label>
                   <label className="form-field"><span>PI_CODING_AGENT_DIR</span><input name="pi_agent_dir" defaultValue={settingMap.summary_pi_agent_dir ?? ""} /></label>
-                  <label className="form-field"><span>pi CLI args</span><input name="pi_cli_args" defaultValue={settingMap.summary_pi_cli_args ?? ""} placeholder="--provider openai --model gpt-4o-mini" /></label>
+                  <label className="form-field"><span>pi CLI args</span><input name="pi_cli_args" defaultValue={settingMap.summary_pi_cli_args ?? ""} /></label>
                 </div>
-                <div className="helper-text">pi_agent now invokes the configured `pi` CLI (command, working directory, and optional arguments) so a vanilla Pi tool can serve as the LLM backend; the native digest remains the safe fallback.</div>
-                <label className="form-field">
-                  <span>Summary prompt</span>
-                  <textarea
-                    name="prompt"
-                    rows={6}
-                    defaultValue={settingMap.summary_prompt ?? ""}
-                    placeholder="Describe exactly how the LLM should summarize the news"
-                  />
-                </label>
-                <button className="button" type="submit" disabled={saving === "summary"}>{saving === "summary" ? "Saving…" : "Save summary settings"}</button>
+                <label className="form-field"><span>Summary prompt</span><textarea name="prompt" rows={6} defaultValue={settingMap.summary_prompt ?? ""} /></label>
+                <div className="cluster"><button className="button" type="submit" disabled={saving === "summary"}>{saving === "summary" ? "Saving…" : "Save summary settings"}</button></div>
               </form>
             </Card>
 
             <Card>
-              <SectionTitle kicker="News providers" title="News limits" subtitle="Configure maximum number of articles fetched per context level." />
-              <form className="stack-form" onSubmit={saveNewsSettings}>
+              <SectionTitle kicker="News ingestion" title="News fetch limits" subtitle="Adjust article limits for macro, industry, and ticker summarization paths." />
+              <form className="stack-form" onSubmit={(event) => void saveNewsSettings(event)}>
                 <div className="form-grid">
-                  <label className="form-field"><span>Macro limit</span><input name="macro_article_limit" defaultValue={settingMap.news_macro_article_limit ?? "12"} /></label>
-                  <label className="form-field"><span>Industry limit</span><input name="industry_article_limit" defaultValue={settingMap.news_industry_article_limit ?? "12"} /></label>
-                  <label className="form-field"><span>Ticker limit</span><input name="ticker_article_limit" defaultValue={settingMap.news_ticker_article_limit ?? "12"} /></label>
+                  <label className="form-field"><span>Macro article limit</span><input name="macro_article_limit" defaultValue={settingMap.news_macro_article_limit ?? "12"} /></label>
+                  <label className="form-field"><span>Industry article limit</span><input name="industry_article_limit" defaultValue={settingMap.news_industry_article_limit ?? "12"} /></label>
+                  <label className="form-field"><span>Ticker article limit</span><input name="ticker_article_limit" defaultValue={settingMap.news_ticker_article_limit ?? "12"} /></label>
                 </div>
-                <div className="helper-text">Set how many articles are aggregated into the news bundle for macro, industry, and ticker analysis. Higher values provide more context to the LLM but cost more tokens and take longer.</div>
-                <button className="button" type="submit" disabled={saving === "news"}>{saving === "news" ? "Saving…" : "Save news settings"}</button>
+                <div className="cluster"><button className="button" type="submit" disabled={saving === "news"}>{saving === "news" ? "Saving…" : "Save news settings"}</button></div>
               </form>
             </Card>
 
             <Card>
-              <SectionTitle kicker="Social signals" title="Nitter-powered macro & industry context" subtitle="Enable the native social pipeline and point it at your Nitter instance so support/context refresh jobs can pull macro and industry posts directly." />
-              <form className="stack-form" onSubmit={saveSocialSettings}>
+              <SectionTitle kicker="Social ingestion" title="Social signal settings" subtitle="Control Nitter and social-signal toggles used by the signal layer." />
+              <form className="stack-form" onSubmit={(event) => void saveSocialSettings(event)}>
                 <div className="form-grid">
-                  <label className="checkbox-field">
-                    <span>Social signal stack enabled</span>
-                    <input type="checkbox" name="sentiment_enabled" value="true" defaultChecked={settingMap.social_sentiment_enabled === "true"} />
-                  </label>
-                  <label className="checkbox-field">
-                    <span>Nitter source enabled</span>
-                    <input type="checkbox" name="nitter_enabled" value="true" defaultChecked={settingMap.social_nitter_enabled === "true"} />
-                  </label>
-                  <label className="form-field"><span>Nitter base URL</span><input name="nitter_base_url" defaultValue={settingMap.social_nitter_base_url ?? "http://127.0.0.1:8080"} /></label>
-                  <label className="form-field"><span>Request timeout (s)</span><input name="nitter_timeout_seconds" defaultValue={settingMap.social_nitter_timeout_seconds ?? "6"} /></label>
-                  <label className="form-field"><span>Results per query</span><input name="nitter_max_items_per_query" defaultValue={settingMap.social_nitter_max_items_per_query ?? "12"} /></label>
-                  <label className="form-field"><span>Query window (h)</span><input name="nitter_query_window_hours" defaultValue={settingMap.social_nitter_query_window_hours ?? "12"} /></label>
-                  <label className="checkbox-field">
-                    <span>Include replies</span>
-                    <input type="checkbox" name="nitter_include_replies" value="true" defaultChecked={settingMap.social_nitter_include_replies === "true"} />
-                  </label>
-                  <label className="checkbox-field">
-                    <span>Use Nitter for ticker sentiment</span>
-                    <input type="checkbox" name="nitter_enable_ticker" value="true" defaultChecked={settingMap.social_nitter_enable_ticker === "true"} />
-                  </label>
+                  <label className="form-field"><span><input type="checkbox" name="sentiment_enabled" defaultChecked={(settingMap.social_sentiment_enabled ?? "false") === "true"} /> Sentiment enabled</span></label>
+                  <label className="form-field"><span><input type="checkbox" name="nitter_enabled" defaultChecked={(settingMap.social_nitter_enabled ?? "false") === "true"} /> Nitter enabled</span></label>
+                  <label className="form-field"><span><input type="checkbox" name="nitter_include_replies" defaultChecked={(settingMap.social_nitter_include_replies ?? "false") === "true"} /> Include replies</span></label>
+                  <label className="form-field"><span><input type="checkbox" name="nitter_enable_ticker" defaultChecked={(settingMap.social_nitter_enable_ticker ?? "false") === "true"} /> Enable ticker queries</span></label>
+                  <label className="form-field"><span>Base URL</span><input name="nitter_base_url" defaultValue={settingMap.social_nitter_base_url ?? "http://127.0.0.1:8080"} /></label>
+                  <label className="form-field"><span>Timeout seconds</span><input name="nitter_timeout_seconds" defaultValue={settingMap.social_nitter_timeout_seconds ?? "6"} /></label>
+                  <label className="form-field"><span>Max items per query</span><input name="nitter_max_items_per_query" defaultValue={settingMap.social_nitter_max_items_per_query ?? "12"} /></label>
+                  <label className="form-field"><span>Query window hours</span><input name="nitter_query_window_hours" defaultValue={settingMap.social_nitter_query_window_hours ?? "12"} /></label>
                 </div>
-                <div className="helper-text">Enable the social signal stack plus the Nitter source, then adjust the timeout, window, and item limits so support/context refresh jobs can reach your instance reliably. Use the ticker toggle to keep Nitter restricted to macro and industry support snapshots when you do not want it influencing live ticker sentiment.</div>
-                <button className="button" type="submit" disabled={saving === "social"}>{saving === "social" ? "Saving…" : "Save social settings"}</button>
+                <div className="cluster"><button className="button" type="submit" disabled={saving === "social"}>{saving === "social" ? "Saving…" : "Save social settings"}</button></div>
               </form>
             </Card>
           </section>
 
-          <Card>
-            <SectionTitle kicker="Internal preflight" title="Current pipeline readiness" />
-            <div className="cluster">
-              <Badge tone={data.preflight.status === "ok" ? "ok" : data.preflight.status === "warning" ? "warning" : "danger"}>
-                {data.preflight.status}
-              </Badge>
-              <span className="helper-text">Checked {data.preflight.checked_at}</span>
-            </div>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>Check</th><th>Status</th><th>Message</th></tr>
-                </thead>
-                <tbody>
-                  {data.preflight.checks.map((check) => (
-                    <tr key={check.name}>
-                      <td>{check.name}</td>
-                      <td><Badge tone={check.status === "ok" ? "ok" : check.status === "failed" ? "danger" : "warning"}>{check.status}</Badge></td>
-                      <td>{check.message}{check.details.length > 0 ? <div className="helper-text">{check.details.join(", ")}</div> : null}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          <Card key={`providers-${dataVersion}`}>
-            <SectionTitle kicker="Provider credentials" title="Encrypted credential storage" subtitle="These values are stored encrypted at rest and supplied to the app’s provider clients only when relevant." />
-            <div className="stack-page">
-              {data.providers.map((provider) => (
-                <form key={provider.provider} className="provider-form" onSubmit={(event) => void saveProvider(event, provider.provider)}>
-                  <div className="provider-form-header">
-                    <h3 className="subsection-title">{provider.provider}</h3>
-                    <button className="button-secondary" type="submit" disabled={saving === provider.provider}>
-                      {saving === provider.provider ? "Saving…" : "Save"}
-                    </button>
-                  </div>
-                  <div className="form-grid">
-                    <label className="form-field"><span>API key</span><input name="api_key" defaultValue={provider.api_key} /></label>
-                    <label className="form-field"><span>API secret</span><input name="api_secret" defaultValue={provider.api_secret} /></label>
-                  </div>
+          <section className="card-grid">
+            {data.providers.map((provider) => (
+              <Card key={provider.provider}>
+                <SectionTitle kicker="Provider credential" title={provider.provider} subtitle="Credentials are stored server-side and redelivered through the existing settings API." />
+                <form className="stack-form" onSubmit={(event) => void saveProvider(event, provider.provider)}>
+                  <label className="form-field"><span>API key</span><input name="api_key" defaultValue={provider.api_key} /></label>
+                  <label className="form-field"><span>API secret</span><input name="api_secret" defaultValue={provider.api_secret} /></label>
+                  <div className="cluster"><button className="button" type="submit" disabled={saving === provider.provider}>{saving === provider.provider ? "Saving…" : `Save ${provider.provider}`}</button></div>
                 </form>
-              ))}
-            </div>
-          </Card>
+              </Card>
+            ))}
+          </section>
         </div>
       ) : null}
     </>

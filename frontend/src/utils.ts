@@ -68,8 +68,8 @@ export function jobTypeLabel(jobType: JobType | string): string {
   if (jobType === "recommendation_evaluation") {
     return "Recommendation evaluation";
   }
-  if (jobType === "weight_optimization") {
-    return "Weight optimization";
+  if (jobType === "plan_generation_tuning") {
+    return "Plan generation tuning";
   }
   if (jobType === "macro_sentiment_refresh") {
     return "Macro context refresh";
