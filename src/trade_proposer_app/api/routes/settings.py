@@ -165,6 +165,27 @@ async def set_signal_gating_tuning_settings(
     )
 
 
+@router.post("/plan-generation-tuning")
+async def set_plan_generation_tuning_settings(
+    auto_enabled: str = Form(default="false"),
+    auto_promote_enabled: str = Form(default="false"),
+    min_actionable_resolved: str = Form(default="20"),
+    min_validation_resolved: str = Form(default="8"),
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    repository = SettingsRepository(session)
+    try:
+        config = repository.set_plan_generation_tuning_settings(
+            auto_enabled=(auto_enabled.strip().lower() in {"1", "true", "yes", "on"}),
+            auto_promote_enabled=(auto_promote_enabled.strip().lower() in {"1", "true", "yes", "on"}),
+            min_actionable_resolved=int(min_actionable_resolved.strip() or 20),
+            min_validation_resolved=int(min_validation_resolved.strip() or 8),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid plan generation tuning settings: {exc}") from exc
+    return {"plan_generation_tuning": config}
+
+
 @router.post("/providers")
 async def set_provider_credential(
     provider: str = Form(...),

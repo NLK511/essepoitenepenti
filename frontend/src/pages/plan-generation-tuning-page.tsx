@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { getJson, postForm } from "../api";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type {
   PlanGenerationTuningConfigVersion,
   PlanGenerationTuningConfigsResponse,
@@ -84,6 +84,7 @@ export function PlanGenerationTuningPage() {
         kicker="Research"
         title="Plan generation tuning"
         subtitle="Run candidate-based precision tuning for live plan construction, inspect ranked backtests, and promote guarded config versions."
+        actions={<HelpHint tooltip="This page shows the dedicated plan-generation tuning workflow: live config, ranked candidates, and guarded promotions." to="/docs?doc=plan-generation-tuning-spec" />}
       />
       {error ? <ErrorState message={error} /> : null}
       {!state || !runs || !configs ? <LoadingState message="Loading plan generation tuning…" /> : null}
@@ -97,7 +98,7 @@ export function PlanGenerationTuningPage() {
           </section>
 
           <Card>
-            <SectionTitle kicker="Controls" title="Run plan generation tuning" subtitle="Launch a dry run or guarded promotion using the immutable backend rules and historical replay." />
+            <SectionTitle kicker="Controls" title="Run plan generation tuning" subtitle="Launch a dry run or guarded promotion using the immutable backend rules and historical replay." actions={<HelpHint tooltip="Dry runs rank candidates without changing the live config. Apply mode promotes only if the winner passes backend guardrails." to="/docs?doc=plan-generation-tuning-spec" />} />
             <div className="cluster top-gap-small">
               <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(false)}>{saving === "run" ? "Running…" : "Run dry"}</button>
               <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(true)}>{saving === "apply" ? "Running & applying…" : "Run and promote if eligible"}</button>
@@ -106,7 +107,7 @@ export function PlanGenerationTuningPage() {
           </Card>
 
           <Card>
-            <SectionTitle kicker="Runs" title="Recent tuning runs" subtitle="Select a run to inspect ranked candidates and promotion outcomes." />
+            <SectionTitle kicker="Runs" title="Recent tuning runs" subtitle="Select a run to inspect ranked candidates and promotion outcomes." actions={<HelpHint tooltip="Each run stores the candidate ranking, winner, validation counts, and whether promotion happened or was blocked." to="/docs?doc=plan-generation-tuning-spec" />} />
             {runs.length === 0 ? (
               <EmptyState message="No plan generation tuning runs recorded yet." />
             ) : (
@@ -128,7 +129,7 @@ export function PlanGenerationTuningPage() {
           </Card>
 
           <Card>
-            <SectionTitle kicker="Selected run" title="Candidate ranking" subtitle="The backend ranks candidates lexicographically by win rate, then win count, then expected value." />
+            <SectionTitle kicker="Selected run" title="Candidate ranking" subtitle="The backend ranks candidates lexicographically by win rate, then win count, then expected value." actions={<HelpHint tooltip="Candidate ordering is deterministic: validity first, then actionable win rate, then win count, then expected value." to="/docs?doc=plan-generation-tuning-spec" />} />
             {selectedRun ? (
               <div className="stack-page">
                 <div className="helper-text">Promotion mode: {selectedRun.promotion_mode} · Winner candidate: {selectedRun.winning_candidate_id ?? "—"} · Promoted config: {selectedRun.promoted_config_version_id ?? "—"}</div>
@@ -154,7 +155,7 @@ export function PlanGenerationTuningPage() {
           </Card>
 
           <Card>
-            <SectionTitle kicker="Configs" title="Config versions" subtitle="Promote a stored version to become the live plan-generation configuration." />
+            <SectionTitle kicker="Configs" title="Config versions" subtitle="Promote a stored version to become the live plan-generation configuration." actions={<HelpHint tooltip="Config versions capture baseline and promoted parameter sets so live plan construction stays auditable." to="/docs?doc=plan-generation-tuning-spec" />} />
             {configs.length === 0 ? (
               <EmptyState message="No config versions available yet." />
             ) : (

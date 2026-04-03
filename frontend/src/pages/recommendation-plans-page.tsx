@@ -272,6 +272,7 @@ export function RecommendationPlansPage() {
         const ticker = searchParams.get("ticker");
         const setupFamily = searchParams.get("setup_family");
         const planId = searchParams.get("plan_id");
+        const resolved = searchParams.get("resolved");
         if (runId) {
           summaryParams.set("run_id", runId);
         }
@@ -283,6 +284,9 @@ export function RecommendationPlansPage() {
         }
         if (planId) {
           summaryParams.set("plan_id", planId);
+        }
+        if (resolved) {
+          summaryParams.set("resolved", resolved);
         }
         const summaryQuery = summaryParams.toString();
         const [planResults, stats] = await Promise.all([
@@ -433,6 +437,7 @@ export function RecommendationPlansPage() {
           <label className="form-field"><span>Run id</span><input name="run_id" defaultValue={searchParams.get("run_id") ?? ""} placeholder="145" /></label>
           <label className="form-field"><span>Plan id</span><input name="plan_id" defaultValue={searchParams.get("plan_id") ?? ""} placeholder="812" /></label>
           <label className="form-field"><span>Setup family</span><select name="setup_family" defaultValue={searchParams.get("setup_family") ?? ""}><option value="">All</option><option value="breakout">breakout</option><option value="continuation">continuation</option><option value="mean_reversion">mean_reversion</option><option value="breakdown">breakdown</option><option value="catalyst_follow_through">catalyst_follow_through</option><option value="macro_beneficiary_loser">macro_beneficiary_loser</option></select></label>
+          <label className="form-field"><span>Resolution</span><select name="resolved" defaultValue={searchParams.get("resolved") ?? ""}><option value="">All</option><option value="resolved">Resolved only</option><option value="unresolved">Unresolved only</option></select></label>
           <label className="form-field"><span>Limit</span><select name="limit" defaultValue={searchParams.get("limit") ?? "100"}><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option></select></label>
           <div className="form-actions">
             <button className="icon-button icon-button-primary" type="submit" title="Apply filters" aria-label="Apply filters">

@@ -999,6 +999,15 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     "nitter_enable_ticker": "true",
                 },
             )
+            plan_generation_tuning_response = await client.post(
+                "/api/settings/plan-generation-tuning",
+                data={
+                    "auto_enabled": "true",
+                    "auto_promote_enabled": "true",
+                    "min_actionable_resolved": "31",
+                    "min_validation_resolved": "12",
+                },
+            )
             provider_response = await client.post(
                 "/api/settings/providers",
                 data={"provider": "openai", "api_key": "sk-test", "api_secret": ""},
@@ -1009,6 +1018,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(summary_response.status_code, 200)
         self.assertEqual(signal_gating_tuning_response.status_code, 200)
         self.assertEqual(social_response.status_code, 200)
+        self.assertEqual(plan_generation_tuning_response.status_code, 200)
         self.assertEqual(provider_response.status_code, 200)
         self.assertEqual(listed.status_code, 200)
         payload = listed.json()
@@ -1027,6 +1037,14 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(setting_map["summary_model"], "anthropic/claude-sonnet-4-5")
         self.assertEqual(setting_map["summary_prompt"], "very short custom summary prompt")
         self.assertEqual(setting_map["social_nitter_enable_ticker"], "true")
+        self.assertEqual(setting_map["plan_generation_tuning_auto_enabled"], "true")
+        self.assertEqual(setting_map["plan_generation_tuning_auto_promote_enabled"], "true")
+        self.assertEqual(setting_map["plan_generation_tuning_min_actionable_resolved"], "31")
+        self.assertEqual(setting_map["plan_generation_tuning_min_validation_resolved"], "12")
+        self.assertEqual(payload["plan_generation_tuning"]["settings"]["auto_enabled"], True)
+        self.assertEqual(payload["plan_generation_tuning"]["settings"]["auto_promote_enabled"], True)
+        self.assertEqual(payload["plan_generation_tuning"]["settings"]["min_actionable_resolved"], 31)
+        self.assertEqual(payload["plan_generation_tuning"]["settings"]["min_validation_resolved"], 12)
         self.assertEqual(payload["providers"][0]["provider"], "openai")
         self.assertEqual(payload["providers"][0]["api_key"], "sk-test")
     async def test_sentiment_snapshot_routes_list_and_detail(self) -> None:
@@ -1169,6 +1187,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             evidence_concentration = await client.get("/api/recommendation-outcomes/evidence-concentration")
             baselines = await client.get("/api/recommendation-plans/baselines")
             filtered_plans = await client.get("/api/recommendation-plans", params={"setup_family": "continuation"})
+            resolved_plans = await client.get("/api/recommendation-plans", params={"resolved": "resolved"})
+            unresolved_plans = await client.get("/api/recommendation-plans", params={"resolved": "unresolved"})
+            resolved_summary = await client.get("/api/recommendation-outcomes/summary", params={"resolved": "resolved"})
             queued = await client.post("/api/recommendation-plans/evaluate", data={})
             scoped = await client.post(f"/api/recommendation-plans/{plan_id}/evaluate", data={})
 
@@ -1218,6 +1239,13 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(filtered_plans.status_code, 200)
         self.assertEqual(len(filtered_plans.json()["items"]), 1)
         self.assertEqual(filtered_plans.json()["items"][0]["ticker"], "AAPL")
+        self.assertEqual(resolved_plans.status_code, 200)
+        self.assertEqual(len(resolved_plans.json()["items"]), 2)
+        self.assertEqual(unresolved_plans.status_code, 200)
+        self.assertEqual(len(unresolved_plans.json()["items"]), 0)
+        self.assertEqual(resolved_summary.status_code, 200)
+        self.assertEqual(resolved_summary.json()["total_outcomes"], 2)
+        self.assertEqual(resolved_summary.json()["resolved_outcomes"], 2)
         self.assertEqual(baselines.status_code, 200)
         self.assertEqual(baselines.json()["total_trade_plans_reviewed"], 2)
         baseline_map = {item["key"]: item for item in baselines.json()["comparisons"]}

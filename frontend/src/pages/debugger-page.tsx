@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { deleteJson, getJson } from "../api";
 import { WorkflowRunResults } from "../components/workflow-run-results";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import { useToast } from "../components/toast";
 import type { Run, RunDetailResponse } from "../types";
 import { formatDate, formatDuration, jobTypeLabel, runTone } from "../utils";
@@ -100,6 +100,7 @@ export function DebuggerPage() {
         kicker="Execution diagnostics"
         title="Run debugger"
         subtitle="Use debugger mode for fast investigation: select a recent run, review warnings first, and jump to the canonical run page only when you need the full orchestration detail."
+        actions={<HelpHint tooltip="Debugger mode keeps run investigation compact: pick a run, inspect warnings and artifacts, then open the full detail only if needed." to="/docs?doc=operator-page-field-guide" />}
       />
       {error ? <ErrorState message={error} /> : null}
 
@@ -116,6 +117,7 @@ export function DebuggerPage() {
             kicker="Recent runs"
             title="Choose a run"
             subtitle="Pick a run from the left, then scan the summary on the right before opening the full run page."
+            actions={<HelpHint tooltip="Use the left list to move quickly between recent runs without leaving the debugger workflow." to="/docs?doc=operator-page-field-guide" />}
           />
           {deleteError ? <ErrorState message={deleteError} /> : null}
           {!runs && !error ? <LoadingState message="Loading runs…" /> : null}

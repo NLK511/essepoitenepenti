@@ -32,11 +32,15 @@ async def list_recommendation_plans(
     offset: int = Query(default=0, ge=0),
     run_id: int | None = Query(default=None),
     plan_id: int | None = Query(default=None),
+    resolved: str | None = Query(default=None),
     session: Session = Depends(get_db_session),
 ) -> dict[str, object]:
     normalized_ticker = ticker.strip().upper() if ticker else None
     normalized_action = action.strip().lower() if action else None
     normalized_setup_family = setup_family.strip().lower() if setup_family else None
+    normalized_resolved = resolved.strip().lower() if resolved else None
+    if normalized_resolved not in {None, "resolved", "unresolved"}:
+        raise HTTPException(status_code=400, detail="resolved must be one of: resolved, unresolved")
     repository = RecommendationPlanRepository(session)
     items = repository.list_plans(
         ticker=normalized_ticker,
@@ -46,6 +50,7 @@ async def list_recommendation_plans(
         offset=offset,
         run_id=run_id,
         plan_id=plan_id,
+        resolved=normalized_resolved,
     )
     total = repository.count_plans(
         ticker=normalized_ticker,
@@ -53,6 +58,7 @@ async def list_recommendation_plans(
         setup_family=normalized_setup_family,
         run_id=run_id,
         plan_id=plan_id,
+        resolved=normalized_resolved,
     )
     return {"items": items, "total": total, "limit": limit, "offset": offset}
 
@@ -63,12 +69,17 @@ async def summarize_recommendation_plan_baselines(
     run_id: int | None = Query(default=None),
     setup_family: str | None = Query(default=None),
     limit: int = Query(default=500, ge=1, le=2000),
+    resolved: str | None = Query(default=None),
     session: Session = Depends(get_db_session),
 ) -> RecommendationBaselineSummary:
+    normalized_resolved = resolved.strip().lower() if resolved else None
+    if normalized_resolved not in {None, "resolved", "unresolved"}:
+        raise HTTPException(status_code=400, detail="resolved must be one of: resolved, unresolved")
     return RecommendationPlanBaselineService(RecommendationPlanRepository(session)).summarize(
         ticker=ticker.strip().upper() if ticker else None,
         run_id=run_id,
         setup_family=setup_family.strip().lower() if setup_family else None,
+        resolved=normalized_resolved,
         limit=limit,
     )
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getJson } from "../api";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
+import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle } from "../components/ui";
 import { ProvenanceStrip } from "../components/decision-surface";
 import type { DashboardResponse, IndustryContextSnapshot, MacroContextSnapshot, RecommendationDecisionSample, RecommendationDecisionSampleListResponse } from "../types";
 import { directionTone, formatDate, formatDuration, jobTypeLabel, recommendationStateTone, runTone, tickerTone, yahooFinanceUrl } from "../utils";
@@ -59,6 +59,7 @@ export function DashboardPage() {
         subtitle="This workspace is built for operator triage: check execution health, inspect the latest context, review recommendation plans, and move quickly to the runs or tickers that need attention."
         actions={
           <>
+            <HelpHint tooltip="The dashboard is a triage surface: start workflows, inspect freshness, and jump into the next review page quickly." to="/docs?doc=operator-page-field-guide" />
             <Link to="/jobs" className="button">
               Run workflows
             </Link>

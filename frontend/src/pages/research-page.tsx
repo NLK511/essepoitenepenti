@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import { Badge, Card, PageHeader, SectionTitle } from "../components/ui";
+import { Badge, Card, HelpHint, PageHeader, SectionTitle } from "../components/ui";
 
 export function ResearchPage() {
   return (
@@ -9,6 +9,7 @@ export function ResearchPage() {
         kicker="Research"
         title="Calibration, tuning, and replay work lives here."
         subtitle="Use this area for review surfaces that help you learn from past decisions before changing how the planner behaves. Decision samples are available now; plan-generation tuning and backtesting will live here too."
+        actions={<HelpHint tooltip="Research pages are for review, calibration, and tuning workflows rather than day-to-day operational execution." to="/docs?doc=operator-page-field-guide" />}
       />
 
       <div className="stack-page">

@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { getJson, postForm } from "../api";
-import { Card, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
+import { Card, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle } from "../components/ui";
 import type { AppSetting, AppPreflightReport, ProviderCredential, SettingsResponse } from "../types";
 import { toSettingMap } from "../utils";
 
@@ -123,6 +123,28 @@ export function SettingsPage() {
     }
   }
 
+  async function savePlanGenerationTuningSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    try {
+      setSaving("plan-generation-tuning");
+      setError(null);
+      setNotice(null);
+      await postForm<{ plan_generation_tuning: SettingsResponse["plan_generation_tuning"]["settings"] }>("/api/settings/plan-generation-tuning", {
+        auto_enabled: formData.get("auto_enabled") ? "true" : "false",
+        auto_promote_enabled: formData.get("auto_promote_enabled") ? "true" : "false",
+        min_actionable_resolved: String(formData.get("min_actionable_resolved") ?? data?.planGenerationTuning.settings.min_actionable_resolved ?? "20"),
+        min_validation_resolved: String(formData.get("min_validation_resolved") ?? data?.planGenerationTuning.settings.min_validation_resolved ?? "8"),
+      });
+      setNotice("Plan generation tuning settings saved");
+      await loadData();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save plan generation tuning settings");
+    } finally {
+      setSaving(null);
+    }
+  }
+
   async function saveProvider(event: FormEvent<HTMLFormElement>, provider: string) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -150,6 +172,7 @@ export function SettingsPage() {
         kicker="System operation"
         title="Configure providers, summarization, and tuning guardrails."
         subtitle="The retired weight-optimization job is gone. This page now exposes only active system settings and the new plan-generation tuning controls."
+        actions={<HelpHint tooltip="Configure live system settings, provider credentials, summarization behavior, and autonomous tuning guardrails." to="/docs?doc=operator-page-field-guide" />}
       />
       {error ? <ErrorState message={error} /> : null}
       {notice ? <Card><div className="helper-text">{notice}</div></Card> : null}
@@ -165,16 +188,22 @@ export function SettingsPage() {
 
           <section className="card-grid">
             <Card>
-              <SectionTitle kicker="Plan generation tuning" title="Active tuning state" subtitle="These are the live settings for the new candidate-based tuning subsystem." />
-              <div className="helper-text">Auto mode: {data.planGenerationTuning.settings.auto_enabled ? "enabled" : "disabled"}</div>
-              <div className="helper-text">Auto promote: {data.planGenerationTuning.settings.auto_promote_enabled ? "enabled" : "disabled"}</div>
-              <div className="helper-text">Minimum actionable resolved records: {data.planGenerationTuning.settings.min_actionable_resolved}</div>
-              <div className="helper-text">Minimum validation resolved records: {data.planGenerationTuning.settings.min_validation_resolved}</div>
+              <SectionTitle kicker="Plan generation tuning" title="Active tuning state" subtitle="Configure autonomous tuning guardrails and inspect the current live config payload." actions={<HelpHint tooltip="These settings control scheduled plan-generation tuning runs and the minimum evidence required before autonomous promotion can happen." to="/docs?doc=plan-generation-tuning-spec" />} />
+              <form className="stack-form" onSubmit={(event) => void savePlanGenerationTuningSettings(event)}>
+                <div className="form-grid">
+                  <label className="form-field"><span><input type="checkbox" name="auto_enabled" defaultChecked={data.planGenerationTuning.settings.auto_enabled} /> Auto mode enabled</span></label>
+                  <label className="form-field"><span><input type="checkbox" name="auto_promote_enabled" defaultChecked={data.planGenerationTuning.settings.auto_promote_enabled} /> Auto promote enabled</span></label>
+                  <label className="form-field"><span>Minimum actionable resolved records</span><input name="min_actionable_resolved" type="number" min="1" defaultValue={String(data.planGenerationTuning.settings.min_actionable_resolved)} /></label>
+                  <label className="form-field"><span>Minimum validation resolved records</span><input name="min_validation_resolved" type="number" min="1" defaultValue={String(data.planGenerationTuning.settings.min_validation_resolved)} /></label>
+                </div>
+                <div className="helper-text">Active config version: {data.planGenerationTuning.settings.active_config_version_id ?? "baseline"}. Promote or apply specific configs from the research tuning page.</div>
+                <div className="cluster"><button className="button" type="submit" disabled={saving === "plan-generation-tuning"}>{saving === "plan-generation-tuning" ? "Saving…" : "Save plan generation tuning settings"}</button></div>
+              </form>
               <pre className="code-block top-gap-small">{JSON.stringify(data.planGenerationTuning.active_config, null, 2)}</pre>
             </Card>
 
             <Card>
-              <SectionTitle kicker="Summary engine" title="LLM-backed news summarization" subtitle="Choose the backend and local Pi CLI settings used for summaries." />
+              <SectionTitle kicker="Summary engine" title="LLM-backed news summarization" subtitle="Choose the backend and local Pi CLI settings used for summaries." actions={<HelpHint tooltip="Summary settings control which backend and prompt shape the generated market-context summaries." to="/docs?doc=operator-page-field-guide" />} />
               <form className="stack-form" onSubmit={(event) => void saveSummarySettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span>Backend</span><select name="backend" defaultValue={settingMap.summary_backend ?? "news_digest"}><option value="news_digest">news_digest</option><option value="openai_api">openai_api</option><option value="pi_agent">pi_agent</option></select></label>
@@ -191,7 +220,7 @@ export function SettingsPage() {
             </Card>
 
             <Card>
-              <SectionTitle kicker="News ingestion" title="News fetch limits" subtitle="Adjust article limits for macro, industry, and ticker summarization paths." />
+              <SectionTitle kicker="News ingestion" title="News fetch limits" subtitle="Adjust article limits for macro, industry, and ticker summarization paths." actions={<HelpHint tooltip="Article limits cap how much raw source material feeds each summarization path." to="/docs?doc=operator-page-field-guide" />} />
               <form className="stack-form" onSubmit={(event) => void saveNewsSettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span>Macro article limit</span><input name="macro_article_limit" defaultValue={settingMap.news_macro_article_limit ?? "12"} /></label>
@@ -203,7 +232,7 @@ export function SettingsPage() {
             </Card>
 
             <Card>
-              <SectionTitle kicker="Social ingestion" title="Social signal settings" subtitle="Control Nitter and social-signal toggles used by the signal layer." />
+              <SectionTitle kicker="Social ingestion" title="Social signal settings" subtitle="Control Nitter and social-signal toggles used by the signal layer." actions={<HelpHint tooltip="Social settings govern whether Nitter-backed social input participates in the signal layer and how aggressively it is queried." to="/docs?doc=operator-page-field-guide" />} />
               <form className="stack-form" onSubmit={(event) => void saveSocialSettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span><input type="checkbox" name="sentiment_enabled" defaultChecked={(settingMap.social_sentiment_enabled ?? "false") === "true"} /> Sentiment enabled</span></label>

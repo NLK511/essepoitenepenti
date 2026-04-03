@@ -21,9 +21,10 @@ class RecommendationEvidenceConcentrationService:
         ticker: str | None = None,
         run_id: int | None = None,
         setup_family: str | None = None,
+        resolved: str | None = None,
         limit: int = 500,
     ) -> RecommendationEvidenceConcentrationSummary:
-        summary = self.calibration.summarize(ticker=ticker, run_id=run_id, setup_family=setup_family, limit=limit)
+        summary = self.calibration.summarize(ticker=ticker, run_id=run_id, setup_family=setup_family, resolved=resolved, limit=limit)
         overall_win_rate = summary.overall_win_rate_percent
         overall_return = self._overall_average_return_5d(summary)
         candidate_groups = [

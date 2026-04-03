@@ -2,7 +2,7 @@ import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson } from "../api";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { RecommendationDecisionSample, RecommendationDecisionSampleListResponse } from "../types";
 import { formatDate, yahooFinanceUrl } from "../utils";
 
@@ -122,6 +122,7 @@ export function RecommendationDecisionSamplesPage() {
         subtitle="This page is for reviewing samples and learning from the plans the system already produced. It keeps near-misses, rejected setups, and actionable plans in one central review surface so small action counts do not leave you blind to what the planner is doing."
         actions={
           <>
+            <HelpHint tooltip="Decision samples are for review and learning: actionable, near-miss, and degraded cases stay visible even when final action counts are small." to="/docs?doc=operator-page-field-guide" />
             <Link to="/research" className="button-subtle">Research hub</Link>
             <Link to="/research/signal-gating/gating-job" className="button-secondary">Gating tuning job</Link>
             <Link to="/jobs/recommendation-plans" className="button-secondary">Back to plans</Link>
@@ -147,6 +148,7 @@ export function RecommendationDecisionSamplesPage() {
               kicker="Review queue"
               title="High-priority samples"
               subtitle="Use this list to inspect borderline no-action plans and the rare actionable cases on the current page side by side."
+              actions={<HelpHint tooltip="High-priority samples help you inspect the most informative review cases on the current page first." to="/docs?doc=operator-page-field-guide" />}
             />
             {highPrioritySamples.length === 0 ? (
               <EmptyState message="No high-priority samples available yet." />

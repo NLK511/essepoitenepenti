@@ -81,6 +81,7 @@ class RecommendationOutcomeRepository:
         recommendation_plan_id: int | None = None,
         run_id: int | None = None,
         setup_family: str | None = None,
+        resolved: str | None = None,
         limit: int = 50,
     ) -> list[RecommendationPlanOutcome]:
         self.session.rollback()
@@ -98,6 +99,10 @@ class RecommendationOutcomeRepository:
             query = query.where(RecommendationOutcomeRecord.run_id == run_id)
         if setup_family:
             query = query.where(RecommendationOutcomeRecord.setup_family == setup_family)
+        if resolved == "resolved":
+            query = query.where(RecommendationOutcomeRecord.status == "resolved")
+        elif resolved == "unresolved":
+            query = query.where(RecommendationOutcomeRecord.status != "resolved")
         rows = self.session.execute(
             query.order_by(RecommendationOutcomeRecord.evaluated_at.desc()).limit(limit)
         ).all()

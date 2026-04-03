@@ -91,12 +91,24 @@ class RecommendationPlanRepository:
         run_id: int | None = None,
         setup_family: str | None = None,
         plan_id: int | None = None,
+        resolved: str | None = None,
     ) -> int:
         query = self._base_plan_query(ticker=ticker, action=action, run_id=run_id, plan_id=plan_id)
-        if setup_family:
+        if setup_family or resolved:
             rows = self.session.scalars(query).all()
-            normalized_setup_family = setup_family.strip().lower()
-            return sum(1 for row in rows if self._record_setup_family(row) == normalized_setup_family)
+            outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
+            normalized_setup_family = setup_family.strip().lower() if setup_family else None
+            normalized_resolved = (resolved or "").strip().lower() or None
+            return sum(
+                1
+                for row in rows
+                if self._matches_filters(
+                    row,
+                    outcome_map=outcome_map,
+                    setup_family=normalized_setup_family,
+                    resolved=normalized_resolved,
+                )
+            )
         count_query = select(func.count()).select_from(query.subquery())
         return int(self.session.scalar(count_query) or 0)
 
@@ -109,29 +121,57 @@ class RecommendationPlanRepository:
         run_id: int | None = None,
         setup_family: str | None = None,
         plan_id: int | None = None,
+        resolved: str | None = None,
     ) -> list[RecommendationPlan]:
         normalized_limit = max(1, limit)
         normalized_offset = max(0, offset)
         query = self._base_plan_query(ticker=ticker, action=action, run_id=run_id, plan_id=plan_id)
-        if setup_family:
+        normalized_setup_family = setup_family.strip().lower() if setup_family else None
+        normalized_resolved = (resolved or "").strip().lower() or None
+        if normalized_setup_family or normalized_resolved:
             rows = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc())).all()
-            normalized_setup_family = setup_family.strip().lower()
-            plans = [
-                self._to_model(row)
+            outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
+            filtered_rows = [
+                row
                 for row in rows
-                if self._record_setup_family(row) == normalized_setup_family
+                if self._matches_filters(
+                    row,
+                    outcome_map=outcome_map,
+                    setup_family=normalized_setup_family,
+                    resolved=normalized_resolved,
+                )
             ]
-            plans = plans[normalized_offset : normalized_offset + normalized_limit]
+            rows = filtered_rows[normalized_offset : normalized_offset + normalized_limit]
+            plans = [self._to_model(row) for row in rows]
         else:
             rows = self.session.scalars(
                 query.order_by(RecommendationPlanRecord.computed_at.desc()).offset(normalized_offset).limit(normalized_limit)
             ).all()
             plans = [self._to_model(row) for row in rows]
-        outcome_map = self.outcomes.get_outcomes_by_plan_ids([plan.id for plan in plans if plan.id is not None])
+            outcome_map = self.outcomes.get_outcomes_by_plan_ids([plan.id for plan in plans if plan.id is not None])
         for plan in plans:
             if plan.id is not None:
                 plan.latest_outcome = outcome_map.get(plan.id)
         return plans
+
+    def _matches_filters(
+        self,
+        record: RecommendationPlanRecord,
+        *,
+        outcome_map: dict[int, object],
+        setup_family: str | None,
+        resolved: str | None,
+    ) -> bool:
+        if setup_family and self._record_setup_family(record) != setup_family:
+            return False
+        if resolved:
+            outcome = outcome_map.get(record.id or 0)
+            is_resolved = bool(outcome is not None and getattr(outcome, "status", None) == "resolved")
+            if resolved == "resolved" and not is_resolved:
+                return False
+            if resolved == "unresolved" and is_resolved:
+                return False
+        return True
 
     @staticmethod
     def _json_default(value: Any) -> Any:

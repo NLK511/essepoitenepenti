@@ -31,9 +31,10 @@ class RecommendationPlanCalibrationService:
         ticker: str | None = None,
         run_id: int | None = None,
         setup_family: str | None = None,
+        resolved: str | None = None,
         limit: int = 500,
     ) -> RecommendationCalibrationSummary:
-        outcomes = self.outcomes.list_outcomes(ticker=ticker, run_id=run_id, setup_family=setup_family, limit=limit)
+        outcomes = self.outcomes.list_outcomes(ticker=ticker, run_id=run_id, setup_family=setup_family, resolved=resolved, limit=limit)
         resolved = [item for item in outcomes if item.outcome in {"win", "loss"}]
         return RecommendationCalibrationSummary(
             total_outcomes=len(outcomes),

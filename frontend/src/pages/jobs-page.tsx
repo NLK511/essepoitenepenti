@@ -3,9 +3,11 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { Job, JobType, Run, Watchlist } from "../types";
 import { jobTypeLabel, tickerTone } from "../utils";
+
+const jobsDoc = "/docs?doc=operator-page-field-guide";
 
 interface JobsViewData {
   jobs: Job[];
@@ -154,9 +156,12 @@ export function JobsPage() {
         title="Jobs and execution"
         subtitle="Jobs define what gets analyzed and when. Use this page to create repeatable workflows, launch manual runs, and keep execution organized around watchlists and recommendation plans."
         actions={
-          <Link to="/jobs/watchlists" className="button-secondary">
-            Manage watchlists
-          </Link>
+          <>
+            <HelpHint tooltip="Jobs define repeatable workflows such as proposal generation, evaluation, and plan-generation tuning." to={jobsDoc} />
+            <Link to="/jobs/watchlists" className="button-secondary">
+              Manage watchlists
+            </Link>
+          </>
         }
       />
       {error ? <ErrorState message={error} /> : null}
@@ -168,7 +173,7 @@ export function JobsPage() {
       </section>
       <section className="two-column top-gap">
         <Card className="sticky-toolbar">
-          <SectionTitle kicker="Create" title="New job" subtitle="Keep the form minimal: choose the workflow type, then define either a watchlist or manual tickers only when the job actually needs them." />
+          <SectionTitle kicker="Create" title="New job" subtitle="Keep the form minimal: choose the workflow type, then define either a watchlist or manual tickers only when the job actually needs them." actions={<HelpHint tooltip="Proposal jobs use watchlists or tickers. Evaluation and plan-generation tuning work from stored data instead." to={jobsDoc} />} />
           <form className="stack-form" onSubmit={handleCreateJob}>
             <div className="form-grid">
               <label className="form-field">
@@ -219,7 +224,7 @@ export function JobsPage() {
           </form>
         </Card>
         <Card>
-          <SectionTitle kicker="Saved jobs" title="Run, edit, and delete" subtitle="Use enqueue for action, edit only when the schedule or source assumptions actually need to change." />
+          <SectionTitle kicker="Saved jobs" title="Run, edit, and delete" subtitle="Use enqueue for action, edit only when the schedule or source assumptions actually need to change." actions={<HelpHint tooltip="The saved-jobs table shows each workflow's type, source scope, schedule, and enabled state." to={jobsDoc} />} />
         {!data && !error ? <LoadingState message="Loading jobs…" /> : null}
         {data && data.jobs.length === 0 ? <EmptyState message="No jobs created yet." /> : null}
         {data ? (

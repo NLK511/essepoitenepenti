@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import { Badge, Card, PageHeader, SectionTitle } from "../components/ui";
+import { Badge, Card, HelpHint, PageHeader, SectionTitle } from "../components/ui";
 
 export function SignalGatingPage() {
   return (
@@ -9,6 +9,7 @@ export function SignalGatingPage() {
         kicker="Research"
         title="Signal gating"
         subtitle="This subsection separates review data from the tuning job itself. Use decision samples to inspect evidence, then use the gating job page to change parameters and inspect run history."
+        actions={<HelpHint tooltip="Signal gating focuses on upstream selection quality and recall, not downstream entry/stop/take-profit tuning." to="/docs?doc=signal-gating-tuning-plan" />}
       />
 
       <div className="stack-page">

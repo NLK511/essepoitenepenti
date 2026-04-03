@@ -52,9 +52,15 @@ const navSections: NavSection[] = [
     label: "Research",
     items: [
       { to: "/research", label: "Research home", shortLabel: "Hub", icon: "⌂", end: true },
-      { to: "/research/decision-samples", label: "Decision samples", shortLabel: "Samples", icon: "◉" },
     ],
     subsections: [
+      {
+        label: "Recommendation tuning",
+        items: [
+          { to: "/research/decision-samples", label: "Decision samples", shortLabel: "Samples", icon: "◉" },
+          { to: "/research/plan-generation-tuning", label: "Plan generation tuning", shortLabel: "Plan tune", icon: "↗" },
+        ],
+      },
       {
         label: "Signal gating",
         items: [
