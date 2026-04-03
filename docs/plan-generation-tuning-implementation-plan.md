@@ -24,8 +24,8 @@ After inspection, the existing weight-optimization flow is **not** an appropriat
 
 ## Why the legacy optimizer should not be reused as the main implementation
 
-Inspected components:
-- `src/trade_proposer_app/services/optimizations.py`
+Inspected components during the replacement decision:
+- the retired legacy optimization service
 - `src/trade_proposer_app/services/job_execution.py`
 - `tests/test_optimizations.py`
 - `src/trade_proposer_app/services/proposals.py`
@@ -33,7 +33,7 @@ Inspected components:
 
 ### What the legacy optimizer does today
 
-The current `WeightOptimizationService`:
+The retired legacy optimizer previously:
 - counts aggregate resolved wins and losses
 - computes a single `delta_ratio`
 - scales selected values inside `weights.json`
@@ -88,7 +88,7 @@ Because the legacy weight-optimization job has never been used, it should be rem
 
 Remove:
 - `JobType.WEIGHT_OPTIMIZATION`
-- `WeightOptimizationService`
+- the legacy optimizer service
 - weight-optimization branches in `job_execution.py`
 - scheduler and active-run guards specific to the old job
 - old optimization settings that only existed for that job

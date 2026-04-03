@@ -1,6 +1,6 @@
 import { Badge, Card, EmptyState, SectionTitle } from "./ui";
 import type { JobType } from "../types";
-import { formatDate, jobTypeLabel, parseJsonForDisplay, parseJsonRecord } from "../utils";
+import { jobTypeLabel, parseJsonForDisplay, parseJsonRecord } from "../utils";
 
 function renderLabel(key: string): string {
   return key
@@ -98,18 +98,6 @@ function RawJson({ title, value }: { title: string; value: string | null }) {
   );
 }
 
-function FingerprintCard({ title, value }: { title: string; value: Record<string, unknown> | null }) {
-  if (!value) {
-    return null;
-  }
-  return (
-    <Card>
-      <SectionTitle title={title} />
-      <MetadataObject value={value} />
-    </Card>
-  );
-}
-
 function EvaluationResultView({ summary, artifact, rawSummary, rawArtifact }: {
   summary: Record<string, unknown> | null;
   artifact: Record<string, unknown> | null;
@@ -152,70 +140,6 @@ function EvaluationResultView({ summary, artifact, rawSummary, rawArtifact }: {
         <Card>
           <SectionTitle kicker="Trigger" title="How this run was started" />
           <MetadataObject value={trigger} />
-        </Card>
-      ) : null}
-
-      <RawJson title="Raw summary JSON" value={rawSummary} />
-      <RawJson title="Raw artifact JSON" value={rawArtifact} />
-    </div>
-  );
-}
-
-function OptimizationResultView({ summary, artifact, rawSummary, rawArtifact }: {
-  summary: Record<string, unknown> | null;
-  artifact: Record<string, unknown> | null;
-  rawSummary: string | null;
-  rawArtifact: string | null;
-}) {
-  const weightsChanged = summary?.weights_changed;
-  const backup = isRecord(artifact?.backup) ? artifact.backup : null;
-  const before = isRecord(artifact?.before) ? artifact.before : null;
-  const after = isRecord(artifact?.after) ? artifact.after : null;
-  const stdout = typeof summary?.stdout === "string" ? summary.stdout : null;
-  const stderr = typeof summary?.stderr === "string" ? summary.stderr : null;
-  const rollbackAvailable = artifact?.rollback_available;
-  const backupCreatedAt = typeof backup?.created_at === "string" ? formatDate(backup.created_at) : "—";
-
-  return (
-    <div className="stack-page">
-      <Card>
-        <SectionTitle kicker="Optimization summary" title="Outcome" subtitle="Optimization workflows update weights using resolved recommendation-plan outcomes and persist before/after fingerprint metadata for audit and rollback." />
-        <div className="summary-grid">
-          <div className="summary-item"><span className="summary-label">Status</span><span className="summary-value">{String(summary?.status ?? "—")}</span></div>
-          <div className="summary-item"><span className="summary-label">Resolved plan outcomes</span><span className="summary-value">{String(summary?.resolved_recommendation_plan_outcomes ?? summary?.resolved_trade_count ?? "—")}</span></div>
-          <div className="summary-item"><span className="summary-label">Minimum required</span><span className="summary-value">{String(summary?.minimum_resolved_recommendation_plan_outcomes ?? summary?.minimum_resolved_trades ?? "—")}</span></div>
-          <div className="summary-item"><span className="summary-label">Weights changed</span><Badge tone={weightsChanged === true ? "ok" : "warning"}>{weightsChanged === true ? "yes" : weightsChanged === false ? "no" : "—"}</Badge></div>
-          <div className="summary-item"><span className="summary-label">Rollback available</span><Badge tone={rollbackAvailable === true ? "ok" : "neutral"}>{rollbackAvailable === true ? "yes" : rollbackAvailable === false ? "no" : "—"}</Badge></div>
-          <div className="summary-item"><span className="summary-label">Weights path</span><span className="summary-value">{String(artifact?.weights_path ?? "—")}</span></div>
-        </div>
-      </Card>
-
-      {backup ? (
-        <Card>
-          <SectionTitle kicker="Recovery" title="Rollback backup" subtitle="Each optimization run records the backup used for rollback before weights are modified." />
-          <div className="summary-grid">
-            <div className="summary-item"><span className="summary-label">Backup path</span><span className="summary-value">{String(backup.path ?? "—")}</span></div>
-            <div className="summary-item"><span className="summary-label">Backup created</span><span className="summary-value">{backupCreatedAt}</span></div>
-          </div>
-          {isRecord(backup.fingerprint) ? <MetadataObject value={backup.fingerprint} /> : null}
-        </Card>
-      ) : null}
-
-      <div className="two-column">
-        <FingerprintCard title="Weights before optimization" value={before} />
-        <FingerprintCard title="Weights after optimization" value={after} />
-      </div>
-
-      {stdout ? (
-        <Card>
-          <SectionTitle title="Optimizer stdout" />
-          <pre>{stdout}</pre>
-        </Card>
-      ) : null}
-      {stderr ? (
-        <Card>
-          <SectionTitle title="Optimizer stderr" />
-          <pre>{stderr}</pre>
         </Card>
       ) : null}
 

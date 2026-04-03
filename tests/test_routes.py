@@ -1290,43 +1290,6 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(industry.json()["run"]["status"], "completed")
         self.assertEqual(macro.json()["artifact"]["snapshot_id"], 99)
 
-    async def test_settings_rollback_restores_latest_weights_backup(self) -> None:
-        weights_path = Path(settings.weights_file_path)
-        data_dir = weights_path.parent
-        data_dir.mkdir(parents=True, exist_ok=True)
-        weights_path.write_text('{"alpha": 9}')
-        backup_dir = data_dir / "weight_backups"
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        backup_path = backup_dir / "weights.20260314T120000000000Z.json.bak"
-        backup_path.write_text('{"alpha": 1}')
-
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            response = await client.post("/api/settings/optimization/rollback", data={})
-
-        self.assertIn(response.status_code, {404, 405})
-
-    async def test_settings_rollback_can_restore_selected_backup_path(self) -> None:
-        weights_path = Path(settings.weights_file_path)
-        data_dir = weights_path.parent
-        data_dir.mkdir(parents=True, exist_ok=True)
-        weights_path.write_text('{"alpha": 9}')
-        backup_dir = data_dir / "weight_backups"
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        older_backup = backup_dir / "weights.20260314T110000000000Z.json.bak"
-        newer_backup = backup_dir / "weights.20260314T120000000000Z.json.bak"
-        older_backup.write_text('{"alpha": 1}')
-        newer_backup.write_text('{"alpha": 2}')
-
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            response = await client.post(
-                "/api/settings/optimization/rollback",
-                data={"backup_path": str(older_backup)},
-            )
-
-        self.assertIn(response.status_code, {404, 405})
-
     async def test_single_user_auth_guarding(self) -> None:
         prev_enabled = settings.single_user_auth_enabled
         prev_token = settings.single_user_auth_token
