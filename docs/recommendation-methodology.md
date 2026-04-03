@@ -190,6 +190,10 @@ Current evaluation records include fields such as:
 
 `watchlist` and `no_action` plans are also preserved as first-class evaluated outcomes.
 
+If a trade plan is still unresolved after its generated horizon has elapsed, the evaluator resolves it as `expired` so stale plans do not remain indefinitely open.
+
+`expired` is a terminal lifecycle outcome for audit and filtering purposes, but it is not treated as a `win` or `loss` by default.
+
 ## Decision samples for tuning
 
 Every generated plan also produces a `RecommendationDecisionSample` row.

@@ -11,6 +11,7 @@ import yfinance as yf
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.domain.enums import StrategyHorizon
 from trade_proposer_app.domain.models import EvaluationRunResult, HistoricalMarketBar, RecommendationPlan, RecommendationPlanOutcome
 from trade_proposer_app.persistence.models import RecommendationPlanRecord
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
@@ -672,44 +673,106 @@ class RecommendationPlanEvaluationService:
     ) -> tuple[RecommendationPlanOutcome, str]:
         if plan.action in {"no_action", "watchlist"}:
             outcome = self._evaluate_plan(plan, None, run_id=run_id, as_of=as_of, intraday_only=False)
-            return outcome, "none"
+            return self._finalize_outcome(plan, outcome, as_of=as_of), "none"
 
         daily_outcome: RecommendationPlanOutcome | None = None
         if daily_data is not None and not daily_data.empty:
             daily_outcome = self._evaluate_plan(plan, daily_data, run_id=run_id, as_of=as_of, intraday_only=False)
             if daily_outcome.outcome in {"no_entry", "open"}:
-                return daily_outcome, "daily"
+                return self._finalize_outcome(plan, daily_outcome, as_of=as_of), "daily"
             if intraday_data is not None and not intraday_data.empty:
-                return self._evaluate_plan(plan, intraday_data, run_id=run_id, as_of=as_of, intraday_only=True), "intraday"
-            return self._pending_resolution_outcome(
+                intraday_outcome = self._evaluate_plan(plan, intraday_data, run_id=run_id, as_of=as_of, intraday_only=True)
+                return self._finalize_outcome(plan, intraday_outcome, as_of=as_of), "intraday"
+            pending_outcome = self._pending_resolution_outcome(
                 plan,
                 run_id=run_id,
                 confidence_bucket=self._confidence_bucket(plan.confidence_percent),
                 setup_family=self._setup_family(plan),
                 notes="Intraday price history is required for final resolution but is unavailable.",
-            ), "pending"
+            )
+            return self._finalize_outcome(plan, pending_outcome, as_of=as_of), "pending"
 
         if intraday_data is not None and not intraday_data.empty:
-            return self._evaluate_plan(plan, intraday_data, run_id=run_id, as_of=as_of, intraday_only=True), "intraday"
+            intraday_outcome = self._evaluate_plan(plan, intraday_data, run_id=run_id, as_of=as_of, intraday_only=True)
+            return self._finalize_outcome(plan, intraday_outcome, as_of=as_of), "intraday"
 
         if daily_outcome is not None:
             if daily_outcome.outcome in {"no_entry", "open"}:
-                return daily_outcome, "daily"
-            return self._pending_resolution_outcome(
+                return self._finalize_outcome(plan, daily_outcome, as_of=as_of), "daily"
+            pending_outcome = self._pending_resolution_outcome(
                 plan,
                 run_id=run_id,
                 confidence_bucket=self._confidence_bucket(plan.confidence_percent),
                 setup_family=self._setup_family(plan),
                 notes="Intraday price history is required for final resolution but is unavailable.",
-            ), "pending"
+            )
+            return self._finalize_outcome(plan, pending_outcome, as_of=as_of), "pending"
 
-        return self._pending_resolution_outcome(
+        pending_outcome = self._pending_resolution_outcome(
             plan,
             run_id=run_id,
             confidence_bucket=self._confidence_bucket(plan.confidence_percent),
             setup_family=self._setup_family(plan),
             notes="No price history available for evaluation.",
-        ), "pending"
+        )
+        return self._finalize_outcome(plan, pending_outcome, as_of=as_of), "pending"
+
+    def _finalize_outcome(
+        self,
+        plan: RecommendationPlan,
+        outcome: RecommendationPlanOutcome,
+        *,
+        as_of: datetime | None,
+    ) -> RecommendationPlanOutcome:
+        if outcome.status == "resolved":
+            return outcome
+        if not self._is_past_plan_horizon(plan, as_of=as_of):
+            return outcome
+        expired = RecommendationPlanOutcome(**outcome.model_dump())
+        expired.outcome = "expired"
+        expired.status = "resolved"
+        expired.evaluated_at = self._normalize_datetime(as_of) or datetime.now(timezone.utc)
+        suffix = "Horizon elapsed without a terminal outcome; marked expired."
+        expired.notes = f"{outcome.notes} {suffix}".strip() if outcome.notes else suffix
+        return expired
+
+    def _is_past_plan_horizon(self, plan: RecommendationPlan, *, as_of: datetime | None) -> bool:
+        reference = self._normalize_datetime(as_of) or datetime.now(timezone.utc)
+        cutoff = self._plan_horizon_cutoff(plan)
+        return cutoff is not None and reference >= cutoff
+
+    def _plan_horizon_cutoff(self, plan: RecommendationPlan) -> datetime | None:
+        computed_at = self._normalize_datetime(plan.computed_at)
+        if computed_at is None:
+            return None
+        session_count = self._plan_horizon_sessions(plan)
+        market_tz = ZoneInfo("America/New_York")
+        local_time = computed_at.astimezone(market_tz)
+        session_date = local_time.date()
+        if local_time.weekday() >= 5 or local_time.time() > self._market_close_time:
+            session_date = self._next_business_day(session_date)
+        remaining_sessions = max(session_count - 1, 0)
+        while remaining_sessions > 0:
+            session_date = self._next_business_day(session_date)
+            remaining_sessions -= 1
+        return datetime.combine(session_date, self._market_close_time, tzinfo=market_tz).astimezone(timezone.utc)
+
+    @staticmethod
+    def _next_business_day(current: date) -> date:
+        candidate = current + timedelta(days=1)
+        while candidate.weekday() >= 5:
+            candidate += timedelta(days=1)
+        return candidate
+
+    @staticmethod
+    def _plan_horizon_sessions(plan: RecommendationPlan) -> int:
+        if isinstance(plan.holding_period_days, int) and plan.holding_period_days > 0:
+            return plan.holding_period_days
+        if plan.horizon == StrategyHorizon.ONE_DAY:
+            return 1
+        if plan.horizon == StrategyHorizon.ONE_MONTH:
+            return 20
+        return 5
 
     def _pending_resolution_outcome(
         self,

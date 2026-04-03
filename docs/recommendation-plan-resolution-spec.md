@@ -36,12 +36,45 @@ This applies whether the plan was generated:
 
 ## What counts as resolution
 
-A plan is resolved when the market data proves, in timestamp order, that one of the following happened first after the assumed entry point:
+A plan is resolved when either:
 
-- the entry condition was touched and then the take profit was hit first, or
-- the entry condition was touched and then the stop loss was hit first
+- the market data proves, in timestamp order, that the entry condition was touched and then the take profit was hit first, or
+- the market data proves, in timestamp order, that the entry condition was touched and then the stop loss was hit first, or
+- the plan remains unresolved until its intended horizon has elapsed, in which case it must be resolved as `expired`
 
-Once that first crossing is established, the outcome is final.
+Once that first crossing or terminal expiration is established, the outcome is final.
+
+## Expiration rule for overdue pending plans
+
+A recommendation plan must not remain `pending`, `open`, or `no_entry` forever.
+
+If the plan is still unresolved after the full generated horizon has passed, the evaluator must convert it to:
+
+- `outcome = "expired"`
+- `status = "resolved"`
+
+This rule exists to prevent stale plans from lingering in the open set after their intended evaluation window is no longer valid.
+
+### Interpretation of `expired`
+
+`expired` is a **terminal resolved lifecycle state**.
+
+It means:
+- the plan's evaluation window ended
+- no qualifying terminal win/loss resolution was proven before the cutoff
+- the plan should leave the open queue
+
+It does **not** mean:
+- automatic win
+- automatic loss
+- that the plan should be silently discarded from audit history
+
+### Tuning and review treatment
+
+For downstream review and tuning:
+- `expired` should be treated as **resolved** for lifecycle/open-vs-closed purposes
+- `expired` should remain visible in audit and operator review surfaces
+- `expired` should **not** be counted as a `win` or `loss` unless a future methodology change explicitly says otherwise
 
 ## Immutable outcome rule
 
@@ -130,6 +163,7 @@ It should not be used as the default batch path.
 - **batch evaluation** = open plans only
 - **manual single-plan evaluation** = may include previously closed plans
 - **closed plans** should not be reevaluated by scheduled jobs
+- overdue open plans should be closed automatically as `expired`
 
 ## What not to do
 

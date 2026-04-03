@@ -675,6 +675,61 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
         self.assertEqual(stored[0].status, "open")
         self.assertEqual(stored[0].notes, "Entry zone has not been touched yet.")
 
+    def test_run_evaluation_marks_overdue_unresolved_plan_as_expired(self) -> None:
+        self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="EOG",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=67.95,
+                entry_price_low=151.8925,
+                entry_price_high=151.8925,
+                stop_loss=149.0889,
+                take_profit=156.2066,
+                signal_breakdown={"setup_family": "catalyst_follow_through"},
+                computed_at=datetime(2026, 3, 24, 15, 0, tzinfo=timezone.utc),
+            )
+        )
+
+        with patch.object(RecommendationPlanEvaluationService, "_download_price_history", return_value=pd.DataFrame()):
+            result = RecommendationPlanEvaluationService(self.session).run_evaluation(
+                as_of=datetime(2026, 4, 2, 21, 30, tzinfo=timezone.utc)
+            )
+
+        self.assertEqual(result.evaluated_recommendation_plans, 1)
+        self.assertEqual(result.pending_recommendation_plan_outcomes, 0)
+        stored = self.outcomes.list_outcomes(ticker="EOG", limit=10)
+        self.assertEqual(stored[0].outcome, "expired")
+        self.assertEqual(stored[0].status, "resolved")
+        self.assertIn("marked expired", stored[0].notes)
+
+    def test_run_evaluation_keeps_unresolved_plan_open_before_horizon_cutoff(self) -> None:
+        self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="EOG",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=67.95,
+                entry_price_low=151.8925,
+                entry_price_high=151.8925,
+                stop_loss=149.0889,
+                take_profit=156.2066,
+                signal_breakdown={"setup_family": "catalyst_follow_through"},
+                computed_at=datetime(2026, 3, 31, 15, 0, tzinfo=timezone.utc),
+            )
+        )
+
+        with patch.object(RecommendationPlanEvaluationService, "_download_price_history", return_value=pd.DataFrame()):
+            result = RecommendationPlanEvaluationService(self.session).run_evaluation(
+                as_of=datetime(2026, 4, 1, 21, 30, tzinfo=timezone.utc)
+            )
+
+        self.assertEqual(result.evaluated_recommendation_plans, 1)
+        self.assertEqual(result.pending_recommendation_plan_outcomes, 1)
+        stored = self.outcomes.list_outcomes(ticker="EOG", limit=10)
+        self.assertEqual(stored[0].outcome, "pending")
+        self.assertEqual(stored[0].status, "open")
+
     def test_run_evaluation_falls_back_to_yfinance_when_persisted_daily_history_is_incomplete(self) -> None:
         self.plan_repository.create_plan(
             RecommendationPlan(
