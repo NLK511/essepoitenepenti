@@ -82,6 +82,12 @@ The shared-artifact layer is still transitional. Legacy support snapshots are st
 
 If macro or industry artifacts are missing or stale, the methodology falls back to neutral values and explicit warnings.
 
+Macro and industry context snapshots also carry two operator-facing heuristic scores:
+- **saliency**: how prominent the active events or drivers look relative to the rest of the current evidence set
+- **confidence**: how trustworthy the context read looks given evidence volume, source quality, contradictions, and degradation
+
+These are bounded review aids, not prediction probabilities.
+
 ### News ingestion and ticker sentiment
 `NewsIngestionService` pulls and normalizes articles, deduplicates them, and records feed usage and failures.
 
@@ -210,7 +216,7 @@ It stores decision context such as:
 
 See:
 - `decision-sample-tuning-guide.md`
-- `signal-gating-tuning-plan.md`
+- `signal-gating-tuning-guide.md`
 
 ## Methodology limits
 

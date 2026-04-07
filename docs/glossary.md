@@ -62,6 +62,14 @@ An evidence-weighted estimate of how trustworthy and actionable a signal or plan
 
 Confidence is not a guarantee.
 
+For macro and industry context snapshots, the confidence badge is an operator trust score rather than a prediction probability.
+
+Operator reading bands:
+- `0.0–39.9` = light
+- `40.0–64.9` = moderate
+- `65.0–84.9` = strong
+- `85.0+` = dominant
+
 ### Calibration
 The process of comparing confidence-like outputs against actual outcomes and adjusting trust, thresholds, or displayed confidence.
 
@@ -137,6 +145,14 @@ How much evidence was found for a context or sentiment object.
 
 ### Saliency
 How prominent an event or driver appears relative to others.
+
+For macro and industry context, saliency is a bounded prominence score on a `0.00–1.00` scale.
+
+Operator reading bands:
+- `0.00–0.39` = light
+- `0.40–0.64` = moderate
+- `0.65–0.84` = strong
+- `0.85+` = dominant
 
 ### Transmission
 How macro or industry context is believed to influence a ticker.

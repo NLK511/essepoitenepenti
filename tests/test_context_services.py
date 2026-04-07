@@ -93,6 +93,8 @@ class ContextServiceTests(unittest.TestCase):
         self.assertGreaterEqual(context.metadata["event_lifecycle_summary"]["new_event_count"], 1)
         self.assertIn("Top macro event: European monetary policy.", context.summary_text)
         self.assertIn("expected transmission window is about a week or longer", context.summary_text)
+        self.assertLess(context.saliency_score, 1.0)
+        self.assertLess(context.confidence_percent, 100.0)
         self.assertTrue(news_service.fetch_topics_calls)
 
     def test_macro_context_tracks_lifecycle_and_contradictions(self) -> None:
@@ -292,6 +294,8 @@ class ContextServiceTests(unittest.TestCase):
         self.assertGreaterEqual(context.metadata["event_lifecycle_summary"]["new_event_count"], 1)
         self.assertEqual(context.metadata["context_summary_method"], "news_digest")
         self.assertEqual(context.metadata["triaged_primary_evidence"][0]["publisher"], "DigiTimes")
+        self.assertLess(context.saliency_score, 1.0)
+        self.assertLess(context.confidence_percent, 100.0)
         self.assertEqual(context.metadata["taxonomy_source_mode"], "split")
         self.assertEqual(context.metadata["ontology_profile"]["label"], "Semiconductors")
         self.assertTrue(any(item["key"] == "ai_capex" for item in context.metadata["ontology_profile"]["transmission_channel_details"]))

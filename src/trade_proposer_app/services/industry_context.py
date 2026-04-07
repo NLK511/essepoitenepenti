@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timezone
 from typing import Any
 
@@ -595,23 +596,30 @@ class IndustryContextService:
         primary_source_counts: dict[str, int],
     ) -> float:
         top_driver_score = max((float(item.get("saliency_weight", 0.0) or 0.0) for item in active_drivers), default=0.0)
-        escalating_boost = min(0.1, sum(1 for item in active_drivers if item.get("persistence_state") == "escalating") * 0.05)
-        trade_boost = min(0.16, primary_source_counts.get("trade", 0) * 0.08)
-        official_boost = min(0.1, primary_source_counts.get("official", 0) * 0.05)
-        major_boost = min(0.08, primary_source_counts.get("major", 0) * 0.04)
-        score = (
-            0.1
-            + top_driver_score * 0.4
-            + (len(active_drivers) * 0.08)
-            + (min(news_item_count, 6) * 0.05)
-            + (min(social_item_count, 4) * 0.02)
-            + (macro_link_count * 0.04)
-            + trade_boost
-            + official_boost
-            + major_boost
-            + escalating_boost
+        driver_factor = min(1.0, math.log1p(len(active_drivers)) / math.log(6.0)) if active_drivers else 0.0
+        news_factor = min(1.0, math.log1p(news_item_count) / math.log(7.0)) if news_item_count > 0 else 0.0
+        social_factor = min(1.0, math.log1p(social_item_count) / math.log(5.0)) if social_item_count > 0 else 0.0
+        macro_link_factor = min(1.0, macro_link_count / 3.0)
+        source_quality = min(
+            1.0,
+            (
+                (primary_source_counts.get("trade", 0) * 1.0)
+                + (primary_source_counts.get("official", 0) * 0.8)
+                + (primary_source_counts.get("major", 0) * 0.65)
+            )
+            / 3.0,
         )
-        return round(min(1.0, score), 3)
+        escalating_factor = min(1.0, sum(1 for item in active_drivers if item.get("persistence_state") == "escalating") / 2.0)
+        raw_score = (
+            top_driver_score * 0.48
+            + driver_factor * 0.12
+            + news_factor * 0.11
+            + social_factor * 0.05
+            + macro_link_factor * 0.07
+            + source_quality * 0.12
+            + escalating_factor * 0.05
+        )
+        return round(min(0.98, 1.0 - math.exp(-(raw_score * 1.35))), 3)
 
     @staticmethod
     def _confidence_percent(
@@ -626,28 +634,46 @@ class IndustryContextService:
     ) -> float:
         social_provider_count = len(diagnostics.get("providers", [])) if isinstance(diagnostics, dict) and isinstance(diagnostics.get("providers"), list) else 0
         high_saliency_drivers = count_events_above_saliency(active_drivers)
-        confidence = (
-            10.0
-            + (len(active_drivers) * 4.0)
-            + (high_saliency_drivers * 4.5)
-            + (min(news_item_count, 8) * 4.0)
-            + (min(social_item_count, 4) * 1.0)
-            + (social_provider_count * 1.5)
-            + (primary_source_counts.get("trade", 0) * 4.0)
-            + (primary_source_counts.get("official", 0) * 3.0)
-            + (primary_source_counts.get("major", 0) * 2.5)
+        average_saliency = (
+            sum(float(item.get("saliency_weight", 0.0) or 0.0) for item in active_drivers) / len(active_drivers)
+            if active_drivers
+            else 0.0
         )
-        if any(item.get("persistence_state") == "escalating" for item in active_drivers):
-            confidence += 3.0
+        driver_factor = min(1.0, math.log1p(len(active_drivers)) / math.log(6.0)) if active_drivers else 0.0
+        news_factor = min(1.0, math.log1p(news_item_count) / math.log(9.0)) if news_item_count > 0 else 0.0
+        social_factor = min(1.0, math.log1p(social_item_count) / math.log(5.0)) if social_item_count > 0 else 0.0
+        source_quality = min(
+            1.0,
+            (
+                (primary_source_counts.get("trade", 0) * 1.0)
+                + (primary_source_counts.get("official", 0) * 0.75)
+                + (primary_source_counts.get("major", 0) * 0.65)
+            )
+            / 3.0,
+        )
+        saliency_factor = min(1.0, (average_saliency * 0.7) + (min(3, high_saliency_drivers) / 3.0 * 0.3))
+        escalating_factor = 1.0 if any(item.get("persistence_state") == "escalating" for item in active_drivers) else 0.0
+        provider_factor = min(1.0, social_provider_count / 3.0)
+
+        confidence = (
+            18.0
+            + driver_factor * 14.0
+            + news_factor * 18.0
+            + social_factor * 5.0
+            + source_quality * 19.0
+            + saliency_factor * 16.0
+            + escalating_factor * 5.0
+            + provider_factor * 3.0
+        )
         if news_item_count == 0:
-            confidence -= 20.0
+            confidence -= 18.0
         if primary_source_counts.get("trade", 0) == 0 and primary_source_counts.get("official", 0) == 0 and primary_source_counts.get("major", 0) == 0:
             confidence -= 10.0
         if contradiction_count > 0:
-            confidence -= min(15.0, contradiction_count * 5.0)
+            confidence -= min(22.0, contradiction_count * 7.0)
         if feed_errors:
-            confidence -= min(15.0, len(feed_errors) * 5.0)
-        return round(max(0.0, min(100.0, confidence)), 1)
+            confidence -= min(18.0, len(feed_errors) * 6.0)
+        return round(max(0.0, min(97.0, confidence)), 1)
 
     @staticmethod
     def _fallback_summary_text(

@@ -23,8 +23,8 @@ export function Card(props: PropsWithChildren<{ className?: string }>) {
   return <section className={`panel ${props.className ?? ""}`.trim()}>{props.children}</section>;
 }
 
-export function Badge(props: PropsWithChildren<{ tone?: "ok" | "warning" | "danger" | "neutral" | "info" }>) {
-  return <span className={`badge badge-${props.tone ?? "neutral"}`}>{props.children}</span>;
+export function Badge(props: PropsWithChildren<{ tone?: "ok" | "warning" | "danger" | "neutral" | "info"; title?: string }>) {
+  return <span className={`badge badge-${props.tone ?? "neutral"}`} title={props.title}>{props.children}</span>;
 }
 
 export function EmptyState(props: { message: string }) {

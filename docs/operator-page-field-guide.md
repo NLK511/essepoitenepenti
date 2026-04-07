@@ -70,6 +70,14 @@ Read it as:
 
 It is not a guarantee.
 
+For **macro context** and **industry context**, confidence is an operator trust score rather than a prediction probability.
+
+Context confidence bands:
+- `0.0–39.9` = light
+- `40.0–64.9` = moderate
+- `65.0–84.9` = strong
+- `85.0+` = dominant
+
 ### Attention score
 Attention is a triage score used mainly on ticker signals.
 
@@ -91,6 +99,17 @@ Common reads:
 Warnings are part of the output.
 
 Treat stale context, thin coverage, provider failures, and contradiction warnings as decision-relevant information.
+
+### Context saliency
+For macro and industry context, saliency measures how prominent the current top events or drivers are relative to the rest of the stored context evidence.
+
+It is a bounded `0.00–1.00` prominence score, not a probability.
+
+Context saliency bands:
+- `0.00–0.39` = light
+- `0.40–0.64` = moderate
+- `0.65–0.84` = strong
+- `0.85+` = dominant
 
 ## Page guide
 
@@ -264,14 +283,25 @@ Important fields:
 - **Drivers**
 - **Coverage**
 - **Saliency**
+- **Confidence**
 - **Diagnostics**
 
+Context badge quick guide:
+- **Saliency** measures prominence of the current stored events or drivers
+- **Confidence** measures how trustworthy the context read is given evidence quality, source mix, contradictions, and degradation
+- both badges are heuristic operator aids, not guarantees or prediction probabilities
+
 Saliency quick guide:
-- `0.00–0.20` weak
-- `0.20–0.45` light
-- `0.45–0.70` moderate
-- `0.70–0.90` strong
-- `0.90–1.00` dominant
+- `0.00–0.39` light
+- `0.40–0.64` moderate
+- `0.65–0.84` strong
+- `0.85+` dominant
+
+Confidence quick guide:
+- `0.0–39.9` light
+- `40.0–64.9` moderate
+- `65.0–84.9` strong
+- `85.0+` dominant
 
 Use this page when plans look plausible but the market backdrop seems stale, thin, or wrong.
 
