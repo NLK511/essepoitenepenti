@@ -44,7 +44,7 @@ function MetadataValue({ label, value }: { label: string; value: unknown }) {
     return (
       <div className="summary-item">
         <span className="summary-label">{label}</span>
-        {longText ? <pre>{value}</pre> : <span className="summary-value">{String(value)}</span>}
+        {longText ? <pre className="workflow-pre">{value}</pre> : <span className="summary-value">{String(value)}</span>}
       </div>
     );
   }
@@ -52,7 +52,7 @@ function MetadataValue({ label, value }: { label: string; value: unknown }) {
     return (
       <div className="summary-item">
         <span className="summary-label">{label}</span>
-        <pre>{JSON.stringify(value, null, 2)}</pre>
+        <pre className="workflow-pre">{JSON.stringify(value, null, 2)}</pre>
       </div>
     );
   }
@@ -70,16 +70,18 @@ function MetadataObject({ value }: { value: Record<string, unknown> }) {
   const nestedEntries = entries.filter((entry): entry is [string, Record<string, unknown>] => isRecord(entry[1]));
 
   return (
-    <div className="stack-page">
+    <div className="stack-page metadata-tree">
       {simpleEntries.length > 0 ? (
-        <div className="summary-grid">
+        <div className="summary-grid workflow-summary-grid">
           {simpleEntries.map(([key, item]) => <MetadataValue key={key} label={renderLabel(key)} value={item} />)}
         </div>
       ) : null}
       {nestedEntries.map(([key, item]) => (
-        <details key={key} open>
+        <details key={key} className="workflow-details" open>
           <summary>{renderLabel(key)}</summary>
-          <MetadataObject value={item} />
+          <div className="workflow-details-body top-gap-small">
+            <MetadataObject value={item} />
+          </div>
         </details>
       ))}
     </div>
@@ -91,10 +93,14 @@ function RawJson({ title, value }: { title: string; value: string | null }) {
     return null;
   }
   return (
-    <details>
-      <summary>{title}</summary>
-      <pre>{parseJsonForDisplay(value)}</pre>
-    </details>
+    <Card className="workflow-section">
+      <details className="workflow-details">
+        <summary>{title}</summary>
+        <div className="workflow-details-body top-gap-small">
+          <pre className="workflow-pre">{parseJsonForDisplay(value)}</pre>
+        </div>
+      </details>
+    </Card>
   );
 }
 
@@ -109,8 +115,8 @@ function EvaluationResultView({ summary, artifact, rawSummary, rawArtifact }: {
   const output = typeof summary?.output === "string" ? summary.output : null;
 
   return (
-    <div className="stack-page">
-      <Card>
+    <div className="stack-page workflow-results">
+      <Card className="workflow-section">
         <SectionTitle kicker="Evaluation summary" title="Outcome" subtitle="Evaluation workflows settle recommendation-plan outcomes and record summary counts on the run." />
         <div className="summary-grid">
           <div className="summary-item"><span className="summary-label">Plans evaluated</span><span className="summary-value">{String(summary?.evaluated_recommendation_plans ?? "—")}</span></div>
@@ -122,22 +128,24 @@ function EvaluationResultView({ summary, artifact, rawSummary, rawArtifact }: {
           <div className="summary-item"><span className="summary-label">Watchlist plans</span><Badge tone="neutral">{String(summary?.watchlist_recommendation_plan_outcomes ?? "—")}</Badge></div>
         </div>
         {output ? (
-          <details className="top-gap-small" open>
+          <details className="workflow-details top-gap-small" open>
             <summary>Evaluator output</summary>
-            <pre>{output}</pre>
+            <div className="workflow-details-body top-gap-small">
+              <pre className="workflow-pre">{output}</pre>
+            </div>
           </details>
         ) : null}
       </Card>
 
       {scope ? (
-        <Card>
+        <Card className="workflow-section">
           <SectionTitle kicker="Evaluation scope" title="What this run evaluated" />
           <MetadataObject value={scope} />
         </Card>
       ) : null}
 
       {trigger ? (
-        <Card>
+        <Card className="workflow-section">
           <SectionTitle kicker="Trigger" title="How this run was started" />
           <MetadataObject value={trigger} />
         </Card>
@@ -153,15 +161,15 @@ function GenericWorkflowResultView({ rawSummary, rawArtifact }: { rawSummary: st
   const summary = parseJsonRecord(rawSummary);
   const artifact = parseJsonRecord(rawArtifact);
   return (
-    <div className="stack-page">
+    <div className="stack-page workflow-results">
       {summary ? (
-        <Card>
+        <Card className="workflow-section">
           <SectionTitle title="Run summary" />
           <MetadataObject value={summary} />
         </Card>
       ) : null}
       {artifact ? (
-        <Card>
+        <Card className="workflow-section">
           <SectionTitle title="Artifacts" />
           <MetadataObject value={artifact} />
         </Card>
@@ -184,7 +192,7 @@ export function WorkflowRunResults({ jobType, summaryJson, artifactJson }: { job
     return <GenericWorkflowResultView rawSummary={summaryJson} rawArtifact={artifactJson} />;
   }
   return (
-    <div className="stack-page">
+    <div className="stack-page workflow-results">
       <div className="helper-text">This run is a {jobTypeLabel(jobType).toLowerCase()} workflow. It stores summary and artifact metadata on the run instead of legacy recommendation rows.</div>
       <GenericWorkflowResultView rawSummary={summaryJson} rawArtifact={artifactJson} />
     </div>

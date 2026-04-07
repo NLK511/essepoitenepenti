@@ -369,11 +369,102 @@ html[data-theme="light"] .topbar {
 
 .debugger-layout {
   align-items: start;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
 }
 
 .debugger-detail-panel {
   align-content: start;
   min-width: 0;
+}
+
+.debugger-sidebar-panel {
+  max-height: calc(100vh - 132px);
+  overflow: auto;
+}
+
+.debugger-run-list {
+  gap: 10px;
+}
+
+.debugger-run-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 10px;
+}
+
+.debugger-summary-card {
+  border-color: rgba(102, 167, 255, 0.22);
+  background: linear-gradient(180deg, rgba(102, 167, 255, 0.06), rgba(255, 255, 255, 0.02));
+}
+
+.debugger-summary-points {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.debugger-timestamp-list {
+  display: grid;
+  gap: 6px;
+}
+
+.workflow-results {
+  gap: 14px;
+}
+
+.workflow-section {
+  overflow: hidden;
+}
+
+.workflow-summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.workflow-details {
+  padding: 2px 0;
+}
+
+.workflow-details > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text);
+}
+
+.workflow-details > summary::after {
+  content: "Expand";
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.workflow-details[open] > summary::after {
+  content: "Collapse";
+}
+
+.workflow-details-body {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.workflow-pre {
+  margin: 0;
+  padding: 14px 16px;
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.metadata-tree {
+  gap: 12px;
 }
 
 .metrics-grid {

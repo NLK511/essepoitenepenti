@@ -112,7 +112,7 @@ export function DebuggerPage() {
       </section>
 
       <section className="two-column debugger-layout top-gap">
-        <Card className="sticky-toolbar">
+        <Card className="sticky-toolbar debugger-sidebar-panel">
           <SectionTitle
             kicker="Recent runs"
             title="Choose a run"
@@ -123,7 +123,7 @@ export function DebuggerPage() {
           {!runs && !error ? <LoadingState message="Loading runs…" /> : null}
           {runs && runs.length === 0 ? <EmptyState message="No runs available." /> : null}
           {runs ? (
-            <div className="data-stack top-gap-small">
+            <div className="data-stack debugger-run-list top-gap-small">
               {runs.map((run) => (
                 <div key={run.id ?? run.created_at} className={`debugger-run-row${selectedRunId === String(run.id) ? " is-selected" : ""}`}>
                   <button
@@ -138,8 +138,10 @@ export function DebuggerPage() {
                       </div>
                       <Badge tone={runTone(run.status)}>{run.status}</Badge>
                     </div>
-                    <div className="helper-text">Created {formatDate(run.created_at)}</div>
-                    {run.scheduled_for ? <div className="helper-text">Scheduled {formatDate(run.scheduled_for)}</div> : null}
+                    <div className="debugger-run-meta">
+                      <span className="helper-text">Created {formatDate(run.created_at)}</span>
+                      {run.scheduled_for ? <span className="helper-text">Scheduled {formatDate(run.scheduled_for)}</span> : null}
+                    </div>
                   </button>
                   {run.id ? (
                     <button
@@ -172,39 +174,35 @@ export function DebuggerPage() {
           ) : null}
           {detail ? (
             <>
-              <div className="debugger-stat-strip top-gap" aria-label="Selected run summary">
-                <div className="debugger-stat-inline">
-                  <span className="debugger-stat-label">Status</span>
-                  <Badge tone={runTone(detail.run.status)}>{detail.run.status}</Badge>
-                </div>
-                <div className="debugger-stat-inline">
-                  <span className="debugger-stat-label">Duration</span>
-                  <span className="debugger-stat-value">{formatDuration(detail.run.duration_seconds)}</span>
-                </div>
-                <div className="debugger-stat-inline">
-                  <span className="debugger-stat-label">Plans written</span>
-                  <span className="debugger-stat-value">{detail.recommendation_plans.length}</span>
-                </div>
-                <div className="debugger-stat-inline">
-                  <span className="debugger-stat-label">Signals written</span>
-                  <span className="debugger-stat-value">{detail.ticker_signal_snapshots.length}</span>
-                </div>
-              </div>
-
-              <Card>
+              <Card className="debugger-summary-card">
                 <SectionTitle
                   kicker="Selected run"
                   title={`Run #${detail.run.id}`}
+                  subtitle="Start here: scan status, timing, and persisted output counts before opening deeper detail."
                   actions={<Link to={`/runs/${detail.run.id}`} className="button-secondary">Open full run review</Link>}
                 />
-                <div className="cluster">
-                  <Badge tone={runTone(detail.run.status)}>{detail.run.status}</Badge>
-                  <Badge>Job {detail.run.job_id}</Badge>
-                  <Badge>{jobTypeLabel(detail.run.job_type)}</Badge>
-                  <Badge>{formatDuration(detail.run.duration_seconds)}</Badge>
+                <div className="data-points debugger-summary-points top-gap-small" aria-label="Selected run summary">
+                  <div className="data-point"><span className="data-point-label">status</span><span className="data-point-value"><Badge tone={runTone(detail.run.status)}>{detail.run.status}</Badge></span></div>
+                  <div className="data-point"><span className="data-point-label">job</span><span className="data-point-value">{detail.run.job_id}</span></div>
+                  <div className="data-point"><span className="data-point-label">workflow</span><span className="data-point-value">{jobTypeLabel(detail.run.job_type)}</span></div>
+                  <div className="data-point"><span className="data-point-label">duration</span><span className="data-point-value">{formatDuration(detail.run.duration_seconds)}</span></div>
+                  <div className="data-point"><span className="data-point-label">plans written</span><span className="data-point-value">{detail.recommendation_plans.length}</span></div>
+                  <div className="data-point"><span className="data-point-label">signals written</span><span className="data-point-value">{detail.ticker_signal_snapshots.length}</span></div>
                 </div>
-                <div className="helper-text top-gap-small">Created {formatDate(detail.run.created_at)} · Started {formatDate(detail.run.started_at)} · Completed {formatDate(detail.run.completed_at)}</div>
+                <div className="debugger-timestamp-list top-gap-small">
+                  <div className="helper-text">Created {formatDate(detail.run.created_at)}</div>
+                  <div className="helper-text">Started {formatDate(detail.run.started_at)}</div>
+                  <div className="helper-text">Completed {formatDate(detail.run.completed_at)}</div>
+                </div>
                 {detail.run.error_message ? <div className="alert alert-danger top-gap-small">{detail.run.error_message}</div> : null}
+              </Card>
+
+              <Card>
+                <SectionTitle
+                  kicker="Run output"
+                  title={detail.run.job_type === "proposal_generation" ? "Proposal-run triage" : "Workflow metadata"}
+                  subtitle={detail.run.job_type === "proposal_generation" ? "Debugger mode is best for quick triage. Use the full run page when you need the complete proposal, signal, and context walkthrough." : "Non-proposal runs store their useful output as run-level summary and artifact metadata."}
+                />
 
                 {detail.run.job_type === "proposal_generation" ? (
                   <div className="insight-grid top-gap">
