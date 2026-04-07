@@ -241,6 +241,7 @@ export function RecommendationPlansPage() {
   const focusedPlanId = searchParams.get("plan_id");
   const [plansResponse, setPlansResponse] = useState<RecommendationPlanListResponse | null>(null);
   const [planStats, setPlanStats] = useState<RecommendationPlanStats | null>(null);
+  const [statsWindow, setStatsWindow] = useState<"all" | "day" | "week" | "month" | "year">("all");
   const [macroContextByRun, setMacroContextByRun] = useState<Record<number, MacroContextSnapshot | null>>({});
   const [industryContextByRun, setIndustryContextByRun] = useState<Record<number, IndustryContextSnapshot | null>>({});
   const [calibration, setCalibration] = useState<RecommendationCalibrationSummary | null>(null);
@@ -274,7 +275,7 @@ export function RecommendationPlansPage() {
         const planId = searchParams.get("plan_id");
         const resolved = searchParams.get("resolved");
         const outcome = searchParams.get("outcome");
-        const window = searchParams.get("window") ?? "all";
+        const window = statsWindow;
         if (runId) {
           summaryParams.set("run_id", runId);
         }
@@ -293,9 +294,9 @@ export function RecommendationPlansPage() {
         if (outcome) {
           summaryParams.set("outcome", outcome);
         }
-        const statsParams = new URLSearchParams(summaryParams);
-        statsParams.set("window", window);
         const summaryQuery = summaryParams.toString();
+        const statsParams = new URLSearchParams();
+        statsParams.set("window", window);
         const [planResults, stats] = await Promise.all([
           getJson<RecommendationPlanListResponse>(buildQuery(searchParams)),
           getJson<RecommendationPlanStats>(`/api/recommendation-plans/stats?${statsParams.toString()}`),
@@ -335,7 +336,7 @@ export function RecommendationPlansPage() {
       }
     }
     void load();
-  }, [searchParams]);
+  }, [searchParams, statsWindow]);
 
   useEffect(() => {
     if (!focusedPlanId || !plans) {
@@ -429,13 +430,31 @@ export function RecommendationPlansPage() {
       />
       {error ? <ErrorState message={error} /> : null}
       {evaluationMessage ? <Card><div className="helper-text">{evaluationMessage}</div></Card> : null}
-      <section className="metrics-grid top-gap">
-        <StatCard label="Total plans" value={planStats?.total_plans ?? "—"} helper={`Current stats cohort · ${planStats?.window ?? "all"}`} />
-        <StatCard label="Open plans" value={planStats?.open_plans ?? "—"} helper="Current filtered cohort" />
-        <StatCard label="Expired plans" value={planStats?.expired_plans ?? "—"} helper="Terminal expired outcomes in the current filtered cohort" />
-        <StatCard label="Win rate" value={planStats?.win_rate_percent !== null && planStats?.win_rate_percent !== undefined ? `${planStats.win_rate_percent}%` : "—"} helper={`Excludes open and expired plans · ${planStats?.window ?? "all"}`} />
-        <StatCard label="Evidence concentration" value={evidenceConcentration ? (evidenceConcentration.ready_for_expansion ? "Ready" : "Focused") : "—"} helper="Whether the current cohort mix supports broader usage or tighter selectivity" />
-      </section>
+      <Card className="top-gap">
+        <SectionTitle
+          kicker="Global stats"
+          title="Recommendation plan review stats"
+          subtitle="These headline stats are computed across all recommendation plans, independent of the current list filters."
+        />
+        <SegmentedTabs
+          value={statsWindow}
+          onChange={(value) => setStatsWindow(value as "all" | "day" | "week" | "month" | "year")}
+          options={[
+            { value: "all", label: "All" },
+            { value: "day", label: "Day" },
+            { value: "week", label: "Week" },
+            { value: "month", label: "Month" },
+            { value: "year", label: "Year" },
+          ]}
+        />
+        <section className="metrics-grid top-gap-small">
+          <StatCard label="Total plans" value={planStats?.total_plans ?? "—"} helper={`All recommendations · ${planStats?.window ?? "all"}`} />
+          <StatCard label="Open plans" value={planStats?.open_plans ?? "—"} helper="Open plans across all recommendations" />
+          <StatCard label="Expired plans" value={planStats?.expired_plans ?? "—"} helper="Terminal expired outcomes across all recommendations" />
+          <StatCard label="Win rate" value={planStats?.win_rate_percent !== null && planStats?.win_rate_percent !== undefined ? `${planStats.win_rate_percent}%` : "—"} helper={`Excludes open and expired plans · ${planStats?.window ?? "all"}`} />
+          <StatCard label="Evidence concentration" value={evidenceConcentration ? (evidenceConcentration.ready_for_expansion ? "Ready" : "Focused") : "—"} helper="This card still reflects the current filtered review cohort" />
+        </section>
+      </Card>
 
       <Card className="sticky-toolbar">
         <SectionTitle kicker="Filters" title="Find recommendation plans" actions={<HelpHint tooltip="Use filters to narrow the recommendation-plan review set before comparing calibration, baselines, and evidence." to={recommendationPlansDoc("filter-bar")} />} />
@@ -447,7 +466,6 @@ export function RecommendationPlansPage() {
           <label className="form-field"><span>Setup family</span><select name="setup_family" defaultValue={searchParams.get("setup_family") ?? ""}><option value="">All</option><option value="breakout">breakout</option><option value="continuation">continuation</option><option value="mean_reversion">mean_reversion</option><option value="breakdown">breakdown</option><option value="catalyst_follow_through">catalyst_follow_through</option><option value="macro_beneficiary_loser">macro_beneficiary_loser</option></select></label>
           <label className="form-field"><span>Resolution</span><select name="resolved" defaultValue={searchParams.get("resolved") ?? ""}><option value="">All</option><option value="resolved">Resolved only</option><option value="unresolved">Unresolved only</option></select></label>
           <label className="form-field"><span>Outcome</span><select name="outcome" defaultValue={searchParams.get("outcome") ?? ""}><option value="">All</option><option value="win">win</option><option value="loss">loss</option><option value="expired">expired</option></select></label>
-          <label className="form-field"><span>Stats window</span><select name="window" defaultValue={searchParams.get("window") ?? "all"}><option value="all">all</option><option value="day">day</option><option value="week">week</option><option value="month">month</option><option value="year">year</option></select></label>
           <label className="form-field"><span>Limit</span><select name="limit" defaultValue={searchParams.get("limit") ?? "100"}><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option></select></label>
           <div className="form-actions">
             <button className="icon-button icon-button-primary" type="submit" title="Apply filters" aria-label="Apply filters">
