@@ -1173,6 +1173,28 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     notes="Stopped out.",
                 )
             )
+            expired_plan = RecommendationPlanRepository(session).create_plan(
+                RecommendationPlan(
+                    ticker="NVDA",
+                    horizon="1w",
+                    action="long",
+                    confidence_percent=58.0,
+                    thesis_summary="Timing window passed without confirmation.",
+                    signal_breakdown={"setup_family": "breakout"},
+                )
+            )
+            RecommendationOutcomeRepository(session).upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=expired_plan.id or 0,
+                    ticker="NVDA",
+                    action="long",
+                    outcome="expired",
+                    status="resolved",
+                    confidence_bucket="50_to_64",
+                    setup_family="breakout",
+                    notes="Horizon elapsed.",
+                )
+            )
         finally:
             session.close()
         transport = httpx.ASGITransport(app=app)
@@ -1182,6 +1204,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             outcomes = await client.get("/api/recommendation-outcomes", params={"ticker": "AAPL"})
             summary = await client.get("/api/recommendation-outcomes/summary")
             stats = await client.get("/api/recommendation-plans/stats")
+            expired_stats = await client.get("/api/recommendation-plans/stats", params={"outcome": "expired"})
             family_filtered_summary = await client.get("/api/recommendation-outcomes/summary", params={"setup_family": "continuation"})
             setup_family_review = await client.get("/api/recommendation-outcomes/setup-family-review")
             evidence_concentration = await client.get("/api/recommendation-outcomes/evidence-concentration")
@@ -1189,21 +1212,28 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             filtered_plans = await client.get("/api/recommendation-plans", params={"setup_family": "continuation"})
             resolved_plans = await client.get("/api/recommendation-plans", params={"resolved": "resolved"})
             unresolved_plans = await client.get("/api/recommendation-plans", params={"resolved": "unresolved"})
+            expired_plans = await client.get("/api/recommendation-plans", params={"outcome": "expired"})
             resolved_summary = await client.get("/api/recommendation-outcomes/summary", params={"resolved": "resolved"})
+            expired_summary = await client.get("/api/recommendation-outcomes/summary", params={"outcome": "expired"})
             queued = await client.post("/api/recommendation-plans/evaluate", data={})
             scoped = await client.post(f"/api/recommendation-plans/{plan_id}/evaluate", data={})
 
         self.assertEqual(outcomes.status_code, 200)
         self.assertEqual(outcomes.json()[0]["outcome"], "win")
         self.assertEqual(summary.status_code, 200)
-        self.assertEqual(summary.json()["total_outcomes"], 2)
+        self.assertEqual(summary.json()["total_outcomes"], 3)
         self.assertEqual(summary.json()["resolved_outcomes"], 2)
         self.assertEqual(summary.json()["overall_win_rate_percent"], 50.0)
         self.assertEqual(stats.status_code, 200)
-        self.assertEqual(stats.json()["total_plans"], 2)
-        self.assertEqual(stats.json()["resolved_outcomes"], 2)
+        self.assertEqual(stats.json()["total_plans"], 3)
+        self.assertEqual(stats.json()["open_plans"], 0)
+        self.assertEqual(stats.json()["expired_plans"], 1)
+        self.assertEqual(stats.json()["win_rate_percent"], 50.0)
         self.assertEqual(stats.json()["win_outcomes"], 1)
         self.assertEqual(stats.json()["loss_outcomes"], 1)
+        self.assertEqual(expired_stats.json()["total_plans"], 1)
+        self.assertEqual(expired_stats.json()["expired_plans"], 1)
+        self.assertIsNone(expired_stats.json()["win_rate_percent"])
         self.assertEqual(family_filtered_summary.status_code, 200)
         self.assertEqual(family_filtered_summary.json()["total_outcomes"], 1)
         self.assertEqual(family_filtered_summary.json()["overall_win_rate_percent"], 100.0)
@@ -1240,14 +1270,20 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(filtered_plans.json()["items"]), 1)
         self.assertEqual(filtered_plans.json()["items"][0]["ticker"], "AAPL")
         self.assertEqual(resolved_plans.status_code, 200)
-        self.assertEqual(len(resolved_plans.json()["items"]), 2)
+        self.assertEqual(len(resolved_plans.json()["items"]), 3)
         self.assertEqual(unresolved_plans.status_code, 200)
         self.assertEqual(len(unresolved_plans.json()["items"]), 0)
+        self.assertEqual(expired_plans.status_code, 200)
+        self.assertEqual(len(expired_plans.json()["items"]), 1)
+        self.assertEqual(expired_plans.json()["items"][0]["ticker"], "NVDA")
         self.assertEqual(resolved_summary.status_code, 200)
-        self.assertEqual(resolved_summary.json()["total_outcomes"], 2)
+        self.assertEqual(resolved_summary.json()["total_outcomes"], 3)
         self.assertEqual(resolved_summary.json()["resolved_outcomes"], 2)
+        self.assertEqual(expired_summary.status_code, 200)
+        self.assertEqual(expired_summary.json()["total_outcomes"], 1)
+        self.assertEqual(expired_summary.json()["resolved_outcomes"], 0)
         self.assertEqual(baselines.status_code, 200)
-        self.assertEqual(baselines.json()["total_trade_plans_reviewed"], 2)
+        self.assertEqual(baselines.json()["total_trade_plans_reviewed"], 3)
         baseline_map = {item["key"]: item for item in baselines.json()["comparisons"]}
         self.assertEqual(baseline_map["actual_actionable"]["resolved_trade_count"], 2)
         self.assertEqual(baseline_map["actual_actionable"]["win_rate_percent"], 50.0)

@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import RecommendationBaselineSummary, RecommendationPlan, RecommendationPlanStats, Run
 from trade_proposer_app.repositories.jobs import JobRepository
-from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
@@ -16,11 +15,36 @@ router = APIRouter(prefix="/recommendation-plans", tags=["recommendation-plans"]
 
 
 @router.get("/stats")
-async def recommendation_plan_stats(session: Session = Depends(get_db_session)) -> RecommendationPlanStats:
-    plans = RecommendationPlanRepository(session)
-    outcomes = RecommendationOutcomeRepository(session)
-    counts = outcomes.count_outcomes()
-    return RecommendationPlanStats(total_plans=plans.count_plans(), **counts)
+async def recommendation_plan_stats(
+    ticker: str | None = Query(default=None),
+    action: str | None = Query(default=None),
+    setup_family: str | None = Query(default=None),
+    run_id: int | None = Query(default=None),
+    plan_id: int | None = Query(default=None),
+    resolved: str | None = Query(default=None),
+    outcome: str | None = Query(default=None),
+    window: str = Query(default="all"),
+    session: Session = Depends(get_db_session),
+) -> RecommendationPlanStats:
+    normalized_resolved = resolved.strip().lower() if resolved else None
+    if normalized_resolved not in {None, "resolved", "unresolved"}:
+        raise HTTPException(status_code=400, detail="resolved must be one of: resolved, unresolved")
+    normalized_outcome = outcome.strip().lower() if outcome else None
+    if normalized_outcome not in {None, "win", "loss", "expired"}:
+        raise HTTPException(status_code=400, detail="outcome must be one of: win, loss, expired")
+    normalized_window = (window or "all").strip().lower() or "all"
+    if normalized_window not in {"all", "day", "week", "month", "year"}:
+        raise HTTPException(status_code=400, detail="window must be one of: all, day, week, month, year")
+    return RecommendationPlanRepository(session).summarize_stats(
+        ticker=ticker.strip().upper() if ticker else None,
+        action=action.strip().lower() if action else None,
+        setup_family=setup_family.strip().lower() if setup_family else None,
+        run_id=run_id,
+        plan_id=plan_id,
+        resolved=normalized_resolved,
+        outcome=normalized_outcome,
+        window=normalized_window,
+    )
 
 
 @router.get("")
@@ -33,6 +57,7 @@ async def list_recommendation_plans(
     run_id: int | None = Query(default=None),
     plan_id: int | None = Query(default=None),
     resolved: str | None = Query(default=None),
+    outcome: str | None = Query(default=None),
     session: Session = Depends(get_db_session),
 ) -> dict[str, object]:
     normalized_ticker = ticker.strip().upper() if ticker else None
@@ -41,6 +66,9 @@ async def list_recommendation_plans(
     normalized_resolved = resolved.strip().lower() if resolved else None
     if normalized_resolved not in {None, "resolved", "unresolved"}:
         raise HTTPException(status_code=400, detail="resolved must be one of: resolved, unresolved")
+    normalized_outcome = outcome.strip().lower() if outcome else None
+    if normalized_outcome not in {None, "win", "loss", "expired"}:
+        raise HTTPException(status_code=400, detail="outcome must be one of: win, loss, expired")
     repository = RecommendationPlanRepository(session)
     items = repository.list_plans(
         ticker=normalized_ticker,
@@ -51,6 +79,7 @@ async def list_recommendation_plans(
         run_id=run_id,
         plan_id=plan_id,
         resolved=normalized_resolved,
+        outcome=normalized_outcome,
     )
     total = repository.count_plans(
         ticker=normalized_ticker,
@@ -59,6 +88,7 @@ async def list_recommendation_plans(
         run_id=run_id,
         plan_id=plan_id,
         resolved=normalized_resolved,
+        outcome=normalized_outcome,
     )
     return {"items": items, "total": total, "limit": limit, "offset": offset}
 
@@ -70,16 +100,21 @@ async def summarize_recommendation_plan_baselines(
     setup_family: str | None = Query(default=None),
     limit: int = Query(default=500, ge=1, le=2000),
     resolved: str | None = Query(default=None),
+    outcome: str | None = Query(default=None),
     session: Session = Depends(get_db_session),
 ) -> RecommendationBaselineSummary:
     normalized_resolved = resolved.strip().lower() if resolved else None
     if normalized_resolved not in {None, "resolved", "unresolved"}:
         raise HTTPException(status_code=400, detail="resolved must be one of: resolved, unresolved")
+    normalized_outcome = outcome.strip().lower() if outcome else None
+    if normalized_outcome not in {None, "win", "loss", "expired"}:
+        raise HTTPException(status_code=400, detail="outcome must be one of: win, loss, expired")
     return RecommendationPlanBaselineService(RecommendationPlanRepository(session)).summarize(
         ticker=ticker.strip().upper() if ticker else None,
         run_id=run_id,
         setup_family=setup_family.strip().lower() if setup_family else None,
         resolved=normalized_resolved,
+        outcome=normalized_outcome,
         limit=limit,
     )
 

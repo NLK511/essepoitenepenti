@@ -1,10 +1,13 @@
 # Signal gating tuning plan
 
-**Status:** development implementation plan
+**Status:** historical planning note
 
-This document describes a first-pass tuning loop for recommendation signal gating.
+This file is retained as implementation history.
 
-The goal is to let the app tune its live gating thresholds during development by using stored decision samples and outcomes to search a small parameter space, score candidate configurations, and write the best one back into the active signal gating settings.
+For the current shipped behavior, use:
+- `signal-gating-tuning-guide.md`
+
+The content below reflects the earlier development plan that led to the shipped signal-gating workflow.
 
 ## Current implementation snapshot
 

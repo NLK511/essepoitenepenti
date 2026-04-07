@@ -9,7 +9,7 @@ It is a current-state reference, not a roadmap.
 
 Trade Proposer App is a short-horizon analysis and trade-planning tool. It helps operators:
 - define watchlists
-- run proposal, evaluation, optimization, and context-refresh jobs
+- run proposal, evaluation, tuning, and context-refresh jobs
 - inspect signals, plans, outcomes, and degraded states
 - review shared context and supporting diagnostics
 - adjust settings and providers inside the app
@@ -28,7 +28,7 @@ It is not yet a proven short-horizon prediction engine.
 ### Recommendations and review
 - Persist proposal outputs as `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`.
 - Review signals, plans, and outcomes through the main review pages.
-- Evaluate recommendation plans through the app-native price-history path.
+- Evaluate recommendation plans through the app-native price-history path, including terminal `expired` handling once a plan passes its intended horizon without a win/loss resolution.
 - Use decision samples to review near-misses, shortlist behavior, and triage priority.
 - Use ticker drill-down pages to inspect plan history and latest outcomes for a single name.
 

@@ -64,16 +64,17 @@ Steps:
 
 ## 5. Running the self-improvement loop
 
-**Persona:** operator who wants evaluation and optimization to run on a cadence.
+**Persona:** operator who wants evaluation and tuning to run on a cadence.
 
 Steps:
 1. enable or schedule evaluation workflows
 2. let the app evaluate older plans through the run system
-3. enable or schedule optimization workflows
-4. let the app update `weights.json` using resolved outcomes and store backups
-5. review run outputs, failures, and resulting weight changes
+3. review recommendation plans and decision samples
+4. use signal-gating tuning when upstream recall looks too strict or too loose
+5. use plan-generation tuning when downstream plan precision, entry framing, or trade-level construction needs improvement
+6. promote updated configs manually after review, or rely on guarded automation only when that workflow is fully enabled
 
-**Success outcome:** the improvement loop runs inside the product with auditable records.
+**Success outcome:** the improvement loop runs inside the product with auditable records and without relying on the retired weight-optimization workflow.
 
 ## 6. Managing shared context
 

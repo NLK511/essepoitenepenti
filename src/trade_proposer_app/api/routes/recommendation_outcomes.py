@@ -45,6 +45,7 @@ async def summarize_recommendation_outcomes(
     run_id: int | None = Query(default=None),
     setup_family: str | None = Query(default=None),
     resolved: str | None = Query(default=None),
+    outcome: str | None = Query(default=None),
     limit: int = Query(default=500, ge=1, le=2000),
     session: Session = Depends(get_db_session),
 ) -> RecommendationCalibrationSummary:
@@ -54,6 +55,7 @@ async def summarize_recommendation_outcomes(
         run_id=run_id,
         setup_family=setup_family.strip().lower() if setup_family else None,
         resolved=normalized_resolved,
+        outcome=outcome.strip().lower() if outcome else None,
         limit=limit,
     )
 
@@ -64,6 +66,7 @@ async def summarize_setup_family_review(
     run_id: int | None = Query(default=None),
     setup_family: str | None = Query(default=None),
     resolved: str | None = Query(default=None),
+    outcome: str | None = Query(default=None),
     limit: int = Query(default=500, ge=1, le=2000),
     session: Session = Depends(get_db_session),
 ) -> RecommendationSetupFamilyReviewSummary:
@@ -73,6 +76,7 @@ async def summarize_setup_family_review(
         run_id=run_id,
         setup_family=setup_family.strip().lower() if setup_family else None,
         resolved=normalized_resolved,
+        outcome=outcome.strip().lower() if outcome else None,
         limit=limit,
     )
 
@@ -83,6 +87,7 @@ async def summarize_evidence_concentration(
     run_id: int | None = Query(default=None),
     setup_family: str | None = Query(default=None),
     resolved: str | None = Query(default=None),
+    outcome: str | None = Query(default=None),
     limit: int = Query(default=500, ge=1, le=2000),
     session: Session = Depends(get_db_session),
 ) -> RecommendationEvidenceConcentrationSummary:
@@ -92,5 +97,6 @@ async def summarize_evidence_concentration(
         run_id=run_id,
         setup_family=setup_family.strip().lower() if setup_family else None,
         resolved=normalized_resolved,
+        outcome=outcome.strip().lower() if outcome else None,
         limit=limit,
     )

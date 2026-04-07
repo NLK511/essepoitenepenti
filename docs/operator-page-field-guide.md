@@ -31,6 +31,10 @@ The UI is easiest to understand in four groups:
    - Snapshot detail
 4. **Research**
    - Decision samples
+   - Signal gating
+   - Signal gating job
+   - Plan generation tuning
+   - Backtesting (planned UI)
 
 A simple mental model:
 - **Dashboard** = what to check next
@@ -152,6 +156,9 @@ Common filters:
 - action
 - run id
 - setup family
+- resolved / unresolved
+- specific outcome such as `win`, `loss`, or `expired`
+- stats window such as day, week, month, or year
 
 Main review tabs:
 - **Overview**
@@ -171,12 +178,18 @@ Most important fields:
 - **Raw confidence / Calibrated confidence / Threshold**
 - **Context bias / Alignment / Expected transmission window**
 - **Latest outcome**
+- **Open plans / expired plans / win rate** stats for the current filter set
 
 Suggested review order:
 1. overview
 2. calibration
 3. baselines/evidence
 4. individual plans
+
+Important interpretation note:
+- `expired` means the plan passed its intended horizon without a terminal win/loss outcome
+- default win-rate surfaces exclude `expired` and other non-win/loss outcomes from the denominator
+- resolved/unresolved filters are broader lifecycle filters than the more granular outcome filter
 
 ## 5. Ticker signals
 

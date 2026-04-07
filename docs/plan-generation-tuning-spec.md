@@ -8,6 +8,42 @@ Use it as the binding reference when implementing services, schema, jobs, APIs, 
 
 If implementation conflicts with this document, this document wins unless it is explicitly amended.
 
+## Read this spec in two layers
+
+This document serves two purposes at once:
+
+1. **current shipped phase-1 behavior**
+2. **authoritative target behavior** for the fuller autonomous tuning system
+
+When reading this spec, interpret it as follows:
+- sections that describe current UI pages, routes, persistence, and bounded candidate ranking reflect shipped behavior
+- sections that define stricter autonomous guardrails, promotion policy, and broader governance remain the required target unless and until implementation catches up
+
+## Current shipped phase-1 snapshot
+
+The app currently ships a **phase-1 bounded implementation** of plan-generation tuning.
+
+What is live now:
+- dedicated plan-generation tuning routes, persistence, runs, candidates, and config versions
+- a real research page for inspecting runs, candidates, and config promotion
+- settings for active config selection and stored automation readiness flags
+- bounded parameter-schema-driven candidate generation
+- deterministic candidate ranking centered on win rate, then win count, then expected value
+- guarded manual run/apply behavior in the backend
+- live consumption of the active config during plan construction
+
+What is not yet fully implemented to the target standard in this spec:
+- the full autonomous daily evolution workflow
+- the full stricter promotion guardrail set described later in this document
+- all target diversity, concentration, and stability protections
+- complete enforcement of the eventual autonomous promotion thresholds as the sole runtime policy
+
+### Interpretation of auto settings in the current build
+
+`auto_enabled` and `auto_promote_enabled` should currently be read as **stored readiness/configuration flags**.
+
+They express intended future autonomous behavior, but they should not be read as proof that the complete autonomous scheduler/promotion policy described later in this spec is already fully active.
+
 ## Purpose
 
 The goal of plan-generation tuning is to improve the quality of **actionable recommendation plans** after signals have already passed upstream gating.

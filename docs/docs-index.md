@@ -48,7 +48,8 @@ These are useful, but they are not the main current-state entry point.
 - `ontology-enrichment-plan.md` — active ontology/taxonomy work
 - `historical-replay-backtesting-plan.md` — target shape for historical replay
 - `historical-replay-implementation-checklist.md` — codebase-specific replay checklist
-- `signal-gating-tuning-plan.md` — development tuning workflow for signal gating
+- `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow
+- `signal-gating-tuning-plan.md` — historical development plan for signal gating tuning
 - `plan-generation-tuning-spec.md` — authoritative implementation spec for autonomous plan-generation tuning
 - `plan-generation-tuning-implementation-plan.md` — concrete codebase implementation plan and replacement strategy
 - `ui-decluttering-plan.md` — active UI cleanup plan

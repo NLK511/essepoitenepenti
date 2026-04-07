@@ -582,8 +582,14 @@ class RecommendationCalibrationBucket(DictLikeModel):
 
 class RecommendationPlanStats(BaseModel):
     total_plans: int = 0
+    open_plans: int = 0
+    expired_plans: int = 0
+    scored_outcomes: int = 0
+    win_rate_percent: float | None = None
+    window: str = "all"
     resolved_outcomes: int = 0
     open_outcomes: int = 0
+    expired_outcomes: int = 0
     win_outcomes: int = 0
     loss_outcomes: int = 0
     no_action_outcomes: int = 0

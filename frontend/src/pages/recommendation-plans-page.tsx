@@ -273,6 +273,8 @@ export function RecommendationPlansPage() {
         const setupFamily = searchParams.get("setup_family");
         const planId = searchParams.get("plan_id");
         const resolved = searchParams.get("resolved");
+        const outcome = searchParams.get("outcome");
+        const window = searchParams.get("window") ?? "all";
         if (runId) {
           summaryParams.set("run_id", runId);
         }
@@ -288,10 +290,15 @@ export function RecommendationPlansPage() {
         if (resolved) {
           summaryParams.set("resolved", resolved);
         }
+        if (outcome) {
+          summaryParams.set("outcome", outcome);
+        }
+        const statsParams = new URLSearchParams(summaryParams);
+        statsParams.set("window", window);
         const summaryQuery = summaryParams.toString();
         const [planResults, stats] = await Promise.all([
           getJson<RecommendationPlanListResponse>(buildQuery(searchParams)),
-          getJson<RecommendationPlanStats>("/api/recommendation-plans/stats"),
+          getJson<RecommendationPlanStats>(`/api/recommendation-plans/stats?${statsParams.toString()}`),
         ]);
         setPlansResponse(planResults);
         setPlanStats(stats);
@@ -423,9 +430,10 @@ export function RecommendationPlansPage() {
       {error ? <ErrorState message={error} /> : null}
       {evaluationMessage ? <Card><div className="helper-text">{evaluationMessage}</div></Card> : null}
       <section className="metrics-grid top-gap">
-        <StatCard label="Total plans" value={planStats?.total_plans ?? "—"} helper={`Showing ${plans?.length ?? 0} of ${planTotal} filtered plans`} />
-        <StatCard label="Resolved outcomes" value={planStats?.resolved_outcomes ?? "—"} helper="Across all stored recommendation plans" />
-        <StatCard label="Overall win rate" value={planStats && planStats.resolved_outcomes > 0 ? `${Math.round((planStats.win_outcomes / planStats.resolved_outcomes) * 1000) / 10}%` : "—"} helper="Across all stored recommendation plans" />
+        <StatCard label="Total plans" value={planStats?.total_plans ?? "—"} helper={`Current stats cohort · ${planStats?.window ?? "all"}`} />
+        <StatCard label="Open plans" value={planStats?.open_plans ?? "—"} helper="Current filtered cohort" />
+        <StatCard label="Expired plans" value={planStats?.expired_plans ?? "—"} helper="Terminal expired outcomes in the current filtered cohort" />
+        <StatCard label="Win rate" value={planStats?.win_rate_percent !== null && planStats?.win_rate_percent !== undefined ? `${planStats.win_rate_percent}%` : "—"} helper={`Excludes open and expired plans · ${planStats?.window ?? "all"}`} />
         <StatCard label="Evidence concentration" value={evidenceConcentration ? (evidenceConcentration.ready_for_expansion ? "Ready" : "Focused") : "—"} helper="Whether the current cohort mix supports broader usage or tighter selectivity" />
       </section>
 
@@ -438,6 +446,8 @@ export function RecommendationPlansPage() {
           <label className="form-field"><span>Plan id</span><input name="plan_id" defaultValue={searchParams.get("plan_id") ?? ""} placeholder="812" /></label>
           <label className="form-field"><span>Setup family</span><select name="setup_family" defaultValue={searchParams.get("setup_family") ?? ""}><option value="">All</option><option value="breakout">breakout</option><option value="continuation">continuation</option><option value="mean_reversion">mean_reversion</option><option value="breakdown">breakdown</option><option value="catalyst_follow_through">catalyst_follow_through</option><option value="macro_beneficiary_loser">macro_beneficiary_loser</option></select></label>
           <label className="form-field"><span>Resolution</span><select name="resolved" defaultValue={searchParams.get("resolved") ?? ""}><option value="">All</option><option value="resolved">Resolved only</option><option value="unresolved">Unresolved only</option></select></label>
+          <label className="form-field"><span>Outcome</span><select name="outcome" defaultValue={searchParams.get("outcome") ?? ""}><option value="">All</option><option value="win">win</option><option value="loss">loss</option><option value="expired">expired</option></select></label>
+          <label className="form-field"><span>Stats window</span><select name="window" defaultValue={searchParams.get("window") ?? "all"}><option value="all">all</option><option value="day">day</option><option value="week">week</option><option value="month">month</option><option value="year">year</option></select></label>
           <label className="form-field"><span>Limit</span><select name="limit" defaultValue={searchParams.get("limit") ?? "100"}><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option></select></label>
           <div className="form-actions">
             <button className="icon-button icon-button-primary" type="submit" title="Apply filters" aria-label="Apply filters">
@@ -475,12 +485,12 @@ export function RecommendationPlansPage() {
                 <div>
                   <h3 className="data-card-title"><HelpLabel label="Calibration posture" tooltip="Shows whether stored outcomes are sufficient to trust current confidence and threshold behavior." to={glossaryDoc("calibration")} /></h3>
                 </div>
-                <Badge tone={planStats && planStats.resolved_outcomes >= 10 ? "ok" : "warning"}>{planStats?.resolved_outcomes ?? 0} resolved</Badge>
+                <Badge tone={planStats && planStats.scored_outcomes >= 10 ? "ok" : "warning"}>{planStats?.scored_outcomes ?? 0} win/loss scored</Badge>
               </div>
               <div className="data-points">
                 <div className="data-point"><span className="data-point-label">overall win rate</span><span className="data-point-value">{calibration?.overall_win_rate_percent ?? "—"}%</span></div>
                 <div className="data-point"><span className="data-point-label">wins / losses</span><span className="data-point-value">{calibration ? `${calibration.win_outcomes} / ${calibration.loss_outcomes}` : "—"}</span></div>
-                <div className="data-point"><span className="data-point-label">no_action outcomes</span><span className="data-point-value">{calibration?.no_action_outcomes ?? "—"}</span></div>
+                <div className="data-point"><span className="data-point-label">expired / open</span><span className="data-point-value">{planStats ? `${planStats.expired_plans} / ${planStats.open_plans}` : "—"}</span></div>
               </div>
             </div>
             <div className="data-card">
@@ -518,14 +528,14 @@ export function RecommendationPlansPage() {
       <Card className="top-gap">
         <SectionTitle
           title="Calibration snapshot"
-          subtitle={calibration ? `Resolved ${calibration.resolved_outcomes} of ${calibration.total_outcomes} stored outcome(s)` : undefined}
+          subtitle={calibration ? `Win/loss scored ${calibration.resolved_outcomes} of ${calibration.total_outcomes} stored outcome(s)` : undefined}
           actions={<HelpHint tooltip="Review how confidence buckets and slices have actually behaved after outcomes resolved." to={recommendationPlansDoc("calibration-fields")} />}
         />
         {!calibration && !error ? <LoadingState message="Loading calibration summary…" /> : null}
         {calibration ? (
           <>
             <div className="stats-grid top-gap-small">
-              <Card><strong>{calibration.overall_win_rate_percent ?? "—"}%</strong><div className="helper-text">overall resolved win rate</div></Card>
+              <Card><strong>{calibration.overall_win_rate_percent ?? "—"}%</strong><div className="helper-text">overall win/loss win rate</div></Card>
               <Card><strong>{calibration.win_outcomes}</strong><div className="helper-text">wins</div></Card>
               <Card><strong>{calibration.loss_outcomes}</strong><div className="helper-text">losses</div></Card>
               <Card><strong>{calibration.no_action_outcomes}</strong><div className="helper-text">no_action outcomes</div></Card>
@@ -624,14 +634,14 @@ export function RecommendationPlansPage() {
       <Card className="top-gap">
         <SectionTitle
           title="Evidence concentration"
-          subtitle={evidenceConcentration ? `Resolved ${evidenceConcentration.resolved_outcomes_reviewed} of ${evidenceConcentration.total_outcomes_reviewed} reviewed outcomes` : undefined}
+          subtitle={evidenceConcentration ? `Win/loss scored ${evidenceConcentration.resolved_outcomes_reviewed} of ${evidenceConcentration.total_outcomes_reviewed} reviewed outcomes` : undefined}
           actions={<HelpHint tooltip="Shows where measured results are concentrated so operators can see which cohorts deserve the most trust." to={glossaryDoc("evidence-concentration")} />}
         />
         {!evidenceConcentration && !error ? <LoadingState message="Loading evidence concentration…" /> : null}
         {evidenceConcentration ? (
           <>
             <div className="stats-grid top-gap-small">
-              <Card><strong>{evidenceConcentration.overall_win_rate_percent ?? "—"}%</strong><div className="helper-text">overall resolved win rate</div></Card>
+              <Card><strong>{evidenceConcentration.overall_win_rate_percent ?? "—"}%</strong><div className="helper-text">overall win/loss win rate</div></Card>
               <Card><strong>{evidenceConcentration.overall_average_return_5d ?? "—"}%</strong><div className="helper-text">overall avg 5d return</div></Card>
               <Card><strong>{evidenceConcentration.ready_for_expansion ? "yes" : "not yet"}</strong><div className="helper-text">ready for broader concentration</div></Card>
             </div>
@@ -709,10 +719,10 @@ export function RecommendationPlansPage() {
               <Card key={family.family} className="top-gap-small">
                 <SectionTitle
                   title={family.label}
-                  subtitle={`resolved ${family.resolved_outcomes} · open ${family.open_outcomes} · wins ${family.win_outcomes} · losses ${family.loss_outcomes}`}
+                  subtitle={`win/loss scored ${family.resolved_outcomes} · open ${family.open_outcomes} · wins ${family.win_outcomes} · losses ${family.loss_outcomes}`}
                 />
                 <div className="stats-grid top-gap-small">
-                  <Card><strong>{family.overall_win_rate_percent ?? "—"}%</strong><div className="helper-text">resolved win rate</div></Card>
+                  <Card><strong>{family.overall_win_rate_percent ?? "—"}%</strong><div className="helper-text">win/loss win rate</div></Card>
                   <Card><strong>{family.average_return_5d ?? "—"}%</strong><div className="helper-text">avg 5d return</div></Card>
                   <Card><strong>{family.average_mfe ?? "—"}%</strong><div className="helper-text">avg MFE</div></Card>
                   <Card><strong>{family.average_mae ?? "—"}%</strong><div className="helper-text">avg MAE</div></Card>

@@ -186,7 +186,10 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
         )
 
         with patch.object(RecommendationPlanEvaluationService, "_download_price_history", return_value=recomputed_price_history):
-            result = RecommendationPlanEvaluationService(self.session).run_evaluation(recommendation_plan_ids=[plan.id or 0])
+            result = RecommendationPlanEvaluationService(self.session).run_evaluation(
+                recommendation_plan_ids=[plan.id or 0],
+                as_of=datetime(2026, 3, 31, 21, 0, tzinfo=timezone.utc),
+            )
 
         self.assertEqual(result.evaluated_recommendation_plans, 1)
         stored = self.outcomes.list_outcomes(ticker="EOG", limit=10)
@@ -382,7 +385,9 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
         price_history.columns = pd.MultiIndex.from_tuples(price_history.columns, names=["Price", "Ticker"])
 
         with patch("trade_proposer_app.services.recommendation_plan_evaluations.yf.download", return_value=price_history):
-            result = RecommendationPlanEvaluationService(self.session).run_evaluation()
+            result = RecommendationPlanEvaluationService(self.session).run_evaluation(
+                as_of=datetime(2026, 3, 31, 21, 0, tzinfo=timezone.utc)
+            )
 
         self.assertEqual(result.evaluated_recommendation_plans, 1)
         self.assertEqual(result.pending_recommendation_plan_outcomes, 1)

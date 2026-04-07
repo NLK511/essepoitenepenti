@@ -549,8 +549,14 @@ export interface RecommendationCalibrationBucket {
 
 export interface RecommendationPlanStats {
   total_plans: number;
+  open_plans: number;
+  expired_plans: number;
+  scored_outcomes: number;
+  win_rate_percent: number | null;
+  window: string;
   resolved_outcomes: number;
   open_outcomes: number;
+  expired_outcomes: number;
   win_outcomes: number;
   loss_outcomes: number;
   no_action_outcomes: number;

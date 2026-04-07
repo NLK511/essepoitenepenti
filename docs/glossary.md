@@ -18,6 +18,11 @@ Short for `RecommendationPlan`, the app’s main trade-planning object.
 ### Outcome
 Short for `RecommendationPlanOutcome`, the measured result recorded later.
 
+### Expired plan
+A plan whose intended horizon elapsed without a terminal win/loss resolution.
+
+`expired` is terminal and operator-visible, but it is neutral for win-rate scoring by default.
+
 ### Canonical review path
 The main operator review chain:
 - `TickerSignalSnapshot`
@@ -194,8 +199,16 @@ Intermediate derived scores such as trend, momentum, or volatility summaries.
 ### Weights
 The numeric influence values used by the scoring pipeline.
 
+### Signal gating tuning
+The research workflow that adjusts upstream shortlist selection and threshold behavior to improve recall.
+
 ### Plan generation tuning
-The workflow that ranks backtested candidate plan-generation configs and can promote guarded winners for live entry, stop-loss, and take-profit construction.
+The research workflow that ranks backtested candidate plan-generation configs and can promote guarded winners for live entry, stop-loss, and take-profit construction.
+
+### Scored outcomes
+The subset of outcomes used in default win-rate calculations.
+
+By default this means `win` and `loss`, excluding `open`, `expired`, `no_action`, and `watchlist`.
 
 ## Evaluation and research terms
 
