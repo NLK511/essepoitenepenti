@@ -186,6 +186,7 @@ export function JobsPage() {
                   <option value="proposal_generation">Proposal generation</option>
                   <option value="recommendation_evaluation">Recommendation evaluation</option>
                   <option value="plan_generation_tuning">Plan generation tuning</option>
+                  <option value="performance_assessment">Performance assessment</option>
                   <option value="macro_sentiment_refresh">Macro context refresh</option>
                   <option value="industry_sentiment_refresh">Industry context refresh</option>
                 </select>
@@ -325,6 +326,7 @@ export function JobsPage() {
                                     <option value="proposal_generation">Proposal generation</option>
                                     <option value="recommendation_evaluation">Recommendation evaluation</option>
                                     <option value="plan_generation_tuning">Plan generation tuning</option>
+                                    <option value="performance_assessment">Performance assessment</option>
                                     <option value="macro_sentiment_refresh">Macro context refresh</option>
                                     <option value="industry_sentiment_refresh">Industry context refresh</option>
                                   </select>

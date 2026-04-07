@@ -10,6 +10,7 @@ export type JobType =
   | "proposal_generation"
   | "recommendation_evaluation"
   | "plan_generation_tuning"
+  | "performance_assessment"
   | "macro_sentiment_refresh"
   | "industry_sentiment_refresh";
 
@@ -860,6 +861,13 @@ export interface SignalGatingTuningResponse {
 export interface SignalGatingTuningRunsResponse {
   runs: SignalGatingTuningRun[];
   limit: number;
+}
+
+export interface PerformanceAssessmentResponse {
+  job: Job;
+  history_count: number;
+  latest_run: Run | null;
+  latest_assessment: Record<string, unknown>;
 }
 
 export interface SettingsResponse {

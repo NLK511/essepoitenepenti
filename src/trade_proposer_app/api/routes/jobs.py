@@ -21,6 +21,7 @@ from trade_proposer_app.services.evaluation_execution import EvaluationExecution
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.scheduling import CronSchedule, ScheduleParseError
@@ -55,7 +56,8 @@ def normalize_job_type(job_type: str | None) -> JobType:
             status_code=400,
             detail=(
                 "invalid job_type: use proposal_generation, recommendation_evaluation, "
-                "plan_generation_tuning, macro_sentiment_refresh (macro context refresh), "
+                "plan_generation_tuning, performance_assessment, "
+                "macro_sentiment_refresh (macro context refresh), "
                 "industry_sentiment_refresh (industry context refresh), or historical_replay"
             ),
         ) from exc
@@ -152,6 +154,7 @@ async def execute_job(job_id: int, session: Session = Depends(get_db_session)) -
             recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
         ),
         plan_generation_tuning=PlanGenerationTuningService(session),
+        performance_assessment=PerformanceAssessmentService(session),
         macro_support=create_macro_support_service(session),
         industry_support=create_industry_support_service(session),
         macro_context=create_macro_context_service(session),

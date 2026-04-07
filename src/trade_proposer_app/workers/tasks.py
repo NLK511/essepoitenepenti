@@ -27,6 +27,7 @@ from trade_proposer_app.services.evaluation_execution import EvaluationExecution
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 
@@ -85,6 +86,7 @@ def process_once(worker_id: str | None = None, state: WorkerRuntimeState | None 
                 recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
             ),
             plan_generation_tuning=PlanGenerationTuningService(session),
+            performance_assessment=PerformanceAssessmentService(session),
             macro_support=create_macro_support_service(session),
             industry_support=create_industry_support_service(session),
             macro_context=create_macro_context_service(session),

@@ -71,6 +71,9 @@ export function jobTypeLabel(jobType: JobType | string): string {
   if (jobType === "plan_generation_tuning") {
     return "Plan generation tuning";
   }
+  if (jobType === "performance_assessment") {
+    return "Performance assessment";
+  }
   if (jobType === "macro_sentiment_refresh") {
     return "Macro context refresh";
   }

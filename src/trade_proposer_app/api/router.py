@@ -10,6 +10,7 @@ from trade_proposer_app.api.routes.jobs import router as jobs_router
 from trade_proposer_app.api.routes.signal_gating_tuning import router as signal_gating_tuning_router
 from trade_proposer_app.api.routes.plan_generation_tuning import router as plan_generation_tuning_router
 from trade_proposer_app.api.routes.recommendation_decision_samples import router as recommendation_decision_samples_router
+from trade_proposer_app.api.routes.research import router as research_router
 from trade_proposer_app.api.routes.recommendation_outcomes import router as recommendation_outcomes_router
 from trade_proposer_app.api.routes.recommendation_plans import router as recommendation_plans_router
 from trade_proposer_app.api.routes.runs import router as runs_router
@@ -29,6 +30,7 @@ router.include_router(historical_replay_router)
 router.include_router(signal_gating_tuning_router)
 router.include_router(plan_generation_tuning_router)
 router.include_router(recommendation_decision_samples_router)
+router.include_router(research_router)
 router.include_router(recommendation_outcomes_router)
 router.include_router(recommendation_plans_router)
 router.include_router(watchlists_router)

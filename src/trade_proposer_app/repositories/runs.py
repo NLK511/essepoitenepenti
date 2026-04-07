@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import JobType, RunStatus
@@ -254,6 +254,25 @@ class RunRepository:
     def list_latest_runs(self, limit: int = 20) -> list[Run]:
         rows = self.session.scalars(select(RunRecord).order_by(RunRecord.created_at.desc()).limit(limit)).all()
         return [self._to_run_model(row) for row in rows]
+
+    def list_runs_for_job_type(
+        self,
+        job_type: JobType,
+        *,
+        limit: int = 20,
+        statuses: list[str] | None = None,
+    ) -> list[Run]:
+        query = select(RunRecord).where(RunRecord.job_type == job_type.value)
+        if statuses:
+            query = query.where(RunRecord.status.in_(statuses))
+        rows = self.session.scalars(query.order_by(RunRecord.created_at.desc()).limit(limit)).all()
+        return [self._to_run_model(row) for row in rows]
+
+    def count_runs_for_job_type(self, job_type: JobType, *, statuses: list[str] | None = None) -> int:
+        query = select(func.count()).select_from(RunRecord).where(RunRecord.job_type == job_type.value)
+        if statuses:
+            query = query.where(RunRecord.status.in_(statuses))
+        return int(self.session.scalar(query) or 0)
 
     def list_latest_runs_above_confidence_threshold(self, confidence_threshold: float, limit: int = 20) -> list[Run]:
         rows = self.session.scalars(select(RunRecord).order_by(RunRecord.created_at.desc())).all()

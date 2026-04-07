@@ -14,6 +14,7 @@ from trade_proposer_app.services.evaluation_execution import EvaluationExecution
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.industry_support import IndustrySupportRefreshService
 from trade_proposer_app.services.macro_support import MacroSupportRefreshService
+from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 
 
@@ -34,6 +35,7 @@ class JobExecutionService:
         runs: RunRepository,
         evaluations: EvaluationExecutionService | None = None,
         plan_generation_tuning: PlanGenerationTuningService | None = None,
+        performance_assessment: PerformanceAssessmentService | None = None,
         macro_support: MacroSupportRefreshService | None = None,
         industry_support: IndustrySupportRefreshService | None = None,
         macro_context=None,
@@ -46,6 +48,7 @@ class JobExecutionService:
         self.runs = runs
         self.evaluations = evaluations
         self.plan_generation_tuning = plan_generation_tuning
+        self.performance_assessment = performance_assessment
         self.macro_support = macro_support
         self.industry_support = industry_support
         self.macro_context = macro_context
@@ -104,6 +107,8 @@ class JobExecutionService:
             return self._execute_evaluation_run(run)
         if run.job_type == JobType.PLAN_GENERATION_TUNING:
             return self._execute_plan_generation_tuning_run(run)
+        if run.job_type == JobType.PERFORMANCE_ASSESSMENT:
+            return self._execute_performance_assessment_run(run)
         if run.job_type == JobType.MACRO_CONTEXT_REFRESH:
             return self._execute_macro_support_run(run)
         if run.job_type == JobType.INDUSTRY_CONTEXT_REFRESH:
@@ -340,6 +345,40 @@ class JobExecutionService:
         timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
 
         self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
+        return [], timing
+
+    def _execute_performance_assessment_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
+        if self.performance_assessment is None:
+            raise RuntimeError("performance assessment execution service is not configured")
+
+        execution_started = perf_counter()
+        timing: dict[str, object] = {
+            "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
+            "performance_assessment_seconds": 0.0,
+            "persistence_seconds": 0.0,
+            "finalize_seconds": 0.0,
+            "total_execution_seconds": 0.0,
+        }
+
+        assessment_started = perf_counter()
+        try:
+            result = self.performance_assessment.run()
+            summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+            artifact = result.get("artifact") if isinstance(result.get("artifact"), dict) else {}
+            warnings_found = bool(result.get("warnings_found"))
+            timing["performance_assessment_seconds"] = round(perf_counter() - assessment_started, 6)
+        except Exception as exc:
+            timing["performance_assessment_seconds"] = round(perf_counter() - assessment_started, 6)
+            timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
+            raise RunExecutionFailed(exc, timing) from exc
+
+        persistence_started = perf_counter()
+        self.runs.set_summary(run.id or 0, summary)
+        self.runs.set_artifact(run.id or 0, artifact)
+        timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
+
+        final_status = RunStatus.COMPLETED_WITH_WARNINGS.value if warnings_found else RunStatus.COMPLETED.value
+        self._finalize_success(run.id or 0, final_status, timing, execution_started)
         return [], timing
 
     def _execute_macro_support_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:

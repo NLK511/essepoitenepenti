@@ -14,6 +14,7 @@ class JobType(StrEnum):
     PROPOSAL_GENERATION = "proposal_generation"
     RECOMMENDATION_EVALUATION = "recommendation_evaluation"
     PLAN_GENERATION_TUNING = "plan_generation_tuning"
+    PERFORMANCE_ASSESSMENT = "performance_assessment"
     MACRO_CONTEXT_REFRESH = "macro_sentiment_refresh"
     INDUSTRY_CONTEXT_REFRESH = "industry_sentiment_refresh"
     HISTORICAL_REPLAY = "historical_replay"

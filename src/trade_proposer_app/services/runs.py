@@ -15,6 +15,7 @@ from trade_proposer_app.services.builders import (
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.scheduling import (
@@ -41,6 +42,7 @@ def enqueue_enabled_jobs(now: datetime | None = None) -> int:
                 recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
             ),
             plan_generation_tuning=PlanGenerationTuningService(session),
+            performance_assessment=PerformanceAssessmentService(session),
             watchlist_orchestration=create_watchlist_orchestration_service(session),
             recommendation_plans=RecommendationPlanRepository(session),
         )
