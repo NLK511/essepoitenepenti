@@ -18,6 +18,7 @@ from trade_proposer_app.repositories.recommendation_decision_samples import Reco
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
+from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.signal_gating_tuning import RecommendationSignalGatingTuningService
 
 
@@ -184,6 +185,161 @@ class RecommendationSignalGatingTuningServiceTests(unittest.TestCase):
         self.assertTrue(any(candidate["shortlisted_selected_count"] > 0 for candidate in run.candidate_results))
         self.assertTrue(any(candidate["near_miss_selected_count"] > 0 for candidate in run.candidate_results))
         self.assertTrue(any(candidate["degraded_selected_count"] > 0 for candidate in run.candidate_results))
+    def test_repository_filters_samples_by_shortlist_and_context_fields(self) -> None:
+        base_time = datetime(2026, 3, 5, tzinfo=timezone.utc)
+        long_plan = self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=68.0,
+                entry_price_low=100.0,
+                entry_price_high=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                signal_breakdown={"setup_family": "breakout"},
+                computed_at=base_time,
+            )
+        )
+        short_plan = self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="MSFT",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="short",
+                confidence_percent=62.0,
+                entry_price_low=100.0,
+                entry_price_high=100.0,
+                stop_loss=105.0,
+                take_profit=90.0,
+                signal_breakdown={"setup_family": "continuation"},
+                computed_at=base_time,
+            )
+        )
+        self.sample_repository.upsert_sample(
+            RecommendationDecisionSample(
+                recommendation_plan_id=long_plan.id or 0,
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK.value,
+                action="long",
+                decision_type="actionable",
+                shortlisted=True,
+                setup_family="breakout",
+                transmission_bias="tailwind",
+                context_regime="catalyst_active",
+                confidence_percent=68.0,
+                reviewed_at=base_time,
+            )
+        )
+        self.sample_repository.upsert_sample(
+            RecommendationDecisionSample(
+                recommendation_plan_id=short_plan.id or 0,
+                ticker="MSFT",
+                horizon=StrategyHorizon.ONE_WEEK.value,
+                action="short",
+                decision_type="rejected",
+                shortlisted=False,
+                setup_family="continuation",
+                transmission_bias="headwind",
+                context_regime="headwind_without_dominant_tag",
+                confidence_percent=62.0,
+                reviewed_at=base_time,
+            )
+        )
+
+        shortlisted_items = self.sample_repository.list_samples(shortlisted=True)
+        self.assertEqual(len(shortlisted_items), 1)
+        self.assertEqual(shortlisted_items[0].ticker, "AAPL")
+        tailwind_items = self.sample_repository.list_samples(transmission_bias="tailwind")
+        self.assertEqual(len(tailwind_items), 1)
+        self.assertEqual(tailwind_items[0].ticker, "AAPL")
+        headwind_items = self.sample_repository.list_samples(context_regime="headwind_without_dominant_tag")
+        self.assertEqual(len(headwind_items), 1)
+        self.assertEqual(headwind_items[0].ticker, "MSFT")
+
+    def test_recommendation_calibration_summary_includes_action_buckets(self) -> None:
+        base_time = datetime(2026, 3, 6, tzinfo=timezone.utc)
+        long_plan = self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=68.0,
+                entry_price_low=100.0,
+                entry_price_high=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                signal_breakdown={"setup_family": "breakout"},
+                computed_at=base_time,
+            )
+        )
+        no_action_plan = self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="MSFT",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="no_action",
+                confidence_percent=42.0,
+                computed_at=base_time,
+            )
+        )
+        watchlist_plan = self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="NVDA",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="watchlist",
+                confidence_percent=48.0,
+                computed_at=base_time,
+            )
+        )
+        self.outcome_repository.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=long_plan.id or 0,
+                ticker="AAPL",
+                action="long",
+                outcome="win",
+                status="resolved",
+                confidence_bucket="65_to_79",
+                setup_family="breakout",
+                horizon="1w",
+                context_regime="catalyst_active",
+                transmission_bias="tailwind",
+            )
+        )
+        self.outcome_repository.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=no_action_plan.id or 0,
+                ticker="MSFT",
+                action="no_action",
+                outcome="no_action",
+                status="resolved",
+                confidence_bucket="below_50",
+                setup_family="continuation",
+                horizon="1w",
+                context_regime="headwind_without_dominant_tag",
+                transmission_bias="headwind",
+            )
+        )
+        self.outcome_repository.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=watchlist_plan.id or 0,
+                ticker="NVDA",
+                action="watchlist",
+                outcome="watchlist",
+                status="resolved",
+                confidence_bucket="50_to_64",
+                setup_family="continuation",
+                horizon="1w",
+                context_regime="mixed_context",
+                transmission_bias="unknown",
+            )
+        )
+
+        summary = RecommendationPlanCalibrationService(self.outcome_repository).summarize(limit=20)
+        self.assertEqual(summary.total_outcomes, 3)
+        self.assertEqual(summary.by_action[0].key, "long")
+        self.assertEqual(summary.by_action[0].win_rate_percent, 100.0)
+        action_keys = {bucket.key for bucket in summary.by_action}
+        self.assertIn("no_action", action_keys)
+        self.assertIn("watchlist", action_keys)
 
 
 class RecommendationSignalGatingTuningRouteTests(unittest.IsolatedAsyncioTestCase):

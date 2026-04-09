@@ -60,6 +60,12 @@ class RecommendationDecisionSampleRepository:
         run_id: int | None = None,
         decision_type: str | None = None,
         review_priority: str | None = None,
+        shortlisted: bool | None = None,
+        setup_family: str | None = None,
+        transmission_bias: str | None = None,
+        context_regime: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
     ):
         query = select(RecommendationDecisionSampleRecord)
         if ticker:
@@ -70,6 +76,18 @@ class RecommendationDecisionSampleRepository:
             query = query.where(RecommendationDecisionSampleRecord.decision_type == decision_type)
         if review_priority:
             query = query.where(RecommendationDecisionSampleRecord.review_priority == review_priority)
+        if shortlisted is not None:
+            query = query.where(RecommendationDecisionSampleRecord.shortlisted.is_(shortlisted))
+        if setup_family:
+            query = query.where(RecommendationDecisionSampleRecord.setup_family == setup_family)
+        if transmission_bias:
+            query = query.where(RecommendationDecisionSampleRecord.transmission_bias == transmission_bias)
+        if context_regime:
+            query = query.where(RecommendationDecisionSampleRecord.context_regime == context_regime)
+        if created_after is not None:
+            query = query.where(RecommendationDecisionSampleRecord.created_at >= created_after)
+        if created_before is not None:
+            query = query.where(RecommendationDecisionSampleRecord.created_at <= created_before)
         return query
 
     def count_samples(
@@ -79,12 +97,24 @@ class RecommendationDecisionSampleRepository:
         run_id: int | None = None,
         decision_type: str | None = None,
         review_priority: str | None = None,
+        shortlisted: bool | None = None,
+        setup_family: str | None = None,
+        transmission_bias: str | None = None,
+        context_regime: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
     ) -> int:
         query = self._base_query(
             ticker=ticker,
             run_id=run_id,
             decision_type=decision_type,
             review_priority=review_priority,
+            shortlisted=shortlisted,
+            setup_family=setup_family,
+            transmission_bias=transmission_bias,
+            context_regime=context_regime,
+            created_after=created_after,
+            created_before=created_before,
         )
         count_query = select(func.count()).select_from(query.subquery())
         return int(self.session.scalar(count_query) or 0)
@@ -96,6 +126,12 @@ class RecommendationDecisionSampleRepository:
         run_id: int | None = None,
         decision_type: str | None = None,
         review_priority: str | None = None,
+        shortlisted: bool | None = None,
+        setup_family: str | None = None,
+        transmission_bias: str | None = None,
+        context_regime: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[RecommendationDecisionSample]:
@@ -106,6 +142,12 @@ class RecommendationDecisionSampleRepository:
             run_id=run_id,
             decision_type=decision_type,
             review_priority=review_priority,
+            shortlisted=shortlisted,
+            setup_family=setup_family,
+            transmission_bias=transmission_bias,
+            context_regime=context_regime,
+            created_after=created_after,
+            created_before=created_before,
         )
         rows = self.session.scalars(
             query.order_by(RecommendationDecisionSampleRecord.created_at.desc()).offset(normalized_offset).limit(normalized_limit)

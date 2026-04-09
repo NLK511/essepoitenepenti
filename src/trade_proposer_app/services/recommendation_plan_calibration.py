@@ -15,6 +15,7 @@ class RecommendationPlanCalibrationService:
     MIN_RESOLVED_COUNTS: dict[str, int] = {
         "confidence_bucket": 10,
         "setup_family": 10,
+        "action": 10,
         "horizon": 12,
         "transmission_bias": 10,
         "context_regime": 10,
@@ -48,6 +49,7 @@ class RecommendationPlanCalibrationService:
             overall_win_rate_percent=self._win_rate(resolved),
             by_confidence_bucket=self._grouped_summary(outcomes, group_by="confidence_bucket"),
             by_setup_family=self._grouped_summary(outcomes, group_by="setup_family"),
+            by_action=self._grouped_summary(outcomes, group_by="action", default_key="unknown_action"),
             by_horizon=self._grouped_summary(outcomes, group_by="horizon", default_key="unknown_horizon"),
             by_transmission_bias=self._grouped_summary(outcomes, group_by="transmission_bias", default_key="unknown"),
             by_context_regime=self._grouped_summary(outcomes, group_by="context_regime", default_key="mixed_context"),

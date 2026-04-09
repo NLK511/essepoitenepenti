@@ -607,6 +607,7 @@ class RecommendationCalibrationSummary(BaseModel):
     overall_win_rate_percent: float | None = None
     by_confidence_bucket: list[RecommendationCalibrationBucket] = Field(default_factory=list)
     by_setup_family: list[RecommendationCalibrationBucket] = Field(default_factory=list)
+    by_action: list[RecommendationCalibrationBucket] = Field(default_factory=list)
     by_horizon: list[RecommendationCalibrationBucket] = Field(default_factory=list)
     by_transmission_bias: list[RecommendationCalibrationBucket] = Field(default_factory=list)
     by_context_regime: list[RecommendationCalibrationBucket] = Field(default_factory=list)

@@ -115,8 +115,11 @@ class RecommendationSignalGatingTuningService:
         ticker: str | None = None,
         run_id: int | None = None,
         setup_family: str | None = None,
+        transmission_bias: str | None = None,
+        context_regime: str | None = None,
         review_priority: str | None = None,
         decision_type: str | None = None,
+        shortlisted: bool | None = None,
         created_after: datetime | None = None,
         created_before: datetime | None = None,
         limit: int = 500,
@@ -130,9 +133,22 @@ class RecommendationSignalGatingTuningService:
             run_id=run_id,
             decision_type=decision_type,
             review_priority=review_priority,
+            shortlisted=shortlisted,
+            setup_family=setup_family,
+            transmission_bias=transmission_bias,
+            context_regime=context_regime,
+            created_after=created_after,
+            created_before=created_before,
             limit=limit,
         )
-        samples = self._filter_samples(samples, setup_family=setup_family, created_after=created_after, created_before=created_before)
+        samples = self._filter_samples(
+            samples,
+            setup_family=setup_family,
+            transmission_bias=transmission_bias,
+            context_regime=context_regime,
+            created_after=created_after,
+            created_before=created_before,
+        )
         if not samples:
             raise RecommendationSignalGatingTuningError("no decision samples available for signal gating tuning")
 
@@ -179,8 +195,11 @@ class RecommendationSignalGatingTuningService:
                 ticker=ticker,
                 run_id=run_id,
                 setup_family=setup_family,
+                transmission_bias=transmission_bias,
+                context_regime=context_regime,
                 review_priority=review_priority,
                 decision_type=decision_type,
+                shortlisted=shortlisted,
                 created_after=created_after,
                 created_before=created_before,
                 limit=limit,
@@ -280,14 +299,22 @@ class RecommendationSignalGatingTuningService:
         samples: list[RecommendationDecisionSample],
         *,
         setup_family: str | None,
+        transmission_bias: str | None,
+        context_regime: str | None,
         created_after: datetime | None,
         created_before: datetime | None,
     ) -> list[RecommendationDecisionSample]:
         filtered: list[RecommendationDecisionSample] = []
         normalized_setup_family = str(setup_family or "").strip().lower() or None
+        normalized_transmission_bias = str(transmission_bias or "").strip().lower() or None
+        normalized_context_regime = str(context_regime or "").strip().lower() or None
         for sample in samples:
             sample_time = sample.reviewed_at or sample.created_at
             if normalized_setup_family and str(sample.setup_family or "").strip().lower() != normalized_setup_family:
+                continue
+            if normalized_transmission_bias and str(sample.transmission_bias or "").strip().lower() != normalized_transmission_bias:
+                continue
+            if normalized_context_regime and str(sample.context_regime or "").strip().lower() != normalized_context_regime:
                 continue
             if created_after is not None and sample_time < created_after:
                 continue
@@ -406,8 +433,11 @@ class RecommendationSignalGatingTuningService:
         ticker: str | None,
         run_id: int | None,
         setup_family: str | None,
+        transmission_bias: str | None,
+        context_regime: str | None,
         review_priority: str | None,
         decision_type: str | None,
+        shortlisted: bool | None,
         created_after: datetime | None,
         created_before: datetime | None,
         limit: int,
@@ -417,8 +447,11 @@ class RecommendationSignalGatingTuningService:
             "ticker": ticker.upper() if ticker else None,
             "run_id": run_id,
             "setup_family": setup_family,
+            "transmission_bias": transmission_bias,
+            "context_regime": context_regime,
             "review_priority": review_priority,
             "decision_type": decision_type,
+            "shortlisted": shortlisted,
             "created_after": created_after.isoformat() if created_after else None,
             "created_before": created_before.isoformat() if created_before else None,
             "limit": limit,
