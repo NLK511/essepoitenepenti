@@ -51,6 +51,20 @@ function eventLabel(value: unknown): string {
   return typeof value === "string" && value.trim() ? value : "—";
 }
 
+function eventTone(value: unknown): "ok" | "warning" | "danger" | "neutral" {
+  const normalized = eventLabel(value).toLowerCase();
+  if (normalized === "easing" || normalized === "stabilizing" || normalized === "relief" || normalized === "growth_supportive") {
+    return "ok";
+  }
+  if (normalized === "escalating" || normalized === "fear" || normalized === "inflationary") {
+    return "danger";
+  }
+  if (normalized === "mixed" || normalized === "unknown") {
+    return "warning";
+  }
+  return "neutral";
+}
+
 function contextEventTitle(row: Record<string, unknown>, index: number, fallbackPrefix: string): string {
   if (typeof row.title === "string" && row.title.trim()) {
     return row.title.trim();
@@ -287,6 +301,11 @@ export function ContextSnapshotDetailPage() {
                         ]}
                         channels={channels}
                       />
+                      <div className="cluster top-gap-small context-event-badges">
+                        <Badge tone={eventTone(row.state_transition)}>state {eventLabel(row.state_transition)}</Badge>
+                        <Badge tone={eventTone(row.market_interpretation)}>read {eventLabel(row.market_interpretation)}</Badge>
+                        <Badge tone="neutral">catalyst {eventLabel(row.catalyst_type)}</Badge>
+                      </div>
                       {contradictionReasons.length > 0 ? <div className="helper-text top-gap-small">Contradiction reasons: {contradictionReasons.join(", ")}</div> : null}
                       {typeof row.state_change_reason === "string" && row.state_change_reason.trim() ? (
                         <div className="helper-text top-gap-small">Why now: {row.state_change_reason}</div>

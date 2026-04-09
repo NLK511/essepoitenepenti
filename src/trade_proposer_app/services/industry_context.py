@@ -91,8 +91,10 @@ class IndustryContextService:
         supporting_social_items = social_items if isinstance(social_items, list) else []
         tracked_tickers = coverage.get("tracked_tickers", []) if isinstance(coverage, dict) else []
         query_terms = diagnostics.get("queries", []) if isinstance(diagnostics, dict) else []
+        ontology_profile = self._with_profile_channel_details(self.taxonomy_service.get_industry_definition(industry_key or industry_label))
+        expanded_queries = self._expanded_query_terms(industry_label, query_terms, ontology_profile)
 
-        news_bundle, news_sentiment = self._load_news_evidence(industry_label, tracked_tickers, query_terms)
+        news_bundle, news_sentiment = self._load_news_evidence(industry_label, tracked_tickers, expanded_queries)
         primary_news_items = news_sentiment.get("news_items", []) if isinstance(news_sentiment, dict) else []
         news_items = primary_news_items if isinstance(primary_news_items, list) else []
 
@@ -118,7 +120,6 @@ class IndustryContextService:
         linked_macro_themes = event_keys(linked_macro_events)
         linked_industry_themes = self._linked_industry_themes(active_drivers)
         lifecycle_summary = summarize_event_lifecycle(active_drivers, previous_events=previous_drivers)
-        ontology_profile = self._with_profile_channel_details(self.taxonomy_service.get_industry_definition(industry_key or industry_label))
         sector_definition = self.taxonomy_service.get_sector_definition(ontology_profile.get("sector", ""))
         ontology_relationships = self.taxonomy_service.list_relationships(industry_key or industry_label, direction="outbound")
         matched_ontology_relationships = self._matched_ontology_relationships(
@@ -206,6 +207,7 @@ class IndustryContextService:
                 "primary_news_item_count": len(news_items),
                 "supporting_social_item_count": len(supporting_social_items),
                 "tracked_tickers": tracked_tickers,
+                "expanded_queries": expanded_queries,
                 "primary_news_providers": list(dict.fromkeys(news_bundle.feeds_used)) if news_bundle is not None else [],
                 "primary_news_feed_errors": feed_errors,
                 "primary_news_source_priorities": summarize_source_priorities(news_items, source_type="news"),
@@ -218,6 +220,7 @@ class IndustryContextService:
             metadata={
                 "query_diagnostics": diagnostics.get("query_diagnostics", {}) if isinstance(diagnostics, dict) else {},
                 "queries": query_terms,
+                "expanded_queries": expanded_queries,
                 "news_coverage_insights": news_sentiment.get("coverage_insights", []) if isinstance(news_sentiment, dict) else [],
                 "top_news_titles": [self._item_text(item)[:140] for item in news_items[:5]],
                 "top_social_titles": [self._item_text(item)[:140] for item in supporting_social_items[:5]],
@@ -287,14 +290,62 @@ class IndustryContextService:
         if self.news_service is None:
             return None, {}
         normalized_tickers = [str(ticker).strip().upper() for ticker in tracked_tickers if str(ticker).strip()]
-        if normalized_tickers:
-            bundle = self.news_service.fetch_many(normalized_tickers, per_symbol_limit=3)
+        queries = [str(query).strip() for query in query_terms if str(query).strip()]
+        if normalized_tickers and len(normalized_tickers) >= 2:
+            bundle = self.news_service.fetch_many(normalized_tickers[:8], per_symbol_limit=3)
         else:
-            queries = [str(query).strip() for query in query_terms if str(query).strip()]
-            bundle = self.news_service.fetch_topics(industry_label, queries or [industry_label], per_query_limit=3)
+            topical_queries = queries or [industry_label]
+            bundle = self.news_service.fetch_topics(industry_label, topical_queries[:8], per_query_limit=3)
         analyzed = self.news_service.analyze_bundle(bundle)
         sentiment = analyzed.get("sentiment", {}) if isinstance(analyzed, dict) else {}
         return bundle, sentiment if isinstance(sentiment, dict) else {}
+
+    def _expanded_query_terms(
+        self,
+        industry_label: str,
+        query_terms: list[object],
+        ontology_profile: dict[str, object],
+    ) -> list[str]:
+        candidates: list[str] = []
+
+        def add(value: object) -> None:
+            text = str(value or "").strip()
+            if not text:
+                return
+            if text not in candidates:
+                candidates.append(text)
+
+        add(industry_label)
+        for value in query_terms[:4]:
+            add(value)
+        for value in ontology_profile.get("queries", []) if isinstance(ontology_profile.get("queries"), list) else []:
+            add(value)
+        for value in ontology_profile.get("themes", []) if isinstance(ontology_profile.get("themes"), list) else []:
+            add(str(value).replace("_", " "))
+        for value in ontology_profile.get("event_vocab", []) if isinstance(ontology_profile.get("event_vocab"), list) else []:
+            add(str(value).replace("_", " "))
+        for value in ontology_profile.get("risk_flags", []) if isinstance(ontology_profile.get("risk_flags"), list) else []:
+            add(str(value).replace("_", " "))
+        sector_label = str(ontology_profile.get("sector", "") or "").replace("_", " ").strip()
+        if sector_label:
+            add(sector_label)
+        companies = [str(value).strip() for value in (ontology_profile.get("companies", []) if isinstance(ontology_profile.get("companies"), list) else []) if str(value).strip()]
+        if companies:
+            add(" OR ".join(companies[:3]))
+
+        normalized = [item for item in candidates if item]
+        queries: list[str] = []
+        if normalized:
+            queries.append(f"{industry_label} OR {' OR '.join(normalized[1:4])}" if len(normalized) > 1 else industry_label)
+        vocab = [item for item in normalized[1:] if len(item.split()) <= 4][:4]
+        if vocab:
+            queries.append(" OR ".join(vocab[:4]))
+        event_drivers = [str(definition.label) for definition in INDUSTRY_EVENT_DEFINITIONS[:8]]
+        queries.append(f"{industry_label} AND ({' OR '.join(event_drivers[:4])})")
+        risk_terms = [str(value).replace("_", " ") for value in (ontology_profile.get("risk_flags", []) if isinstance(ontology_profile.get("risk_flags"), list) else [])][:4]
+        if risk_terms:
+            queries.append(f"{industry_label} AND ({' OR '.join(risk_terms)})")
+        return list(dict.fromkeys(query for query in queries if query.strip()))[:8]
 
     def _summarize_context(
         self,

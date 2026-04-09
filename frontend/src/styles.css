@@ -217,6 +217,10 @@ html[data-theme="light"] .topbar {
   background: transparent;
 }
 
+.context-event-badges {
+  align-items: center;
+}
+
 .danger-button {
   color: var(--danger);
 }

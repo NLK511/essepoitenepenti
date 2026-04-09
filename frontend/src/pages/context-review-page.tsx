@@ -76,6 +76,20 @@ function actionLabel(scope: "macro" | "industry"): string {
   return scope === "macro" ? "Macro" : "Industry";
 }
 
+function stateTone(value: unknown): "ok" | "warning" | "danger" | "neutral" {
+  const normalized = themeString(value, "").toLowerCase();
+  if (normalized === "easing" || normalized === "stabilizing" || normalized === "relief" || normalized === "growth_supportive") {
+    return "ok";
+  }
+  if (normalized === "escalating" || normalized === "fear" || normalized === "inflationary") {
+    return "danger";
+  }
+  if (normalized === "mixed" || normalized === "unknown") {
+    return "warning";
+  }
+  return "neutral";
+}
+
 function docsLink(doc: string, section?: string): string {
   const params = new URLSearchParams({ doc });
   if (section) {
@@ -393,6 +407,12 @@ function IndustryContextList({ snapshots }: { snapshots: IndustryContextSnapshot
                   </div>
                 </div>
                 <div className="helper-text context-inline-metrics"><span className="context-inline-metric"><strong>Direction:</strong> {snapshot.direction}</span><span className="context-inline-metric"><strong>Computed:</strong> {formatDate(snapshot.computed_at)}</span></div>
+                {topDriver ? (
+                  <div className="cluster top-gap-small">
+                    <Badge tone={stateTone(topDriver.state_transition)}>state {themeString(topDriver.state_transition)}</Badge>
+                    <Badge tone={stateTone(topDriver.market_interpretation)}>read {themeString(topDriver.market_interpretation)}</Badge>
+                  </div>
+                ) : null}
                 {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
                 <WarningSummary warnings={snapshot.warnings} />
                 {summaryError(snapshot) ? <div className="helper-text top-gap-small">{summaryError(snapshot)}</div> : null}
@@ -431,6 +451,12 @@ function MacroContextList({ snapshots }: { snapshots: MacroContextSnapshot[] }) 
                     {topTheme ? <Badge tone="neutral">theme {themeString(topTheme.label)}</Badge> : null}
                   </div>
                 </div>
+                {topTheme ? (
+                  <div className="cluster top-gap-small">
+                    <Badge tone={stateTone(topTheme.state_transition)}>state {themeString(topTheme.state_transition)}</Badge>
+                    <Badge tone={stateTone(topTheme.market_interpretation)}>read {themeString(topTheme.market_interpretation)}</Badge>
+                  </div>
+                ) : null}
                 {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
                 <WarningSummary warnings={snapshot.warnings} />
                 {summaryError(snapshot) ? <div className="helper-text top-gap-small">{summaryError(snapshot)}</div> : null}
