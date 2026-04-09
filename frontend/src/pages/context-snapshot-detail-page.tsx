@@ -294,6 +294,8 @@ export function ContextSnapshotDetailPage() {
                           { label: "Catalyst", value: eventLabel(row.catalyst_type) },
                           { label: "Interpretation", value: eventLabel(row.market_interpretation) },
                           { label: "Actor", value: eventLabel(row.trigger_actor) },
+                          { label: "Actor role", value: eventLabel(row.trigger_actor_role) },
+                          { label: "Actor source", value: eventLabel(row.trigger_source_type) },
                           { label: "Source", value: sourcePriorityLabel },
                           { label: "Window", value: windowLabel },
                           { label: "Recency", value: recencyLabel },
@@ -305,6 +307,7 @@ export function ContextSnapshotDetailPage() {
                         <Badge tone={eventTone(row.state_transition)}>state {eventLabel(row.state_transition)}</Badge>
                         <Badge tone={eventTone(row.market_interpretation)}>read {eventLabel(row.market_interpretation)}</Badge>
                         <Badge tone="neutral">catalyst {eventLabel(row.catalyst_type)}</Badge>
+                        {eventLabel(row.trigger_actor) !== "—" ? <Badge tone="neutral">actor {eventLabel(row.trigger_actor)}</Badge> : null}
                       </div>
                       {contradictionReasons.length > 0 ? <div className="helper-text top-gap-small">Contradiction reasons: {contradictionReasons.join(", ")}</div> : null}
                       {typeof row.state_change_reason === "string" && row.state_change_reason.trim() ? (

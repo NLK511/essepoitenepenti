@@ -229,6 +229,7 @@ export interface ContextEventRow {
   catalyst_type?: string;
   trigger_actor?: string | null;
   trigger_actor_role?: string | null;
+  trigger_source_type?: string | null;
   market_interpretation?: string;
   state_change_reason?: string | null;
   window_hint?: string;

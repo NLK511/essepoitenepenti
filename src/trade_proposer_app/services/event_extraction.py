@@ -187,7 +187,28 @@ ACTOR_HINTS = {
     "FDA": "regulator",
     "SEC": "regulator",
     "European Commission": "regulator",
+    "NATO": "intergovernmental_body",
+    "Pentagon": "defense_establishment",
+    "State Department": "government",
+    "Commerce Department": "government",
+    "Department of Justice": "regulator",
+    "DOJ": "regulator",
+    "FTC": "regulator",
+    "CFPB": "regulator",
+    "FAA": "regulator",
+    "IRS": "government",
+    "EIA": "government",
+    "IAEA": "intergovernmental_body",
 }
+
+ACTOR_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\b(the )?(federal reserve|fomc)\b", re.IGNORECASE), "central_bank"),
+    (re.compile(r"\b(ecb|european central bank|bank of england|bank of japan)\b", re.IGNORECASE), "central_bank"),
+    (re.compile(r"\b(u\.s\. treasury|treasury|white house|state department|commerce department|department of justice|doj)\b", re.IGNORECASE), "government"),
+    (re.compile(r"\b(sec|fda|ftc|cfpb|faa|european commission|regulator)\b", re.IGNORECASE), "regulator"),
+    (re.compile(r"\b(opec|nato|iaea)\b", re.IGNORECASE), "intergovernmental_body"),
+    (re.compile(r"\b([A-Z][A-Za-z&.-]+(?:\s+[A-Z][A-Za-z&.-]+){0,2})\s+(?:said|says|warned|signaled|announced|approved|cut|raised)\b"), "named_actor"),
+)
 
 
 @dataclass(frozen=True)
@@ -258,7 +279,7 @@ def extract_ranked_events(
         contradiction_reasons = _contradiction_reasons(all_matches, previous)
         state_transition = _state_transition(all_matches, previous)
         catalyst_type = _catalyst_type(all_matches)
-        trigger_actor, trigger_actor_role = _trigger_actor(all_matches)
+        trigger_actor, trigger_actor_role, trigger_source_type = _trigger_actor(all_matches)
         market_interpretation = _market_interpretation(all_matches, evidence_direction, state_transition)
         state_change_reason = _state_change_reason(all_matches, catalyst_type, state_transition, market_interpretation)
         events.append(
@@ -294,6 +315,7 @@ def extract_ranked_events(
                 "catalyst_type": catalyst_type,
                 "trigger_actor": trigger_actor,
                 "trigger_actor_role": trigger_actor_role,
+                "trigger_source_type": trigger_source_type,
                 "market_interpretation": market_interpretation,
                 "state_change_reason": state_change_reason,
                 "persistence_state": _persistence_state(previous, event_score, len(all_matches)),
@@ -701,17 +723,49 @@ def _catalyst_type(matches: list[dict[str, object]]) -> str:
     return best[0] if best[1] > 0 else "other"
 
 
-def _trigger_actor(matches: list[dict[str, object]]) -> tuple[str | None, str | None]:
+def _trigger_actor(matches: list[dict[str, object]]) -> tuple[str | None, str | None, str | None]:
+    scored: list[tuple[float, str, str, str]] = []
     for item in matches:
         text = str(item.get("text", "") or "")
+        weight = float(item.get("event_weight", 0.0) or 0.0)
         for actor, role in ACTOR_HINTS.items():
             if actor.lower() in text.lower():
-                return actor, role
-    for item in matches:
+                scored.append((weight + 1.0, actor, role, "text_match"))
+        for pattern, role in ACTOR_PATTERNS:
+            match = pattern.search(text)
+            if not match:
+                continue
+            actor = match.group(1) if role == "named_actor" and match.groups() else match.group(0)
+            cleaned_actor = re.sub(r"^(the )", "", str(actor), flags=re.IGNORECASE).strip(" .,:;-")
+            if cleaned_actor:
+                resolved_role = _normalize_actor_role(cleaned_actor, role)
+                scored.append((weight + 0.8, cleaned_actor, resolved_role, "regex_match"))
         publisher = str(item.get("publisher", "") or "").strip()
         if publisher:
-            return publisher, "source_publisher"
-    return None, None
+            scored.append((weight + 0.25, publisher, "source_publisher", "publisher"))
+    if not scored:
+        return None, None, None
+    scored.sort(key=lambda item: item[0], reverse=True)
+    _, actor, role, source_type = scored[0]
+    return actor, role, source_type
+
+
+def _normalize_actor_role(actor: str, fallback_role: str) -> str:
+    lowered = actor.lower()
+    for known_actor, role in ACTOR_HINTS.items():
+        if known_actor.lower() == lowered:
+            return role
+    if fallback_role != "named_actor":
+        return fallback_role
+    if any(token in lowered for token in ("department", "ministry", "treasury", "government", "administration")):
+        return "government"
+    if any(token in lowered for token in ("commission", "agency", "sec", "fda", "ftc", "regulator")):
+        return "regulator"
+    if any(token in lowered for token in ("bank", "federal reserve", "ecb", "fomc")):
+        return "central_bank"
+    if any(token in lowered for token in ("opec", "nato", "iaea")):
+        return "intergovernmental_body"
+    return "named_actor"
 
 
 def _market_interpretation(matches: list[dict[str, object]], evidence_direction: str, state_transition: str) -> str:
