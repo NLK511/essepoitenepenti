@@ -182,6 +182,7 @@ class RecommendationOutcomeRepository:
         model.ticker = plan_record.ticker
         model.action = plan_record.action
         model.horizon = plan_record.horizon
+        model.confidence_percent = plan_record.confidence_percent
         transmission_summary = self._transmission_summary(plan_record)
         model.transmission_bias = self.taxonomy_service.derive_transmission_bias(transmission_summary)
         transmission_bias_definition = self.taxonomy_service.get_transmission_bias_definition(model.transmission_bias)

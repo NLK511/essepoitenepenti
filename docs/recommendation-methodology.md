@@ -226,6 +226,8 @@ It stores decision context such as:
 - compact decision, signal, and evidence snapshots
 - `review_priority` for borderline cases
 
+The research workflow now exposes richer filters for these samples, including shortlist state, setup family, transmission bias, context regime, and date ranges. The calibration report endpoint also surfaces confidence reliability bins with Brier score and expected calibration error so operators can compare predicted confidence against realized outcomes.
+
 See:
 - `decision-sample-tuning-guide.md`
 - `signal-gating-tuning-guide.md`

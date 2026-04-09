@@ -29,7 +29,8 @@ It is not yet a proven short-horizon prediction engine.
 - Persist proposal outputs as `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`.
 - Review signals, plans, and outcomes through the main review pages.
 - Evaluate recommendation plans through the app-native price-history path, including terminal `expired` handling once a plan passes its intended horizon without a win/loss resolution.
-- Use decision samples to review near-misses, shortlist behavior, and triage priority.
+- Use decision samples to review near-misses, shortlist behavior, triage priority, and richer filters such as shortlist state, setup family, transmission bias, and context regime.
+- Use the calibration report endpoint and the research-page calibration tab to inspect confidence reliability, Brier score, and expected calibration error.
 - Use ticker drill-down pages to inspect plan history and latest outcomes for a single name.
 
 ### Shared context and ontology
@@ -54,7 +55,7 @@ It is not yet a proven short-horizon prediction engine.
 
 ### Diagnostics, settings, and docs
 - Inspect structured `analysis_json` payloads in the UI.
-- Review coverage, feature vectors, weights, warnings, timing, and other diagnostics.
+- Review coverage, feature vectors, weights, warnings, timing, calibration summaries, and other diagnostics.
 - Configure summarization and providers from Settings.
 - Browse the project markdown docs in-app.
 

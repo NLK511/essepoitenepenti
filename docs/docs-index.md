@@ -35,6 +35,7 @@ These define the current product truth.
 - `recommendation-plan-resolution-spec.md` — canonical plan outcome semantics
 - `recommendation-plan-evaluation-recompute-notes.md` — evaluator edge cases and recompute notes
 - `decision-sample-tuning-guide.md` — how to review and tune decision samples
+- `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow and calibration-related review surfaces
 
 ### Architecture and data
 - `architecture.md` — runtime model and module boundaries

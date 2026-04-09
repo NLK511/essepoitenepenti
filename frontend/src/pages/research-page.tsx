@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
-import type { PerformanceAssessmentResponse } from "../types";
+import type { CalibrationReportResponse, CalibrationSummary, PerformanceAssessmentResponse } from "../types";
 import { formatDate, jobTypeLabel, runTone } from "../utils";
-import { Badge, Card, HelpHint, PageHeader, SectionTitle } from "../components/ui";
+import { Badge, Card, HelpHint, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 
 function renderAssessment(content: string) {
   const lines = content.split(/\r?\n/);
@@ -73,6 +73,8 @@ function renderAssessment(content: string) {
 
 export function ResearchPage() {
   const [assessment, setAssessment] = useState<PerformanceAssessmentResponse | null>(null);
+  const [calibration, setCalibration] = useState<CalibrationReportResponse | null>(null);
+  const [activeTab, setActiveTab] = useState<"overview" | "calibration">("overview");
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,9 +85,13 @@ export function ResearchPage() {
       setLoading(true);
       setError(null);
       try {
-        const payload = await getJson<PerformanceAssessmentResponse>("/api/research/performance-assessment");
+        const [assessmentPayload, calibrationPayload] = await Promise.all([
+          getJson<PerformanceAssessmentResponse>("/api/research/performance-assessment"),
+          getJson<CalibrationReportResponse>("/api/recommendation-outcomes/calibration-report?limit=500"),
+        ]);
         if (!cancelled) {
-          setAssessment(payload);
+          setAssessment(assessmentPayload);
+          setCalibration(calibrationPayload);
         }
       } catch (err) {
         if (!cancelled) {
@@ -108,14 +114,21 @@ export function ResearchPage() {
   const latestMethod = typeof assessment?.latest_assessment?.method === "string" ? assessment.latest_assessment.method : "—";
   const latestGeneratedAt = typeof assessment?.latest_assessment?.generated_at === "string" ? assessment.latest_assessment.generated_at : assessment?.latest_run?.completed_at ?? null;
   const latestError = typeof assessment?.latest_assessment?.llm_error === "string" ? assessment.latest_assessment.llm_error : null;
+  const calibrationSummary: CalibrationSummary | null = calibration?.calibration_summary ?? assessment?.calibration_summary ?? null;
+  const calibrationReport = calibration?.calibration_report ?? calibrationSummary?.calibration_report ?? null;
+  const calibrationBins = calibrationReport?.bins ?? [];
 
   async function handleRunAssessment() {
     setRunning(true);
     setError(null);
     try {
       await postForm("/api/research/performance-assessment/run", {});
-      const payload = await getJson<PerformanceAssessmentResponse>("/api/research/performance-assessment");
-      setAssessment(payload);
+      const [assessmentPayload, calibrationPayload] = await Promise.all([
+        getJson<PerformanceAssessmentResponse>("/api/research/performance-assessment"),
+        getJson<CalibrationReportResponse>("/api/recommendation-outcomes/calibration-report?limit=500"),
+      ]);
+      setAssessment(assessmentPayload);
+      setCalibration(calibrationPayload);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -160,58 +173,143 @@ export function ResearchPage() {
           ) : null}
         </Card>
 
-        <section className="card-grid">
-          <Card>
-            <SectionTitle
-              kicker="Available now"
-              title="Decision samples"
-              subtitle="Review near-misses, actionable cases, and the evidence that may feed future tuning and replay workflows."
+        <Card>
+          <SectionTitle
+            kicker="Research view"
+            title="Overview and calibration tabs"
+            subtitle="Switch between the operational overview and the calibration-focused view."
+          />
+          <div className="top-gap-small">
+            <SegmentedTabs
+              value={activeTab}
+              options={[
+                { value: "overview", label: "Overview" },
+                { value: "calibration", label: "Calibration" },
+              ]}
+              onChange={setActiveTab}
             />
-            <div className="helper-text">This is the shared evidence surface. It is not exclusive to signal gating, even though gating uses it today.</div>
-            <div className="cluster top-gap-small">
-              <Link to="/research/decision-samples" className="button-secondary">Open decision samples</Link>
-              <Badge tone="info">active</Badge>
-            </div>
-          </Card>
+          </div>
+        </Card>
 
-          <Card>
-            <SectionTitle
-              kicker="Available now"
-              title="Signal gating"
-              subtitle="The signal-gating subsection collects the tuning job and supporting review links so the controls stay grouped without owning the samples themselves."
-            />
-            <div className="helper-text">Use the gating subsection when you want to adjust live gating parameters or inspect tuning history.</div>
-            <div className="cluster top-gap-small">
-              <Link to="/research/signal-gating" className="button-secondary">Open signal gating</Link>
-              <Badge tone="info">active</Badge>
-            </div>
-          </Card>
+        {activeTab === "overview" ? (
+          <section className="card-grid">
+            <Card>
+              <SectionTitle
+                kicker="Available now"
+                title="Decision samples"
+                subtitle="Review near-misses, actionable cases, and the evidence that may feed future tuning and replay workflows."
+              />
+              <div className="helper-text">This is the shared evidence surface. It is not exclusive to signal gating, even though gating uses it today.</div>
+              <div className="cluster top-gap-small">
+                <Link to="/research/decision-samples" className="button-secondary">Open decision samples</Link>
+                <Badge tone="info">active</Badge>
+              </div>
+            </Card>
 
-          <Card>
-            <SectionTitle
-              kicker="Available now"
-              title="Plan generation tuning"
-              subtitle="Run candidate-based precision tuning for live entry, stop-loss, and take-profit construction with ranked backtest results."
-            />
-            <div className="helper-text">Use this page to inspect active config versions, tuning runs, guarded promotions, and the candidate ranking output.</div>
-            <div className="cluster top-gap-small">
-              <Link to="/research/plan-generation-tuning" className="button-secondary">Open plan generation tuning</Link>
-              <Badge tone="info">active</Badge>
-            </div>
-          </Card>
+            <Card>
+              <SectionTitle
+                kicker="Available now"
+                title="Signal gating"
+                subtitle="The signal-gating subsection collects the tuning job and supporting review links so the controls stay grouped without owning the samples themselves."
+              />
+              <div className="helper-text">Use the gating subsection when you want to adjust live gating parameters or inspect tuning history.</div>
+              <div className="cluster top-gap-small">
+                <Link to="/research/signal-gating" className="button-secondary">Open signal gating</Link>
+                <Badge tone="info">active</Badge>
+              </div>
+            </Card>
 
-          <Card>
-            <SectionTitle
-              kicker="Planned"
-              title="Backtesting"
-              subtitle="A future page for historical replay, comparison, and scenario analysis."
-            />
-            <div className="helper-text">This slot is reserved for replay-style experiments and historical validation workflows.</div>
-            <div className="cluster top-gap-small">
-              <Badge tone="neutral">coming soon</Badge>
-            </div>
-          </Card>
-        </section>
+            <Card>
+              <SectionTitle
+                kicker="Available now"
+                title="Plan generation tuning"
+                subtitle="Run candidate-based precision tuning for live entry, stop-loss, and take-profit construction with ranked backtest results."
+              />
+              <div className="helper-text">Use this page to inspect active config versions, tuning runs, guarded promotions, and the candidate ranking output.</div>
+              <div className="cluster top-gap-small">
+                <Link to="/research/plan-generation-tuning" className="button-secondary">Open plan generation tuning</Link>
+                <Badge tone="info">active</Badge>
+              </div>
+            </Card>
+
+            <Card>
+              <SectionTitle
+                kicker="Planned"
+                title="Backtesting"
+                subtitle="A future page for historical replay, comparison, and scenario analysis."
+              />
+              <div className="helper-text">This slot is reserved for replay-style experiments and historical validation workflows.</div>
+              <div className="cluster top-gap-small">
+                <Badge tone="neutral">coming soon</Badge>
+              </div>
+            </Card>
+          </section>
+        ) : null}
+
+        {activeTab === "calibration" ? (
+          <>
+            {calibrationSummary ? (
+              <section className="card-grid">
+                <StatCard
+                  label="Calibration method"
+                  value={calibrationReport?.method ?? "—"}
+                  helper="Confidence reliability summary for the latest assessed cohort."
+                />
+                <StatCard
+                  label="Brier score"
+                  value={calibrationReport?.brier_score !== null && calibrationReport?.brier_score !== undefined ? calibrationReport.brier_score.toFixed(4) : "—"}
+                  helper="Lower is better. This checks how close confidence is to realized outcome."
+                />
+                <StatCard
+                  label="ECE"
+                  value={calibrationReport?.expected_calibration_error !== null && calibrationReport?.expected_calibration_error !== undefined ? calibrationReport.expected_calibration_error.toFixed(4) : "—"}
+                  helper="Average calibration gap across confidence bins."
+                />
+                <StatCard
+                  label="Resolved outcomes"
+                  value={calibrationReport?.resolved_count ?? calibrationSummary.resolved_outcomes}
+                  helper="Only resolved win/loss cases contribute to the reliability curve."
+                />
+              </section>
+            ) : null}
+
+            {calibrationBins.length > 0 ? (
+              <Card>
+                <SectionTitle
+                  kicker="Reliability curve"
+                  title="Confidence calibration bins"
+                  subtitle="Predicted probability versus realized win rate by confidence band. Thin bins should be treated cautiously."
+                />
+                <div className="table-wrapper top-gap-small">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>bin</th>
+                        <th>samples</th>
+                        <th>predicted</th>
+                        <th>realized win rate</th>
+                        <th>brier</th>
+                        <th>calibration error</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {calibrationBins.map((bin) => (
+                        <tr key={bin.bin_key}>
+                          <td>{bin.bin_label}</td>
+                          <td>{bin.sample_count}</td>
+                          <td>{bin.predicted_probability !== null ? `${(bin.predicted_probability * 100).toFixed(1)}%` : "—"}</td>
+                          <td>{bin.realized_win_rate_percent !== null ? `${bin.realized_win_rate_percent.toFixed(1)}%` : "—"}</td>
+                          <td>{bin.brier_score !== null ? bin.brier_score.toFixed(4) : "—"}</td>
+                          <td>{bin.calibration_error !== null ? bin.calibration_error.toFixed(4) : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            ) : null}
+          </>
+        ) : null}
       </div>
     </>
   );

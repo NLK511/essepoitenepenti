@@ -870,11 +870,57 @@ export interface SignalGatingTuningRunsResponse {
   limit: number;
 }
 
+export interface CalibrationReliabilityBin {
+  bin_key: string;
+  bin_label: string;
+  sample_count: number;
+  resolved_count: number;
+  predicted_probability: number | null;
+  realized_win_rate_percent: number | null;
+  brier_score: number | null;
+  calibration_error: number | null;
+}
+
+export interface CalibrationReport {
+  version_label: string;
+  method: string;
+  sample_count: number;
+  resolved_count: number;
+  brier_score: number | null;
+  expected_calibration_error: number | null;
+  bins: CalibrationReliabilityBin[];
+}
+
+export interface CalibrationSummary {
+  total_outcomes: number;
+  resolved_outcomes: number;
+  open_outcomes: number;
+  win_outcomes: number;
+  loss_outcomes: number;
+  no_action_outcomes: number;
+  watchlist_outcomes: number;
+  overall_win_rate_percent: number | null;
+  calibration_report: CalibrationReport | null;
+  by_confidence_bucket: unknown[];
+  by_setup_family: unknown[];
+  by_action: unknown[];
+  by_horizon: unknown[];
+  by_transmission_bias: unknown[];
+  by_context_regime: unknown[];
+  by_horizon_setup_family: unknown[];
+}
+
 export interface PerformanceAssessmentResponse {
   job: Job;
   history_count: number;
   latest_run: Run | null;
   latest_assessment: Record<string, unknown>;
+  calibration_summary: CalibrationSummary | null;
+}
+
+export interface CalibrationReportResponse {
+  calibration_summary: CalibrationSummary;
+  calibration_report: CalibrationReport | null;
 }
 
 export interface SettingsResponse {

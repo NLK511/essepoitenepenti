@@ -22,7 +22,8 @@ This is a **development-only target plan**, not a live product capability.
 - apply / dry-run support, with apply writing the winning tuning values back into active settings
 - live proposal-generation/scoring now reads the active signal gating tuning config and uses it in shortlist thresholds and calibration thresholds
 - research-page controls for viewing, editing, and running the active signal gating tuning config
-- decision-sample page summary for the latest tuning run, including whether the winner was applied
+- richer decision-sample filters for shortlist state, setup family, transmission bias, and context regime
+- calibration-report inspection through the shared research/calibration surfaces
 - unit and route coverage for scoring, persistence, apply behavior, live-path integration, and research-page editing
 
 ### Current scope
@@ -30,12 +31,10 @@ This is a **development-only target plan**, not a live product capability.
 
 ### Expected future work
 - candidate generation and scoring over a broader parameter grid than the current threshold-centered surface
-- a read-only review page for comparing the latest run and its candidates
 - richer scoring explanations and comparison summaries
 - production scheduling or automatic rollout behavior
 
 ### Not yet implemented
-- a UI control surface for launching or reviewing tuning runs
 - adaptive optimization beyond the initial raw search pass
 - production scheduling or automatic rollout behavior
 

@@ -484,6 +484,7 @@ class RecommendationPlanOutcome(BaseModel):
     max_adverse_excursion: float | None = None
     realized_holding_period_days: float | None = None
     direction_correct: bool | None = None
+    confidence_percent: float | None = None
     confidence_bucket: str = ""
     setup_family: str = ""
     horizon: str | None = None
@@ -596,6 +597,27 @@ class RecommendationPlanStats(BaseModel):
     watchlist_outcomes: int = 0
 
 
+class RecommendationCalibrationReliabilityBin(BaseModel):
+    bin_key: str
+    bin_label: str
+    sample_count: int = 0
+    resolved_count: int = 0
+    predicted_probability: float | None = None
+    realized_win_rate_percent: float | None = None
+    brier_score: float | None = None
+    calibration_error: float | None = None
+
+
+class RecommendationCalibrationReport(BaseModel):
+    version_label: str = "v1"
+    method: str = "confidence_binned_reliability"
+    sample_count: int = 0
+    resolved_count: int = 0
+    brier_score: float | None = None
+    expected_calibration_error: float | None = None
+    bins: list[RecommendationCalibrationReliabilityBin] = Field(default_factory=list)
+
+
 class RecommendationCalibrationSummary(BaseModel):
     total_outcomes: int = 0
     resolved_outcomes: int = 0
@@ -605,6 +627,7 @@ class RecommendationCalibrationSummary(BaseModel):
     no_action_outcomes: int = 0
     watchlist_outcomes: int = 0
     overall_win_rate_percent: float | None = None
+    calibration_report: RecommendationCalibrationReport | None = None
     by_confidence_bucket: list[RecommendationCalibrationBucket] = Field(default_factory=list)
     by_setup_family: list[RecommendationCalibrationBucket] = Field(default_factory=list)
     by_action: list[RecommendationCalibrationBucket] = Field(default_factory=list)

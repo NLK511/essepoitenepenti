@@ -340,6 +340,10 @@ class RecommendationSignalGatingTuningServiceTests(unittest.TestCase):
         action_keys = {bucket.key for bucket in summary.by_action}
         self.assertIn("no_action", action_keys)
         self.assertIn("watchlist", action_keys)
+        self.assertIsNotNone(summary.calibration_report)
+        self.assertEqual(summary.calibration_report.version_label, "confidence-reliability-v1")
+        self.assertGreater(summary.calibration_report.sample_count, 0)
+        self.assertGreaterEqual(len(summary.calibration_report.bins), 1)
 
 
 class RecommendationSignalGatingTuningRouteTests(unittest.IsolatedAsyncioTestCase):
@@ -441,3 +445,51 @@ class RecommendationSignalGatingTuningRouteTests(unittest.IsolatedAsyncioTestCas
             runs_payload = runs_response.json()
             self.assertGreaterEqual(len(runs_payload["runs"]), 1)
             self.assertEqual(runs_payload["runs"][0]["best_threshold"], 64.0)
+
+    async def test_calibration_report_endpoint_returns_report(self) -> None:
+        session = Session(bind=self.engine)
+        try:
+            plan_repository = RecommendationPlanRepository(session)
+            outcome_repository = RecommendationOutcomeRepository(session)
+            for index, outcome in enumerate(["win", "loss"], start=1):
+                plan = plan_repository.create_plan(
+                    RecommendationPlan(
+                        ticker="AAPL",
+                        horizon=StrategyHorizon.ONE_WEEK,
+                        action="long",
+                        confidence_percent=65.0 + index,
+                        entry_price_low=100.0,
+                        entry_price_high=100.0,
+                        stop_loss=95.0,
+                        take_profit=110.0,
+                        signal_breakdown={"setup_family": "breakout"},
+                        computed_at=datetime(2026, 3, index, tzinfo=timezone.utc),
+                    )
+                )
+                outcome_repository.upsert_outcome(
+                    RecommendationPlanOutcome(
+                        recommendation_plan_id=plan.id or 0,
+                        ticker="AAPL",
+                        action="long",
+                        outcome=outcome,
+                        status="resolved",
+                        evaluated_at=datetime(2026, 3, index, tzinfo=timezone.utc),
+                        confidence_bucket="65_to_79",
+                        setup_family="breakout",
+                        horizon="1w",
+                        transmission_bias="tailwind",
+                        context_regime="catalyst_active",
+                    )
+                )
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/api/recommendation-outcomes/calibration-report?limit=20")
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+            self.assertIn("calibration_summary", payload)
+            self.assertIn("calibration_report", payload)
+            self.assertIsNotNone(payload["calibration_report"])
+            self.assertGreater(payload["calibration_report"]["sample_count"], 0)

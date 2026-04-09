@@ -60,6 +60,31 @@ async def summarize_recommendation_outcomes(
     )
 
 
+@router.get("/calibration-report")
+async def get_recommendation_calibration_report(
+    ticker: str | None = Query(default=None),
+    run_id: int | None = Query(default=None),
+    setup_family: str | None = Query(default=None),
+    resolved: str | None = Query(default=None),
+    outcome: str | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=2000),
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    normalized_resolved = resolved.strip().lower() if resolved else None
+    summary = RecommendationPlanCalibrationService(RecommendationOutcomeRepository(session)).summarize(
+        ticker=ticker.strip().upper() if ticker else None,
+        run_id=run_id,
+        setup_family=setup_family.strip().lower() if setup_family else None,
+        resolved=normalized_resolved,
+        outcome=outcome.strip().lower() if outcome else None,
+        limit=limit,
+    )
+    return {
+        "calibration_summary": summary,
+        "calibration_report": summary.calibration_report,
+    }
+
+
 @router.get("/setup-family-review")
 async def summarize_setup_family_review(
     ticker: str | None = Query(default=None),

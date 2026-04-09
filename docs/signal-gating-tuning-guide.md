@@ -52,6 +52,8 @@ The current shipped implementation supports:
 - candidate comparison storage
 - operator review of recent tuning runs
 - live proposal-generation use of the active gating tuning config
+- richer sample filtering by shortlist state, setup family, transmission bias, and context regime
+- calibration-report inspection through the shared research/calibration surfaces
 
 The current surface is real shipped research tooling.
 It is not just a placeholder.

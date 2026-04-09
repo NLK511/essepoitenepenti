@@ -30,6 +30,8 @@ The UI is easiest to understand in four groups:
    - Context review
    - Snapshot detail
 4. **Research**
+   - Research overview
+   - Calibration tab
    - Decision samples
    - Signal gating
    - Signal gating job

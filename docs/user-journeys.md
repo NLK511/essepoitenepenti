@@ -71,8 +71,9 @@ Steps:
 2. let the app evaluate older plans through the run system
 3. review recommendation plans and decision samples
 4. use signal-gating tuning when upstream recall looks too strict or too loose
-5. use plan-generation tuning when downstream plan precision, entry framing, or trade-level construction needs improvement
-6. promote updated configs manually after review, or rely on guarded automation only when that workflow is fully enabled
+5. use the research calibration tab and calibration report to check whether confidence is lining up with realized outcomes
+6. use plan-generation tuning when downstream plan precision, entry framing, or trade-level construction needs improvement
+7. promote updated configs manually after review, or rely on guarded automation only when that workflow is fully enabled
 
 **Success outcome:** the improvement loop runs inside the product with auditable records and without relying on the retired weight-optimization workflow.
 
