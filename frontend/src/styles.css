@@ -1666,15 +1666,51 @@ details summary {
 
 @media (max-width: 640px) {
   .page-shell {
-    padding: 24px 16px 48px;
+    padding: 20px 14px 40px;
   }
 
-  .card-grid {
+  .stack-page,
+  .stack-form,
+  .docs-list,
+  .card-grid,
+  .metrics-grid,
+  .two-column,
+  .form-grid,
+  .summary-grid,
+  .docs-layout,
+  .insight-grid,
+  .data-points,
+  .debugger-layout,
+  .context-review-main-grid,
+  .context-review-history-grid,
+  .workflow-summary-grid,
+  .debugger-summary-points,
+  .enhanced-sentiment-grid {
     grid-template-columns: 1fr;
   }
 
+  .card-grid {
+    gap: 14px;
+  }
+
+  .panel,
+  .recommendation-card,
+  .provider-form {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
   .metrics-grid {
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+  }
+
+  .metric-value {
+    font-size: 24px;
+  }
+
+  .data-point {
+    padding: 10px 12px;
+    border-radius: 14px;
   }
 
   .badge-row,
