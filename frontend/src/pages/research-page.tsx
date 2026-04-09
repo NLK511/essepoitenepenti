@@ -148,6 +148,24 @@ export function ResearchPage() {
       <div className="stack-page">
         <Card>
           <SectionTitle
+            kicker="Research view"
+            title="Overview and calibration tabs"
+            subtitle="Switch between the operational overview and the calibration-focused view."
+          />
+          <div className="top-gap-small">
+            <SegmentedTabs
+              value={activeTab}
+              options={[
+                { value: "overview", label: "Overview" },
+                { value: "calibration", label: "Calibration" },
+              ]}
+              onChange={setActiveTab}
+            />
+          </div>
+        </Card>
+
+        <Card>
+          <SectionTitle
             kicker="Automated review"
             title="Latest performance assessment"
             subtitle="A scheduled performance-assessment job runs daily at midnight, preserves history in runs, and keeps this page focused on the latest assessment only."
@@ -171,24 +189,6 @@ export function ResearchPage() {
               </div>
             </>
           ) : null}
-        </Card>
-
-        <Card>
-          <SectionTitle
-            kicker="Research view"
-            title="Overview and calibration tabs"
-            subtitle="Switch between the operational overview and the calibration-focused view."
-          />
-          <div className="top-gap-small">
-            <SegmentedTabs
-              value={activeTab}
-              options={[
-                { value: "overview", label: "Overview" },
-                { value: "calibration", label: "Calibration" },
-              ]}
-              onChange={setActiveTab}
-            />
-          </div>
         </Card>
 
         {activeTab === "overview" ? (

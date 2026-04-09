@@ -77,20 +77,34 @@ export function SegmentedTabs<T extends string>(props: {
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="segmented-tabs" role="tablist" aria-label="Section tabs">
-      {props.options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          className={`segmented-tab${props.value === option.value ? " is-active" : ""}`}
-          onClick={() => props.onChange(option.value)}
-          role="tab"
-          aria-selected={props.value === option.value}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
+    <>
+      <div className="desktop-only">
+        <div className="segmented-tabs" role="tablist" aria-label="Section tabs">
+          {props.options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={`segmented-tab${props.value === option.value ? " is-active" : ""}`}
+              onClick={() => props.onChange(option.value)}
+              role="tab"
+              aria-selected={props.value === option.value}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="mobile-only segmented-tabs-mobile">
+        <label className="form-field">
+          <span>Section</span>
+          <select value={props.value} onChange={(event) => props.onChange(event.target.value as T)}>
+            {props.options.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+    </>
   );
 }
 

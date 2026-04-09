@@ -436,17 +436,19 @@ export function RecommendationPlansPage() {
           title="Recommendation plan review stats"
           subtitle="These headline stats are computed across all recommendation plans, independent of the current list filters."
         />
-        <SegmentedTabs
-          value={statsWindow}
-          onChange={(value) => setStatsWindow(value as "all" | "day" | "week" | "month" | "year")}
-          options={[
-            { value: "all", label: "All" },
-            { value: "day", label: "Day" },
-            { value: "week", label: "Week" },
-            { value: "month", label: "Month" },
-            { value: "year", label: "Year" },
-          ]}
-        />
+        <div className="top-gap-small">
+          <SegmentedTabs
+            value={statsWindow}
+            onChange={(value) => setStatsWindow(value as "all" | "day" | "week" | "month" | "year")}
+            options={[
+              { value: "all", label: "All" },
+              { value: "day", label: "Day" },
+              { value: "week", label: "Week" },
+              { value: "month", label: "Month" },
+              { value: "year", label: "Year" },
+            ]}
+          />
+        </div>
         <section className="metrics-grid top-gap-small">
           <StatCard label="Total plans" value={planStats?.total_plans ?? "—"} helper={`All recommendations · ${planStats?.window ?? "all"}`} />
           <StatCard label="Open plans" value={planStats?.open_plans ?? "—"} helper="Open plans across all recommendations" />
@@ -481,17 +483,19 @@ export function RecommendationPlansPage() {
           title="Choose what to review"
           actions={<HelpHint tooltip="Each tab answers a different operator question: trust, comparison, evidence concentration, or family-specific behavior." to={recommendationPlansDoc("review-workspace-tabs")} />}
         />
-        <SegmentedTabs
-          value={reviewSection}
-          onChange={setReviewSection}
-          options={[
-            { value: "overview", label: "Overview" },
-            { value: "calibration", label: "Calibration" },
-            { value: "baselines", label: "Baselines" },
-            { value: "evidence", label: "Evidence" },
-            { value: "families", label: "Setup families" },
-          ]}
-        />
+        <div className="top-gap-small">
+          <SegmentedTabs
+            value={reviewSection}
+            onChange={setReviewSection}
+            options={[
+              { value: "overview", label: "Overview" },
+              { value: "calibration", label: "Calibration" },
+              { value: "baselines", label: "Baselines" },
+              { value: "evidence", label: "Evidence" },
+              { value: "families", label: "Setup families" },
+            ]}
+          />
+        </div>
       </Card>
 
       {reviewSection === "overview" ? (

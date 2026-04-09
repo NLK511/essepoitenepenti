@@ -2701,18 +2701,57 @@ td {
 }
 
 @media (max-width: 640px) {
+  .sticky-toolbar {
+    position: static;
+    top: auto;
+  }
+
+  .desktop-only {
+    display: none !important;
+  }
+
+  .mobile-only {
+    display: block !important;
+  }
+
   .segmented-tabs {
     width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding: 4px;
+    gap: 6px;
   }
 
   .segmented-tab {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
+    padding: 8px 10px;
+    font-size: 13px;
   }
 
   .data-card-header {
     flex-direction: column;
     align-items: stretch;
   }
+}
+
+.desktop-only {
+  display: block;
+}
+
+.mobile-only {
+  display: none;
+}
+
+.tab-switch {
+  width: 100%;
+}
+
+.tab-switch .form-field {
+  margin-top: 0;
 }
 
 .sidebar-status-indicator-group {
