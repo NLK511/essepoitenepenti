@@ -160,11 +160,12 @@ MACRO_THEME_DEFINITIONS = [
 ]
 
 DEFAULT_MACRO_NEWS_QUERIES = [
-    "Federal Reserve OR FOMC OR Powell",
-    "inflation OR CPI OR PPI",
-    "Treasury yields OR bond market",
+    "Federal Reserve OR FOMC OR Powell OR rate cut OR rate hike",
+    "inflation OR CPI OR PPI OR disinflation OR cooling prices",
+    "Treasury yields OR bond market OR higher yields OR lower yields",
     "ECB OR eurozone rates OR Lagarde",
-    "war OR sanctions OR geopolitical tensions OR oil",
+    "war OR sanctions OR geopolitical tensions OR missile OR retaliation OR ceasefire OR truce OR diplomatic progress",
+    "oil OR crude OR OPEC OR supply disruption OR output increase OR energy prices",
 ]
 
 
