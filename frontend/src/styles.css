@@ -2732,6 +2732,18 @@ td {
     font-size: 13px;
   }
 
+  .segmented-tabs-mobile {
+    width: 100%;
+  }
+
+  .segmented-tabs-mobile .form-field {
+    margin-top: 0;
+  }
+
+  .segmented-tabs-mobile select {
+    width: 100%;
+  }
+
   .data-card-header {
     flex-direction: column;
     align-items: stretch;
@@ -2744,14 +2756,6 @@ td {
 
 .mobile-only {
   display: none;
-}
-
-.tab-switch {
-  width: 100%;
-}
-
-.tab-switch .form-field {
-  margin-top: 0;
 }
 
 .sidebar-status-indicator-group {
