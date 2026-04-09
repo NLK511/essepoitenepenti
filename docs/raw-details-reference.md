@@ -45,6 +45,18 @@ Common macro/industry fields include:
 - freshness and source metadata
 - optional context summary/event fields
 
+Current context-event payloads may also include fields such as:
+- `persistence_state`
+- `state_transition`
+- `catalyst_type`
+- `trigger_actor`
+- `trigger_actor_role`
+- `trigger_source_type`
+- `market_interpretation`
+- `state_change_reason`
+- `evidence_direction`
+- `evidence_samples`
+
 `score` is a heuristic 0-100 confidence-style value, not a probability.
 
 Context events may also carry `saliency_weight`, a normalized 0-1 prominence score.
@@ -132,6 +144,7 @@ Important stored context/ontology fields include:
 - `matched_ontology_relationships`
 - `ticker_relationship_edges`
 - `matched_ticker_relationships`
+- `expanded_queries` for industry context refreshes when ontology-driven query expansion is used
 
 These support context detail views, recommendation transmission summaries, and relationship read-through UI.
 
@@ -143,7 +156,7 @@ Examples:
 - proposal generation — recommendation summaries and diagnostics
 - evaluation — evaluation scope and result summary
 - optimization — before/after fingerprint and backup metadata
-- context refresh — created snapshot ids, scope, and refresh summary
+- context refresh — created snapshot ids, scope, refresh summary, and context event metadata
 
 ## Support snapshot records
 

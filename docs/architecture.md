@@ -127,9 +127,10 @@ flowchart LR
 3. the worker claims the queued run
 4. `JobExecutionService` executes the orchestration path
 5. the pipeline fetches price history, computes features, loads shared macro and industry artifacts, and performs ticker analysis
-6. the system emits ticker signals, recommendation plans, and diagnostics
-7. the backend persists run state, redesign-native objects, and artifacts
-8. the frontend reads them back through `/api`
+6. shared context refreshes classify active events into persisted fields such as persistence state, state transition, catalyst type, market interpretation, and trigger actor metadata
+7. the system emits ticker signals, recommendation plans, and diagnostics
+8. the backend persists run state, redesign-native objects, and artifacts
+9. the frontend reads them back through `/api`
 
 If execution fails, run timing, status, and failure metadata are still persisted. Full cross-workflow rollback is still limited.
 
@@ -138,8 +139,9 @@ If execution fails, run timing, status, and failure metadata are still persisted
 2. the backend enqueues a refresh run
 3. the worker executes it asynchronously
 4. industry refresh scope is seeded from the taxonomy layer
-5. refresh services persist transitional support snapshots and redesign-native context snapshots
-6. downstream review pages surface the resulting context and diagnostics
+5. industry refresh queries can be expanded from ontology definitions such as themes, event vocabulary, risk flags, sector, and company names
+6. refresh services persist transitional support snapshots and redesign-native context snapshots
+7. downstream review pages surface the resulting context, event fields, actor/source metadata, and diagnostics
 
 ## Runtime components
 

@@ -286,6 +286,8 @@ Important fields:
 - **Coverage**
 - **Saliency**
 - **Confidence**
+- **State / Read badges**
+- **Actor badges** when a material trigger source is identified
 - **Diagnostics**
 
 Context badge quick guide:
@@ -307,6 +309,11 @@ Confidence quick guide:
 
 Use this page when plans look plausible but the market backdrop seems stale, thin, or wrong.
 
+Current context cards now try to show not just the top theme/driver, but also:
+- whether the current read looks escalating, easing, stabilizing, or mixed
+- whether the market read looks more like fear, relief, inflationary pressure, or growth support
+- the leading actor or trigger source when one is recoverable from the evidence
+
 ## 9. Snapshot detail
 
 **Use it for:** auditing one shared snapshot.
@@ -318,6 +325,16 @@ Typical sections:
 - source mix
 - ontology context for industry snapshots
 - diagnostics JSON
+
+Stored event rows on this page may now include:
+- persistence
+- transition
+- catalyst
+- interpretation
+- actor
+- actor role
+- actor source
+- short "why now" text grounded in top evidence
 
 Read this page as a lower-level storage-oriented view.
 

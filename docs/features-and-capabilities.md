@@ -36,8 +36,10 @@ It is not yet a proven short-horizon prediction engine.
 ### Shared context and ontology
 - Persist macro and industry context snapshots, plus the legacy support snapshots still used by some backend flows.
 - Review macro and industry context from the Context pages and detail views.
+- Store context-event fields such as persistence state, state transition, catalyst type, market interpretation, trigger actor, trigger actor role, trigger source type, and short "why now" summaries.
 - Trace which shared artifacts were used by a run or recommendation plan.
 - Use the taxonomy layer for industry definitions, sector definitions, ticker profiles, and relationship edges.
+- Expand industry refresh queries from ontology context such as industry queries, themes, event vocabulary, risk flags, sector, and known company names.
 - Surface ticker relationship read-throughs such as peer, supplier, and customer links in review pages and stored diagnostics.
 - Use governed labels for transmission, calibration, outcome, and event metadata so UI pages do not depend on raw internal keys.
 - Optionally use Nitter as supporting social input for macro and industry context.
@@ -76,7 +78,7 @@ The main limits are still practical:
 - reliability still needs more hardening around worker/scheduler crash recovery and partial-persistence edge cases
 - observability is still thin for a multi-process app; logs are not yet structured enough and daemon health is not surfaced clearly enough
 - auth, RBAC, tenancy, and credential lifecycle are still incomplete; the app remains single-user and the frontend stores the bearer token locally
-- context extraction is still heuristic rather than a mature event model
+- context extraction is stronger than before at capturing short-horizon state changes, but it is still heuristic rather than a mature event model
 - ticker deep analysis still reuses some older proposal-engine internals
 - legacy support snapshots are still present in refresh, resolver, and health paths even though context snapshots are the main review surface
 - calibration exists, but evidence remains limited

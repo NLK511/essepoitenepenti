@@ -88,7 +88,7 @@ Macro and industry context snapshots also carry two operator-facing heuristic sc
 
 These are bounded review aids, not prediction probabilities.
 
-A current limitation is that context extraction is still better at identifying the dominant high-level theme than the exact short-horizon state change inside that theme. For example, a macro snapshot may correctly surface a geopolitical driver while still under-describing whether the live move is being driven by escalation, de-escalation, rhetoric-driven relief, sanctions risk, battlefield developments, or oil-supply fear. The same issue can appear in industry context when the system captures a broad driver such as demand, guidance, or regulation but not the concrete catalyst that changed the market's interpretation.
+A current limitation is that context extraction is still not a fully mature event model, but it now does more than broad theme detection. Current macro and industry snapshots try to preserve short-horizon state through fields such as persistence state, state transition, catalyst type, market interpretation, trigger actor metadata, and a short why-now summary. That means the system is better than before at distinguishing cases like escalation versus de-escalation or guidance improvement versus guidance cuts, even though it still relies on heuristic extraction and imperfect evidence coverage.
 
 So the intended target state for context is not just "theme detected". It is:
 - the active theme or driver
@@ -98,7 +98,7 @@ So the intended target state for context is not just "theme detected". It is:
 - the main transmission mechanism into industries or tickers
 - explicit uncertainty when evidence conflicts
 
-Prompt quality matters here, but prompt wording alone is not enough. Better context quality also depends on better event definitions, more specific evidence triage, and structured state fields that preserve short-horizon dynamics instead of compressing them away.
+Prompt quality matters here, but prompt wording alone is not enough. Better context quality also depends on better event definitions, more specific evidence triage, structured state fields that preserve short-horizon dynamics instead of compressing them away, and query generation that pulls more concrete industry evidence from ontology context.
 
 ### News ingestion and ticker sentiment
 `NewsIngestionService` pulls and normalizes articles, deduplicates them, and records feed usage and failures.
