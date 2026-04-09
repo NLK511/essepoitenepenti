@@ -276,6 +276,10 @@ export function ContextSnapshotDetailPage() {
                         value={eventValue}
                         details={[
                           { label: "Persistence", value: persistenceLabel },
+                          { label: "Transition", value: eventLabel(row.state_transition) },
+                          { label: "Catalyst", value: eventLabel(row.catalyst_type) },
+                          { label: "Interpretation", value: eventLabel(row.market_interpretation) },
+                          { label: "Actor", value: eventLabel(row.trigger_actor) },
                           { label: "Source", value: sourcePriorityLabel },
                           { label: "Window", value: windowLabel },
                           { label: "Recency", value: recencyLabel },
@@ -284,6 +288,9 @@ export function ContextSnapshotDetailPage() {
                         channels={channels}
                       />
                       {contradictionReasons.length > 0 ? <div className="helper-text top-gap-small">Contradiction reasons: {contradictionReasons.join(", ")}</div> : null}
+                      {typeof row.state_change_reason === "string" && row.state_change_reason.trim() ? (
+                        <div className="helper-text top-gap-small">Why now: {row.state_change_reason}</div>
+                      ) : null}
                       {Array.isArray(row.evidence_samples) && row.evidence_samples.length > 0 ? (
                         <div className="helper-text top-gap-small">Evidence: {row.evidence_samples.slice(0, 3).join(" | ")}</div>
                       ) : null}

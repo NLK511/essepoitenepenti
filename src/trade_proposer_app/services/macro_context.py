@@ -426,7 +426,10 @@ class MacroContextService:
         new_labels = [label for label in lifecycle_summary.get("new_event_labels", []) if label != top_label]
         fading_labels = list(lifecycle_summary.get("fading_event_labels", []))
 
-        overview = f"Top macro event: {top_label}. It looks {state}, matters mainly through {why}, and the expected transmission window is {window}."
+        catalyst = str(top_theme.get("catalyst_type", "other") or "other").replace("_", " ")
+        interpretation = str(top_theme.get("market_interpretation", "unknown") or "unknown").replace("_", " ")
+        change_reason = str(top_theme.get("state_change_reason", "") or "").strip()
+        overview = f"Top macro event: {top_label}. It looks {state}, is being driven mainly by {catalyst}, and matters mainly through {why} over {window}."
         evidence = f"Evidence is led by {source} coverage"
         if news_items:
             evidence += f" across {len(news_items)} primary news item{'s' if len(news_items) != 1 else ''}"
@@ -451,9 +454,14 @@ class MacroContextService:
         if warnings and not contradiction_labels:
             updates.append("Coverage is still degraded enough that the overview should be read with caution")
 
+        interpretation_line = ""
+        if interpretation != "unknown":
+            interpretation_line = f" The current market read looks more {interpretation}."
+        reason_line = f" {change_reason}" if change_reason else ""
+
         if updates:
-            return f"{overview} {evidence} {' '.join(updates)}."
-        return f"{overview} {evidence}"
+            return f"{overview} {evidence}{interpretation_line} {' '.join(updates)}.{reason_line}"
+        return f"{overview} {evidence}{interpretation_line}{reason_line}"
 
     def _summarize_context(
         self,
@@ -511,7 +519,7 @@ class MacroContextService:
         for index, event in enumerate(active_themes[:3], start=1):
             channels = event.get("transmission_channels") if isinstance(event.get("transmission_channels"), list) else []
             top_events.append(
-                f"{index}. {event.get('label', 'Unknown event')} | state={event.get('persistence_state', 'unknown')} | saliency={event.get('saliency_weight', 0.0)} | source={event.get('source_priority', 'other')} | window={event.get('window_hint', 'unknown')} | direction={event.get('evidence_direction', 'mixed')} | channels={', '.join(str(channel) for channel in channels[:3]) or 'unknown'}"
+                f"{index}. {event.get('label', 'Unknown event')} | state={event.get('persistence_state', 'unknown')} | transition={event.get('state_transition', 'unknown')} | catalyst={event.get('catalyst_type', 'other')} | interpretation={event.get('market_interpretation', 'unknown')} | saliency={event.get('saliency_weight', 0.0)} | source={event.get('source_priority', 'other')} | window={event.get('window_hint', 'unknown')} | direction={event.get('evidence_direction', 'mixed')} | actor={event.get('trigger_actor', 'unknown')} | channels={', '.join(str(channel) for channel in channels[:3]) or 'unknown'} | why={event.get('state_change_reason', 'n/a')}"
             )
         triaged_news = self._triaged_news_items(news_items, active_themes)
         news_lines = []
@@ -536,7 +544,9 @@ class MacroContextService:
             "Write a short operator-facing macro market summary in 2-4 sentences.",
             "Focus on the top salient events, not just one event.",
             "Ground the summary in the highest-quality fetched sources first. Use social evidence only as secondary support.",
-            "Say what the main macro events are, why they matter, and what short-horizon transmission window they imply.",
+            "Say what the main macro events are, what concrete catalyst or state change is driving them right now, why they matter, and what short-horizon transmission window they imply.",
+            "Explicitly distinguish escalation, easing, stabilization, or mixed conditions when the evidence supports it.",
+            "Prefer durable semantic language over person-specific labels; mention specific actors only as evidence-level detail.",
             "Use the previous snapshot only to explain continuity or change. Do not let old framing override current evidence.",
             "If evidence is contradictory or degraded, say that plainly.",
             "Do not use hype. Do not invent facts beyond the evidence below.",
@@ -582,6 +592,7 @@ class MacroContextService:
             text = f"{title} {summary}".lower()
             event_hits = 0
             saliency_score = 0.0
+            state_change_bonus = 0
             for event in active_themes[:3]:
                 key = str(event.get("key", "") or "")
                 definition = definition_map.get(key)
@@ -590,9 +601,11 @@ class MacroContextService:
                 if any(phrase.lower() in text for phrase in definition.phrases):
                     event_hits += 1
                     saliency_score += float(event.get("saliency_weight", 0.0) or 0.0)
+                    if any(hint in text for hint in ("escalat", "de-escalat", "easing", "relief", "cooling", "ceasefire", "sanction", "disruption", "jump", "cut")):
+                        state_change_bonus += 1
             ranked.append(
                 (
-                    (priority_score, saliency_score, event_hits),
+                    (priority_score, saliency_score + (state_change_bonus * 0.35), event_hits + state_change_bonus),
                     {
                         "title": title,
                         "summary": summary,

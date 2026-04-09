@@ -225,6 +225,12 @@ export interface ContextEventRow {
   source_priority_detail?: KeyLabelDetail;
   persistence_state?: string;
   persistence_state_detail?: KeyLabelDetail;
+  state_transition?: string;
+  catalyst_type?: string;
+  trigger_actor?: string | null;
+  trigger_actor_role?: string | null;
+  market_interpretation?: string;
+  state_change_reason?: string | null;
   window_hint?: string;
   window_hint_detail?: KeyLabelDetail;
   recency_bucket?: string;

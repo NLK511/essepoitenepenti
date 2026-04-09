@@ -508,6 +508,8 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
                     value={themeString(driver.label)}
                     details={[
                       { label: "Window", value: detailLabel(driver.window_hint_detail, driver.window_hint) },
+                      { label: "State", value: String(driver.state_transition || "—") },
+                      { label: "Catalyst", value: String(driver.catalyst_type || "—") },
                       { label: "Source", value: detailLabel(driver.source_priority_detail, driver.source_priority) },
                     ]}
                     channels={channels}
@@ -611,7 +613,9 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
                     label={`Theme ${index + 1}`}
                     value={themeString(theme.label)}
                     details={[
-                      { label: "State", value: detailLabel(theme.persistence_state_detail, theme.persistence_state) },
+                      { label: "Persistence", value: detailLabel(theme.persistence_state_detail, theme.persistence_state) },
+                      { label: "Transition", value: String(theme.state_transition || "—") },
+                      { label: "Catalyst", value: String(theme.catalyst_type || "—") },
                       { label: "Window", value: detailLabel(theme.window_hint_detail, theme.window_hint) },
                       { label: "Source", value: detailLabel(theme.source_priority_detail, theme.source_priority) },
                     ]}

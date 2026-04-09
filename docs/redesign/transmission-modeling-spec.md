@@ -25,10 +25,13 @@ Context must not be treated as a generic sentiment overlay.
 
 Instead, the engine should answer:
 1. **what active context is present?**
-2. **which industries are exposed?**
-3. **which tickers are exposed through which channels?**
-4. **is the transmission direction supportive, hostile, mixed, or negligible?**
-5. **over what window should that context plausibly matter?**
+2. **what concrete catalyst or state change is driving it right now?**
+3. **which industries are exposed?**
+4. **which tickers are exposed through which channels?**
+5. **is the transmission direction supportive, hostile, mixed, or negligible?**
+6. **over what window should that context plausibly matter?**
+
+A context object that only says "geopolitics is active" or "guidance matters" is incomplete. The system should aim to preserve the short-horizon dynamic inside the theme: escalation versus de-escalation, rhetoric versus physical disruption, demand acceleration versus estimate-reset relief, and similar distinctions when the evidence supports them.
 
 ## Transmission objects
 
@@ -67,7 +70,9 @@ Examples:
 - `ecb_restrictive_bias`
 - `europe_growth_pressure`
 - `middle_east_escalation`
+- `middle_east_deescalation_signal`
 - `oil_supply_risk`
+- `official_rhetoric_relief`
 - `semiconductor_ai_demand_strength`
 - `airline_cost_pressure`
 
@@ -79,6 +84,13 @@ Each extracted event should carry:
 - affected industries
 - event direction hints
 - confidence / evidence quality
+- state classification such as `escalating | easing | stabilizing | mixed | unknown`
+- catalyst type such as `battlefield | diplomacy | rhetoric | sanctions | supply_disruption | policy | guidance | pricing | demand | regulation | other`
+- actor or trigger source when material and recoverable from evidence
+- market interpretation such as `fear | relief | inflationary | growth_supportive | mixed | unknown`
+- a short state-change explanation grounded in the top evidence items
+
+Canonical event keys should prefer durable semantic categories over person-specific or administration-specific names. For example, use a stable key such as `official_rhetoric_relief` rather than a person-bound key. The specific actor, role, and evidence source should be preserved on extracted metadata fields instead of being baked into the governed taxonomy key.
 
 ## 2. Macro-to-industry mapping
 Every macro event definition should specify a ranked set of industry transmission mappings.
@@ -118,6 +130,8 @@ Each industry-native driver should specify:
 - likely loser profiles
 - timing window
 - catalyst type: `earnings | product | regulation | supply_chain | pricing | guidance | conference | geopolitical | other`
+- whether the current read looks like escalation, easing, stabilization, or mixed state
+- the dominant reason the market appears to be reacting now, not just the broad topic label
 
 ## 4. Industry-to-ticker mapping
 Ticker transmission should not rely only on sector membership.
@@ -196,8 +210,8 @@ Prefer:
 - policy shifts
 - demand / supply trend continuation
 
-## D. Decay policy
-Every context driver should have a decay state.
+## D. Decay and state-transition policy
+Every context driver should have both a decay state and a current state-transition read.
 
 Suggested interpretation:
 - `fresh`: new and potentially underpriced
@@ -205,7 +219,14 @@ Suggested interpretation:
 - `fading`: still present but with weakening marginal impact
 - `stale`: should not materially influence plan promotion without new confirmation
 
-Stale or fading drivers should reduce transmission influence for shorter horizons first.
+Suggested state-transition interpretation:
+- `escalating`: evidence points to worsening pressure or stronger follow-through
+- `easing`: evidence points to relief, de-escalation, or reduced pressure
+- `stabilizing`: the topic remains active but the marginal shock is flattening
+- `mixed`: high-quality evidence points in both directions
+- `unknown`: evidence is too weak or generic to classify safely
+
+Stale or fading drivers should reduce transmission influence for shorter horizons first. State-transition reads should also affect transmission direction and urgency: an easing geopolitical shock should not be treated the same as an escalating one even if both map to the same broad theme family.
 
 ## Conflict policy
 The engine must explicitly detect and persist conflicts such as:

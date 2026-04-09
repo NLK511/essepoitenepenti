@@ -108,6 +108,87 @@ NEGATIVE_DIRECTION_HINTS = (
     "cost pressure",
 )
 
+STATE_TRANSITION_HINTS = {
+    "escalating": (
+        "escalat",
+        "worsen",
+        "intensif",
+        "retaliat",
+        "expand",
+        "surge",
+        "jump",
+        "spike",
+        "tightening",
+        "hike",
+        "crackdown",
+        "disruption",
+    ),
+    "easing": (
+        "de-escalat",
+        "ease",
+        "cooling",
+        "relief",
+        "ceasefire",
+        "truce",
+        "cut",
+        "cuts",
+        "disinflation",
+        "approval",
+        "rebound",
+        "reopen",
+    ),
+    "stabilizing": (
+        "stabiliz",
+        "steady",
+        "contained",
+        "holding",
+        "hold steady",
+        "flat",
+        "normaliz",
+        "plateau",
+        "balanced",
+    ),
+}
+
+CATALYST_TYPE_HINTS = {
+    "battlefield": ("missile", "drone", "strike", "troops", "attack", "battlefield", "military"),
+    "diplomacy": ("ceasefire", "negotiation", "talks", "summit", "deal", "diplomatic"),
+    "rhetoric": ("said", "comments", "remark", "speech", "warned", "threat", "rhetoric", "signaled"),
+    "sanctions": ("sanction", "tariff", "export control", "blacklist", "embargo"),
+    "supply_disruption": ("outage", "shutdown", "disruption", "bottleneck", "delay", "shortage", "halt"),
+    "policy": ("policy", "fomc", "fed", "ecb", "treasury", "government", "administration", "regulator"),
+    "guidance": ("guidance", "outlook", "forecast", "raised forecast", "cut forecast"),
+    "pricing": ("pricing", "price", "discount", "surcharge", "fare", "rate card"),
+    "demand": ("demand", "orders", "bookings", "traffic", "consumption", "spending"),
+    "regulation": ("regulation", "approval", "antitrust", "compliance", "court", "ruling", "probe"),
+}
+
+MARKET_INTERPRETATION_HINTS = {
+    "fear": ("fear", "risk off", "selloff", "safe haven", "pressure", "warning", "worsen"),
+    "relief": ("relief", "rebound", "bounce", "easing", "de-escalat", "cooling"),
+    "inflationary": ("inflation", "sticky prices", "higher prices", "cost pressure", "yield jump"),
+    "growth_supportive": ("recovery", "strong demand", "acceleration", "beat", "upside", "soft landing"),
+}
+
+ACTOR_HINTS = {
+    "Federal Reserve": "central_bank",
+    "FOMC": "central_bank",
+    "ECB": "central_bank",
+    "European Central Bank": "central_bank",
+    "Bank of England": "central_bank",
+    "Bank of Japan": "central_bank",
+    "U.S. Treasury": "government",
+    "Treasury": "government",
+    "OPEC": "intergovernmental_body",
+    "White House": "executive_branch",
+    "administration": "executive_branch",
+    "government": "government",
+    "regulator": "regulator",
+    "FDA": "regulator",
+    "SEC": "regulator",
+    "European Commission": "regulator",
+}
+
 
 @dataclass(frozen=True)
 class EventDefinition:
@@ -175,6 +256,11 @@ def extract_ranked_events(
         latest_published_at = _latest_timestamp(all_matches)
         evidence_direction = _event_direction(all_matches)
         contradiction_reasons = _contradiction_reasons(all_matches, previous)
+        state_transition = _state_transition(all_matches, previous)
+        catalyst_type = _catalyst_type(all_matches)
+        trigger_actor, trigger_actor_role = _trigger_actor(all_matches)
+        market_interpretation = _market_interpretation(all_matches, evidence_direction, state_transition)
+        state_change_reason = _state_change_reason(all_matches, catalyst_type, state_transition, market_interpretation)
         events.append(
             {
                 "key": definition.key,
@@ -204,6 +290,12 @@ def extract_ranked_events(
                 "recency_bucket": _recency_bucket(latest_published_at),
                 "recency_bucket_detail": _key_label_detail("recency_bucket", _recency_bucket(latest_published_at)),
                 "evidence_direction": evidence_direction,
+                "state_transition": state_transition,
+                "catalyst_type": catalyst_type,
+                "trigger_actor": trigger_actor,
+                "trigger_actor_role": trigger_actor_role,
+                "market_interpretation": market_interpretation,
+                "state_change_reason": state_change_reason,
                 "persistence_state": _persistence_state(previous, event_score, len(all_matches)),
                 "persistence_state_detail": _key_label_detail("persistence_state", _persistence_state(previous, event_score, len(all_matches))),
                 "previous_event_score": _float_value(previous.get("event_score")) if isinstance(previous, dict) else None,
@@ -325,6 +417,9 @@ def summarize_event_scores(events: list[dict[str, object]], *, limit: int = 3) -
                 "event_score": event.get("event_score"),
                 "saliency_weight": event.get("saliency_weight"),
                 "persistence_state": event.get("persistence_state"),
+                "state_transition": event.get("state_transition"),
+                "catalyst_type": event.get("catalyst_type"),
+                "market_interpretation": event.get("market_interpretation"),
                 "window_hint": event.get("window_hint"),
                 "contradiction_flag": event.get("contradiction_flag"),
             }
@@ -416,6 +511,7 @@ def _match_items(items: list[object], phrases: tuple[str, ...], *, source_type: 
                 "published_at": published_at,
                 "signature": _item_signature(raw_item),
                 "direction": _text_direction(text),
+                "text": text,
             }
         )
     return matches
@@ -571,6 +667,88 @@ def _contradiction_reason_details(reasons: list[str]) -> list[dict[str, str]]:
         seen.add(key)
         details.append({"key": key, "label": str(detail.get("label", reason.replace("_", " "))).strip() or reason.replace("_", " ")})
     return details
+
+
+def _state_transition(matches: list[dict[str, object]], previous: dict[str, object] | None) -> str:
+    scores = {"escalating": 0, "easing": 0, "stabilizing": 0}
+    for item in matches:
+        text = str(item.get("text", "") or "").lower()
+        for state, hints in STATE_TRANSITION_HINTS.items():
+            scores[state] += sum(1 for hint in hints if hint in text)
+    if max(scores.values(), default=0) <= 0:
+        direction = _event_direction(matches)
+        previous_direction = str(previous.get("evidence_direction", "neutral")) if isinstance(previous, dict) else "neutral"
+        if direction == "positive":
+            return "easing"
+        if direction == "negative":
+            return "escalating"
+        if previous_direction == direction == "neutral":
+            return "unknown"
+        return "mixed" if direction == "mixed" else "unknown"
+    ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+    if len(ordered) > 1 and ordered[0][1] == ordered[1][1] and ordered[0][1] > 0:
+        return "mixed"
+    return ordered[0][0]
+
+
+def _catalyst_type(matches: list[dict[str, object]]) -> str:
+    scores = {key: 0 for key in CATALYST_TYPE_HINTS}
+    for item in matches:
+        text = str(item.get("text", "") or "").lower()
+        for catalyst, hints in CATALYST_TYPE_HINTS.items():
+            scores[catalyst] += sum(1 for hint in hints if hint in text)
+    best = max(scores.items(), key=lambda item: item[1], default=("other", 0))
+    return best[0] if best[1] > 0 else "other"
+
+
+def _trigger_actor(matches: list[dict[str, object]]) -> tuple[str | None, str | None]:
+    for item in matches:
+        text = str(item.get("text", "") or "")
+        for actor, role in ACTOR_HINTS.items():
+            if actor.lower() in text.lower():
+                return actor, role
+    for item in matches:
+        publisher = str(item.get("publisher", "") or "").strip()
+        if publisher:
+            return publisher, "source_publisher"
+    return None, None
+
+
+def _market_interpretation(matches: list[dict[str, object]], evidence_direction: str, state_transition: str) -> str:
+    scores = {key: 0 for key in MARKET_INTERPRETATION_HINTS}
+    for item in matches:
+        text = str(item.get("text", "") or "").lower()
+        for interpretation, hints in MARKET_INTERPRETATION_HINTS.items():
+            scores[interpretation] += sum(1 for hint in hints if hint in text)
+    best_key, best_score = max(scores.items(), key=lambda item: item[1], default=("unknown", 0))
+    if best_score > 0:
+        leaders = [key for key, score in scores.items() if score == best_score and score > 0]
+        return leaders[0] if len(leaders) == 1 else "mixed"
+    if evidence_direction == "positive" or state_transition == "easing":
+        return "relief"
+    if evidence_direction == "negative" or state_transition == "escalating":
+        return "fear"
+    if evidence_direction == "mixed" or state_transition == "mixed":
+        return "mixed"
+    return "unknown"
+
+
+def _state_change_reason(
+    matches: list[dict[str, object]],
+    catalyst_type: str,
+    state_transition: str,
+    market_interpretation: str,
+) -> str | None:
+    top_sample = ""
+    if matches:
+        top = max(matches, key=lambda item: float(item.get("event_weight", 0.0) or 0.0))
+        top_sample = str(top.get("sample", "") or "").strip()
+    catalyst_text = catalyst_type.replace("_", " ") if catalyst_type else "unclear catalyst"
+    state_text = state_transition.replace("_", " ") if state_transition else "unclear state"
+    interpretation_text = market_interpretation.replace("_", " ") if market_interpretation else "unclear interpretation"
+    if top_sample:
+        return f"{state_text} signal led by {catalyst_text}; current read looks {interpretation_text}. Evidence: {top_sample[:180]}"
+    return f"{state_text} signal led by {catalyst_text}; current read looks {interpretation_text}."
 
 
 def _key_label_detail(kind: str, value: str) -> dict[str, str]:

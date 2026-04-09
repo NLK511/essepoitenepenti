@@ -361,12 +361,12 @@ class IndustryContextService:
         for index, event in enumerate(active_drivers[:3], start=1):
             channels = event.get("transmission_channels") if isinstance(event.get("transmission_channels"), list) else []
             driver_lines.append(
-                f"{index}. {event.get('label', 'Unknown driver')} | state={event.get('persistence_state', 'unknown')} | saliency={event.get('saliency_weight', 0.0)} | source={event.get('source_priority', 'other')} | window={event.get('window_hint', 'unknown')} | direction={event.get('evidence_direction', 'mixed')} | channels={', '.join(str(channel) for channel in channels[:3]) or 'unknown'}"
+                f"{index}. {event.get('label', 'Unknown driver')} | state={event.get('persistence_state', 'unknown')} | transition={event.get('state_transition', 'unknown')} | catalyst={event.get('catalyst_type', 'other')} | interpretation={event.get('market_interpretation', 'unknown')} | saliency={event.get('saliency_weight', 0.0)} | source={event.get('source_priority', 'other')} | window={event.get('window_hint', 'unknown')} | direction={event.get('evidence_direction', 'mixed')} | actor={event.get('trigger_actor', 'unknown')} | channels={', '.join(str(channel) for channel in channels[:3]) or 'unknown'} | why={event.get('state_change_reason', 'n/a')}"
             )
         macro_lines = []
         for index, event in enumerate(linked_macro_events[:2], start=1):
             macro_lines.append(
-                f"{index}. {event.get('label', 'Unknown macro link')} | state={event.get('persistence_state', 'unknown')} | saliency={event.get('saliency_weight', 0.0)} | window={event.get('window_hint', 'unknown')}"
+                f"{index}. {event.get('label', 'Unknown macro link')} | state={event.get('persistence_state', 'unknown')} | transition={event.get('state_transition', 'unknown')} | catalyst={event.get('catalyst_type', 'other')} | interpretation={event.get('market_interpretation', 'unknown')} | saliency={event.get('saliency_weight', 0.0)} | window={event.get('window_hint', 'unknown')}"
             )
         triaged_news = self._triaged_news_items(news_items, active_drivers, linked_macro_events)
         news_lines = []
@@ -402,7 +402,9 @@ class IndustryContextService:
             f"Write a short operator-facing industry context summary for {industry_label} in 2-4 sentences.",
             "Focus on the top salient industry drivers, not just one event.",
             "Ground the summary in the highest-quality fetched sources first. Use social evidence only as secondary support.",
-            "Say what the main drivers are, how they matter over the next few trading days to weeks, and whether macro read-through is reinforcing or offsetting them.",
+            "Say what the main drivers are, what concrete catalyst or state change is driving them right now, how they matter over the next few trading days to weeks, and whether macro read-through is reinforcing or offsetting them.",
+            "Explicitly distinguish escalation, easing, stabilization, or mixed conditions when the evidence supports it.",
+            "Prefer durable semantic language over person-specific labels; mention specific actors only as evidence-level detail.",
             "Use the previous snapshot only to explain continuity or change. Do not let old framing override current evidence.",
             "If evidence is contradictory or degraded, say that plainly.",
             "Do not use hype. Do not invent facts beyond the evidence below.",
@@ -459,6 +461,7 @@ class IndustryContextService:
             text = f"{title} {summary}".lower()
             event_hits = 0
             saliency_score = 0.0
+            state_change_bonus = 0
             for event in prioritized_events:
                 key = str(event.get("key", "") or "")
                 definition = definition_map.get(key)
@@ -467,9 +470,11 @@ class IndustryContextService:
                 if any(phrase.lower() in text for phrase in definition.phrases):
                     event_hits += 1
                     saliency_score += float(event.get("saliency_weight", 0.0) or 0.0)
+                    if any(hint in text for hint in ("escalat", "de-escalat", "easing", "relief", "cooling", "approval", "guidance", "pricing", "order", "demand", "destocking", "shortage", "delay")):
+                        state_change_bonus += 1
             ranked.append(
                 (
-                    (priority_score, saliency_score, event_hits),
+                    (priority_score, saliency_score + (state_change_bonus * 0.35), event_hits + state_change_bonus),
                     {
                         "title": title,
                         "summary": summary,
@@ -689,6 +694,10 @@ class IndustryContextService:
         driver_labels = [str(item.get("label", "")).strip() for item in active_drivers if item.get("label")]
         focus = ", ".join(driver_labels[:2]) if driver_labels else "no dominant industry-native driver"
         macro = ", ".join(linked_macro_themes[:2]) if linked_macro_themes else "limited visible macro transmission"
+        top_driver = active_drivers[0] if active_drivers else {}
+        catalyst = str(top_driver.get("catalyst_type", "other") or "other").replace("_", " ") if isinstance(top_driver, dict) else "other"
+        transition = str(top_driver.get("state_transition", "unknown") or "unknown").replace("_", " ") if isinstance(top_driver, dict) else "unknown"
+        interpretation = str(top_driver.get("market_interpretation", "unknown") or "unknown").replace("_", " ") if isinstance(top_driver, dict) else "unknown"
         new_labels = list(lifecycle_summary.get("new_event_labels", []))
         escalating_labels = list(lifecycle_summary.get("escalating_event_labels", []))
         contradiction_labels = list(lifecycle_summary.get("contradictory_event_labels", []))
@@ -698,15 +707,15 @@ class IndustryContextService:
             top_relationship = matched_ontology_relationships[0]
             relationship_note = f" Ontology read-through most clearly points to {top_relationship.get('type', 'linked_to')} {top_relationship.get('target_label', top_relationship.get('target', 'known transmission path'))} via {top_relationship.get('channel', 'known channel')}."
         if contradiction_labels and driver_labels:
-            return f"{industry_label} remains centered on {focus}, but conflicting industry evidence is visible around {', '.join(contradiction_labels[:2])}.{relationship_note}"
+            return f"{industry_label} remains centered on {focus}, but conflicting industry evidence is visible around {', '.join(contradiction_labels[:2])}. The leading read is still {transition}, driven mainly by {catalyst}, with a more {interpretation} market interpretation.{relationship_note}"
         if escalating_labels:
-            return f"{industry_label} is led by {focus}, with escalation now most visible in {', '.join(escalating_labels[:2])}; macro read-through still points to {macro}.{relationship_note}"
+            return f"{industry_label} is led by {focus}, with escalation now most visible in {', '.join(escalating_labels[:2])}; the dominant catalyst looks like {catalyst} and the market read is {interpretation}; macro read-through still points to {macro}.{relationship_note}"
         if previous and previous.summary_text and new_labels:
-            return f"{industry_label} still leans on {focus}, but fresh attention is shifting toward {', '.join(new_labels[:2])}; macro read-through remains {macro}.{relationship_note}"
+            return f"{industry_label} still leans on {focus}, but fresh attention is shifting toward {', '.join(new_labels[:2])}; the lead driver currently looks {transition} and is being interpreted more as {interpretation}; macro read-through remains {macro}.{relationship_note}"
         if fading_labels and driver_labels:
-            return f"{industry_label} context still points to {focus}, but some earlier pressure is fading around {', '.join(fading_labels[:2])}.{relationship_note}"
+            return f"{industry_label} context still points to {focus}, but some earlier pressure is fading around {', '.join(fading_labels[:2])}. The lead catalyst looks more like {catalyst} than a broad theme-only shift.{relationship_note}"
         if driver_labels and news_items:
-            return f"{industry_label} context is led by {focus}, while macro transmission points to {macro}; primary news is carrying most of the evidence in this run.{relationship_note}"
+            return f"{industry_label} context is led by {focus}, with the main short-horizon change looking {transition} and driven mainly by {catalyst}; the market read is currently more {interpretation}, while macro transmission points to {macro}; primary news is carrying most of the evidence in this run.{relationship_note}"
         if driver_labels and social_items:
             return f"{industry_label} context still points to {focus}, but primary industry news was thin so the run leans more on social confirmation than desired.{relationship_note}"
         if previous and previous.summary_text:

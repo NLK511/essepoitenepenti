@@ -88,6 +88,18 @@ Macro and industry context snapshots also carry two operator-facing heuristic sc
 
 These are bounded review aids, not prediction probabilities.
 
+A current limitation is that context extraction is still better at identifying the dominant high-level theme than the exact short-horizon state change inside that theme. For example, a macro snapshot may correctly surface a geopolitical driver while still under-describing whether the live move is being driven by escalation, de-escalation, rhetoric-driven relief, sanctions risk, battlefield developments, or oil-supply fear. The same issue can appear in industry context when the system captures a broad driver such as demand, guidance, or regulation but not the concrete catalyst that changed the market's interpretation.
+
+So the intended target state for context is not just "theme detected". It is:
+- the active theme or driver
+- the concrete catalyst behind the latest move
+- what changed versus the prior snapshot
+- whether the state is escalating, easing, stabilizing, or mixed
+- the main transmission mechanism into industries or tickers
+- explicit uncertainty when evidence conflicts
+
+Prompt quality matters here, but prompt wording alone is not enough. Better context quality also depends on better event definitions, more specific evidence triage, and structured state fields that preserve short-horizon dynamics instead of compressing them away.
+
 ### News ingestion and ticker sentiment
 `NewsIngestionService` pulls and normalizes articles, deduplicates them, and records feed usage and failures.
 

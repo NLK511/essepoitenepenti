@@ -55,6 +55,27 @@ That is enough for a basic start, but not enough for broad multi-industry contex
 4. Add explicit relationships that help transmission reasoning.
 5. Add validation so ontology growth does not quietly degrade quality.
 6. Keep the ontology understandable and maintainable rather than turning it into a giant messy dump.
+7. Make context extraction capture concrete state changes and catalysts, not only broad recurring themes.
+
+## Context-dynamics gap to close
+
+The current context layer is reasonably good at identifying a broad active theme such as geopolitics, rates, energy, guidance, pricing, or demand. It is weaker at preserving the actual short-horizon dynamic inside that theme.
+
+Examples of the missing detail:
+- escalation versus de-escalation inside a geopolitical event
+- battlefield developments versus rhetoric-driven relief
+- sanctions risk versus physical supply disruption
+- strong guidance because of demand acceleration versus strong guidance because of margin improvement
+- regulation risk because of enforcement escalation versus regulation relief after a court or policy update
+
+That gap matters because operator review and downstream transmission logic need to understand not only **what topic is active**, but also **what changed, why it changed, and how the market is currently interpreting it**.
+
+This means ontology and event-vocabulary work should support:
+- finer-grained event keys under broad themes
+- actor / action / catalyst-aware query terms
+- explicit de-escalation and relief vocabularies, not only shock vocabularies
+- stronger mapping between event type and likely transmission channel
+- context fields that preserve state transitions instead of collapsing them into a generic label
 
 ## Work plan
 
@@ -131,6 +152,8 @@ Goal: stop relying only on ticker-derived industry labels and add explicit indus
 - [x] peer industries
 - [x] risk flags
 - [x] event vocabulary
+- [ ] catalyst vocabularies that help distinguish state changes inside broad drivers
+- [ ] actor / action synonyms where they materially improve industry query precision
 
 #### Example uses
 - better industry refresh queries
@@ -164,6 +187,7 @@ Goal: make the ontology behave more like a real market-structure graph.
 - [x] add governed `transmission_channels.json`
 - [x] add governed `relationship_types.json`
 - [x] add governed `relationship_target_kinds.json`
+- [ ] extend event vocabularies so broad themes can branch into concrete short-horizon states and catalysts where needed
 - [x] normalize ticker / industry / sector taxonomy values against those registries inside the taxonomy service
 - [x] validate that taxonomy themes, macro-channel references, transmission-channel references, relationship types, and relationship target kinds resolve to governed values
 - [x] move deep-analysis synthetic transmission-channel values used in exposure summaries onto the governed transmission-channel registry
@@ -197,6 +221,18 @@ Goal: make the ontology behave more like a real market-structure graph.
 - Semiconductors → sensitive to → export controls
 - Consumer electronics → sensitive to → consumer spending
 - Banks → sensitive to → curve shape and credit conditions
+
+#### Additional event-modeling requirements
+- Broad keys such as `geopolitics`, `guidance`, `demand`, or `regulation` should be treated as roll-up families rather than the only event granularity.
+- Canonical event keys should use durable semantic categories rather than person-specific, company-specific, or administration-specific names whenever a more stable category is available.
+- Where evidence quality allows, the event layer should preserve:
+  - whether the state is escalating, easing, stabilizing, or mixed
+  - the dominant catalyst type (`battlefield`, `rhetoric`, `policy`, `sanctions`, `supply_disruption`, `guidance`, `pricing`, `demand`, `regulation`, and similar)
+  - the actor or source of the change when material
+  - the market interpretation (`fear`, `relief`, `inflationary`, `growth-supportive`, `mixed`, and similar)
+- Person or entity specificity should usually live in extracted metadata fields such as actor, role, or source, not in the governed event key itself.
+- Query generation should explicitly include de-escalation and relief language where relevant instead of searching mainly for negative shock terms.
+- The ontology should make it easier to distinguish a topic being active from the market's current interpretation of that topic.
 
 #### Exit criteria
 - Transmission explanations can reference explicit relationships instead of only loose keyword overlap.
