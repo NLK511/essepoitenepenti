@@ -327,8 +327,12 @@ def extract_ranked_events(
                 "contradiction_reasons": contradiction_reasons,
                 "contradiction_reason_details": _contradiction_reason_details(contradiction_reasons),
                 "evidence_samples": evidence_samples,
+                "match_signatures": [str(item.get("signature", "")).strip() for item in all_matches if str(item.get("signature", "")).strip()],
+                "definition_phrase_count": len(definition.phrases),
+                "definition_max_phrase_length": max((len(str(phrase).split()) for phrase in definition.phrases), default=0),
             }
         )
+    events = _suppress_overlapping_events(events)
     events.sort(
         key=lambda item: (
             _priority_sort_key(str(item.get("source_priority", "other"))),
@@ -550,6 +554,76 @@ def _dedupe_matches(matches: list[dict[str, object]]) -> list[dict[str, object]]
         if float(match.get("event_weight", 0.0) or 0.0) > float(existing.get("event_weight", 0.0) or 0.0):
             deduped[signature] = match
     return list(deduped.values())
+
+
+OVERLAP_SPECIFICITY_PREFERENCES: dict[str, set[str]] = {
+    "us_monetary_policy": {"bond_yield_drop", "bond_yield_spike", "inflation_cooling", "inflation_sticky"},
+    "growth_recession": {"risk_off"},
+    "rates": {"yield_pressure", "inflation_cooling", "inflation_sticky"},
+    "energy_costs": {"geopolitical_escalation", "geopolitical_deescalation"},
+    "product_cycle": {"innovation"},
+    "conference_cycle": {"guidance_raise", "guidance_cut", "product_cycle"},
+    "backlog": {"demand_acceleration", "demand_softening", "inventory_destocking", "inventory_restocking"},
+}
+
+
+def _suppress_overlapping_events(events: list[dict[str, object]]) -> list[dict[str, object]]:
+    kept: list[dict[str, object]] = []
+    for candidate in sorted(
+        events,
+        key=lambda item: (
+            _priority_sort_key(str(item.get("source_priority", "other"))),
+            float(item.get("event_score", 0.0) or 0.0),
+            float(item.get("saliency_weight", 0.0) or 0.0),
+            int(item.get("definition_max_phrase_length", 0) or 0),
+            int(item.get("definition_phrase_count", 0) or 0),
+        ),
+        reverse=True,
+    ):
+        if any(_should_suppress_event(candidate, existing) for existing in kept):
+            continue
+        kept.append(candidate)
+    return kept
+
+
+def _should_suppress_event(candidate: dict[str, object], existing: dict[str, object]) -> bool:
+    candidate_key = str(candidate.get("key", "") or "")
+    existing_key = str(existing.get("key", "") or "")
+    overlap = _signature_overlap(candidate, existing)
+    if overlap < 0.6:
+        return False
+    candidate_score = float(candidate.get("event_score", 0.0) or 0.0)
+    existing_score = float(existing.get("event_score", 0.0) or 0.0)
+    if candidate_key in OVERLAP_SPECIFICITY_PREFERENCES and existing_key in OVERLAP_SPECIFICITY_PREFERENCES[candidate_key]:
+        return existing_score >= candidate_score * 0.7
+    if existing_key in OVERLAP_SPECIFICITY_PREFERENCES and candidate_key in OVERLAP_SPECIFICITY_PREFERENCES[existing_key]:
+        return existing_score >= candidate_score * 0.7
+    same_category = str(candidate.get("category", "")) == str(existing.get("category", ""))
+    same_transition = str(candidate.get("state_transition", "")) == str(existing.get("state_transition", ""))
+    same_actor = str(candidate.get("trigger_actor", "") or "") == str(existing.get("trigger_actor", "") or "")
+    candidate_specificity = (
+        int(candidate.get("definition_max_phrase_length", 0) or 0),
+        int(candidate.get("definition_phrase_count", 0) or 0),
+    )
+    existing_specificity = (
+        int(existing.get("definition_max_phrase_length", 0) or 0),
+        int(existing.get("definition_phrase_count", 0) or 0),
+    )
+    if same_category and (same_transition or same_actor):
+        return existing_score >= candidate_score * 0.85 and existing_specificity >= candidate_specificity
+    return False
+
+
+def _signature_overlap(left: dict[str, object], right: dict[str, object]) -> float:
+    left_signatures = {str(item).strip() for item in left.get("match_signatures", []) if str(item).strip()} if isinstance(left.get("match_signatures"), list) else set()
+    right_signatures = {str(item).strip() for item in right.get("match_signatures", []) if str(item).strip()} if isinstance(right.get("match_signatures"), list) else set()
+    if not left_signatures or not right_signatures:
+        return 0.0
+    intersection = left_signatures & right_signatures
+    denominator = min(len(left_signatures), len(right_signatures))
+    if denominator <= 0:
+        return 0.0
+    return len(intersection) / denominator
 
 
 def _priority_sort_key(priority: str) -> int:
