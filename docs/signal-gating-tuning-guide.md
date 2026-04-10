@@ -31,8 +31,7 @@ Plan-generation tuning is separate.
 The app currently ships these operator-visible signal-gating surfaces:
 
 - **Research home** → entry point for research workflows
-- **Signal gating** page → overview and navigation for the gating workflow
-- **Signal gating job** page → live configuration, tuning runs, and candidate review
+- **Signal gating tuning** page → live configuration, tuning runs, and candidate review
 - **Decision samples** page → shared evidence surface used by gating review and other research workflows
 
 ## Shipped backend surfaces

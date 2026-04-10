@@ -196,10 +196,13 @@ export function SettingsPage() {
                   <label className="form-field"><span>Minimum actionable resolved records</span><input name="min_actionable_resolved" type="number" min="1" defaultValue={String(data.planGenerationTuning.settings.min_actionable_resolved)} /></label>
                   <label className="form-field"><span>Minimum validation resolved records</span><input name="min_validation_resolved" type="number" min="1" defaultValue={String(data.planGenerationTuning.settings.min_validation_resolved)} /></label>
                 </div>
-                <div className="helper-text">Active config version: {data.planGenerationTuning.settings.active_config_version_id ?? "baseline"}. Promote or apply specific configs from the research tuning page.</div>
+                <div className="helper-text">Advanced research-facing controls. Active config version: {data.planGenerationTuning.settings.active_config_version_id ?? "baseline"}. Promote or apply specific configs from the research tuning page.</div>
                 <div className="cluster"><button className="button" type="submit" disabled={saving === "plan-generation-tuning"}>{saving === "plan-generation-tuning" ? "Saving…" : "Save plan generation tuning settings"}</button></div>
               </form>
-              <pre className="code-block top-gap-small">{JSON.stringify(data.planGenerationTuning.active_config, null, 2)}</pre>
+              <details className="top-gap-small">
+                <summary className="helper-text">Show active config JSON</summary>
+                <pre className="code-block top-gap-small">{JSON.stringify(data.planGenerationTuning.active_config, null, 2)}</pre>
+              </details>
             </Card>
 
             <Card>

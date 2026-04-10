@@ -55,17 +55,16 @@ const navSections: NavSection[] = [
     ],
     subsections: [
       {
-        label: "Recommendation tuning",
+        label: "Advanced review",
         items: [
           { to: "/research/decision-samples", label: "Decision samples", shortLabel: "Samples", icon: "◉" },
-          { to: "/research/plan-generation-tuning", label: "Plan generation tuning", shortLabel: "Plan tune", icon: "↗" },
         ],
       },
       {
-        label: "Signal gating",
+        label: "Tuning",
         items: [
-          { to: "/research/signal-gating", label: "Signal gating hub", shortLabel: "Gate", icon: "◉", end: true },
-          { to: "/research/signal-gating/gating-job", label: "Gating tuning job", shortLabel: "Tune", icon: "↯" },
+          { to: "/research/signal-gating/gating-job", label: "Signal gating tuning", shortLabel: "Gate", icon: "↯" },
+          { to: "/research/plan-generation-tuning", label: "Plan generation tuning", shortLabel: "Plan tune", icon: "↗" },
         ],
       },
     ],
@@ -141,25 +140,11 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
       description: "Review trade plans, calibration state, outcomes, and measured edge in one place.",
     };
   }
-  if (pathname.startsWith("/research/signal-gating/gating-job")) {
+  if (pathname.startsWith("/research/signal-gating/gating-job") || pathname.startsWith("/research/signal-gating")) {
     return {
       eyebrow: "Research",
-      title: "Gating tuning job",
-      description: "Edit gating controls, launch tuning runs, and inspect recent optimization history and candidate results.",
-    };
-  }
-  if (pathname.startsWith("/research/signal-gating/decision-samples")) {
-    return {
-      eyebrow: "Research",
-      title: "Decision samples",
-      description: "Inspect near-miss and actionable samples to tune the planner with more than just final outcomes.",
-    };
-  }
-  if (pathname.startsWith("/research/signal-gating")) {
-    return {
-      eyebrow: "Research",
-      title: "Signal gating",
-      description: "Move between decision samples and gating tuning without leaving the research workflow.",
+      title: "Signal gating tuning",
+      description: "Adjust upstream selection controls, launch tuning runs, and inspect candidate results without a separate hub page.",
     };
   }
   if (pathname.startsWith("/research/plan-generation-tuning")) {

@@ -195,4 +195,4 @@ This spec preserves the meaning of resolution:
 
 - `recommendation-plan-evaluation-recompute-notes.md`
 - `recommendation-methodology.md`
-- `signal-gating-tuning-plan.md`
+- `signal-gating-tuning-guide.md`

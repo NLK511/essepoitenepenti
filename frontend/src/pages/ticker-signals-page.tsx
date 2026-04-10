@@ -165,10 +165,14 @@ export function TickerSignalsPage() {
                     <div className="data-point"><span className="data-point-label">window</span><span className="data-point-value">{expectedWindow}</span></div>
                   </div>
 
-                  <div className="helper-text top-gap-small">shortlist {joinSummary(shortlistReasons, "eligible")} · drivers {joinSummary(primaryDrivers)} · industry {joinSummary(industryExposureChannels)} · ticker {joinSummary(tickerExposureChannels)}</div>
-                  <div className="helper-text">flags {joinSummary(conflictFlags)} · tags {joinSummary(transmissionTags)} · cheap scan trend {typeof components?.trend_score === "number" ? components.trend_score.toFixed(0) : "—"} / momentum {typeof components?.momentum_score === "number" ? components.momentum_score.toFixed(0) : "—"} / breakout {typeof components?.breakout_score === "number" ? components.breakout_score.toFixed(0) : "—"}</div>
-                  <div className="helper-text">selection {selectionLane ?? "—"} · catalyst proxy {catalystProxyScore !== null ? catalystProxyScore.toFixed(1) : "—"} · alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"} · window {expectedWindow}</div>
+                  <div className="helper-text top-gap-small">shortlist {joinSummary(shortlistReasons, "eligible")} · drivers {joinSummary(primaryDrivers)}</div>
                   <WarningSummary warnings={signal.warnings} />
+                  <details className="top-gap-small">
+                    <summary className="helper-text">Show advanced signal diagnostics</summary>
+                    <div className="helper-text top-gap-small">industry channels {joinSummary(industryExposureChannels)} · ticker channels {joinSummary(tickerExposureChannels)}</div>
+                    <div className="helper-text">flags {joinSummary(conflictFlags)} · tags {joinSummary(transmissionTags)}</div>
+                    <div className="helper-text">cheap scan trend {typeof components?.trend_score === "number" ? components.trend_score.toFixed(0) : "—"} / momentum {typeof components?.momentum_score === "number" ? components.momentum_score.toFixed(0) : "—"} / breakout {typeof components?.breakout_score === "number" ? components.breakout_score.toFixed(0) : "—"}</div>
+                  </details>
                 </article>
               );
             })}

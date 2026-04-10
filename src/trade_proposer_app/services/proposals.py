@@ -24,7 +24,7 @@ from trade_proposer_app.services.news import (
     SUMMARY_METHOD_NEWS_DIGEST,
 )
 from trade_proposer_app.services.signals import SignalIngestionService
-from trade_proposer_app.services.support_snapshot_resolver import SupportSnapshotResolver
+from trade_proposer_app.services.context_snapshot_resolver import ContextSnapshotResolver
 from trade_proposer_app.services.social import SocialIngestionService
 from trade_proposer_app.services.summary import SummaryRequest, SummaryService
 
@@ -170,7 +170,7 @@ class ProposalService:
         news_service: NewsIngestionService | None = None,
         social_service: SocialIngestionService | None = None,
         signal_service: SignalIngestionService | None = None,
-        snapshot_resolver: SupportSnapshotResolver | None = None,
+        snapshot_resolver: ContextSnapshotResolver | None = None,
         sentiment_analyzer: NaiveSentimentAnalyzer | None = None,
         summary_service: SummaryService | None = None,
     ) -> None:

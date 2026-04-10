@@ -254,6 +254,7 @@ export function RecommendationPlansPage() {
   const [evaluatingPlanId, setEvaluatingPlanId] = useState<number | null>(null);
   const [expandedPlanRows, setExpandedPlanRows] = useState<Record<string, boolean>>({});
   const [reviewSection, setReviewSection] = useState<"overview" | "calibration" | "baselines" | "evidence" | "families">("overview");
+  const [analyticsExpanded, setAnalyticsExpanded] = useState(false);
   const pageSize = Math.max(1, Number(searchParams.get("limit") ?? "100") || 100);
   const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
   const plans = plansResponse?.items ?? null;
@@ -480,25 +481,33 @@ export function RecommendationPlansPage() {
       <Card className="top-gap">
         <SectionTitle
           kicker="Review workspace"
-          title="Choose what to review"
+          title="Analytics and cohort review"
+          subtitle="Advanced review surfaces stay collapsed by default so the page remains plan-list first."
           actions={<HelpHint tooltip="Each tab answers a different operator question: trust, comparison, evidence concentration, or family-specific behavior." to={recommendationPlansDoc("review-workspace-tabs")} />}
         />
-        <div className="top-gap-small">
-          <SegmentedTabs
-            value={reviewSection}
-            onChange={setReviewSection}
-            options={[
-              { value: "overview", label: "Overview" },
-              { value: "calibration", label: "Calibration" },
-              { value: "baselines", label: "Baselines" },
-              { value: "evidence", label: "Evidence" },
-              { value: "families", label: "Setup families" },
-            ]}
-          />
+        <div className="cluster top-gap-small">
+          <button type="button" className="button-secondary" onClick={() => setAnalyticsExpanded((current) => !current)}>
+            {analyticsExpanded ? "Hide analytics" : "Show analytics"}
+          </button>
         </div>
+        {analyticsExpanded ? (
+          <div className="top-gap-small">
+            <SegmentedTabs
+              value={reviewSection}
+              onChange={setReviewSection}
+              options={[
+                { value: "overview", label: "Overview" },
+                { value: "calibration", label: "Calibration" },
+                { value: "baselines", label: "Baselines" },
+                { value: "evidence", label: "Evidence" },
+                { value: "families", label: "Setup families" },
+              ]}
+            />
+          </div>
+        ) : null}
       </Card>
 
-      {reviewSection === "overview" ? (
+      {analyticsExpanded && reviewSection === "overview" ? (
         <Card className="top-gap">
           <SectionTitle title="Review overview" actions={<HelpHint tooltip="High-level posture for recommendation plans: calibration trust, baseline comparisons, and where evidence is strongest or weakest." to={recommendationPlansDoc("recommendation-plans")} />} />
           <div className="insight-grid top-gap-small">
@@ -546,7 +555,7 @@ export function RecommendationPlansPage() {
         </Card>
       ) : null}
 
-      {reviewSection === "calibration" ? (
+      {analyticsExpanded && reviewSection === "calibration" ? (
       <Card className="top-gap">
         <SectionTitle
           title="Calibration snapshot"
@@ -573,7 +582,7 @@ export function RecommendationPlansPage() {
       </Card>
       ) : null}
 
-      {reviewSection === "baselines" ? (
+      {analyticsExpanded && reviewSection === "baselines" ? (
       <Card className="top-gap">
         <SectionTitle
           title="Baseline comparisons"
@@ -652,7 +661,7 @@ export function RecommendationPlansPage() {
       </Card>
       ) : null}
 
-      {reviewSection === "evidence" ? (
+      {analyticsExpanded && reviewSection === "evidence" ? (
       <Card className="top-gap">
         <SectionTitle
           title="Evidence concentration"
@@ -727,7 +736,7 @@ export function RecommendationPlansPage() {
       </Card>
       ) : null}
 
-      {reviewSection === "families" ? (
+      {analyticsExpanded && reviewSection === "families" ? (
       <Card className="top-gap">
         <SectionTitle
           title="Setup-family evaluation review"

@@ -103,7 +103,10 @@ export function PlanGenerationTuningPage() {
               <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(false)}>{saving === "run" ? "Running…" : "Run dry"}</button>
               <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(true)}>{saving === "apply" ? "Running & applying…" : "Run and promote if eligible"}</button>
             </div>
-            <pre className="code-block top-gap-small">{JSON.stringify(state.state.active_config, null, 2)}</pre>
+            <details className="top-gap-small">
+              <summary className="helper-text">Show active config JSON</summary>
+              <pre className="code-block top-gap-small">{JSON.stringify(state.state.active_config, null, 2)}</pre>
+            </details>
           </Card>
 
           <Card>
@@ -144,7 +147,10 @@ export function PlanGenerationTuningPage() {
                         </div>
                         <div className="helper-text">{candidate.changed_keys.join(", ") || "no changes"}</div>
                       </div>
-                      <pre className="code-block top-gap-small">{JSON.stringify(candidate.metric_breakdown, null, 2)}</pre>
+                      <details className="top-gap-small">
+                        <summary className="helper-text">Show candidate metric breakdown</summary>
+                        <pre className="code-block top-gap-small">{JSON.stringify(candidate.metric_breakdown, null, 2)}</pre>
+                      </details>
                     </article>
                   ))}
                 </div>

@@ -32,11 +32,9 @@ The UI is easiest to understand in four groups:
 4. **Research**
    - Research overview
    - Calibration tab
-   - Decision samples
-   - Signal gating
-   - Signal gating job
-   - Plan generation tuning
-   - Backtesting (planned UI)
+   - Advanced review: Decision samples
+   - Tuning: Signal gating tuning
+   - Tuning: Plan generation tuning
 
 A simple mental model:
 - **Dashboard** = what to check next
@@ -202,10 +200,9 @@ Most important fields:
 - **Open plans / expired plans / win rate** stats for the current filter set
 
 Suggested review order:
-1. overview
-2. calibration
-3. baselines/evidence
-4. individual plans
+1. individual plans first
+2. expand analytics only when needed
+3. calibration / baselines / evidence for deeper review
 
 Important interpretation note:
 - `expired` means the plan passed its intended horizon without a terminal win/loss outcome
@@ -279,8 +276,6 @@ Main actions:
 - reload
 
 Important fields:
-- **Label**
-- **Score**
 - **Computed / Expires**
 - **Drivers**
 - **Coverage**

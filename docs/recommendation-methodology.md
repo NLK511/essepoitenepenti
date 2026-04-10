@@ -34,7 +34,7 @@ For each proposal run, the system:
 4. runs `TickerDeepAnalysisService` for shortlisted names
 5. fetches recent OHLC data through `yfinance`
 6. computes technical and context-enriched features with `pandas`
-7. loads the latest shared macro and industry artifacts through the transitional `SupportSnapshotResolver`, enriched with context-snapshot data where available
+7. loads the latest shared macro and industry context snapshots through the context-native resolver layer
 8. builds recommendation plans, diagnostics, and audit payloads
 9. persists ticker signals, recommendation plans, run summaries, and artifacts
 10. emits explicit `no_action` plans when policy gates fail or evidence is too weak
@@ -78,7 +78,7 @@ That allows the system to:
 - surface ticker relationship read-throughs such as peers, suppliers, and customers
 - keep operator-facing transmission labels readable without relying on raw internal keys
 
-The shared-artifact layer is still transitional. Legacy support snapshots are still involved in resolver and freshness paths.
+Macro and industry context now use context snapshots as the canonical shared-artifact layer for refresh, review, and proposal-time reuse.
 
 If macro or industry artifacts are missing or stale, the methodology falls back to neutral values and explicit warnings.
 
@@ -240,7 +240,7 @@ Current limits still matter:
 - cheap scan is only a triage layer
 - context extraction is still heuristic
 - ticker deep analysis still reuses some older proposal internals
-- the shared context layer still depends partly on transitional support snapshots
+- the shared context layer is context-native now, but its event extraction and scoring are still heuristic
 - calibration is active, but evidence depth is still growing
 
 Related references:

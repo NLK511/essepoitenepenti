@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from trade_proposer_app.domain.models import SupportSnapshot
-from trade_proposer_app.repositories.support_snapshots import SupportSnapshotRepository
+import json
 from trade_proposer_app.services.social import SocialIngestionService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
@@ -14,12 +14,10 @@ INDUSTRY_TTL_HOURS = 8
 class IndustrySupportRefreshService:
     def __init__(
         self,
-        repository: SupportSnapshotRepository,
         *,
         social_service: SocialIngestionService | None = None,
         taxonomy_service: TickerTaxonomyService | None = None,
     ) -> None:
-        self.repository = repository
         self.social_service = social_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
@@ -67,7 +65,7 @@ class IndustrySupportRefreshService:
         computed_at = datetime.now(timezone.utc)
         expires_at = computed_at + timedelta(hours=INDUSTRY_TTL_HOURS)
 
-        snapshot = self.repository.create_snapshot(
+        snapshot = SupportSnapshot(
             scope="industry",
             subject_key=subject_key,
             subject_label=subject_label,
@@ -75,28 +73,28 @@ class IndustrySupportRefreshService:
             label=label,
             computed_at=computed_at,
             expires_at=expires_at,
-            coverage={
+            coverage_json=json.dumps({
                 "social_count": social_count,
                 "news_count": 0,
                 "ttl_hours": INDUSTRY_TTL_HOURS,
                 "tracked_tickers": tickers or [],
                 "query_count": len(queries or []),
-            },
-            source_breakdown={
+            }),
+            source_breakdown_json=json.dumps({
                 "news": {"score": 0.0, "item_count": 0},
                 "social": {"score": social_score, "item_count": social_count},
-            },
-            drivers=[],
-            signals={
+            }),
+            drivers_json=json.dumps([]),
+            signals_json=json.dumps({
                 "social_items": social_sentiment.get("items", []),
                 "scope_breakdown": social_sentiment.get("scope_breakdown", {}),
-            },
-            diagnostics={
+            }),
+            diagnostics_json=json.dumps({
                 "warnings": social_sentiment.get("coverage_insights", []),
                 "providers": (getattr(bundle, "feeds_used", []) if bundle is not None else []),
                 "query_diagnostics": (getattr(bundle, "query_diagnostics", {}) if bundle is not None else {}),
                 "queries": queries or [subject_label],
-            },
+            }),
             summary_text="",
             job_id=job_id,
             run_id=run_id,

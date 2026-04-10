@@ -69,7 +69,7 @@ Steps:
 Steps:
 1. enable or schedule evaluation workflows
 2. let the app evaluate older plans through the run system
-3. review recommendation plans and decision samples
+3. review recommendation plans first, then use decision samples only for advanced review when needed
 4. use signal-gating tuning when upstream recall looks too strict or too loose
 5. use the research calibration tab and calibration report to check whether confidence is lining up with realized outcomes
 6. use plan-generation tuning when downstream plan precision, entry framing, or trade-level construction needs improvement
@@ -83,7 +83,7 @@ Steps:
 
 Steps:
 1. open Context review
-2. review recent macro and industry context plus supporting refresh history
+2. review recent macro and industry context plus their refresh runs
 3. notice freshness warnings or missing coverage
 4. queue a refresh
 5. open context detail pages or related runs when investigating quality problems

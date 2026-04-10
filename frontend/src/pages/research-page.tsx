@@ -74,7 +74,7 @@ function renderAssessment(content: string) {
 export function ResearchPage() {
   const [assessment, setAssessment] = useState<PerformanceAssessmentResponse | null>(null);
   const [calibration, setCalibration] = useState<CalibrationReportResponse | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "calibration">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "calibration" | "tuning">("overview");
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -158,6 +158,7 @@ export function ResearchPage() {
               options={[
                 { value: "overview", label: "Overview" },
                 { value: "calibration", label: "Calibration" },
+                { value: "tuning", label: "Tuning" },
               ]}
               onChange={setActiveTab}
             />
@@ -195,52 +196,59 @@ export function ResearchPage() {
           <section className="card-grid">
             <Card>
               <SectionTitle
-                kicker="Available now"
+                kicker="Advanced review"
                 title="Decision samples"
-                subtitle="Review near-misses, actionable cases, and the evidence that may feed future tuning and replay workflows."
+                subtitle="Inspect near-misses, borderline cases, and actionable examples used by advanced review and tuning workflows."
               />
-              <div className="helper-text">This is the shared evidence surface. It is not exclusive to signal gating, even though gating uses it today.</div>
+              <div className="helper-text">This is an advanced review surface rather than a daily operator queue.</div>
               <div className="cluster top-gap-small">
                 <Link to="/research/decision-samples" className="button-secondary">Open decision samples</Link>
-                <Badge tone="info">active</Badge>
+                <Badge tone="info">advanced review</Badge>
               </div>
             </Card>
 
             <Card>
               <SectionTitle
-                kicker="Available now"
-                title="Signal gating"
-                subtitle="The signal-gating subsection collects the tuning job and supporting review links so the controls stay grouped without owning the samples themselves."
+                kicker="Tuning"
+                title="Signal gating tuning"
+                subtitle="Adjust upstream selection controls when shortlist recall is too strict or too loose."
               />
-              <div className="helper-text">Use the gating subsection when you want to adjust live gating parameters or inspect tuning history.</div>
+              <div className="helper-text">Use this page to tune shortlist behavior directly without a separate hub layer.</div>
               <div className="cluster top-gap-small">
-                <Link to="/research/signal-gating" className="button-secondary">Open signal gating</Link>
+                <Link to="/research/signal-gating/gating-job" className="button-secondary">Open signal gating tuning</Link>
                 <Badge tone="info">active</Badge>
               </div>
             </Card>
 
             <Card>
               <SectionTitle
-                kicker="Available now"
+                kicker="Tuning"
                 title="Plan generation tuning"
                 subtitle="Run candidate-based precision tuning for live entry, stop-loss, and take-profit construction with ranked backtest results."
               />
-              <div className="helper-text">Use this page to inspect active config versions, tuning runs, guarded promotions, and the candidate ranking output.</div>
+              <div className="helper-text">Use this page to inspect active config versions, tuning runs, guarded promotions, and candidate ranking output.</div>
               <div className="cluster top-gap-small">
                 <Link to="/research/plan-generation-tuning" className="button-secondary">Open plan generation tuning</Link>
                 <Badge tone="info">active</Badge>
               </div>
             </Card>
+          </section>
+        ) : null}
 
+        {activeTab === "tuning" ? (
+          <section className="card-grid">
             <Card>
-              <SectionTitle
-                kicker="Planned"
-                title="Backtesting"
-                subtitle="A future page for historical replay, comparison, and scenario analysis."
-              />
-              <div className="helper-text">This slot is reserved for replay-style experiments and historical validation workflows.</div>
+              <SectionTitle kicker="Upstream" title="Signal gating tuning" subtitle="Recall-oriented tuning for shortlist and threshold behavior." />
+              <div className="helper-text">Use this when too many promising names are being screened out before full plan generation.</div>
               <div className="cluster top-gap-small">
-                <Badge tone="neutral">coming soon</Badge>
+                <Link to="/research/signal-gating/gating-job" className="button-secondary">Open signal gating tuning</Link>
+              </div>
+            </Card>
+            <Card>
+              <SectionTitle kicker="Downstream" title="Plan generation tuning" subtitle="Precision-oriented tuning for entry, stop, target, and actionability behavior." />
+              <div className="helper-text">Use this when the app is generating too many weak actionable plans or the live trade framing needs adjustment.</div>
+              <div className="cluster top-gap-small">
+                <Link to="/research/plan-generation-tuning" className="button-secondary">Open plan generation tuning</Link>
               </div>
             </Card>
           </section>

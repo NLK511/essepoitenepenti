@@ -158,11 +158,13 @@ Examples:
 - optimization — before/after fingerprint and backup metadata
 - context refresh — created snapshot ids, scope, refresh summary, and context event metadata
 
-## Support snapshot records
+## Historical support snapshot records
 
-Shared macro and industry refresh workflows still persist `SupportSnapshot` records.
+Older builds persisted `SupportSnapshot` records during context refresh workflows.
 
-Common fields:
+They are no longer part of the active operator-facing architecture, but the schema references may still appear in historical notes or old test fixtures.
+
+Common historical fields:
 - `id`
 - `scope`
 - `subject_key`

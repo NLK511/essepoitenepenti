@@ -34,7 +34,7 @@ It is not yet a proven short-horizon prediction engine.
 - Use ticker drill-down pages to inspect plan history and latest outcomes for a single name.
 
 ### Shared context and ontology
-- Persist macro and industry context snapshots, plus the legacy support snapshots still used by some backend flows.
+- Persist macro and industry context snapshots as the canonical shared-context artifacts.
 - Review macro and industry context from the Context pages and detail views.
 - Store context-event fields such as persistence state, state transition, catalyst type, market interpretation, trigger actor, trigger actor role, trigger source type, and short "why now" summaries.
 - Trace which shared artifacts were used by a run or recommendation plan.
@@ -80,7 +80,7 @@ The main limits are still practical:
 - auth, RBAC, tenancy, and credential lifecycle are still incomplete; the app remains single-user and the frontend stores the bearer token locally
 - context extraction is stronger than before at capturing short-horizon state changes, but it is still heuristic rather than a mature event model
 - ticker deep analysis still reuses some older proposal-engine internals
-- legacy support snapshots are still present in refresh, resolver, and health paths even though context snapshots are the main review surface
+- context refresh and proposal-time context reuse are now context-native, but the deeper event model is still heuristic rather than fully mature
 - calibration exists, but evidence remains limited
 
 And one analytical caution still matters:

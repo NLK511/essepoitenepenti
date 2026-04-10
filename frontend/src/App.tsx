@@ -11,7 +11,6 @@ import { RecommendationDecisionSamplesPage } from "./pages/recommendation-decisi
 import { RecommendationPlansPage } from "./pages/recommendation-plans-page";
 import { ResearchPage } from "./pages/research-page";
 import { SignalGatingJobPage } from "./pages/signal-gating-job-page";
-import { SignalGatingPage } from "./pages/signal-gating-page";
 import { PlanGenerationTuningPage } from "./pages/plan-generation-tuning-page";
 import { RunDetailPage } from "./pages/run-detail-page";
 import { ContextReviewPage } from "./pages/context-review-page";
@@ -50,8 +49,8 @@ export default function App() {
           <Route path="sentiment" element={<Navigate to="/context" replace />} />
           <Route path="sentiment/:snapshotId" element={<Navigate to="/context" replace />} />
           <Route path="research" element={<ResearchPage />} />
-          <Route path="research/signal-gating" element={<SignalGatingPage />} />
           <Route path="research/decision-samples" element={<RecommendationDecisionSamplesPage />} />
+          <Route path="research/signal-gating" element={<Navigate to="/research/signal-gating/gating-job" replace />} />
           <Route path="research/signal-gating/decision-samples" element={<Navigate to="/research/decision-samples" replace />} />
           <Route path="research/signal-gating/gating-job" element={<SignalGatingJobPage />} />
           <Route path="research/plan-generation-tuning" element={<PlanGenerationTuningPage />} />

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from trade_proposer_app.repositories.support_snapshots import SupportSnapshotRepository
+from trade_proposer_app.domain.models import SupportSnapshot
 from trade_proposer_app.services.news import NewsIngestionService
 from trade_proposer_app.services.social import SocialIngestionService
 
@@ -30,12 +31,10 @@ MACRO_QUERIES = [
 class MacroSupportRefreshService:
     def __init__(
         self,
-        repository: SupportSnapshotRepository,
         *,
         social_service: SocialIngestionService | None = None,
         news_service: NewsIngestionService | None = None,
     ) -> None:
-        self.repository = repository
         self.social_service = social_service
         self.news_service = news_service
 
@@ -60,7 +59,7 @@ class MacroSupportRefreshService:
         computed_at = datetime.now(timezone.utc)
         expires_at = computed_at + timedelta(hours=MACRO_TTL_HOURS)
 
-        snapshot = self.repository.create_snapshot(
+        snapshot = SupportSnapshot(
             scope="macro",
             subject_key=MACRO_SUBJECT_KEY,
             subject_label=MACRO_SUBJECT_LABEL,
@@ -68,25 +67,25 @@ class MacroSupportRefreshService:
             label=label,
             computed_at=computed_at,
             expires_at=expires_at,
-            coverage={
+            coverage_json=json.dumps({
                 "social_count": social_count,
                 "news_count": 0,
                 "ttl_hours": MACRO_TTL_HOURS,
-            },
-            source_breakdown={
+            }),
+            source_breakdown_json=json.dumps({
                 "news": {"score": 0.0, "item_count": 0},
                 "social": {"score": social_score, "item_count": social_count},
-            },
-            drivers=[],
-            signals={
+            }),
+            drivers_json=json.dumps([]),
+            signals_json=json.dumps({
                 "social_items": social_sentiment.get("items", []),
                 "scope_breakdown": social_sentiment.get("scope_breakdown", {}),
-            },
-            diagnostics={
+            }),
+            diagnostics_json=json.dumps({
                 "warnings": social_sentiment.get("coverage_insights", []),
                 "providers": (getattr(bundle, "feeds_used", []) if bundle is not None else []),
                 "query_diagnostics": (getattr(bundle, "query_diagnostics", {}) if bundle is not None else {}),
-            },
+            }),
             summary_text="",
             job_id=job_id,
             run_id=run_id,

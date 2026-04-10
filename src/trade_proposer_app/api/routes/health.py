@@ -7,7 +7,6 @@ from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import AppPreflightReport, PreflightCheck
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
-from trade_proposer_app.repositories.support_snapshots import SupportSnapshotRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.preflight import AppPreflightService
@@ -32,10 +31,7 @@ def _normalize_datetime(value: datetime | None) -> datetime | None:
 
 
 def _augment_report_with_snapshot_checks(report: AppPreflightReport, session: Session) -> AppPreflightReport:
-    repository = SupportSnapshotRepository(session)
     context_repository = ContextSnapshotRepository(session)
-    latest_macro = repository.get_latest_snapshot("macro", "global_macro")
-    latest_industry = next(iter(repository.list_recent_snapshots(scope="industry", limit=1)), None)
     latest_macro_context = context_repository.get_latest_macro_context_snapshot()
     latest_industry_context = next(iter(context_repository.list_industry_context_snapshots(limit=1)), None)
     runs_repository = RunRepository(session)
@@ -53,8 +49,6 @@ def _augment_report_with_snapshot_checks(report: AppPreflightReport, session: Se
     )
 
     for name, label, snapshot in (
-        ("support_snapshot:macro", "macro support", latest_macro),
-        ("support_snapshot:industry", "industry support", latest_industry),
         ("context_snapshot:macro", "macro context", latest_macro_context),
         ("context_snapshot:industry", "industry context", latest_industry_context),
     ):
@@ -117,7 +111,6 @@ def _augment_report_with_snapshot_checks(report: AppPreflightReport, session: Se
 async def health(session: Session = Depends(get_db_session)) -> dict[str, object]:
     report = _augment_report_with_snapshot_checks(_create_preflight_service(session).run(), session)
     status = "ok" if report.status == "ok" else "degraded"
-    snapshot_checks = {check.name: check for check in report.checks if check.name.startswith("support_snapshot:")}
     context_checks = {check.name: check for check in report.checks if check.name.startswith("context_snapshot:")}
     return {
         "status": status,
@@ -127,10 +120,6 @@ async def health(session: Session = Depends(get_db_session)) -> dict[str, object
             "status": report.status,
             "engine": report.engine,
             "checked_at": report.checked_at.isoformat(),
-        },
-        "support_snapshots": {
-            "macro": snapshot_checks.get("support_snapshot:macro").model_dump() if snapshot_checks.get("support_snapshot:macro") else None,
-            "industry": snapshot_checks.get("support_snapshot:industry").model_dump() if snapshot_checks.get("support_snapshot:industry") else None,
         },
         "context_snapshots": {
             "macro": context_checks.get("context_snapshot:macro").model_dump() if context_checks.get("context_snapshot:macro") else None,

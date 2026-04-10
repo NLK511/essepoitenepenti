@@ -7,16 +7,6 @@ import type {
   RunStatus,
 } from "./types";
 
-export interface SupportSnapshotReference {
-  scope: string;
-  snapshotId: number;
-  subjectKey: string | null;
-  subjectLabel: string | null;
-  source: string | null;
-  label: string | null;
-  score: number | null;
-}
-
 export interface KeyLabelDetail {
   key: string;
   label: string;
@@ -194,35 +184,6 @@ export function parseJsonRecord(value: string | null): Record<string, unknown> |
   } catch (_error) {
     return null;
   }
-}
-
-export function extractSupportSnapshotReferences(value: string | null): SupportSnapshotReference[] {
-  const parsed = parseJsonRecord(value);
-  const sentiment = parsed && isRecord(parsed.sentiment) ? parsed.sentiment : null;
-  if (!sentiment) {
-    return [];
-  }
-  const references: SupportSnapshotReference[] = [];
-  for (const scope of ["macro", "industry"]) {
-    const section = sentiment[scope];
-    if (!isRecord(section)) {
-      continue;
-    }
-    const snapshotId = section.snapshot_id;
-    if (typeof snapshotId !== "number") {
-      continue;
-    }
-    references.push({
-      scope,
-      snapshotId,
-      subjectKey: typeof section.subject_key === "string" ? section.subject_key : null,
-      subjectLabel: typeof section.subject_label === "string" ? section.subject_label : null,
-      source: typeof section.source === "string" ? section.source : null,
-      label: typeof section.label === "string" ? section.label : null,
-      score: typeof section.score === "number" ? section.score : null,
-    });
-  }
-  return references;
 }
 
 function humanizeKey(value: string): string {

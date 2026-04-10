@@ -185,34 +185,6 @@ export interface DashboardResponse {
   recommendation_plans: RecommendationPlan[];
 }
 
-export interface SupportSnapshot {
-  id: number | null;
-  scope: "macro" | "industry" | string;
-  subject_key: string;
-  subject_label: string;
-  status: string;
-  score: number;
-  label: string;
-  computed_at: string;
-  expires_at: string | null;
-  is_expired: boolean;
-  coverage: Record<string, unknown>;
-  source_breakdown: Record<string, unknown>;
-  drivers: string[];
-  signals: Record<string, unknown>;
-  diagnostics: Record<string, unknown>;
-  summary_text: string;
-  job_id: number | null;
-  run_id: number | null;
-}
-
-export interface SupportSnapshotListResponse {
-  snapshots: SupportSnapshot[];
-  scope: string | null;
-  limit: number;
-}
-
-
 export interface KeyLabelDetail {
   key: string;
   label: string;

@@ -134,7 +134,7 @@ export function ContextReviewPage() {
     try {
       setBusyAction(scope);
       setError(null);
-      const run = await postForm<Run>(`/api/support-snapshots/refresh/${scope}`, {});
+      const run = await postForm<Run>(`/api/context/refresh/${scope}`, {});
       showToast({
         message: `${actionLabel(scope)} refresh queued as run #${run.id}`,
         tone: "success",

@@ -781,6 +781,6 @@ Autonomous implementation must not broaden scope beyond this spec without an exp
 - `recommendation-plan-resolution-spec.md`
 - `recommendation-plan-evaluation-recompute-notes.md`
 - `decision-sample-tuning-guide.md`
-- `signal-gating-tuning-plan.md`
+- `signal-gating-tuning-guide.md`
 - `raw-details-reference.md`
 - `operator-page-field-guide.md`
