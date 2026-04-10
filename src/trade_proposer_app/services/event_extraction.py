@@ -561,9 +561,38 @@ OVERLAP_SPECIFICITY_PREFERENCES: dict[str, set[str]] = {
     "growth_recession": {"risk_off"},
     "rates": {"yield_pressure", "inflation_cooling", "inflation_sticky"},
     "energy_costs": {"geopolitical_escalation", "geopolitical_deescalation"},
-    "product_cycle": {"innovation"},
     "conference_cycle": {"guidance_raise", "guidance_cut", "product_cycle"},
+    "product_cycle": {"innovation", "supply_chain_disruption", "supply_chain_recovery"},
     "backlog": {"demand_acceleration", "demand_softening", "inventory_destocking", "inventory_restocking"},
+    "ai_theme": {"semiconductor_theme", "cloud_theme", "product_cycle", "backlog", "demand_acceleration"},
+}
+
+
+KNOWN_SPECIFICITY_RANKS: dict[str, int] = {
+    "ai_theme": 1,
+    "conference_cycle": 1,
+    "us_monetary_policy": 1,
+    "rates": 1,
+    "growth_recession": 1,
+    "energy_costs": 1,
+    "backlog": 2,
+    "product_cycle": 2,
+    "semiconductor_theme": 3,
+    "cloud_theme": 3,
+    "demand_acceleration": 3,
+    "demand_softening": 3,
+    "guidance_raise": 4,
+    "guidance_cut": 4,
+    "supply_chain_disruption": 4,
+    "supply_chain_recovery": 4,
+    "inventory_destocking": 4,
+    "inventory_restocking": 4,
+    "bond_yield_drop": 4,
+    "bond_yield_spike": 4,
+    "inflation_cooling": 4,
+    "inflation_sticky": 4,
+    "geopolitical_escalation": 4,
+    "geopolitical_deescalation": 4,
 }
 
 
@@ -580,38 +609,72 @@ def _suppress_overlapping_events(events: list[dict[str, object]]) -> list[dict[s
         ),
         reverse=True,
     ):
-        if any(_should_suppress_event(candidate, existing) for existing in kept):
+        suppress_candidate = False
+        replace_existing_indexes: list[int] = []
+        for index, existing in enumerate(kept):
+            resolution = _overlap_resolution(candidate, existing)
+            if resolution == "suppress_candidate":
+                suppress_candidate = True
+                break
+            if resolution == "replace_existing":
+                replace_existing_indexes.append(index)
+        if suppress_candidate:
             continue
+        for index in reversed(replace_existing_indexes):
+            kept.pop(index)
         kept.append(candidate)
     return kept
 
 
-def _should_suppress_event(candidate: dict[str, object], existing: dict[str, object]) -> bool:
+def _overlap_resolution(candidate: dict[str, object], existing: dict[str, object]) -> str | None:
     candidate_key = str(candidate.get("key", "") or "")
     existing_key = str(existing.get("key", "") or "")
     overlap = _signature_overlap(candidate, existing)
-    if overlap < 0.6:
-        return False
+    known_pair = _is_preferred_specific_pair(candidate_key, existing_key) or _is_preferred_specific_pair(existing_key, candidate_key)
+    overlap_threshold = 0.5 if known_pair else 0.6
+    if overlap < overlap_threshold:
+        return None
+
     candidate_score = float(candidate.get("event_score", 0.0) or 0.0)
     existing_score = float(existing.get("event_score", 0.0) or 0.0)
-    if candidate_key in OVERLAP_SPECIFICITY_PREFERENCES and existing_key in OVERLAP_SPECIFICITY_PREFERENCES[candidate_key]:
-        return existing_score >= candidate_score * 0.7
-    if existing_key in OVERLAP_SPECIFICITY_PREFERENCES and candidate_key in OVERLAP_SPECIFICITY_PREFERENCES[existing_key]:
-        return existing_score >= candidate_score * 0.7
+
+    if _is_preferred_specific_pair(existing_key, candidate_key):
+        if overlap >= 0.95 or candidate_score >= existing_score * 0.55:
+            return "replace_existing"
+    if _is_preferred_specific_pair(candidate_key, existing_key):
+        if overlap >= 0.95 or existing_score >= candidate_score * 0.55:
+            return "suppress_candidate"
+
     same_category = str(candidate.get("category", "")) == str(existing.get("category", ""))
     same_transition = str(candidate.get("state_transition", "")) == str(existing.get("state_transition", ""))
     same_actor = str(candidate.get("trigger_actor", "") or "") == str(existing.get("trigger_actor", "") or "")
-    candidate_specificity = (
-        int(candidate.get("definition_max_phrase_length", 0) or 0),
-        int(candidate.get("definition_phrase_count", 0) or 0),
-    )
-    existing_specificity = (
-        int(existing.get("definition_max_phrase_length", 0) or 0),
-        int(existing.get("definition_phrase_count", 0) or 0),
-    )
+    candidate_specificity = _event_specificity(candidate)
+    existing_specificity = _event_specificity(existing)
+
+    if overlap >= 0.95 and candidate_specificity > existing_specificity and candidate_score >= existing_score * 0.55:
+        return "replace_existing"
+    if overlap >= 0.95 and existing_specificity >= candidate_specificity and existing_score >= candidate_score * 0.55:
+        return "suppress_candidate"
+
     if same_category and (same_transition or same_actor):
-        return existing_score >= candidate_score * 0.85 and existing_specificity >= candidate_specificity
-    return False
+        if existing_score >= candidate_score * 0.85 and existing_specificity >= candidate_specificity:
+            return "suppress_candidate"
+        if candidate_score >= existing_score * 0.85 and candidate_specificity > existing_specificity:
+            return "replace_existing"
+    return None
+
+
+def _is_preferred_specific_pair(broad_key: str, specific_key: str) -> bool:
+    return specific_key in OVERLAP_SPECIFICITY_PREFERENCES.get(broad_key, set())
+
+
+def _event_specificity(event: dict[str, object]) -> tuple[int, int, int]:
+    key = str(event.get("key", "") or "")
+    return (
+        KNOWN_SPECIFICITY_RANKS.get(key, 0),
+        int(event.get("definition_max_phrase_length", 0) or 0),
+        int(event.get("definition_phrase_count", 0) or 0),
+    )
 
 
 def _signature_overlap(left: dict[str, object], right: dict[str, object]) -> float:
