@@ -61,10 +61,20 @@ export function SectionTitle(props: { kicker?: string; title: string; subtitle?:
   );
 }
 
-export function StatCard(props: { label: string; value: ReactNode; helper?: string; className?: string }) {
+export function StatCard(props: {
+  label: string;
+  value: ReactNode;
+  helper?: string;
+  className?: string;
+  tooltip?: string;
+  tooltipTo?: string;
+}) {
   return (
     <Card className={props.className}>
-      <div className="metric-label">{props.label}</div>
+      <div className="metric-label cluster cluster-tight">
+        <span>{props.label}</span>
+        {props.tooltip && props.tooltipTo ? <HelpHint tooltip={props.tooltip} to={props.tooltipTo} ariaLabel={`${props.label}. ${props.tooltip}. Open documentation.`} /> : null}
+      </div>
       <div className="metric-value">{props.value}</div>
       {props.helper ? <div className="helper-text">{props.helper}</div> : null}
     </Card>

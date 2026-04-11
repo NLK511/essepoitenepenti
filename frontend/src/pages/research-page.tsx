@@ -252,10 +252,10 @@ export function ResearchPage() {
             {walkForward ? (
               <>
                 <section className="card-grid">
-                  <StatCard label="Slices" value={walkForward.total_slices} helper="Rolling validation windows" />
-                  <StatCard label="Lookback" value={`${walkForward.lookback_days}d`} helper="Historical span considered" />
-                  <StatCard label="Validation" value={`${walkForward.validation_days}d`} helper="Each window length" />
-                  <StatCard label="Step" value={`${walkForward.step_days}d`} helper="Window stride" />
+                  <StatCard label="Slices" value={walkForward.total_slices} helper="Rolling validation windows" tooltip="The total number of walk-forward slices. A slice is one bounded validation window used to test whether results hold across time instead of one pooled sample." tooltipTo="/docs?doc=glossary&section=slice" />
+                  <StatCard label="Lookback" value={`${walkForward.lookback_days}d`} helper="Historical span considered" tooltip="How much prior history each validation cycle can look back on before evaluating the later validation window." tooltipTo="/docs?doc=glossary&section=walk-forward-validation" />
+                  <StatCard label="Validation" value={`${walkForward.validation_days}d`} helper="Each window length" tooltip="The length of each held-out validation window used to measure later performance." tooltipTo="/docs?doc=glossary&section=walk-forward-validation" />
+                  <StatCard label="Step" value={`${walkForward.step_days}d`} helper="Window stride" tooltip="How far the rolling validation window moves forward between slices." tooltipTo="/docs?doc=glossary&section=walk-forward-validation" />
                 </section>
                 <section className="card-grid">
                   {walkForward.slices.map((slice) => (
@@ -299,10 +299,10 @@ export function ResearchPage() {
           <>
             {calibrationSummary ? (
               <section className="card-grid">
-                <StatCard label="Calibration method" value={calibrationReport?.method ?? "—"} helper="Latest assessed cohort" />
-                <StatCard label="Brier score" value={calibrationReport?.brier_score !== null && calibrationReport?.brier_score !== undefined ? calibrationReport.brier_score.toFixed(4) : "—"} helper="Lower is better" />
-                <StatCard label="ECE" value={calibrationReport?.expected_calibration_error !== null && calibrationReport?.expected_calibration_error !== undefined ? calibrationReport.expected_calibration_error.toFixed(4) : "—"} helper="Average confidence gap" />
-                <StatCard label="Resolved outcomes" value={calibrationReport?.resolved_count ?? calibrationSummary.resolved_outcomes} helper="Win/loss cases used for reliability" />
+                <StatCard label="Calibration method" value={calibrationReport?.method ?? "—"} helper="Latest assessed cohort" tooltip="The current calibration report method used for this reviewed cohort or filtered comparison group." tooltipTo="/docs?doc=glossary&section=calibration" />
+                <StatCard label="Brier score" value={calibrationReport?.brier_score !== null && calibrationReport?.brier_score !== undefined ? calibrationReport.brier_score.toFixed(4) : "—"} helper="Lower is better" tooltip="A proper scoring measure of confidence quality. Lower generally means predicted confidence matched realized outcomes more closely." tooltipTo="/docs?doc=glossary&section=calibration" />
+                <StatCard label="ECE" value={calibrationReport?.expected_calibration_error !== null && calibrationReport?.expected_calibration_error !== undefined ? calibrationReport.expected_calibration_error.toFixed(4) : "—"} helper="Average confidence gap" tooltip="Expected calibration error: the average gap between displayed confidence and realized win rate across confidence buckets." tooltipTo="/docs?doc=glossary&section=confidence-bucket" />
+                <StatCard label="Resolved outcomes" value={calibrationReport?.resolved_count ?? calibrationSummary.resolved_outcomes} helper="Win/loss cases used for reliability" tooltip="The number of resolved win/loss outcomes contributing to the current calibration view. Thin samples should be read cautiously." tooltipTo="/docs?doc=glossary&section=outcome-evaluation" />
               </section>
             ) : null}
 

@@ -10,11 +10,12 @@ Use it to answer two questions:
 
 ## Start here
 
-If you are new to the repo, read these first:
+If you are new to the repo, read these first in order:
 - `../README.md` — repo overview and quick start
 - `getting-started.md` — setup, startup, auth basics, troubleshooting
-- `operator-page-field-guide.md` — main UI pages and operator flow
-- `glossary.md` — shared terms used across the app
+- `operator-page-field-guide.md` — main UI pages, operator flow, and how to orient yourself in the product
+- `glossary.md` — shared terms used across the app, including cohort, slice, bucket, and calibration language
+- `recommendation-methodology.md` — the live recommendation path after you know the page and term basics
 
 ## Canonical current-state docs
 
@@ -94,10 +95,13 @@ When a doc becomes mostly historical:
 - `getting-started.md`
 - `operator-page-field-guide.md`
 - `glossary.md`
+- `recommendation-methodology.md`
 
 ### Product understanding
 - `product-thesis.md`
 - `features-and-capabilities.md`
+- `operator-page-field-guide.md`
+- `glossary.md`
 - `recommendation-methodology.md`
 - `roadmap.md`
 

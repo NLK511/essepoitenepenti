@@ -93,10 +93,10 @@ export function DashboardPage() {
       {data ? (
         <div className="stack-page">
           <section className="metrics-grid">
-            <StatCard label="Plans to review" value={data.recommendation_plans.length} helper="Latest persisted recommendation plans" />
-            <StatCard label="Recent runs" value={data.latest_runs.length} helper="Most recent workflow executions" />
-            <StatCard label="Watchlists" value={data.watchlists.length} helper="Reusable universes feeding proposal jobs" />
-            <StatCard label="Jobs" value={data.jobs.length} helper="Saved workflows" />
+            <StatCard label="Plans to review" value={data.recommendation_plans.length} helper="Latest persisted recommendation plans" tooltip="A quick count of the most recent recommendation plans available for operator review." tooltipTo="/docs?doc=operator-page-field-guide&section=4-recommendation-plans" />
+            <StatCard label="Recent runs" value={data.latest_runs.length} helper="Most recent workflow executions" tooltip="The number of recent workflow runs surfaced on the dashboard for quick health and activity checks." tooltipTo="/docs?doc=glossary&section=run" />
+            <StatCard label="Watchlists" value={data.watchlists.length} helper="Reusable universes feeding proposal jobs" tooltip="The number of stored watchlists currently available to seed proposal-generation workflows." tooltipTo="/docs?doc=glossary&section=watchlist" />
+            <StatCard label="Jobs" value={data.jobs.length} helper="Saved workflows" tooltip="The number of saved workflows that can be run manually or by the scheduler." tooltipTo="/docs?doc=glossary&section=job" />
             <StatCard
               label="Macro context"
               value={latestMacroContext ? latestMacroContext.status : "—"}
@@ -113,10 +113,10 @@ export function DashboardPage() {
             <Card>
               <SectionTitle kicker="Quality snapshot" title="Recommendation quality at a glance" subtitle={`Status: ${data.recommendation_quality.summary.status} · Updated ${formatDate(data.recommendation_quality.summary.generated_at)}`} actions={<><Link to="/recommendation-quality" className="button-secondary">Open summary</Link><Link to="/research" className="button-subtle">Open research</Link></>} />
               <section className="metrics-grid top-gap-small">
-                <StatCard label="Win rate" value={data.recommendation_quality.summary.overall_win_rate_percent !== null ? `${data.recommendation_quality.summary.overall_win_rate_percent.toFixed(1)}%` : "—"} helper="Overall resolved recommendation outcomes" />
-                <StatCard label="Brier / ECE" value={data.recommendation_quality.summary.calibration_report ? `${data.recommendation_quality.summary.calibration_report.brier_score?.toFixed(4) ?? "—"} / ${data.recommendation_quality.summary.calibration_report.expected_calibration_error?.toFixed(4) ?? "—"}` : "—"} helper="Current calibration snapshot" />
-                <StatCard label="Walk-forward" value={data.recommendation_quality.summary.walk_forward_promotion_recommended ? "recommended" : data.recommendation_quality.summary.walk_forward_error ? "error" : "watch"} helper="Active tuning profile gate" />
-                <StatCard label="Evidence" value={data.recommendation_quality.summary.ready_for_expansion ? "ready" : "conservative"} helper="Whether the strongest cohorts have separated" />
+                <StatCard label="Win rate" value={data.recommendation_quality.summary.overall_win_rate_percent !== null ? `${data.recommendation_quality.summary.overall_win_rate_percent.toFixed(1)}%` : "—"} helper="Overall resolved recommendation outcomes" tooltip="Overall win/loss rate across the currently reviewed resolved recommendation outcomes. It should be read together with calibration and evidence, not alone." tooltipTo="/docs?doc=recommendation-quality-improvement-plan" />
+                <StatCard label="Brier / ECE" value={data.recommendation_quality.summary.calibration_report ? `${data.recommendation_quality.summary.calibration_report.brier_score?.toFixed(4) ?? "—"} / ${data.recommendation_quality.summary.calibration_report.expected_calibration_error?.toFixed(4) ?? "—"}` : "—"} helper="Current calibration snapshot" tooltip="A compact calibration snapshot. Brier score and expected calibration error both describe how closely displayed confidence matched realized outcomes." tooltipTo="/docs?doc=glossary&section=calibration" />
+                <StatCard label="Walk-forward" value={data.recommendation_quality.summary.walk_forward_promotion_recommended ? "recommended" : data.recommendation_quality.summary.walk_forward_error ? "error" : "watch"} helper="Active tuning profile gate" tooltip="Whether the active tuning profile currently looks strong enough under walk-forward validation to support promotion or continued trust." tooltipTo="/docs?doc=glossary&section=walk-forward-validation" />
+                <StatCard label="Evidence" value={data.recommendation_quality.summary.ready_for_expansion ? "ready" : "conservative"} helper="Whether the strongest cohorts have separated" tooltip="Whether similar recommendation groups are separating clearly enough to deserve broader trust, or whether the evidence still looks too thin and should stay conservative." tooltipTo="/docs?doc=glossary&section=cohort" />
               </section>
               <div className="helper-text top-gap-small">Next: {data.recommendation_quality.next_actions[0] ?? "Maintain the current settings."}</div>
             </Card>
