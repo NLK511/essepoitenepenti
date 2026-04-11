@@ -128,10 +128,10 @@ export function SignalGatingJobPage() {
       {tuningState && runs ? (
         <div className="stack-page">
           <section className="metrics-grid">
-            <StatCard label="Current threshold" value={formatValue(tuningState.current_confidence_threshold)} helper="Live confidence threshold" />
-            <StatCard label="Active offset" value={formatValue(tuningState.active_tuning.threshold_offset)} helper="Tuning offset in effect" />
-            <StatCard label="Latest best" value={formatValue(tuningState.latest_run?.best_threshold)} helper="Winning candidate threshold" />
-            <StatCard label="Latest score" value={formatValue(tuningState.latest_run?.best_score, 3)} helper="Winning candidate score" />
+            <StatCard label="Current threshold" value={formatValue(tuningState.current_confidence_threshold)} helper="Live confidence threshold" tooltip="The base live confidence threshold currently used for signal gating before any tuning offset is applied." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
+            <StatCard label="Active offset" value={formatValue(tuningState.active_tuning.threshold_offset)} helper="Tuning offset in effect" tooltip="The active tuning adjustment added to or subtracted from the base threshold to change shortlist strictness." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
+            <StatCard label="Latest best" value={formatValue(tuningState.latest_run?.best_threshold)} helper="Winning candidate threshold" tooltip="The best threshold found in the most recent tuning run according to the selected objective." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
+            <StatCard label="Latest score" value={formatValue(tuningState.latest_run?.best_score, 3)} helper="Winning candidate score" tooltip="The objective score of the best candidate from the most recent tuning run." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
           </section>
 
           <Card>
@@ -169,10 +169,10 @@ export function SignalGatingJobPage() {
             {selectedRun ? (
               <div className="stack-page">
                 <section className="metrics-grid">
-                  <StatCard label="Status" value={selectedRun.status} helper="Run state" />
-                  <StatCard label="Applied" value={selectedRun.applied ? "yes" : "no"} helper="Whether the config was saved" />
-                  <StatCard label="Samples" value={formatCount(selectedRun.sample_count)} helper="Sample rows scored" />
-                  <StatCard label="Resolved" value={formatCount(selectedRun.resolved_sample_count)} helper="Resolved samples used" />
+                  <StatCard label="Status" value={selectedRun.status} helper="Run state" tooltip="The execution state of this signal-gating tuning run." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
+                  <StatCard label="Applied" value={selectedRun.applied ? "yes" : "no"} helper="Whether the config was saved" tooltip="Whether the resulting threshold change from this run was saved into the live tuning configuration." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
+                  <StatCard label="Samples" value={formatCount(selectedRun.sample_count)} helper="Sample rows scored" tooltip="How many decision-sample rows were scored in this run before filtering down to resolved evidence." tooltipTo="/docs?doc=glossary&section=recommendation-decision-sample" />
+                  <StatCard label="Resolved" value={formatCount(selectedRun.resolved_sample_count)} helper="Resolved samples used" tooltip="How many samples had resolved evidence strong enough to contribute to the tuning objective." tooltipTo="/docs?doc=glossary&section=outcome-evaluation" />
                 </section>
                 <div className="helper-text">Objective: {selectedRun.objective_name} · Best threshold: {formatValue(selectedRun.best_threshold)} · Best score: {formatValue(selectedRun.best_score, 3)}</div>
                 <div className="helper-text">Baseline threshold: {formatValue(selectedRun.baseline_threshold)} · Baseline score: {formatValue(selectedRun.baseline_score, 3)}</div>

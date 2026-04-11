@@ -93,10 +93,10 @@ export function DashboardPage() {
       {data ? (
         <div className="stack-page">
           <section className="metrics-grid">
-            <StatCard label="Plans to review" value={data.recommendation_plans.length} helper="Latest persisted recommendation plans" />
-            <StatCard label="Recent runs" value={data.latest_runs.length} helper="Most recent workflow executions" />
-            <StatCard label="Watchlists" value={data.watchlists.length} helper="Reusable universes feeding proposal jobs" />
-            <StatCard label="Jobs" value={data.jobs.length} helper="Saved workflows" />
+            <StatCard label="Plans to review" value={data.recommendation_plans.length} helper="Latest persisted recommendation plans" tooltip="A quick count of the most recent recommendation plans available for operator review." tooltipTo="/docs?doc=operator-page-field-guide&section=4-recommendation-plans" />
+            <StatCard label="Recent runs" value={data.latest_runs.length} helper="Most recent workflow executions" tooltip="The number of recent workflow runs surfaced on the dashboard for quick health and activity checks." tooltipTo="/docs?doc=glossary&section=run" />
+            <StatCard label="Watchlists" value={data.watchlists.length} helper="Reusable universes feeding proposal jobs" tooltip="The number of stored watchlists currently available to seed proposal-generation workflows." tooltipTo="/docs?doc=glossary&section=watchlist" />
+            <StatCard label="Jobs" value={data.jobs.length} helper="Saved workflows" tooltip="The number of saved workflows that can be run manually or by the scheduler." tooltipTo="/docs?doc=glossary&section=job" />
             <StatCard
               label="Macro context"
               value={latestMacroContext ? latestMacroContext.status : "—"}

@@ -4,6 +4,12 @@
 
 This glossary defines the main terms used across the app and docs.
 
+If you are new, read in this order:
+1. `operator-page-field-guide.md` for page-level orientation
+2. this glossary for shared vocabulary
+3. `recommendation-methodology.md` for the live recommendation path
+4. `raw-details-reference.md` only when you need storage or payload detail
+
 For page-level usage, see `operator-page-field-guide.md`.
 For payload structure, see `raw-details-reference.md`.
 
@@ -245,14 +251,54 @@ The intended holding or evaluation timeframe.
 ### Horizon return
 Return measured after a fixed elapsed period such as 1 day, 3 days, or 5 days.
 
+### Cohort
+A comparison group whose members share a common starting condition or rule.
+
+In this app, a cohort might mean:
+- recommendations from the same time window
+- plans from the same setup family
+- outcomes in the same confidence bucket
+- records from the same validation slice
+
+Cohorts are used to compare like with like.
+
+### Segment
+A subgroup defined by a shared attribute.
+
+In this app, common segment fields include setup family, horizon, transmission bias, context regime, watchlist, or mode.
+
+### Slice
+A bounded cut of the data, usually along time or one analysis dimension.
+
+Examples in this app include:
+- a historical replay day
+- one walk-forward validation window
+- a family-level or regime-level analytics breakdown
+
 ### Confidence bucket
 A grouped confidence range used for calibration and evaluation review.
+
+Buckets let operators compare predicted confidence against realized results without treating every score as unique.
 
 ### Baseline comparison
 A comparison between actual recommendation behavior and simpler alternative cohorts.
 
+The purpose is to check whether the full workflow is adding value beyond easier heuristic alternatives.
+
 ### Evidence concentration
 A review concept showing where measured evidence is strongest or weakest.
+
+In practice, this asks whether some cohorts are separating clearly enough to deserve more trust or tighter constraints.
+
+### Walk-forward validation
+A time-ordered validation method that tests candidate changes on repeated later slices instead of one pooled sample.
+
+Its purpose is to reduce the risk of promoting settings that only looked good in one historical split.
+
+### Promotion gate
+The rule that decides whether a candidate tuning change is allowed to become the live configuration.
+
+In this app, promotion gates can use walk-forward validation and minimum-sample requirements so thin evidence does not auto-promote a change.
 
 ### Recommendation decision sample
 An advanced-review artifact used for tuning and deeper post-hoc analysis.
@@ -284,6 +330,12 @@ Older behavior or data models kept for compatibility, not as the preferred workf
 ### Confidence vs calibration
 - **Confidence** = current estimate on a signal or plan
 - **Calibration** = evidence-based review of whether that confidence deserves trust
+
+### Cohort vs segment vs bucket vs slice
+- **Cohort** = the group you compare
+- **Segment** = the subgroup defined by a shared attribute
+- **Bucket** = the numeric range, such as a confidence band
+- **Slice** = one bounded cut of the data, often a time window or one analysis view
 
 ### Context vs sentiment
 - **Sentiment** = polarity

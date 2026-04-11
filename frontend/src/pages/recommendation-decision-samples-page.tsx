@@ -136,11 +136,11 @@ export function RecommendationDecisionSamplesPage() {
       {samples ? (
         <div className="stack-page">
           <section className="metrics-grid">
-            <StatCard label="Samples on page" value={summary.total} helper={`Showing ${summary.total} of ${totalSamples} filtered samples`} />
-            <StatCard label="Actionable on page" value={summary.actionable} helper="Long and short decisions" />
-            <StatCard label="Near misses on page" value={summary.nearMiss} helper="High-signal no-action plans" />
-            <StatCard label="High priority on page" value={summary.highPriority} helper="Review these first" />
-            <StatCard label="Degraded on page" value={summary.degraded} helper="Plans produced with missing or failed deep analysis" />
+            <StatCard label="Samples on page" value={summary.total} helper={`Showing ${summary.total} of ${totalSamples} filtered samples`} tooltip="The number of decision samples shown on the current page after filters are applied." tooltipTo="/docs?doc=glossary&section=recommendation-decision-sample" />
+            <StatCard label="Actionable on page" value={summary.actionable} helper="Long and short decisions" tooltip="Samples whose final decision was actionable, usually long or short." tooltipTo="/docs?doc=glossary&section=actionable-plan" />
+            <StatCard label="Near misses on page" value={summary.nearMiss} helper="High-signal no-action plans" tooltip="Borderline no-action cases that looked close to passing the gate and are often the most useful samples for tuning review." tooltipTo="/docs?doc=decision-sample-tuning-guide" />
+            <StatCard label="High priority on page" value={summary.highPriority} helper="Review these first" tooltip="Samples marked as most informative for operator review because they are borderline, degraded, contradictory, or otherwise tuning-relevant." tooltipTo="/docs?doc=decision-sample-tuning-guide" />
+            <StatCard label="Degraded on page" value={summary.degraded} helper="Plans produced with missing or failed deep analysis" tooltip="Samples carrying degraded evidence, such as missing or failed deep-analysis inputs, and therefore deserving more caution during review." tooltipTo="/docs?doc=glossary&section=degraded" />
           </section>
 
           <Card>

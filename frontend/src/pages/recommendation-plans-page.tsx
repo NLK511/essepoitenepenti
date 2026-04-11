@@ -156,7 +156,7 @@ function HelpLabel({ label, tooltip, to }: { label: string; tooltip: string; to:
 function CalibrationBucketTable({ title, buckets }: { title: string; buckets: RecommendationCalibrationSummary["by_confidence_bucket"] }) {
   return (
     <div className="top-gap">
-      <SectionTitle title={title} actions={<HelpHint tooltip="Grouped calibration view for this slice: sample size, win rate, and average 5-day return." to={recommendationPlansDoc("calibration-fields")} />} />
+      <SectionTitle title={title} actions={<HelpHint tooltip="Grouped calibration view for this slice: sample size, win rate, and average 5-day return. Here, a slice means one bounded cut of the data, such as confidence bucket, family, horizon, or regime." to={recommendationPlansDoc("calibration-fields")} />} />
       <div className="table-wrap">
         <table>
           <thead>
@@ -436,6 +436,7 @@ export function RecommendationPlansPage() {
           kicker="Global stats"
           title="Recommendation plan review stats"
           subtitle="These headline stats are computed across all recommendation plans, independent of the current list filters."
+          actions={<HelpHint tooltip="These headline numbers are global review stats, not just the current table filters. Use them as top-level posture checks before drilling into cohorts or individual plans." to={recommendationPlansDoc("recommendation-plans")} />}
         />
         <div className="top-gap-small">
           <SegmentedTabs
@@ -451,16 +452,16 @@ export function RecommendationPlansPage() {
           />
         </div>
         <section className="metrics-grid top-gap-small">
-          <StatCard label="Total plans" value={planStats?.total_plans ?? "—"} helper={`All recommendations · ${planStats?.window ?? "all"}`} />
-          <StatCard label="Open plans" value={planStats?.open_plans ?? "—"} helper="Open plans across all recommendations" />
-          <StatCard label="Expired plans" value={planStats?.expired_plans ?? "—"} helper="Terminal expired outcomes across all recommendations" />
-          <StatCard label="Win rate" value={planStats?.win_rate_percent !== null && planStats?.win_rate_percent !== undefined ? `${planStats.win_rate_percent}%` : "—"} helper={`Excludes open and expired plans · ${planStats?.window ?? "all"}`} />
-          <StatCard label="Evidence concentration" value={evidenceConcentration ? (evidenceConcentration.ready_for_expansion ? "Ready" : "Focused") : "—"} helper="This card still reflects the current filtered review cohort" />
+          <StatCard label="Total plans" value={planStats?.total_plans ?? "—"} helper={`All recommendations · ${planStats?.window ?? "all"}`} tooltip="The total number of stored recommendation plans in the selected stats window, regardless of the current table filters." tooltipTo={recommendationPlansDoc("recommendation-plans")} />
+          <StatCard label="Open plans" value={planStats?.open_plans ?? "—"} helper="Open plans across all recommendations" tooltip="Plans that have not yet resolved to a terminal measured outcome in the selected stats window." tooltipTo={recommendationPlansDoc("outcome-fields")} />
+          <StatCard label="Expired plans" value={planStats?.expired_plans ?? "—"} helper="Terminal expired outcomes across all recommendations" tooltip="Plans whose evaluation horizon elapsed without a terminal win or loss. Expired is operator-visible, but it is excluded from default win/loss scoring." tooltipTo={glossaryDoc("expired-plan")} />
+          <StatCard label="Win rate" value={planStats?.win_rate_percent !== null && planStats?.win_rate_percent !== undefined ? `${planStats.win_rate_percent}%` : "—"} helper={`Excludes open and expired plans · ${planStats?.window ?? "all"}`} tooltip="Overall win/loss rate in the selected stats window. Read it together with calibration, returns, and evidence concentration instead of treating it as the whole story." tooltipTo={recommendationPlansDoc("recommendation-plans")} />
+          <StatCard label="Evidence concentration" value={evidenceConcentration ? (evidenceConcentration.ready_for_expansion ? "Ready" : "Focused") : "—"} helper="This card still reflects the current filtered review cohort" tooltip="Shows whether the current filtered cohort has clear enough separation between stronger and weaker groups to justify broader trust, or whether review should stay selective." tooltipTo={glossaryDoc("evidence-concentration")} />
         </section>
       </Card>
 
       <Card className="top-gap">
-        <SectionTitle kicker="Review mode" title="Choose the page focus" subtitle="Keep the default path list-first. Use advanced analytics separately when you need deeper review." />
+        <SectionTitle kicker="Review mode" title="Choose the page focus" subtitle="Keep the default path list-first. Use advanced analytics separately when you need deeper review." actions={<HelpHint tooltip="Review queue is the main operator path for reading plans one by one. Advanced analytics is for deeper cohort, calibration, and family-level investigation." to={recommendationPlansDoc("review-workspace-tabs")} />} />
         <div className="top-gap-small">
           <SegmentedTabs
             value={pageMode}
@@ -499,8 +500,8 @@ export function RecommendationPlansPage() {
         <SectionTitle
           kicker="Advanced analytics"
           title="Cohort review"
-          subtitle="Use these tabs for calibration, baseline comparison, evidence concentration, and setup-family review."
-          actions={<HelpHint tooltip="Each tab answers a different review question: trust, comparison, concentration, or family-specific behavior." to={recommendationPlansDoc("review-workspace-tabs")} />}
+          subtitle="Use these tabs for calibration, baseline comparison, evidence concentration, and setup-family review. A cohort is a comparison group that shares a common rule, such as one family, one confidence bucket, or one time window."
+          actions={<HelpHint tooltip="Each tab answers a different review question: can confidence be trusted, does the workflow beat simpler alternatives, where are results strongest or weakest, and which setup families behave differently?" to={recommendationPlansDoc("review-workspace-tabs")} />}
         />
         <div className="top-gap-small">
           <SegmentedTabs
@@ -520,12 +521,12 @@ export function RecommendationPlansPage() {
 
       {pageMode === "analytics" && reviewSection === "overview" ? (
         <Card className="top-gap">
-          <SectionTitle title="Review overview" actions={<HelpHint tooltip="High-level posture for recommendation plans: calibration trust, baseline comparisons, and where evidence is strongest or weakest." to={recommendationPlansDoc("recommendation-plans")} />} />
+          <SectionTitle title="Review overview" subtitle="A plain-English summary of trust, simpler comparisons, and where measured results are concentrating." actions={<HelpHint tooltip="High-level posture for recommendation plans: calibration trust, baseline comparisons, and where evidence is strongest or weakest." to={recommendationPlansDoc("recommendation-plans")} />} />
           <div className="insight-grid top-gap-small">
             <div className="data-card">
               <div className="data-card-header">
                 <div>
-                  <h3 className="data-card-title"><HelpLabel label="Calibration posture" tooltip="Shows whether stored outcomes are sufficient to trust current confidence and threshold behavior." to={glossaryDoc("calibration")} /></h3>
+                  <h3 className="data-card-title"><HelpLabel label="Calibration posture" tooltip="Shows whether stored outcomes are sufficient to trust current confidence and threshold behavior. In simple terms: do higher-confidence plans actually deserve more trust?" to={glossaryDoc("calibration")} /></h3>
                 </div>
                 <Badge tone={planStats && planStats.scored_outcomes >= 10 ? "ok" : "warning"}>{planStats?.scored_outcomes ?? 0} win/loss scored</Badge>
               </div>
@@ -538,7 +539,7 @@ export function RecommendationPlansPage() {
             <div className="data-card">
               <div className="data-card-header">
                 <div>
-                  <h3 className="data-card-title"><HelpLabel label="Baseline reality check" tooltip="Compares actual recommendation-plan outcomes against simpler cohorts to see whether added complexity is helping." to={glossaryDoc("baseline-comparison")} /></h3>
+                  <h3 className="data-card-title"><HelpLabel label="Baseline reality check" tooltip="Compares actual recommendation-plan outcomes against simpler cohorts to see whether added complexity is helping. In simple terms: is the full workflow beating easier alternatives?" to={glossaryDoc("baseline-comparison")} /></h3>
                 </div>
                 <Badge tone="info">{baselines?.total_trade_plans_reviewed ?? 0} trades</Badge>
               </div>
@@ -551,7 +552,7 @@ export function RecommendationPlansPage() {
             <div className="data-card">
               <div className="data-card-header">
                 <div>
-                  <h3 className="data-card-title"><HelpLabel label="Evidence concentration" tooltip="Shows where measured edge is concentrated so operators know whether to stay selective or broaden usage." to={glossaryDoc("evidence-concentration")} /></h3>
+                  <h3 className="data-card-title"><HelpLabel label="Evidence concentration" tooltip="Shows where measured edge is concentrated so operators know whether to stay selective or broaden usage. In simple terms: which cohorts currently look strongest, and which still deserve skepticism?" to={glossaryDoc("evidence-concentration")} /></h3>
                 </div>
                 <Badge tone={evidenceConcentration?.ready_for_expansion ? "ok" : "warning"}>{evidenceConcentration?.ready_for_expansion ? "ready" : "focus"}</Badge>
               </div>
@@ -571,7 +572,7 @@ export function RecommendationPlansPage() {
         <SectionTitle
           title="Calibration snapshot"
           subtitle={calibration ? `Win/loss scored ${calibration.resolved_outcomes} of ${calibration.total_outcomes} stored outcome(s)` : undefined}
-          actions={<HelpHint tooltip="Review how confidence buckets and slices have actually behaved after outcomes resolved." to={recommendationPlansDoc("calibration-fields")} />}
+          actions={<HelpHint tooltip="Review how confidence buckets and slices have actually behaved after outcomes resolved. Buckets are grouped confidence bands, and slices are bounded cuts of the data such as family, horizon, or regime." to={recommendationPlansDoc("calibration-fields")} />}
         />
         {!calibration && !error ? <LoadingState message="Loading calibration summary…" /> : null}
         {calibration ? (
@@ -598,7 +599,7 @@ export function RecommendationPlansPage() {
         <SectionTitle
           title="Baseline comparisons"
           subtitle={baselines ? `Reviewed ${baselines.total_trade_plans_reviewed} trade plan(s) across ${baselines.total_plans_reviewed} total plan(s)` : undefined}
-          actions={<HelpHint tooltip="Compare live plan behavior against simpler heuristic cohorts before trusting the full workflow." to={glossaryDoc("baseline-comparison")} />}
+          actions={<HelpHint tooltip="Compare live plan behavior against simpler heuristic cohorts before trusting the full workflow. This helps answer whether the extra complexity is adding measurable value." to={glossaryDoc("baseline-comparison")} />}
         />
         {!baselines && !error ? <LoadingState message="Loading baseline comparisons…" /> : null}
         {baselines ? (
@@ -634,7 +635,7 @@ export function RecommendationPlansPage() {
             </div>
             <SectionTitle
               title="Setup-family cohorts"
-              actions={<HelpHint tooltip="Family-specific cohorts help show whether one setup type is carrying most of the measured performance." to={glossaryDoc("setup-family")} />}
+              actions={<HelpHint tooltip="Family-specific cohorts help show whether one setup type is carrying most of the measured performance, or whether performance is broad-based across multiple setup families." to={glossaryDoc("setup-family")} />}
             />
             <div className="table-wrap top-gap-small">
               <table>
@@ -677,7 +678,7 @@ export function RecommendationPlansPage() {
         <SectionTitle
           title="Evidence concentration"
           subtitle={evidenceConcentration ? `Win/loss scored ${evidenceConcentration.resolved_outcomes_reviewed} of ${evidenceConcentration.total_outcomes_reviewed} reviewed outcomes` : undefined}
-          actions={<HelpHint tooltip="Shows where measured results are concentrated so operators can see which cohorts deserve the most trust." to={glossaryDoc("evidence-concentration")} />}
+          actions={<HelpHint tooltip="Shows where measured results are concentrated so operators can see which cohorts deserve the most trust. A cohort is just a comparison group, such as one family, one confidence band, or one time slice." to={glossaryDoc("evidence-concentration")} />}
         />
         {!evidenceConcentration && !error ? <LoadingState message="Loading evidence concentration…" /> : null}
         {evidenceConcentration ? (
@@ -688,7 +689,7 @@ export function RecommendationPlansPage() {
               <Card><strong>{evidenceConcentration.ready_for_expansion ? "yes" : "not yet"}</strong><div className="helper-text">ready for broader concentration</div></Card>
             </div>
             <div className="helper-text top-gap-small">{evidenceConcentration.focus_message}</div>
-            <SectionTitle title="Strongest positive cohorts" actions={<HelpHint tooltip="These are the best-performing measured cohorts versus the overall review set." to={glossaryDoc("evidence-concentration")} />} />
+            <SectionTitle title="Strongest positive cohorts" subtitle="The measured comparison groups currently outperforming the overall review set most clearly." actions={<HelpHint tooltip="These are the best-performing measured cohorts versus the overall review set." to={glossaryDoc("evidence-concentration")} />} />
             <div className="table-wrap top-gap-small">
               <table>
                 <thead>
@@ -715,7 +716,7 @@ export function RecommendationPlansPage() {
                 </tbody>
               </table>
             </div>
-            <SectionTitle title="Weakest cohorts" actions={<HelpHint tooltip="These cohorts have the weakest measured results and often deserve stricter skepticism or gating." to={glossaryDoc("evidence-concentration")} />} />
+            <SectionTitle title="Weakest cohorts" subtitle="The measured comparison groups currently underperforming and therefore deserving more skepticism or tighter gating." actions={<HelpHint tooltip="These cohorts have the weakest measured results and often deserve stricter skepticism or gating." to={glossaryDoc("evidence-concentration")} />} />
             <div className="table-wrap top-gap-small">
               <table>
                 <thead>
@@ -752,7 +753,7 @@ export function RecommendationPlansPage() {
         <SectionTitle
           title="Setup-family evaluation review"
           subtitle={familyReview ? `Built from ${familyReview.total_outcomes_reviewed} stored outcome(s) across the current filters` : undefined}
-          actions={<HelpHint tooltip="Breaks evaluation down by setup family so you can see whether breakout, continuation, catalyst, or other families behave differently." to={glossaryDoc("setup-family")} />}
+          actions={<HelpHint tooltip="Breaks evaluation down by setup family so you can see whether breakout, continuation, catalyst, or other families behave differently. This helps identify whether one trade archetype is carrying or hurting the book." to={glossaryDoc("setup-family")} />}
         />
         {!familyReview && !error ? <LoadingState message="Loading setup-family review…" /> : null}
         {familyReview ? (

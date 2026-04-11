@@ -9,6 +9,12 @@ Use it when you want quick answers to questions like:
 - which page should I use for this investigation?
 - what do confidence, transmission, shortlist, and outcome fields mean?
 
+If you are new to the app, use this reading order:
+1. this guide for page orientation
+2. `glossary.md` for shared terms such as cohort, slice, and calibration
+3. `recommendation-methodology.md` for the live recommendation path
+4. `raw-details-reference.md` only when you need payload detail
+
 For payload-level storage details, see `raw-details-reference.md`.
 
 ## How to read the product
@@ -100,6 +106,21 @@ Warnings are part of the output.
 
 Treat stale context, thin coverage, provider failures, and contradiction warnings as decision-relevant information.
 
+### Research-page reading terms
+These terms appear often on calibration, baseline, evidence, replay, and tuning pages.
+
+- **Cohort** = a comparison group with a shared rule, such as one setup family, one confidence bucket, or one time window
+- **Segment** = a subgroup defined by a shared attribute, such as horizon or transmission bias
+- **Bucket** = a numeric range, usually a confidence band used for calibration review
+- **Slice** = one bounded cut of data, often a time window or one analytics breakdown
+- **Promotion gate** = the rule that decides whether a tuning candidate is allowed to become the live config
+
+Quick mental model:
+- calibration asks whether confidence deserves trust
+- baselines ask whether the full workflow beats simpler alternatives
+- evidence asks where results are strongest or weakest
+- walk-forward validation asks whether a change still works on later data slices
+
 ### Context saliency
 For macro and industry context, saliency measures how prominent the current top events or drivers are relative to the rest of the stored context evidence.
 
@@ -188,6 +209,12 @@ Advanced analytics tabs:
 - **Baselines**
 - **Evidence**
 - **Setup families**
+
+Plain-English read:
+- **Calibration** = do higher-confidence plans actually behave better?
+- **Baselines** = does the live workflow beat simpler comparison groups?
+- **Evidence** = which cohorts look strongest or weakest right now?
+- **Setup families** = which trade archetypes are carrying or hurting measured performance?
 
 Most important fields:
 - **Action**
@@ -442,6 +469,7 @@ Use it to decide whether a ticker deserves repeated operator attention.
 4. check Settings/preflight if broad
 
 ## See also
+- `glossary.md`
 - `features-and-capabilities.md`
 - `recommendation-methodology.md`
 - `raw-details-reference.md`
