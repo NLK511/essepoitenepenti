@@ -218,7 +218,7 @@ To load the curated default watchlist pack:
 This seeds:
 - 15 watchlists
 - 18 scheduled `Auto: ...` jobs
-- 300 equities across U.S., Europe, and Asia-Pacific groups
+- 750 equities across U.S., Europe, and Asia-Pacific groups
 
 See `default-watchlists.md` for rationale.
 
