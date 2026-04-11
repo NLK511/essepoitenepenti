@@ -224,10 +224,10 @@ export function ResearchPage() {
               </div>
             </Card>
             <Card>
-              <SectionTitle kicker="Review" title="Recommendation quality summary" subtitle="Use this for a consolidated view of calibration, baselines, evidence concentration, and walk-forward readiness." />
+              <SectionTitle kicker="Advanced review" title="Recommendation quality summary" subtitle="Use this for a consolidated view of calibration, baselines, evidence concentration, and walk-forward readiness." />
               <div className="cluster top-gap-small">
                 <Link to="/recommendation-quality" className="button-secondary">Open quality summary</Link>
-                <Badge tone="info">operator view</Badge>
+                <Badge tone="info">advanced review</Badge>
               </div>
             </Card>
             <Card>

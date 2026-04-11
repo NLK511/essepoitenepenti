@@ -236,22 +236,27 @@ class RecommendationPlanEvaluationService:
         plan: RecommendationPlan,
         price_data: pd.DataFrame | None,
         *,
+        intended_action: str | None = None,
         run_id: int | None,
         as_of: datetime | None = None,
         intraday_only: bool = False,
     ) -> RecommendationPlanOutcome:
         setup_family = self._setup_family(plan)
         confidence_bucket = self._confidence_bucket(plan.confidence_percent)
+        effective_action = intended_action if plan.action in {"no_action", "watchlist"} and intended_action in {"long", "short"} else plan.action
+
         logger.debug(
-            "evaluate_plan start: plan_id=%s ticker=%s action=%s confidence=%s bucket=%s price_rows=%s",
+            "evaluate_plan start: plan_id=%s ticker=%s action=%s effective=%s confidence=%s bucket=%s price_rows=%s",
             plan.id,
             plan.ticker,
             plan.action,
+            effective_action,
             plan.confidence_percent,
             confidence_bucket,
             0 if price_data is None else len(price_data),
         )
-        if plan.action in {"no_action", "watchlist"}:
+        
+        if effective_action not in {"long", "short"}:
             logger.info("evaluate_plan short-circuit: plan_id=%s action=%s outcome=%s", plan.id, plan.action, plan.action)
             return RecommendationPlanOutcome(
                 recommendation_plan_id=plan.id or 0,
@@ -335,13 +340,13 @@ class RecommendationPlanEvaluationService:
                 recommendation_plan_id=plan.id or 0,
                 ticker=plan.ticker,
                 action=plan.action,
-                outcome="no_entry",
+                outcome="phantom_no_entry" if plan.action in {"no_action", "watchlist"} else "no_entry",
                 status="open",
                 evaluated_at=self._last_timestamp(sliced) or datetime.now(timezone.utc),
                 entry_touched=False,
-                horizon_return_1d=self._horizon_return(plan, sliced, 1, entry_reference),
-                horizon_return_3d=self._horizon_return(plan, sliced, 3, entry_reference),
-                horizon_return_5d=self._horizon_return(plan, sliced, 5, entry_reference),
+                horizon_return_1d=self._horizon_return(effective_action, sliced, 1, entry_reference),
+                horizon_return_3d=self._horizon_return(effective_action, sliced, 3, entry_reference),
+                horizon_return_5d=self._horizon_return(effective_action, sliced, 5, entry_reference),
                 confidence_bucket=confidence_bucket,
                 setup_family=setup_family,
                 notes="Entry zone has not been touched yet.",
@@ -349,31 +354,31 @@ class RecommendationPlanEvaluationService:
             )
 
         active = sliced.iloc[entry_index:]
-        first_stop_hit, first_take_hit, decisive_timestamp = self._resolve_exit(plan, active)
+        first_stop_hit, first_take_hit, decisive_timestamp = self._resolve_exit(effective_action, plan, active)
         realized_holding = self._realized_holding_days(plan.computed_at, decisive_timestamp or self._last_timestamp(active))
-        mfe = self._max_favorable_excursion(plan, active, entry_reference)
-        mae = self._max_adverse_excursion(plan, active, entry_reference)
-        horizon_1d = self._horizon_return(plan, active, 1, entry_reference)
-        horizon_3d = self._horizon_return(plan, active, 3, entry_reference)
-        horizon_5d = self._horizon_return(plan, active, 5, entry_reference)
+        mfe = self._max_favorable_excursion(effective_action, active, entry_reference)
+        mae = self._max_adverse_excursion(effective_action, active, entry_reference)
+        horizon_1d = self._horizon_return(effective_action, active, 1, entry_reference)
+        horizon_3d = self._horizon_return(effective_action, active, 3, entry_reference)
+        horizon_5d = self._horizon_return(effective_action, active, 5, entry_reference)
         direction_correct = None
         for candidate in (horizon_5d, horizon_3d, horizon_1d):
             if candidate is not None:
                 direction_correct = candidate > 0
                 break
-        outcome = "open"
+        outcome = "phantom_pending" if plan.action in {"no_action", "watchlist"} else "open"
         status = "open"
         notes = "Entry touched; waiting for stop, take, or more bars."
         if first_take_hit and not first_stop_hit:
-            outcome = "win"
+            outcome = "phantom_win" if plan.action in {"no_action", "watchlist"} else "win"
             status = "resolved"
             notes = "Take profit was reached before stop loss."
         elif first_stop_hit and not first_take_hit:
-            outcome = "loss"
+            outcome = "phantom_loss" if plan.action in {"no_action", "watchlist"} else "loss"
             status = "resolved"
             notes = "Stop loss was reached before take profit."
         elif first_stop_hit and first_take_hit:
-            outcome = "loss"
+            outcome = "phantom_loss" if plan.action in {"no_action", "watchlist"} else "loss"
             status = "resolved"
             notes = "Stop loss and take profit were both touched on the same bar; conservative resolution marked as loss."
 
@@ -451,14 +456,14 @@ class RecommendationPlanEvaluationService:
                 return index
         return None
 
-    def _resolve_exit(self, plan: RecommendationPlan, data: pd.DataFrame) -> tuple[bool, bool, datetime | None]:
+    def _resolve_exit(self, effective_action: str, plan: RecommendationPlan, data: pd.DataFrame) -> tuple[bool, bool, datetime | None]:
         for timestamp, row in data.iterrows():
             row_high = self._float_or_none(row.get("High"))
             row_low = self._float_or_none(row.get("Low"))
             if row_high is None or row_low is None:
                 continue
-            stop_hit = self._check_stop(plan.action, row_high, row_low, plan.stop_loss)
-            take_hit = self._check_take(plan.action, row_high, row_low, plan.take_profit)
+            stop_hit = self._check_stop(effective_action, row_high, row_low, plan.stop_loss)
+            take_hit = self._check_take(effective_action, row_high, row_low, plan.take_profit)
             if stop_hit or take_hit:
                 return stop_hit, take_hit, self._normalize_datetime(timestamp)
         return False, False, None
@@ -485,7 +490,7 @@ class RecommendationPlanEvaluationService:
 
     def _horizon_return(
         self,
-        plan: RecommendationPlan,
+        effective_action: str,
         data: pd.DataFrame,
         sessions: int,
         entry_reference: float,
@@ -497,14 +502,14 @@ class RecommendationPlanEvaluationService:
         if close_value is None:
             return None
         raw_return = ((close_value - entry_reference) / entry_reference) * 100.0
-        if plan.action == "short":
+        if effective_action == "short":
             return round(-raw_return, 4)
         return round(raw_return, 4)
 
-    def _max_favorable_excursion(self, plan: RecommendationPlan, data: pd.DataFrame, entry_reference: float) -> float | None:
+    def _max_favorable_excursion(self, effective_action: str, data: pd.DataFrame, entry_reference: float) -> float | None:
         if data.empty or entry_reference <= 0:
             return None
-        if plan.action == "short":
+        if effective_action == "short":
             lows = [self._float_or_none(row.get("Low")) for _, row in data.iterrows()]
             numeric_lows = [value for value in lows if value is not None]
             if not numeric_lows:
@@ -518,10 +523,10 @@ class RecommendationPlanEvaluationService:
         candidate = max(numeric_highs)
         return round(((candidate - entry_reference) / entry_reference) * 100.0, 4)
 
-    def _max_adverse_excursion(self, plan: RecommendationPlan, data: pd.DataFrame, entry_reference: float) -> float | None:
+    def _max_adverse_excursion(self, effective_action: str, data: pd.DataFrame, entry_reference: float) -> float | None:
         if data.empty or entry_reference <= 0:
             return None
-        if plan.action == "short":
+        if effective_action == "short":
             highs = [self._float_or_none(row.get("High")) for _, row in data.iterrows()]
             numeric_highs = [value for value in highs if value is not None]
             if not numeric_highs:

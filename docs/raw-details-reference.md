@@ -91,7 +91,7 @@ Typical stored themes:
 - action, confidence, entry, stop, target, horizon
 - thesis and rationale
 - evidence summary
-- signal breakdown
+- signal breakdown (includes `intended_action` for phantom-trade-eligible `no_action` plans)
 - calibration review
 - transmission summary
 - warnings and diagnostics
@@ -106,6 +106,8 @@ Typical stored themes:
 - confidence bucket
 - setup family
 - transmission-bias and context-regime slices used in calibration review
+
+Outcome values include `win`, `loss`, `expired`, `no_action`, `watchlist`, `phantom_win`, `phantom_loss`, and `phantom_no_entry`. Phantom outcomes are produced when a `no_action` plan had an intended direction and valid trade levels and is evaluated against real market data.
 
 ### `RecommendationDecisionSample`
 A tuning and review snapshot stored for each generated plan.

@@ -29,6 +29,7 @@ It is not yet a proven short-horizon prediction engine.
 - Persist proposal outputs as `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`.
 - Review signals, plans, and outcomes through the main review pages.
 - Evaluate recommendation plans through the app-native price-history path, including terminal `expired` handling once a plan passes its intended horizon without a win/loss resolution.
+- Track **phantom trades** for `no_action` plans that carry an intended direction and valid trade levels, evaluating them against real market data to produce `phantom_win` or `phantom_loss` outcomes for recall optimization in tuning engines.
 - Use decision samples to review near-misses, shortlist behavior, triage priority, and richer filters such as shortlist state, setup family, transmission bias, and context regime.
 - Use the calibration report endpoint and the research-page calibration tab to inspect confidence reliability, Brier score, and expected calibration error.
 - Use ticker drill-down pages to inspect plan history and latest outcomes for a single name.

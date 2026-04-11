@@ -34,7 +34,7 @@ export function RecommendationQualityPage() {
   return (
     <>
       <PageHeader
-        kicker="Research"
+        kicker="Advanced review"
         title="Recommendation quality summary"
         subtitle="A single operator view for calibration, baselines, evidence concentration, and walk-forward promotion readiness."
         actions={<HelpHint tooltip="This page combines the metrics that matter for recommendation quality into one review surface." to="/docs?doc=recommendation-quality-improvement-plan" />}

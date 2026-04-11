@@ -175,7 +175,7 @@ Common filters:
 - run id
 - setup family
 - resolved / unresolved
-- specific outcome such as `win`, `loss`, or `expired`
+- specific outcome such as `win`, `loss`, `phantom_win`, `phantom_loss`, or `expired`
 - stats window such as day, week, month, or year
 
 Main page modes:
@@ -209,7 +209,8 @@ Suggested review order:
 
 Important interpretation note:
 - `expired` means the plan passed its intended horizon without a terminal win/loss outcome
-- default win-rate surfaces exclude `expired` and other non-win/loss outcomes from the denominator
+- default win-rate surfaces exclude `expired`, `phantom_*`, and other non-win/loss outcomes from the denominator
+- phantom outcomes (`phantom_win`, `phantom_loss`) are visible via outcome filters but only used by tuning engines, not headline stats
 - resolved/unresolved filters are broader lifecycle filters than the more granular outcome filter
 
 ## 5. Ticker signals

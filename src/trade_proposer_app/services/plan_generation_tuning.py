@@ -295,10 +295,10 @@ class PlanGenerationTuningService:
         eligible: list[EligibleTuningRecord] = []
         normalized_setup_family = str(setup_family or "").strip().lower() or None
         for plan in plans:
-            if (plan.action or "") not in {"long", "short"} or plan.id is None:
+            if (plan.action or "") not in {"long", "short", "no_action"} or plan.id is None:
                 continue
             outcome = outcome_map.get(plan.id)
-            if outcome is None or outcome.outcome not in {"win", "loss"}:
+            if outcome is None or outcome.outcome not in {"win", "loss", "phantom_win", "phantom_loss"}:
                 continue
             signal_breakdown = plan.signal_breakdown if isinstance(plan.signal_breakdown, dict) else {}
             transmission_summary = signal_breakdown.get("transmission_summary") if isinstance(signal_breakdown.get("transmission_summary"), dict) else {}
@@ -405,12 +405,21 @@ class PlanGenerationTuningService:
         entry = self._entry_reference(record.plan)
         if entry is None or entry <= 0 or record.plan.stop_loss is None or record.plan.take_profit is None:
             return None
+            
+        intended_action = None
+        if isinstance(record.plan.signal_breakdown, dict):
+            intended_action = record.plan.signal_breakdown.get("intended_action")
+        effective_action = intended_action if record.plan.action in {"no_action", "watchlist"} and intended_action in {"long", "short"} else record.plan.action
+        
+        if effective_action not in {"long", "short"}:
+            return None
+            
         entry_low, entry_high, stop_loss, take_profit = family_adjusted_trade_levels(
             entry_price=entry,
             stop_loss=float(record.plan.stop_loss),
             take_profit=float(record.plan.take_profit),
             setup_family=record.setup_family,
-            action=record.plan.action,
+            action=effective_action,
             transmission_context_bias=record.context_bias,
             tuning_config=config,
         )

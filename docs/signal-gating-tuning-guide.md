@@ -21,6 +21,8 @@ Use it when you want to answer questions like:
 - is the shortlist too narrow or too permissive?
 - are degraded cases being over-penalized or under-penalized?
 
+*(Note: Recall optimization requires the evaluation engine to track `phantom_win` and `phantom_loss` outcomes on `no_action` plans. The tuning engine uses these phantom trades to simulate whether lowering the threshold would have captured profitable missed opportunities).*
+
 Plan-generation tuning is separate.
 
 - **signal gating tuning** = upstream selection / recall

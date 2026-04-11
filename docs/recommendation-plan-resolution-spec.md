@@ -55,6 +55,26 @@ If the plan is still unresolved after the full generated horizon has passed, the
 
 This rule exists to prevent stale plans from lingering in the open set after their intended evaluation window is no longer valid.
 
+## Phantom trades (Recall optimization)
+
+To enable recall optimization, the system tracks "phantom trades" for plans where the system decided **not** to trade (`action = "no_action"` or `watchlist`).
+
+### Expected behavior
+
+If a `no_action` plan carries an `intended_action` (long or short) and valid entry/stop/target levels, the evaluator must simulate it through the market exactly as if it were a real trade.
+
+- If it hits the target, it resolves as `phantom_win`.
+- If it hits the stop-loss, it resolves as `phantom_loss`.
+- If it misses the entry, it resolves as `phantom_no_entry`.
+
+### Interpretation of phantom outcomes
+
+- `phantom_win` means the system missed a profitable opportunity.
+- `phantom_loss` means the system correctly avoided a bad setup.
+- All phantom outcomes receive `status = "resolved"` when terminal, and remain `"open"` while pending.
+
+These phantom outcomes are ignored by default operator win-rate metrics, but are loaded by the tuning engines to learn if the system should have lowered its confidence threshold to capture the missed wins.
+
 ### Interpretation of `expired`
 
 `expired` is a **terminal resolved lifecycle state**.

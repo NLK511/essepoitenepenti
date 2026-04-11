@@ -57,6 +57,12 @@ Direction is not the same as action.
 ### Actionable plan
 A plan proposing a trade, usually `long` or `short`.
 
+### Phantom trade
+A simulated trade tracked by the system when it explicitly decides not to take action (`no_action`), but stores intended entry/stop/target levels anyway. This enables the tuning engines to learn if skipping the trade was a mistake (optimizing for recall).
+
+### Phantom win / Phantom loss
+The evaluated outcome of a phantom trade. If a `phantom_win` occurs, the system missed a profitable opportunity. If a `phantom_loss` occurs, the system correctly avoided a bad setup.
+
 ### Confidence
 An evidence-weighted estimate of how trustworthy and actionable a signal or plan is.
 
@@ -226,7 +232,7 @@ The research workflow that ranks backtested candidate plan-generation configs an
 ### Scored outcomes
 The subset of outcomes used in default win-rate calculations.
 
-By default this means `win` and `loss`, excluding `open`, `expired`, `no_action`, and `watchlist`.
+By default this means `win` and `loss`. It explicitly excludes `open`, `expired`, `no_action`, `watchlist`, and all `phantom_*` outcomes. Phantom outcomes are only scored within the tuning engines.
 
 ## Evaluation and research terms
 

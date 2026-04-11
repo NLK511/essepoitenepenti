@@ -331,7 +331,7 @@ class RecommendationSignalGatingTuningService:
         resolved: list[tuple[RecommendationDecisionSample, RecommendationPlanOutcome]] = []
         for sample in samples:
             outcome = outcomes.get(sample.recommendation_plan_id)
-            if outcome is None or outcome.outcome not in {"win", "loss"}:
+            if outcome is None or outcome.outcome not in {"win", "loss", "phantom_win", "phantom_loss"}:
                 continue
             resolved.append((sample, outcome))
         return resolved
@@ -376,8 +376,8 @@ class RecommendationSignalGatingTuningService:
             effective_score = self._decision_score(sample, config)
             threshold = self._effective_threshold(sample, base_threshold, config)
             selected = effective_score >= threshold
-            is_win = outcome.outcome == "win"
-            is_loss = outcome.outcome == "loss"
+            is_win = outcome.outcome in {"win", "phantom_win"}
+            is_loss = outcome.outcome in {"loss", "phantom_loss"}
             if sample.shortlisted and selected:
                 shortlisted_selected_count += 1
             if str(sample.decision_type or "").strip().lower() == "near_miss" and selected:

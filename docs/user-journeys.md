@@ -57,7 +57,7 @@ Steps:
 Steps:
 1. open recommendation plans
 2. filter by ticker, action, run, setup family, or calibration slice
-3. run or review evaluation workflows so older plans gain outcomes
+3. run or review evaluation workflows so older plans gain outcomes (including phantom outcomes for skipped setups)
 4. review setup-family and calibration surfaces
 5. open ticker pages or run detail for deeper inspection
 
@@ -72,9 +72,9 @@ Steps:
 2. let the app evaluate older plans through the run system
 3. review recommendation plans first
 4. open decision samples only for advanced review when needed
-5. use signal-gating tuning when upstream recall looks too strict or too loose
+5. use signal-gating tuning when upstream recall looks too strict or too loose (phantom trade outcomes reveal missed opportunities)
 6. use the research calibration tab and calibration report to check whether confidence is lining up with realized outcomes
-7. use plan-generation tuning when downstream plan precision, entry framing, or trade-level construction needs improvement
+7. use plan-generation tuning when downstream plan precision, entry framing, or trade-level construction needs improvement (phantom outcomes contribute to precision-and-recall scoring)
 8. promote updated configs manually after review, or rely on guarded automation only when that workflow is fully enabled
 
 **Success outcome:** the improvement loop runs inside the product with auditable records and without relying on the retired weight-optimization workflow.

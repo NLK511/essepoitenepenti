@@ -52,13 +52,13 @@ const navSections: NavSection[] = [
     label: "Research",
     items: [
       { to: "/research", label: "Research home", shortLabel: "Hub", icon: "⌂", end: true },
-      { to: "/recommendation-quality", label: "Quality summary", shortLabel: "Quality", icon: "◈" },
     ],
     subsections: [
       {
         label: "Advanced review",
         items: [
           { to: "/research/decision-samples", label: "Decision samples", shortLabel: "Samples", icon: "◉" },
+          { to: "/recommendation-quality", label: "Quality summary", shortLabel: "Quality", icon: "◈" },
         ],
       },
       {
@@ -143,7 +143,7 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
   }
   if (pathname.startsWith("/recommendation-quality")) {
     return {
-      eyebrow: "Research",
+      eyebrow: "Advanced review",
       title: "Recommendation quality summary",
       description: "Review calibration, evidence concentration, and walk-forward readiness in one consolidated place.",
     };

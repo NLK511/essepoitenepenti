@@ -227,7 +227,7 @@ A candidate evaluation record must have:
 - reproducible plan-generation inputs, or enough stored artifacts to reconstruct the relevant plan-generation features
 - a known plan-generation timestamp
 - a known directional/actionable interpretation
-- a resolved or otherwise scoreable outcome if it is being used for win/loss or expected-value scoring
+- a resolved or otherwise scoreable outcome if it is being used for win/loss or expected-value scoring. This includes real `win`/`loss` outcomes as well as `phantom_win` and `phantom_loss` records from `no_action` plans.
 
 ### Required exclusions
 

@@ -74,6 +74,8 @@ If they were shortlisted but not promoted, the issue is probably in:
 ### 1. Too many near-misses that look good
 Likely the planner is too conservative.
 
+Phantom trades now provide evidence: if `no_action` plans with an intended direction are producing `phantom_win` outcomes, the system is quantifiably missing profitable setups.
+
 Possible actions:
 - lower the threshold slightly
 - reduce calibration penalty

@@ -634,9 +634,21 @@ class WatchlistOrchestrationService:
 
         recommendation = deep_output.recommendation
         direction = self._normalize_direction(recommendation.direction)
+        intended_action = direction if direction in {"long", "short"} else None
         action_reason = "actionable_setup"
         effective_threshold = float(calibration_review.get("effective_confidence_threshold", self.confidence_threshold))
         calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", signal.confidence_percent) or signal.confidence_percent)
+        
+        entry_price_low, entry_price_high, stop_loss, take_profit, risk_reward_ratio = None, None, None, None, None
+        if intended_action:
+            entry_price_low, entry_price_high, stop_loss, take_profit = self._family_adjusted_trade_levels(
+                recommendation,
+                setup_family=setup_family,
+                action=intended_action,
+                transmission_summary=transmission_summary,
+            )
+            risk_reward_ratio = self._risk_reward_ratio(recommendation)
+
         if direction == "short" and not watchlist.allow_shorts:
             warnings.append("watchlist does not allow shorts")
             action = "no_action"
@@ -663,11 +675,17 @@ class WatchlistOrchestrationService:
                 action=action,
                 status="ok" if not warnings else "partial",
                 confidence_percent=calibrated_confidence,
+                entry_price_low=entry_price_low,
+                entry_price_high=entry_price_high,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+                holding_period_days=self._holding_period_days(watchlist.default_horizon) if intended_action else None,
+                risk_reward_ratio=risk_reward_ratio,
                 thesis_summary=self._no_action_thesis(setup_family, action_reason, transmission_summary=transmission_summary),
                 rationale_summary=rationale,
                 warnings=list(dict.fromkeys(warnings)),
                 evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
-                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary),
+                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -675,12 +693,6 @@ class WatchlistOrchestrationService:
                 ticker_signal_snapshot_id=signal.id,
             )
 
-        entry_price_low, entry_price_high, stop_loss, take_profit = self._family_adjusted_trade_levels(
-            recommendation,
-            setup_family=setup_family,
-            action=action,
-            transmission_summary=transmission_summary,
-        )
         return RecommendationPlan(
             ticker=candidate.ticker,
             horizon=watchlist.default_horizon,
@@ -692,13 +704,13 @@ class WatchlistOrchestrationService:
             stop_loss=stop_loss,
             take_profit=take_profit,
             holding_period_days=self._holding_period_days(watchlist.default_horizon),
-            risk_reward_ratio=self._risk_reward_ratio(recommendation),
+            risk_reward_ratio=risk_reward_ratio,
             thesis_summary=summary_text or self._actionable_thesis(action, setup_family, transmission_summary=transmission_summary),
             rationale_summary=rationale,
             risks=self._plan_risks(warnings, setup_family, action, transmission_summary),
             warnings=list(dict.fromkeys(warnings)),
             evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
-            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary),
+            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action),
             computed_at=signal.computed_at,
             run_id=run_id,
             job_id=job_id,
@@ -1030,6 +1042,7 @@ class WatchlistOrchestrationService:
         confidence_components: dict[str, float],
         calibration_review: dict[str, object] | None = None,
         transmission_summary: dict[str, object] | None = None,
+        intended_action: str | None = None,
     ) -> dict[str, object]:
         calibration = calibration_review or {}
         calibrated_confidence = calibration.get("calibrated_confidence_percent") if isinstance(calibration.get("calibrated_confidence_percent"), (int, float)) else signal.confidence_percent

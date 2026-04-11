@@ -206,7 +206,9 @@ Current evaluation records include fields such as:
 - setup family
 - transmission-bias and context-regime slices used by downstream calibration summaries
 
-`watchlist` and `no_action` plans are also preserved as first-class evaluated outcomes.
+`watchlist` and `no_action` plans are also preserved as first-class evaluated outcomes. 
+
+To enable recall optimization, the evaluation pipeline actively tracks **phantom trades** for these skipped setups. If a `no_action` plan carries an intended direction and valid trade levels, the evaluator simulates it against live market data and records `phantom_win` or `phantom_loss`. This ensures tuning engines can learn when the system missed a profitable opportunity.
 
 If a trade plan is still unresolved after its generated horizon has elapsed, the evaluator resolves it as `expired` so stale plans do not remain indefinitely open.
 
