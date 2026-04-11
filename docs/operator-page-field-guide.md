@@ -20,11 +20,11 @@ The UI is easiest to understand in four groups:
    - Jobs
    - Watchlists
    - Settings
-2. **Review trade objects**
-   - Recommendation plans
+2. **Review**
    - Ticker signals
+   - Recommendation plans
    - Ticker drill-down
-3. **Investigate execution and context**
+3. **Investigate**
    - Run debugger
    - Run detail
    - Context review
@@ -119,13 +119,12 @@ Context saliency bands:
 
 Typical cards include:
 - plans waiting for review
-- decision samples
-- active watchlists
-- configured jobs
 - recent runs
+- watchlists and jobs counts
 - macro and industry freshness
+- attention items
 
-Go here first. If freshness looks degraded, go to **Context review** or **Settings/preflight**. If recent runs look bad, go to **Run debugger**.
+Go here first. If freshness looks degraded, go to **Context review**. If recent runs look bad, go to **Run debugger**.
 
 ## 2. Jobs
 
@@ -179,7 +178,11 @@ Common filters:
 - specific outcome such as `win`, `loss`, or `expired`
 - stats window such as day, week, month, or year
 
-Main review tabs:
+Main page modes:
+- **Review queue**
+- **Advanced analytics**
+
+Advanced analytics tabs:
 - **Overview**
 - **Calibration**
 - **Baselines**
@@ -200,9 +203,9 @@ Most important fields:
 - **Open plans / expired plans / win rate** stats for the current filter set
 
 Suggested review order:
-1. individual plans first
-2. expand analytics only when needed
-3. calibration / baselines / evidence for deeper review
+1. review the queue first
+2. open individual plan details only when needed
+3. switch to advanced analytics for calibration / baselines / evidence
 
 Important interpretation note:
 - `expired` means the plan passed its intended horizon without a terminal win/loss outcome
@@ -343,17 +346,14 @@ Relationship read-throughs, governed labels, and transmission details may appear
 
 ## 10. Settings
 
-**Use it for:** setup, preflight, credentials, summary configuration, and optimization guardrails.
+**Use it for:** setup, providers, ingestion controls, and advanced research controls.
 
 Key areas:
-- **Internal pipeline health**
-- **Summary backend**
-- **Optimization threshold**
-- **Weight backups**
-- **Confidence threshold**
-- **Summary engine settings**
+- **System and providers**
+- **Summarization**
+- **News ingestion**
 - **Social/Nitter settings**
-- **Preflight checks**
+- **Advanced research controls**
 
 Go here early when startup or run quality looks off.
 

@@ -10,8 +10,8 @@ It is a current-state reference, not a roadmap.
 Trade Proposer App is a short-horizon analysis and trade-planning tool. It helps operators:
 - define watchlists
 - run proposal, evaluation, tuning, and context-refresh jobs
-- inspect signals, plans, outcomes, and degraded states
-- review shared context and supporting diagnostics
+- review candidates, action plans, and outcomes
+- review shared context when the broader backdrop matters
 - adjust settings and providers inside the app
 
 It is not yet a proven short-horizon prediction engine.
@@ -56,9 +56,9 @@ It is not yet a proven short-horizon prediction engine.
 - Queue recommendation-plan evaluation runs from the recommendation-plans page.
 
 ### Diagnostics, settings, and docs
-- Inspect structured `analysis_json` payloads in the UI.
-- Review coverage, feature vectors, weights, warnings, timing, calibration summaries, and other diagnostics.
-- Configure summarization and providers from Settings.
+- Inspect structured `analysis_json` payloads in the UI when deeper debugging is needed.
+- Review warnings, timing, calibration summaries, and other diagnostics through detail pages and advanced review surfaces.
+- Configure summarization, providers, and ingestion from Settings.
 - Browse the project markdown docs in-app.
 
 ## What is already in place
@@ -66,8 +66,8 @@ It is not yet a proven short-horizon prediction engine.
 The shipped baseline includes:
 - watchlists, jobs, runs, settings, docs browsing, and audit history
 - signal, plan, and outcome persistence
-- recommendation-plan evaluation and stored review analytics
-- plan-generation tuning inside the app
+- recommendation-plan evaluation and advanced review analytics
+- plan-generation tuning inside the app as a research workflow
 - shared context reuse across runs
 - operator-visible shortlist reasoning and degraded-state reporting
 - single-user bearer-token API protection and encrypted provider credentials at rest

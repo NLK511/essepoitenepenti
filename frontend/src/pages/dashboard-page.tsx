@@ -1,22 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getJson } from "../api";
-import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle } from "../components/ui";
-import { ProvenanceStrip } from "../components/decision-surface";
-import type { DashboardResponse, IndustryContextSnapshot, MacroContextSnapshot, RecommendationDecisionSample, RecommendationDecisionSampleListResponse } from "../types";
-import { directionTone, formatDate, formatDuration, jobTypeLabel, recommendationStateTone, runTone, tickerTone, yahooFinanceUrl } from "../utils";
+import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import type { DashboardResponse, IndustryContextSnapshot, MacroContextSnapshot } from "../types";
+import { formatDate, formatDuration, jobTypeLabel, runTone } from "../utils";
 
 function contextSummaryMethod(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
   return snapshot && typeof snapshot.metadata?.context_summary_method === "string" ? snapshot.metadata.context_summary_method : "unknown";
-}
-
-function contextSummaryBackend(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
-  return snapshot && typeof snapshot.metadata?.context_summary_backend === "string" ? snapshot.metadata.context_summary_backend : "—";
-}
-
-function contextSummaryModel(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
-  return snapshot && typeof snapshot.metadata?.context_summary_model === "string" ? snapshot.metadata.context_summary_model : "—";
 }
 
 function contextSummaryError(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string | null {
@@ -27,23 +18,20 @@ export function DashboardPage() {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [latestMacroContext, setLatestMacroContext] = useState<MacroContextSnapshot | null>(null);
   const [latestIndustryContext, setLatestIndustryContext] = useState<IndustryContextSnapshot | null>(null);
-  const [latestDecisionSamples, setLatestDecisionSamples] = useState<RecommendationDecisionSample[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
         setError(null);
-        const [dashboard, macroContexts, industryContexts, decisionSamples] = await Promise.all([
+        const [dashboard, macroContexts, industryContexts] = await Promise.all([
           getJson<DashboardResponse>("/api/dashboard"),
           getJson<MacroContextSnapshot[]>("/api/context/macro?limit=1"),
           getJson<IndustryContextSnapshot[]>("/api/context/industry?limit=1"),
-          getJson<RecommendationDecisionSampleListResponse>("/api/recommendation-decision-samples?limit=5"),
         ]);
         setData(dashboard);
         setLatestMacroContext(macroContexts[0] ?? null);
         setLatestIndustryContext(industryContexts[0] ?? null);
-        setLatestDecisionSamples(decisionSamples.items);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
       }
@@ -51,23 +39,49 @@ export function DashboardPage() {
     void load();
   }, []);
 
+  const attentionItems = useMemo(() => {
+    if (!data) {
+      return [] as string[];
+    }
+    const items: string[] = [];
+    if (data.watchlists.length === 0) {
+      items.push("No watchlists yet. Create one before relying on scheduled proposal jobs.");
+    }
+    if (data.jobs.length === 0) {
+      items.push("No jobs configured yet. Add a proposal workflow to generate candidates and plans.");
+    }
+    if (data.latest_runs.some((run) => run.status === "failed" || run.status === "completed_with_warnings")) {
+      items.push("Recent runs include failures or warnings. Open the debugger before trusting new output.");
+    }
+    if (!latestMacroContext) {
+      items.push("No macro context snapshot is stored yet.");
+    }
+    if (!latestIndustryContext) {
+      items.push("No industry context snapshot is stored yet.");
+    }
+    if (latestMacroContext && contextSummaryError(latestMacroContext)) {
+      items.push("Latest macro summary used a fallback path.");
+    }
+    if (latestIndustryContext && contextSummaryError(latestIndustryContext)) {
+      items.push("Latest industry summary used a fallback path.");
+    }
+    return items;
+  }, [data, latestIndustryContext, latestMacroContext]);
+
   return (
     <>
       <PageHeader
         kicker="Workspace overview"
-        title="Know what to review next."
-        subtitle="This workspace is built for operator triage: check execution health, inspect the latest context, review recommendation plans, and move quickly to the runs or tickers that need attention."
+        title="Start with what needs attention."
+        subtitle="Use the dashboard for fast triage: check workflow health, context freshness, and the next page you should open."
         actions={
           <>
-            <HelpHint tooltip="The dashboard is a triage surface: start workflows, inspect freshness, and jump into the next review page quickly." to="/docs?doc=operator-page-field-guide" />
+            <HelpHint tooltip="The dashboard is a triage page. Use it to spot what needs attention, then jump into review, jobs, or context." to="/docs?doc=operator-page-field-guide" />
             <Link to="/jobs" className="button">
               Run workflows
             </Link>
             <Link to="/jobs/recommendation-plans" className="button-secondary">
               Review plans
-            </Link>
-            <Link to="/settings" className="button-subtle">
-              Setup
             </Link>
           </>
         }
@@ -79,87 +93,50 @@ export function DashboardPage() {
       {data ? (
         <div className="stack-page">
           <section className="metrics-grid">
-            <Card>
-              <div className="metric-label">Plans waiting for review</div>
-              <div className="metric-value">{data.recommendation_plans.length}</div>
-              <div className="helper-text">Latest persisted recommendation plans</div>
-            </Card>
-            <Card>
-              <div className="metric-label">Active watchlists</div>
-              <div className="metric-value">{data.watchlists.length}</div>
-              <div className="helper-text">Reusable universes feeding proposal jobs</div>
-            </Card>
-            <Card>
-              <div className="metric-label">Configured jobs</div>
-              <div className="metric-value">{data.jobs.length}</div>
-              <div className="helper-text">Scheduled and manual workflows</div>
-            </Card>
-            <Card>
-              <div className="metric-label">Recent runs</div>
-              <div className="metric-value">{data.latest_runs.length}</div>
-              <div className="helper-text">Most recent execution records</div>
-            </Card>
-            <Card>
-              <div className="metric-label">Macro context freshness</div>
-              <div className="metric-value">{latestMacroContext ? latestMacroContext.status : "—"}</div>
-              <div className="helper-text">{latestMacroContext ? `${formatDate(latestMacroContext.computed_at)} · ${contextSummaryMethod(latestMacroContext)}` : "no context snapshot"}</div>
-              {latestMacroContext ? <ProvenanceStrip method={contextSummaryMethod(latestMacroContext)} backend={contextSummaryBackend(latestMacroContext)} model={contextSummaryModel(latestMacroContext)} error={contextSummaryError(latestMacroContext)} /> : null}
-            </Card>
-            <Card>
-              <div className="metric-label">Industry context freshness</div>
-              <div className="metric-value">{latestIndustryContext ? latestIndustryContext.industry_label || latestIndustryContext.industry_key : "—"}</div>
-              <div className="helper-text">{latestIndustryContext ? `${latestIndustryContext.status} · ${formatDate(latestIndustryContext.computed_at)} · ${contextSummaryMethod(latestIndustryContext)}` : "no context snapshot"}</div>
-              {latestIndustryContext ? <ProvenanceStrip method={contextSummaryMethod(latestIndustryContext)} backend={contextSummaryBackend(latestIndustryContext)} model={contextSummaryModel(latestIndustryContext)} error={contextSummaryError(latestIndustryContext)} /> : null}
-            </Card>
+            <StatCard label="Plans to review" value={data.recommendation_plans.length} helper="Latest persisted recommendation plans" />
+            <StatCard label="Recent runs" value={data.latest_runs.length} helper="Most recent workflow executions" />
+            <StatCard label="Watchlists" value={data.watchlists.length} helper="Reusable universes feeding proposal jobs" />
+            <StatCard label="Jobs" value={data.jobs.length} helper="Saved workflows" />
+            <StatCard
+              label="Macro context"
+              value={latestMacroContext ? latestMacroContext.status : "—"}
+              helper={latestMacroContext ? `${formatDate(latestMacroContext.computed_at)} · ${contextSummaryMethod(latestMacroContext)}` : "No macro snapshot yet"}
+            />
+            <StatCard
+              label="Industry context"
+              value={latestIndustryContext ? latestIndustryContext.status : "—"}
+              helper={latestIndustryContext ? `${formatDate(latestIndustryContext.computed_at)} · ${contextSummaryMethod(latestIndustryContext)}` : "No industry snapshot yet"}
+            />
           </section>
 
           <section className="card-grid">
             <Card>
-              <SectionTitle kicker="Start here" title="Run the workflow" subtitle="Best for day-to-day operations." />
-              <div className="helper-text">Open jobs to queue a proposal run, then move into run review or recommendation plans once execution completes.</div>
+              <SectionTitle kicker="Primary actions" title="Run the core workflow" />
               <div className="cluster top-gap-small">
                 <Link to="/jobs" className="button">Open jobs</Link>
-                <Link to="/jobs/debugger" className="button-subtle">Open debugger</Link>
+                <Link to="/jobs/ticker-signals" className="button-secondary">Review candidates</Link>
+                <Link to="/jobs/recommendation-plans" className="button-secondary">Review plans</Link>
+                <Link to="/context" className="button-subtle">Check context</Link>
               </div>
             </Card>
+
             <Card>
-              <SectionTitle kicker="Decision review" title="Inspect plans and signals" subtitle="Best for short-horizon trade framing." />
-              <div className="helper-text">Use recommendation plans for final operator review and ticker signals when you want to understand why a name was promoted or blocked.</div>
-              <div className="cluster top-gap-small">
-                <Link to="/jobs/recommendation-plans" className="button-secondary">Recommendation plans</Link>
-                <Link to="/jobs/ticker-signals" className="button-subtle">Ticker signals</Link>
-              </div>
-            </Card>
-            <Card>
-              <SectionTitle kicker="Context review" title="Check the market backdrop" subtitle="Best for macro and industry awareness." />
-              <div className="helper-text">Review stored context snapshots before over-weighting any one ticker setup. Macro and industry context stay canonical here; the detail pages own the full backdrop.</div>
-              <div className="top-gap-small">
-                {latestMacroContext ? <ProvenanceStrip method={contextSummaryMethod(latestMacroContext)} backend={contextSummaryBackend(latestMacroContext)} model={contextSummaryModel(latestMacroContext)} error={contextSummaryError(latestMacroContext)} /> : null}
-                {latestIndustryContext ? <ProvenanceStrip method={contextSummaryMethod(latestIndustryContext)} backend={contextSummaryBackend(latestIndustryContext)} model={contextSummaryModel(latestIndustryContext)} error={contextSummaryError(latestIndustryContext)} /> : null}
-              </div>
-              <div className="cluster top-gap-small">
-                <Link to="/context" className="button-secondary">Context review</Link>
-                <Link to="/docs" className="button-subtle">Docs</Link>
-              </div>
+              <SectionTitle kicker="Attention" title="What to check next" />
+              {attentionItems.length === 0 ? (
+                <EmptyState message="Nothing urgent stands out right now." />
+              ) : (
+                <ul className="list-reset">
+                  {attentionItems.map((item) => (
+                    <li key={item} className="list-item compact-item">{item}</li>
+                  ))}
+                </ul>
+              )}
             </Card>
           </section>
 
           <section className="two-column">
             <Card>
-              <SectionTitle
-                kicker="Operator path"
-                title="Recommended workflow"
-                subtitle="Setup → scan → review → evaluate."
-              />
-              <ol className="checklist">
-                <li>Configure providers and defaults in Settings.</li>
-                <li>Create reusable watchlists for the markets you actually monitor.</li>
-                <li>Run jobs to generate ticker signals and recommendation plans.</li>
-                <li>Evaluate plans later so calibration and evidence review stay grounded in outcomes.</li>
-              </ol>
-            </Card>
-            <Card>
-              <SectionTitle kicker="Latest runs" title="Execution triage" subtitle="Jump straight into the most recent workflow outputs." />
+              <SectionTitle kicker="Recent runs" title="Execution triage" actions={<Link to="/jobs/debugger" className="button-subtle">Open debugger</Link>} />
               {data.latest_runs.length === 0 ? (
                 <EmptyState message="No runs yet." />
               ) : (
@@ -170,8 +147,7 @@ export function DashboardPage() {
                         <Link to={`/runs/${run.id}`} className="strong-link">
                           Run #{run.id}
                         </Link>
-                        <div className="helper-text">Job {run.job_id} · {jobTypeLabel(run.job_type)} · {formatDate(run.created_at)}</div>
-                        {run.scheduled_for ? <div className="helper-text">Scheduled slot {formatDate(run.scheduled_for)}</div> : null}
+                        <div className="helper-text">{jobTypeLabel(run.job_type)} · {formatDate(run.created_at)}</div>
                         <div className="helper-text">Duration {formatDuration(run.duration_seconds)}</div>
                         {run.error_message ? <div className="warning-text">{run.error_message}</div> : null}
                       </div>
@@ -181,98 +157,42 @@ export function DashboardPage() {
                 </ul>
               )}
             </Card>
-          </section>
 
-          <section className="card-grid">
             <Card>
-              <SectionTitle kicker="Configuration" title="Watchlists" />
-              {data.watchlists.length === 0 ? (
-                <EmptyState message="No watchlists yet." />
-              ) : (
-                <ul className="list-reset">
-                  {data.watchlists.map((watchlist) => (
-                    <li key={watchlist.id ?? watchlist.name} className="list-item compact-item">
-                      <div>
-                        <strong>{watchlist.name}</strong>
-                        <div className="badge-row">
-                          {watchlist.tickers.map((ticker) => (
-                            <Badge key={`${watchlist.name}-${ticker}`} tone={tickerTone()}>{ticker}</Badge>
-                          ))}
-                        </div>
-                      </div>
-                      <Badge>{watchlist.tickers.length} ticker(s)</Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-            <Card>
-              <SectionTitle kicker="Automation" title="Jobs" />
-              {data.jobs.length === 0 ? (
-                <EmptyState message="No jobs yet." />
-              ) : (
-                <ul className="list-reset">
-                  {data.jobs.map((job) => (
-                    <li key={job.id ?? job.name} className="list-item compact-item">
-                      <div>
-                        <strong>{job.name}</strong>
-                        <div className="badge-row">
-                          <Badge tone="neutral">{jobTypeLabel(job.job_type)}</Badge>
-                          {job.job_type === "proposal_generation" ? (
-                            job.watchlist_id ? (
-                              <Badge tone="info">watchlist: {job.watchlist_name ?? job.watchlist_id}</Badge>
-                            ) : (
-                              job.tickers.map((ticker) => (
-                                <Badge key={`${job.name}-${ticker}`} tone={tickerTone()}>{ticker}</Badge>
-                              ))
-                            )
-                          ) : (
-                            <Badge tone="info">maintenance workflow</Badge>
-                          )}
-                        </div>
-                      </div>
-                      <Badge tone={job.enabled ? "ok" : "neutral"}>{job.enabled ? "enabled" : "disabled"}</Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          </section>
-
-          <section className="card-grid">
-            <Card>
-              <SectionTitle kicker="Advanced review" title="Decision samples" subtitle="Near misses and actionable plans for deeper review and tuning." actions={<Link to="/research/decision-samples" className="button-secondary">Open samples</Link>} />
-              {latestDecisionSamples.length === 0 ? (
-                <EmptyState message="No decision samples yet." />
-              ) : (
-                <div className="data-stack top-gap-small">
-                  {latestDecisionSamples.map((sample) => (
-                    <div key={sample.id ?? `${sample.ticker}-${sample.created_at}`} className="data-card">
-                      <div className="data-card-header">
-                        <div>
-                          <div className="data-card-title">{sample.ticker}</div>
-                          <div className="helper-text">{sample.decision_type} · {sample.review_priority} priority</div>
-                        </div>
-                        <Badge tone={sample.review_priority === "high" ? "danger" : sample.review_priority === "medium" ? "warning" : "neutral"}>{sample.shortlisted ? "shortlisted" : "rejected"}</Badge>
-                      </div>
-                      <div className="helper-text">{sample.decision_reason || "No decision reason stored."}</div>
+              <SectionTitle kicker="Context freshness" title="Latest shared backdrop" actions={<Link to="/context" className="button-subtle">Open context review</Link>} />
+              <div className="data-stack top-gap-small">
+                <div className="data-card">
+                  <div className="data-card-header">
+                    <div>
+                      <div className="data-card-title">Macro</div>
+                      <div className="helper-text">{latestMacroContext ? formatDate(latestMacroContext.computed_at) : "No snapshot stored"}</div>
                     </div>
-                  ))}
+                    <Badge tone={latestMacroContext?.warnings.length ? "warning" : "neutral"}>{latestMacroContext?.status ?? "missing"}</Badge>
+                  </div>
+                  <div className="helper-text">
+                    {latestMacroContext?.summary_text || "No macro summary stored yet."}
+                  </div>
+                  {contextSummaryError(latestMacroContext) ? <div className="helper-text top-gap-small">Fallback note: {contextSummaryError(latestMacroContext)}</div> : null}
                 </div>
-              )}
+                <div className="data-card">
+                  <div className="data-card-header">
+                    <div>
+                      <div className="data-card-title">Industry</div>
+                      <div className="helper-text">{latestIndustryContext ? `${latestIndustryContext.industry_label || latestIndustryContext.industry_key} · ${formatDate(latestIndustryContext.computed_at)}` : "No snapshot stored"}</div>
+                    </div>
+                    <Badge tone={latestIndustryContext?.warnings.length ? "warning" : "neutral"}>{latestIndustryContext?.status ?? "missing"}</Badge>
+                  </div>
+                  <div className="helper-text">
+                    {latestIndustryContext?.summary_text || "No industry summary stored yet."}
+                  </div>
+                  {contextSummaryError(latestIndustryContext) ? <div className="helper-text top-gap-small">Fallback note: {contextSummaryError(latestIndustryContext)}</div> : null}
+                </div>
+              </div>
             </Card>
           </section>
 
           <Card>
-            <SectionTitle
-              kicker="Latest output"
-              title="Recommendation plans"
-              actions={
-                <Link to="/jobs/recommendation-plans" className="button-secondary">
-                  Browse plans
-                </Link>
-              }
-            />
+            <SectionTitle kicker="Latest output" title="Recent recommendation plans" actions={<Link to="/jobs/recommendation-plans" className="button-secondary">Browse plans</Link>} />
             {data.recommendation_plans.length === 0 ? (
               <EmptyState message="No recommendation plans persisted yet." />
             ) : (
@@ -282,22 +202,19 @@ export function DashboardPage() {
                     <div className="card-headline">
                       <div>
                         <div className="cluster">
-                          <a href={yahooFinanceUrl(item.ticker)} className="badge badge-info badge-link" target="_blank" rel="noreferrer noopener">{item.ticker}</a>
-                          <Badge tone={directionTone(item.action === "short" ? "SHORT" : item.action === "long" ? "LONG" : "NEUTRAL")}>{item.action}</Badge>
-                          <Badge tone={recommendationStateTone(item.latest_outcome?.outcome === "win" ? "WIN" : item.latest_outcome?.outcome === "loss" ? "LOSS" : "PENDING")}>
+                          <Badge tone="info">{item.ticker}</Badge>
+                          <Badge tone={item.action === "long" ? "ok" : item.action === "short" ? "warning" : "neutral"}>{item.action}</Badge>
+                          <Badge tone={item.latest_outcome?.outcome === "win" ? "ok" : item.latest_outcome?.outcome === "loss" ? "danger" : "neutral"}>
                             {item.latest_outcome?.outcome ?? item.status}
                           </Badge>
                         </div>
-                        <div className="cluster top-gap-small"><Badge tone="info">confidence {item.confidence_percent}%</Badge></div>
+                        <div className="helper-text top-gap-small">Confidence {item.confidence_percent}% · {formatDate(item.computed_at)}</div>
                       </div>
-                      <Link to={item.run_id ? `/runs/${item.run_id}` : "/jobs/recommendation-plans"} className="button-secondary">
+                      <Link to={item.run_id ? `/runs/${item.run_id}` : "/jobs/recommendation-plans"} className="button-subtle">
                         Open run
                       </Link>
                     </div>
-                    <div className="summary-grid">
-                      <div className="summary-item"><span className="summary-label">Entry / stop / take</span><span className="summary-value">{item.entry_price_low ?? item.entry_price_high ?? "—"} · {item.stop_loss ?? "—"} · {item.take_profit ?? "—"}</span></div>
-                    </div>
-                    <div className="helper-text">{item.thesis_summary || "No thesis summary captured for this recommendation plan."}</div>
+                    <div className="helper-text">{item.thesis_summary || "No thesis summary stored."}</div>
                   </article>
                 ))}
               </div>

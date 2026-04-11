@@ -28,10 +28,11 @@ Steps:
 
 Steps:
 1. open the dashboard
-2. scan signals and plans first
-3. scan recent runs as execution context
-4. check health and context freshness
-5. open only problematic runs or plans for deeper inspection
+2. check what needs attention now
+3. review plans first, then candidate signals if needed
+4. scan recent runs as execution context
+5. check context freshness when the backdrop matters
+6. open only problematic runs or plans for deeper inspection
 
 **Success outcome:** the user can separate trade decisions from system diagnostics.
 
@@ -69,11 +70,12 @@ Steps:
 Steps:
 1. enable or schedule evaluation workflows
 2. let the app evaluate older plans through the run system
-3. review recommendation plans first, then use decision samples only for advanced review when needed
-4. use signal-gating tuning when upstream recall looks too strict or too loose
-5. use the research calibration tab and calibration report to check whether confidence is lining up with realized outcomes
-6. use plan-generation tuning when downstream plan precision, entry framing, or trade-level construction needs improvement
-7. promote updated configs manually after review, or rely on guarded automation only when that workflow is fully enabled
+3. review recommendation plans first
+4. open decision samples only for advanced review when needed
+5. use signal-gating tuning when upstream recall looks too strict or too loose
+6. use the research calibration tab and calibration report to check whether confidence is lining up with realized outcomes
+7. use plan-generation tuning when downstream plan precision, entry framing, or trade-level construction needs improvement
+8. promote updated configs manually after review, or rely on guarded automation only when that workflow is fully enabled
 
 **Success outcome:** the improvement loop runs inside the product with auditable records and without relying on the retired weight-optimization workflow.
 

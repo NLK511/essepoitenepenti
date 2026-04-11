@@ -25,9 +25,9 @@ A plan whose intended horizon elapsed without a terminal win/loss resolution.
 
 ### Canonical review path
 The main operator review chain:
-- `TickerSignalSnapshot`
-- `RecommendationPlan`
-- `RecommendationPlanOutcome`
+- `TickerSignalSnapshot` = candidate review
+- `RecommendationPlan` = action review
+- `RecommendationPlanOutcome` = later measured result
 
 ### Run
 An execution record created when a job is queued or executed.
@@ -135,7 +135,9 @@ Reusable sector or industry context.
 A stored reusable artifact representing market context or support state at a point in time.
 
 ### Support snapshot
-A transitional shared artifact still used in some refresh, resolver, and freshness paths.
+A retired transitional shared artifact.
+
+Context snapshots are now the active shared-context path.
 
 ### Freshness
 Whether shared context is still recent enough to trust normally.
@@ -247,7 +249,7 @@ A comparison between actual recommendation behavior and simpler alternative coho
 A review concept showing where measured evidence is strongest or weakest.
 
 ### Recommendation decision sample
-A tuning and review snapshot stored for each generated plan.
+An advanced-review artifact used for tuning and deeper post-hoc analysis.
 
 ## System terms
 

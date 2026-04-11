@@ -253,8 +253,8 @@ export function RecommendationPlansPage() {
   const [evaluating, setEvaluating] = useState(false);
   const [evaluatingPlanId, setEvaluatingPlanId] = useState<number | null>(null);
   const [expandedPlanRows, setExpandedPlanRows] = useState<Record<string, boolean>>({});
+  const [pageMode, setPageMode] = useState<"review" | "analytics">("review");
   const [reviewSection, setReviewSection] = useState<"overview" | "calibration" | "baselines" | "evidence" | "families">("overview");
-  const [analyticsExpanded, setAnalyticsExpanded] = useState(false);
   const pageSize = Math.max(1, Number(searchParams.get("limit") ?? "100") || 100);
   const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
   const plans = plansResponse?.items ?? null;
@@ -413,9 +413,9 @@ export function RecommendationPlansPage() {
   return (
     <>
       <PageHeader
-        kicker="Recommendation workflow"
+        kicker="Review"
         title="Recommendation plans"
-        subtitle="Use this page as the main decision-review surface: filter plans, inspect calibrated confidence, compare cohorts, and queue evaluation runs without digging through raw run payloads."
+        subtitle="Use this page as the main action-review queue. Review plans first, then open advanced analytics only when you need deeper cohort analysis."
         actions={
           <button
             type="button"
@@ -459,8 +459,23 @@ export function RecommendationPlansPage() {
         </section>
       </Card>
 
+      <Card className="top-gap">
+        <SectionTitle kicker="Review mode" title="Choose the page focus" subtitle="Keep the default path list-first. Use advanced analytics separately when you need deeper review." />
+        <div className="top-gap-small">
+          <SegmentedTabs
+            value={pageMode}
+            onChange={(value) => setPageMode(value as "review" | "analytics")}
+            options={[
+              { value: "review", label: "Review queue" },
+              { value: "analytics", label: "Advanced analytics" },
+            ]}
+          />
+        </div>
+      </Card>
+
+      {pageMode === "review" ? (
       <Card className="sticky-toolbar">
-        <SectionTitle kicker="Filters" title="Find recommendation plans" actions={<HelpHint tooltip="Use filters to narrow the recommendation-plan review set before comparing calibration, baselines, and evidence." to={recommendationPlansDoc("filter-bar")} />} />
+        <SectionTitle kicker="Filters" title="Find recommendation plans" subtitle="Filter the review queue by ticker, run, setup, resolution, or outcome." actions={<HelpHint tooltip="Use filters to narrow the recommendation-plan review set before opening plan details." to={recommendationPlansDoc("filter-bar")} />} />
         <form className="form-grid" onSubmit={handleSubmit}>
           <label className="form-field"><span>Ticker</span><input name="ticker" defaultValue={searchParams.get("ticker") ?? ""} placeholder="AAPL" /></label>
           <label className="form-field"><span>Action</span><select name="action" defaultValue={searchParams.get("action") ?? ""}><option value="">All</option><option value="long">long</option><option value="short">short</option><option value="no_action">no_action</option></select></label>
@@ -477,37 +492,33 @@ export function RecommendationPlansPage() {
           </div>
         </form>
       </Card>
+      ) : null}
 
+      {pageMode === "analytics" ? (
       <Card className="top-gap">
         <SectionTitle
-          kicker="Review workspace"
-          title="Analytics and cohort review"
-          subtitle="Advanced review surfaces stay collapsed by default so the page remains plan-list first."
-          actions={<HelpHint tooltip="Each tab answers a different operator question: trust, comparison, evidence concentration, or family-specific behavior." to={recommendationPlansDoc("review-workspace-tabs")} />}
+          kicker="Advanced analytics"
+          title="Cohort review"
+          subtitle="Use these tabs for calibration, baseline comparison, evidence concentration, and setup-family review."
+          actions={<HelpHint tooltip="Each tab answers a different review question: trust, comparison, concentration, or family-specific behavior." to={recommendationPlansDoc("review-workspace-tabs")} />}
         />
-        <div className="cluster top-gap-small">
-          <button type="button" className="button-secondary" onClick={() => setAnalyticsExpanded((current) => !current)}>
-            {analyticsExpanded ? "Hide analytics" : "Show analytics"}
-          </button>
+        <div className="top-gap-small">
+          <SegmentedTabs
+            value={reviewSection}
+            onChange={setReviewSection}
+            options={[
+              { value: "overview", label: "Overview" },
+              { value: "calibration", label: "Calibration" },
+              { value: "baselines", label: "Baselines" },
+              { value: "evidence", label: "Evidence" },
+              { value: "families", label: "Setup families" },
+            ]}
+          />
         </div>
-        {analyticsExpanded ? (
-          <div className="top-gap-small">
-            <SegmentedTabs
-              value={reviewSection}
-              onChange={setReviewSection}
-              options={[
-                { value: "overview", label: "Overview" },
-                { value: "calibration", label: "Calibration" },
-                { value: "baselines", label: "Baselines" },
-                { value: "evidence", label: "Evidence" },
-                { value: "families", label: "Setup families" },
-              ]}
-            />
-          </div>
-        ) : null}
       </Card>
+      ) : null}
 
-      {analyticsExpanded && reviewSection === "overview" ? (
+      {pageMode === "analytics" && reviewSection === "overview" ? (
         <Card className="top-gap">
           <SectionTitle title="Review overview" actions={<HelpHint tooltip="High-level posture for recommendation plans: calibration trust, baseline comparisons, and where evidence is strongest or weakest." to={recommendationPlansDoc("recommendation-plans")} />} />
           <div className="insight-grid top-gap-small">
@@ -555,7 +566,7 @@ export function RecommendationPlansPage() {
         </Card>
       ) : null}
 
-      {analyticsExpanded && reviewSection === "calibration" ? (
+      {pageMode === "analytics" && reviewSection === "calibration" ? (
       <Card className="top-gap">
         <SectionTitle
           title="Calibration snapshot"
@@ -582,7 +593,7 @@ export function RecommendationPlansPage() {
       </Card>
       ) : null}
 
-      {analyticsExpanded && reviewSection === "baselines" ? (
+      {pageMode === "analytics" && reviewSection === "baselines" ? (
       <Card className="top-gap">
         <SectionTitle
           title="Baseline comparisons"
@@ -661,7 +672,7 @@ export function RecommendationPlansPage() {
       </Card>
       ) : null}
 
-      {analyticsExpanded && reviewSection === "evidence" ? (
+      {pageMode === "analytics" && reviewSection === "evidence" ? (
       <Card className="top-gap">
         <SectionTitle
           title="Evidence concentration"
@@ -736,7 +747,7 @@ export function RecommendationPlansPage() {
       </Card>
       ) : null}
 
-      {analyticsExpanded && reviewSection === "families" ? (
+      {pageMode === "analytics" && reviewSection === "families" ? (
       <Card className="top-gap">
         <SectionTitle
           title="Setup-family evaluation review"
@@ -768,8 +779,9 @@ export function RecommendationPlansPage() {
       </Card>
       ) : null}
 
+      {pageMode === "review" ? (
       <Card className="top-gap">
-        <SectionTitle title="Results" subtitle={plans ? `${planTotal} recommendation plan(s) · page ${currentPage} of ${pageCount}` : undefined} actions={<HelpHint tooltip="The main recommendation-plan table: review action, confidence, execution framing, transmission, outcomes, and thesis together." to={recommendationPlansDoc("results-table")} />} />
+        <SectionTitle title="Review queue" subtitle={plans ? `${planTotal} recommendation plan(s) · page ${currentPage} of ${pageCount}` : undefined} actions={<HelpHint tooltip="The main recommendation-plan table: review action, confidence, execution framing, outcomes, and thesis together." to={recommendationPlansDoc("results-table")} />} />
         {!plans && !error ? <LoadingState message="Loading recommendation plans…" /> : null}
         {plans && plans.length === 0 ? <EmptyState message="No recommendation plans match the current filters." /> : null}
         {plans ? (
@@ -1034,6 +1046,7 @@ export function RecommendationPlansPage() {
           </>
         ) : null}
       </Card>
+      ) : null}
     </>
   );
 }

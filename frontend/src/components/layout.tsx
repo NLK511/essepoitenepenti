@@ -40,7 +40,7 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    label: "Recommendation workflow",
+    label: "Review",
     items: [
       { to: "/jobs/ticker-signals", label: "Ticker signals", shortLabel: "Signals", icon: "≈" },
       { to: "/jobs/recommendation-plans", label: "Recommendation plans", shortLabel: "Plans", icon: "↗" },
@@ -128,16 +128,16 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
   }
   if (pathname.startsWith("/jobs/ticker-signals")) {
     return {
-      eyebrow: "Recommendation workflow",
+      eyebrow: "Review",
       title: "Ticker signals",
-      description: "Inspect shortlist inputs, cheap-scan ranking, and signal quality before plan promotion.",
+      description: "Review candidates before they become action plans.",
     };
   }
   if (pathname.startsWith("/jobs/recommendation-plans")) {
     return {
-      eyebrow: "Recommendation workflow",
+      eyebrow: "Review",
       title: "Recommendation plans",
-      description: "Review trade plans, calibration state, outcomes, and measured edge in one place.",
+      description: "Review action plans first, with advanced analytics available when needed.",
     };
   }
   if (pathname.startsWith("/research/signal-gating/gating-job") || pathname.startsWith("/research/signal-gating")) {
@@ -163,7 +163,7 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
   }
   if (pathname.startsWith("/jobs/debugger")) {
     return {
-      eyebrow: "Recommendation workflow",
+      eyebrow: "Review",
       title: "Run debugger",
       description: "Trace what each run scanned, shortlisted, persisted, and warned about.",
     };
@@ -193,7 +193,7 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
     return {
       eyebrow: "Context",
       title: "Context review",
-      description: "Review macro and industry context records, support refresh state, saliency, summary provenance, and continuity across runs.",
+      description: "Review the shared macro and industry backdrop behind current plans and signals.",
     };
   }
   if (pathname.startsWith("/settings")) {

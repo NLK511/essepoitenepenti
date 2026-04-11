@@ -191,7 +191,7 @@ export function ContextSnapshotDetailPage() {
       <PageHeader
         kicker="Context detail"
         title={title}
-        subtitle="Inspect the stored context summary, summary provenance, top events, lifecycle, source mix, and warnings behind a macro or industry context object."
+        subtitle="Read the stored summary first, then open advanced diagnostics only if you need lower-level event or source detail."
         actions={
           <>
             <Link to="/context" className="button-secondary">Back to context review</Link>
@@ -242,8 +242,11 @@ export function ContextSnapshotDetailPage() {
             <Card>
               <SectionTitle kicker="Summary provenance" title="How the summary was generated" />
               <ProvenanceStrip method={summaryMethod} backend={summaryBackend} model={summaryModel} error={summaryError} />
-              <div className="helper-text top-gap-small">Duration {summaryDuration !== null ? `${summaryDuration.toFixed(2)}s` : "—"} · metadata payload below</div>
-              <pre className="markdown-code-block top-gap-small">{JSON.stringify(snapshot.metadata?.context_summary_metadata ?? {}, null, 2)}</pre>
+              <div className="helper-text top-gap-small">Duration {summaryDuration !== null ? `${summaryDuration.toFixed(2)}s` : "—"}</div>
+              <details className="top-gap-small">
+                <summary className="helper-text">Show summary metadata</summary>
+                <pre className="markdown-code-block top-gap-small">{JSON.stringify(snapshot.metadata?.context_summary_metadata ?? {}, null, 2)}</pre>
+              </details>
             </Card>
             <Card>
               <SectionTitle kicker="Lifecycle" title="Event lifecycle and contradiction state" />
@@ -367,7 +370,7 @@ export function ContextSnapshotDetailPage() {
             </Card>
             {isIndustrySnapshot(snapshot) ? (
               <Card>
-                <SectionTitle kicker="Ontology" title="Stored industry ontology context" />
+                <SectionTitle kicker="Advanced detail" title="Stored industry ontology context" />
                 <div className="summary-grid">
                   <div className="summary-item"><span className="summary-label">Sector</span><span className="summary-value">{eventLabel(sectorDefinition?.label ?? ontologyProfile?.sector)}</span></div>
                   <div className="summary-item"><span className="summary-label">Peer industries</span><span className="summary-value">{stringList(ontologyProfile?.peer_industries).join(", ") || "—"}</span></div>
@@ -388,15 +391,21 @@ export function ContextSnapshotDetailPage() {
               </Card>
             ) : (
               <Card>
-                <SectionTitle kicker="Diagnostics" title="Stored JSON detail" />
-                <pre className="markdown-code-block">{JSON.stringify({ source_breakdown: snapshot.source_breakdown, metadata: snapshot.metadata }, null, 2)}</pre>
+                <SectionTitle kicker="Advanced detail" title="Stored JSON detail" />
+                <details>
+                  <summary className="helper-text">Show raw JSON</summary>
+                  <pre className="markdown-code-block top-gap-small">{JSON.stringify({ source_breakdown: snapshot.source_breakdown, metadata: snapshot.metadata }, null, 2)}</pre>
+                </details>
               </Card>
             )}
           </section>
           {isIndustrySnapshot(snapshot) ? (
             <Card>
-              <SectionTitle kicker="Diagnostics" title="Stored JSON detail" />
-              <pre className="markdown-code-block">{JSON.stringify({ source_breakdown: snapshot.source_breakdown, metadata: snapshot.metadata }, null, 2)}</pre>
+              <SectionTitle kicker="Advanced detail" title="Stored JSON detail" />
+              <details>
+                <summary className="helper-text">Show raw JSON</summary>
+                <pre className="markdown-code-block top-gap-small">{JSON.stringify({ source_breakdown: snapshot.source_breakdown, metadata: snapshot.metadata }, null, 2)}</pre>
+              </details>
             </Card>
           ) : null}
         </div>

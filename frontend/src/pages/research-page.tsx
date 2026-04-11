@@ -140,18 +140,14 @@ export function ResearchPage() {
     <>
       <PageHeader
         kicker="Research"
-        title="Calibration, tuning, and review work lives here."
-        subtitle="Use this area for evidence-oriented review surfaces that help you learn from past decisions before changing how the planner behaves. The latest automated performance assessment is shown here, while detailed tuning pages remain below."
-        actions={<HelpHint tooltip="Research pages are for review, calibration, and tuning workflows rather than day-to-day operational execution." to="/docs?doc=operator-page-field-guide" />}
+        title="Keep advanced review and tuning separate from daily operations."
+        subtitle="Use this area for secondary review, tuning, and performance assessment after the main workflow is already running."
+        actions={<HelpHint tooltip="Research pages are secondary tools for advanced review, tuning, and performance assessment." to="/docs?doc=operator-page-field-guide" />}
       />
 
       <div className="stack-page">
         <Card>
-          <SectionTitle
-            kicker="Research view"
-            title="Overview and calibration tabs"
-            subtitle="Switch between the operational overview and the calibration-focused view."
-          />
+          <SectionTitle kicker="Research view" title="Choose a secondary workflow" />
           <div className="top-gap-small">
             <SegmentedTabs
               value={activeTab}
@@ -167,9 +163,9 @@ export function ResearchPage() {
 
         <Card>
           <SectionTitle
-            kicker="Automated review"
-            title="Latest performance assessment"
-            subtitle="A scheduled performance-assessment job runs daily at midnight, preserves history in runs, and keeps this page focused on the latest assessment only."
+            kicker="Performance assessment"
+            title="Latest automated review"
+            subtitle="The performance-assessment job stays available here as a secondary review surface."
             actions={<button type="button" className="button-secondary" onClick={() => void handleRunAssessment()} disabled={running}>{running ? "Queueing…" : "Run now"}</button>}
           />
           {loading ? <div className="helper-text">Loading latest assessment…</div> : null}
@@ -177,14 +173,14 @@ export function ResearchPage() {
           {!loading && !error ? (
             <>
               <div className="data-points top-gap-small">
-                <div className="data-point"><span className="data-point-label">job</span><span className="data-point-value">{assessment?.job ? jobTypeLabel(assessment.job.job_type) : "—"}</span></div>
+                <div className="data-point"><span className="data-point-label">workflow</span><span className="data-point-value">{assessment?.job ? jobTypeLabel(assessment.job.job_type) : "—"}</span></div>
                 <div className="data-point"><span className="data-point-label">schedule</span><span className="data-point-value">{assessment?.job?.cron ?? "—"}</span></div>
                 <div className="data-point"><span className="data-point-label">history kept</span><span className="data-point-value">{assessment?.history_count ?? 0}</span></div>
                 <div className="data-point"><span className="data-point-label">latest run</span><span className="data-point-value">{assessment?.latest_run?.status ? <Badge tone={runTone(assessment.latest_run.status)}>{assessment.latest_run.status}</Badge> : "—"}</span></div>
                 <div className="data-point"><span className="data-point-label">generated</span><span className="data-point-value">{formatDate(latestGeneratedAt)}</span></div>
                 <div className="data-point"><span className="data-point-label">backend</span><span className="data-point-value">{latestBackend} / {latestMethod}</span></div>
               </div>
-              {latestError ? <div className="helper-text top-gap-small">LLM fallback note: {latestError}</div> : null}
+              {latestError ? <div className="helper-text top-gap-small">Fallback note: {latestError}</div> : null}
               <div className="top-gap-medium">
                 {latestContent ? renderAssessment(latestContent) : <div className="helper-text">No assessment has been generated yet.</div>}
               </div>
@@ -195,41 +191,24 @@ export function ResearchPage() {
         {activeTab === "overview" ? (
           <section className="card-grid">
             <Card>
-              <SectionTitle
-                kicker="Advanced review"
-                title="Decision samples"
-                subtitle="Inspect near-misses, borderline cases, and actionable examples used by advanced review and tuning workflows."
-              />
-              <div className="helper-text">This is an advanced review surface rather than a daily operator queue.</div>
+              <SectionTitle kicker="Advanced review" title="Decision samples" subtitle="Review near-misses and borderline cases when you need deeper evidence review." />
               <div className="cluster top-gap-small">
                 <Link to="/research/decision-samples" className="button-secondary">Open decision samples</Link>
                 <Badge tone="info">advanced review</Badge>
               </div>
             </Card>
-
             <Card>
-              <SectionTitle
-                kicker="Tuning"
-                title="Signal gating tuning"
-                subtitle="Adjust upstream selection controls when shortlist recall is too strict or too loose."
-              />
-              <div className="helper-text">Use this page to tune shortlist behavior directly without a separate hub layer.</div>
+              <SectionTitle kicker="Tuning" title="Signal gating tuning" subtitle="Use this when shortlist recall is too strict or too loose." />
               <div className="cluster top-gap-small">
                 <Link to="/research/signal-gating/gating-job" className="button-secondary">Open signal gating tuning</Link>
-                <Badge tone="info">active</Badge>
+                <Badge tone="info">research</Badge>
               </div>
             </Card>
-
             <Card>
-              <SectionTitle
-                kicker="Tuning"
-                title="Plan generation tuning"
-                subtitle="Run candidate-based precision tuning for live entry, stop-loss, and take-profit construction with ranked backtest results."
-              />
-              <div className="helper-text">Use this page to inspect active config versions, tuning runs, guarded promotions, and candidate ranking output.</div>
+              <SectionTitle kicker="Tuning" title="Plan generation tuning" subtitle="Use this when actionable plan precision or trade framing needs work." />
               <div className="cluster top-gap-small">
                 <Link to="/research/plan-generation-tuning" className="button-secondary">Open plan generation tuning</Link>
-                <Badge tone="info">active</Badge>
+                <Badge tone="info">research</Badge>
               </div>
             </Card>
           </section>
@@ -238,15 +217,13 @@ export function ResearchPage() {
         {activeTab === "tuning" ? (
           <section className="card-grid">
             <Card>
-              <SectionTitle kicker="Upstream" title="Signal gating tuning" subtitle="Recall-oriented tuning for shortlist and threshold behavior." />
-              <div className="helper-text">Use this when too many promising names are being screened out before full plan generation.</div>
+              <SectionTitle kicker="Upstream" title="Signal gating tuning" subtitle="Recall-oriented shortlist tuning." />
               <div className="cluster top-gap-small">
                 <Link to="/research/signal-gating/gating-job" className="button-secondary">Open signal gating tuning</Link>
               </div>
             </Card>
             <Card>
-              <SectionTitle kicker="Downstream" title="Plan generation tuning" subtitle="Precision-oriented tuning for entry, stop, target, and actionability behavior." />
-              <div className="helper-text">Use this when the app is generating too many weak actionable plans or the live trade framing needs adjustment.</div>
+              <SectionTitle kicker="Downstream" title="Plan generation tuning" subtitle="Precision-oriented plan-construction tuning." />
               <div className="cluster top-gap-small">
                 <Link to="/research/plan-generation-tuning" className="button-secondary">Open plan generation tuning</Link>
               </div>
@@ -258,36 +235,16 @@ export function ResearchPage() {
           <>
             {calibrationSummary ? (
               <section className="card-grid">
-                <StatCard
-                  label="Calibration method"
-                  value={calibrationReport?.method ?? "—"}
-                  helper="Confidence reliability summary for the latest assessed cohort."
-                />
-                <StatCard
-                  label="Brier score"
-                  value={calibrationReport?.brier_score !== null && calibrationReport?.brier_score !== undefined ? calibrationReport.brier_score.toFixed(4) : "—"}
-                  helper="Lower is better. This checks how close confidence is to realized outcome."
-                />
-                <StatCard
-                  label="ECE"
-                  value={calibrationReport?.expected_calibration_error !== null && calibrationReport?.expected_calibration_error !== undefined ? calibrationReport.expected_calibration_error.toFixed(4) : "—"}
-                  helper="Average calibration gap across confidence bins."
-                />
-                <StatCard
-                  label="Resolved outcomes"
-                  value={calibrationReport?.resolved_count ?? calibrationSummary.resolved_outcomes}
-                  helper="Only resolved win/loss cases contribute to the reliability curve."
-                />
+                <StatCard label="Calibration method" value={calibrationReport?.method ?? "—"} helper="Latest assessed cohort" />
+                <StatCard label="Brier score" value={calibrationReport?.brier_score !== null && calibrationReport?.brier_score !== undefined ? calibrationReport.brier_score.toFixed(4) : "—"} helper="Lower is better" />
+                <StatCard label="ECE" value={calibrationReport?.expected_calibration_error !== null && calibrationReport?.expected_calibration_error !== undefined ? calibrationReport.expected_calibration_error.toFixed(4) : "—"} helper="Average confidence gap" />
+                <StatCard label="Resolved outcomes" value={calibrationReport?.resolved_count ?? calibrationSummary.resolved_outcomes} helper="Win/loss cases used for reliability" />
               </section>
             ) : null}
 
             {calibrationBins.length > 0 ? (
               <Card>
-                <SectionTitle
-                  kicker="Reliability curve"
-                  title="Confidence calibration bins"
-                  subtitle="Predicted probability versus realized win rate by confidence band. Thin bins should be treated cautiously."
-                />
+                <SectionTitle kicker="Reliability curve" title="Confidence calibration bins" subtitle="Predicted probability versus realized win rate by confidence band." />
                 <div className="table-wrapper top-gap-small">
                   <table className="data-table">
                     <thead>

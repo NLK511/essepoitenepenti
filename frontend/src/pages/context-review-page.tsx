@@ -258,9 +258,9 @@ export function ContextReviewPage() {
   return (
     <>
       <PageHeader
-        kicker="Shared context"
+        kicker="Context"
         title="Context review"
-        subtitle="Review macro and industry context in dedicated tabs, with the latest context snapshots shown first so shared backdrop changes are easier to inspect."
+        subtitle="Review the shared macro and industry backdrop first. Advanced event details stay below the main summary so the page remains readable."
         actions={
           <>
             <button type="button" className="button" onClick={() => void enqueueRefresh(activeScope)} disabled={busyAction !== null}>
@@ -289,7 +289,7 @@ export function ContextReviewPage() {
           </section>
 
           <Card>
-            <SectionTitle title="Choose context scope" actions={<HelpHint tooltip="Switch between macro and industry review so one shared context layer stays in focus at a time." to={contextReviewDoc("context-review")} />} />
+            <SectionTitle title="Choose context scope" subtitle="Keep one shared context layer in focus at a time." actions={<HelpHint tooltip="Switch between macro and industry review so one shared context layer stays in focus at a time." to={contextReviewDoc("context-review")} />} />
             <SegmentedTabs
               value={activeTab}
               onChange={setActiveTab}
@@ -342,7 +342,7 @@ function MacroContextTab(props: {
 
       <section className="card-grid context-review-history-grid">
         <Card>
-          <SectionTitle kicker="Macro context history" title="Recent macro context snapshots" actions={<HelpHint tooltip="Recent macro context snapshots show how the shared backdrop changed over time." to={contextReviewDoc("history-lists")} />} />
+          <SectionTitle kicker="History" title="Recent macro snapshots" actions={<HelpHint tooltip="Recent macro context snapshots show how the shared backdrop changed over time." to={contextReviewDoc("history-lists")} />} />
           {props.history.length === 0 ? <EmptyState message="No macro context snapshots stored yet." /> : <MacroContextList snapshots={props.history} />}
         </Card>
       </section>
@@ -393,7 +393,7 @@ function IndustryContextTab(props: {
 
       <section className="card-grid context-review-history-grid">
         <Card>
-          <SectionTitle kicker="Industry context history" title="Recent industry context snapshots" actions={<HelpHint tooltip="Recent industry context snapshots help you see whether the sector backdrop is stable, shifting, or degraded." to={contextReviewDoc("history-lists")} />} />
+          <SectionTitle kicker="History" title="Recent industry snapshots" actions={<HelpHint tooltip="Recent industry context snapshots help you see whether the sector backdrop is stable, shifting, or degraded." to={contextReviewDoc("history-lists")} />} />
           {props.history.length === 0 ? <EmptyState message="No industry context snapshots stored yet." /> : <IndustryContextList snapshots={props.history} />}
         </Card>
       </section>

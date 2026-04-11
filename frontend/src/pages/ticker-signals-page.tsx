@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson } from "../api";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import { ScoreBadge, WarningSummary } from "../components/decision-surface";
 import type { TickerSignalSnapshot } from "../types";
 import { detailLabel, extractDisplayLabels, formatDate, yahooFinanceUrl } from "../utils";
@@ -84,9 +84,10 @@ export function TickerSignalsPage() {
   return (
     <>
       <PageHeader
-        kicker="Recommendation workflow"
+        kicker="Review"
         title="Ticker signals"
-        subtitle="Use signals to understand the shortlist before reading full recommendation plans. This view emphasizes what was promoted, what was blocked, and which transmission conditions shaped the decision."
+        subtitle="Use this page for candidate review: what was promoted, what was blocked, and why it got attention before a full plan existed."
+        actions={<HelpHint tooltip="Ticker signals are candidate review, not final action review. Use them to understand shortlist decisions before opening recommendation plans." to="/docs?doc=operator-page-field-guide" />}
       />
       {error ? <ErrorState message={error} /> : null}
 
@@ -98,7 +99,7 @@ export function TickerSignalsPage() {
       </section>
 
       <Card className="sticky-toolbar">
-        <SectionTitle kicker="Filters" title="Find signal snapshots" subtitle="Filter by ticker or run, then scan the compact cards below to see shortlist outcome and transmission quality at a glance." />
+        <SectionTitle kicker="Filters" title="Find candidate signals" subtitle="Filter by ticker or run, then scan what was shortlisted, blocked, or sent into deeper analysis." />
         <form className="form-grid" onSubmit={handleSubmit}>
           <label className="form-field"><span>Ticker</span><input name="ticker" defaultValue={searchParams.get("ticker") ?? ""} placeholder="AAPL" /></label>
           <label className="form-field"><span>Run id</span><input name="run_id" defaultValue={searchParams.get("run_id") ?? ""} placeholder="145" /></label>
@@ -108,7 +109,7 @@ export function TickerSignalsPage() {
       </Card>
 
       <Card className="top-gap">
-        <SectionTitle title="Results" subtitle={signals ? `${signals.length} ticker signal snapshot(s)` : undefined} />
+        <SectionTitle title="Candidate review" subtitle={signals ? `${signals.length} ticker signal snapshot(s)` : undefined} />
         {!signals && !error ? <LoadingState message="Loading ticker signals…" /> : null}
         {signals && signals.length === 0 ? <EmptyState message="No ticker signals match the current filters." /> : null}
         {signals ? (
