@@ -104,6 +104,7 @@ export function ContextReviewPage() {
   const { showToast } = useToast();
   const [macroContexts, setMacroContexts] = useState<MacroContextSnapshot[]>([]);
   const [industryContexts, setIndustryContexts] = useState<IndustryContextSnapshot[]>([]);
+  const [selectedIndustryHistory, setSelectedIndustryHistory] = useState<IndustryContextSnapshot[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<"macro" | "industry" | null>(null);
@@ -123,6 +124,16 @@ export function ContextReviewPage() {
       setError(loadError instanceof Error ? loadError.message : "Failed to load context review data");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadIndustryHistory(industryKey: string) {
+    try {
+      const history = await getJson<IndustryContextSnapshot[]>(`/api/context/industry?industry_key=${encodeURIComponent(industryKey)}&limit=50`);
+      setSelectedIndustryHistory(history);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : `Failed to load history for ${industryKey}`);
+      setSelectedIndustryHistory([]);
     }
   }
 
@@ -171,6 +182,7 @@ export function ContextReviewPage() {
   useEffect(() => {
     if (industryOptions.length === 0) {
       setSelectedIndustryKey(null);
+      setSelectedIndustryHistory([]);
       return;
     }
     if (!selectedIndustryKey || !latestIndustryByKey.has(selectedIndustryKey)) {
@@ -178,10 +190,16 @@ export function ContextReviewPage() {
     }
   }, [industryOptions, latestIndustryByKey, selectedIndustryKey]);
 
+  useEffect(() => {
+    if (!selectedIndustryKey) {
+      setSelectedIndustryHistory([]);
+      return;
+    }
+    void loadIndustryHistory(selectedIndustryKey);
+  }, [selectedIndustryKey]);
+
   const latestIndustryContext = selectedIndustryKey ? latestIndustryByKey.get(selectedIndustryKey) ?? null : industryContexts[0] ?? null;
-  const visibleIndustryHistory = selectedIndustryKey
-    ? industryContexts.filter((snapshot) => snapshot.industry_key === selectedIndustryKey)
-    : industryContexts;
+  const visibleIndustryHistory = selectedIndustryKey ? selectedIndustryHistory : industryContexts;
 
   const headerMetrics = useMemo(() => {
     if (activeTab === "macro") {
