@@ -23,6 +23,7 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_BY_KEY, normalize_plan_generation_tuning_config, parameter_definitions
+from trade_proposer_app.services.plan_generation_walk_forward import PlanGenerationWalkForwardService
 
 
 class PlanGenerationTuningError(Exception):
@@ -147,6 +148,19 @@ class PlanGenerationTuningService:
         evaluations.sort(key=self._candidate_sort_key, reverse=True)
         winner = evaluations[0]
         baseline_eval = next(item for item in evaluations if item.changed_keys == [])
+        walk_forward_validation = PlanGenerationWalkForwardService(self).summarize(
+            candidate_config=winner.config,
+            baseline_config=active_config,
+            candidate_label=f"run-{mode}-winner" if mode else "candidate",
+            baseline_label="active-baseline",
+            ticker=ticker,
+            setup_family=setup_family,
+            limit=limit,
+            lookback_days=365,
+            validation_days=90,
+            step_days=30,
+            min_validation_resolved=min_validation_resolved,
+        )
 
         run = self.repository.create_run(
             PlanGenerationTuningRun(
@@ -165,6 +179,7 @@ class PlanGenerationTuningService:
                     "promotion_requested": apply,
                     "search_record_count": len(search_records),
                     "validation_record_count": len(validation_records),
+                    "walk_forward_validation": walk_forward_validation.model_dump(mode="json"),
                 },
                 filters={
                     "ticker": ticker.upper() if ticker else None,
@@ -216,6 +231,8 @@ class PlanGenerationTuningService:
         if apply:
             if not winner_candidate.promotion_eligible:
                 raise PlanGenerationTuningError("winning candidate is not promotion eligible under current guardrails")
+            if walk_forward_validation.qualified_slices >= 3 and not walk_forward_validation.promotion_recommended:
+                raise PlanGenerationTuningError(f"winning candidate failed walk-forward validation: {walk_forward_validation.promotion_rationale}")
             promoted = self.repository.create_config_version(
                 PlanGenerationTuningConfigVersion(
                     version_label=f"run-{run.id}-winner",

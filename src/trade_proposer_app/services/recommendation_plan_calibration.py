@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import datetime
 
 from trade_proposer_app.domain.models import (
     RecommendationCalibrationBucket,
@@ -36,11 +37,14 @@ class RecommendationPlanCalibrationService:
         setup_family: str | None = None,
         resolved: str | None = None,
         outcome: str | None = None,
+        evaluated_after: datetime | None = None,
+        evaluated_before: datetime | None = None,
         limit: int = 500,
     ) -> RecommendationCalibrationSummary:
-        outcomes = self.outcomes.list_outcomes(ticker=ticker, run_id=run_id, setup_family=setup_family, resolved=resolved, outcome=outcome, limit=limit)
+        outcomes = self.outcomes.list_outcomes(ticker=ticker, run_id=run_id, setup_family=setup_family, resolved=resolved, outcome=outcome, evaluated_after=evaluated_after, evaluated_before=evaluated_before, limit=limit)
         resolved = [item for item in outcomes if item.outcome in {"win", "loss"}]
         calibration_report = self._calibration_report(outcomes)
+        smoothed_calibration_report = self._smoothed_calibration_report(outcomes)
         return RecommendationCalibrationSummary(
             total_outcomes=len(outcomes),
             resolved_outcomes=len(resolved),
@@ -51,6 +55,7 @@ class RecommendationPlanCalibrationService:
             watchlist_outcomes=sum(1 for item in outcomes if item.outcome == "watchlist"),
             overall_win_rate_percent=self._win_rate(resolved),
             calibration_report=calibration_report,
+            smoothed_calibration_report=smoothed_calibration_report,
             by_confidence_bucket=self._grouped_summary(outcomes, group_by="confidence_bucket"),
             by_setup_family=self._grouped_summary(outcomes, group_by="setup_family"),
             by_action=self._grouped_summary(outcomes, group_by="action", default_key="unknown_action"),
@@ -150,6 +155,19 @@ class RecommendationPlanCalibrationService:
         return round((wins / len(items)) * 100.0, 1)
 
     def _calibration_report(self, outcomes: list[RecommendationPlanOutcome]) -> RecommendationCalibrationReport | None:
+        return self._build_calibration_report(outcomes, method="confidence_binned_reliability", version_label="confidence-reliability-v1", smoothing_strength=0.0)
+
+    def _smoothed_calibration_report(self, outcomes: list[RecommendationPlanOutcome]) -> RecommendationCalibrationReport | None:
+        return self._build_calibration_report(outcomes, method="confidence_binned_smoothed_reliability", version_label="confidence-reliability-v2-smoothed", smoothing_strength=8.0)
+
+    def _build_calibration_report(
+        self,
+        outcomes: list[RecommendationPlanOutcome],
+        *,
+        method: str,
+        version_label: str,
+        smoothing_strength: float,
+    ) -> RecommendationCalibrationReport | None:
         scored = [item for item in outcomes if isinstance(item.confidence_percent, (int, float)) and item.outcome in {"win", "loss"}]
         if not scored:
             return None
@@ -157,17 +175,19 @@ class RecommendationPlanCalibrationService:
         total_brier = 0.0
         total_weighted_error = 0.0
         total_count = 0
+        overall_prob = sum(1.0 if item.outcome == "win" else 0.0 for item in scored) / len(scored)
         for lower, upper in ((0, 20), (20, 40), (40, 50), (50, 60), (60, 70), (70, 80), (80, 90), (90, 100)):
             bin_items = [item for item in scored if self._confidence_in_bin(float(item.confidence_percent), lower, upper)]
             if not bin_items:
                 continue
             resolved_count = len(bin_items)
-            predicted_probs = [max(0.0, min(1.0, float(item.confidence_percent) / 100.0)) for item in bin_items]
+            raw_probs = [max(0.0, min(1.0, float(item.confidence_percent) / 100.0)) for item in bin_items]
             actuals = [1.0 if item.outcome == "win" else 0.0 for item in bin_items]
-            bin_brier = sum((pred - actual) ** 2 for pred, actual in zip(predicted_probs, actuals, strict=False)) / resolved_count
-            avg_predicted = sum(predicted_probs) / resolved_count
+            avg_predicted = sum(raw_probs) / resolved_count
             avg_actual = sum(actuals) / resolved_count
-            calibration_error = abs(avg_predicted - avg_actual)
+            smoothed_predicted = avg_predicted if smoothing_strength <= 0 else ((avg_predicted * resolved_count) + (overall_prob * smoothing_strength)) / (resolved_count + smoothing_strength)
+            bin_brier = sum((pred - actual) ** 2 for pred, actual in zip([smoothed_predicted] * resolved_count, actuals, strict=False)) / resolved_count
+            calibration_error = abs(smoothed_predicted - avg_actual)
             total_brier += bin_brier * resolved_count
             total_weighted_error += calibration_error * resolved_count
             total_count += resolved_count
@@ -177,7 +197,7 @@ class RecommendationPlanCalibrationService:
                     bin_label=f"{lower}-{upper}",
                     sample_count=resolved_count,
                     resolved_count=resolved_count,
-                    predicted_probability=round(avg_predicted, 4),
+                    predicted_probability=round(smoothed_predicted, 4),
                     realized_win_rate_percent=round(avg_actual * 100.0, 1),
                     brier_score=round(bin_brier, 4),
                     calibration_error=round(calibration_error, 4),
@@ -186,8 +206,8 @@ class RecommendationPlanCalibrationService:
         if total_count <= 0:
             return None
         return RecommendationCalibrationReport(
-            version_label="confidence-reliability-v1",
-            method="confidence_binned_reliability",
+            version_label=version_label,
+            method=method,
             sample_count=total_count,
             resolved_count=total_count,
             brier_score=round(total_brier / total_count, 4),

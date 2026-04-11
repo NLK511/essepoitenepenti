@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
-import type { CalibrationReportResponse, CalibrationSummary, PerformanceAssessmentResponse } from "../types";
+import type { CalibrationReportResponse, CalibrationSummary, PerformanceAssessmentResponse, PerformanceWindowAssessment, WalkForwardValidationResponse } from "../types";
 import { formatDate, jobTypeLabel, runTone } from "../utils";
 import { Badge, Card, HelpHint, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 
@@ -74,7 +74,8 @@ function renderAssessment(content: string) {
 export function ResearchPage() {
   const [assessment, setAssessment] = useState<PerformanceAssessmentResponse | null>(null);
   const [calibration, setCalibration] = useState<CalibrationReportResponse | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "calibration" | "tuning">("overview");
+  const [walkForward, setWalkForward] = useState<WalkForwardValidationResponse | null>(null);
+  const [activeTab, setActiveTab] = useState<"overview" | "calibration" | "validation" | "tuning">("overview");
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,13 +86,15 @@ export function ResearchPage() {
       setLoading(true);
       setError(null);
       try {
-        const [assessmentPayload, calibrationPayload] = await Promise.all([
+        const [assessmentPayload, calibrationPayload, walkForwardPayload] = await Promise.all([
           getJson<PerformanceAssessmentResponse>("/api/research/performance-assessment"),
           getJson<CalibrationReportResponse>("/api/recommendation-outcomes/calibration-report?limit=500"),
+          getJson<WalkForwardValidationResponse>("/api/recommendation-outcomes/walk-forward?lookback_days=365&validation_days=90&step_days=30&min_resolved_outcomes=20"),
         ]);
         if (!cancelled) {
           setAssessment(assessmentPayload);
           setCalibration(calibrationPayload);
+          setWalkForward(walkForwardPayload);
         }
       } catch (err) {
         if (!cancelled) {
@@ -117,18 +120,21 @@ export function ResearchPage() {
   const calibrationSummary: CalibrationSummary | null = calibration?.calibration_summary ?? assessment?.calibration_summary ?? null;
   const calibrationReport = calibration?.calibration_report ?? calibrationSummary?.calibration_report ?? null;
   const calibrationBins = calibrationReport?.bins ?? [];
+  const windowedAssessments = Array.isArray(assessment?.windowed_assessments) ? (assessment.windowed_assessments as PerformanceWindowAssessment[]) : [];
 
   async function handleRunAssessment() {
     setRunning(true);
     setError(null);
     try {
       await postForm("/api/research/performance-assessment/run", {});
-      const [assessmentPayload, calibrationPayload] = await Promise.all([
+      const [assessmentPayload, calibrationPayload, walkForwardPayload] = await Promise.all([
         getJson<PerformanceAssessmentResponse>("/api/research/performance-assessment"),
         getJson<CalibrationReportResponse>("/api/recommendation-outcomes/calibration-report?limit=500"),
+        getJson<WalkForwardValidationResponse>("/api/recommendation-outcomes/walk-forward?lookback_days=365&validation_days=90&step_days=30&min_resolved_outcomes=20"),
       ]);
       setAssessment(assessmentPayload);
       setCalibration(calibrationPayload);
+      setWalkForward(walkForwardPayload);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -154,6 +160,7 @@ export function ResearchPage() {
               options={[
                 { value: "overview", label: "Overview" },
                 { value: "calibration", label: "Calibration" },
+                { value: "validation", label: "Validation" },
                 { value: "tuning", label: "Tuning" },
               ]}
               onChange={setActiveTab}
@@ -181,6 +188,25 @@ export function ResearchPage() {
                 <div className="data-point"><span className="data-point-label">backend</span><span className="data-point-value">{latestBackend} / {latestMethod}</span></div>
               </div>
               {latestError ? <div className="helper-text top-gap-small">Fallback note: {latestError}</div> : null}
+              {windowedAssessments.length > 0 ? (
+                <section className="card-grid top-gap-medium">
+                  {windowedAssessments.map((window) => (
+                    <Card key={window.window}>
+                      <SectionTitle kicker={`Window ${window.window}`} title={`${window.resolved_outcomes} resolved outcomes`} subtitle={`Evaluated after ${formatDate(window.evaluated_after)}`} />
+                      <div className="data-points top-gap-small">
+                        <div className="data-point"><span className="data-point-label">overall win rate</span><span className="data-point-value">{window.overall_win_rate_percent !== null ? `${window.overall_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
+                        <div className="data-point"><span className="data-point-label">actionable win rate</span><span className="data-point-value">{window.actual_actionable_win_rate_percent !== null ? `${window.actual_actionable_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
+                        <div className="data-point"><span className="data-point-label">high-confidence win rate</span><span className="data-point-value">{window.high_confidence_win_rate_percent !== null ? `${window.high_confidence_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
+                        <div className="data-point"><span className="data-point-label">actionable return 5d</span><span className="data-point-value">{window.actual_actionable_average_return_5d !== null ? window.actual_actionable_average_return_5d.toFixed(3) : "—"}</span></div>
+                        <div className="data-point"><span className="data-point-label">confidence return 5d</span><span className="data-point-value">{window.high_confidence_average_return_5d !== null ? window.high_confidence_average_return_5d.toFixed(3) : "—"}</span></div>
+                        <div className="data-point"><span className="data-point-label">brier / ece</span><span className="data-point-value">{window.calibration_brier_score !== null ? window.calibration_brier_score.toFixed(4) : "—"} / {window.calibration_ece !== null ? window.calibration_ece.toFixed(4) : "—"}</span></div>
+                        <div className="data-point"><span className="data-point-label">family count</span><span className="data-point-value">{window.family_count}</span></div>
+                        <div className="data-point"><span className="data-point-label">expansion</span><span className="data-point-value">{window.ready_for_expansion ? "yes" : "no"}</span></div>
+                      </div>
+                    </Card>
+                  ))}
+                </section>
+              ) : null}
               <div className="top-gap-medium">
                 {latestContent ? renderAssessment(latestContent) : <div className="helper-text">No assessment has been generated yet.</div>}
               </div>
@@ -198,6 +224,13 @@ export function ResearchPage() {
               </div>
             </Card>
             <Card>
+              <SectionTitle kicker="Review" title="Recommendation quality summary" subtitle="Use this for a consolidated view of calibration, baselines, evidence concentration, and walk-forward readiness." />
+              <div className="cluster top-gap-small">
+                <Link to="/recommendation-quality" className="button-secondary">Open quality summary</Link>
+                <Badge tone="info">operator view</Badge>
+              </div>
+            </Card>
+            <Card>
               <SectionTitle kicker="Tuning" title="Signal gating tuning" subtitle="Use this when shortlist recall is too strict or too loose." />
               <div className="cluster top-gap-small">
                 <Link to="/research/signal-gating/gating-job" className="button-secondary">Open signal gating tuning</Link>
@@ -212,6 +245,37 @@ export function ResearchPage() {
               </div>
             </Card>
           </section>
+        ) : null}
+
+        {activeTab === "validation" ? (
+          <>
+            {walkForward ? (
+              <>
+                <section className="card-grid">
+                  <StatCard label="Slices" value={walkForward.total_slices} helper="Rolling validation windows" />
+                  <StatCard label="Lookback" value={`${walkForward.lookback_days}d`} helper="Historical span considered" />
+                  <StatCard label="Validation" value={`${walkForward.validation_days}d`} helper="Each window length" />
+                  <StatCard label="Step" value={`${walkForward.step_days}d`} helper="Window stride" />
+                </section>
+                <section className="card-grid">
+                  {walkForward.slices.map((slice) => (
+                    <Card key={`${slice.slice_index}-${slice.window_label}`}>
+                      <SectionTitle kicker={`Slice ${slice.slice_index}`} title={slice.window_label} subtitle={`${slice.resolved_outcomes} resolved outcomes`} />
+                      <div className="data-points top-gap-small">
+                        <div className="data-point"><span className="data-point-label">overall win rate</span><span className="data-point-value">{slice.overall_win_rate_percent !== null ? `${slice.overall_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
+                        <div className="data-point"><span className="data-point-label">actual actionable</span><span className="data-point-value">{slice.actual_actionable_win_rate_percent !== null ? `${slice.actual_actionable_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
+                        <div className="data-point"><span className="data-point-label">high confidence</span><span className="data-point-value">{slice.high_confidence_win_rate_percent !== null ? `${slice.high_confidence_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
+                        <div className="data-point"><span className="data-point-label">actionable return 5d</span><span className="data-point-value">{slice.actual_actionable_average_return_5d !== null ? slice.actual_actionable_average_return_5d.toFixed(3) : "—"}</span></div>
+                        <div className="data-point"><span className="data-point-label">confidence return 5d</span><span className="data-point-value">{slice.high_confidence_average_return_5d !== null ? slice.high_confidence_average_return_5d.toFixed(3) : "—"}</span></div>
+                        <div className="data-point"><span className="data-point-label">ready</span><span className="data-point-value">{slice.ready_for_expansion ? "yes" : "no"}</span></div>
+                        <div className="data-point"><span className="data-point-label">brier / ece</span><span className="data-point-value">{slice.calibration_report?.brier_score !== null && slice.calibration_report?.brier_score !== undefined ? slice.calibration_report.brier_score.toFixed(4) : "—"} / {slice.calibration_report?.expected_calibration_error !== null && slice.calibration_report?.expected_calibration_error !== undefined ? slice.calibration_report.expected_calibration_error.toFixed(4) : "—"}</span></div>
+                      </div>
+                    </Card>
+                  ))}
+                </section>
+              </>
+            ) : null}
+          </>
         ) : null}
 
         {activeTab === "tuning" ? (
@@ -260,6 +324,37 @@ export function ResearchPage() {
                     <tbody>
                       {calibrationBins.map((bin) => (
                         <tr key={bin.bin_key}>
+                          <td>{bin.bin_label}</td>
+                          <td>{bin.sample_count}</td>
+                          <td>{bin.predicted_probability !== null ? `${(bin.predicted_probability * 100).toFixed(1)}%` : "—"}</td>
+                          <td>{bin.realized_win_rate_percent !== null ? `${bin.realized_win_rate_percent.toFixed(1)}%` : "—"}</td>
+                          <td>{bin.brier_score !== null ? bin.brier_score.toFixed(4) : "—"}</td>
+                          <td>{bin.calibration_error !== null ? bin.calibration_error.toFixed(4) : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            ) : null}
+            {calibrationSummary?.smoothed_calibration_report?.bins?.length ? (
+              <Card className="top-gap">
+                <SectionTitle kicker="Smoothed curve" title="Smoothed calibration bins" subtitle="Alternative reliability curve with a light Bayesian pull toward the overall rate." />
+                <div className="table-wrapper top-gap-small">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>bin</th>
+                        <th>samples</th>
+                        <th>predicted</th>
+                        <th>realized win rate</th>
+                        <th>brier</th>
+                        <th>calibration error</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {calibrationSummary.smoothed_calibration_report.bins.map((bin) => (
+                        <tr key={`smoothed-${bin.bin_key}`}>
                           <td>{bin.bin_label}</td>
                           <td>{bin.sample_count}</td>
                           <td>{bin.predicted_probability !== null ? `${(bin.predicted_probability * 100).toFixed(1)}%` : "—"}</td>

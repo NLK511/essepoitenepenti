@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -24,6 +26,8 @@ async def recommendation_plan_stats(
     resolved: str | None = Query(default=None),
     outcome: str | None = Query(default=None),
     window: str = Query(default="all"),
+    computed_after: datetime | None = Query(default=None),
+    computed_before: datetime | None = Query(default=None),
     session: Session = Depends(get_db_session),
 ) -> RecommendationPlanStats:
     normalized_resolved = resolved.strip().lower() if resolved else None
@@ -43,6 +47,8 @@ async def recommendation_plan_stats(
         plan_id=plan_id,
         resolved=normalized_resolved,
         outcome=normalized_outcome,
+        computed_after=computed_after,
+        computed_before=computed_before,
         window=normalized_window,
     )
 
@@ -58,6 +64,8 @@ async def list_recommendation_plans(
     plan_id: int | None = Query(default=None),
     resolved: str | None = Query(default=None),
     outcome: str | None = Query(default=None),
+    computed_after: datetime | None = Query(default=None),
+    computed_before: datetime | None = Query(default=None),
     session: Session = Depends(get_db_session),
 ) -> dict[str, object]:
     normalized_ticker = ticker.strip().upper() if ticker else None
@@ -80,6 +88,8 @@ async def list_recommendation_plans(
         plan_id=plan_id,
         resolved=normalized_resolved,
         outcome=normalized_outcome,
+        computed_after=computed_after,
+        computed_before=computed_before,
     )
     total = repository.count_plans(
         ticker=normalized_ticker,
@@ -89,6 +99,8 @@ async def list_recommendation_plans(
         plan_id=plan_id,
         resolved=normalized_resolved,
         outcome=normalized_outcome,
+        computed_after=computed_after,
+        computed_before=computed_before,
     )
     return {"items": items, "total": total, "limit": limit, "offset": offset}
 
@@ -101,6 +113,8 @@ async def summarize_recommendation_plan_baselines(
     limit: int = Query(default=500, ge=1, le=2000),
     resolved: str | None = Query(default=None),
     outcome: str | None = Query(default=None),
+    computed_after: datetime | None = Query(default=None),
+    computed_before: datetime | None = Query(default=None),
     session: Session = Depends(get_db_session),
 ) -> RecommendationBaselineSummary:
     normalized_resolved = resolved.strip().lower() if resolved else None
@@ -115,6 +129,8 @@ async def summarize_recommendation_plan_baselines(
         setup_family=setup_family.strip().lower() if setup_family else None,
         resolved=normalized_resolved,
         outcome=normalized_outcome,
+        computed_after=computed_after,
+        computed_before=computed_before,
         limit=limit,
     )
 

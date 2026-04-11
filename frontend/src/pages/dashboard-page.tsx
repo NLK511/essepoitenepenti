@@ -109,6 +109,19 @@ export function DashboardPage() {
             />
           </section>
 
+          {data.recommendation_quality ? (
+            <Card>
+              <SectionTitle kicker="Quality snapshot" title="Recommendation quality at a glance" subtitle={`Status: ${data.recommendation_quality.summary.status} · Updated ${formatDate(data.recommendation_quality.summary.generated_at)}`} actions={<><Link to="/recommendation-quality" className="button-secondary">Open summary</Link><Link to="/research" className="button-subtle">Open research</Link></>} />
+              <section className="metrics-grid top-gap-small">
+                <StatCard label="Win rate" value={data.recommendation_quality.summary.overall_win_rate_percent !== null ? `${data.recommendation_quality.summary.overall_win_rate_percent.toFixed(1)}%` : "—"} helper="Overall resolved recommendation outcomes" />
+                <StatCard label="Brier / ECE" value={data.recommendation_quality.summary.calibration_report ? `${data.recommendation_quality.summary.calibration_report.brier_score?.toFixed(4) ?? "—"} / ${data.recommendation_quality.summary.calibration_report.expected_calibration_error?.toFixed(4) ?? "—"}` : "—"} helper="Current calibration snapshot" />
+                <StatCard label="Walk-forward" value={data.recommendation_quality.summary.walk_forward_promotion_recommended ? "recommended" : data.recommendation_quality.summary.walk_forward_error ? "error" : "watch"} helper="Active tuning profile gate" />
+                <StatCard label="Evidence" value={data.recommendation_quality.summary.ready_for_expansion ? "ready" : "conservative"} helper="Whether the strongest cohorts have separated" />
+              </section>
+              <div className="helper-text top-gap-small">Next: {data.recommendation_quality.next_actions[0] ?? "Maintain the current settings."}</div>
+            </Card>
+          ) : null}
+
           <section className="card-grid">
             <Card>
               <SectionTitle kicker="Primary actions" title="Run the core workflow" />

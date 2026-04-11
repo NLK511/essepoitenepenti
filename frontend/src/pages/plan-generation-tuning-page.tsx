@@ -8,6 +8,7 @@ import type {
   PlanGenerationTuningResponse,
   PlanGenerationTuningRun,
   PlanGenerationTuningRunsResponse,
+  PlanGenerationTuningValidationResponse,
 } from "../types";
 
 function tone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
@@ -21,6 +22,7 @@ export function PlanGenerationTuningPage() {
   const [state, setState] = useState<PlanGenerationTuningResponse | null>(null);
   const [runs, setRuns] = useState<PlanGenerationTuningRun[] | null>(null);
   const [configs, setConfigs] = useState<PlanGenerationTuningConfigVersion[] | null>(null);
+  const [validation, setValidation] = useState<PlanGenerationTuningValidationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
@@ -28,14 +30,16 @@ export function PlanGenerationTuningPage() {
   async function loadData() {
     try {
       setError(null);
-      const [loadedState, loadedRuns, loadedConfigs] = await Promise.all([
+      const [loadedState, loadedRuns, loadedConfigs, loadedValidation] = await Promise.all([
         getJson<PlanGenerationTuningResponse>("/api/plan-generation-tuning"),
         getJson<PlanGenerationTuningRunsResponse>("/api/plan-generation-tuning/runs?limit=20"),
         getJson<PlanGenerationTuningConfigsResponse>("/api/plan-generation-tuning/configs?limit=20"),
+        getJson<PlanGenerationTuningValidationResponse>("/api/plan-generation-tuning/validation"),
       ]);
       setState(loadedState);
       setRuns(loadedRuns.items);
       setConfigs(loadedConfigs.items);
+      setValidation(loadedValidation);
       setSelectedRunId((current) => current ?? loadedRuns.items[0]?.id ?? null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load plan generation tuning state");
@@ -108,6 +112,19 @@ export function PlanGenerationTuningPage() {
               <pre className="code-block top-gap-small">{JSON.stringify(state.state.active_config, null, 2)}</pre>
             </details>
           </Card>
+
+          {validation ? (
+            <Card>
+              <SectionTitle kicker="Validation" title="Walk-forward promotion gate" subtitle={validation.summary.promotion_rationale} />
+              <section className="metrics-grid top-gap-small">
+                <StatCard label="Promotion" value={validation.summary.promotion_recommended ? "recommended" : "not yet"} helper="Walk-forward gate outcome" />
+                <StatCard label="Qualified slices" value={validation.summary.qualified_slices} helper="Slices with enough resolved records" />
+                <StatCard label="Avg win-rate delta" value={validation.summary.average_win_rate_delta !== null ? validation.summary.average_win_rate_delta.toFixed(2) : "—"} helper="Candidate minus baseline" />
+                <StatCard label="Avg EV delta" value={validation.summary.average_expected_value_delta !== null ? validation.summary.average_expected_value_delta.toFixed(4) : "—"} helper="Candidate minus baseline" />
+              </section>
+              <div className="helper-text top-gap-small">Candidate: {validation.candidate_version.version_label} · Baseline: {validation.baseline_version.version_label}</div>
+            </Card>
+          ) : null}
 
           <Card>
             <SectionTitle kicker="Runs" title="Recent tuning runs" subtitle="Select a run to inspect ranked candidates and promotion outcomes." actions={<HelpHint tooltip="Each run stores the candidate ranking, winner, validation counts, and whether promotion happened or was blocked." to="/docs?doc=plan-generation-tuning-spec" />} />

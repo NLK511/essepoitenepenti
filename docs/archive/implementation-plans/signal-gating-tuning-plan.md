@@ -1,11 +1,11 @@
 # Signal gating tuning plan
 
-**Status:** historical planning note
+**Status:** archived historical planning note
 
 This file is retained as implementation history.
 
 For the current shipped behavior, use:
-- `signal-gating-tuning-guide.md`
+- `../../signal-gating-tuning-guide.md`
 
 The content below reflects the earlier development plan that led to the shipped signal-gating workflow.
 
@@ -212,4 +212,4 @@ The first objective is to learn a reasonable raw configuration, not to build a f
 - `recommendation-methodology.md`
 - `decision-sample-tuning-guide.md`
 - `raw-details-reference.md`
-- `docs-index.md`
+- `../../docs-index.md`

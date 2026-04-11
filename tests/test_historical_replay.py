@@ -218,12 +218,10 @@ class HistoricalReplayTests(unittest.TestCase):
             slice_row = repository.list_slices(batch.id or 0)[0]
             self.assertEqual("completed", slice_row.status)
             output_summary = json.loads(slice_row.output_summary_json)
-            self.assertIn("market-data input assembly completed", output_summary["message"])
-            self.assertEqual("dummy_placeholder_v1", output_summary["dummy_signal_logic"]["version"])
-            self.assertEqual(2, len(output_summary["dummy_signal_logic"]["signals"]))
-            self.assertEqual("long", output_summary["dummy_signal_logic"]["signals"][0]["direction"])
+            self.assertEqual("Historical replay market-data input assembly completed.", output_summary["message"])
+            self.assertEqual("market_inputs_prepared", output_summary["pipeline_stage"])
             input_summary = json.loads(slice_row.input_summary_json)
             self.assertEqual(2, input_summary["market_input"]["covered_ticker_count"])
-            self.assertEqual("dummy_placeholder_v1", input_summary["signal_logic"]["version"])
+            self.assertEqual("market_inputs_prepared", input_summary["pipeline_stage"])
         finally:
             session.close()

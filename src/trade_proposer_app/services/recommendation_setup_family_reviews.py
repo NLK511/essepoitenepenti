@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import datetime
 
 from trade_proposer_app.domain.models import (
     RecommendationCalibrationBucket,
@@ -35,6 +36,8 @@ class RecommendationSetupFamilyReviewService:
         setup_family: str | None = None,
         resolved: str | None = None,
         outcome: str | None = None,
+        evaluated_after: datetime | None = None,
+        evaluated_before: datetime | None = None,
         limit: int = 500,
     ) -> RecommendationSetupFamilyReviewSummary:
         normalized_setup_family = setup_family.strip().lower() if setup_family else None
@@ -44,6 +47,8 @@ class RecommendationSetupFamilyReviewService:
             setup_family=normalized_setup_family,
             resolved=resolved,
             outcome=outcome,
+            evaluated_after=evaluated_after,
+            evaluated_before=evaluated_before,
             limit=limit,
         )
         grouped: dict[str, list[RecommendationPlanOutcome]] = defaultdict(list)

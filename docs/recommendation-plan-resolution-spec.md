@@ -12,7 +12,7 @@ This document defines the **expected behavior** for plan resolution.
 
 It is intentionally stricter than the current evaluator in a few places so that future work can reconcile the codebase back to a single rule set.
 
-Use the notes below as the canonical target and `recommendation-plan-evaluation-recompute-notes.md` as the current implementation history.
+Use the notes below as the canonical target and `archive/implementation-plans/recommendation-plan-evaluation-recompute-notes.md` as the current implementation history.
 
 ### Expected behavior
 
@@ -193,6 +193,6 @@ This spec preserves the meaning of resolution:
 
 ## Related docs
 
-- `recommendation-plan-evaluation-recompute-notes.md`
+- `archive/implementation-plans/recommendation-plan-evaluation-recompute-notes.md`
 - `recommendation-methodology.md`
 - `signal-gating-tuning-guide.md`

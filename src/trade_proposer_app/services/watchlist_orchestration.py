@@ -1863,11 +1863,22 @@ class WatchlistOrchestrationService:
             reasons.extend(bucket_reasons)
         threshold_adjustment += self._signal_gating_tuning_value("threshold_offset", 0.0)
         confidence_adjustment += self._signal_gating_tuning_value("confidence_adjustment", 0.0)
+        review_scale = 1.0
+        if strong_bucket_count >= 3 and usable_bucket_count >= 5:
+            review_scale = 1.0
+        elif strong_bucket_count >= 2 or usable_bucket_count >= 4:
+            review_scale = 0.8
+        elif usable_bucket_count >= 2:
+            review_scale = 0.6
+        else:
+            review_scale = 0.4
+        threshold_adjustment *= review_scale
+        confidence_adjustment *= review_scale
         threshold_adjustment = max(-6.0, min(15.0, threshold_adjustment))
         confidence_adjustment = max(-4.0, min(2.5, confidence_adjustment))
         effective_threshold = max(45.0, min(90.0, base_threshold + threshold_adjustment))
         calibrated_confidence = max(5.0, min(95.0, confidence_percent + confidence_adjustment))
-        review_status = self._calibration_review_status(usable_bucket_count, strong_bucket_count, reasons)
+        review_status = self._calibration_review_status(usable_bucket_count, strong_bucket_count)
         return {
             "enabled": True,
             "review_status": review_status,
@@ -1878,6 +1889,7 @@ class WatchlistOrchestrationService:
             "effective_confidence_threshold": round(effective_threshold, 2),
             "threshold_adjustment": round(threshold_adjustment, 2),
             "overall_win_rate_percent": overall_win_rate,
+            "review_scale": round(review_scale, 2),
             "setup_family": self._bucket_snapshot(setup_family, setup_bucket),
             "confidence_bucket": self._bucket_snapshot(bucket_key, confidence_bucket),
             "horizon": self._bucket_snapshot(horizon, horizon_bucket),
@@ -1966,15 +1978,13 @@ class WatchlistOrchestrationService:
         }
 
     @staticmethod
-    def _calibration_review_status(usable_bucket_count: int, strong_bucket_count: int, reasons: list[str]) -> str:
+    def _calibration_review_status(usable_bucket_count: int, strong_bucket_count: int) -> str:
         if usable_bucket_count == 0:
             return "insufficient_data"
         if strong_bucket_count >= 2 and usable_bucket_count >= 4:
             return "strong_for_gating"
         if usable_bucket_count >= 3:
             return "usable_for_gating"
-        if reasons:
-            return "heuristic_limited"
         return "heuristic_limited"
 
     def _calibration_transmission_bias(self, transmission_summary: dict[str, object] | None) -> str:

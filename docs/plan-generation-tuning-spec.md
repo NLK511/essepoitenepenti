@@ -273,7 +273,7 @@ For each eligible record, candidate evaluation must attempt to answer:
 
 Outcome comparison must use the canonical rules in:
 - `recommendation-plan-resolution-spec.md`
-- `recommendation-plan-evaluation-recompute-notes.md`
+- `archive/implementation-plans/recommendation-plan-evaluation-recompute-notes.md`
 
 Plan-generation tuning must not invent a separate outcome semantics.
 
@@ -779,7 +779,7 @@ Autonomous implementation must not broaden scope beyond this spec without an exp
 
 - `recommendation-methodology.md`
 - `recommendation-plan-resolution-spec.md`
-- `recommendation-plan-evaluation-recompute-notes.md`
+- `archive/implementation-plans/recommendation-plan-evaluation-recompute-notes.md`
 - `decision-sample-tuning-guide.md`
 - `signal-gating-tuning-guide.md`
 - `raw-details-reference.md`

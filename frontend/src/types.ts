@@ -178,11 +178,62 @@ export interface AppPreflightReport {
   checks: PreflightCheck[];
 }
 
+export interface RecommendationQualitySummary {
+  status: string;
+  status_reason: string;
+  generated_at: string;
+  tuning_settings: {
+    confidence_threshold: number;
+    signal_gating: {
+      threshold_offset: number;
+      confidence_adjustment: number;
+      near_miss_gap_cutoff: number;
+      shortlist_aggressiveness: number;
+      degraded_penalty: number;
+    };
+    plan_generation: {
+      active_config_version_id: number | null;
+      auto_enabled: boolean;
+      auto_promote_enabled: boolean;
+      min_actionable_resolved: number;
+      min_validation_resolved: number;
+    };
+  };
+  resolved_outcomes: number;
+  overall_win_rate_percent: number | null;
+  calibration_report: CalibrationReport | null;
+  smoothed_calibration_report: CalibrationReport | null;
+  actual_actionable_win_rate_percent: number | null;
+  actual_actionable_average_return_5d: number | null;
+  high_confidence_win_rate_percent: number | null;
+  high_confidence_average_return_5d: number | null;
+  ready_for_expansion: boolean;
+  strongest_positive_count: number;
+  weakest_count: number;
+  family_count: number;
+  walk_forward_promotion_recommended: boolean | null;
+  walk_forward_average_win_rate_delta: number | null;
+  walk_forward_average_expected_value_delta: number | null;
+  walk_forward_error: string | null;
+  latest_assessment: Record<string, unknown>;
+}
+
+export interface RecommendationQualityResponse {
+  summary: RecommendationQualitySummary;
+  calibration: CalibrationSummary;
+  baselines: RecommendationBaselineSummary;
+  evidence_concentration: RecommendationEvidenceConcentrationSummary;
+  setup_family_review: Record<string, unknown>;
+  walk_forward_validation: Record<string, unknown> | null;
+  next_actions: string[];
+}
+
 export interface DashboardResponse {
   watchlists: Watchlist[];
   jobs: Job[];
   latest_runs: Run[];
   recommendation_plans: RecommendationPlan[];
+  recommendation_quality?: RecommendationQualityResponse;
 }
 
 export interface KeyLabelDetail {
@@ -701,6 +752,46 @@ export interface PlanGenerationTuningCandidate {
   updated_at: string;
 }
 
+export interface PlanGenerationWalkForwardSlice {
+  slice_index: number;
+  window_label: string;
+  computed_after: string | null;
+  computed_before: string | null;
+  evaluated_after: string | null;
+  evaluated_before: string | null;
+  total_records: number;
+  resolved_records: number;
+  baseline_actionable_count: number;
+  candidate_actionable_count: number;
+  baseline_win_rate_percent: number | null;
+  candidate_win_rate_percent: number | null;
+  baseline_expected_value: number;
+  candidate_expected_value: number;
+  win_rate_delta: number | null;
+  expected_value_delta: number | null;
+  ambiguous_count: number;
+  sample_status: string;
+}
+
+export interface PlanGenerationWalkForwardSummary {
+  total_slices: number;
+  lookback_days: number;
+  validation_days: number;
+  step_days: number;
+  min_validation_resolved: number;
+  candidate_label: string;
+  baseline_label: string;
+  qualified_slices: number;
+  candidate_wins: number;
+  baseline_wins: number;
+  ties: number;
+  average_win_rate_delta: number | null;
+  average_expected_value_delta: number | null;
+  promotion_recommended: boolean;
+  promotion_rationale: string;
+  slices: PlanGenerationWalkForwardSlice[];
+}
+
 export interface PlanGenerationTuningRun {
   id: number | null;
   status: string;
@@ -753,6 +844,14 @@ export interface PlanGenerationTuningResponse {
   parameter_schema_version: string;
   parameters: Array<Record<string, unknown>>;
   state: PlanGenerationTuningState;
+}
+
+export interface PlanGenerationTuningValidationResponse {
+  summary: PlanGenerationWalkForwardSummary;
+  candidate_config: Record<string, unknown>;
+  baseline_config: Record<string, unknown>;
+  candidate_version: PlanGenerationTuningConfigVersion;
+  baseline_version: PlanGenerationTuningConfigVersion;
 }
 
 export interface PlanGenerationTuningRunsResponse {
@@ -873,6 +972,7 @@ export interface CalibrationSummary {
   watchlist_outcomes: number;
   overall_win_rate_percent: number | null;
   calibration_report: CalibrationReport | null;
+  smoothed_calibration_report: CalibrationReport | null;
   by_confidence_bucket: unknown[];
   by_setup_family: unknown[];
   by_action: unknown[];
@@ -882,12 +982,59 @@ export interface CalibrationSummary {
   by_horizon_setup_family: unknown[];
 }
 
+export interface PerformanceWindowAssessment {
+  window: string;
+  evaluated_after: string;
+  resolved_outcomes: number;
+  overall_win_rate_percent: number | null;
+  calibration_brier_score: number | null;
+  calibration_ece: number | null;
+  actual_actionable_win_rate_percent: number | null;
+  actual_actionable_average_return_5d: number | null;
+  high_confidence_win_rate_percent: number | null;
+  high_confidence_average_return_5d: number | null;
+  family_count: number;
+  ready_for_expansion: boolean;
+}
+
 export interface PerformanceAssessmentResponse {
   job: Job;
   history_count: number;
   latest_run: Run | null;
   latest_assessment: Record<string, unknown>;
   calibration_summary: CalibrationSummary | null;
+  windowed_assessments?: PerformanceWindowAssessment[];
+}
+
+export interface WalkForwardSlice {
+  slice_index: number;
+  window_label: string;
+  computed_after: string | null;
+  computed_before: string | null;
+  evaluated_after: string | null;
+  evaluated_before: string | null;
+  total_outcomes: number;
+  resolved_outcomes: number;
+  overall_win_rate_percent: number | null;
+  calibration_report: CalibrationReport | null;
+  actual_actionable_win_rate_percent: number | null;
+  high_confidence_win_rate_percent: number | null;
+  actual_actionable_average_return_5d: number | null;
+  high_confidence_average_return_5d: number | null;
+  ready_for_expansion: boolean;
+  setup_family_count: number;
+  horizon_count: number;
+  transmission_bias_count: number;
+  context_regime_count: number;
+}
+
+export interface WalkForwardValidationResponse {
+  total_slices: number;
+  lookback_days: number;
+  validation_days: number;
+  step_days: number;
+  min_resolved_outcomes: number;
+  slices: WalkForwardSlice[];
 }
 
 export interface CalibrationReportResponse {

@@ -628,6 +628,7 @@ class RecommendationCalibrationSummary(BaseModel):
     watchlist_outcomes: int = 0
     overall_win_rate_percent: float | None = None
     calibration_report: RecommendationCalibrationReport | None = None
+    smoothed_calibration_report: RecommendationCalibrationReport | None = None
     by_confidence_bucket: list[RecommendationCalibrationBucket] = Field(default_factory=list)
     by_setup_family: list[RecommendationCalibrationBucket] = Field(default_factory=list)
     by_action: list[RecommendationCalibrationBucket] = Field(default_factory=list)
@@ -662,6 +663,37 @@ class RecommendationEvidenceConcentrationSummary(BaseModel):
     focus_message: str = ""
     strongest_positive_cohorts: list[RecommendationEvidenceConcentrationCohort] = Field(default_factory=list)
     weakest_cohorts: list[RecommendationEvidenceConcentrationCohort] = Field(default_factory=list)
+
+
+class RecommendationWalkForwardSlice(BaseModel):
+    slice_index: int = 0
+    window_label: str = ""
+    computed_after: datetime | None = None
+    computed_before: datetime | None = None
+    evaluated_after: datetime | None = None
+    evaluated_before: datetime | None = None
+    total_outcomes: int = 0
+    resolved_outcomes: int = 0
+    overall_win_rate_percent: float | None = None
+    calibration_report: RecommendationCalibrationReport | None = None
+    actual_actionable_win_rate_percent: float | None = None
+    high_confidence_win_rate_percent: float | None = None
+    actual_actionable_average_return_5d: float | None = None
+    high_confidence_average_return_5d: float | None = None
+    ready_for_expansion: bool = False
+    setup_family_count: int = 0
+    horizon_count: int = 0
+    transmission_bias_count: int = 0
+    context_regime_count: int = 0
+
+
+class RecommendationWalkForwardSummary(BaseModel):
+    total_slices: int = 0
+    lookback_days: int = 0
+    validation_days: int = 0
+    step_days: int = 0
+    min_resolved_outcomes: int = 0
+    slices: list[RecommendationWalkForwardSlice] = Field(default_factory=list)
 
 
 class RecommendationBaselineComparison(BaseModel):
@@ -777,6 +809,46 @@ class PlanGenerationTuningEvent(BaseModel):
     payload: dict[str, object] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PlanGenerationWalkForwardSlice(BaseModel):
+    slice_index: int = 0
+    window_label: str = ""
+    computed_after: datetime | None = None
+    computed_before: datetime | None = None
+    evaluated_after: datetime | None = None
+    evaluated_before: datetime | None = None
+    total_records: int = 0
+    resolved_records: int = 0
+    baseline_actionable_count: int = 0
+    candidate_actionable_count: int = 0
+    baseline_win_rate_percent: float | None = None
+    candidate_win_rate_percent: float | None = None
+    baseline_expected_value: float = 0.0
+    candidate_expected_value: float = 0.0
+    win_rate_delta: float | None = None
+    expected_value_delta: float | None = None
+    ambiguous_count: int = 0
+    sample_status: str = "thin"
+
+
+class PlanGenerationWalkForwardSummary(BaseModel):
+    total_slices: int = 0
+    lookback_days: int = 0
+    validation_days: int = 0
+    step_days: int = 0
+    min_validation_resolved: int = 0
+    candidate_label: str = "candidate"
+    baseline_label: str = "baseline"
+    qualified_slices: int = 0
+    candidate_wins: int = 0
+    baseline_wins: int = 0
+    ties: int = 0
+    average_win_rate_delta: float | None = None
+    average_expected_value_delta: float | None = None
+    promotion_recommended: bool = False
+    promotion_rationale: str = ""
+    slices: list[PlanGenerationWalkForwardSlice] = Field(default_factory=list)
 
 
 class PlanGenerationTuningRun(BaseModel):

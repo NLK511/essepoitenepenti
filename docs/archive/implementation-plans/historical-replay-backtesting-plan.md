@@ -1,6 +1,6 @@
 # Historical Replay and Backtesting Plan
 
-**Status:** active implementation plan
+**Status:** archived implementation plan
 
 ## Why this exists
 
@@ -20,7 +20,7 @@ The hard part is the app's differentiated layer:
 
 This document defines the **target** path for historical replay: the practical and disciplined capability we want to build without pretending we can perfectly reconstruct every past state.
 
-For current repo status, see the implementation snapshot below and `historical-replay-implementation-checklist.md`.
+For the historical implementation record, see the implementation snapshot below and `historical-replay-implementation-checklist.md`.
 
 ---
 

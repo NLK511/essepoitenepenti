@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 
-from trade_proposer_app.domain.enums import JobType, StrategyHorizon
-from trade_proposer_app.domain.models import HistoricalReplayBatch, HistoricalReplaySlice, Run, TickerSignalSnapshot
+from trade_proposer_app.domain.enums import JobType
+from trade_proposer_app.domain.models import HistoricalReplayBatch, HistoricalReplaySlice, Run
 from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
@@ -190,7 +190,6 @@ class HistoricalReplayService:
                 "coverage_ratio": 0.0,
                 "tickers": [],
             }
-        dummy_signals = self._build_dummy_signal_snapshots(market_input.get("tickers", []), slice_row.as_of)
         input_summary = {
             "as_of": slice_row.as_of.isoformat(),
             "mode": batch.mode,
@@ -203,24 +202,17 @@ class HistoricalReplayService:
             "tickers": tickers,
             "market_input": market_input,
             "hydration_summary": hydration_summary,
-            "signal_logic": {
-                "version": "dummy_placeholder_v1",
-                "note": "This replay signal logic is intentionally dummy scaffolding. It must be replaced with the app-native signal pipeline before strict comparisons are made.",
-            },
+            "pipeline_stage": "market_inputs_prepared",
         }
         output_summary = {
             "batch_id": batch.id,
             "slice_id": slice_row.id,
-            "message": "Historical replay market-data input assembly completed; plan generation pipeline not implemented yet.",
+            "message": "Historical replay market-data input assembly completed.",
             "next_step": "connect market-data replay inputs to recommendation plan generation",
             "coverage_ratio": market_input.get("coverage_ratio", 0.0),
             "covered_ticker_count": market_input.get("covered_ticker_count", 0),
             "ticker_count": market_input.get("ticker_count", len(tickers)),
-            "dummy_signal_logic": {
-                "version": "dummy_placeholder_v1",
-                "note": "This replay signal logic is intentionally dummy scaffolding and must be aligned to the app-native signal logic later.",
-                "signals": [signal.model_dump(mode="json") for signal in dummy_signals],
-            },
+            "pipeline_stage": "market_inputs_prepared",
         }
         return input_summary, output_summary
 
@@ -257,63 +249,6 @@ class HistoricalReplayService:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
-
-    @staticmethod
-    def _build_dummy_signal_snapshots(ticker_market_rows: list[dict[str, object]], as_of: datetime) -> list[TickerSignalSnapshot]:
-        signals: list[TickerSignalSnapshot] = []
-        for row in ticker_market_rows:
-            ticker = str(row.get("ticker") or "").strip().upper()
-            if not ticker:
-                continue
-            latest_close = row.get("latest_close")
-            latest_bar_time = row.get("latest_bar_time")
-            latest_open = row.get("latest_open")
-            direction = "neutral"
-            technical_score = 0.0
-            confidence = 15.0
-            status = "ok"
-            warnings: list[str] = ["dummy_replay_signal_logic"]
-            missing_inputs: list[str] = []
-            if latest_close is None:
-                status = "degraded"
-                missing_inputs.append("latest_close")
-            else:
-                if latest_open is not None:
-                    try:
-                        open_value = float(latest_open)
-                        close_value = float(latest_close)
-                    except (TypeError, ValueError):
-                        open_value = 0.0
-                        close_value = 0.0
-                    if close_value > open_value:
-                        direction = "long"
-                    elif close_value < open_value:
-                        direction = "short"
-                    technical_score = round(abs(close_value - open_value) / max(abs(open_value), 1.0) * 100.0, 2)
-                    confidence = round(min(75.0, 20.0 + technical_score), 2)
-                else:
-                    confidence = 20.0
-            signals.append(
-                TickerSignalSnapshot(
-                    ticker=ticker,
-                    horizon=StrategyHorizon.ONE_WEEK,
-                    computed_at=as_of,
-                    status=status,
-                    direction=direction,
-                    confidence_percent=confidence,
-                    swing_probability_percent=confidence,
-                    technical_setup_score=technical_score,
-                    attention_score=min(100.0, confidence + 5.0),
-                    warnings=warnings,
-                    missing_inputs=missing_inputs,
-                    diagnostics={
-                        "mode": "dummy_placeholder",
-                        "note": "This is a placeholder replay signal. It must be aligned to the app-native signal pipeline later.",
-                        "latest_bar_time": latest_bar_time,
-                    },
-                )
-            )
-        return signals
 
     @staticmethod
     def _parse_batch_tickers(batch: HistoricalReplayBatch) -> list[str]:

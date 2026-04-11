@@ -1,6 +1,6 @@
 # Recommendation Plan Evaluation Recompute Notes
 
-**Status:** active implementation notes
+**Status:** archived implementation notes
 
 This document records the evaluation/recompute work that was done around the EOG plans (`315`, `635`) and the surrounding architecture choices.
 

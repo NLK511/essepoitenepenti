@@ -33,7 +33,7 @@ These define the current product truth.
 ### Recommendation workflow
 - `recommendation-methodology.md` — current scoring and planning pipeline
 - `recommendation-plan-resolution-spec.md` — canonical plan outcome semantics
-- `recommendation-plan-evaluation-recompute-notes.md` — evaluator edge cases and recompute notes
+- `archive/implementation-plans/recommendation-plan-evaluation-recompute-notes.md` — evaluator edge cases and recompute notes
 - `decision-sample-tuning-guide.md` — how to review and tune decision samples
 - `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow and calibration-related review surfaces
 
@@ -47,12 +47,9 @@ These define the current product truth.
 These are useful, but they are not the main current-state entry point.
 
 - `ontology-enrichment-plan.md` — active ontology/taxonomy work
-- `historical-replay-backtesting-plan.md` — target shape for historical replay
-- `historical-replay-implementation-checklist.md` — codebase-specific replay checklist
+- `recommendation-quality-improvement-plan.md` — working tracker for recommendation-quality, calibration, and validation improvements
 - `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow
-- `signal-gating-tuning-plan.md` — historical development plan for signal gating tuning
 - `plan-generation-tuning-spec.md` — authoritative implementation spec for autonomous plan-generation tuning
-- `plan-generation-tuning-implementation-plan.md` — concrete codebase implementation plan and replacement strategy
 - `ui-decluttering-plan.md` — active UI cleanup plan
 - `nitter-social-relevance-scoring.md` — current Nitter relevance-ranking behavior
 
@@ -75,6 +72,10 @@ Archived docs are still useful for history, but they are not part of the main re
 Start with:
 - `archive/README.md`
 - `archive/roadmap-history.md`
+- `archive/implementation-plans/signal-gating-tuning-plan.md` — historical development plan for signal gating tuning
+- `archive/implementation-plans/plan-generation-tuning-implementation-plan.md` — archived implementation plan and replacement strategy
+- `archive/implementation-plans/historical-replay-backtesting-plan.md` — archived historical replay research plan
+- `archive/implementation-plans/historical-replay-implementation-checklist.md` — archived historical replay implementation checklist
 
 ## Maintenance rule
 

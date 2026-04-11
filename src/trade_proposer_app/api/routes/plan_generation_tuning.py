@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningError, PlanGenerationTuningService
+from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
+from trade_proposer_app.services.plan_generation_walk_forward import PlanGenerationWalkForwardService
 
 router = APIRouter(prefix="/plan-generation-tuning", tags=["plan-generation-tuning"])
 
@@ -114,4 +116,54 @@ async def get_plan_generation_tuning_parameters(session: Session = Depends(get_d
         "objective_name": state["objective_name"],
         "parameter_schema_version": state["parameter_schema_version"],
         "parameters": state["parameters"],
+    }
+
+
+@router.get("/validation")
+async def validate_plan_generation_tuning(
+    config_version_id: int | None = Query(default=None),
+    baseline_config_version_id: int | None = Query(default=None),
+    ticker: str | None = Query(default=None),
+    setup_family: str | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=5000),
+    lookback_days: int = Query(default=365, ge=30, le=3650),
+    validation_days: int = Query(default=90, ge=7, le=365),
+    step_days: int = Query(default=30, ge=1, le=365),
+    min_validation_resolved: int = Query(default=8, ge=1, le=500),
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    service = PlanGenerationTuningService(session)
+    seed_version = service.ensure_baseline_config_version()
+    current_active_id = service.settings.get_plan_generation_active_config_version_id() or seed_version.id or 0
+    current_active_version = service.repository.get_config_version(current_active_id)
+    candidate_version = service.repository.get_config_version(config_version_id) if config_version_id is not None else current_active_version
+    if baseline_config_version_id is not None:
+        baseline_version = service.repository.get_config_version(baseline_config_version_id)
+    elif config_version_id is None:
+        baseline_version = seed_version
+    elif candidate_version.id == current_active_version.id:
+        baseline_version = seed_version
+    else:
+        baseline_version = current_active_version
+    candidate_config = normalize_plan_generation_tuning_config(candidate_version.config)
+    baseline_config = normalize_plan_generation_tuning_config(baseline_version.config)
+    summary = PlanGenerationWalkForwardService(service).summarize(
+        candidate_config=candidate_config,
+        baseline_config=baseline_config,
+        candidate_label=candidate_version.version_label,
+        baseline_label=baseline_version.version_label,
+        ticker=ticker,
+        setup_family=setup_family,
+        limit=limit,
+        lookback_days=lookback_days,
+        validation_days=validation_days,
+        step_days=step_days,
+        min_validation_resolved=min_validation_resolved,
+    )
+    return {
+        "summary": summary,
+        "candidate_version": candidate_version,
+        "baseline_version": baseline_version,
+        "candidate_config": candidate_config,
+        "baseline_config": baseline_config,
     }

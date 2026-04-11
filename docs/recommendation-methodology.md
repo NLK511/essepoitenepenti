@@ -245,7 +245,7 @@ Current limits still matter:
 
 Related references:
 - `recommendation-plan-resolution-spec.md`
-- `recommendation-plan-evaluation-recompute-notes.md`
+- `archive/implementation-plans/recommendation-plan-evaluation-recompute-notes.md`
 
 ## See also
 

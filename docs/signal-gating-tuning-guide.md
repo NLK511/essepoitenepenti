@@ -92,14 +92,6 @@ Signal gating tuning should be judged mainly by whether the upstream shortlist b
 It should not be treated as the same thing as plan-generation tuning.
 If the shortlist is acceptable but the actual trade plans are weak, use **plan generation tuning** instead.
 
-## Future work
-
-Likely next expansions include:
-- broader candidate search
-- richer explanations and comparison summaries
-- stronger automation and scheduling rules
-- tighter governance around promotion behavior
-
 ## Related docs
 
 - `decision-sample-tuning-guide.md`

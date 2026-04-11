@@ -67,6 +67,7 @@ class RecommendationPlanRepository:
         run_id: int | None = None,
         plan_id: int | None = None,
         computed_after: datetime | None = None,
+        computed_before: datetime | None = None,
     ):
         query = select(RecommendationPlanRecord)
         if ticker:
@@ -79,6 +80,8 @@ class RecommendationPlanRepository:
             query = query.where(RecommendationPlanRecord.id == plan_id)
         if computed_after is not None:
             query = query.where(RecommendationPlanRecord.computed_at >= computed_after)
+        if computed_before is not None:
+            query = query.where(RecommendationPlanRecord.computed_at <= computed_before)
         return query
 
     def _record_setup_family(self, record: RecommendationPlanRecord) -> str:
@@ -97,8 +100,9 @@ class RecommendationPlanRepository:
         resolved: str | None = None,
         outcome: str | None = None,
         computed_after: datetime | None = None,
+        computed_before: datetime | None = None,
     ) -> int:
-        query = self._base_plan_query(ticker=ticker, action=action, run_id=run_id, plan_id=plan_id, computed_after=computed_after)
+        query = self._base_plan_query(ticker=ticker, action=action, run_id=run_id, plan_id=plan_id, computed_after=computed_after, computed_before=computed_before)
         if setup_family or resolved or outcome:
             rows = self.session.scalars(query).all()
             outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
@@ -131,10 +135,11 @@ class RecommendationPlanRepository:
         resolved: str | None = None,
         outcome: str | None = None,
         computed_after: datetime | None = None,
+        computed_before: datetime | None = None,
     ) -> list[RecommendationPlan]:
         normalized_limit = max(1, limit)
         normalized_offset = max(0, offset)
-        query = self._base_plan_query(ticker=ticker, action=action, run_id=run_id, plan_id=plan_id, computed_after=computed_after)
+        query = self._base_plan_query(ticker=ticker, action=action, run_id=run_id, plan_id=plan_id, computed_after=computed_after, computed_before=computed_before)
         normalized_setup_family = setup_family.strip().lower() if setup_family else None
         normalized_resolved = (resolved or "").strip().lower() or None
         normalized_outcome = (outcome or "").strip().lower() or None
@@ -232,16 +237,22 @@ class RecommendationPlanRepository:
         plan_id: int | None = None,
         resolved: str | None = None,
         outcome: str | None = None,
+        computed_after: datetime | None = None,
+        computed_before: datetime | None = None,
         window: str = "all",
     ) -> RecommendationPlanStats:
-        computed_after = self._window_start(window)
+        normalized_window = (window or "all").strip().lower() or "all"
+        window_start = self._window_start(normalized_window)
+        effective_after = computed_after if computed_after is not None else window_start
+        window_label = "custom" if computed_after is not None or computed_before is not None else normalized_window
         rows = self.session.scalars(
             self._base_plan_query(
                 ticker=ticker,
                 action=action,
                 run_id=run_id,
                 plan_id=plan_id,
-                computed_after=computed_after,
+                computed_after=effective_after,
+                computed_before=computed_before,
             ).order_by(RecommendationPlanRecord.computed_at.desc())
         ).all()
         outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
@@ -273,7 +284,7 @@ class RecommendationPlanRepository:
             expired_plans=expired_plans,
             scored_outcomes=scored_outcomes,
             win_rate_percent=round((wins / scored_outcomes) * 100.0, 1) if scored_outcomes > 0 else None,
-            window=(window or "all").strip().lower() or "all",
+            window=window_label,
             resolved_outcomes=scored_outcomes,
             open_outcomes=open_plans,
             expired_outcomes=expired_plans,

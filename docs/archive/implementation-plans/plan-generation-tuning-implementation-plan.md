@@ -1,8 +1,10 @@
 # Plan generation tuning implementation plan
 
-**Status:** implementation plan derived from `plan-generation-tuning-spec.md`
+**Status:** archived implementation plan
 
-This document translates the spec into concrete codebase decisions.
+This document is retained for historical context. The live reference is `../../plan-generation-tuning-spec.md`.
+
+This document translated the spec into concrete codebase decisions.
 
 It is the execution plan to follow before and during implementation.
 

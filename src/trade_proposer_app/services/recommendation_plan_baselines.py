@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Callable
 
 from trade_proposer_app.domain.models import (
@@ -31,9 +32,11 @@ class RecommendationPlanBaselineService:
         setup_family: str | None = None,
         resolved: str | None = None,
         outcome: str | None = None,
+        computed_after: datetime | None = None,
+        computed_before: datetime | None = None,
         limit: int = 500,
     ) -> RecommendationBaselineSummary:
-        plans = self.plans.list_plans(ticker=ticker, run_id=run_id, setup_family=setup_family, resolved=resolved, outcome=outcome, limit=limit)
+        plans = self.plans.list_plans(ticker=ticker, run_id=run_id, setup_family=setup_family, resolved=resolved, outcome=outcome, computed_after=computed_after, computed_before=computed_before, limit=limit)
         comparisons = [self._build_comparison(definition, plans) for definition in self._definitions()]
         comparisons.sort(key=lambda item: (item.resolved_trade_count, item.trade_plan_count, item.win_count), reverse=True)
         family_cohorts = [self._build_comparison(definition, plans) for definition in self._family_definitions()]

@@ -1,8 +1,8 @@
 # Historical Replay Implementation Checklist
 
-**Status:** active implementation checklist
+**Status:** archived implementation checklist
 
-This document translates `historical-replay-backtesting-plan.md` into concrete work inside this repository.
+This document translates `historical-replay-backtesting-plan.md` into concrete historical work inside this repository.
 
 It is intentionally codebase-specific.
 It names the likely modules to extend, the order of work, and the MVP slice that should be implemented first.

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
@@ -25,6 +27,7 @@ async def get_performance_assessment(session: Session = Depends(get_db_session))
         "latest_run": latest_run,
         "latest_assessment": latest_summary,
         "calibration_summary": calibration_summary,
+        "windowed_assessments": payload.get("windowed_assessments", []),
     }
 
 

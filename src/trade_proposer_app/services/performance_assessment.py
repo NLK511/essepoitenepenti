@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from trade_proposer_app.domain.enums import JobType, RunStatus
@@ -140,6 +140,7 @@ class PerformanceAssessmentService:
             "latest_run": latest,
             "latest_summary": latest_summary,
             "latest_artifact": latest_artifact,
+            "windowed_assessments": self._windowed_assessments(),
         }
 
     def _build_payload(self) -> dict[str, object]:
@@ -148,6 +149,7 @@ class PerformanceAssessmentService:
         evidence = RecommendationEvidenceConcentrationService(self.outcome_repository).summarize(limit=500)
         family_review = RecommendationSetupFamilyReviewService(self.outcome_repository).summarize(limit=500)
         latest_runs = self.runs.list_latest_runs(limit=12)
+        windowed_assessments = self._windowed_assessments()
         recent_run_status_counts: dict[str, int] = {}
         for run in latest_runs:
             key = str(run.status)
@@ -167,7 +169,9 @@ class PerformanceAssessmentService:
             "overall_win_rate_percent": calibration.overall_win_rate_percent,
             "total_trade_plans_reviewed": baselines.total_trade_plans_reviewed,
             "actual_actionable_win_rate_percent": self._comparison_metric(baselines, "actual_actionable"),
+            "actual_actionable_average_return_5d": self._baseline_metric(baselines, "actual_actionable", "average_return_5d"),
             "high_confidence_win_rate_percent": self._comparison_metric(baselines, "high_confidence_only"),
+            "high_confidence_average_return_5d": self._baseline_metric(baselines, "high_confidence_only", "average_return_5d"),
             "ready_for_expansion": evidence.ready_for_expansion,
         }
         return {
@@ -176,6 +180,7 @@ class PerformanceAssessmentService:
             "calibration": calibration.model_dump(mode="json"),
             "baselines": baselines.model_dump(mode="json"),
             "evidence_concentration": evidence.model_dump(mode="json"),
+            "windowed_assessments": windowed_assessments,
             "setup_family_review": {
                 "total_outcomes_reviewed": family_review.total_outcomes_reviewed,
                 "families": top_families,
@@ -231,19 +236,61 @@ class PerformanceAssessmentService:
         return None
 
     @staticmethod
+    def _baseline_metric(summary, key: str, metric: str) -> float | None:
+        for item in summary.comparisons:
+            if item.key == key:
+                return getattr(item, metric, None)
+        return None
+
+    def _windowed_assessments(self) -> list[dict[str, object]]:
+        now = datetime.now(timezone.utc)
+        windows = [
+            ("30d", now - timedelta(days=30)),
+            ("90d", now - timedelta(days=90)),
+            ("180d", now - timedelta(days=180)),
+        ]
+        results: list[dict[str, object]] = []
+        for label, evaluated_after in windows:
+            calibration = RecommendationPlanCalibrationService(self.outcome_repository).summarize(limit=500, evaluated_after=evaluated_after)
+            baselines = RecommendationPlanBaselineService(self.plan_repository).summarize(limit=500, computed_after=evaluated_after)
+            evidence = RecommendationEvidenceConcentrationService(self.outcome_repository).summarize(limit=500, evaluated_after=evaluated_after)
+            family_review = RecommendationSetupFamilyReviewService(self.outcome_repository).summarize(limit=500, evaluated_after=evaluated_after)
+            results.append(
+                {
+                    "window": label,
+                    "evaluated_after": evaluated_after.isoformat(),
+                    "resolved_outcomes": calibration.resolved_outcomes,
+                    "overall_win_rate_percent": calibration.overall_win_rate_percent,
+                    "calibration_brier_score": calibration.calibration_report.brier_score if calibration.calibration_report else None,
+                    "calibration_ece": calibration.calibration_report.expected_calibration_error if calibration.calibration_report else None,
+                    "actual_actionable_win_rate_percent": self._comparison_metric(baselines, "actual_actionable"),
+                    "actual_actionable_average_return_5d": self._baseline_metric(baselines, "actual_actionable", "average_return_5d"),
+                    "high_confidence_win_rate_percent": self._comparison_metric(baselines, "high_confidence_only"),
+                    "high_confidence_average_return_5d": self._baseline_metric(baselines, "high_confidence_only", "average_return_5d"),
+                    "family_count": len(family_review.families),
+                    "ready_for_expansion": evidence.ready_for_expansion,
+                }
+            )
+        return results
+
+    @staticmethod
     def _build_fallback_summary(payload: dict[str, object]) -> str:
         headline = payload.get("headline_metrics", {}) if isinstance(payload.get("headline_metrics"), dict) else {}
         resolved = headline.get("resolved_outcomes", 0)
         overall_win_rate = headline.get("overall_win_rate_percent")
         actual_win_rate = headline.get("actual_actionable_win_rate_percent")
+        actual_return = headline.get("actual_actionable_average_return_5d")
         high_confidence = headline.get("high_confidence_win_rate_percent")
+        high_return = headline.get("high_confidence_average_return_5d")
         ready = headline.get("ready_for_expansion")
         return (
             "Executive summary\n"
             f"- Resolved outcomes reviewed: {resolved}\n"
             f"- Overall measured win rate: {overall_win_rate if overall_win_rate is not None else 'n/a'}%\n"
             f"- Actual actionable baseline win rate: {actual_win_rate if actual_win_rate is not None else 'n/a'}%\n"
+            f"- Actual actionable average return 5d: {actual_return if actual_return is not None else 'n/a'}\n"
             f"- High-confidence baseline win rate: {high_confidence if high_confidence is not None else 'n/a'}%\n"
+            f"- High-confidence average return 5d: {high_return if high_return is not None else 'n/a'}\n"
             f"- Evidence concentration ready for expansion: {'yes' if ready else 'no'}\n\n"
             "Recommended next actions\n"
             "- Increase resolved sample size before trusting thin cohorts.\n"

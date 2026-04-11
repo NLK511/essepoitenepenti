@@ -82,6 +82,8 @@ class RecommendationOutcomeRepository:
         run_id: int | None = None,
         setup_family: str | None = None,
         resolved: str | None = None,
+        evaluated_after: datetime | None = None,
+        evaluated_before: datetime | None = None,
         limit: int = 50,
     ) -> list[RecommendationPlanOutcome]:
         self.session.rollback()
@@ -103,6 +105,10 @@ class RecommendationOutcomeRepository:
             query = query.where(RecommendationOutcomeRecord.status == "resolved")
         elif resolved == "unresolved":
             query = query.where(RecommendationOutcomeRecord.status != "resolved")
+        if evaluated_after is not None:
+            query = query.where(RecommendationOutcomeRecord.evaluated_at >= self._normalize_datetime(evaluated_after))
+        if evaluated_before is not None:
+            query = query.where(RecommendationOutcomeRecord.evaluated_at <= self._normalize_datetime(evaluated_before))
         rows = self.session.execute(
             query.order_by(RecommendationOutcomeRecord.evaluated_at.desc()).limit(limit)
         ).all()

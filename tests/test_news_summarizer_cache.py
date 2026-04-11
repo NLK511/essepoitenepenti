@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 
-SUMMARIZER_SCRIPT = Path("/home/aurelio/workspace/pi-mono/.pi/skills/news-summarizer/scripts/summarize_news.py")
+SUMMARIZER_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "summarize_news.py"
 
 
 def extract_tagged_json(output: str, prefix: str) -> dict[str, object]:
