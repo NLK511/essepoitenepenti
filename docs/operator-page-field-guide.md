@@ -121,6 +121,11 @@ Quick mental model:
 - evidence asks where results are strongest or weakest
 - walk-forward validation asks whether a change still works on later data slices
 
+Current division of labor across research pages:
+- **Signal gating tuning** = upstream shortlist and threshold control
+- **Plan generation tuning** = downstream trade framing and actionable precision
+- **Recommendation quality / calibration / walk-forward** = trust, validation, and promotion discipline
+
 ### Context saliency
 For macro and industry context, saliency measures how prominent the current top events or drivers are relative to the rest of the stored context evidence.
 

@@ -27,6 +27,29 @@ Plan-generation tuning is separate.
 
 - **signal gating tuning** = upstream selection / recall
 - **plan generation tuning** = downstream plan quality / precision
+- **recommendation-quality review and walk-forward validation** = trust, calibration, and promotion discipline
+
+## Current role in the broader system
+
+Signal-gating tuning is still valuable, but it is no longer the only or main quality surface.
+
+Its current role is to act as an **upstream control layer**:
+- adjust shortlist strictness
+- review near-misses and degraded borderline cases
+- reduce junk before deeper analysis and plan construction
+- recover skipped opportunities when the gate is too conservative
+
+It should not be treated as the final proof that recommendation quality improved.
+
+Recommendation quality now depends on several layers working together:
+- **signal gating tuning** decides what gets through upstream
+- **plan generation tuning** adjusts how actionable trades are framed downstream
+- **recommendation-quality summaries, calibration review, evidence concentration, and walk-forward validation** decide whether a change deserves trust and promotion
+
+So the intended reading is:
+- use **signal gating tuning** when shortlist recall or selectivity looks wrong
+- use **plan generation tuning** when trade framing and actionable precision look wrong
+- use **recommendation-quality and walk-forward surfaces** to judge whether any tuning change is actually credible
 
 ## Shipped UI surfaces
 
@@ -93,6 +116,9 @@ Signal gating tuning should be judged mainly by whether the upstream shortlist b
 
 It should not be treated as the same thing as plan-generation tuning.
 If the shortlist is acceptable but the actual trade plans are weak, use **plan generation tuning** instead.
+
+It also should not be treated as a replacement for recommendation-quality validation.
+A gating change that looks locally better still needs to be checked against calibration, baselines, evidence concentration, and later time slices before operators trust it.
 
 ## Related docs
 

@@ -57,6 +57,20 @@ Watchlist-backed jobs follow this staged flow:
 4. calibration-aware confidence and policy gating
 5. persistence of signals and plans
 
+## How the research and tuning surfaces relate
+
+The app now has multiple research surfaces, and they should be read as separate layers rather than one generic optimizer.
+
+Current division of labor:
+- **signal gating tuning** = upstream shortlist and threshold control
+- **plan generation tuning** = downstream plan framing and actionable precision
+- **recommendation-quality summary, calibration, baseline comparisons, evidence concentration, and walk-forward validation** = trust and promotion review
+
+In practical terms:
+- if too many candidates are rejected too early or too much noise is entering deep analysis, inspect **signal gating tuning**
+- if candidates are reaching plan generation but the trade framing is weak, inspect **plan generation tuning**
+- if a change looks promising, use the **recommendation-quality and walk-forward surfaces** to decide whether it is actually credible on later data
+
 ## Data layers used by the methodology
 
 ### Market data

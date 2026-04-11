@@ -48,6 +48,11 @@ They express intended future autonomous behavior, but they should not be read as
 
 The goal of plan-generation tuning is to improve the quality of **actionable recommendation plans** after signals have already passed upstream gating.
 
+This means plan-generation tuning is no longer the only optimization surface, and it should not be read that way. It sits between upstream shortlist control and downstream trust validation:
+- **signal gating tuning** controls what reaches serious consideration
+- **plan generation tuning** controls how candidate trades are framed once they are in scope
+- **recommendation-quality review and walk-forward validation** control whether those changes are trustworthy enough to keep or promote
+
 This tuning layer is responsible for improving the quality of:
 - entry price selection
 - stop-loss selection
@@ -125,8 +130,14 @@ Signal gating tuning is separate and must remain separate.
 
 - signal gating tuning optimizes upstream selection / recall
 - plan generation tuning optimizes downstream plan quality / precision
+- recommendation-quality review and walk-forward validation judge whether tuning changes deserve trust or promotion
 
 The two systems may share infrastructure patterns, but they must not share the same active configuration object or promotion policy.
+
+Practical division of labor:
+- use **signal gating tuning** when the shortlist is too strict, too loose, or mishandles degraded near-misses
+- use **plan generation tuning** when the system is already surfacing candidates but entry/stop/take-profit framing or actionable precision needs improvement
+- use **quality-summary, calibration, baseline, evidence, and walk-forward surfaces** to decide whether any tuning change should actually influence live behavior
 
 ### Legacy weight optimization
 
