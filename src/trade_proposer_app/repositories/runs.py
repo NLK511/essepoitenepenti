@@ -111,7 +111,7 @@ class RunRepository:
             return None
         return self._to_run_model(record)
 
-    def claim_next_queued_run(self, worker_id: str | None = None, lease_seconds: int = 300) -> Run | None:
+    def claim_next_queued_run(self, worker_id: str | None = None, lease_seconds: int = 1200) -> Run | None:
         while True:
             candidate_id = self.session.scalars(
                 select(RunRecord.id)
@@ -189,7 +189,7 @@ class RunRepository:
             recovered = [self._to_run_model(record) for record in stale_records]
         return recovered
 
-    def claim_queued_run(self, run_id: int, worker_id: str | None = None, lease_seconds: int = 300) -> Run | None:
+    def claim_queued_run(self, run_id: int, worker_id: str | None = None, lease_seconds: int = 1200) -> Run | None:
         started_at = datetime.now(timezone.utc)
         lease_expires_at = started_at + timedelta(seconds=lease_seconds)
         result = self.session.execute(
@@ -214,7 +214,7 @@ class RunRepository:
             return None
         return self._to_run_model(record)
 
-    def renew_lease(self, run_id: int, lease_seconds: int = 300) -> bool:
+    def renew_lease(self, run_id: int, lease_seconds: int = 1200) -> bool:
         new_expiry = self._normalize_datetime(datetime.now(timezone.utc)) + timedelta(seconds=lease_seconds)
         result = self.session.execute(
             update(RunRecord)

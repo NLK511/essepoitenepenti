@@ -94,6 +94,17 @@ export function DebuggerPage() {
     }
   }
 
+  // Extract warnings from run summary if available
+  const activeWarnings = useMemo(() => {
+    if (!detail?.run.summary_json) return [];
+    try {
+        const summary = JSON.parse(detail.run.summary_json);
+        return Array.isArray(summary.warnings) ? summary.warnings : [];
+    } catch (e) {
+        return [];
+    }
+  }, [detail]);
+
   return (
     <>
       <PageHeader
@@ -195,6 +206,19 @@ export function DebuggerPage() {
                   <div className="helper-text">Completed {formatDate(detail.run.completed_at)}</div>
                 </div>
                 {detail.run.error_message ? <div className="alert alert-danger top-gap-small">{detail.run.error_message}</div> : null}
+                
+                {activeWarnings.length > 0 ? (
+                    <div className="top-gap-small">
+                        <div className="helper-text-label">Active warnings</div>
+                        <div className="alert alert-warning top-gap-tiny">
+                            <ul className="bullet-list-compact">
+                                {activeWarnings.map((warning, index) => (
+                                    <li key={index}>{warning}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                ) : null}
               </Card>
 
               <Card>

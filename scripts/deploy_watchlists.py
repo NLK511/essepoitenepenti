@@ -297,7 +297,8 @@ def main() -> None:
 
         for spec in WATCHLIST_SPECS:
             normalized = _normalize_tickers(spec["tickers"])
-            watchlist_record = _ensure_watchlist(session, watchlist_repo, spec["name"], normalized)
+            # Curated watchlists trigger overlap removal
+            watchlist_record = _ensure_watchlist(session, watchlist_repo, spec["name"], normalized, trigger_removal=True)
             job_name = f"{spec['name']}" # No prefix
             _ensure_job(
                 session,
@@ -320,7 +321,8 @@ def main() -> None:
                         region_tickers.extend(w_spec["tickers"])
                 
                 watchlist_name = f"Ref-{region}" # Less verbose name
-                target_watchlist = _ensure_watchlist(session, watchlist_repo, watchlist_name, _normalize_tickers(region_tickers))
+                # System watchlists DO NOT trigger overlap removal
+                target_watchlist = _ensure_watchlist(session, watchlist_repo, watchlist_name, _normalize_tickers(region_tickers), trigger_removal=False)
 
             _ensure_job(
                 session,
@@ -382,9 +384,11 @@ def _normalize_tickers(tickers: Iterable[str]) -> list[str]:
 
 
 def _ensure_watchlist(
-    session, repo: WatchlistRepository, name: str, tickers: list[str]
+    session, repo: WatchlistRepository, name: str, tickers: list[str], trigger_removal: bool = True
 ) -> WatchlistRecord:
-    _remove_tickers_from_other_watchlists(session, tickers, exclude_name=name)
+    if trigger_removal:
+        _remove_tickers_from_other_watchlists(session, tickers, exclude_name=name)
+        
     record = _find_watchlist_record(session, name)
 
     if record:

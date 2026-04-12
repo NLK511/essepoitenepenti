@@ -20,6 +20,7 @@ class BarsRefreshService:
         default_start_date = end_date - timedelta(days=lookback_days)
         total_ingested = 0
         stats = {}
+        warnings = []
 
         for ticker in tickers:
             try:
@@ -54,6 +55,7 @@ class BarsRefreshService:
                 )
 
                 if df is None or df.empty:
+                    warnings.append(f"{ticker}: No data returned from Yahoo (possible delisting or holiday)")
                     stats[ticker] = 0
                     continue
 
@@ -97,11 +99,13 @@ class BarsRefreshService:
 
             except Exception as e:
                 logger.error(f"Failed to refresh bars for {ticker}: {e}")
+                warnings.append(f"{ticker}: Error during refresh: {str(e)}")
                 stats[ticker] = -1
 
         return {
             "total_ingested": total_ingested,
             "ticker_stats": stats,
+            "warnings": warnings,
             "refreshed_at": end_date.isoformat(),
         }
 

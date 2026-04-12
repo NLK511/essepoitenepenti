@@ -8,6 +8,7 @@ import yfinance as yf
 from pydantic import BaseModel, Field
 
 from trade_proposer_app.domain.enums import StrategyHorizon
+from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 
 
 class CheapScanSignal(BaseModel):
@@ -36,18 +37,26 @@ class CheapScanError(Exception):
 class CheapScanSignalService:
     def __init__(
         self,
-        history_fetcher: Callable[[str, str], pd.DataFrame] | None = None,
+        history_fetcher: Callable[[str, str, datetime | None], pd.DataFrame] | None = None,
+        repository: HistoricalMarketDataRepository | None = None,
     ) -> None:
+        self.repository = repository
         self.history_fetcher = history_fetcher or self._fetch_price_history
 
-    def score(self, ticker: str, horizon: StrategyHorizon) -> CheapScanSignal:
+    def score(self, ticker: str, horizon: StrategyHorizon, as_of: datetime | None = None) -> CheapScanSignal:
         normalized_ticker = ticker.strip().upper()
         period = self._period_for_horizon(horizon)
-        history = self.history_fetcher(normalized_ticker, period)
+        
+        # If we have a repository and an as_of time, use the DB
+        if self.repository and as_of:
+            history = self._fetch_from_db(normalized_ticker, as_of)
+        else:
+            history = self.history_fetcher(normalized_ticker, period, as_of)
+            
         if history.empty:
             raise CheapScanError(f"no price history available for {normalized_ticker}")
         if len(history) < 30:
-            raise CheapScanError(f"insufficient price history for {normalized_ticker}")
+            raise CheapScanError(f"insufficient price history for {normalized_ticker} (found {len(history)} bars)")
 
         closes = self._series(history, "Close")
         volumes = self._series(history, "Volume")
@@ -114,6 +123,7 @@ class CheapScanSignalService:
         return CheapScanSignal(
             ticker=normalized_ticker,
             horizon=horizon,
+            computed_at=as_of or datetime.now(timezone.utc),
             status="partial" if warnings else "ok",
             directional_bias=directional_bias,
             directional_score=round(directional_score, 4),
@@ -134,9 +144,42 @@ class CheapScanSignalService:
                 "avg_dollar_volume_20": round(avg_dollar_volume_20, 2),
                 "realized_volatility_20": round(realized_volatility_20, 4),
                 "model": "cheap_scan_v1",
+                "data_source": "database" if self.repository and as_of else "yahoo",
             },
             indicator_summary=" · ".join(summary_parts),
         )
+
+    def _fetch_from_db(self, ticker: str, as_of: datetime) -> pd.DataFrame:
+        if self.repository is None:
+            return pd.DataFrame()
+        
+        # Fetch 1d bars from DB where available_at <= as_of
+        # We need at least 60 bars for a full SMA50
+        bars = self.repository.list_bars(
+            ticker=ticker,
+            timeframe="1d",
+            end_at=as_of,
+            available_at=as_of,
+            limit=100
+        )
+        if not bars:
+            return pd.DataFrame()
+            
+        data = []
+        for b in bars:
+            data.append({
+                "Date": b.bar_time,
+                "Open": b.open_price,
+                "High": b.high_price,
+                "Low": b.low_price,
+                "Close": b.close_price,
+                "Volume": b.volume
+            })
+        
+        df = pd.DataFrame(data)
+        df.set_index("Date", inplace=True)
+        df.sort_index(inplace=True)
+        return df
 
     @staticmethod
     def _series(history: pd.DataFrame, column: str) -> pd.Series:
@@ -186,7 +229,11 @@ class CheapScanSignalService:
         return "6mo"
 
     @staticmethod
-    def _fetch_price_history(ticker: str, period: str) -> pd.DataFrame:
+    def _fetch_price_history(ticker: str, period: str, as_of: datetime | None = None) -> pd.DataFrame:
+        # yfinance doesn't easily support 'as_of' for history without manual start/end
+        if as_of:
+            # Not implemented for yahoo provider in this simplified version
+            return pd.DataFrame()
         history = yf.Ticker(ticker).history(period=period, interval="1d", auto_adjust=False)
         if history is None or history.empty:
             return pd.DataFrame()
