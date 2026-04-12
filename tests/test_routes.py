@@ -961,6 +961,14 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     "min_validation_resolved": "12",
                 },
             )
+            realism_response = await client.post(
+                "/api/settings/evaluation-realism",
+                data={
+                    "stop_buffer_pct": "0.06",
+                    "take_profit_buffer_pct": "0.07",
+                    "friction_pct": "0.15",
+                },
+            )
             provider_response = await client.post(
                 "/api/settings/providers",
                 data={"provider": "openai", "api_key": "sk-test", "api_secret": ""},
@@ -972,12 +980,15 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(signal_gating_tuning_response.status_code, 200)
         self.assertEqual(social_response.status_code, 200)
         self.assertEqual(plan_generation_tuning_response.status_code, 200)
+        self.assertEqual(realism_response.status_code, 200)
         self.assertEqual(provider_response.status_code, 200)
         self.assertEqual(listed.status_code, 200)
         payload = listed.json()
         setting_map = {item["key"]: item["value"] for item in payload["settings"]}
         self.assertEqual(setting_map["confidence_threshold"], "75")
         self.assertEqual(setting_map["signal_gating_tuning_threshold_offset"], "-2.5")
+        self.assertEqual(setting_map["evaluation_realism_stop_buffer_pct"], "0.06")
+        self.assertEqual(payload["evaluation_realism"]["friction_pct"], 0.15)
         self.assertEqual(setting_map["signal_gating_tuning_confidence_adjustment"], "1.5")
         self.assertEqual(setting_map["signal_gating_tuning_near_miss_gap_cutoff"], "2")
         self.assertEqual(setting_map["signal_gating_tuning_shortlist_aggressiveness"], "1")

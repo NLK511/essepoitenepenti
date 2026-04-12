@@ -17,6 +17,7 @@ from trade_proposer_app.persistence.models import RecommendationPlanRecord
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
+from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
@@ -48,6 +49,7 @@ class RecommendationPlanEvaluationService:
         self.plans = RecommendationPlanRepository(session)
         self.outcomes = RecommendationOutcomeRepository(session)
         self.market_data = HistoricalMarketDataRepository(session)
+        self.settings = SettingsRepository(session)
         self.taxonomy = TickerTaxonomyService()
 
     def run_evaluation(
@@ -457,19 +459,50 @@ class RecommendationPlanEvaluationService:
         return None
 
     def _resolve_exit(self, effective_action: str, plan: RecommendationPlan, data: pd.DataFrame) -> tuple[bool, bool, datetime | None]:
+        realism = self.settings.get_evaluation_realism_config()
+        stop_buffer = realism["stop_buffer_pct"] / 100.0
+        take_buffer = realism["take_profit_buffer_pct"] / 100.0
+
         for timestamp, row in data.iterrows():
             row_high = self._float_or_none(row.get("High"))
             row_low = self._float_or_none(row.get("Low"))
             if row_high is None or row_low is None:
                 continue
-            stop_hit = self._check_stop(effective_action, row_high, row_low, plan.stop_loss)
-            take_hit = self._check_take(effective_action, row_high, row_low, plan.take_profit)
+            
+            # Use dynamic realism buffers
+            stop_hit = self._check_stop_with_buffer(effective_action, row_high, row_low, plan.stop_loss, stop_buffer)
+            take_hit = self._check_take_with_buffer(effective_action, row_high, row_low, plan.take_profit, take_buffer)
+            
             if stop_hit or take_hit:
                 return stop_hit, take_hit, self._normalize_datetime(timestamp)
         return False, False, None
 
     @staticmethod
+    def _check_stop_with_buffer(action: str, high: float, low: float, stop_loss: float | None, buffer_pct: float) -> bool:
+        if stop_loss is None:
+            return False
+        buffer = stop_loss * buffer_pct
+        if action == "long":
+            return low <= (stop_loss + buffer)
+        if action == "short":
+            return high >= (stop_loss - buffer)
+        return False
+
+    @staticmethod
+    def _check_take_with_buffer(action: str, high: float, low: float, take_profit: float | None, buffer_pct: float) -> bool:
+        if take_profit is None:
+            return False
+        buffer = take_profit * buffer_pct
+        if action == "long":
+            return high >= (take_profit + buffer)
+        if action == "short":
+            return low <= (take_profit - buffer)
+        return False
+
+    @staticmethod
     def _check_stop(action: str, high: float, low: float, stop_loss: float | None) -> bool:
+        # Legacy method maintained for unit test compatibility if needed, 
+        # but _resolve_exit now uses _check_stop_with_buffer.
         if stop_loss is None:
             return False
         if action == "long":
@@ -501,10 +534,17 @@ class RecommendationPlanEvaluationService:
         close_value = self._float_or_none(data.iloc[close_index].get("Close"))
         if close_value is None:
             return None
+        
+        # Gross Return
         raw_return = ((close_value - entry_reference) / entry_reference) * 100.0
+        
+        # Realism Buffer: Use dynamic friction from settings
+        realism = self.settings.get_evaluation_realism_config()
+        friction_pct = realism["friction_pct"]
+        
         if effective_action == "short":
-            return round(-raw_return, 4)
-        return round(raw_return, 4)
+            return round(-raw_return - friction_pct, 4)
+        return round(raw_return - friction_pct, 4)
 
     def _max_favorable_excursion(self, effective_action: str, data: pd.DataFrame, entry_reference: float) -> float | None:
         if data.empty or entry_reference <= 0:
@@ -883,7 +923,40 @@ class RecommendationPlanEvaluationService:
             ticker,
             intraday_only,
         )
-        return self._download_price_history(ticker, start_date, end_date, intraday_only=intraday_only)
+        downloaded = self._download_price_history(ticker, start_date, end_date, intraday_only=intraday_only)
+        if not downloaded.empty:
+            self._persist_downloaded_bars(ticker, downloaded, intraday_only=intraday_only)
+        return downloaded
+
+    def _persist_downloaded_bars(self, ticker: str, data: pd.DataFrame, *, intraday_only: bool) -> None:
+        """Save downloaded bars to the local historical_market_bars table."""
+        timeframe = self._intraday_interval if intraday_only else "1d"
+        bars = []
+        for timestamp, row in data.iterrows():
+            bar_time = self._normalize_datetime(timestamp)
+            available_at = self._normalize_datetime(row.get("available_at"))
+            if bar_time is None:
+                continue
+            bars.append(
+                HistoricalMarketBar(
+                    ticker=ticker,
+                    timeframe=timeframe,
+                    bar_time=bar_time,
+                    available_at=available_at,
+                    open_price=float(row.get("Open", 0.0)),
+                    high_price=float(row.get("High", 0.0)),
+                    low_price=float(row.get("Low", 0.0)),
+                    close_price=float(row.get("Close", 0.0)),
+                    volume=float(row.get("Volume", 0.0)),
+                    source="yfinance_auto_cache",
+                )
+            )
+        if bars:
+            try:
+                self.market_data.upsert_bars(bars)
+                logger.info("persisted %s downloaded %s bars for %s", len(bars), timeframe, ticker)
+            except Exception as exc:
+                logger.warning("failed to persist downloaded bars for %s: %s", ticker, exc)
 
     def _load_persisted_price_history(
         self,

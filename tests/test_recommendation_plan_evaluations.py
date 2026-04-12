@@ -30,6 +30,7 @@ from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
+from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.recommendation_plan_evaluations import (
     RecommendationPlanEvaluationService,
 )
@@ -101,6 +102,14 @@ class EvalTestBase(unittest.TestCase):
         self.plans = RecommendationPlanRepository(self.session)
         self.outcomes = RecommendationOutcomeRepository(self.session)
         self.market_data = HistoricalMarketDataRepository(self.session)
+        self.settings = SettingsRepository(self.session)
+        
+        # Disable realism buffer by default for precise numerical tests
+        self.settings.set_evaluation_realism_config(
+            stop_buffer_pct=0.0,
+            take_profit_buffer_pct=0.0,
+            friction_pct=0.0
+        )
 
     def tearDown(self) -> None:
         self.session.close()
@@ -1786,3 +1795,42 @@ class HorizonReturnPrecisionTests(EvalTestBase):
         out = self._get("NAN")
         self.assertIsNone(out.horizon_return_5d)
         self.assertAlmostEqual(out.horizon_return_3d, 3.0)
+
+class DynamicRealismSettingsTests(EvalTestBase):
+    """Verifies that the evaluator respects dynamic realism settings."""
+
+    def test_respects_custom_friction_and_buffers(self) -> None:
+        # Set custom realism settings
+        self.settings.set_evaluation_realism_config(
+            stop_buffer_pct=0.1,  # 0.1% buffer
+            take_profit_buffer_pct=0.1,
+            friction_pct=0.5      # 0.5% friction
+        )
+        
+        # entry=100, stop=99, take=101.
+        # With 0.1% buffer:
+        #   stop triggers at 99 + (99*0.001) = 99.099
+        #   take triggers at 101 + (101*0.001) = 101.101
+        
+        plan = self._create(
+            ticker="REAL", action="long", 
+            entry_price_low=100.0, stop_loss=99.0, take_profit=101.0
+        )
+        
+        # Bar 1: Low hits 99.05. 
+        # Without buffer, this is NOT a stop (99.05 > 99).
+        # With 0.1% buffer, it IS a stop (99.05 <= 99.099).
+        frame = _daily_frame([("2026-01-06T00:00:00Z", 100.5, 99.05, 100.2)])
+        
+        self._eval(frame)
+        out = self._get("REAL")
+        
+        self.assertEqual(out.outcome, "loss")
+        self.assertTrue(out.stop_loss_hit)
+        
+        # Return check: Close=100.2, Entry=100.0. Gross=+0.2%.
+        # Friction=0.5%. Net = 0.2 - 0.5 = -0.3%.
+        self.assertAlmostEqual(out.horizon_return_1d, -0.3)
+
+if __name__ == "__main__":
+    unittest.main()

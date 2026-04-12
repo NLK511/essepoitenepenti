@@ -885,6 +885,12 @@ export interface SignalGatingTuningState {
   degraded_penalty: number;
 }
 
+export interface EvaluationRealismState {
+  stop_buffer_pct: number;
+  take_profit_buffer_pct: number;
+  friction_pct: number;
+}
+
 export interface SignalGatingTuningCandidateResult {
   threshold: number | null;
   score: number | null;
@@ -1055,6 +1061,7 @@ export interface SettingsResponse {
   settings: AppSetting[];
   providers: ProviderCredential[];
   signal_gating_tuning: SignalGatingTuningState;
+  evaluation_realism: EvaluationRealismState;
   plan_generation_tuning: {
     settings: PlanGenerationTuningSettingsState;
     active_config: Record<string, unknown>;

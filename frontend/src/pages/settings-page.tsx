@@ -9,6 +9,7 @@ interface SettingsViewData {
   settings: AppSetting[];
   providers: ProviderCredential[];
   preflight: AppPreflightReport;
+  evaluationRealism: EvaluationRealismState;
   planGenerationTuning: SettingsResponse["plan_generation_tuning"];
 }
 
@@ -28,6 +29,7 @@ export function SettingsPage() {
       setData({
         settings: settingsResponse.settings,
         providers: settingsResponse.providers,
+        evaluationRealism: settingsResponse.evaluation_realism,
         planGenerationTuning: settingsResponse.plan_generation_tuning,
         preflight,
       });
@@ -145,6 +147,27 @@ export function SettingsPage() {
     }
   }
 
+  async function saveEvaluationRealismSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    try {
+      setSaving("evaluation-realism");
+      setError(null);
+      setNotice(null);
+      await postForm<{ evaluation_realism: EvaluationRealismState }>("/api/settings/evaluation-realism", {
+        stop_buffer_pct: String(formData.get("stop_buffer_pct") ?? data?.evaluationRealism.stop_buffer_pct ?? "0.05"),
+        take_profit_buffer_pct: String(formData.get("take_profit_buffer_pct") ?? data?.evaluationRealism.take_profit_buffer_pct ?? "0.05"),
+        friction_pct: String(formData.get("friction_pct") ?? data?.evaluationRealism.friction_pct ?? "0.1"),
+      });
+      setNotice("Evaluation realism settings saved");
+      await loadData();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save evaluation realism settings");
+    } finally {
+      setSaving(null);
+    }
+  }
+
   async function saveProvider(event: FormEvent<HTMLFormElement>, provider: string) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -255,8 +278,21 @@ export function SettingsPage() {
             </Card>
           </section>
 
-          <Card>
-            <SectionTitle kicker="Advanced research controls" title="Plan generation tuning" subtitle="These controls are for research and tuning workflows, not daily operator review." actions={<HelpHint tooltip="These settings store automation readiness and minimum evidence thresholds for plan-generation tuning." to="/docs?doc=plan-generation-tuning-spec" />} />
+          <section className="card-grid">
+            <Card>
+              <SectionTitle kicker="Evaluation realism" title="Slippage and friction" subtitle="Control the buffer and fees subtracted during trade evaluation to simulate real-world conditions." actions={<HelpHint tooltip="Realism buffers subtract slippage and fees to produce conservative, trustable backtest results." to="/docs?doc=operator-page-field-guide" />} />
+              <form className="stack-form" onSubmit={(event) => void saveEvaluationRealismSettings(event)}>
+                <div className="form-grid">
+                  <label className="form-field"><span>Stop loss buffer %</span><input name="stop_buffer_pct" type="number" step="0.001" defaultValue={String(data.evaluationRealism.stop_buffer_pct)} /></label>
+                  <label className="form-field"><span>Take profit buffer %</span><input name="take_profit_buffer_pct" type="number" step="0.001" defaultValue={String(data.evaluationRealism.take_profit_buffer_pct)} /></label>
+                  <label className="form-field"><span>Round-trip friction %</span><input name="friction_pct" type="number" step="0.01" defaultValue={String(data.evaluationRealism.friction_pct)} /></label>
+                </div>
+                <div className="cluster"><button className="button" type="submit" disabled={saving === "evaluation-realism"}>{saving === "evaluation-realism" ? "Saving…" : "Save realism settings"}</button></div>
+              </form>
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Advanced research controls" title="Plan generation tuning" subtitle="These controls are for research and tuning workflows, not daily operator review." actions={<HelpHint tooltip="These settings store automation readiness and minimum evidence thresholds for plan-generation tuning." to="/docs?doc=plan-generation-tuning-spec" />} />
             <form className="stack-form" onSubmit={(event) => void savePlanGenerationTuningSettings(event)}>
               <div className="form-grid">
                 <label className="form-field"><span><input type="checkbox" name="auto_enabled" defaultChecked={data.planGenerationTuning.settings.auto_enabled} /> Advanced tuning automation enabled</span></label>
