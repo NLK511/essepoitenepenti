@@ -183,12 +183,12 @@ class ProposalService:
         self.sentiment_analyzer = sentiment_analyzer or NaiveSentimentAnalyzer()
         self.summary_service = summary_service or SummaryService()
 
-    def generate(self, ticker: str) -> RunOutput:
+    def generate(self, ticker: str, *, as_of: datetime | None = None) -> RunOutput:
         normalized_ticker = ticker.upper()
-        history = self._fetch_price_history(normalized_ticker)
+        history = self._fetch_price_history(normalized_ticker, as_of=as_of)
         enriched = self._enrich_history(history)
         context = self._build_context(enriched)
-        context = self._apply_news_context(context, normalized_ticker)
+        context = self._apply_news_context(context, normalized_ticker, as_of=as_of)
         feature_vector = self._build_feature_vector(context)
         column_ranges = self._compute_column_ranges(enriched)
         normalized_vector = self._normalize_feature_vector(feature_vector, column_ranges)
@@ -242,6 +242,7 @@ class ProposalService:
             take_profit=take_profit,
             indicator_summary=self._build_indicator_summary(context, aggregations),
             state=RecommendationState.PENDING,
+            created_at=as_of or datetime.now(timezone.utc),
         )
         return RunOutput(recommendation=recommendation, diagnostics=diagnostics)
 
@@ -499,9 +500,14 @@ class ProposalService:
         }
         return {"confidence": confidence, "aggregators": aggregators}
 
-    def _fetch_price_history(self, ticker: str) -> pd.DataFrame:
+    def _fetch_price_history(self, ticker: str, *, as_of: datetime | None = None) -> pd.DataFrame:
         try:
-            history = yf.download(ticker, period="1y", interval="1d", progress=False, auto_adjust=False)
+            if as_of:
+                # Use a large window to ensure enough bars for SMA200 (approx 300 calendar days)
+                start_at = as_of - timedelta(days=365)
+                history = yf.download(ticker, start=start_at.date().isoformat(), end=(as_of + timedelta(days=1)).date().isoformat(), interval="1d", progress=False, auto_adjust=False)
+            else:
+                history = yf.download(ticker, period="1y", interval="1d", progress=False, auto_adjust=False)
         except Exception as exc:
             raise ProposalExecutionError(f"failed to download historical data: {exc}") from exc
         if history.empty:
@@ -960,9 +966,13 @@ class ProposalService:
             return None
         return numeric
 
-    def _apply_news_context(self, context: dict[str, Any], ticker: str) -> dict[str, Any]:
+    def _apply_news_context(self, context: dict[str, Any], ticker: str, *, as_of: datetime | None = None) -> dict[str, Any]:
         context.update(self._build_news_context_base())
-        signal_bundle = self.signal_service.fetch(ticker) if self.signal_service is not None else None
+        
+        effective_now = as_of or datetime.now(timezone.utc)
+        start_at = effective_now - timedelta(hours=24)
+        
+        signal_bundle = self.signal_service.fetch(ticker, start_at=start_at, end_at=effective_now) if self.signal_service is not None else None
         if signal_bundle is not None:
             signal_items = [item.model_dump(mode="json") for item in signal_bundle.items]
             social_items = [item for item in signal_items if item.get("source_type") == "social"]
@@ -979,7 +989,7 @@ class ProposalService:
         social_sentiment: dict[str, Any] = {}
         social_scope_breakdown: dict[str, Any] = {}
         if self.social_service is not None:
-            social_result = self.social_service.analyze(ticker)
+            social_result = self.social_service.analyze(ticker, start_at=start_at, end_at=effective_now)
             social_sentiment = social_result.get("sentiment", {})
             social_scope_breakdown = social_sentiment.get("scope_breakdown", {})
             context.update(
@@ -999,7 +1009,7 @@ class ProposalService:
             merged_problems = list(dict.fromkeys(context.get("problems", []) + context.get("signal_feed_errors", [])))
             context["problems"] = merged_problems
             return context
-        bundle = self.news_service.fetch(ticker)
+        bundle = self.news_service.fetch(ticker, start_at=start_at, end_at=effective_now)
         sentiment = self.sentiment_analyzer.analyze(bundle)
         feeds = list(dict.fromkeys(bundle.feeds_used))
         news_items = sentiment.get("news_items") or sentiment.get("news_points", [])
@@ -1025,7 +1035,7 @@ class ProposalService:
             social_breakdown=social_scope_breakdown,
             context_flags=sentiment.get("context_flags", {}),
         )
-        macro_snapshot = self.snapshot_resolver.resolve_macro_snapshot() if self.snapshot_resolver is not None else None
+        macro_snapshot = self.snapshot_resolver.resolve_macro_snapshot(as_of=as_of) if self.snapshot_resolver is not None else None
         if macro_snapshot is not None:
             hierarchical.update(
                 {
@@ -1060,7 +1070,7 @@ class ProposalService:
                     ),
                 }
             )
-        industry_snapshot = self.snapshot_resolver.resolve_industry_snapshot(ticker) if self.snapshot_resolver is not None else None
+        industry_snapshot = self.snapshot_resolver.resolve_industry_snapshot(ticker, as_of=as_of) if self.snapshot_resolver is not None else None
         if industry_snapshot is not None:
             hierarchical.update(
                 {

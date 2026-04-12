@@ -4,6 +4,7 @@ import json
 import math
 from dataclasses import dataclass
 from typing import Any
+from datetime import datetime, timezone
 
 from trade_proposer_app.domain.enums import RecommendationDirection, StrategyHorizon
 from trade_proposer_app.domain.models import RecommendationDecisionSample, RecommendationPlan, RunOutput, TickerSignalSnapshot, Watchlist
@@ -95,13 +96,14 @@ class WatchlistOrchestrationService:
         *,
         job_id: int | None = None,
         run_id: int | None = None,
+        as_of: datetime | None = None,
     ) -> dict[str, object]:
         normalized_tickers = [ticker.strip().upper() for ticker in tickers if ticker and ticker.strip()]
         if not normalized_tickers:
             raise ValueError("watchlist job has no effective tickers configured")
 
         calibration_summary = self._load_calibration_summary()
-        candidates = [self._run_cheap_scan(ticker, watchlist.default_horizon) for ticker in normalized_tickers]
+        candidates = [self._run_cheap_scan(ticker, watchlist.default_horizon, as_of=as_of) for ticker in normalized_tickers]
         shortlist_evaluation = self._evaluate_shortlist(watchlist, candidates)
         shortlist = shortlist_evaluation["shortlist"]
         shortlist_map = {ticker: rank for rank, ticker in enumerate(shortlist, start=1)}
@@ -159,7 +161,7 @@ class WatchlistOrchestrationService:
                     warnings_found = True
                 continue
 
-            deep_output, deep_error = self._run_deep_analysis(candidate.ticker, watchlist.default_horizon)
+            deep_output, deep_error = self._run_deep_analysis(candidate.ticker, watchlist.default_horizon, as_of=as_of)
             decision = self._shortlist_decision_for_ticker(shortlist_evaluation, candidate.ticker)
             signal = self._build_signal_snapshot(
                 watchlist,
@@ -226,6 +228,7 @@ class WatchlistOrchestrationService:
             "shortlist_rejection_details": self._counted_shortlist_reason_details(shortlist_evaluation["rejection_counts"]),
             "calibration_enabled": calibration_summary is not None,
             "warnings_found": warnings_found,
+            "as_of": as_of.isoformat() if as_of else None,
         }
         artifact = {
             "mode": "watchlist_orchestration",
@@ -244,9 +247,9 @@ class WatchlistOrchestrationService:
             "warnings_found": warnings_found,
         }
 
-    def _run_cheap_scan(self, ticker: str, horizon: StrategyHorizon) -> _CheapScanCandidate:
+    def _run_cheap_scan(self, ticker: str, horizon: StrategyHorizon, as_of: datetime | None = None) -> _CheapScanCandidate:
         try:
-            signal = self.cheap_scan_service.score(ticker, horizon)
+            signal = self.cheap_scan_service.score(ticker, horizon, as_of=as_of)
         except Exception as exc:
             return _CheapScanCandidate(
                 ticker=ticker,
@@ -270,11 +273,11 @@ class WatchlistOrchestrationService:
             raw_output=None,
         )
 
-    def _run_deep_analysis(self, ticker: str, horizon: StrategyHorizon) -> tuple[RunOutput | None, str | None]:
+    def _run_deep_analysis(self, ticker: str, horizon: StrategyHorizon, as_of: datetime | None = None) -> tuple[RunOutput | None, str | None]:
         try:
             if hasattr(self.deep_analysis_service, "analyze"):
-                return self.deep_analysis_service.analyze(ticker, horizon=horizon), None
-            return self.deep_analysis_service.generate(ticker), None
+                return self.deep_analysis_service.analyze(ticker, horizon=horizon, as_of=as_of), None
+            return self.deep_analysis_service.generate(ticker, as_of=as_of), None
         except Exception as exc:
             return None, str(exc)
 

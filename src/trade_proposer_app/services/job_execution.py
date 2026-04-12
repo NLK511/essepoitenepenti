@@ -174,11 +174,16 @@ class JobExecutionService:
             ticker_generation = self._get_ticker_generation_list(timing)
             if self.watchlist_orchestration is None:
                 raise RuntimeError("proposal_generation runs require the redesign watchlist orchestration service")
+            
+            # Use scheduled_for as the 'as_of' time if provided (for replays/simulations)
+            as_of = self._normalize_datetime(run.scheduled_for)
+            
             orchestration = self.watchlist_orchestration.execute(
                 watchlist,
                 tickers,
                 job_id=run.job_id,
                 run_id=run.id,
+                as_of=as_of,
             )
             logger.info(
                 "job execution proposal orchestration finished: run_id=%s job_id=%s warnings_found=%s",
@@ -593,15 +598,19 @@ class JobExecutionService:
             raise RunExecutionFailed(exc, timing) from exc
 
         persistence_started = perf_counter()
+        warnings = result.get("warnings", [])
         summary = {
             "total_ingested": result.get("total_ingested"),
             "refreshed_at": result.get("refreshed_at"),
+            "warning_count": len(warnings),
+            "warnings": warnings,
         }
         self.runs.set_summary(run.id or 0, summary)
         self.runs.set_artifact(run.id or 0, result)
         timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
 
-        self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
+        final_status = RunStatus.COMPLETED_WITH_WARNINGS.value if warnings else RunStatus.COMPLETED.value
+        self._finalize_success(run.id or 0, final_status, timing, execution_started)
         return [], timing
 
     def process_next_queued_run(self, worker_id: str | None = None) -> tuple[Run | None, list[Recommendation]]:

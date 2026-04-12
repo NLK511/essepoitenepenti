@@ -1,5 +1,6 @@
 import json
 import unittest
+from datetime import datetime
 from unittest.mock import MagicMock
 
 from trade_proposer_app.domain.models import IndustryContextRefreshPayload, IndustryContextSnapshot, MacroContextRefreshPayload, MacroContextSnapshot, NewsArticle, NewsBundle
@@ -15,11 +16,11 @@ class StubNewsService:
         self.fetch_topics_calls: list[tuple[str, list[str]]] = []
         self.fetch_many_calls: list[list[str]] = []
 
-    def fetch_topics(self, subject: str, queries: list[str], *, per_query_limit: int = 4) -> NewsBundle:
+    def fetch_topics(self, subject: str, queries: list[str], *, per_query_limit: int = 4, start_at: datetime | None = None, end_at: datetime | None = None) -> NewsBundle:
         self.fetch_topics_calls.append((subject, list(queries)))
         return self.bundle
 
-    def fetch_many(self, symbols: list[str], *, per_symbol_limit: int = 3) -> NewsBundle:
+    def fetch_many(self, symbols: list[str], *, per_symbol_limit: int = 3, start_at: datetime | None = None, end_at: datetime | None = None) -> NewsBundle:
         self.fetch_many_calls.append(list(symbols))
         return self.bundle
 
@@ -91,7 +92,7 @@ class ContextServiceTests(unittest.TestCase):
 
     def test_macro_context_tracks_lifecycle_and_contradictions(self) -> None:
         repository = MagicMock()
-        repository.get_latest_macro_context_snapshot.return_value = MacroContextSnapshot(
+        snapshot_obj = MacroContextSnapshot(
             summary_text="Older macro state",
             active_themes=[
                 {
@@ -103,6 +104,8 @@ class ContextServiceTests(unittest.TestCase):
                 }
             ],
         )
+        repository.get_latest_macro_context_snapshot.return_value = snapshot_obj
+        repository.get_latest_macro_context_snapshot_before.return_value = snapshot_obj
         repository.create_macro_context_snapshot.side_effect = lambda context: context
         news_bundle = NewsBundle(
             ticker="Global Macro",
@@ -152,7 +155,7 @@ class ContextServiceTests(unittest.TestCase):
 
     def test_macro_context_uses_llm_summary_when_available(self) -> None:
         repository = MagicMock()
-        repository.get_latest_macro_context_snapshot.return_value = MacroContextSnapshot(
+        snapshot_obj = MacroContextSnapshot(
             summary_text="Prior macro summary about rates and yields.",
             active_themes=[
                 {"key": "bond_yields", "label": "Bond yields", "event_score": 0.8},
@@ -160,6 +163,8 @@ class ContextServiceTests(unittest.TestCase):
             ],
             regime_tags=["rates", "risk_off"],
         )
+        repository.get_latest_macro_context_snapshot.return_value = snapshot_obj
+        repository.get_latest_macro_context_snapshot_before.return_value = snapshot_obj
         repository.create_macro_context_snapshot.side_effect = lambda context: context
         news_bundle = NewsBundle(
             ticker="Global Macro",
@@ -285,7 +290,7 @@ class ContextServiceTests(unittest.TestCase):
 
     def test_industry_context_uses_llm_summary_when_available(self) -> None:
         repository = MagicMock()
-        repository.get_latest_industry_context_snapshot.return_value = IndustryContextSnapshot(
+        snapshot_obj = IndustryContextSnapshot(
             industry_key="semiconductors",
             industry_label="Semiconductors",
             summary_text="Prior semiconductor summary about AI demand and rate pressure.",
@@ -295,6 +300,8 @@ class ContextServiceTests(unittest.TestCase):
             ],
             linked_macro_themes=["rates", "yield_pressure"],
         )
+        repository.get_latest_industry_context_snapshot.return_value = snapshot_obj
+        repository.get_latest_industry_context_snapshot_before.return_value = snapshot_obj
         repository.create_industry_context_snapshot.side_effect = lambda context: context
         news_bundle = NewsBundle(
             ticker="NVDA, AMD",

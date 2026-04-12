@@ -37,13 +37,18 @@ class MacroContextRefreshService:
         self.social_service = social_service
         self.news_service = news_service
 
-    def refresh(self, *, job_id: int | None = None, run_id: int | None = None) -> dict[str, Any]:
+    def refresh(self, *, job_id: int | None = None, run_id: int | None = None, as_of: datetime | None = None) -> dict[str, Any]:
+        effective_now = as_of or datetime.now(timezone.utc)
+        start_at = effective_now - timedelta(hours=24) # look back 24h for news/social
+        
         social_result = (
             self.social_service.analyze_subject(
                 subject_key=MACRO_SUBJECT_KEY,
                 subject_label=MACRO_SUBJECT_LABEL,
                 queries=MACRO_QUERIES,
                 scope_tag="macro",
+                start_at=start_at,
+                end_at=effective_now,
             )
             if self.social_service is not None
             else {"sentiment": {}, "bundle": None}
@@ -55,7 +60,7 @@ class MacroContextRefreshService:
 
         score = social_score
         label = social_sentiment.get("label") or "NEUTRAL"
-        computed_at = datetime.now(timezone.utc)
+        computed_at = effective_now
         expires_at = computed_at + timedelta(hours=MACRO_TTL_HOURS)
 
         payload = MacroContextRefreshPayload(

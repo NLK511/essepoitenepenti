@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from trade_proposer_app.domain.models import MacroContextRefreshPayload, MacroContextSnapshot
@@ -190,14 +190,15 @@ class MacroContextService:
         job_id: int | None = None,
         run_id: int | None = None,
     ) -> MacroContextSnapshot:
-        previous = self.repository.get_latest_macro_context_snapshot()
+        effective_now = payload.computed_at or datetime.now(timezone.utc)
+        previous = self.repository.get_latest_macro_context_snapshot_before(effective_now)
         signals = dict(getattr(payload, "signals", {}) or {})
         diagnostics = dict(getattr(payload, "diagnostics", {}) or {})
         source_breakdown = dict(getattr(payload, "source_breakdown", {}) or {})
         social_items = signals.get("social_items") if isinstance(signals, dict) else []
         supporting_social_items = social_items if isinstance(social_items, list) else []
 
-        news_bundle, news_sentiment = self._load_news_evidence()
+        news_bundle, news_sentiment = self._load_news_evidence(as_of=effective_now)
         primary_news_items = news_sentiment.get("news_items", []) if isinstance(news_sentiment, dict) else []
         news_items = primary_news_items if isinstance(primary_news_items, list) else []
 
@@ -260,7 +261,7 @@ class MacroContextService:
         triaged_evidence = self._triaged_news_items(news_items, active_themes)
 
         context = MacroContextSnapshot(
-            computed_at=datetime.now(timezone.utc),
+            computed_at=effective_now,
             expires_at=getattr(payload, "expires_at", None),
             status=status,
             summary_text=summary_text,
@@ -336,10 +337,14 @@ class MacroContextService:
             enriched.append(payload)
         return enriched
 
-    def _load_news_evidence(self) -> tuple[object | None, dict[str, object]]:
+    def _load_news_evidence(self, *, as_of: datetime | None = None) -> tuple[object | None, dict[str, object]]:
         if self.news_service is None:
             return None, {}
-        bundle = self.news_service.fetch_topics("Global Macro", DEFAULT_MACRO_NEWS_QUERIES)
+        
+        effective_now = as_of or datetime.now(timezone.utc)
+        start_at = effective_now - timedelta(hours=24)
+        
+        bundle = self.news_service.fetch_topics("Global Macro", DEFAULT_MACRO_NEWS_QUERIES, start_at=start_at, end_at=effective_now)
         analyzed = self.news_service.analyze_bundle(bundle)
         sentiment = analyzed.get("sentiment", {}) if isinstance(analyzed, dict) else {}
         return bundle, sentiment if isinstance(sentiment, dict) else {}

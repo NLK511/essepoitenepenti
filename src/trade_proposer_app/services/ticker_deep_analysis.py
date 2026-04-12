@@ -38,17 +38,17 @@ class TickerDeepAnalysisService:
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
         self.model_name = model_name
 
-    def analyze(self, ticker: str, *, horizon: StrategyHorizon | None = None) -> RunOutput:
+    def analyze(self, ticker: str, *, horizon: StrategyHorizon | None = None, as_of: datetime | None = None) -> RunOutput:
         normalized_ticker = ticker.strip().upper()
         if not normalized_ticker:
             raise TickerDeepAnalysisError("ticker is required")
         if not self._supports_native_execution():
-            return self._analyze_with_compatibility_fallback(normalized_ticker, horizon=horizon)
+            return self._analyze_with_compatibility_fallback(normalized_ticker, horizon=horizon, as_of=as_of)
         try:
-            history = self.proposal_service._fetch_price_history(normalized_ticker)
+            history = self.proposal_service._fetch_price_history(normalized_ticker, as_of=as_of)
             enriched = self._enrich_history(history)
             context = self._build_context(enriched)
-            context = self._apply_context_enrichment(context, normalized_ticker)
+            context = self._apply_context_enrichment(context, normalized_ticker, as_of=as_of)
             context = self._apply_support_aliases(context)
             context = self._apply_taxonomy_profile(context, normalized_ticker)
             feature_vector = self._build_feature_vector(context)
@@ -106,12 +106,12 @@ class TickerDeepAnalysisService:
         except Exception as exc:  # noqa: BLE001
             raise TickerDeepAnalysisError(str(exc)) from exc
 
-    def _analyze_with_compatibility_fallback(self, ticker: str, *, horizon: StrategyHorizon | None) -> RunOutput:
+    def _analyze_with_compatibility_fallback(self, ticker: str, *, horizon: StrategyHorizon | None, as_of: datetime | None = None) -> RunOutput:
         generate = getattr(self.proposal_service, "generate", None)
         if not callable(generate):
             raise TickerDeepAnalysisError("ticker deep analysis engine is missing native pipeline methods and generate() fallback")
         try:
-            output = generate(ticker)
+            output = generate(ticker, as_of=as_of)
         except Exception as exc:  # noqa: BLE001
             raise TickerDeepAnalysisError(str(exc)) from exc
         diagnostics = output.diagnostics
@@ -131,10 +131,10 @@ class TickerDeepAnalysisService:
     def _supports_native_execution(self) -> bool:
         return callable(getattr(self.proposal_service, "_fetch_price_history", None))
 
-    def _apply_context_enrichment(self, context: dict[str, Any], ticker: str) -> dict[str, Any]:
+    def _apply_context_enrichment(self, context: dict[str, Any], ticker: str, *, as_of: datetime | None = None) -> dict[str, Any]:
         apply_news_context = getattr(self.proposal_service, "_apply_news_context", None)
         if callable(apply_news_context):
-            return apply_news_context(context, ticker)
+            return apply_news_context(context, ticker, as_of=as_of)
         return context
 
     @staticmethod

@@ -282,10 +282,10 @@ class NewsProvider:
     provider_key: ClassVar[str] = ""
     supports_topic: ClassVar[bool] = True
 
-    def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
+    def fetch(self, ticker: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
         raise NotImplementedError
 
-    def fetch_topic(self, topic: str, limit: int) -> list[NewsArticle]:
+    def fetch_topic(self, topic: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
         raise NewsFetchError(f"{self.name} does not support topic queries")
 
 
@@ -293,13 +293,13 @@ class NewsAPIProvider(NewsProvider):
     name: ClassVar[str] = "NewsAPI"
     provider_key: ClassVar[str] = "newsapi"
 
-    def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
-        return self._fetch_query(f"{ticker} stock", limit)
+    def fetch(self, ticker: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
+        return self._fetch_query(f"{ticker} stock", limit, start_at=start_at, end_at=end_at)
 
-    def fetch_topic(self, topic: str, limit: int) -> list[NewsArticle]:
-        return self._fetch_query(topic, limit)
+    def fetch_topic(self, topic: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
+        return self._fetch_query(topic, limit, start_at=start_at, end_at=end_at)
 
-    def _fetch_query(self, query: str, limit: int) -> list[NewsArticle]:
+    def _fetch_query(self, query: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
         api_key = (self.credential.api_key or "").strip()
         if not api_key:
             raise NewsFetchError("missing NewsAPI api key")
@@ -312,6 +312,10 @@ class NewsAPIProvider(NewsProvider):
             "page": 1,
             "domains": ",".join(HIGH_QUALITY_NEWS_DOMAINS),
         }
+        if start_at:
+            params["from"] = start_at.isoformat()
+        if end_at:
+            params["to"] = end_at.isoformat()
         response = httpx.get(NEWS_API_BASE_URL, params=params, timeout=self.timeout)
         if response.status_code != 200:
             raise NewsFetchError(f"unexpected status {response.status_code}")
@@ -340,16 +344,19 @@ class FinnhubProvider(NewsProvider):
     provider_key: ClassVar[str] = "finnhub"
     supports_topic: ClassVar[bool] = False
 
-    def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
+    def fetch(self, ticker: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
         api_key = (self.credential.api_key or "").strip()
         if not api_key:
             raise NewsFetchError("missing Finnhub api key")
-        today = date.today()
-        start = today - timedelta(days=7)
+        
+        # Default to last 7 days if no dates provided
+        effective_end = end_at or datetime.now(timezone.utc)
+        effective_start = start_at or (effective_end - timedelta(days=7))
+        
         params = {
             "symbol": ticker,
-            "from": start.isoformat(),
-            "to": today.isoformat(),
+            "from": effective_start.date().isoformat(),
+            "to": effective_end.date().isoformat(),
             "token": api_key,
         }
         response = httpx.get(FINNHUB_NEWS_URL, params=params, timeout=self.timeout)
@@ -380,7 +387,8 @@ class YahooFinanceProvider(NewsProvider):
     provider_key: ClassVar[str] = "yahoofinance"
     supports_topic: ClassVar[bool] = False
 
-    def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
+    def fetch(self, ticker: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
+        # yfinance news API doesn't support date ranges directly, but we can filter the results
         try:
             raw_news = yf.Ticker(ticker).news
         except Exception as exc:
@@ -427,15 +435,20 @@ class YahooFinanceProvider(NewsProvider):
             if not title and not summary:
                 continue
 
-            articles.append(
-                NewsArticle(
-                    title=title or summary,
-                    summary=summary,
-                    publisher=publisher or "Yahoo Finance",
-                    link=link,
-                    published_at=published,
-                )
+            article = NewsArticle(
+                title=title or summary,
+                summary=summary,
+                publisher=publisher or "Yahoo Finance",
+                link=link,
+                published_at=published,
             )
+
+            if start_at and article.published_at and article.published_at < start_at:
+                continue
+            if end_at and article.published_at and article.published_at > end_at:
+                continue
+
+            articles.append(article)
         return articles[:limit]
 
 
@@ -444,15 +457,23 @@ class GoogleNewsProvider(NewsProvider):
     provider_key: ClassVar[str] = "googlenews"
     supports_topic: ClassVar[bool] = True
 
-    def fetch(self, ticker: str, limit: int) -> list[NewsArticle]:
-        return self._fetch_query(f"{ticker} stock", limit)
+    def fetch(self, ticker: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
+        return self._fetch_query(f"{ticker} stock", limit, start_at=start_at, end_at=end_at)
 
-    def fetch_topic(self, topic: str, limit: int) -> list[NewsArticle]:
-        return self._fetch_query(topic, limit)
+    def fetch_topic(self, topic: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
+        return self._fetch_query(topic, limit, start_at=start_at, end_at=end_at)
 
-    def _fetch_query(self, query: str, limit: int) -> list[NewsArticle]:
+    def _fetch_query(self, query: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
         domain_filters = " OR ".join(f"site:{domain}" for domain in HIGH_QUALITY_NEWS_DOMAINS)
-        full_query = f"{query} ({domain_filters}) when:7d"
+        if start_at and end_at:
+            # use after:YYYY-MM-DD before:YYYY-MM-DD
+            # We add one day to end_at to make the range inclusive of the end day
+            effective_end = end_at + timedelta(days=1)
+            date_filter = f"after:{start_at.date().isoformat()} before:{effective_end.date().isoformat()}"
+        else:
+            date_filter = "when:7d"
+        
+        full_query = f"{query} ({domain_filters}) {date_filter}"
         response = httpx.get(
             "https://news.google.com/rss/search",
             params={"q": full_query, "hl": "en-US", "gl": "US", "ceid": "US:en"},
@@ -634,7 +655,7 @@ class NewsIngestionService:
                 providers.append(builder(credential))
         return cls(providers, max_articles=max_articles)
 
-    def fetch(self, ticker: str) -> NewsBundle:
+    def fetch(self, ticker: str, *, start_at: datetime | None = None, end_at: datetime | None = None) -> NewsBundle:
         bundle = NewsBundle(ticker=ticker)
         if not self.providers:
             bundle.feed_errors.append("news: no providers configured")
@@ -642,7 +663,7 @@ class NewsIngestionService:
         seen_links: set[str] = set()
         for provider in self.providers:
             try:
-                articles = provider.fetch(ticker, self.max_articles)
+                articles = provider.fetch(ticker, self.max_articles, start_at=start_at, end_at=end_at)
             except Exception as exc:  # noqa: BLE001
                 bundle.feed_errors.append(f"{provider.name}: {exc}")
                 continue
@@ -652,7 +673,7 @@ class NewsIngestionService:
         bundle.articles = bundle.articles[: self.max_articles]
         return bundle
 
-    def fetch_topic(self, topic: str, *, limit: int | None = None) -> NewsBundle:
+    def fetch_topic(self, topic: str, *, limit: int | None = None, start_at: datetime | None = None, end_at: datetime | None = None) -> NewsBundle:
         bundle = NewsBundle(ticker=topic)
         if not self.providers:
             bundle.feed_errors.append("news: no providers configured")
@@ -663,7 +684,7 @@ class NewsIngestionService:
             if not getattr(provider, "supports_topic", True):
                 continue
             try:
-                articles = provider.fetch_topic(topic, fetch_limit)
+                articles = provider.fetch_topic(topic, fetch_limit, start_at=start_at, end_at=end_at)
             except Exception as exc:  # noqa: BLE001
                 bundle.feed_errors.append(f"{provider.name}: {exc}")
                 continue
@@ -673,7 +694,7 @@ class NewsIngestionService:
         bundle.articles = bundle.articles[:fetch_limit]
         return bundle
 
-    def fetch_topics(self, subject: str, queries: list[str], *, per_query_limit: int = 4) -> NewsBundle:
+    def fetch_topics(self, subject: str, queries: list[str], *, per_query_limit: int = 4, start_at: datetime | None = None, end_at: datetime | None = None) -> NewsBundle:
         bundle = NewsBundle(ticker=subject)
         if not self.providers:
             bundle.feed_errors.append("news: no providers configured")
@@ -683,7 +704,7 @@ class NewsIngestionService:
         if not normalized_queries:
             normalized_queries = [subject]
         for query in normalized_queries[:5]:
-            query_bundle = self.fetch_topic(query, limit=per_query_limit)
+            query_bundle = self.fetch_topic(query, limit=per_query_limit, start_at=start_at, end_at=end_at)
             self._merge_articles(bundle, query_bundle.articles, seen_links)
             bundle.feeds_used.extend(query_bundle.feeds_used)
             bundle.feed_errors.extend(query_bundle.feed_errors)
@@ -694,7 +715,7 @@ class NewsIngestionService:
         bundle.articles = bundle.articles[: self.max_articles]
         return bundle
 
-    def fetch_many(self, symbols: list[str], *, per_symbol_limit: int = 3) -> NewsBundle:
+    def fetch_many(self, symbols: list[str], *, per_symbol_limit: int = 3, start_at: datetime | None = None, end_at: datetime | None = None) -> NewsBundle:
         subject = ", ".join(symbols[:4]) if symbols else "news"
         bundle = NewsBundle(ticker=subject)
         if not self.providers:
@@ -703,7 +724,7 @@ class NewsIngestionService:
         seen_links: set[str] = set()
         normalized_symbols = [symbol.strip().upper() for symbol in symbols if isinstance(symbol, str) and symbol.strip()]
         for symbol in list(dict.fromkeys(normalized_symbols))[:6]:
-            symbol_bundle = self.fetch(symbol)
+            symbol_bundle = self.fetch(symbol, start_at=start_at, end_at=end_at)
             self._merge_articles(bundle, symbol_bundle.articles[:per_symbol_limit], seen_links)
             bundle.feeds_used.extend(symbol_bundle.feeds_used)
             bundle.feed_errors.extend(symbol_bundle.feed_errors)
@@ -714,8 +735,8 @@ class NewsIngestionService:
         bundle.articles = bundle.articles[: self.max_articles]
         return bundle
 
-    def analyze(self, ticker: str) -> dict[str, object]:
-        bundle = self.fetch(ticker)
+    def analyze(self, ticker: str, *, start_at: datetime | None = None, end_at: datetime | None = None) -> dict[str, object]:
+        bundle = self.fetch(ticker, start_at=start_at, end_at=end_at)
         sentiment = self._sentiment_analyzer.analyze(bundle)
         return {"bundle": bundle, "sentiment": sentiment}
 

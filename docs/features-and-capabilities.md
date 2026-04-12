@@ -37,6 +37,7 @@ It is not yet a proven short-horizon prediction engine.
 ### Shared context and ontology
 - Persist macro and industry context snapshots as the canonical shared-context artifacts.
 - Review macro and industry context from the Context pages and detail views.
+- **Realistic Context Reconstruction:** Re-generate high-fidelity historical context snapshots from past news and social data. This allows for accurate point-in-time backtesting and simulation of the bot's behavior during past market events.
 - Store context-event fields such as persistence state, state transition, catalyst type, market interpretation, trigger actor, trigger actor role, trigger source type, and short "why now" summaries.
 - Trace which shared artifacts were used by a run or recommendation plan.
 - Use the taxonomy layer for industry definitions, sector definitions, ticker profiles, and relationship edges.
@@ -48,11 +49,13 @@ It is not yet a proven short-horizon prediction engine.
 ### Watchlists and proposal flow
 - Persist watchlists with metadata such as region, exchange, timezone, default horizon, and shorting policy.
 - Seed the curated default watchlist pack with `scripts/deploy_watchlists.py`; see `default-watchlists.md` for rationale.
+- Reconstruct high-fidelity historical context using `scripts/reconstruct_context.py`.
 - Run watchlist-backed proposal jobs through a staged flow:
   1. watchlist scan
   2. shortlist selection
   3. deep analysis for shortlisted names only
   4. persistence of signals and plans, including cheap-scan-only `no_action` plans for non-shortlisted names and phantom-trade-eligible rejected plans when deep analysis produced valid trade framing
+- **Point-in-Time Replay Integrity:** Execute proposal jobs for past dates using historical market data and reconstructed trading context, ensuring that the bot only uses information that was available as of the target date.
 - Browse signals and plans outside the run page and filter them by `run_id`.
 - Queue recommendation-plan evaluation runs from the recommendation-plans page.
 
