@@ -1179,3 +1179,184 @@ class RecommendationPlanEvaluationServiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_run_evaluation_computes_exact_returns_and_holding_period_for_long_plan(self) -> None:
+        plan = self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="AAPL",
+                horizon="1w",
+                action="long",
+                confidence_percent=80.0,
+                entry_price_low=100.0,
+                entry_price_high=100.0,
+                stop_loss=90.0,
+                take_profit=110.0,
+                computed_at=datetime(2026, 1, 1, 14, 0, tzinfo=timezone.utc),
+            )
+        )
+        dates = pd.date_range("2026-01-01T15:00:00Z", periods=7, freq="D")
+        price_history = pd.DataFrame(
+            {
+                "High": [100.0, 102.0, 105.0, 108.0, 111.0, 112.0, 115.0],
+                "Low": [99.0, 100.0, 102.0, 104.0, 107.0, 108.0, 109.0],
+                "Close": [99.5, 101.5, 104.5, 107.5, 110.5, 111.0, 110.0],
+                "available_at": dates + pd.Timedelta(hours=1),
+            },
+            index=dates,
+        )
+        with patch.object(RecommendationPlanEvaluationService, "_download_price_history", return_value=price_history):
+            RecommendationPlanEvaluationService(self.session).run_evaluation(as_of=datetime(2026, 1, 10, tzinfo=timezone.utc))
+
+        outcomes = self.outcomes.list_outcomes(ticker="AAPL")
+        self.assertEqual(len(outcomes), 1)
+        outcome = outcomes[0]
+
+        self.assertEqual(outcome.outcome, "win")
+        self.assertTrue(outcome.entry_touched)
+        self.assertFalse(outcome.stop_loss_hit)
+        self.assertTrue(outcome.take_profit_hit)
+        self.assertTrue(outcome.direction_correct)
+        
+        self.assertIsNotNone(outcome.realized_holding_period_days)
+        self.assertAlmostEqual(outcome.realized_holding_period_days or 0.0, 4.04, places=1)
+
+        self.assertAlmostEqual(outcome.horizon_return_1d or 0.0, -0.5, places=2)
+        self.assertAlmostEqual(outcome.horizon_return_3d or 0.0, 4.5, places=2)
+        self.assertAlmostEqual(outcome.horizon_return_5d or 0.0, 10.5, places=2)
+
+        self.assertAlmostEqual(outcome.max_favorable_excursion or 0.0, 15.0, places=2)
+        self.assertAlmostEqual(outcome.max_adverse_excursion or 0.0, -1.0, places=2)
+
+    def test_run_evaluation_computes_exact_returns_and_holding_period_for_short_plan(self) -> None:
+        plan = self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="TSLA",
+                horizon="1w",
+                action="short",
+                confidence_percent=80.0,
+                entry_price_low=200.0,
+                entry_price_high=200.0,
+                stop_loss=220.0,
+                take_profit=180.0,
+                computed_at=datetime(2026, 1, 1, 14, 0, tzinfo=timezone.utc),
+            )
+        )
+        dates = pd.date_range("2026-01-01T15:00:00Z", periods=7, freq="D")
+        price_history = pd.DataFrame(
+            {
+                "High": [205.0, 195.0, 190.0, 185.0, 175.0, 170.0, 160.0],
+                "Low": [199.0, 188.0, 182.0, 181.0, 170.0, 165.0, 155.0],
+                "Close": [201.0, 189.0, 185.0, 182.0, 172.0, 168.0, 158.0],
+                "available_at": dates + pd.Timedelta(hours=1),
+            },
+            index=dates,
+        )
+        with patch.object(RecommendationPlanEvaluationService, "_download_price_history", return_value=price_history):
+            RecommendationPlanEvaluationService(self.session).run_evaluation(as_of=datetime(2026, 1, 10, tzinfo=timezone.utc))
+
+        outcomes = self.outcomes.list_outcomes(ticker="TSLA")
+        outcome = outcomes[0]
+
+        self.assertEqual(outcome.outcome, "win")
+        self.assertTrue(outcome.entry_touched)
+        self.assertTrue(outcome.direction_correct)
+        
+        self.assertAlmostEqual(outcome.horizon_return_1d or 0.0, -0.5, places=2)
+        self.assertAlmostEqual(outcome.horizon_return_3d or 0.0, 7.5, places=2)
+        self.assertAlmostEqual(outcome.horizon_return_5d or 0.0, 14.0, places=2)
+
+        self.assertAlmostEqual(outcome.max_favorable_excursion or 0.0, 22.5, places=2)
+        self.assertAlmostEqual(outcome.max_adverse_excursion or 0.0, -2.5, places=2)
+
+    def test_run_evaluation_resolves_phantom_loss(self) -> None:
+        plan = self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="NFLX",
+                horizon="1w",
+                action="no_action",
+                confidence_percent=60.0,
+                entry_price_low=500.0,
+                entry_price_high=500.0,
+                stop_loss=450.0,
+                take_profit=600.0,
+                signal_breakdown={"intended_action": "long"},
+                computed_at=datetime(2026, 1, 1, 14, 0, tzinfo=timezone.utc),
+            )
+        )
+        dates = pd.date_range("2026-01-01T15:00:00Z", periods=2, freq="D")
+        price_history = pd.DataFrame(
+            {
+                "High": [510.0, 460.0],
+                "Low": [490.0, 440.0],
+                "Close": [505.0, 445.0],
+                "available_at": dates + pd.Timedelta(hours=1),
+            },
+            index=dates,
+        )
+        with patch.object(RecommendationPlanEvaluationService, "_download_price_history", return_value=price_history):
+            RecommendationPlanEvaluationService(self.session).run_evaluation(as_of=datetime(2026, 1, 10, tzinfo=timezone.utc))
+
+        outcomes = self.outcomes.list_outcomes(ticker="NFLX")
+        self.assertEqual(len(outcomes), 1)
+        self.assertEqual(outcomes[0].outcome, "phantom_loss")
+        self.assertTrue(outcomes[0].entry_touched)
+        self.assertTrue(outcomes[0].stop_loss_hit)
+
+    def test_run_evaluation_resolves_phantom_no_entry(self) -> None:
+        plan = self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="AMD",
+                horizon="1w",
+                action="watchlist",
+                confidence_percent=60.0,
+                entry_price_low=100.0,
+                entry_price_high=100.0,
+                stop_loss=90.0,
+                take_profit=120.0,
+                signal_breakdown={"intended_action": "long"},
+                computed_at=datetime(2026, 1, 1, 14, 0, tzinfo=timezone.utc),
+            )
+        )
+        dates = pd.date_range("2026-01-01T15:00:00Z", periods=2, freq="D")
+        price_history = pd.DataFrame(
+            {
+                "High": [110.0, 115.0],
+                "Low": [105.0, 108.0],
+                "Close": [108.0, 112.0],
+                "available_at": dates + pd.Timedelta(hours=1),
+            },
+            index=dates,
+        )
+        with patch.object(RecommendationPlanEvaluationService, "_download_price_history", return_value=price_history):
+            RecommendationPlanEvaluationService(self.session).run_evaluation(as_of=datetime(2026, 1, 10, tzinfo=timezone.utc))
+
+        outcomes = self.outcomes.list_outcomes(ticker="AMD")
+        self.assertEqual(len(outcomes), 1)
+        self.assertEqual(outcomes[0].outcome, "phantom_no_entry")
+        self.assertFalse(outcomes[0].entry_touched)
+
+    def test_run_evaluation_ignores_phantom_if_intended_action_missing(self) -> None:
+        plan = self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="INTC",
+                horizon="1w",
+                action="no_action",
+                confidence_percent=60.0,
+                entry_price_low=100.0,
+                entry_price_high=100.0,
+                stop_loss=90.0,
+                take_profit=120.0,
+                signal_breakdown={},
+                computed_at=datetime(2026, 1, 1, 14, 0, tzinfo=timezone.utc),
+            )
+        )
+        dates = pd.date_range("2026-01-01T15:00:00Z", periods=2, freq="D")
+        price_history = pd.DataFrame(
+            {"High": [110.0, 115.0], "Low": [90.0, 108.0], "Close": [108.0, 112.0], "available_at": dates + pd.Timedelta(hours=1)}, index=dates
+        )
+        with patch.object(RecommendationPlanEvaluationService, "_download_price_history", return_value=price_history):
+            RecommendationPlanEvaluationService(self.session).run_evaluation(as_of=datetime(2026, 1, 10, tzinfo=timezone.utc))
+
+        outcomes = self.outcomes.list_outcomes(ticker="INTC")
+        self.assertEqual(len(outcomes), 1)
+        self.assertEqual(outcomes[0].outcome, "no_action")
