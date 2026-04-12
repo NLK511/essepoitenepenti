@@ -5,7 +5,7 @@ import math
 from datetime import datetime, timezone
 from typing import Any
 
-from trade_proposer_app.domain.models import MacroContextSnapshot, SupportSnapshot
+from trade_proposer_app.domain.models import MacroContextRefreshPayload, MacroContextSnapshot
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.services.event_extraction import (
     EventDefinition,
@@ -183,17 +183,17 @@ class MacroContextService:
         self.summary_service = summary_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
-    def create_from_support_snapshot(
+    def create_from_refresh_payload(
         self,
-        snapshot: SupportSnapshot,
+        payload: MacroContextRefreshPayload,
         *,
         job_id: int | None = None,
         run_id: int | None = None,
     ) -> MacroContextSnapshot:
         previous = self.repository.get_latest_macro_context_snapshot()
-        signals = _load_json(getattr(snapshot, "signals_json", None), {})
-        diagnostics = _load_json(getattr(snapshot, "diagnostics_json", None), {})
-        source_breakdown = _load_json(getattr(snapshot, "source_breakdown_json", None), {})
+        signals = dict(getattr(payload, "signals", {}) or {})
+        diagnostics = dict(getattr(payload, "diagnostics", {}) or {})
+        source_breakdown = dict(getattr(payload, "source_breakdown", {}) or {})
         social_items = signals.get("social_items") if isinstance(signals, dict) else []
         supporting_social_items = social_items if isinstance(social_items, list) else []
 
@@ -231,8 +231,8 @@ class MacroContextService:
         if not supporting_social_items:
             missing_inputs.append("supporting_social_evidence")
 
-        support_score = float(getattr(snapshot, "score", 0.0) or 0.0)
-        support_label = str(getattr(snapshot, "label", "NEUTRAL") or "NEUTRAL")
+        support_score = float(getattr(payload, "score", 0.0) or 0.0)
+        support_label = str(getattr(payload, "label", "NEUTRAL") or "NEUTRAL")
         regime_tags = self._regime_tags(active_themes, support_score, support_label)
         saliency_score = self._saliency_score(active_themes, len(news_items), len(supporting_social_items), abs(support_score), primary_source_counts)
         confidence_percent = self._confidence_percent(
@@ -261,7 +261,7 @@ class MacroContextService:
 
         context = MacroContextSnapshot(
             computed_at=datetime.now(timezone.utc),
-            expires_at=getattr(snapshot, "expires_at", None),
+            expires_at=getattr(payload, "expires_at", None),
             status=status,
             summary_text=summary_text,
             saliency_score=saliency_score,
@@ -271,9 +271,9 @@ class MacroContextService:
             warnings=list(dict.fromkeys(warnings)),
             missing_inputs=list(dict.fromkeys(missing_inputs)),
             source_breakdown={
-                "support_snapshot_id": getattr(snapshot, "id", None),
-                "support_label": support_label,
-                "support_score": support_score,
+                "context_refresh_subject_key": getattr(payload, "subject_key", None),
+                "context_label": support_label,
+                "context_score": support_score,
                 "primary_news_item_count": len(news_items),
                 "supporting_social_item_count": len(supporting_social_items),
                 "primary_news_providers": list(dict.fromkeys(news_bundle.feeds_used)) if news_bundle is not None else [],
@@ -284,8 +284,8 @@ class MacroContextService:
                 "upstream": source_breakdown if isinstance(source_breakdown, dict) else {},
             },
             metadata={
-                "subject_key": getattr(snapshot, "subject_key", None),
-                "subject_label": getattr(snapshot, "subject_label", None),
+                "subject_key": getattr(payload, "subject_key", None),
+                "subject_label": getattr(payload, "subject_label", None),
                 "query_diagnostics": diagnostics.get("query_diagnostics", {}) if isinstance(diagnostics, dict) else {},
                 "news_coverage_insights": news_sentiment.get("coverage_insights", []) if isinstance(news_sentiment, dict) else [],
                 "top_news_titles": [self._item_text(item)[:140] for item in news_items[:5]],

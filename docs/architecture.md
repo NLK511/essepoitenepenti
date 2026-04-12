@@ -60,17 +60,18 @@ flowchart LR
 
     subgraph Storage["Persistence"]
         DB[("SQLite / Postgres")]
-        Snapshots[("support + context snapshots")]
+        ContextSnapshots[("context snapshots")]
+        AnalysisRecords[("signals + plans + outcomes")]
     end
 
     subgraph Pipeline["Analysis pipeline"]
         Orchestration["WatchlistOrchestrationService"]
         DeepAnalysis["TickerDeepAnalysisService"]
         ProposalService["ProposalService"]
-        SnapshotResolver["SupportSnapshotResolver"]
+        SnapshotResolver["ContextSnapshotResolver"]
         NewsIngestionService["NewsIngestionService"]
         FeatureEngine["Feature engineering"]
-        Weights["weights.json"]
+        Calibration["Calibration + tuning config"]
         RefreshServices["Context refresh services"]
     end
 
@@ -96,7 +97,8 @@ flowchart LR
     Scheduler --> Services
     Services --> Repositories
     Repositories --> DB
-    Repositories --> Snapshots
+    Repositories --> ContextSnapshots
+    Repositories --> AnalysisRecords
 
     Services --> Orchestration
     Services --> DeepAnalysis
@@ -107,10 +109,11 @@ flowchart LR
     ProposalService --> SnapshotResolver
     ProposalService --> FeatureEngine
     ProposalService --> NewsIngestionService
-    FeatureEngine --> Weights
+    FeatureEngine --> Calibration
     RefreshServices --> NewsIngestionService
-    RefreshServices --> Snapshots
-    SnapshotResolver --> Snapshots
+    RefreshServices --> ContextSnapshots
+    SnapshotResolver --> ContextSnapshots
+    Orchestration --> AnalysisRecords
 
     NewsIngestionService --> GoogleNews
     NewsIngestionService --> YahooFinance
@@ -140,7 +143,7 @@ If execution fails, run timing, status, and failure metadata are still persisted
 3. the worker executes it asynchronously
 4. industry refresh scope is seeded from the taxonomy layer
 5. industry refresh queries can be expanded from ontology definitions such as themes, event vocabulary, risk flags, sector, and company names
-6. refresh services persist transitional support snapshots and redesign-native context snapshots
+6. refresh services persist redesign-native context snapshots directly
 7. downstream review pages surface the resulting context, event fields, actor/source metadata, and diagnostics
 
 ## Runtime components
@@ -192,7 +195,6 @@ Stored entities include:
 - watchlists
 - jobs
 - runs
-- support snapshots
 - macro, industry, and ticker context/signal objects
 - recommendation plans and outcomes
 - settings
@@ -226,7 +228,7 @@ The main strength is shared ownership of execution, diagnostics, persistence, an
 
 The main weakness is operational maturity, not the module split. Reliability, observability, and credential lifecycle matter more right now than additional architectural complexity.
 
-A second transitional issue remains: context snapshots are the main review surface, but legacy support snapshots still remain in some refresh, resolver, and health paths.
+Context snapshots are now the only active review and refresh persistence layer.
 
 ## Immediate next moves
 
@@ -234,4 +236,3 @@ A second transitional issue remains: context snapshots are the main review surfa
 2. improve production observability with better logs, correlation, and health signals
 3. improve credential lifecycle and production auth hygiene
 4. keep API payloads and diagnostics explicit and stable
-5. finish converging legacy support-snapshot paths onto context-native reads

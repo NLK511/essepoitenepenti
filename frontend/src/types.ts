@@ -11,8 +11,8 @@ export type JobType =
   | "recommendation_evaluation"
   | "plan_generation_tuning"
   | "performance_assessment"
-  | "macro_sentiment_refresh"
-  | "industry_sentiment_refresh";
+  | "macro_context_refresh"
+  | "industry_context_refresh";
 
 export type RecommendationDirection = "LONG" | "SHORT" | "NEUTRAL";
 export type RecommendationState = "PENDING" | "WIN" | "LOSS";
@@ -178,10 +178,34 @@ export interface AppPreflightReport {
   checks: PreflightCheck[];
 }
 
-export interface RecommendationQualitySummary {
+export interface RecommendationQualityWindowSummary {
+  window_label?: string;
+  computed_after?: string;
+  computed_before?: string;
+  evaluated_after?: string;
+  evaluated_before?: string;
   status: string;
   status_reason: string;
   generated_at: string;
+  resolved_outcomes: number;
+  overall_win_rate_percent: number | null;
+  calibration_report: CalibrationReport | null;
+  smoothed_calibration_report: CalibrationReport | null;
+  actual_actionable_win_rate_percent: number | null;
+  actual_actionable_average_return_5d: number | null;
+  high_confidence_win_rate_percent: number | null;
+  high_confidence_average_return_5d: number | null;
+  ready_for_expansion: boolean;
+  strongest_positive_count: number;
+  weakest_count: number;
+  family_count: number;
+  walk_forward_promotion_recommended: boolean | null;
+  walk_forward_average_win_rate_delta: number | null;
+  walk_forward_average_expected_value_delta: number | null;
+  walk_forward_error: string | null;
+}
+
+export interface RecommendationQualitySummary extends RecommendationQualityWindowSummary {
   tuning_settings: {
     confidence_threshold: number;
     signal_gating: {
@@ -199,27 +223,12 @@ export interface RecommendationQualitySummary {
       min_validation_resolved: number;
     };
   };
-  resolved_outcomes: number;
-  overall_win_rate_percent: number | null;
-  calibration_report: CalibrationReport | null;
-  smoothed_calibration_report: CalibrationReport | null;
-  actual_actionable_win_rate_percent: number | null;
-  actual_actionable_average_return_5d: number | null;
-  high_confidence_win_rate_percent: number | null;
-  high_confidence_average_return_5d: number | null;
-  ready_for_expansion: boolean;
-  strongest_positive_count: number;
-  weakest_count: number;
-  family_count: number;
-  walk_forward_promotion_recommended: boolean | null;
-  walk_forward_average_win_rate_delta: number | null;
-  walk_forward_average_expected_value_delta: number | null;
-  walk_forward_error: string | null;
   latest_assessment: Record<string, unknown>;
 }
 
 export interface RecommendationQualityResponse {
   summary: RecommendationQualitySummary;
+  windowed_summaries: RecommendationQualityWindowSummary[];
   calibration: CalibrationSummary;
   baselines: RecommendationBaselineSummary;
   evidence_concentration: RecommendationEvidenceConcentrationSummary;

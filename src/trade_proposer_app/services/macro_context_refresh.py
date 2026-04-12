@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from trade_proposer_app.domain.models import SupportSnapshot
+from trade_proposer_app.domain.models import MacroContextRefreshPayload
 from trade_proposer_app.services.news import NewsIngestionService
 from trade_proposer_app.services.social import SocialIngestionService
 
@@ -28,7 +27,7 @@ MACRO_QUERIES = [
 ]
 
 
-class MacroSupportRefreshService:
+class MacroContextRefreshService:
     def __init__(
         self,
         *,
@@ -59,39 +58,38 @@ class MacroSupportRefreshService:
         computed_at = datetime.now(timezone.utc)
         expires_at = computed_at + timedelta(hours=MACRO_TTL_HOURS)
 
-        snapshot = SupportSnapshot(
-            scope="macro",
+        payload = MacroContextRefreshPayload(
             subject_key=MACRO_SUBJECT_KEY,
             subject_label=MACRO_SUBJECT_LABEL,
             score=score,
             label=label,
             computed_at=computed_at,
             expires_at=expires_at,
-            coverage_json=json.dumps({
+            coverage={
                 "social_count": social_count,
                 "news_count": 0,
                 "ttl_hours": MACRO_TTL_HOURS,
-            }),
-            source_breakdown_json=json.dumps({
+            },
+            source_breakdown={
                 "news": {"score": 0.0, "item_count": 0},
                 "social": {"score": social_score, "item_count": social_count},
-            }),
-            drivers_json=json.dumps([]),
-            signals_json=json.dumps({
+            },
+            drivers=[],
+            signals={
                 "social_items": social_sentiment.get("items", []),
                 "scope_breakdown": social_sentiment.get("scope_breakdown", {}),
-            }),
-            diagnostics_json=json.dumps({
+            },
+            diagnostics={
                 "warnings": social_sentiment.get("coverage_insights", []),
                 "providers": (getattr(bundle, "feeds_used", []) if bundle is not None else []),
                 "query_diagnostics": (getattr(bundle, "query_diagnostics", {}) if bundle is not None else {}),
-            }),
+            },
             summary_text="",
             job_id=job_id,
             run_id=run_id,
         )
         return {
-            "snapshot": snapshot,
+            "payload": payload,
             "summary": {
                 "scope": "macro",
                 "subject_key": MACRO_SUBJECT_KEY,
@@ -101,6 +99,3 @@ class MacroSupportRefreshService:
                 "expires_at": expires_at.isoformat(),
             },
         }
-
-
-MacroSupportRefreshService = MacroSupportRefreshService

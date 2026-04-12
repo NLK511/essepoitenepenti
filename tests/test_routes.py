@@ -887,6 +887,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(payload["recommendation_plans"]), 2)
         self.assertEqual(payload["recommendation_plans"][0]["latest_outcome"]["outcome"], "win")
         self.assertNotIn("prototype_trades", payload)
+        self.assertNotIn("legacy_trades", payload)
 
     async def test_failed_run_is_apparent_in_api(self) -> None:
         run_id = self.seed_failed_run()
@@ -1246,11 +1247,11 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(macro.status_code, 200)
         self.assertEqual(industry.status_code, 200)
-        self.assertEqual(macro.json()["job_type"], JobType.MACRO_SENTIMENT_REFRESH.value)
-        self.assertEqual(industry.json()["job_type"], JobType.INDUSTRY_SENTIMENT_REFRESH.value)
+        self.assertEqual(macro.json()["job_type"], JobType.MACRO_CONTEXT_REFRESH.value)
+        self.assertEqual(industry.json()["job_type"], JobType.INDUSTRY_CONTEXT_REFRESH.value)
         run_job_types = [item["job_type"] for item in runs.json()]
-        self.assertIn(JobType.MACRO_SENTIMENT_REFRESH.value, run_job_types)
-        self.assertIn(JobType.INDUSTRY_SENTIMENT_REFRESH.value, run_job_types)
+        self.assertIn(JobType.MACRO_CONTEXT_REFRESH.value, run_job_types)
+        self.assertIn(JobType.INDUSTRY_CONTEXT_REFRESH.value, run_job_types)
 
     async def test_context_run_now_routes_execute_synchronously(self) -> None:
         class StubSnapshotExecutionService:

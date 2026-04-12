@@ -52,6 +52,9 @@ class RecommendationQualitySummaryTests(unittest.TestCase):
             self.assertIn("tuning_settings", payload["summary"])
             self.assertIn("baselines", payload)
             self.assertIn("evidence_concentration", payload)
+            self.assertIn("windowed_summaries", payload)
+            self.assertEqual(["7d", "30d", "90d", "180d", "1y"], [item["window_label"] for item in payload["windowed_summaries"]])
+            self.assertEqual("30d", payload["summary"]["window_label"])
         finally:
             session.close()
 
@@ -65,6 +68,7 @@ class RecommendationQualitySummaryTests(unittest.TestCase):
                 self.assertIn("summary", payload)
                 self.assertIn("next_actions", payload)
                 self.assertIn("calibration", payload)
+                self.assertIn("windowed_summaries", payload)
 
         import asyncio
 

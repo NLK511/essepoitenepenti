@@ -209,7 +209,7 @@ The first objective is to learn a reasonable raw configuration, not to build a f
 
 ## Related docs
 
-- `recommendation-methodology.md`
-- `decision-sample-tuning-guide.md`
-- `raw-details-reference.md`
+- `../../recommendation-methodology.md`
+- `../../decision-sample-tuning-guide.md`
+- `../../raw-details-reference.md`
 - `../../docs-index.md`

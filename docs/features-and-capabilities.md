@@ -21,7 +21,7 @@ It is not yet a proven short-horizon prediction engine.
 ### Jobs, runs, and operations
 - Create, edit, delete, schedule, and execute jobs.
 - Run proposal generation, recommendation evaluation, plan-generation tuning, and macro/industry refreshes through the same worker-backed run system.
-- Inspect queued, running, completed, failed, cancelled, and warning-heavy runs in the debugger and run detail pages.
+- Inspect queued, running, completed, failed, canceled, and warning-heavy runs in the debugger and run detail pages.
 - Review persisted run timing, summaries, artifacts, warnings, and failure metadata.
 - Delete individual runs from the debugger.
 
@@ -29,7 +29,7 @@ It is not yet a proven short-horizon prediction engine.
 - Persist proposal outputs as `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`.
 - Review signals, plans, and outcomes through the main review pages.
 - Evaluate recommendation plans through the app-native price-history path, including terminal `expired` handling once a plan passes its intended horizon without a win/loss resolution.
-- Track **phantom trades** for `no_action` plans that carry an intended direction and valid trade levels, evaluating them against real market data to produce `phantom_win` or `phantom_loss` outcomes for recall optimization in tuning engines.
+- Track **phantom trades** for `no_action` or `watchlist` plans that retain an intended direction and valid trade levels, evaluating them against real market data to produce outcomes such as `phantom_win`, `phantom_loss`, or `phantom_no_entry` for recall optimization in tuning engines.
 - Use decision samples to review near-misses, shortlist behavior, triage priority, and richer filters such as shortlist state, setup family, transmission bias, and context regime.
 - Use the calibration report endpoint and the research-page calibration tab to inspect confidence reliability, Brier score, and expected calibration error.
 - Use ticker drill-down pages to inspect plan history and latest outcomes for a single name.
@@ -51,8 +51,8 @@ It is not yet a proven short-horizon prediction engine.
 - Run watchlist-backed proposal jobs through a staged flow:
   1. watchlist scan
   2. shortlist selection
-  3. deep analysis for shortlisted names
-  4. persistence of signals and plans
+  3. deep analysis for shortlisted names only
+  4. persistence of signals and plans, including cheap-scan-only `no_action` plans for non-shortlisted names and phantom-trade-eligible rejected plans when deep analysis produced valid trade framing
 - Browse signals and plans outside the run page and filter them by `run_id`.
 - Queue recommendation-plan evaluation runs from the recommendation-plans page.
 

@@ -6,6 +6,14 @@ import type { CalibrationReportResponse, CalibrationSummary, PerformanceAssessme
 import { formatDate, jobTypeLabel, runTone } from "../utils";
 import { Badge, Card, HelpHint, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 
+const assessmentWindows = ["7d", "30d", "90d", "180d", "1y"] as const;
+
+function windowStartIso(window: (typeof assessmentWindows)[number]): string {
+  const now = Date.now();
+  const days = window === "7d" ? 7 : window === "30d" ? 30 : window === "90d" ? 90 : window === "180d" ? 180 : 365;
+  return new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
 function renderAssessment(content: string) {
   const lines = content.split(/\r?\n/);
   const nodes: JSX.Element[] = [];
@@ -76,6 +84,7 @@ export function ResearchPage() {
   const [calibration, setCalibration] = useState<CalibrationReportResponse | null>(null);
   const [walkForward, setWalkForward] = useState<WalkForwardValidationResponse | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "calibration" | "validation" | "tuning">("overview");
+  const [selectedWindow, setSelectedWindow] = useState<(typeof assessmentWindows)[number]>("30d");
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +97,7 @@ export function ResearchPage() {
       try {
         const [assessmentPayload, calibrationPayload, walkForwardPayload] = await Promise.all([
           getJson<PerformanceAssessmentResponse>("/api/research/performance-assessment"),
-          getJson<CalibrationReportResponse>("/api/recommendation-outcomes/calibration-report?limit=500"),
+          getJson<CalibrationReportResponse>(`/api/recommendation-outcomes/calibration-report?evaluated_after=${encodeURIComponent(windowStartIso(selectedWindow))}&limit=2000`),
           getJson<WalkForwardValidationResponse>("/api/recommendation-outcomes/walk-forward?lookback_days=365&validation_days=90&step_days=30&min_resolved_outcomes=20"),
         ]);
         if (!cancelled) {
@@ -110,7 +119,7 @@ export function ResearchPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedWindow]);
 
   const latestContent = typeof assessment?.latest_assessment?.content === "string" ? assessment.latest_assessment.content : "";
   const latestBackend = typeof assessment?.latest_assessment?.backend === "string" ? assessment.latest_assessment.backend : "—";
@@ -121,6 +130,7 @@ export function ResearchPage() {
   const calibrationReport = calibration?.calibration_report ?? calibrationSummary?.calibration_report ?? null;
   const calibrationBins = calibrationReport?.bins ?? [];
   const windowedAssessments = Array.isArray(assessment?.windowed_assessments) ? (assessment.windowed_assessments as PerformanceWindowAssessment[]) : [];
+  const selectedAssessmentWindow = windowedAssessments.find((window) => window.window === selectedWindow) ?? windowedAssessments[0] ?? null;
 
   async function handleRunAssessment() {
     setRunning(true);
@@ -129,7 +139,7 @@ export function ResearchPage() {
       await postForm("/api/research/performance-assessment/run", {});
       const [assessmentPayload, calibrationPayload, walkForwardPayload] = await Promise.all([
         getJson<PerformanceAssessmentResponse>("/api/research/performance-assessment"),
-        getJson<CalibrationReportResponse>("/api/recommendation-outcomes/calibration-report?limit=500"),
+        getJson<CalibrationReportResponse>(`/api/recommendation-outcomes/calibration-report?evaluated_after=${encodeURIComponent(windowStartIso(selectedWindow))}&limit=2000`),
         getJson<WalkForwardValidationResponse>("/api/recommendation-outcomes/walk-forward?lookback_days=365&validation_days=90&step_days=30&min_resolved_outcomes=20"),
       ]);
       setAssessment(assessmentPayload);
@@ -189,23 +199,33 @@ export function ResearchPage() {
               </div>
               {latestError ? <div className="helper-text top-gap-small">Fallback note: {latestError}</div> : null}
               {windowedAssessments.length > 0 ? (
-                <section className="card-grid top-gap-medium">
-                  {windowedAssessments.map((window) => (
-                    <Card key={window.window}>
-                      <SectionTitle kicker={`Window ${window.window}`} title={`${window.resolved_outcomes} resolved outcomes`} subtitle={`Evaluated after ${formatDate(window.evaluated_after)}`} />
-                      <div className="data-points top-gap-small">
-                        <div className="data-point"><span className="data-point-label">overall win rate</span><span className="data-point-value">{window.overall_win_rate_percent !== null ? `${window.overall_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
-                        <div className="data-point"><span className="data-point-label">actionable win rate</span><span className="data-point-value">{window.actual_actionable_win_rate_percent !== null ? `${window.actual_actionable_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
-                        <div className="data-point"><span className="data-point-label">high-confidence win rate</span><span className="data-point-value">{window.high_confidence_win_rate_percent !== null ? `${window.high_confidence_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
-                        <div className="data-point"><span className="data-point-label">actionable return 5d</span><span className="data-point-value">{window.actual_actionable_average_return_5d !== null ? window.actual_actionable_average_return_5d.toFixed(3) : "—"}</span></div>
-                        <div className="data-point"><span className="data-point-label">confidence return 5d</span><span className="data-point-value">{window.high_confidence_average_return_5d !== null ? window.high_confidence_average_return_5d.toFixed(3) : "—"}</span></div>
-                        <div className="data-point"><span className="data-point-label">brier / ece</span><span className="data-point-value">{window.calibration_brier_score !== null ? window.calibration_brier_score.toFixed(4) : "—"} / {window.calibration_ece !== null ? window.calibration_ece.toFixed(4) : "—"}</span></div>
-                        <div className="data-point"><span className="data-point-label">family count</span><span className="data-point-value">{window.family_count}</span></div>
-                        <div className="data-point"><span className="data-point-label">expansion</span><span className="data-point-value">{window.ready_for_expansion ? "yes" : "no"}</span></div>
-                      </div>
-                    </Card>
-                  ))}
-                </section>
+                <Card className="top-gap-medium">
+                  <SectionTitle kicker="Rolling windows" title="Assessment snapshots" subtitle="Select a time window to inspect the matching performance-assessment summary." actions={<HelpHint tooltip="These windows summarize recent assessment posture without forcing you to scan every period at once." to="/docs?doc=glossary&section=walk-forward-validation" />} />
+                  <div className="top-gap-small">
+                    <SegmentedTabs
+                      value={selectedWindow}
+                      options={assessmentWindows.filter((window) => windowedAssessments.some((item) => item.window === window)).map((window) => ({ value: window, label: window.toUpperCase() }))}
+                      onChange={(value) => setSelectedWindow(value as (typeof assessmentWindows)[number])}
+                    />
+                  </div>
+                  {selectedAssessmentWindow ? (
+                    <section className="card-grid top-gap-small">
+                      <Card>
+                        <SectionTitle kicker={`Window ${selectedAssessmentWindow.window}`} title={`${selectedAssessmentWindow.resolved_outcomes} resolved outcomes`} subtitle={`Evaluated after ${formatDate(selectedAssessmentWindow.evaluated_after)}`} />
+                        <div className="data-points top-gap-small">
+                          <div className="data-point"><span className="data-point-label">overall win rate</span><span className="data-point-value">{selectedAssessmentWindow.overall_win_rate_percent !== null ? `${selectedAssessmentWindow.overall_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
+                          <div className="data-point"><span className="data-point-label">actionable win rate</span><span className="data-point-value">{selectedAssessmentWindow.actual_actionable_win_rate_percent !== null ? `${selectedAssessmentWindow.actual_actionable_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
+                          <div className="data-point"><span className="data-point-label">high-confidence win rate</span><span className="data-point-value">{selectedAssessmentWindow.high_confidence_win_rate_percent !== null ? `${selectedAssessmentWindow.high_confidence_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
+                          <div className="data-point"><span className="data-point-label">actionable return 5d</span><span className="data-point-value">{selectedAssessmentWindow.actual_actionable_average_return_5d !== null ? selectedAssessmentWindow.actual_actionable_average_return_5d.toFixed(3) : "—"}</span></div>
+                          <div className="data-point"><span className="data-point-label">confidence return 5d</span><span className="data-point-value">{selectedAssessmentWindow.high_confidence_average_return_5d !== null ? selectedAssessmentWindow.high_confidence_average_return_5d.toFixed(3) : "—"}</span></div>
+                          <div className="data-point"><span className="data-point-label">brier / ece</span><span className="data-point-value">{selectedAssessmentWindow.calibration_brier_score !== null ? selectedAssessmentWindow.calibration_brier_score.toFixed(4) : "—"} / {selectedAssessmentWindow.calibration_ece !== null ? selectedAssessmentWindow.calibration_ece.toFixed(4) : "—"}</span></div>
+                          <div className="data-point"><span className="data-point-label">family count</span><span className="data-point-value">{selectedAssessmentWindow.family_count}</span></div>
+                          <div className="data-point"><span className="data-point-label">expansion</span><span className="data-point-value">{selectedAssessmentWindow.ready_for_expansion ? "yes" : "no"}</span></div>
+                        </div>
+                      </Card>
+                    </section>
+                  ) : null}
+                </Card>
               ) : null}
               <div className="top-gap-medium">
                 {latestContent ? renderAssessment(latestContent) : <div className="helper-text">No assessment has been generated yet.</div>}
@@ -297,9 +317,20 @@ export function ResearchPage() {
 
         {activeTab === "calibration" ? (
           <>
+            <Card>
+              <SectionTitle kicker="Time window" title="Calibration review window" subtitle="Choose which rolling window the calibration tab should use." actions={<HelpHint tooltip="This selector changes the calibration cohort so you can compare recent versus broader confidence behavior." to="/docs?doc=glossary&section=confidence-bucket" />} />
+              <div className="top-gap-small">
+                <SegmentedTabs
+                  value={selectedWindow}
+                  options={assessmentWindows.map((window) => ({ value: window, label: window.toUpperCase() }))}
+                  onChange={(value) => setSelectedWindow(value as (typeof assessmentWindows)[number])}
+                />
+              </div>
+            </Card>
+
             {calibrationSummary ? (
-              <section className="card-grid">
-                <StatCard label="Calibration method" value={calibrationReport?.method ?? "—"} helper="Latest assessed cohort" tooltip="The current calibration report method used for this reviewed cohort or filtered comparison group." tooltipTo="/docs?doc=glossary&section=calibration" />
+              <section className="card-grid top-gap">
+                <StatCard label="Calibration method" value={calibrationReport?.method ?? "—"} helper={`${selectedWindow.toUpperCase()} cohort`} tooltip="The current calibration report method used for this reviewed cohort or filtered comparison group." tooltipTo="/docs?doc=glossary&section=calibration" />
                 <StatCard label="Brier score" value={calibrationReport?.brier_score !== null && calibrationReport?.brier_score !== undefined ? calibrationReport.brier_score.toFixed(4) : "—"} helper="Lower is better" tooltip="A proper scoring measure of confidence quality. Lower generally means predicted confidence matched realized outcomes more closely." tooltipTo="/docs?doc=glossary&section=calibration" />
                 <StatCard label="ECE" value={calibrationReport?.expected_calibration_error !== null && calibrationReport?.expected_calibration_error !== undefined ? calibrationReport.expected_calibration_error.toFixed(4) : "—"} helper="Average confidence gap" tooltip="Expected calibration error: the average gap between displayed confidence and realized win rate across confidence buckets." tooltipTo="/docs?doc=glossary&section=confidence-bucket" />
                 <StatCard label="Resolved outcomes" value={calibrationReport?.resolved_count ?? calibrationSummary.resolved_outcomes} helper="Win/loss cases used for reliability" tooltip="The number of resolved win/loss outcomes contributing to the current calibration view. Thin samples should be read cautiously." tooltipTo="/docs?doc=glossary&section=outcome-evaluation" />

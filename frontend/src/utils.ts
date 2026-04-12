@@ -64,10 +64,10 @@ export function jobTypeLabel(jobType: JobType | string): string {
   if (jobType === "performance_assessment") {
     return "Performance assessment";
   }
-  if (jobType === "macro_sentiment_refresh") {
+  if (jobType === "macro_context_refresh") {
     return "Macro context refresh";
   }
-  if (jobType === "industry_sentiment_refresh") {
+  if (jobType === "industry_context_refresh") {
     return "Industry context refresh";
   }
   return jobType;

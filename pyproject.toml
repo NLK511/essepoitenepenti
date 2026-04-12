@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-prototype = [
+openai = [
   "openai>=1.100.0,<2.0.0",
 ]
 dev = [

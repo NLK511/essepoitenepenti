@@ -1046,7 +1046,7 @@ class WatchlistOrchestrationService:
     ) -> dict[str, object]:
         calibration = calibration_review or {}
         calibrated_confidence = calibration.get("calibrated_confidence_percent") if isinstance(calibration.get("calibrated_confidence_percent"), (int, float)) else signal.confidence_percent
-        return {
+        payload = {
             "attention_score": signal.attention_score,
             "macro_exposure_score": signal.macro_exposure_score,
             "industry_alignment_score": signal.industry_alignment_score,
@@ -1064,6 +1064,9 @@ class WatchlistOrchestrationService:
             "transmission_summary": transmission_summary or {},
             "mode": signal.diagnostics.get("mode"),
         }
+        if intended_action in {"long", "short"}:
+            payload["intended_action"] = intended_action
+        return payload
 
     def _plan_setup_family(
         self,

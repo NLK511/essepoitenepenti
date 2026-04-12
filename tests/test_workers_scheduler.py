@@ -81,40 +81,49 @@ class StubOptimizationService:
         return StubRun()
 
 
-class StubMacroSupportRefreshService:
+class StubMacroContextRefreshService:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
     def refresh(self, *, job_id: int | None = None, run_id: int | None = None) -> Any:
-        return type(
-            "Snapshot",
-            (),
-            {
-                "id": 11,
-                "subject_key": "global_macro",
-                "subject_label": "Global Macro",
-                "score": 0.1,
-                "label": "NEUTRAL",
-                "computed_at": datetime(2026, 3, 22, 6, 0, 0, tzinfo=timezone.utc),
-            },
-        )()
+        return {
+            "payload": type(
+                "Payload",
+                (),
+                {
+                    "subject_key": "global_macro",
+                    "subject_label": "Global Macro",
+                    "score": 0.1,
+                    "label": "NEUTRAL",
+                    "computed_at": datetime(2026, 3, 22, 6, 0, 0, tzinfo=timezone.utc),
+                    "expires_at": None,
+                    "signals": {},
+                    "diagnostics": {},
+                    "source_breakdown": {},
+                },
+            )(),
+        }
 
 
-class StubIndustrySupportRefreshService:
+class StubIndustryContextRefreshService:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
     def refresh_all(self, *, job_id: int | None = None, run_id: int | None = None) -> list[Any]:
         return [
             type(
-                "Snapshot",
+                "Payload",
                 (),
                 {
-                    "id": 21,
                     "subject_key": "consumer_electronics",
                     "subject_label": "Consumer Electronics",
                     "score": 0.12,
                     "label": "POSITIVE",
+                    "expires_at": None,
+                    "coverage": {},
+                    "signals": {},
+                    "diagnostics": {"queries": ["consumer electronics"]},
+                    "source_breakdown": {},
                 },
             )()
         ]
@@ -380,7 +389,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         self.assertIn('"plan_generation_tuning_run_id": 1', updated_run.artifact_json or "")
         self.assertIn('"plan_generation_tuning_seconds"', updated_run.timing_json or "")
 
-    def test_worker_process_once_processes_macro_support_refresh_run(self) -> None:
+    def test_worker_process_once_processes_macro_context_refresh_run(self) -> None:
         session = self.create_session()
         jobs = JobRepository(session)
         runs = RunRepository(session)
@@ -388,28 +397,28 @@ class WorkerSchedulerTests(unittest.TestCase):
             "Macro Refresh Job",
             [],
             None,
-            job_type=JobType.MACRO_SENTIMENT_REFRESH,
+            job_type=JobType.MACRO_CONTEXT_REFRESH,
         )
         run = runs.enqueue(job.id or 0)
 
         with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
             "trade_proposer_app.workers.tasks.create_proposal_service", return_value=StubProposalService()
         ), patch(
-            "trade_proposer_app.workers.tasks.create_macro_support_service", return_value=StubMacroSupportRefreshService()
+            "trade_proposer_app.workers.tasks.create_macro_context_refresh_service", return_value=StubMacroContextRefreshService()
         ), patch(
-            "trade_proposer_app.workers.tasks.create_industry_support_service", return_value=StubIndustrySupportRefreshService()
+            "trade_proposer_app.workers.tasks.create_industry_context_refresh_service", return_value=StubIndustryContextRefreshService()
         ):
             processed = process_once()
 
         self.assertTrue(processed)
         updated_run = runs.get_run(run.id or 0)
         self.assertEqual(updated_run.status, "completed")
-        self.assertEqual(updated_run.job_type, JobType.MACRO_SENTIMENT_REFRESH)
+        self.assertEqual(updated_run.job_type, JobType.MACRO_CONTEXT_REFRESH)
         self.assertIn('"scope": "macro"', updated_run.summary_json or "")
-        self.assertIn('"snapshot_id": 11', updated_run.artifact_json or "")
-        self.assertIn('"macro_refresh_seconds"', updated_run.timing_json or "")
+        self.assertIn('"macro_context_snapshot_id":', updated_run.artifact_json or "")
+        self.assertIn('"macro_context_seconds"', updated_run.timing_json or "")
 
-    def test_worker_process_once_processes_industry_support_refresh_run(self) -> None:
+    def test_worker_process_once_processes_industry_context_refresh_run(self) -> None:
         session = self.create_session()
         jobs = JobRepository(session)
         runs = RunRepository(session)
@@ -417,26 +426,26 @@ class WorkerSchedulerTests(unittest.TestCase):
             "Industry Refresh Job",
             [],
             None,
-            job_type=JobType.INDUSTRY_SENTIMENT_REFRESH,
+            job_type=JobType.INDUSTRY_CONTEXT_REFRESH,
         )
         run = runs.enqueue(job.id or 0)
 
         with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
             "trade_proposer_app.workers.tasks.create_proposal_service", return_value=StubProposalService()
         ), patch(
-            "trade_proposer_app.workers.tasks.create_macro_support_service", return_value=StubMacroSupportRefreshService()
+            "trade_proposer_app.workers.tasks.create_macro_context_refresh_service", return_value=StubMacroContextRefreshService()
         ), patch(
-            "trade_proposer_app.workers.tasks.create_industry_support_service", return_value=StubIndustrySupportRefreshService()
+            "trade_proposer_app.workers.tasks.create_industry_context_refresh_service", return_value=StubIndustryContextRefreshService()
         ):
             processed = process_once()
 
         self.assertTrue(processed)
         updated_run = runs.get_run(run.id or 0)
         self.assertEqual(updated_run.status, "completed")
-        self.assertEqual(updated_run.job_type, JobType.INDUSTRY_SENTIMENT_REFRESH)
+        self.assertEqual(updated_run.job_type, JobType.INDUSTRY_CONTEXT_REFRESH)
         self.assertIn('"scope": "industry"', updated_run.summary_json or "")
         self.assertIn('"snapshot_count": 1', updated_run.artifact_json or "")
-        self.assertIn('"industry_refresh_seconds"', updated_run.timing_json or "")
+        self.assertIn('"industry_context_seconds"', updated_run.timing_json or "")
 
     def test_scheduler_skips_second_optimization_job_when_one_is_active(self) -> None:
         session = self.create_session()

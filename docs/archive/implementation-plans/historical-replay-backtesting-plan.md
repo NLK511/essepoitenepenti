@@ -64,7 +64,7 @@ This section separates what the repo already has from what this plan still expec
 - explicit outcome labeling and evaluation outputs for replay-generated plans
 - archived provenance for future validation
 
-The live recommendation-plan outcome resolution rules are **not** defined here. They live in `recommendation-plan-resolution-spec.md`.
+The live recommendation-plan outcome resolution rules are **not** defined here. They live in `../../recommendation-plan-resolution-spec.md`.
 
 ---
 
@@ -494,7 +494,7 @@ The fastest useful MVP is:
 - optional article text when available
 - no dependency on full tweet/X coverage
 
-This MVP is about replay research throughput, not live recommendation-plan win/loss semantics. Live outcome resolution remains governed by `recommendation-plan-resolution-spec.md`.
+This MVP is about replay research throughput, not live recommendation-plan win/loss semantics. Live outcome resolution remains governed by `../../recommendation-plan-resolution-spec.md`.
 
 This MVP is enough to test:
 - whether context-aware plans beat technical-only baselines

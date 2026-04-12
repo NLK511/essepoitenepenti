@@ -107,7 +107,7 @@ Typical stored themes:
 - setup family
 - transmission-bias and context-regime slices used in calibration review
 
-Outcome values include `win`, `loss`, `expired`, `no_action`, `watchlist`, `phantom_win`, `phantom_loss`, and `phantom_no_entry`. Phantom outcomes are produced when a `no_action` plan had an intended direction and valid trade levels and is evaluated against real market data.
+Outcome values include `win`, `loss`, `expired`, `no_action`, `watchlist`, `phantom_win`, `phantom_loss`, and `phantom_no_entry`. Phantom outcomes are produced when a `no_action` or `watchlist` plan retained an intended direction and valid trade levels and is evaluated against real market data.
 
 ### `RecommendationDecisionSample`
 A tuning and review snapshot stored for each generated plan.
@@ -160,13 +160,11 @@ Examples:
 - optimization — before/after fingerprint and backup metadata
 - context refresh — created snapshot ids, scope, refresh summary, and context event metadata
 
-## Historical support snapshot records
+## Retired support snapshot records
 
-Older builds persisted `SupportSnapshot` records during context refresh workflows.
+Older builds introduced `SupportSnapshot` records during context refresh workflows, but active builds persist context snapshots directly.
 
-They are no longer part of the active operator-facing architecture, but the schema references may still appear in historical notes or old test fixtures.
-
-Common historical fields:
+`SupportSnapshot` is now historical only. Common historical fields were:
 - `id`
 - `scope`
 - `subject_key`
@@ -183,8 +181,6 @@ Common historical fields:
 - `diagnostics`
 - `job_id`
 - `run_id`
-
-These act as both reusable artifacts and audit objects.
 
 ## Common diagnostics and timing fields
 

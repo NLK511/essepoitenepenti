@@ -60,9 +60,9 @@ function workflowLabel(jobType: JobType | string): string {
       return "Run plan tuning";
     case "performance_assessment":
       return "Run performance assessment";
-    case "macro_sentiment_refresh":
+    case "macro_context_refresh":
       return "Refresh macro context";
-    case "industry_sentiment_refresh":
+    case "industry_context_refresh":
       return "Refresh industry context";
     default:
       return jobTypeLabel(jobType);
@@ -265,8 +265,8 @@ export function JobsPage() {
                     <option value="performance_assessment">Run performance assessment</option>
                   </optgroup>
                   <optgroup label="Maintenance workflows">
-                    <option value="macro_sentiment_refresh">Refresh macro context</option>
-                    <option value="industry_sentiment_refresh">Refresh industry context</option>
+                    <option value="macro_context_refresh">Refresh macro context</option>
+                    <option value="industry_context_refresh">Refresh industry context</option>
                   </optgroup>
                 </select>
               </label>
@@ -425,8 +425,8 @@ export function JobsPage() {
                                                 <option value="performance_assessment">Run performance assessment</option>
                                               </optgroup>
                                               <optgroup label="Maintenance workflows">
-                                                <option value="macro_sentiment_refresh">Refresh macro context</option>
-                                                <option value="industry_sentiment_refresh">Refresh industry context</option>
+                                                <option value="macro_context_refresh">Refresh macro context</option>
+                                                <option value="industry_context_refresh">Refresh industry context</option>
                                               </optgroup>
                                             </select>
                                           </label>

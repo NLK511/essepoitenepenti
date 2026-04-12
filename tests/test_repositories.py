@@ -3,6 +3,8 @@ import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
 
+import pandas as pd
+
 from sqlalchemy.exc import IntegrityError
 
 from sqlalchemy import create_engine, update
@@ -12,7 +14,9 @@ from trade_proposer_app.config import settings
 from trade_proposer_app.domain.enums import JobType, RecommendationDirection, StrategyHorizon
 from trade_proposer_app.domain.models import (
     EvaluationRunResult,
+    IndustryContextRefreshPayload,
     IndustryContextSnapshot,
+    MacroContextRefreshPayload,
     MacroContextSnapshot,
     Recommendation,
     RecommendationDecisionSample,
@@ -23,7 +27,6 @@ from trade_proposer_app.domain.models import (
     RecommendationTransmissionSummary,
     RunDiagnostics,
     RunOutput,
-    SupportSnapshot,
     TickerSignalDiagnostics,
     TickerSignalSnapshot,
     TickerSignalSourceBreakdown,
@@ -36,7 +39,6 @@ from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRep
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
-from trade_proposer_app.repositories.support_snapshots import SupportSnapshotRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
@@ -44,6 +46,7 @@ from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
+from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
 from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
 
@@ -266,22 +269,20 @@ class StubOptimizationService:
         return StubRun()
 
 
-class StubMacroSupportRefreshService:
+class StubMacroContextRefreshService:
     def __init__(self) -> None:
         self.calls: list[tuple[int | None, int | None]] = []
 
     def refresh(self, *, job_id: int | None = None, run_id: int | None = None) -> dict[str, object]:
         self.calls.append((job_id, run_id))
-        snapshot = SupportSnapshot(
-            id=7,
-            scope="macro",
+        snapshot = MacroContextRefreshPayload(
             subject_key="global_macro",
             subject_label="Global Macro",
             score=0.2,
             label="POSITIVE",
         )
         return {
-            "snapshot": snapshot,
+            "payload": snapshot,
             "summary": {
                 "scope": "macro",
                 "subject_key": "global_macro",
@@ -293,16 +294,14 @@ class StubMacroSupportRefreshService:
         }
 
 
-class StubIndustrySupportRefreshService:
+class StubIndustryContextRefreshService:
     def __init__(self) -> None:
         self.calls: list[tuple[int | None, int | None]] = []
 
     def refresh_all(self, *, job_id: int | None = None, run_id: int | None = None) -> dict[str, object]:
         self.calls.append((job_id, run_id))
         snapshots = [
-            SupportSnapshot(
-                id=12,
-                scope="industry",
+            IndustryContextRefreshPayload(
                 subject_key="consumer_electronics",
                 subject_label="Consumer Electronics",
                 score=0.15,
@@ -310,7 +309,7 @@ class StubIndustrySupportRefreshService:
             )
         ]
         return {
-            "snapshots": snapshots,
+            "payloads": snapshots,
             "summary": {
                 "scope": "industry",
                 "snapshot_count": 1,
@@ -437,63 +436,6 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(stored_run.job_type, JobType.RECOMMENDATION_EVALUATION)
         self.assertIn('"synced_recommendation_plan_outcomes": 3', stored_run.summary_json or "")
         self.assertIn('"weights_path": "/tmp/weights.json"', stored_run.artifact_json or "")
-
-    def test_sentiment_snapshot_repository_returns_latest_valid_snapshot(self) -> None:
-        session = create_session()
-        repository = SupportSnapshotRepository(session)
-        now = datetime(2026, 3, 22, 12, 0, tzinfo=timezone.utc)
-
-        repository.create_snapshot(
-            scope="macro",
-            subject_key="global_macro",
-            subject_label="Global Macro",
-            score=-0.1,
-            label="NEGATIVE",
-            computed_at=now,
-            expires_at=now,
-            coverage={"social_count": 2},
-        )
-        latest = repository.create_snapshot(
-            scope="macro",
-            subject_key="global_macro",
-            subject_label="Global Macro",
-            score=0.25,
-            label="POSITIVE",
-            computed_at=now.replace(hour=13),
-            expires_at=now.replace(hour=19),
-            coverage={"social_count": 5},
-            drivers=["inflation cooled"],
-        )
-
-        resolved = repository.get_latest_valid_snapshot("macro", "global_macro", now=now.replace(hour=14))
-
-        self.assertIsNotNone(resolved)
-        assert resolved is not None
-        self.assertEqual(resolved.id, latest.id)
-        self.assertEqual(resolved.label, "POSITIVE")
-        self.assertIn('"social_count": 5', resolved.coverage_json or "")
-
-    def test_sentiment_snapshot_repository_ignores_expired_snapshot(self) -> None:
-        session = create_session()
-        repository = SupportSnapshotRepository(session)
-        snapshot = repository.create_snapshot(
-            scope="macro",
-            subject_key="global_macro",
-            subject_label="Global Macro",
-            score=0.05,
-            label="NEUTRAL",
-            computed_at=datetime(2026, 3, 22, 6, 0, tzinfo=timezone.utc),
-            expires_at=datetime(2026, 3, 22, 8, 0, tzinfo=timezone.utc),
-        )
-
-        resolved = repository.get_latest_valid_snapshot(
-            "macro",
-            "global_macro",
-            now=datetime(2026, 3, 22, 9, 0, tzinfo=timezone.utc),
-        )
-
-        self.assertIsNone(resolved)
-        self.assertIsNotNone(snapshot.id)
 
     def test_context_and_recommendation_plan_repositories_persist_new_redesign_models(self) -> None:
         session = create_session()
@@ -1227,6 +1169,41 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(tuned_calibration["effective_confidence_threshold"], 56.0)
         self.assertEqual(tuned_calibration["calibrated_confidence_percent"], 62.0)
 
+    def test_recommendation_evaluation_resolves_phantom_trade_for_no_action_plan_with_trade_levels(self) -> None:
+        session = create_session()
+        plan = RecommendationPlanRepository(session).create_plan(
+            RecommendationPlan(
+                ticker="AAPL",
+                horizon="1w",
+                action="no_action",
+                confidence_percent=61.0,
+                entry_price_low=100.0,
+                entry_price_high=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                thesis_summary="Rejected despite a valid long setup.",
+                computed_at=datetime(2026, 1, 5, 14, 30, tzinfo=timezone.utc),
+                signal_breakdown={
+                    "setup_family": "breakout",
+                    "intended_action": "long",
+                },
+            )
+        )
+        service = RecommendationPlanEvaluationService(session)
+        intraday_frame = pd.DataFrame(
+            [
+                {"bar_time": datetime(2026, 1, 5, 14, 35, tzinfo=timezone.utc), "available_at": datetime(2026, 1, 5, 14, 40, tzinfo=timezone.utc), "Open": 100.0, "High": 101.0, "Low": 99.5, "Close": 100.5},
+                {"bar_time": datetime(2026, 1, 6, 14, 35, tzinfo=timezone.utc), "available_at": datetime(2026, 1, 6, 14, 40, tzinfo=timezone.utc), "Open": 100.5, "High": 111.0, "Low": 100.0, "Close": 110.5},
+            ]
+        ).set_index("bar_time")
+        with patch.object(service, "_prepare_price_histories", return_value=({("AAPL", False): None, ("AAPL", True): intraday_frame}, [])):
+            result = service.run_evaluation([plan.id or 0], as_of=datetime(2026, 1, 7, tzinfo=timezone.utc))
+
+        outcome = RecommendationOutcomeRepository(session).get_outcomes_by_plan_ids([plan.id or 0])[plan.id or 0]
+        self.assertEqual(outcome.outcome, "phantom_win")
+        self.assertEqual(outcome.status, "resolved")
+        self.assertIn("AAPL: phantom_win", result.output)
+
     def test_job_execution_processes_evaluation_run_and_persists_summary(self) -> None:
         session = create_session()
         jobs = JobRepository(session)
@@ -1283,7 +1260,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn('"plan_generation_tuning_run_id": 1', stored_run.artifact_json or "")
         self.assertIn('"plan_generation_tuning_seconds"', stored_run.timing_json or "")
 
-    def test_job_execution_processes_macro_support_refresh_and_persists_snapshot_metadata(self) -> None:
+    def test_job_execution_processes_macro_context_refresh_and_persists_snapshot_metadata(self) -> None:
         session = create_session()
         jobs = JobRepository(session)
         runs = RunRepository(session)
@@ -1291,13 +1268,13 @@ class RepositoryTests(unittest.TestCase):
             "Macro Refresh",
             [],
             "0 */6 * * *",
-            job_type=JobType.MACRO_SENTIMENT_REFRESH,
+            job_type=JobType.MACRO_CONTEXT_REFRESH,
         )
-        macro_service = StubMacroSupportRefreshService()
+        macro_service = StubMacroContextRefreshService()
         service = JobExecutionService(
             jobs=jobs,
             runs=runs,
-            macro_support=macro_service,
+            macro_context_refresh=macro_service,
             macro_context=MacroContextService(ContextSnapshotRepository(session)),
         )
         queued_run = service.enqueue_job(job.id or 0)
@@ -1305,7 +1282,7 @@ class RepositoryTests(unittest.TestCase):
         processed_run, recommendations = service.process_next_queued_run()
 
         self.assertIsNotNone(processed_run)
-        self.assertEqual(processed_run.job_type, JobType.MACRO_SENTIMENT_REFRESH)
+        self.assertEqual(processed_run.job_type, JobType.MACRO_CONTEXT_REFRESH)
         self.assertEqual(processed_run.status, "completed")
         self.assertEqual(recommendations, [])
         self.assertEqual(len(macro_service.calls), 1)
@@ -1314,14 +1291,13 @@ class RepositoryTests(unittest.TestCase):
         stored_run = runs.get_run(queued_run.id or 0)
         self.assertIn('"scope": "macro"', stored_run.summary_json or "")
         self.assertIn('"macro_context_snapshot_id":', stored_run.summary_json or "")
-        self.assertIn('"snapshot_id": 7', stored_run.artifact_json or "")
         self.assertIn('"macro_context_snapshot_id":', stored_run.artifact_json or "")
-        self.assertIn('"macro_refresh_seconds"', stored_run.timing_json or "")
+        self.assertIn('"macro_context_seconds"', stored_run.timing_json or "")
         macro_context_snapshots = ContextSnapshotRepository(session).list_macro_context_snapshots(run_id=queued_run.id or 0)
         self.assertEqual(len(macro_context_snapshots), 1)
-        self.assertEqual(macro_context_snapshots[0].source_breakdown["support_snapshot_id"], 7)
+        self.assertEqual(macro_context_snapshots[0].source_breakdown["context_refresh_subject_key"], "global_macro")
 
-    def test_job_execution_processes_industry_support_refresh_and_persists_snapshot_metadata(self) -> None:
+    def test_job_execution_processes_industry_context_refresh_and_persists_snapshot_metadata(self) -> None:
         session = create_session()
         jobs = JobRepository(session)
         runs = RunRepository(session)
@@ -1329,13 +1305,13 @@ class RepositoryTests(unittest.TestCase):
             "Industry Refresh",
             [],
             "0 */8 * * *",
-            job_type=JobType.INDUSTRY_SENTIMENT_REFRESH,
+            job_type=JobType.INDUSTRY_CONTEXT_REFRESH,
         )
-        industry_service = StubIndustrySupportRefreshService()
+        industry_service = StubIndustryContextRefreshService()
         service = JobExecutionService(
             jobs=jobs,
             runs=runs,
-            industry_support=industry_service,
+            industry_context_refresh=industry_service,
             industry_context=IndustryContextService(ContextSnapshotRepository(session)),
         )
         queued_run = service.enqueue_job(job.id or 0)
@@ -1343,7 +1319,7 @@ class RepositoryTests(unittest.TestCase):
         processed_run, recommendations = service.process_next_queued_run()
 
         self.assertIsNotNone(processed_run)
-        self.assertEqual(processed_run.job_type, JobType.INDUSTRY_SENTIMENT_REFRESH)
+        self.assertEqual(processed_run.job_type, JobType.INDUSTRY_CONTEXT_REFRESH)
         self.assertEqual(processed_run.status, "completed")
         self.assertEqual(recommendations, [])
         self.assertEqual(len(industry_service.calls), 1)
@@ -1354,10 +1330,10 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn('"industry_context_snapshot_count": 1', stored_run.summary_json or "")
         self.assertIn('"snapshot_count": 1', stored_run.artifact_json or "")
         self.assertIn('"industry_context_snapshot_ids": [', stored_run.artifact_json or "")
-        self.assertIn('"industry_refresh_seconds"', stored_run.timing_json or "")
+        self.assertIn('"industry_context_seconds"', stored_run.timing_json or "")
         industry_context_snapshots = ContextSnapshotRepository(session).list_industry_context_snapshots(run_id=queued_run.id or 0)
         self.assertEqual(len(industry_context_snapshots), 1)
-        self.assertEqual(industry_context_snapshots[0].source_breakdown["support_snapshot_id"], 12)
+        self.assertEqual(industry_context_snapshots[0].source_breakdown["context_refresh_subject_key"], "consumer_electronics")
 
     def test_job_execution_blocks_second_optimization_enqueue_when_one_is_active(self) -> None:
         session = create_session()
@@ -1472,22 +1448,13 @@ class RepositoryTests(unittest.TestCase):
                 job_id=job.id,
             )
         )
-        SupportSnapshotRepository(session).create_snapshot(
-            scope="macro",
-            subject_key="global",
-            subject_label="Global Macro",
-            job_id=job.id,
-            run_id=run.id,
-        )
-
         jobs.delete(job.id or 0)
 
         self.assertIsNone(session.get(JobRecord, job.id or 0))
         self.assertIsNone(session.get(RunRecord, run.id or 0))
         self.assertEqual(RecommendationDecisionSampleRepository(session).list_samples(limit=10), [])
-        self.assertEqual(SupportSnapshotRepository(session).list_recent_snapshots(), [])
 
-    def test_run_repository_delete_removes_support_snapshots(self) -> None:
+    def test_run_repository_delete_removes_context_snapshots(self) -> None:
         session = create_session()
         jobs = JobRepository(session)
         runs = RunRepository(session)
@@ -1529,19 +1496,15 @@ class RepositoryTests(unittest.TestCase):
                 job_id=job.id,
             )
         )
-        SupportSnapshotRepository(session).create_snapshot(
-            scope="macro",
-            subject_key="global",
-            subject_label="Global Macro",
-            job_id=job.id,
-            run_id=run.id,
+        ContextSnapshotRepository(session).create_macro_context_snapshot(
+            MacroContextSnapshot(summary_text="cleanup", run_id=run.id, job_id=job.id)
         )
 
         runs.delete_run(run.id or 0)
 
         self.assertIsNone(session.get(RunRecord, run.id or 0))
         self.assertEqual(RecommendationDecisionSampleRepository(session).list_samples(limit=10), [])
-        self.assertEqual(SupportSnapshotRepository(session).list_recent_snapshots(), [])
+        self.assertEqual(ContextSnapshotRepository(session).list_macro_context_snapshots(run_id=run.id or 0), [])
 
     def test_run_repository_recovers_stale_running_runs(self) -> None:
         session = create_session()

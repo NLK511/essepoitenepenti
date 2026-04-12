@@ -11,10 +11,10 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.builders import (
+    create_industry_context_refresh_service,
     create_industry_context_service,
-    create_industry_support_service,
+    create_macro_context_refresh_service,
     create_macro_context_service,
-    create_macro_support_service,
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.job_execution import JobExecutionService
@@ -30,8 +30,8 @@ def _create_job_execution_service(session: Session) -> JobExecutionService:
         evaluations=EvaluationExecutionService(
             recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
         ),
-        macro_support=create_macro_support_service(session),
-        industry_support=create_industry_support_service(session),
+        macro_context_refresh=create_macro_context_refresh_service(session),
+        industry_context_refresh=create_industry_context_refresh_service(session),
         macro_context=create_macro_context_service(session),
         industry_context=create_industry_context_service(session),
         recommendation_plans=RecommendationPlanRepository(session),

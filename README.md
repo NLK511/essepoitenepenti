@@ -28,7 +28,7 @@ Default local setup uses SQLite.
 For a Postgres-backed local environment:
 
 ```bash
-docker compose up -d postgres redis
+docker compose up -d postgres
 ./scripts/setup.sh --force-env --database postgres
 ```
 

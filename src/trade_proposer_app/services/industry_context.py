@@ -5,7 +5,7 @@ import math
 from datetime import datetime, timezone
 from typing import Any
 
-from trade_proposer_app.domain.models import IndustryContextSnapshot, SupportSnapshot
+from trade_proposer_app.domain.models import IndustryContextRefreshPayload, IndustryContextSnapshot
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.services.event_extraction import (
     EventDefinition,
@@ -73,20 +73,20 @@ class IndustryContextService:
         self.summary_service = summary_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
-    def create_from_support_snapshot(
+    def create_from_refresh_payload(
         self,
-        snapshot: SupportSnapshot,
+        payload: IndustryContextRefreshPayload,
         *,
         job_id: int | None = None,
         run_id: int | None = None,
     ) -> IndustryContextSnapshot:
-        industry_key = str(getattr(snapshot, "subject_key", "") or "")
-        industry_label = str(getattr(snapshot, "subject_label", "") or industry_key)
+        industry_key = str(getattr(payload, "subject_key", "") or "")
+        industry_label = str(getattr(payload, "subject_label", "") or industry_key)
         previous = self.repository.get_latest_industry_context_snapshot(industry_key)
-        signals = _load_json(getattr(snapshot, "signals_json", None), {})
-        diagnostics = _load_json(getattr(snapshot, "diagnostics_json", None), {})
-        source_breakdown = _load_json(getattr(snapshot, "source_breakdown_json", None), {})
-        coverage = _load_json(getattr(snapshot, "coverage_json", None), {})
+        signals = dict(getattr(payload, "signals", {}) or {})
+        diagnostics = dict(getattr(payload, "diagnostics", {}) or {})
+        source_breakdown = dict(getattr(payload, "source_breakdown", {}) or {})
+        coverage = dict(getattr(payload, "coverage", {}) or {})
         social_items = signals.get("social_items") if isinstance(signals, dict) else []
         supporting_social_items = social_items if isinstance(social_items, list) else []
         tracked_tickers = coverage.get("tracked_tickers", []) if isinstance(coverage, dict) else []
@@ -189,10 +189,10 @@ class IndustryContextService:
             industry_key=industry_key,
             industry_label=industry_label,
             computed_at=datetime.now(timezone.utc),
-            expires_at=getattr(snapshot, "expires_at", None),
+            expires_at=getattr(payload, "expires_at", None),
             status="warning" if warnings else "ok",
             summary_text=summary_text,
-            direction=self._direction_from_label(str(getattr(snapshot, "label", "NEUTRAL") or "NEUTRAL")),
+            direction=self._direction_from_label(str(getattr(payload, "label", "NEUTRAL") or "NEUTRAL")),
             saliency_score=saliency_score,
             confidence_percent=confidence_percent,
             active_drivers=active_drivers,
@@ -201,9 +201,9 @@ class IndustryContextService:
             warnings=list(dict.fromkeys(warnings)),
             missing_inputs=list(dict.fromkeys(missing_inputs)),
             source_breakdown={
-                "support_snapshot_id": getattr(snapshot, "id", None),
-                "support_label": getattr(snapshot, "label", None),
-                "support_score": getattr(snapshot, "score", None),
+                "context_refresh_subject_key": getattr(payload, "subject_key", None),
+                "context_label": getattr(payload, "label", None),
+                "context_score": getattr(payload, "score", None),
                 "primary_news_item_count": len(news_items),
                 "supporting_social_item_count": len(supporting_social_items),
                 "tracked_tickers": tracked_tickers,

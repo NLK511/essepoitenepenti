@@ -245,9 +245,11 @@ class PerformanceAssessmentService:
     def _windowed_assessments(self) -> list[dict[str, object]]:
         now = datetime.now(timezone.utc)
         windows = [
+            ("7d", now - timedelta(days=7)),
             ("30d", now - timedelta(days=30)),
             ("90d", now - timedelta(days=90)),
             ("180d", now - timedelta(days=180)),
+            ("1y", now - timedelta(days=365)),
         ]
         results: list[dict[str, object]] = []
         for label, evaluated_after in windows:

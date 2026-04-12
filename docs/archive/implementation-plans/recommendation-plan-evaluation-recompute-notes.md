@@ -24,7 +24,7 @@ That means:
 
 Operationally, scheduled jobs should only process open plans, while manual single-plan evaluation may revisit a previously closed plan when specifically requested.
 
-This document records the implementation history and known pitfalls. The canonical resolution semantics themselves are defined in `recommendation-plan-resolution-spec.md`.
+This document records the implementation history and known pitfalls. The canonical resolution semantics themselves are defined in `../../recommendation-plan-resolution-spec.md`.
 
 ## Current implementation snapshot
 
@@ -58,7 +58,7 @@ That matters because:
 
 The earlier evaluator tried to switch between daily and intraday bars based on session timing. That is the exact class of behavior that caused the `315` / `635` mismatch.
 
-Current canonical guidance is now defined in `recommendation-plan-resolution-spec.md`:
+Current canonical guidance is now defined in `../../recommendation-plan-resolution-spec.md`:
 - use daily bars only as a cheap prefilter
 - use intraday bars as the source of truth for final win/loss resolution
 - do not use a daily-bar shortcut as the final outcome path for same-day or post-close plans

@@ -47,11 +47,9 @@ These define the current product truth.
 
 These are useful, but they are not the main current-state entry point.
 
-- `ontology-enrichment-plan.md` — active ontology/taxonomy work
 - `recommendation-quality-improvement-plan.md` — working tracker for recommendation-quality, calibration, and validation improvements
 - `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow
 - `plan-generation-tuning-spec.md` — authoritative implementation spec for autonomous plan-generation tuning
-- `ui-decluttering-plan.md` — active UI cleanup plan
 - `nitter-social-relevance-scoring.md` — current Nitter relevance-ranking behavior
 
 ## Redesign reference
@@ -77,6 +75,9 @@ Start with:
 - `archive/implementation-plans/plan-generation-tuning-implementation-plan.md` — archived implementation plan and replacement strategy
 - `archive/implementation-plans/historical-replay-backtesting-plan.md` — archived historical replay research plan
 - `archive/implementation-plans/historical-replay-implementation-checklist.md` — archived historical replay implementation checklist
+- `archive/implementation-plans/ontology-enrichment-plan.md` — archived ontology expansion and governance plan
+- `archive/implementation-plans/tech-debt-remediation-plan.md` — archived context-refresh cleanup and terminology convergence plan
+- `archive/implementation-plans/ui-decluttering-plan.md` — archived UI decluttering execution plan
 
 ## Maintenance rule
 

@@ -12,12 +12,10 @@ APP_HOST="${APP_HOST:-0.0.0.0}"
 DATABASE_BACKEND="sqlite"
 SQLITE_DATABASE_URL_DEFAULT="sqlite:///./trade_proposer.db"
 POSTGRES_DATABASE_URL_DEFAULT="postgresql+psycopg://postgres:postgres@localhost:5432/trade_proposer"
-REDIS_URL_DEFAULT="redis://localhost:6379/0"
 FORCE_ENV_WRITE="false"
 SKIP_FRONTEND_DEPS="false"
 INSTALL_DEV_DEPS="false"
 INSTALL_OPENAI_DEPS="false"
-LEGACY_PROTOTYPE_PATH="${PROTOTYPE_REPO_PATH:-}"
 
 log() {
   printf '[setup] %s\n' "$1"
@@ -124,7 +122,7 @@ finally:
     engine.dispose()
 PY
   then
-    fail "could not connect to PostgreSQL using DATABASE_URL=${database_url}. Start local services with 'docker compose up -d postgres redis' or rerun setup with '--database sqlite' for a no-service local fallback."
+    fail "could not connect to PostgreSQL using DATABASE_URL=${database_url}. Start local services with 'docker compose up -d postgres' or rerun setup with '--database sqlite' for a no-service local fallback."
   fi
 }
 
@@ -221,7 +219,7 @@ fi
 
 if [[ "$INSTALL_OPENAI_DEPS" == "true" ]]; then
   log "installing optional OpenAI integration dependencies"
-  "$VENV_PIP" install -e "$ROOT_DIR[prototype]"
+  "$VENV_PIP" install -e "$ROOT_DIR[openai]"
 fi
 
 if [[ "$SKIP_FRONTEND_DEPS" == "true" ]]; then
@@ -244,48 +242,20 @@ APP_ENV=development
 APP_HOST=${APP_HOST}
 APP_PORT=${APP_PORT}
 DATABASE_URL=${database_url}
-REDIS_URL=${REDIS_URL_DEFAULT}
 SECRET_KEY=${secret_key}
-PROTOTYPE_REPO_PATH=
-PROTOTYPE_PYTHON_EXECUTABLE=${VENV_PYTHON}
 SINGLE_USER_AUTH_ENABLED=true
 SINGLE_USER_AUTH_TOKEN=change-me
-SINGLE_USER_AUTH_ALLOWLIST_PATHS=/api/health,/api/health/preflight,/api/health/prototype
+SINGLE_USER_AUTH_ALLOWLIST_PATHS=/api/health,/api/health/preflight,/api/login
 SINGLE_USER_AUTH_USERNAME=admin
 SINGLE_USER_AUTH_PASSWORD=change-me
 EOF
-}
-
-update_or_append_env_setting() {
-  local key="$1"
-  local value="$2"
-  "$VENV_PYTHON" - <<PY
-from pathlib import Path
-key = ${1@Q}
-value = ${2@Q}
-path = Path(${ENV_FILE@Q})
-content = path.read_text() if path.exists() else ""
-lines = content.splitlines()
-updated = []
-found = False
-for line in lines:
-    if line.startswith(f"{key}="):
-        updated.append(f"{key}={value}")
-        found = True
-    else:
-        updated.append(line)
-if not found:
-    updated.append(f"{key}={value}")
-path.write_text("\n".join(updated) + "\n")
-PY
 }
 
 if [[ ! -f "$ENV_FILE" || "$FORCE_ENV_WRITE" == "true" ]]; then
   log "writing ${ENV_FILE}"
   write_env_file
 else
-  log ".env already exists, preserving DATABASE_URL and updating local execution defaults"
-  update_or_append_env_setting "PROTOTYPE_PYTHON_EXECUTABLE" "$VENV_PYTHON"
+  log ".env already exists, preserving DATABASE_URL"
 fi
 
 [[ -f "$ENV_EXAMPLE_FILE" ]] || fail "missing ${ENV_EXAMPLE_FILE}"
@@ -310,11 +280,8 @@ fi
 if [[ "$INSTALL_OPENAI_DEPS" != "true" ]]; then
   MANUAL_TASKS+=("install optional summary-provider dependencies later with ./scripts/setup.sh --with-openai if you want OpenAI-backed summaries")
 fi
-if [[ -n "$LEGACY_PROTOTYPE_PATH" ]]; then
-  MANUAL_TASKS+=("legacy PROTOTYPE_REPO_PATH was detected in your environment; the redesigned app no longer requires an external prototype checkout for normal operation")
-fi
 if [[ "$CURRENT_DATABASE_BACKEND" == "postgres" ]]; then
-  MANUAL_TASKS+=("keep PostgreSQL and Redis running for local startup, e.g. docker compose up -d postgres redis")
+  MANUAL_TASKS+=("keep PostgreSQL running for local startup, e.g. docker compose up -d postgres")
 fi
 
 log "setup complete"

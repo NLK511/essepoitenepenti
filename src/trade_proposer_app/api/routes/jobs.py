@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, Form, HTTPException
 from sqlalchemy.orm import Session
 
@@ -12,10 +14,10 @@ from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.builders import (
+    create_industry_context_refresh_service,
     create_industry_context_service,
-    create_industry_support_service,
+    create_macro_context_refresh_service,
     create_macro_context_service,
-    create_macro_support_service,
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.historical_market_data import HistoricalMarketDataService
@@ -27,6 +29,7 @@ from trade_proposer_app.services.recommendation_plan_evaluations import Recommen
 from trade_proposer_app.services.scheduling import CronSchedule, ScheduleParseError
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+logger = logging.getLogger(__name__)
 
 
 def parse_tickers(raw: str) -> list[str]:
@@ -50,15 +53,17 @@ def normalize_optional_watchlist_id(value: int | str | None) -> int | None:
 def normalize_job_type(job_type: str | None) -> JobType:
     normalized = (job_type or JobType.PROPOSAL_GENERATION.value).strip()
     try:
-        return JobType(normalized)
+        parsed = JobType.parse(normalized)
+        if normalized in {"macro_sentiment_refresh", "industry_sentiment_refresh"}:
+            logger.warning("deprecated job_type alias received: %s -> %s", normalized, parsed.value)
+        return parsed
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
             detail=(
                 "invalid job_type: use proposal_generation, recommendation_evaluation, "
                 "plan_generation_tuning, performance_assessment, "
-                "macro_sentiment_refresh (macro context refresh), "
-                "industry_sentiment_refresh (industry context refresh), or historical_replay"
+                "macro_context_refresh, industry_context_refresh, or historical_replay"
             ),
         ) from exc
 
@@ -155,8 +160,8 @@ async def execute_job(job_id: int, session: Session = Depends(get_db_session)) -
         ),
         plan_generation_tuning=PlanGenerationTuningService(session),
         performance_assessment=PerformanceAssessmentService(session),
-        macro_support=create_macro_support_service(session),
-        industry_support=create_industry_support_service(session),
+        macro_context_refresh=create_macro_context_refresh_service(session),
+        industry_context_refresh=create_industry_context_refresh_service(session),
         macro_context=create_macro_context_service(session),
         industry_context=create_industry_context_service(session),
         recommendation_plans=RecommendationPlanRepository(session),

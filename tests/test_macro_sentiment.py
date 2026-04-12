@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import SignalBundle
 from trade_proposer_app.persistence.models import Base
-from trade_proposer_app.services.industry_support import IndustrySupportRefreshService
-from trade_proposer_app.services.macro_support import MACRO_QUERIES, MACRO_SUBJECT_KEY, MACRO_SUBJECT_LABEL, MacroSupportRefreshService
+from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
+from trade_proposer_app.services.macro_context_refresh import MACRO_QUERIES, MACRO_SUBJECT_KEY, MACRO_SUBJECT_LABEL, MacroContextRefreshService
 from trade_proposer_app.services.social import SocialSentimentAnalyzer
 
 
@@ -54,7 +54,7 @@ class StubTaxonomyService:
         }
 
 
-class MacroSupportRefreshServiceTests(unittest.TestCase):
+class MacroContextRefreshServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         engine = create_engine("sqlite:///:memory:", future=True)
         Base.metadata.create_all(bind=engine)
@@ -69,7 +69,7 @@ class MacroSupportRefreshServiceTests(unittest.TestCase):
 
     def test_refresh_uses_european_and_geopolitical_macro_queries(self) -> None:
         social_service = StubSocialService()
-        service = MacroSupportRefreshService(social_service=social_service)
+        service = MacroContextRefreshService(social_service=social_service)
 
         result = service.refresh()
 
@@ -88,12 +88,12 @@ class MacroSupportRefreshServiceTests(unittest.TestCase):
 
     def test_macro_summary_uses_previous_snapshot_summary_for_continuity(self) -> None:
         social_service = StubSocialService()
-        service = MacroSupportRefreshService(social_service=social_service)
+        service = MacroContextRefreshService(social_service=social_service)
 
         result = service.refresh()
-        snapshot = result["snapshot"]
+        payload = result["payload"]
 
-        self.assertEqual(snapshot.scope, "macro")
+        self.assertEqual(payload.subject_key, "global_macro")
         # self.assertIn("Update:", snapshot.summary_text)
         # self.assertIn("prior summary centered on rate pressure and risk-off tone", snapshot.summary_text)
         # self.assertEqual(result["summary"]["previous_snapshot_id"], 1)
@@ -114,7 +114,7 @@ class MacroSupportRefreshServiceTests(unittest.TestCase):
                     "bundle": type("Bundle", (), {"feeds_used": ["Nitter"], "query_diagnostics": {}})(),
                 }
 
-        service = IndustrySupportRefreshService(
+        service = IndustryContextRefreshService(
             social_service=StubSocialServiceWithItem(),
             taxonomy_service=StubTaxonomyService(),
         )
@@ -126,7 +126,7 @@ class MacroSupportRefreshServiceTests(unittest.TestCase):
             tickers=["AAPL"],
         )
 
-        self.assertEqual(snapshot.scope, "industry")
+        self.assertEqual(snapshot.subject_key, "consumer_electronics")
         # self.assertIn("Update:", snapshot.summary_text)
         # self.assertIn("prior summary centered on phone demand and stable margins", snapshot.summary_text)
         # self.assertEqual(summary["previous_snapshot_id"], 1)

@@ -676,17 +676,37 @@ class RecommendationPlanEvaluationService:
         run_id: int | None,
         as_of: datetime | None = None,
     ) -> tuple[RecommendationPlanOutcome, str]:
-        if plan.action in {"no_action", "watchlist"}:
+        intended_action = self._phantom_intended_action(plan)
+        if plan.action in {"no_action", "watchlist"} and intended_action is None:
             outcome = self._evaluate_plan(plan, None, run_id=run_id, as_of=as_of, intraday_only=False)
             return self._finalize_outcome(plan, outcome, as_of=as_of), "none"
 
+        return self._resolve_trade_like_outcome(
+            plan,
+            daily_data,
+            intraday_data,
+            run_id=run_id,
+            as_of=as_of,
+            intended_action=intended_action,
+        )
+
+    def _resolve_trade_like_outcome(
+        self,
+        plan: RecommendationPlan,
+        daily_data: pd.DataFrame | None,
+        intraday_data: pd.DataFrame | None,
+        *,
+        run_id: int | None,
+        as_of: datetime | None = None,
+        intended_action: str | None = None,
+    ) -> tuple[RecommendationPlanOutcome, str]:
         daily_outcome: RecommendationPlanOutcome | None = None
         if daily_data is not None and not daily_data.empty:
-            daily_outcome = self._evaluate_plan(plan, daily_data, run_id=run_id, as_of=as_of, intraday_only=False)
-            if daily_outcome.outcome in {"no_entry", "open"}:
+            daily_outcome = self._evaluate_plan(plan, daily_data, intended_action=intended_action, run_id=run_id, as_of=as_of, intraday_only=False)
+            if daily_outcome.outcome in {"no_entry", "open", "phantom_no_entry", "phantom_pending"}:
                 return self._finalize_outcome(plan, daily_outcome, as_of=as_of), "daily"
             if intraday_data is not None and not intraday_data.empty:
-                intraday_outcome = self._evaluate_plan(plan, intraday_data, run_id=run_id, as_of=as_of, intraday_only=True)
+                intraday_outcome = self._evaluate_plan(plan, intraday_data, intended_action=intended_action, run_id=run_id, as_of=as_of, intraday_only=True)
                 return self._finalize_outcome(plan, intraday_outcome, as_of=as_of), "intraday"
             pending_outcome = self._pending_resolution_outcome(
                 plan,
@@ -698,11 +718,11 @@ class RecommendationPlanEvaluationService:
             return self._finalize_outcome(plan, pending_outcome, as_of=as_of), "pending"
 
         if intraday_data is not None and not intraday_data.empty:
-            intraday_outcome = self._evaluate_plan(plan, intraday_data, run_id=run_id, as_of=as_of, intraday_only=True)
+            intraday_outcome = self._evaluate_plan(plan, intraday_data, intended_action=intended_action, run_id=run_id, as_of=as_of, intraday_only=True)
             return self._finalize_outcome(plan, intraday_outcome, as_of=as_of), "intraday"
 
         if daily_outcome is not None:
-            if daily_outcome.outcome in {"no_entry", "open"}:
+            if daily_outcome.outcome in {"no_entry", "open", "phantom_no_entry", "phantom_pending"}:
                 return self._finalize_outcome(plan, daily_outcome, as_of=as_of), "daily"
             pending_outcome = self._pending_resolution_outcome(
                 plan,
@@ -721,6 +741,20 @@ class RecommendationPlanEvaluationService:
             notes="No price history available for evaluation.",
         )
         return self._finalize_outcome(plan, pending_outcome, as_of=as_of), "pending"
+
+    @staticmethod
+    def _phantom_intended_action(plan: RecommendationPlan) -> str | None:
+        if plan.action not in {"no_action", "watchlist"}:
+            return None
+        signal_breakdown = plan.signal_breakdown if hasattr(plan.signal_breakdown, "get") else {}
+        intended_action = signal_breakdown.get("intended_action") if hasattr(signal_breakdown, "get") else None
+        if intended_action not in {"long", "short"}:
+            return None
+        if plan.entry_price_low is None and plan.entry_price_high is None:
+            return None
+        if plan.stop_loss is None or plan.take_profit is None:
+            return None
+        return str(intended_action)
 
     def _finalize_outcome(
         self,

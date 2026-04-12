@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import MagicMock
 
-from trade_proposer_app.domain.models import IndustryContextSnapshot, MacroContextSnapshot, NewsArticle, NewsBundle, SupportSnapshot
+from trade_proposer_app.domain.models import IndustryContextRefreshPayload, IndustryContextSnapshot, MacroContextRefreshPayload, MacroContextSnapshot, NewsArticle, NewsBundle
 from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.summary import SummaryResult
@@ -57,25 +57,17 @@ class ContextServiceTests(unittest.TestCase):
                 "coverage_insights": [],
             },
         )
-        snapshot = SupportSnapshot(
-            id=7,
-            scope="macro",
-            subject_key="global_macro",
+        snapshot = MacroContextRefreshPayload(
+                        subject_key="global_macro",
             subject_label="Global Macro",
             score=0.1,
             label="NEUTRAL",
-            signals_json=json.dumps(
-                {
-                    "social_items": [
-                        {"title": "Traders discuss ECB and yield pressure", "body": "Markets stay focused on rates"}
-                    ]
-                }
-            ),
-            diagnostics_json=json.dumps({"providers": ["nitter"]}),
-            source_breakdown_json=json.dumps({"social": {"item_count": 1}}),
+            signals={"social_items": [{"title": "Traders discuss ECB and yield pressure", "body": "Markets stay focused on rates"}]},
+            diagnostics={"providers": ["nitter"]},
+            source_breakdown={"social": {"item_count": 1}},
         )
 
-        context = MacroContextService(repository, news_service=news_service).create_from_support_snapshot(snapshot)
+        context = MacroContextService(repository, news_service=news_service).create_from_refresh_payload(snapshot)
 
         self.assertEqual(context.source_breakdown["primary_news_item_count"], 1)
         self.assertNotIn("primary_news_evidence", context.missing_inputs)
@@ -135,19 +127,17 @@ class ContextServiceTests(unittest.TestCase):
                 "coverage_insights": [],
             },
         )
-        snapshot = SupportSnapshot(
-            id=8,
-            scope="macro",
-            subject_key="global_macro",
+        snapshot = MacroContextRefreshPayload(
+                        subject_key="global_macro",
             subject_label="Global Macro",
             score=-0.1,
             label="NEGATIVE",
-            signals_json=json.dumps({"social_items": []}),
-            diagnostics_json=json.dumps({"providers": ["nitter"]}),
-            source_breakdown_json=json.dumps({}),
+            signals={"social_items": []},
+            diagnostics={"providers": ["nitter"]},
+            source_breakdown={},
         )
 
-        context = MacroContextService(repository, news_service=news_service).create_from_support_snapshot(snapshot)
+        context = MacroContextService(repository, news_service=news_service).create_from_refresh_payload(snapshot)
 
         energy = next(theme for theme in context.active_themes if theme["key"] == "oil_supply_risk")
         self.assertTrue(energy["contradiction_flag"])
@@ -204,19 +194,17 @@ class ContextServiceTests(unittest.TestCase):
             metadata={"summary_kind": "macro_context"},
             duration_seconds=0.2,
         )
-        snapshot = SupportSnapshot(
-            id=9,
-            scope="macro",
-            subject_key="global_macro",
+        snapshot = MacroContextRefreshPayload(
+                        subject_key="global_macro",
             subject_label="Global Macro",
             score=0.0,
             label="NEUTRAL",
-            signals_json=json.dumps({"social_items": []}),
-            diagnostics_json=json.dumps({"providers": ["nitter"]}),
-            source_breakdown_json=json.dumps({}),
+            signals={"social_items": []},
+            diagnostics={"providers": ["nitter"]},
+            source_breakdown={},
         )
 
-        context = MacroContextService(repository, news_service=news_service, summary_service=summary_service).create_from_support_snapshot(snapshot)
+        context = MacroContextService(repository, news_service=news_service, summary_service=summary_service).create_from_refresh_payload(snapshot)
 
         self.assertEqual(context.summary_text, summary_service.summarize_prompt.return_value.summary)
         self.assertEqual(context.metadata["context_summary_method"], "llm_summary")
@@ -258,26 +246,18 @@ class ContextServiceTests(unittest.TestCase):
                 "coverage_insights": [],
             },
         )
-        snapshot = SupportSnapshot(
-            id=12,
-            scope="industry",
-            subject_key="semiconductors",
+        snapshot = IndustryContextRefreshPayload(
+                        subject_key="semiconductors",
             subject_label="Semiconductors",
             score=0.2,
             label="POSITIVE",
-            coverage_json=json.dumps({"tracked_tickers": ["NVDA", "AMD"]}),
-            signals_json=json.dumps(
-                {
-                    "social_items": [
-                        {"title": "AI chip launch chatter", "body": "Conference cycle continues"}
-                    ]
-                }
-            ),
-            diagnostics_json=json.dumps({"queries": ["semiconductor", "chip demand"], "providers": ["nitter"]}),
-            source_breakdown_json=json.dumps({"social": {"item_count": 1}}),
+            coverage={"tracked_tickers": ["NVDA", "AMD"]},
+            signals={"social_items": [{"title": "AI chip launch chatter", "body": "Conference cycle continues"}]},
+            diagnostics={"queries": ["semiconductor", "chip demand"], "providers": ["nitter"]},
+            source_breakdown={"social": {"item_count": 1}},
         )
 
-        context = IndustryContextService(repository, news_service=news_service).create_from_support_snapshot(snapshot)
+        context = IndustryContextService(repository, news_service=news_service).create_from_refresh_payload(snapshot)
 
         self.assertEqual(context.source_breakdown["primary_news_item_count"], 1)
         self.assertNotIn("primary_industry_news_evidence", context.missing_inputs)
@@ -349,20 +329,18 @@ class ContextServiceTests(unittest.TestCase):
             metadata={"summary_kind": "industry_context"},
             duration_seconds=0.2,
         )
-        snapshot = SupportSnapshot(
-            id=13,
-            scope="industry",
-            subject_key="semiconductors",
+        snapshot = IndustryContextRefreshPayload(
+                        subject_key="semiconductors",
             subject_label="Semiconductors",
             score=0.2,
             label="POSITIVE",
-            coverage_json=json.dumps({"tracked_tickers": ["NVDA", "AMD"]}),
-            signals_json=json.dumps({"social_items": []}),
-            diagnostics_json=json.dumps({"queries": ["semiconductor", "chip demand"], "providers": ["nitter"]}),
-            source_breakdown_json=json.dumps({}),
+            coverage={"tracked_tickers": ["NVDA", "AMD"]},
+            signals={"social_items": []},
+            diagnostics={"queries": ["semiconductor", "chip demand"], "providers": ["nitter"]},
+            source_breakdown={},
         )
 
-        context = IndustryContextService(repository, news_service=news_service, summary_service=summary_service).create_from_support_snapshot(snapshot)
+        context = IndustryContextService(repository, news_service=news_service, summary_service=summary_service).create_from_refresh_payload(snapshot)
 
         self.assertEqual(context.summary_text, summary_service.summarize_prompt.return_value.summary)
         self.assertEqual(context.metadata["context_summary_method"], "llm_summary")

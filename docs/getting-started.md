@@ -117,7 +117,6 @@ APP_ENV=development
 APP_HOST=0.0.0.0
 APP_PORT=8000
 DATABASE_URL=sqlite:///./trade_proposer.db
-REDIS_URL=redis://localhost:6379/0
 SECRET_KEY=replace-this-with-a-long-random-secret
 WEIGHTS_FILE_PATH=
 SINGLE_USER_AUTH_ENABLED=true
@@ -130,7 +129,7 @@ SINGLE_USER_AUTH_PASSWORD=change-me
 For a Postgres-backed local setup:
 
 ```bash
-docker compose up -d postgres redis
+docker compose up -d postgres
 ```
 
 ```env
@@ -253,7 +252,7 @@ The repo also includes `.github/workflows/postgres-integration.yml`, kept for ma
 If you selected Postgres, start local services first:
 
 ```bash
-docker compose up -d postgres redis
+docker compose up -d postgres
 ```
 
 If you want the easiest local setup instead:

@@ -31,13 +31,13 @@ For each proposal run, the system:
 1. resolves the watchlist or manual ticker scope
 2. runs a cheap scan across candidates
 3. selects a shortlist using explicit rules
-4. runs `TickerDeepAnalysisService` for shortlisted names
+4. runs `TickerDeepAnalysisService` for shortlisted names only
 5. fetches recent OHLC data through `yfinance`
 6. computes technical and context-enriched features with `pandas`
 7. loads the latest shared macro and industry context snapshots through the context-native resolver layer
 8. builds recommendation plans, diagnostics, and audit payloads
 9. persists ticker signals, recommendation plans, run summaries, and artifacts
-10. emits explicit `no_action` plans when policy gates fail or evidence is too weak
+10. emits explicit `no_action` plans when policy gates fail or evidence is too weak, while preserving cheap-scan-only rejections for non-shortlisted names
 
 `ProposalService` still exists as a lower-level helper for price history, feature engineering, news/context enrichment, and diagnostics, but it is no longer the main run-execution path.
 
@@ -222,7 +222,7 @@ Current evaluation records include fields such as:
 
 `watchlist` and `no_action` plans are also preserved as first-class evaluated outcomes. 
 
-To enable recall optimization, the evaluation pipeline actively tracks **phantom trades** for these skipped setups. If a `no_action` plan carries an intended direction and valid trade levels, the evaluator simulates it against live market data and records `phantom_win` or `phantom_loss`. This ensures tuning engines can learn when the system missed a profitable opportunity.
+To enable recall optimization, the evaluation pipeline actively tracks **phantom trades** for skipped setups that still retain executable framing. If a `no_action` or `watchlist` plan carries an intended direction plus valid entry, stop, and take-profit levels, the evaluator simulates it against live market data and records phantom outcomes such as `phantom_win`, `phantom_loss`, or `phantom_no_entry`. Cheap-scan-only rejected names that never received full trade framing remain ordinary non-trade outcomes. This preserves quota savings from shortlist gating while still letting tuning engines learn from near-miss setups.
 
 If a trade plan is still unresolved after its generated horizon has elapsed, the evaluator resolves it as `expired` so stale plans do not remain indefinitely open.
 

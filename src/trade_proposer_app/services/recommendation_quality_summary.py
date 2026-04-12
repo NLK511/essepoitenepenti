@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
@@ -16,6 +16,16 @@ from trade_proposer_app.services.recommendation_setup_family_reviews import Reco
 
 
 class RecommendationQualitySummaryService:
+    WINDOW_DEFINITIONS: list[tuple[str, int]] = [
+        ("7d", 7),
+        ("30d", 30),
+        ("90d", 90),
+        ("180d", 180),
+        ("1y", 365),
+    ]
+    METRIC_SAMPLE_LIMIT = 500_000
+    DEFAULT_SUMMARY_WINDOW = "30d"
+
     def __init__(self, session) -> None:
         self.session = session
         self.outcomes = RecommendationOutcomeRepository(session)
@@ -25,10 +35,7 @@ class RecommendationQualitySummaryService:
         self.tuning = PlanGenerationTuningService(session)
 
     def summarize(self) -> dict[str, object]:
-        calibration = RecommendationPlanCalibrationService(self.outcomes).summarize(limit=500)
-        baselines = RecommendationPlanBaselineService(self.plans).summarize(limit=500)
-        evidence = RecommendationEvidenceConcentrationService(self.outcomes).summarize(limit=500)
-        family_review = RecommendationSetupFamilyReviewService(self.outcomes).summarize(limit=500)
+        now = datetime.now(timezone.utc)
         latest_assessment = self.performance.latest_assessment()
         current_version = self.tuning._resolve_active_config_version()
         baseline_version = self.tuning.ensure_baseline_config_version()
@@ -42,7 +49,7 @@ class RecommendationQualitySummaryService:
                 baseline_config=baseline_config,
                 candidate_label=current_version.version_label,
                 baseline_label=baseline_version.version_label,
-                limit=500,
+                limit=self.METRIC_SAMPLE_LIMIT,
                 lookback_days=365,
                 validation_days=90,
                 step_days=30,
@@ -50,16 +57,107 @@ class RecommendationQualitySummaryService:
             ).model_dump(mode="json")
         except Exception as exc:  # pragma: no cover
             walk_forward_error = str(exc)
+
+        windowed_summaries: list[dict[str, object]] = []
+        summary: dict[str, object] | None = None
+        calibration = None
+        baselines = None
+        evidence = None
+        family_review = None
+        for label, days in self.WINDOW_DEFINITIONS:
+            computed_after = now - timedelta(days=days)
+            evaluated_after = now - timedelta(days=days)
+            calibration_window = RecommendationPlanCalibrationService(self.outcomes).summarize(
+                limit=self.METRIC_SAMPLE_LIMIT,
+                evaluated_after=evaluated_after,
+            )
+            baselines_window = RecommendationPlanBaselineService(self.plans).summarize(
+                limit=self.METRIC_SAMPLE_LIMIT,
+                computed_after=computed_after,
+            )
+            evidence_window = RecommendationEvidenceConcentrationService(self.outcomes).summarize(
+                limit=self.METRIC_SAMPLE_LIMIT,
+                evaluated_after=evaluated_after,
+            )
+            family_review_window = RecommendationSetupFamilyReviewService(self.outcomes).summarize(
+                limit=self.METRIC_SAMPLE_LIMIT,
+                evaluated_after=evaluated_after,
+            )
+            window_summary = self._summary_payload(
+                calibration_window,
+                baselines_window,
+                evidence_window,
+                family_review_window,
+                walk_forward=None,
+                walk_forward_error=None,
+                window_label=label,
+                computed_after=computed_after,
+                computed_before=now,
+                evaluated_after=evaluated_after,
+                evaluated_before=now,
+            )
+            windowed_summaries.append(window_summary)
+            if label == self.DEFAULT_SUMMARY_WINDOW:
+                summary = window_summary
+                calibration = calibration_window
+                baselines = baselines_window
+                evidence = evidence_window
+                family_review = family_review_window
+
+        if summary is None or calibration is None or baselines is None or evidence is None or family_review is None:
+            raise RuntimeError("failed to build default recommendation-quality summary window")
+
+        summary.update(
+            {
+                "tuning_settings": {
+                    "confidence_threshold": self.settings.get_confidence_threshold(),
+                    "signal_gating": self.settings.get_signal_gating_tuning_config(),
+                    "plan_generation": self.settings.get_plan_generation_tuning_settings(),
+                },
+                "walk_forward_promotion_recommended": walk_forward.get("promotion_recommended") if isinstance(walk_forward, dict) else None,
+                "walk_forward_average_win_rate_delta": walk_forward.get("average_win_rate_delta") if isinstance(walk_forward, dict) else None,
+                "walk_forward_average_expected_value_delta": walk_forward.get("average_expected_value_delta") if isinstance(walk_forward, dict) else None,
+                "walk_forward_error": walk_forward_error,
+                "latest_assessment": latest_assessment.get("latest_summary", {}),
+            }
+        )
+        next_actions = self._next_actions(summary)
+        return {
+            "summary": summary,
+            "windowed_summaries": windowed_summaries,
+            "calibration": calibration.model_dump(mode="json"),
+            "baselines": baselines.model_dump(mode="json"),
+            "evidence_concentration": evidence.model_dump(mode="json"),
+            "setup_family_review": family_review.model_dump(mode="json"),
+            "walk_forward_validation": walk_forward,
+            "next_actions": next_actions,
+        }
+
+    def _summary_payload(
+        self,
+        calibration,
+        baselines,
+        evidence,
+        family_review,
+        *,
+        walk_forward: dict[str, object] | None,
+        walk_forward_error: str | None,
+        window_label: str,
+        computed_after: datetime,
+        computed_before: datetime,
+        evaluated_after: datetime,
+        evaluated_before: datetime,
+    ) -> dict[str, object]:
         quality_status = self._quality_status(calibration, evidence, walk_forward)
-        summary = {
+        return {
+            "window_label": window_label,
+            "computed_after": computed_after.isoformat(),
+            "computed_before": computed_before.isoformat(),
+            "evaluated_after": evaluated_after.isoformat(),
+            "evaluated_before": evaluated_before.isoformat(),
             "status": quality_status,
             "status_reason": self._quality_status_reason(calibration, evidence, walk_forward),
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "tuning_settings": {
-                "confidence_threshold": self.settings.get_confidence_threshold(),
-                "signal_gating": self.settings.get_signal_gating_tuning_config(),
-                "plan_generation": self.settings.get_plan_generation_tuning_settings(),
-            },
             "resolved_outcomes": calibration.resolved_outcomes,
             "overall_win_rate_percent": calibration.overall_win_rate_percent,
             "calibration_report": calibration.calibration_report.model_dump(mode="json") if calibration.calibration_report else None,
@@ -76,17 +174,6 @@ class RecommendationQualitySummaryService:
             "walk_forward_average_win_rate_delta": walk_forward.get("average_win_rate_delta") if isinstance(walk_forward, dict) else None,
             "walk_forward_average_expected_value_delta": walk_forward.get("average_expected_value_delta") if isinstance(walk_forward, dict) else None,
             "walk_forward_error": walk_forward_error,
-            "latest_assessment": latest_assessment.get("latest_summary", {}),
-        }
-        next_actions = self._next_actions(summary)
-        return {
-            "summary": summary,
-            "calibration": calibration.model_dump(mode="json"),
-            "baselines": baselines.model_dump(mode="json"),
-            "evidence_concentration": evidence.model_dump(mode="json"),
-            "setup_family_review": family_review.model_dump(mode="json"),
-            "walk_forward_validation": walk_forward,
-            "next_actions": next_actions,
         }
 
     @staticmethod

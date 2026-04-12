@@ -103,9 +103,9 @@ Shared-context refresh jobs:
 
 | Job | Scope | UTC schedule |
 |---|---|---:|
-| `Auto: Macro Support Refresh AM` | Macro | `06:00` |
-| `Auto: Macro Support Refresh PM` | Macro | `18:00` |
-| `Auto: Industry Support Refresh` | Industry | `10:30` |
+| `Auto: Macro Context Refresh AM` | Macro | `06:00` |
+| `Auto: Macro Context Refresh PM` | Macro | `18:00` |
+| `Auto: Industry Context Refresh` | Industry | `10:30` |
 
 ## Coverage summary
 

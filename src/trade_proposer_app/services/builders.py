@@ -7,9 +7,9 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.services.industry_context import IndustryContextService
-from trade_proposer_app.services.industry_support import IndustrySupportRefreshService
+from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
 from trade_proposer_app.services.macro_context import MacroContextService
-from trade_proposer_app.services.macro_support import MacroSupportRefreshService
+from trade_proposer_app.services.macro_context_refresh import MacroContextRefreshService
 from trade_proposer_app.services.news import NewsIngestionService
 from trade_proposer_app.services.proposals import ProposalService
 from trade_proposer_app.services.signals import SignalIngestionService
@@ -82,14 +82,14 @@ def create_watchlist_orchestration_service(
     )
 
 
-def create_macro_support_service(session: Session) -> MacroSupportRefreshService:
+def create_macro_context_refresh_service(session: Session) -> MacroContextRefreshService:
     repository = SettingsRepository(session)
     settings_map = repository.get_setting_map()
     credentials = repository.get_provider_credential_map()
     macro_limit = int(settings_map.get("news_macro_article_limit", "12"))
     news_service = NewsIngestionService.from_provider_credentials(credentials, max_articles=macro_limit)
     social_service = SocialIngestionService.from_settings(repository.get_social_settings())
-    return MacroSupportRefreshService(social_service=social_service, news_service=news_service)
+    return MacroContextRefreshService(social_service=social_service, news_service=news_service)
 
 
 def create_macro_context_service(session: Session) -> MacroContextService:
@@ -105,11 +105,11 @@ def create_macro_context_service(session: Session) -> MacroContextService:
     return MacroContextService(ContextSnapshotRepository(session), news_service=news_service, summary_service=summary_service)
 
 
-def create_industry_support_service(session: Session) -> IndustrySupportRefreshService:
+def create_industry_context_refresh_service(session: Session) -> IndustryContextRefreshService:
     repository = SettingsRepository(session)
     social_service = SocialIngestionService.from_settings(repository.get_social_settings())
     taxonomy_service = TickerTaxonomyService()
-    return IndustrySupportRefreshService(
+    return IndustryContextRefreshService(
         social_service=social_service,
         taxonomy_service=taxonomy_service,
     )

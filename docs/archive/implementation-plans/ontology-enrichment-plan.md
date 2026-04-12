@@ -1,8 +1,8 @@
 # Ontology Enrichment Plan
 
-**Status:** active implementation plan
+**Status:** archived implementation plan
 
-This page tracks the work needed to turn the current ticker taxonomy into a more useful ontology for industry coverage, query generation, transmission reasoning, and operator-facing context summaries.
+This page tracked the work needed to turn the ticker taxonomy into a more useful ontology for industry coverage, query generation, transmission reasoning, and operator-facing context summaries.
 
 ## Why this exists
 
@@ -390,7 +390,7 @@ When ontology-related work ships:
 - `src/trade_proposer_app/data/ticker_taxonomy.json` (fallback compatibility file)
 - `src/trade_proposer_app/services/taxonomy.py`
 - `src/trade_proposer_app/services/industry_context.py`
-- `src/trade_proposer_app/services/industry_support.py`
+- `src/trade_proposer_app/services/industry_context_refresh.py`
 - `src/trade_proposer_app/services/macro_context.py`
 - `scripts/validate_taxonomy.py`
 - `scripts/taxonomy_report.py`

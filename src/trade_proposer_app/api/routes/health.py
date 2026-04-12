@@ -112,7 +112,35 @@ async def health(session: Session = Depends(get_db_session)) -> dict[str, object
     report = _augment_report_with_snapshot_checks(_create_preflight_service(session).run(), session)
     status = "ok" if report.status == "ok" else "degraded"
     context_checks = {check.name: check for check in report.checks if check.name.startswith("context_snapshot:")}
-    return {
+    runs = RunRepository(session)
+    settings_repository = SettingsRepository(session)
+    settings_map = settings_repository.get_setting_map()
+    active_workers = runs.list_active_workers(stale_seconds=settings.worker_heartbeat_interval_seconds * 2)
+    latest_macro_context = ContextSnapshotRepository(session).get_latest_macro_context_snapshot()
+    latest_industry_context = next(iter(ContextSnapshotRepository(session).list_industry_context_snapshots(limit=1)), None)
+    reference_now = datetime.now(timezone.utc)
+
+    def _age_seconds(value: datetime | None) -> float | None:
+        normalized = _normalize_datetime(value)
+        if normalized is None:
+            return None
+        return max(0.0, (reference_now - normalized).total_seconds())
+
+    scheduler_last_poll = settings_map.get("scheduler_last_poll_at") or None
+    scheduler_last_success = settings_map.get("scheduler_last_success_at") or None
+    worker_details = [
+        {
+            "worker_id": worker.worker_id,
+            "hostname": worker.hostname,
+            "pid": worker.pid,
+            "status": worker.status,
+            "active_run_id": worker.active_run_id,
+            "last_heartbeat_at": worker.last_heartbeat_at.isoformat(),
+            "heartbeat_age_seconds": _age_seconds(worker.last_heartbeat_at),
+        }
+        for worker in active_workers
+    ]
+    payload = {
         "status": status,
         "app": settings.app_name,
         "env": settings.app_env,
@@ -121,16 +149,51 @@ async def health(session: Session = Depends(get_db_session)) -> dict[str, object
             "engine": report.engine,
             "checked_at": report.checked_at.isoformat(),
         },
+        "service_health": {
+            "status": status,
+            "app": settings.app_name,
+            "env": settings.app_env,
+        },
+        "dependency_health": {
+            "status": report.status,
+            "engine": report.engine,
+            "checked_at": report.checked_at.isoformat(),
+        },
         "context_snapshots": {
             "macro": context_checks.get("context_snapshot:macro").model_dump() if context_checks.get("context_snapshot:macro") else None,
             "industry": context_checks.get("context_snapshot:industry").model_dump() if context_checks.get("context_snapshot:industry") else None,
         },
+        "data_freshness": {
+            "macro_context_age_seconds": _age_seconds(getattr(latest_macro_context, "computed_at", None)),
+            "industry_context_age_seconds": _age_seconds(getattr(latest_industry_context, "computed_at", None)),
+        },
         "workers": {
             "status": next((c.status for c in report.checks if c.name == "worker:heartbeat"), "unknown"),
-            "count": len(next((c.details or [] for c in report.checks if c.name == "worker:heartbeat"), [])),
-            "details": next((c.details or [] for c in report.checks if c.name == "worker:heartbeat"), []),
+            "count": len(worker_details),
+            "details": [f"worker_id={item['worker_id']}, hostname={item['hostname']}, pid={item['pid']}" for item in worker_details],
+        },
+        "worker_health": {
+            "status": next((c.status for c in report.checks if c.name == "worker:heartbeat"), "unknown"),
+            "active_worker_count": len(worker_details),
+            "workers": worker_details,
+            "oldest_heartbeat_age_seconds": max((item["heartbeat_age_seconds"] or 0.0 for item in worker_details), default=None),
+        },
+        "scheduler_health": {
+            "last_poll_at": scheduler_last_poll,
+            "last_success_at": scheduler_last_success,
+            "last_enqueue_count": settings_map.get("scheduler_last_enqueue_count", ""),
+            "last_error": settings_map.get("scheduler_last_error", ""),
+            "last_poll_age_seconds": _age_seconds(datetime.fromisoformat(scheduler_last_poll) if scheduler_last_poll else None),
+            "last_success_age_seconds": _age_seconds(datetime.fromisoformat(scheduler_last_success) if scheduler_last_success else None),
+        },
+        "run_health": {
+            "queued_run_count": runs.count_runs_by_status("queued"),
+            "running_run_count": runs.count_runs_by_status("running"),
+            "stale_running_run_count": runs.count_stale_running_runs(stale_after_seconds=settings.run_stale_after_seconds, now=reference_now),
+            "oldest_active_lease_age_seconds": runs.oldest_active_lease_age_seconds(now=reference_now),
         },
     }
+    return payload
 
 
 @router.get("/health/preflight")

@@ -13,7 +13,6 @@ from trade_proposer_app.persistence.models import (
     RecommendationOutcomeRecord,
     RecommendationPlanRecord,
     RunRecord,
-    SupportSnapshotRecord,
     TickerSignalSnapshotRecord,
     WatchlistRecord,
 )
@@ -141,7 +140,6 @@ class JobRepository:
             self.session.execute(delete(TickerSignalSnapshotRecord).where(TickerSignalSnapshotRecord.run_id.in_(run_ids)))
             self.session.execute(delete(MacroContextSnapshotRecord).where(MacroContextSnapshotRecord.run_id.in_(run_ids)))
             self.session.execute(delete(IndustryContextSnapshotRecord).where(IndustryContextSnapshotRecord.run_id.in_(run_ids)))
-            self.session.execute(delete(SupportSnapshotRecord).where(SupportSnapshotRecord.run_id.in_(run_ids)))
             self.session.execute(delete(RunRecord).where(RunRecord.id.in_(run_ids)))
 
         self.session.execute(delete(JobRecord).where(JobRecord.id == job_id))
@@ -208,7 +206,7 @@ class JobRepository:
         return Job(
             id=record.id,
             name=record.name,
-            job_type=JobType(record.job_type or JobType.PROPOSAL_GENERATION.value),
+            job_type=JobType.parse(record.job_type or JobType.PROPOSAL_GENERATION.value),
             tickers=[ticker for ticker in record.tickers_csv.split(",") if ticker],
             watchlist_id=record.watchlist_id,
             watchlist_name=watchlist.name if watchlist is not None else None,

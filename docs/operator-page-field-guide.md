@@ -168,8 +168,10 @@ Typical workflow types:
 - `proposal_generation`
 - `recommendation_evaluation`
 - `plan_generation_tuning`
-- `macro_sentiment_refresh`
-- `industry_sentiment_refresh`
+- `macro_context_refresh`
+- `industry_context_refresh`
+
+The UI and docs describe these as macro/industry context refresh workflows, and the persisted job-type keys now match that naming.
 
 Prefer watchlist-backed proposal jobs over ad hoc ticker lists when possible.
 
@@ -233,6 +235,11 @@ Most important fields:
 - **Context bias / Alignment / Expected transmission window**
 - **Latest outcome**
 - **Open plans / expired plans / win rate** stats for the current filter set
+
+Important nuance:
+- non-shortlisted names usually remain cheap-scan-only `no_action` plans
+- shortlisted names may still end as `no_action` after deep analysis and policy gating
+- only those deep-analysis-derived rejected plans can later produce phantom outcomes, because they retain intended direction and trade levels
 
 Suggested review order:
 1. review the queue first

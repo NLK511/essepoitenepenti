@@ -241,20 +241,20 @@ WATCHLIST_SPECS = [
 
 SUPPORT_REFRESH_JOB_SPECS = [
     {
-        "name": "Auto: Macro Support Refresh AM",
-        "job_type": "macro_sentiment_refresh",
+        "name": "Auto: Macro Context Refresh AM",
+        "job_type": "macro_context_refresh",
         "cron": "00 06 * * MON-FRI",
         "schedule_rationale": "Runs before the Europe block so the morning macro read is fresh without colliding with seeded watchlist jobs.",
     },
     {
-        "name": "Auto: Macro Support Refresh PM",
-        "job_type": "macro_sentiment_refresh",
+        "name": "Auto: Macro Context Refresh PM",
+        "job_type": "macro_context_refresh",
         "cron": "00 18 * * MON-FRI",
         "schedule_rationale": "Runs after the U.S. block so the evening macro read captures the full session while leaving the watchlist windows clear.",
     },
     {
-        "name": "Auto: Industry Support Refresh",
-        "job_type": "industry_sentiment_refresh",
+        "name": "Auto: Industry Context Refresh",
+        "job_type": "industry_context_refresh",
         "cron": "30 10 * * MON-FRI",
         "schedule_rationale": "Placed in the gap between Europe and U.S. batches so industry context refreshes stay out of the way of the seeded equity scans.",
     },

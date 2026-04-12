@@ -1,8 +1,8 @@
 # UI Decluttering Plan
 
-**Status:** active implementation plan
+**Status:** archived implementation plan
 
-This document reviews the current duplication problem in the app UI and proposes a concrete decluttering path.
+This document reviewed the duplication problem in the app UI and proposed a decluttering path. The main current-state behavior now belongs in operator and page-reference docs instead.
 
 ## Why this exists
 
@@ -84,7 +84,7 @@ Each concept should have one primary home:
 
 - **Run detail**: execution diagnostics and orchestration state
 - **Recommendation plans**: calibrated confidence, action framing, and outcome review
-- **Context review**: macro / industry backdrop and support-snapshot state
+- **Context review**: macro / industry backdrop from the context-native snapshot pipeline
 - **Ticker signals**: signal generation and shortlist behavior
 - **Ticker detail**: ticker-level performance and history
 

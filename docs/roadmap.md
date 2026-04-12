@@ -16,7 +16,7 @@ Detailed history is in `archive/roadmap-history.md`.
 ## Current shipped baseline
 
 Trade Proposer App already has its core workflow in place:
-- watchlists, jobs, runs, settings, support snapshots, ticker signals, recommendation plans, and outcomes all persist inside one schema
+- watchlists, jobs, runs, settings, context snapshots, ticker signals, recommendation plans, and outcomes all persist inside one schema
 - the operator UI supports dashboard, watchlists, jobs, debugger, run detail, context review, ticker signals, recommendation plans, ticker drill-down, settings, and docs browsing
 - proposal generation, evaluation, optimization, and macro/industry refresh runs all execute inside this repository through the worker-backed run system
 - recommendation review is centered on `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`
@@ -48,12 +48,14 @@ Already in place:
 - health and preflight visibility for degraded state
 - warnings and provenance on context and recommendation review pages
 - persisted worker heartbeat data
+- `/api/health` separation between service health, dependency health, worker health, scheduler health, run health, and context freshness
+- lease-age, stale-running-run, worker-heartbeat-age, and scheduler-heartbeat diagnostics in `/api/health`
+- worker and scheduler daemon logging
 
 Still needed:
-- structured logs and explicit run correlation across processes
-- clearer health signals separating app health from refresh freshness and transitional support-snapshot state
-- worker heartbeat and lease visibility in `/api/health`
+- richer structured logs and stronger cross-process run correlation
 - easier diagnosis of provider failures across processes
+- continued polish of health signal presentation and operator-facing diagnostics
 
 ### 3. Security and credential lifecycle
 The app should not expand provider surface area faster than it improves secret handling.
@@ -83,16 +85,15 @@ Still needed:
 - validation of which setup families, horizons, transmission conditions, and regimes actually work in live data
 
 ### 5. Redesign maturation
-The redesign is already the active path, but some transitional concepts remain.
+The redesign is already the active path.
 
 Already in place:
 - recommendation-plan review as the main operator-facing decision flow
 - dedicated context review and detail pages
-- removal of operator-facing support-snapshot UI from the main review path
+- support-snapshot UI and persistence have been retired from the active runtime path
 
 Still needed:
 - continued improvement of ticker-analysis quality
-- retirement of remaining support-snapshot dependencies in refresh, resolver, health, and scoring paths
 - continued avoidance of duplicate legacy-vs-redesign terminology
 
 ## Explicitly later

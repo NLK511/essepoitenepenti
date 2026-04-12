@@ -1,3 +1,4 @@
+import logging
 import os
 import socket
 import threading
@@ -15,10 +16,10 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.builders import (
+    create_industry_context_refresh_service,
     create_industry_context_service,
-    create_industry_support_service,
+    create_macro_context_refresh_service,
     create_macro_context_service,
-    create_macro_support_service,
     create_proposal_service,
     create_watchlist_orchestration_service,
 )
@@ -30,6 +31,9 @@ from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -71,7 +75,7 @@ def _heartbeat_loop(worker_id: str, state: WorkerRuntimeState, stop_event: threa
         try:
             _write_worker_heartbeat(worker_id, state)
         except Exception:
-            traceback.print_exc()
+            logger.exception("worker heartbeat write failed")
 
 
 def process_once(worker_id: str | None = None, state: WorkerRuntimeState | None = None) -> bool:
@@ -87,8 +91,8 @@ def process_once(worker_id: str | None = None, state: WorkerRuntimeState | None 
             ),
             plan_generation_tuning=PlanGenerationTuningService(session),
             performance_assessment=PerformanceAssessmentService(session),
-            macro_support=create_macro_support_service(session),
-            industry_support=create_industry_support_service(session),
+            macro_context_refresh=create_macro_context_refresh_service(session),
+            industry_context_refresh=create_industry_context_refresh_service(session),
             macro_context=create_macro_context_service(session),
             industry_context=create_industry_context_service(session),
             watchlist_orchestration=create_watchlist_orchestration_service(session, proposal_service=proposal_service),
@@ -111,8 +115,7 @@ def process_once(worker_id: str | None = None, state: WorkerRuntimeState | None 
                 state.set_active_run_id(None)
             return True
         except Exception as exc:
-            prefix = f"[{worker_id}] " if worker_id else ""
-            print(f"{prefix}worker error: run processing failed: {exc}")
+            logger.exception("worker run processing failed: worker_id=%s error=%s", worker_id, exc)
             traceback.print_exc()
             return True
     finally:
@@ -120,11 +123,12 @@ def process_once(worker_id: str | None = None, state: WorkerRuntimeState | None 
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
     worker_id = os.getenv("WORKER_ID") or f"worker-{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
     state = WorkerRuntimeState()
     stop_event = threading.Event()
     heartbeat_thread = threading.Thread(target=_heartbeat_loop, args=(worker_id, state, stop_event), daemon=True)
-    print(f"worker started: {worker_id}", flush=True)
+    logger.info("worker started: worker_id=%s", worker_id)
     _write_worker_heartbeat(worker_id, state)
     heartbeat_thread.start()
     try:
