@@ -193,7 +193,7 @@ class JobRepository:
     def _validate_job_source(job_type: JobType, tickers: list[str], watchlist_id: int | None) -> None:
         has_tickers = bool(tickers)
         has_watchlist = watchlist_id is not None
-        if job_type == JobType.PROPOSAL_GENERATION:
+        if job_type in {JobType.PROPOSAL_GENERATION, JobType.BARS_DATA_REFRESH}:
             if has_tickers == has_watchlist:
                 raise ValueError("job must use exactly one source: either manual tickers or a watchlist")
             return

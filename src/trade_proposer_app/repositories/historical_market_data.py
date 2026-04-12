@@ -12,6 +12,66 @@ class HistoricalMarketDataRepository:
         self.session = session
         self._supports_available_at: bool | None = None
 
+    def upsert_bars(self, bars: list[HistoricalMarketBar]) -> int:
+        if not bars:
+            return 0
+        
+        table = HistoricalMarketBarRecord.__table__
+        has_available_at = self._has_available_at_column()
+        
+        records = []
+        for bar in bars:
+            normalized_bar_time = self._normalize(bar.bar_time)
+            values = {
+                "ticker": bar.ticker,
+                "timeframe": bar.timeframe,
+                "bar_time": normalized_bar_time,
+                "open_price": bar.open_price,
+                "high_price": bar.high_price,
+                "low_price": bar.low_price,
+                "close_price": bar.close_price,
+                "volume": bar.volume,
+                "adjusted_close": bar.adjusted_close,
+                "source": bar.source,
+                "source_tier": bar.source_tier,
+                "point_in_time_confidence": bar.point_in_time_confidence,
+                "metadata_json": bar.metadata_json,
+            }
+            if has_available_at:
+                values["available_at"] = self._normalize(bar.available_at) if bar.available_at else normalized_bar_time
+            records.append(values)
+
+        dialect = self.session.bind.dialect.name if self.session.bind else "postgresql"
+        
+        if dialect == "postgresql":
+            # For Postgres, use ON CONFLICT DO UPDATE
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+            
+            # Determine unique keys for ON CONFLICT
+            index_elements = ["ticker", "timeframe", "bar_time"]
+            
+            stmt = pg_insert(HistoricalMarketBarRecord).values(records)
+            update_cols = {
+                col.name: stmt.excluded[col.name] 
+                for col in HistoricalMarketBarRecord.__table__.columns 
+                if col.name not in (index_elements + ["id", "created_at"])
+            }
+            stmt = stmt.on_conflict_do_update(
+                index_elements=index_elements,
+                set_=update_cols
+            )
+            result = self.session.execute(stmt)
+            self.session.commit()
+            return result.rowcount
+        else:
+            # Fallback for SQLite or other dialects
+            count = 0
+            for record in records:
+                self.session.execute(insert(table).values(**record).prefix_with("OR REPLACE"))
+                count += 1
+            self.session.commit()
+            return count
+
     def upsert_bar(self, bar: HistoricalMarketBar) -> HistoricalMarketBar:
         table = HistoricalMarketBarRecord.__table__
         normalized_bar_time = self._normalize(bar.bar_time)

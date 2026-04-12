@@ -15,6 +15,7 @@ from trade_proposer_app.repositories.historical_replay import HistoricalReplayRe
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.services.bars_refresh import BarsRefreshService
 from trade_proposer_app.services.builders import (
     create_industry_context_refresh_service,
     create_industry_context_service,
@@ -103,6 +104,7 @@ def process_once(worker_id: str | None = None, state: WorkerRuntimeState | None 
                 runs=RunRepository(session),
                 historical_market_data=HistoricalMarketDataService(HistoricalMarketDataRepository(session)),
             ),
+            bars_refresh=BarsRefreshService(HistoricalMarketDataRepository(session)),
         )
         try:
             run = service.runs.claim_next_queued_run(worker_id=worker_id)
