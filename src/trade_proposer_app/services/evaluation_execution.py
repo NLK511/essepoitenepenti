@@ -1,6 +1,10 @@
 import json
+import logging
 
 from trade_proposer_app.domain.models import EvaluationRunResult, Run
+
+
+logger = logging.getLogger(__name__)
 
 
 class EvaluationExecutionService:
@@ -8,15 +12,34 @@ class EvaluationExecutionService:
         self.recommendation_evaluations = recommendation_evaluations
         self.recommendation_plan_evaluations = recommendation_plan_evaluations
 
-    def execute(self, run: Run) -> EvaluationRunResult:
+    def execute(self, run: Run, *, as_of: object | None = None) -> EvaluationRunResult:
         recommendation_plan_ids = self._extract_ids(run, key="recommendation_plan_ids")
+        logger.info(
+            "evaluation execution started: run_id=%s job_id=%s recommendation_plan_ids=%s scope=%s",
+            run.id,
+            run.job_id,
+            recommendation_plan_ids,
+            self._extract_scope_type(run),
+        )
 
         recommendation_plan_result = EvaluationRunResult()
         if self.recommendation_plan_evaluations is not None:
             recommendation_plan_result = self.recommendation_plan_evaluations.run_evaluation(
                 recommendation_plan_ids=recommendation_plan_ids,
                 run_id=run.id,
+                as_of=as_of,
             )
+        logger.info(
+            "evaluation execution completed: run_id=%s evaluated=%s synced=%s pending=%s win=%s loss=%s no_action=%s watchlist=%s",
+            run.id,
+            recommendation_plan_result.evaluated_recommendation_plans,
+            recommendation_plan_result.synced_recommendation_plan_outcomes,
+            recommendation_plan_result.pending_recommendation_plan_outcomes,
+            recommendation_plan_result.win_recommendation_plan_outcomes,
+            recommendation_plan_result.loss_recommendation_plan_outcomes,
+            recommendation_plan_result.no_action_recommendation_plan_outcomes,
+            recommendation_plan_result.watchlist_recommendation_plan_outcomes,
+        )
 
         return EvaluationRunResult(
             evaluated_recommendation_plans=recommendation_plan_result.evaluated_recommendation_plans,

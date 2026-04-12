@@ -108,6 +108,108 @@ NEGATIVE_DIRECTION_HINTS = (
     "cost pressure",
 )
 
+STATE_TRANSITION_HINTS = {
+    "escalating": (
+        "escalat",
+        "worsen",
+        "intensif",
+        "retaliat",
+        "expand",
+        "surge",
+        "jump",
+        "spike",
+        "tightening",
+        "hike",
+        "crackdown",
+        "disruption",
+    ),
+    "easing": (
+        "de-escalat",
+        "ease",
+        "cooling",
+        "relief",
+        "ceasefire",
+        "truce",
+        "cut",
+        "cuts",
+        "disinflation",
+        "approval",
+        "rebound",
+        "reopen",
+    ),
+    "stabilizing": (
+        "stabiliz",
+        "steady",
+        "contained",
+        "holding",
+        "hold steady",
+        "flat",
+        "normaliz",
+        "plateau",
+        "balanced",
+    ),
+}
+
+CATALYST_TYPE_HINTS = {
+    "battlefield": ("missile", "drone", "strike", "troops", "attack", "battlefield", "military"),
+    "diplomacy": ("ceasefire", "negotiation", "talks", "summit", "deal", "diplomatic"),
+    "rhetoric": ("said", "comments", "remark", "speech", "warned", "threat", "rhetoric", "signaled"),
+    "sanctions": ("sanction", "tariff", "export control", "blacklist", "embargo"),
+    "supply_disruption": ("outage", "shutdown", "disruption", "bottleneck", "delay", "shortage", "halt"),
+    "policy": ("policy", "fomc", "fed", "ecb", "treasury", "government", "administration", "regulator"),
+    "guidance": ("guidance", "outlook", "forecast", "raised forecast", "cut forecast"),
+    "pricing": ("pricing", "price", "discount", "surcharge", "fare", "rate card"),
+    "demand": ("demand", "orders", "bookings", "traffic", "consumption", "spending"),
+    "regulation": ("regulation", "approval", "antitrust", "compliance", "court", "ruling", "probe"),
+}
+
+MARKET_INTERPRETATION_HINTS = {
+    "fear": ("fear", "risk off", "selloff", "safe haven", "pressure", "warning", "worsen"),
+    "relief": ("relief", "rebound", "bounce", "easing", "de-escalat", "cooling"),
+    "inflationary": ("inflation", "sticky prices", "higher prices", "cost pressure", "yield jump"),
+    "growth_supportive": ("recovery", "strong demand", "acceleration", "beat", "upside", "soft landing"),
+}
+
+ACTOR_HINTS = {
+    "Federal Reserve": "central_bank",
+    "FOMC": "central_bank",
+    "ECB": "central_bank",
+    "European Central Bank": "central_bank",
+    "Bank of England": "central_bank",
+    "Bank of Japan": "central_bank",
+    "U.S. Treasury": "government",
+    "Treasury": "government",
+    "OPEC": "intergovernmental_body",
+    "White House": "executive_branch",
+    "administration": "executive_branch",
+    "government": "government",
+    "regulator": "regulator",
+    "FDA": "regulator",
+    "SEC": "regulator",
+    "European Commission": "regulator",
+    "NATO": "intergovernmental_body",
+    "Pentagon": "defense_establishment",
+    "State Department": "government",
+    "Commerce Department": "government",
+    "Department of Justice": "regulator",
+    "DOJ": "regulator",
+    "FTC": "regulator",
+    "CFPB": "regulator",
+    "FAA": "regulator",
+    "IRS": "government",
+    "EIA": "government",
+    "IAEA": "intergovernmental_body",
+}
+
+ACTOR_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\b(the )?(federal reserve|fomc)\b", re.IGNORECASE), "central_bank"),
+    (re.compile(r"\b(ecb|european central bank|bank of england|bank of japan)\b", re.IGNORECASE), "central_bank"),
+    (re.compile(r"\b(u\.s\. treasury|treasury|white house|state department|commerce department|department of justice|doj)\b", re.IGNORECASE), "government"),
+    (re.compile(r"\b(sec|fda|ftc|cfpb|faa|european commission|regulator)\b", re.IGNORECASE), "regulator"),
+    (re.compile(r"\b(opec|nato|iaea)\b", re.IGNORECASE), "intergovernmental_body"),
+    (re.compile(r"\b([A-Z][A-Za-z&.-]+(?:\s+[A-Z][A-Za-z&.-]+){0,2})\s+(?:said|says|warned|signaled|announced|approved|cut|raised)\b"), "named_actor"),
+)
+
 
 @dataclass(frozen=True)
 class EventDefinition:
@@ -175,6 +277,11 @@ def extract_ranked_events(
         latest_published_at = _latest_timestamp(all_matches)
         evidence_direction = _event_direction(all_matches)
         contradiction_reasons = _contradiction_reasons(all_matches, previous)
+        state_transition = _state_transition(all_matches, previous)
+        catalyst_type = _catalyst_type(all_matches)
+        trigger_actor, trigger_actor_role, trigger_source_type = _trigger_actor(all_matches)
+        market_interpretation = _market_interpretation(all_matches, evidence_direction, state_transition)
+        state_change_reason = _state_change_reason(all_matches, catalyst_type, state_transition, market_interpretation)
         events.append(
             {
                 "key": definition.key,
@@ -204,6 +311,13 @@ def extract_ranked_events(
                 "recency_bucket": _recency_bucket(latest_published_at),
                 "recency_bucket_detail": _key_label_detail("recency_bucket", _recency_bucket(latest_published_at)),
                 "evidence_direction": evidence_direction,
+                "state_transition": state_transition,
+                "catalyst_type": catalyst_type,
+                "trigger_actor": trigger_actor,
+                "trigger_actor_role": trigger_actor_role,
+                "trigger_source_type": trigger_source_type,
+                "market_interpretation": market_interpretation,
+                "state_change_reason": state_change_reason,
                 "persistence_state": _persistence_state(previous, event_score, len(all_matches)),
                 "persistence_state_detail": _key_label_detail("persistence_state", _persistence_state(previous, event_score, len(all_matches))),
                 "previous_event_score": _float_value(previous.get("event_score")) if isinstance(previous, dict) else None,
@@ -213,8 +327,12 @@ def extract_ranked_events(
                 "contradiction_reasons": contradiction_reasons,
                 "contradiction_reason_details": _contradiction_reason_details(contradiction_reasons),
                 "evidence_samples": evidence_samples,
+                "match_signatures": [str(item.get("signature", "")).strip() for item in all_matches if str(item.get("signature", "")).strip()],
+                "definition_phrase_count": len(definition.phrases),
+                "definition_max_phrase_length": max((len(str(phrase).split()) for phrase in definition.phrases), default=0),
             }
         )
+    events = _suppress_overlapping_events(events)
     events.sort(
         key=lambda item: (
             _priority_sort_key(str(item.get("source_priority", "other"))),
@@ -325,6 +443,9 @@ def summarize_event_scores(events: list[dict[str, object]], *, limit: int = 3) -
                 "event_score": event.get("event_score"),
                 "saliency_weight": event.get("saliency_weight"),
                 "persistence_state": event.get("persistence_state"),
+                "state_transition": event.get("state_transition"),
+                "catalyst_type": event.get("catalyst_type"),
+                "market_interpretation": event.get("market_interpretation"),
                 "window_hint": event.get("window_hint"),
                 "contradiction_flag": event.get("contradiction_flag"),
             }
@@ -416,6 +537,7 @@ def _match_items(items: list[object], phrases: tuple[str, ...], *, source_type: 
                 "published_at": published_at,
                 "signature": _item_signature(raw_item),
                 "direction": _text_direction(text),
+                "text": text,
             }
         )
     return matches
@@ -432,6 +554,139 @@ def _dedupe_matches(matches: list[dict[str, object]]) -> list[dict[str, object]]
         if float(match.get("event_weight", 0.0) or 0.0) > float(existing.get("event_weight", 0.0) or 0.0):
             deduped[signature] = match
     return list(deduped.values())
+
+
+OVERLAP_SPECIFICITY_PREFERENCES: dict[str, set[str]] = {
+    "us_monetary_policy": {"bond_yield_drop", "bond_yield_spike", "inflation_cooling", "inflation_sticky"},
+    "growth_recession": {"risk_off"},
+    "rates": {"yield_pressure", "inflation_cooling", "inflation_sticky"},
+    "energy_costs": {"geopolitical_escalation", "geopolitical_deescalation"},
+    "conference_cycle": {"guidance_raise", "guidance_cut", "product_cycle"},
+    "product_cycle": {"innovation", "supply_chain_disruption", "supply_chain_recovery"},
+    "backlog": {"demand_acceleration", "demand_softening", "inventory_destocking", "inventory_restocking"},
+    "ai_theme": {"semiconductor_theme", "cloud_theme", "product_cycle", "backlog", "demand_acceleration"},
+}
+
+
+KNOWN_SPECIFICITY_RANKS: dict[str, int] = {
+    "ai_theme": 1,
+    "conference_cycle": 1,
+    "us_monetary_policy": 1,
+    "rates": 1,
+    "growth_recession": 1,
+    "energy_costs": 1,
+    "backlog": 2,
+    "product_cycle": 2,
+    "semiconductor_theme": 3,
+    "cloud_theme": 3,
+    "demand_acceleration": 3,
+    "demand_softening": 3,
+    "guidance_raise": 4,
+    "guidance_cut": 4,
+    "supply_chain_disruption": 4,
+    "supply_chain_recovery": 4,
+    "inventory_destocking": 4,
+    "inventory_restocking": 4,
+    "bond_yield_drop": 4,
+    "bond_yield_spike": 4,
+    "inflation_cooling": 4,
+    "inflation_sticky": 4,
+    "geopolitical_escalation": 4,
+    "geopolitical_deescalation": 4,
+}
+
+
+def _suppress_overlapping_events(events: list[dict[str, object]]) -> list[dict[str, object]]:
+    kept: list[dict[str, object]] = []
+    for candidate in sorted(
+        events,
+        key=lambda item: (
+            _priority_sort_key(str(item.get("source_priority", "other"))),
+            float(item.get("event_score", 0.0) or 0.0),
+            float(item.get("saliency_weight", 0.0) or 0.0),
+            int(item.get("definition_max_phrase_length", 0) or 0),
+            int(item.get("definition_phrase_count", 0) or 0),
+        ),
+        reverse=True,
+    ):
+        suppress_candidate = False
+        replace_existing_indexes: list[int] = []
+        for index, existing in enumerate(kept):
+            resolution = _overlap_resolution(candidate, existing)
+            if resolution == "suppress_candidate":
+                suppress_candidate = True
+                break
+            if resolution == "replace_existing":
+                replace_existing_indexes.append(index)
+        if suppress_candidate:
+            continue
+        for index in reversed(replace_existing_indexes):
+            kept.pop(index)
+        kept.append(candidate)
+    return kept
+
+
+def _overlap_resolution(candidate: dict[str, object], existing: dict[str, object]) -> str | None:
+    candidate_key = str(candidate.get("key", "") or "")
+    existing_key = str(existing.get("key", "") or "")
+    overlap = _signature_overlap(candidate, existing)
+    known_pair = _is_preferred_specific_pair(candidate_key, existing_key) or _is_preferred_specific_pair(existing_key, candidate_key)
+    overlap_threshold = 0.5 if known_pair else 0.6
+    if overlap < overlap_threshold:
+        return None
+
+    candidate_score = float(candidate.get("event_score", 0.0) or 0.0)
+    existing_score = float(existing.get("event_score", 0.0) or 0.0)
+
+    if _is_preferred_specific_pair(existing_key, candidate_key):
+        if overlap >= 0.95 or candidate_score >= existing_score * 0.55:
+            return "replace_existing"
+    if _is_preferred_specific_pair(candidate_key, existing_key):
+        if overlap >= 0.95 or existing_score >= candidate_score * 0.55:
+            return "suppress_candidate"
+
+    same_category = str(candidate.get("category", "")) == str(existing.get("category", ""))
+    same_transition = str(candidate.get("state_transition", "")) == str(existing.get("state_transition", ""))
+    same_actor = str(candidate.get("trigger_actor", "") or "") == str(existing.get("trigger_actor", "") or "")
+    candidate_specificity = _event_specificity(candidate)
+    existing_specificity = _event_specificity(existing)
+
+    if overlap >= 0.95 and candidate_specificity > existing_specificity and candidate_score >= existing_score * 0.55:
+        return "replace_existing"
+    if overlap >= 0.95 and existing_specificity >= candidate_specificity and existing_score >= candidate_score * 0.55:
+        return "suppress_candidate"
+
+    if same_category and (same_transition or same_actor):
+        if existing_score >= candidate_score * 0.85 and existing_specificity >= candidate_specificity:
+            return "suppress_candidate"
+        if candidate_score >= existing_score * 0.85 and candidate_specificity > existing_specificity:
+            return "replace_existing"
+    return None
+
+
+def _is_preferred_specific_pair(broad_key: str, specific_key: str) -> bool:
+    return specific_key in OVERLAP_SPECIFICITY_PREFERENCES.get(broad_key, set())
+
+
+def _event_specificity(event: dict[str, object]) -> tuple[int, int, int]:
+    key = str(event.get("key", "") or "")
+    return (
+        KNOWN_SPECIFICITY_RANKS.get(key, 0),
+        int(event.get("definition_max_phrase_length", 0) or 0),
+        int(event.get("definition_phrase_count", 0) or 0),
+    )
+
+
+def _signature_overlap(left: dict[str, object], right: dict[str, object]) -> float:
+    left_signatures = {str(item).strip() for item in left.get("match_signatures", []) if str(item).strip()} if isinstance(left.get("match_signatures"), list) else set()
+    right_signatures = {str(item).strip() for item in right.get("match_signatures", []) if str(item).strip()} if isinstance(right.get("match_signatures"), list) else set()
+    if not left_signatures or not right_signatures:
+        return 0.0
+    intersection = left_signatures & right_signatures
+    denominator = min(len(left_signatures), len(right_signatures))
+    if denominator <= 0:
+        return 0.0
+    return len(intersection) / denominator
 
 
 def _priority_sort_key(priority: str) -> int:
@@ -571,6 +826,120 @@ def _contradiction_reason_details(reasons: list[str]) -> list[dict[str, str]]:
         seen.add(key)
         details.append({"key": key, "label": str(detail.get("label", reason.replace("_", " "))).strip() or reason.replace("_", " ")})
     return details
+
+
+def _state_transition(matches: list[dict[str, object]], previous: dict[str, object] | None) -> str:
+    scores = {"escalating": 0, "easing": 0, "stabilizing": 0}
+    for item in matches:
+        text = str(item.get("text", "") or "").lower()
+        for state, hints in STATE_TRANSITION_HINTS.items():
+            scores[state] += sum(1 for hint in hints if hint in text)
+    if max(scores.values(), default=0) <= 0:
+        direction = _event_direction(matches)
+        previous_direction = str(previous.get("evidence_direction", "neutral")) if isinstance(previous, dict) else "neutral"
+        if direction == "positive":
+            return "easing"
+        if direction == "negative":
+            return "escalating"
+        if previous_direction == direction == "neutral":
+            return "unknown"
+        return "mixed" if direction == "mixed" else "unknown"
+    ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+    if len(ordered) > 1 and ordered[0][1] == ordered[1][1] and ordered[0][1] > 0:
+        return "mixed"
+    return ordered[0][0]
+
+
+def _catalyst_type(matches: list[dict[str, object]]) -> str:
+    scores = {key: 0 for key in CATALYST_TYPE_HINTS}
+    for item in matches:
+        text = str(item.get("text", "") or "").lower()
+        for catalyst, hints in CATALYST_TYPE_HINTS.items():
+            scores[catalyst] += sum(1 for hint in hints if hint in text)
+    best = max(scores.items(), key=lambda item: item[1], default=("other", 0))
+    return best[0] if best[1] > 0 else "other"
+
+
+def _trigger_actor(matches: list[dict[str, object]]) -> tuple[str | None, str | None, str | None]:
+    scored: list[tuple[float, str, str, str]] = []
+    for item in matches:
+        text = str(item.get("text", "") or "")
+        weight = float(item.get("event_weight", 0.0) or 0.0)
+        for actor, role in ACTOR_HINTS.items():
+            if actor.lower() in text.lower():
+                scored.append((weight + 1.0, actor, role, "text_match"))
+        for pattern, role in ACTOR_PATTERNS:
+            match = pattern.search(text)
+            if not match:
+                continue
+            actor = match.group(1) if role == "named_actor" and match.groups() else match.group(0)
+            cleaned_actor = re.sub(r"^(the )", "", str(actor), flags=re.IGNORECASE).strip(" .,:;-")
+            if cleaned_actor:
+                resolved_role = _normalize_actor_role(cleaned_actor, role)
+                scored.append((weight + 0.8, cleaned_actor, resolved_role, "regex_match"))
+        publisher = str(item.get("publisher", "") or "").strip()
+        if publisher:
+            scored.append((weight + 0.25, publisher, "source_publisher", "publisher"))
+    if not scored:
+        return None, None, None
+    scored.sort(key=lambda item: item[0], reverse=True)
+    _, actor, role, source_type = scored[0]
+    return actor, role, source_type
+
+
+def _normalize_actor_role(actor: str, fallback_role: str) -> str:
+    lowered = actor.lower()
+    for known_actor, role in ACTOR_HINTS.items():
+        if known_actor.lower() == lowered:
+            return role
+    if fallback_role != "named_actor":
+        return fallback_role
+    if any(token in lowered for token in ("department", "ministry", "treasury", "government", "administration")):
+        return "government"
+    if any(token in lowered for token in ("commission", "agency", "sec", "fda", "ftc", "regulator")):
+        return "regulator"
+    if any(token in lowered for token in ("bank", "federal reserve", "ecb", "fomc")):
+        return "central_bank"
+    if any(token in lowered for token in ("opec", "nato", "iaea")):
+        return "intergovernmental_body"
+    return "named_actor"
+
+
+def _market_interpretation(matches: list[dict[str, object]], evidence_direction: str, state_transition: str) -> str:
+    scores = {key: 0 for key in MARKET_INTERPRETATION_HINTS}
+    for item in matches:
+        text = str(item.get("text", "") or "").lower()
+        for interpretation, hints in MARKET_INTERPRETATION_HINTS.items():
+            scores[interpretation] += sum(1 for hint in hints if hint in text)
+    best_key, best_score = max(scores.items(), key=lambda item: item[1], default=("unknown", 0))
+    if best_score > 0:
+        leaders = [key for key, score in scores.items() if score == best_score and score > 0]
+        return leaders[0] if len(leaders) == 1 else "mixed"
+    if evidence_direction == "positive" or state_transition == "easing":
+        return "relief"
+    if evidence_direction == "negative" or state_transition == "escalating":
+        return "fear"
+    if evidence_direction == "mixed" or state_transition == "mixed":
+        return "mixed"
+    return "unknown"
+
+
+def _state_change_reason(
+    matches: list[dict[str, object]],
+    catalyst_type: str,
+    state_transition: str,
+    market_interpretation: str,
+) -> str | None:
+    top_sample = ""
+    if matches:
+        top = max(matches, key=lambda item: float(item.get("event_weight", 0.0) or 0.0))
+        top_sample = str(top.get("sample", "") or "").strip()
+    catalyst_text = catalyst_type.replace("_", " ") if catalyst_type else "unclear catalyst"
+    state_text = state_transition.replace("_", " ") if state_transition else "unclear state"
+    interpretation_text = market_interpretation.replace("_", " ") if market_interpretation else "unclear interpretation"
+    if top_sample:
+        return f"{state_text} signal led by {catalyst_text}; current read looks {interpretation_text}. Evidence: {top_sample[:180]}"
+    return f"{state_text} signal led by {catalyst_text}; current read looks {interpretation_text}."
 
 
 def _key_label_detail(kind: str, value: str) -> dict[str, str]:

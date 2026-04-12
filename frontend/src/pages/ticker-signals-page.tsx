@@ -2,9 +2,10 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson } from "../api";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { ScoreBadge, WarningSummary } from "../components/decision-surface";
 import type { TickerSignalSnapshot } from "../types";
-import { detailLabel, extractDisplayLabels, formatDate } from "../utils";
+import { detailLabel, extractDisplayLabels, formatDate, yahooFinanceUrl } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams): string {
   const query = searchParams.toString();
@@ -33,6 +34,10 @@ function biasTone(value: string): "ok" | "warning" | "neutral" {
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function joinSummary(items: string[], empty = "none"): string {
+  return items.length > 0 ? items.join(" · ") : empty;
 }
 
 export function TickerSignalsPage() {
@@ -79,9 +84,10 @@ export function TickerSignalsPage() {
   return (
     <>
       <PageHeader
-        kicker="Recommendation workflow"
+        kicker="Review"
         title="Ticker signals"
-        subtitle="Use signals to understand the shortlist before reading full recommendation plans. This view emphasizes what was promoted, what was blocked, and which transmission conditions shaped the decision."
+        subtitle="Use this page for candidate review: what was promoted, what was blocked, and why it got attention before a full plan existed."
+        actions={<HelpHint tooltip="Ticker signals are candidate review, not final action review. Use them to understand shortlist decisions before opening recommendation plans." to="/docs?doc=operator-page-field-guide" />}
       />
       {error ? <ErrorState message={error} /> : null}
 
@@ -93,7 +99,7 @@ export function TickerSignalsPage() {
       </section>
 
       <Card className="sticky-toolbar">
-        <SectionTitle kicker="Filters" title="Find signal snapshots" subtitle="Filter by ticker or run, then scan the compact cards below to see shortlist outcome, transmission quality, and cheap-scan composition at a glance." />
+        <SectionTitle kicker="Filters" title="Find candidate signals" subtitle="Filter by ticker or run, then scan what was shortlisted, blocked, or sent into deeper analysis." />
         <form className="form-grid" onSubmit={handleSubmit}>
           <label className="form-field"><span>Ticker</span><input name="ticker" defaultValue={searchParams.get("ticker") ?? ""} placeholder="AAPL" /></label>
           <label className="form-field"><span>Run id</span><input name="run_id" defaultValue={searchParams.get("run_id") ?? ""} placeholder="145" /></label>
@@ -103,7 +109,7 @@ export function TickerSignalsPage() {
       </Card>
 
       <Card className="top-gap">
-        <SectionTitle title="Results" subtitle={signals ? `${signals.length} ticker signal snapshot(s)` : undefined} />
+        <SectionTitle title="Candidate review" subtitle={signals ? `${signals.length} ticker signal snapshot(s)` : undefined} />
         {!signals && !error ? <LoadingState message="Loading ticker signals…" /> : null}
         {signals && signals.length === 0 ? <EmptyState message="No ticker signals match the current filters." /> : null}
         {signals ? (
@@ -139,13 +145,13 @@ export function TickerSignalsPage() {
                   <div className="data-card-header">
                     <div>
                       <div className="cluster">
-                        <Link to={`/tickers/${signal.ticker}`} className="badge badge-info badge-link">{signal.ticker}</Link>
+                        <a href={yahooFinanceUrl(signal.ticker)} className="badge badge-info badge-link" target="_blank" rel="noreferrer noopener">{signal.ticker}</a>
                         <Badge tone={signal.warnings.length > 0 ? "warning" : "ok"}>{signal.status}</Badge>
                         <Badge tone={directionTone(signal.direction)}>{signal.direction}</Badge>
                         <Badge tone={mode === "deep_analysis" ? "info" : "neutral"}>{mode}</Badge>
                       </div>
-                      <h3 className="data-card-title top-gap-small">{signal.confidence_percent.toFixed(1)}% confidence · {signal.attention_score.toFixed(1)} attention</h3>
-                      <div className="helper-text">{formatDate(signal.computed_at)} · horizon {signal.horizon} · run {signal.run_id ? `#${signal.run_id}` : "—"}</div>
+                      <div className="cluster top-gap-small"><ScoreBadge label="Confidence" value={`${signal.confidence_percent.toFixed(1)}%`} tone="info" /><ScoreBadge label="Attention" value={signal.attention_score.toFixed(1)} tone="neutral" /></div>
+                      <div className="helper-text">{formatDate(signal.computed_at)} · horizon {signal.horizon} · run {signal.run_id ? `#${signal.run_id}` : "—"} · mode {mode}</div>
                     </div>
                     <div className="data-card-meta">
                       <Badge tone={shortlisted ? "info" : "neutral"}>{shortlisted ? `shortlisted${shortlistRank !== null ? ` #${shortlistRank}` : ""}` : "not shortlisted"}</Badge>
@@ -160,14 +166,14 @@ export function TickerSignalsPage() {
                     <div className="data-point"><span className="data-point-label">window</span><span className="data-point-value">{expectedWindow}</span></div>
                   </div>
 
-                  <div className="helper-text top-gap-small">shortlist reasons: {shortlistReasons.length > 0 ? shortlistReasons.join(" · ") : "eligible"}</div>
-                  <div className="helper-text">drivers: {primaryDrivers.length > 0 ? primaryDrivers.join(" · ") : "none"}</div>
-                  <div className="helper-text">industry channels: {industryExposureChannels.length > 0 ? industryExposureChannels.join(" · ") : "none"}</div>
-                  <div className="helper-text">ticker channels: {tickerExposureChannels.length > 0 ? tickerExposureChannels.join(" · ") : "none"}</div>
-                  <div className="helper-text">conflicts: {conflictFlags.length > 0 ? conflictFlags.join(" · ") : "none"}</div>
-                  <div className="helper-text">tags: {transmissionTags.length > 0 ? transmissionTags.join(" · ") : "none"}</div>
-                  <div className="helper-text">cheap scan: trend {typeof components?.trend_score === "number" ? components.trend_score.toFixed(0) : "—"} · momentum {typeof components?.momentum_score === "number" ? components.momentum_score.toFixed(0) : "—"} · breakout {typeof components?.breakout_score === "number" ? components.breakout_score.toFixed(0) : "—"}</div>
-                  {signal.warnings.length > 0 ? <div className="helper-text warning-text top-gap-small">warnings: {signal.warnings.join(" · ")}</div> : null}
+                  <div className="helper-text top-gap-small">shortlist {joinSummary(shortlistReasons, "eligible")} · drivers {joinSummary(primaryDrivers)}</div>
+                  <WarningSummary warnings={signal.warnings} />
+                  <details className="top-gap-small">
+                    <summary className="helper-text">Show advanced signal diagnostics</summary>
+                    <div className="helper-text top-gap-small">industry channels {joinSummary(industryExposureChannels)} · ticker channels {joinSummary(tickerExposureChannels)}</div>
+                    <div className="helper-text">flags {joinSummary(conflictFlags)} · tags {joinSummary(transmissionTags)}</div>
+                    <div className="helper-text">cheap scan trend {typeof components?.trend_score === "number" ? components.trend_score.toFixed(0) : "—"} / momentum {typeof components?.momentum_score === "number" ? components.momentum_score.toFixed(0) : "—"} / breakout {typeof components?.breakout_score === "number" ? components.breakout_score.toFixed(0) : "—"}</div>
+                  </details>
                 </article>
               );
             })}

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import patch
 
-from sqlalchemy import create_engine, update
+from sqlalchemy import create_engine, text, update
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.config import settings
@@ -14,7 +14,7 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.runs import enqueue_enabled_jobs
-from trade_proposer_app.workers.tasks import process_once
+from trade_proposer_app.workers.tasks import WorkerRuntimeState, _write_worker_heartbeat, process_once
 
 
 class StubProposalService:
@@ -53,7 +53,7 @@ class StubEvaluationExecutionService:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
-    def execute(self, run=None) -> EvaluationRunResult:
+    def execute(self, run=None, as_of=None) -> EvaluationRunResult:
         return EvaluationRunResult(
             evaluated_recommendation_plans=8,
             synced_recommendation_plan_outcomes=3,
@@ -68,58 +68,62 @@ class StubOptimizationService:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
-    def execute(self) -> tuple[dict[str, object], dict[str, object]]:
-        return (
-            {
-                "status": "completed",
-                "resolved_trade_count": 99,
-                "minimum_resolved_trades": 50,
-                "weights_changed": True,
-                "stdout": "scheduled optimization complete",
-                "stderr": "",
-            },
-            {
-                "weights_path": "/tmp/weights.json",
-                "before": {"exists": True, "sha256": "abc"},
-                "after": {"exists": True, "sha256": "def"},
-            },
-        )
+    def run(self, *args, **kwargs):
+        class StubRun:
+            id = 1
+            winning_candidate_id = 1
+            promoted_config_version_id = None
+            summary = {
+                "winner_candidate_id": 1,
+                "best_config": {"setup_family.breakout.take_profit_distance_multiplier": 1.07},
+            }
+
+        return StubRun()
 
 
-class StubMacroSupportRefreshService:
+class StubMacroContextRefreshService:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
     def refresh(self, *, job_id: int | None = None, run_id: int | None = None) -> Any:
-        return type(
-            "Snapshot",
-            (),
-            {
-                "id": 11,
-                "subject_key": "global_macro",
-                "subject_label": "Global Macro",
-                "score": 0.1,
-                "label": "NEUTRAL",
-                "computed_at": datetime(2026, 3, 22, 6, 0, 0, tzinfo=timezone.utc),
-            },
-        )()
+        return {
+            "payload": type(
+                "Payload",
+                (),
+                {
+                    "subject_key": "global_macro",
+                    "subject_label": "Global Macro",
+                    "score": 0.1,
+                    "label": "NEUTRAL",
+                    "computed_at": datetime(2026, 3, 22, 6, 0, 0, tzinfo=timezone.utc),
+                    "expires_at": None,
+                    "signals": {},
+                    "diagnostics": {},
+                    "source_breakdown": {},
+                },
+            )(),
+        }
 
 
-class StubIndustrySupportRefreshService:
+class StubIndustryContextRefreshService:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
     def refresh_all(self, *, job_id: int | None = None, run_id: int | None = None) -> list[Any]:
         return [
             type(
-                "Snapshot",
+                "Payload",
                 (),
                 {
-                    "id": 21,
                     "subject_key": "consumer_electronics",
                     "subject_label": "Consumer Electronics",
                     "score": 0.12,
                     "label": "POSITIVE",
+                    "expires_at": None,
+                    "coverage": {},
+                    "signals": {},
+                    "diagnostics": {"queries": ["consumer electronics"]},
+                    "source_breakdown": {},
                 },
             )()
         ]
@@ -198,10 +202,10 @@ class WorkerSchedulerTests(unittest.TestCase):
             job_type=JobType.RECOMMENDATION_EVALUATION,
         )
         optimization = jobs.create(
-            "Scheduled Optimization",
+            "Scheduled Plan Generation Tuning",
             [],
             "0 2 * * 0",
-            job_type=JobType.WEIGHT_OPTIMIZATION,
+            job_type=JobType.PLAN_GENERATION_TUNING,
         )
         scheduled_eval = datetime(2026, 3, 14, 18, 0, tzinfo=timezone.utc)
         scheduled_opt = datetime(2026, 3, 15, 2, 0, tzinfo=timezone.utc)
@@ -215,7 +219,7 @@ class WorkerSchedulerTests(unittest.TestCase):
         evaluation_run = next(run for run in runs.list_latest_runs(limit=10) if run.job_id == evaluation.id)
         optimization_run = next(run for run in runs.list_latest_runs(limit=10) if run.job_id == optimization.id)
         self.assertEqual(evaluation_run.job_type, JobType.RECOMMENDATION_EVALUATION)
-        self.assertEqual(optimization_run.job_type, JobType.WEIGHT_OPTIMIZATION)
+        self.assertEqual(optimization_run.job_type, JobType.PLAN_GENERATION_TUNING)
         self.assertEqual(evaluation_run.scheduled_for, scheduled_eval)
         self.assertEqual(optimization_run.scheduled_for, scheduled_opt)
 
@@ -363,29 +367,29 @@ class WorkerSchedulerTests(unittest.TestCase):
         jobs = JobRepository(session)
         runs = RunRepository(session)
         job = jobs.create(
-            "Optimization Job",
+            "Plan Generation Tuning Job",
             [],
             None,
-            job_type=JobType.WEIGHT_OPTIMIZATION,
+            job_type=JobType.PLAN_GENERATION_TUNING,
         )
         run = runs.enqueue(job.id or 0)
 
         with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
             "trade_proposer_app.workers.tasks.create_proposal_service", return_value=StubProposalService()
         ), patch(
-            "trade_proposer_app.workers.tasks.WeightOptimizationService", StubOptimizationService
+            "trade_proposer_app.workers.tasks.PlanGenerationTuningService", StubOptimizationService
         ):
             processed = process_once()
 
         self.assertTrue(processed)
         updated_run = runs.get_run(run.id or 0)
         self.assertEqual(updated_run.status, "completed")
-        self.assertEqual(updated_run.job_type, JobType.WEIGHT_OPTIMIZATION)
-        self.assertIn('"weights_changed": true', (updated_run.summary_json or "").lower())
-        self.assertIn('"weights_path": "/tmp/weights.json"', updated_run.artifact_json or "")
-        self.assertIn('"optimization_seconds"', updated_run.timing_json or "")
+        self.assertEqual(updated_run.job_type, JobType.PLAN_GENERATION_TUNING)
+        self.assertIn('"winner_candidate_id": 1', (updated_run.summary_json or "").lower())
+        self.assertIn('"plan_generation_tuning_run_id": 1', updated_run.artifact_json or "")
+        self.assertIn('"plan_generation_tuning_seconds"', updated_run.timing_json or "")
 
-    def test_worker_process_once_processes_macro_support_refresh_run(self) -> None:
+    def test_worker_process_once_processes_macro_context_refresh_run(self) -> None:
         session = self.create_session()
         jobs = JobRepository(session)
         runs = RunRepository(session)
@@ -393,28 +397,28 @@ class WorkerSchedulerTests(unittest.TestCase):
             "Macro Refresh Job",
             [],
             None,
-            job_type=JobType.MACRO_SENTIMENT_REFRESH,
+            job_type=JobType.MACRO_CONTEXT_REFRESH,
         )
         run = runs.enqueue(job.id or 0)
 
         with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
             "trade_proposer_app.workers.tasks.create_proposal_service", return_value=StubProposalService()
         ), patch(
-            "trade_proposer_app.workers.tasks.create_macro_support_service", return_value=StubMacroSupportRefreshService()
+            "trade_proposer_app.workers.tasks.create_macro_context_refresh_service", return_value=StubMacroContextRefreshService()
         ), patch(
-            "trade_proposer_app.workers.tasks.create_industry_support_service", return_value=StubIndustrySupportRefreshService()
+            "trade_proposer_app.workers.tasks.create_industry_context_refresh_service", return_value=StubIndustryContextRefreshService()
         ):
             processed = process_once()
 
         self.assertTrue(processed)
         updated_run = runs.get_run(run.id or 0)
         self.assertEqual(updated_run.status, "completed")
-        self.assertEqual(updated_run.job_type, JobType.MACRO_SENTIMENT_REFRESH)
+        self.assertEqual(updated_run.job_type, JobType.MACRO_CONTEXT_REFRESH)
         self.assertIn('"scope": "macro"', updated_run.summary_json or "")
-        self.assertIn('"snapshot_id": 11', updated_run.artifact_json or "")
-        self.assertIn('"macro_refresh_seconds"', updated_run.timing_json or "")
+        self.assertIn('"macro_context_snapshot_id":', updated_run.artifact_json or "")
+        self.assertIn('"macro_context_seconds"', updated_run.timing_json or "")
 
-    def test_worker_process_once_processes_industry_support_refresh_run(self) -> None:
+    def test_worker_process_once_processes_industry_context_refresh_run(self) -> None:
         session = self.create_session()
         jobs = JobRepository(session)
         runs = RunRepository(session)
@@ -422,33 +426,33 @@ class WorkerSchedulerTests(unittest.TestCase):
             "Industry Refresh Job",
             [],
             None,
-            job_type=JobType.INDUSTRY_SENTIMENT_REFRESH,
+            job_type=JobType.INDUSTRY_CONTEXT_REFRESH,
         )
         run = runs.enqueue(job.id or 0)
 
         with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
             "trade_proposer_app.workers.tasks.create_proposal_service", return_value=StubProposalService()
         ), patch(
-            "trade_proposer_app.workers.tasks.create_macro_support_service", return_value=StubMacroSupportRefreshService()
+            "trade_proposer_app.workers.tasks.create_macro_context_refresh_service", return_value=StubMacroContextRefreshService()
         ), patch(
-            "trade_proposer_app.workers.tasks.create_industry_support_service", return_value=StubIndustrySupportRefreshService()
+            "trade_proposer_app.workers.tasks.create_industry_context_refresh_service", return_value=StubIndustryContextRefreshService()
         ):
             processed = process_once()
 
         self.assertTrue(processed)
         updated_run = runs.get_run(run.id or 0)
         self.assertEqual(updated_run.status, "completed")
-        self.assertEqual(updated_run.job_type, JobType.INDUSTRY_SENTIMENT_REFRESH)
+        self.assertEqual(updated_run.job_type, JobType.INDUSTRY_CONTEXT_REFRESH)
         self.assertIn('"scope": "industry"', updated_run.summary_json or "")
         self.assertIn('"snapshot_count": 1', updated_run.artifact_json or "")
-        self.assertIn('"industry_refresh_seconds"', updated_run.timing_json or "")
+        self.assertIn('"industry_context_seconds"', updated_run.timing_json or "")
 
     def test_scheduler_skips_second_optimization_job_when_one_is_active(self) -> None:
         session = self.create_session()
         jobs = JobRepository(session)
         runs = RunRepository(session)
-        first = jobs.create("Optimization One", [], "0 2 * * *", job_type=JobType.WEIGHT_OPTIMIZATION)
-        second = jobs.create("Optimization Two", [], "0 2 * * *", job_type=JobType.WEIGHT_OPTIMIZATION)
+        first = jobs.create("Plan Tuning One", [], "0 2 * * *", job_type=JobType.PLAN_GENERATION_TUNING)
+        second = jobs.create("Plan Tuning Two", [], "0 2 * * *", job_type=JobType.PLAN_GENERATION_TUNING)
         runs.enqueue(first.id or 0)
         scheduled_now = datetime(2026, 3, 15, 2, 0, tzinfo=timezone.utc)
 
@@ -456,9 +460,9 @@ class WorkerSchedulerTests(unittest.TestCase):
             count = enqueue_enabled_jobs(now=scheduled_now)
 
         self.assertEqual(count, 0)
-        optimization_runs = [run for run in runs.list_latest_runs(limit=10) if run.job_type == JobType.WEIGHT_OPTIMIZATION]
-        self.assertEqual(len(optimization_runs), 1)
-        self.assertEqual(optimization_runs[0].job_id, first.id)
+        plan_tuning_runs = [run for run in runs.list_latest_runs(limit=10) if run.job_type == JobType.PLAN_GENERATION_TUNING]
+        self.assertEqual(len(plan_tuning_runs), 1)
+        self.assertEqual(plan_tuning_runs[0].job_id, first.id)
         self.assertNotEqual(first.id, second.id)
 
     def test_worker_process_once_marks_run_failed_without_crashing_worker(self) -> None:
@@ -491,6 +495,27 @@ class WorkerSchedulerTests(unittest.TestCase):
             processed = process_once()
 
         self.assertFalse(processed)
+
+    def test_worker_heartbeat_write_marks_worker_active(self) -> None:
+        session = self.create_session()
+        state = WorkerRuntimeState(active_run_id=77)
+
+        with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
+            "trade_proposer_app.workers.tasks.socket.gethostname", return_value="worker-host"), patch(
+            "trade_proposer_app.workers.tasks.os.getpid", return_value=12345
+        ):
+            _write_worker_heartbeat("worker-test", state)
+
+        row = session.execute(
+            text("select worker_id, hostname, pid, status, active_run_id from worker_heartbeats where worker_id = 'worker-test'")
+        ).mappings().first()
+        self.assertIsNotNone(row)
+        assert row is not None
+        self.assertEqual("worker-test", row["worker_id"])
+        self.assertEqual("worker-host", row["hostname"])
+        self.assertEqual(12345, row["pid"])
+        self.assertEqual("running", row["status"])
+        self.assertEqual(77, row["active_run_id"])
 
 
 if __name__ == "__main__":

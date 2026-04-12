@@ -6,12 +6,15 @@ from dataclasses import dataclass
 from typing import Any
 
 from trade_proposer_app.domain.enums import RecommendationDirection, StrategyHorizon
-from trade_proposer_app.domain.models import RecommendationPlan, RunOutput, TickerSignalSnapshot, Watchlist
+from trade_proposer_app.domain.models import RecommendationDecisionSample, RecommendationPlan, RunOutput, TickerSignalSnapshot, Watchlist
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal, CheapScanSignalService
+from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
+from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
 
 
 @dataclass
@@ -34,18 +37,56 @@ class WatchlistOrchestrationService:
         context_snapshots: ContextSnapshotRepository,
         recommendation_plans: RecommendationPlanRepository,
         cheap_scan_service: CheapScanSignalService,
+        decision_samples: RecommendationDecisionSampleRepository | None = None,
         deep_analysis_service,
         confidence_threshold: float = 60.0,
+        signal_gating_tuning_config: dict[str, float] | None = None,
+        plan_generation_tuning_config: dict[str, float] | None = None,
         calibration_service: RecommendationPlanCalibrationService | None = None,
         taxonomy_service: TickerTaxonomyService | None = None,
     ) -> None:
         self.context_snapshots = context_snapshots
         self.recommendation_plans = recommendation_plans
+        self.decision_samples = decision_samples
         self.cheap_scan_service = cheap_scan_service
         self.deep_analysis_service = deep_analysis_service
         self.confidence_threshold = confidence_threshold
+        self.signal_gating_tuning_config = self._normalize_signal_gating_tuning_config(signal_gating_tuning_config)
+        self.plan_generation_tuning_config = normalize_plan_generation_tuning_config(plan_generation_tuning_config)
         self.calibration_service = calibration_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
+
+    @staticmethod
+    def _normalize_signal_gating_tuning_config(signal_gating_tuning_config: dict[str, float] | None) -> dict[str, float]:
+        defaults = {
+            "threshold_offset": 0.0,
+            "confidence_adjustment": 0.0,
+            "near_miss_gap_cutoff": 0.0,
+            "shortlist_aggressiveness": 0.0,
+            "degraded_penalty": 0.0,
+        }
+        if not signal_gating_tuning_config:
+            return defaults
+        normalized = dict(defaults)
+        for key, default in defaults.items():
+            raw_value = signal_gating_tuning_config.get(key, default)
+            try:
+                normalized[key] = float(raw_value)
+            except (TypeError, ValueError):
+                normalized[key] = default
+        return normalized
+
+    def _signal_gating_tuning_value(self, key: str, default: float) -> float:
+        try:
+            return float(self.signal_gating_tuning_config.get(key, default))
+        except (TypeError, ValueError):
+            return default
+
+    def _plan_generation_tuning_value(self, key: str, default: float) -> float:
+        try:
+            return float(self.plan_generation_tuning_config.get(key, default))
+        except (TypeError, ValueError):
+            return default
 
     def execute(
         self,
@@ -95,7 +136,16 @@ class WatchlistOrchestrationService:
                     run_id=run_id,
                     reason="Ticker did not make the deep-analysis shortlist.",
                 )
-                stored_plans.append(self.recommendation_plans.create_plan(plan))
+                stored_plan = self.recommendation_plans.create_plan(plan)
+                self._record_decision_sample(
+                    stored_plan,
+                    candidate,
+                    signal=stored_signal,
+                    shortlisted=False,
+                    shortlist_rank=None,
+                    shortlist_decision=decision,
+                )
+                stored_plans.append(stored_plan)
                 ticker_generation.append(
                     {
                         "ticker": candidate.ticker,
@@ -135,6 +185,14 @@ class WatchlistOrchestrationService:
                 run_id=run_id,
             )
             stored_plan = self.recommendation_plans.create_plan(plan)
+            self._record_decision_sample(
+                stored_plan,
+                candidate,
+                signal=stored_signal,
+                shortlisted=True,
+                shortlist_rank=shortlist_rank,
+                shortlist_decision=decision,
+            )
             stored_plans.append(stored_plan)
             ticker_generation.append(
                 {
@@ -576,9 +634,21 @@ class WatchlistOrchestrationService:
 
         recommendation = deep_output.recommendation
         direction = self._normalize_direction(recommendation.direction)
+        intended_action = direction if direction in {"long", "short"} else None
         action_reason = "actionable_setup"
         effective_threshold = float(calibration_review.get("effective_confidence_threshold", self.confidence_threshold))
         calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", signal.confidence_percent) or signal.confidence_percent)
+        
+        entry_price_low, entry_price_high, stop_loss, take_profit, risk_reward_ratio = None, None, None, None, None
+        if intended_action:
+            entry_price_low, entry_price_high, stop_loss, take_profit = self._family_adjusted_trade_levels(
+                recommendation,
+                setup_family=setup_family,
+                action=intended_action,
+                transmission_summary=transmission_summary,
+            )
+            risk_reward_ratio = self._risk_reward_ratio(recommendation)
+
         if direction == "short" and not watchlist.allow_shorts:
             warnings.append("watchlist does not allow shorts")
             action = "no_action"
@@ -605,11 +675,17 @@ class WatchlistOrchestrationService:
                 action=action,
                 status="ok" if not warnings else "partial",
                 confidence_percent=calibrated_confidence,
+                entry_price_low=entry_price_low,
+                entry_price_high=entry_price_high,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+                holding_period_days=self._holding_period_days(watchlist.default_horizon) if intended_action else None,
+                risk_reward_ratio=risk_reward_ratio,
                 thesis_summary=self._no_action_thesis(setup_family, action_reason, transmission_summary=transmission_summary),
                 rationale_summary=rationale,
                 warnings=list(dict.fromkeys(warnings)),
                 evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
-                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary),
+                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -617,12 +693,6 @@ class WatchlistOrchestrationService:
                 ticker_signal_snapshot_id=signal.id,
             )
 
-        entry_price_low, entry_price_high, stop_loss, take_profit = self._family_adjusted_trade_levels(
-            recommendation,
-            setup_family=setup_family,
-            action=action,
-            transmission_summary=transmission_summary,
-        )
         return RecommendationPlan(
             ticker=candidate.ticker,
             horizon=watchlist.default_horizon,
@@ -634,13 +704,13 @@ class WatchlistOrchestrationService:
             stop_loss=stop_loss,
             take_profit=take_profit,
             holding_period_days=self._holding_period_days(watchlist.default_horizon),
-            risk_reward_ratio=self._risk_reward_ratio(recommendation),
+            risk_reward_ratio=risk_reward_ratio,
             thesis_summary=summary_text or self._actionable_thesis(action, setup_family, transmission_summary=transmission_summary),
             rationale_summary=rationale,
             risks=self._plan_risks(warnings, setup_family, action, transmission_summary),
             warnings=list(dict.fromkeys(warnings)),
             evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
-            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary),
+            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action),
             computed_at=signal.computed_at,
             run_id=run_id,
             job_id=job_id,
@@ -688,6 +758,148 @@ class WatchlistOrchestrationService:
             ticker_signal_snapshot_id=signal.id,
         )
 
+    def _record_decision_sample(
+        self,
+        plan: RecommendationPlan,
+        candidate: _CheapScanCandidate,
+        *,
+        signal: TickerSignalSnapshot,
+        shortlisted: bool,
+        shortlist_rank: int | None,
+        shortlist_decision: dict[str, object] | None,
+    ) -> None:
+        if self.decision_samples is None or plan.id is None:
+            return
+        signal_breakdown = self._mapping(plan.signal_breakdown)
+        evidence_summary = self._mapping(plan.evidence_summary)
+        calibration_review = self._mapping(signal_breakdown.get("calibration_review"))
+        effective_threshold = self._float_from_mapping(calibration_review, "effective_confidence_threshold")
+        calibrated_confidence = self._float_from_mapping(calibration_review, "calibrated_confidence_percent")
+        confidence_gap = None
+        if calibrated_confidence is not None and effective_threshold is not None:
+            confidence_gap = round(calibrated_confidence - effective_threshold, 2)
+        action_reason = str(
+            evidence_summary.get("action_reason")
+            or evidence_summary.get("action_reason_label")
+            or plan.action
+            or "unknown"
+        ).strip()
+        decision_type = self._decision_type(plan.action, plan.status, action_reason, confidence_gap, shortlisted=shortlisted)
+        review_priority = self._review_priority(decision_type, confidence_gap=confidence_gap, shortlisted=shortlisted, status=plan.status)
+        shortlist_payload = {
+            "shortlisted": shortlisted,
+            "shortlist_rank": shortlist_rank,
+            "shortlist_decision": shortlist_decision or {},
+            "shortlist_reasons": signal.diagnostics.get("shortlist_reasons", []),
+            "shortlist_reason_details": signal.diagnostics.get("shortlist_reason_details", []),
+        }
+        self.decision_samples.upsert_sample(
+            RecommendationDecisionSample(
+                recommendation_plan_id=plan.id,
+                ticker=plan.ticker,
+                horizon=plan.horizon.value if hasattr(plan.horizon, "value") else str(plan.horizon),
+                action=plan.action,
+                decision_type=decision_type,
+                decision_reason=action_reason,
+                shortlisted=shortlisted,
+                shortlist_rank=shortlist_rank,
+                shortlist_decision=shortlist_payload,
+                confidence_percent=plan.confidence_percent,
+                calibrated_confidence_percent=calibrated_confidence,
+                effective_threshold_percent=effective_threshold,
+                confidence_gap_percent=confidence_gap,
+                setup_family=str(signal_breakdown.get("setup_family") or "").strip(),
+                transmission_bias=str(signal_breakdown.get("transmission_bias") or "").strip() or None,
+                context_regime=str(self._pluck(signal_breakdown, "calibration_review", "context_regime", "key") or "").strip() or None,
+                review_priority=review_priority,
+                decision_context={
+                    "status": plan.status,
+                    "warnings": list(plan.warnings),
+                    "shortlisted": shortlisted,
+                    "shortlist_rank": shortlist_rank,
+                    "shortlist_decision": shortlist_decision or {},
+                    "confidence_percent": plan.confidence_percent,
+                    "calibrated_confidence_percent": calibrated_confidence,
+                    "effective_threshold_percent": effective_threshold,
+                    "confidence_gap_percent": confidence_gap,
+                    "action_reason": action_reason,
+                    "review_priority": review_priority,
+                },
+                signal_breakdown=signal_breakdown,
+                evidence_summary=evidence_summary,
+                run_id=plan.run_id,
+                job_id=plan.job_id,
+                watchlist_id=plan.watchlist_id,
+                ticker_signal_snapshot_id=plan.ticker_signal_snapshot_id,
+            )
+        )
+
+    @staticmethod
+    def _mapping(payload: object | None) -> dict[str, object]:
+        if payload is None:
+            return {}
+        if isinstance(payload, dict):
+            return payload
+        if hasattr(payload, "items"):
+            try:
+                return dict(payload.items())
+            except TypeError:
+                return {}
+        if hasattr(payload, "model_dump"):
+            dumped = payload.model_dump(mode="json")
+            return dumped if isinstance(dumped, dict) else {}
+        return {}
+
+    @staticmethod
+    def _float_from_mapping(payload: object, key: str) -> float | None:
+        if not hasattr(payload, "get"):
+            return None
+        value = payload.get(key)
+        try:
+            return float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _decision_type(
+        action: str,
+        status: str,
+        action_reason: str,
+        confidence_gap: float | None,
+        *,
+        shortlisted: bool,
+    ) -> str:
+        normalized_action = str(action or "").strip().lower()
+        normalized_status = str(status or "").strip().lower()
+        normalized_reason = str(action_reason or "").strip().lower()
+        if normalized_action in {"long", "short"}:
+            return "actionable"
+        if normalized_status == "degraded" or normalized_reason == "deep_analysis_unavailable":
+            return "degraded"
+        if confidence_gap is not None and confidence_gap >= -5.0:
+            return "near_miss"
+        if shortlisted:
+            return "rejected"
+        return "no_action"
+
+    @staticmethod
+    def _review_priority(
+        decision_type: str,
+        *,
+        confidence_gap: float | None,
+        shortlisted: bool,
+        status: str,
+    ) -> str:
+        if decision_type == "actionable":
+            return "medium" if str(status or "").strip().lower() == "partial" else "low"
+        if decision_type == "degraded":
+            return "high"
+        if confidence_gap is not None and confidence_gap >= -2.0:
+            return "high"
+        if confidence_gap is not None and confidence_gap >= -6.0:
+            return "medium"
+        return "medium" if shortlisted else "low"
+
     @staticmethod
     def _analysis_payload(output: RunOutput | None) -> dict[str, Any]:
         if output is None or not output.diagnostics.analysis_json:
@@ -715,7 +927,7 @@ class WatchlistOrchestrationService:
     def _pluck(payload: dict[str, Any], *path: str) -> Any:
         current: Any = payload
         for key in path:
-            if not isinstance(current, dict):
+            if not hasattr(current, "get"):
                 return None
             current = current.get(key)
         return current
@@ -830,10 +1042,11 @@ class WatchlistOrchestrationService:
         confidence_components: dict[str, float],
         calibration_review: dict[str, object] | None = None,
         transmission_summary: dict[str, object] | None = None,
+        intended_action: str | None = None,
     ) -> dict[str, object]:
         calibration = calibration_review or {}
         calibrated_confidence = calibration.get("calibrated_confidence_percent") if isinstance(calibration.get("calibrated_confidence_percent"), (int, float)) else signal.confidence_percent
-        return {
+        payload = {
             "attention_score": signal.attention_score,
             "macro_exposure_score": signal.macro_exposure_score,
             "industry_alignment_score": signal.industry_alignment_score,
@@ -851,6 +1064,9 @@ class WatchlistOrchestrationService:
             "transmission_summary": transmission_summary or {},
             "mode": signal.diagnostics.get("mode"),
         }
+        if intended_action in {"long", "short"}:
+            payload["intended_action"] = intended_action
+        return payload
 
     def _plan_setup_family(
         self,
@@ -1514,27 +1730,16 @@ class WatchlistOrchestrationService:
         action: str,
         transmission_summary: dict[str, object] | None = None,
     ) -> tuple[float, float, float, float]:
-        entry = round(float(recommendation.entry_price), 4)
-        stop = round(float(recommendation.stop_loss), 4)
-        take = round(float(recommendation.take_profit), 4)
-        if entry <= 0:
-            return entry, entry, stop, take
-        risk_distance = abs(entry - stop)
-        reward_distance = abs(take - entry)
         bias = transmission_summary.get("context_bias") if isinstance(transmission_summary, dict) else None
-        if setup_family in {"breakout", "breakdown"} and risk_distance > 0:
-            stop = round(stop + (risk_distance * 0.15 if action == "long" else -risk_distance * 0.15), 4)
-            take = round(take + (reward_distance * 0.12 if action == "long" else -reward_distance * 0.12), 4)
-        elif setup_family == "mean_reversion" and risk_distance > 0:
-            stop = round(stop - (risk_distance * 0.1 if action == "long" else -risk_distance * 0.1), 4)
-            take = round(take - (reward_distance * 0.12 if action == "long" else -reward_distance * 0.12), 4)
-        elif setup_family == "catalyst_follow_through" and reward_distance > 0:
-            take = round(take + (reward_distance * 0.18 if action == "long" else -reward_distance * 0.18), 4)
-        elif setup_family == "macro_beneficiary_loser" and reward_distance > 0:
-            take = round(take + (reward_distance * 0.08 if action == "long" else -reward_distance * 0.08), 4)
-        if bias == "headwind" and risk_distance > 0:
-            stop = round(stop + (risk_distance * 0.08 if action == "long" else -risk_distance * 0.08), 4)
-        return entry, entry, stop, take
+        return family_adjusted_trade_levels(
+            entry_price=float(recommendation.entry_price),
+            stop_loss=float(recommendation.stop_loss),
+            take_profit=float(recommendation.take_profit),
+            setup_family=setup_family,
+            action=action,
+            transmission_context_bias=str(bias) if bias is not None else None,
+            tuning_config=self.plan_generation_tuning_config,
+        )
 
     @staticmethod
     def _plan_risks(
@@ -1606,16 +1811,18 @@ class WatchlistOrchestrationService:
         transmission_summary: dict[str, object] | None = None,
     ) -> dict[str, object]:
         if calibration_summary is None:
+            threshold_offset = self._signal_gating_tuning_value("threshold_offset", 0.0)
+            confidence_adjustment = self._signal_gating_tuning_value("confidence_adjustment", 0.0)
             return {
                 "enabled": False,
                 "review_status": "disabled",
                 "review_status_label": self._calibration_review_status_label("disabled"),
                 "raw_confidence_percent": round(confidence_percent, 2),
-                "calibrated_confidence_percent": round(confidence_percent, 2),
-                "confidence_adjustment": 0.0,
+                "calibrated_confidence_percent": round(confidence_percent + confidence_adjustment, 2),
+                "confidence_adjustment": round(confidence_adjustment, 2),
                 "base_confidence_threshold": round(self.confidence_threshold, 2),
-                "effective_confidence_threshold": round(self.confidence_threshold, 2),
-                "threshold_adjustment": 0.0,
+                "effective_confidence_threshold": round(self.confidence_threshold + threshold_offset, 2),
+                "threshold_adjustment": round(threshold_offset, 2),
                 "reasons": [],
                 "reason_details": [],
             }
@@ -1670,11 +1877,24 @@ class WatchlistOrchestrationService:
             threshold_adjustment += adjustment
             confidence_adjustment += conf_adjustment
             reasons.extend(bucket_reasons)
+        threshold_adjustment += self._signal_gating_tuning_value("threshold_offset", 0.0)
+        confidence_adjustment += self._signal_gating_tuning_value("confidence_adjustment", 0.0)
+        review_scale = 1.0
+        if strong_bucket_count >= 3 and usable_bucket_count >= 5:
+            review_scale = 1.0
+        elif strong_bucket_count >= 2 or usable_bucket_count >= 4:
+            review_scale = 0.8
+        elif usable_bucket_count >= 2:
+            review_scale = 0.6
+        else:
+            review_scale = 0.4
+        threshold_adjustment *= review_scale
+        confidence_adjustment *= review_scale
         threshold_adjustment = max(-6.0, min(15.0, threshold_adjustment))
         confidence_adjustment = max(-4.0, min(2.5, confidence_adjustment))
         effective_threshold = max(45.0, min(90.0, base_threshold + threshold_adjustment))
         calibrated_confidence = max(5.0, min(95.0, confidence_percent + confidence_adjustment))
-        review_status = self._calibration_review_status(usable_bucket_count, strong_bucket_count, reasons)
+        review_status = self._calibration_review_status(usable_bucket_count, strong_bucket_count)
         return {
             "enabled": True,
             "review_status": review_status,
@@ -1685,6 +1905,7 @@ class WatchlistOrchestrationService:
             "effective_confidence_threshold": round(effective_threshold, 2),
             "threshold_adjustment": round(threshold_adjustment, 2),
             "overall_win_rate_percent": overall_win_rate,
+            "review_scale": round(review_scale, 2),
             "setup_family": self._bucket_snapshot(setup_family, setup_bucket),
             "confidence_bucket": self._bucket_snapshot(bucket_key, confidence_bucket),
             "horizon": self._bucket_snapshot(horizon, horizon_bucket),
@@ -1773,15 +1994,13 @@ class WatchlistOrchestrationService:
         }
 
     @staticmethod
-    def _calibration_review_status(usable_bucket_count: int, strong_bucket_count: int, reasons: list[str]) -> str:
+    def _calibration_review_status(usable_bucket_count: int, strong_bucket_count: int) -> str:
         if usable_bucket_count == 0:
             return "insufficient_data"
         if strong_bucket_count >= 2 and usable_bucket_count >= 4:
             return "strong_for_gating"
         if usable_bucket_count >= 3:
             return "usable_for_gating"
-        if reasons:
-            return "heuristic_limited"
         return "heuristic_limited"
 
     def _calibration_transmission_bias(self, transmission_summary: dict[str, object] | None) -> str:
@@ -1832,8 +2051,7 @@ class WatchlistOrchestrationService:
             return 20
         return 5
 
-    @staticmethod
-    def _shortlist_limit(horizon: StrategyHorizon, ticker_count: int) -> int:
+    def _shortlist_limit(self, horizon: StrategyHorizon, ticker_count: int) -> int:
         if ticker_count <= 0:
             return 0
         if horizon == StrategyHorizon.ONE_DAY:
@@ -1865,10 +2083,15 @@ class WatchlistOrchestrationService:
             size_bump = 10.0
         elif ticker_count >= 10:
             size_bump = 5.0
-        return min(95.0, base + size_bump)
+        tuning_relief = (
+            self._signal_gating_tuning_value("threshold_offset", 0.0) * 0.35
+            + self._signal_gating_tuning_value("confidence_adjustment", 0.0) * 0.25
+            + self._signal_gating_tuning_value("shortlist_aggressiveness", 1.0) * 1.2
+            + self._signal_gating_tuning_value("near_miss_gap_cutoff", 1.5) * 0.5
+        )
+        return min(95.0, max(35.0, base + size_bump - tuning_relief))
 
-    @staticmethod
-    def _minimum_shortlist_attention(horizon: StrategyHorizon, ticker_count: int) -> float:
+    def _minimum_shortlist_attention(self, horizon: StrategyHorizon, ticker_count: int) -> float:
         base = {
             StrategyHorizon.ONE_DAY: 52.0,
             StrategyHorizon.ONE_WEEK: 45.0,
@@ -1879,4 +2102,5 @@ class WatchlistOrchestrationService:
             size_bump = 12.0
         elif ticker_count >= 10:
             size_bump = 6.0
-        return min(95.0, base + size_bump)
+        tuning_relief = self._signal_gating_tuning_value("shortlist_aggressiveness", 1.0) * 1.0
+        return min(95.0, max(35.0, base + size_bump - tuning_relief))

@@ -9,9 +9,10 @@ export type RunStatus =
 export type JobType =
   | "proposal_generation"
   | "recommendation_evaluation"
-  | "weight_optimization"
-  | "macro_sentiment_refresh"
-  | "industry_sentiment_refresh";
+  | "plan_generation_tuning"
+  | "performance_assessment"
+  | "macro_context_refresh"
+  | "industry_context_refresh";
 
 export type RecommendationDirection = "LONG" | "SHORT" | "NEUTRAL";
 export type RecommendationState = "PENDING" | "WIN" | "LOSS";
@@ -139,6 +140,37 @@ export interface AppHealthResponse {
   };
 }
 
+export interface WorkerHeartbeat {
+  worker_id: string;
+  hostname: string;
+  pid: number;
+  status: string;
+  last_heartbeat_at: string;
+  started_at: string;
+  version: string | null;
+  active_run_id: number | null;
+  metadata_json: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ActiveWorkersResponse {
+  status: string;
+  count: number;
+  stale_seconds: number;
+  workers: WorkerHeartbeat[];
+}
+
+export interface WorkerLogsResponse {
+  worker_id: string;
+  log_path: string;
+  tail: number;
+  line_count: number;
+  truncated: boolean;
+  updated_at: string;
+  lines: string[];
+}
+
 export interface AppPreflightReport {
   status: string;
   checked_at: string;
@@ -146,40 +178,72 @@ export interface AppPreflightReport {
   checks: PreflightCheck[];
 }
 
+export interface RecommendationQualityWindowSummary {
+  window_label?: string;
+  computed_after?: string;
+  computed_before?: string;
+  evaluated_after?: string;
+  evaluated_before?: string;
+  status: string;
+  status_reason: string;
+  generated_at: string;
+  resolved_outcomes: number;
+  overall_win_rate_percent: number | null;
+  calibration_report: CalibrationReport | null;
+  smoothed_calibration_report: CalibrationReport | null;
+  actual_actionable_win_rate_percent: number | null;
+  actual_actionable_average_return_5d: number | null;
+  high_confidence_win_rate_percent: number | null;
+  high_confidence_average_return_5d: number | null;
+  ready_for_expansion: boolean;
+  strongest_positive_count: number;
+  weakest_count: number;
+  family_count: number;
+  walk_forward_promotion_recommended: boolean | null;
+  walk_forward_average_win_rate_delta: number | null;
+  walk_forward_average_expected_value_delta: number | null;
+  walk_forward_error: string | null;
+}
+
+export interface RecommendationQualitySummary extends RecommendationQualityWindowSummary {
+  tuning_settings: {
+    confidence_threshold: number;
+    signal_gating: {
+      threshold_offset: number;
+      confidence_adjustment: number;
+      near_miss_gap_cutoff: number;
+      shortlist_aggressiveness: number;
+      degraded_penalty: number;
+    };
+    plan_generation: {
+      active_config_version_id: number | null;
+      auto_enabled: boolean;
+      auto_promote_enabled: boolean;
+      min_actionable_resolved: number;
+      min_validation_resolved: number;
+    };
+  };
+  latest_assessment: Record<string, unknown>;
+}
+
+export interface RecommendationQualityResponse {
+  summary: RecommendationQualitySummary;
+  windowed_summaries: RecommendationQualityWindowSummary[];
+  calibration: CalibrationSummary;
+  baselines: RecommendationBaselineSummary;
+  evidence_concentration: RecommendationEvidenceConcentrationSummary;
+  setup_family_review: Record<string, unknown>;
+  walk_forward_validation: Record<string, unknown> | null;
+  next_actions: string[];
+}
+
 export interface DashboardResponse {
   watchlists: Watchlist[];
   jobs: Job[];
   latest_runs: Run[];
   recommendation_plans: RecommendationPlan[];
+  recommendation_quality?: RecommendationQualityResponse;
 }
-
-export interface SupportSnapshot {
-  id: number | null;
-  scope: "macro" | "industry" | string;
-  subject_key: string;
-  subject_label: string;
-  status: string;
-  score: number;
-  label: string;
-  computed_at: string;
-  expires_at: string | null;
-  is_expired: boolean;
-  coverage: Record<string, unknown>;
-  source_breakdown: Record<string, unknown>;
-  drivers: string[];
-  signals: Record<string, unknown>;
-  diagnostics: Record<string, unknown>;
-  summary_text: string;
-  job_id: number | null;
-  run_id: number | null;
-}
-
-export interface SupportSnapshotListResponse {
-  snapshots: SupportSnapshot[];
-  scope: string | null;
-  limit: number;
-}
-
 
 export interface KeyLabelDetail {
   key: string;
@@ -193,6 +257,13 @@ export interface ContextEventRow {
   source_priority_detail?: KeyLabelDetail;
   persistence_state?: string;
   persistence_state_detail?: KeyLabelDetail;
+  state_transition?: string;
+  catalyst_type?: string;
+  trigger_actor?: string | null;
+  trigger_actor_role?: string | null;
+  trigger_source_type?: string | null;
+  market_interpretation?: string;
+  state_change_reason?: string | null;
   window_hint?: string;
   window_hint_detail?: KeyLabelDetail;
   recency_bucket?: string;
@@ -419,6 +490,46 @@ export interface RecommendationPlanOutcome {
   run_id: number | null;
 }
 
+export interface RecommendationDecisionSample {
+  id: number | null;
+  recommendation_plan_id: number;
+  ticker: string;
+  horizon: string;
+  action: string;
+  decision_type: string;
+  decision_reason: string;
+  shortlisted: boolean;
+  shortlist_rank: number | null;
+  shortlist_decision: Record<string, unknown>;
+  confidence_percent: number;
+  calibrated_confidence_percent: number | null;
+  effective_threshold_percent: number | null;
+  confidence_gap_percent: number | null;
+  setup_family: string;
+  transmission_bias: string | null;
+  context_regime: string | null;
+  review_priority: string;
+  review_label: string | null;
+  review_notes: string;
+  reviewed_at: string | null;
+  decision_context: Record<string, unknown>;
+  signal_breakdown: Record<string, unknown>;
+  evidence_summary: Record<string, unknown>;
+  run_id: number | null;
+  job_id: number | null;
+  watchlist_id: number | null;
+  ticker_signal_snapshot_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecommendationDecisionSampleListResponse {
+  items: RecommendationDecisionSample[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface RecommendationPlan {
   id: number | null;
   ticker: string;
@@ -447,6 +558,13 @@ export interface RecommendationPlan {
   latest_outcome: RecommendationPlanOutcome | null;
 }
 
+export interface RecommendationPlanListResponse {
+  items: RecommendationPlan[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface RecommendationCalibrationBucket {
   key: string;
   label: string;
@@ -467,6 +585,22 @@ export interface RecommendationCalibrationBucket {
   average_return_5d: number | null;
   average_mfe: number | null;
   average_mae: number | null;
+}
+
+export interface RecommendationPlanStats {
+  total_plans: number;
+  open_plans: number;
+  expired_plans: number;
+  scored_outcomes: number;
+  win_rate_percent: number | null;
+  window: string;
+  resolved_outcomes: number;
+  open_outcomes: number;
+  expired_outcomes: number;
+  win_outcomes: number;
+  loss_outcomes: number;
+  no_action_outcomes: number;
+  watchlist_outcomes: number;
 }
 
 export interface RecommendationCalibrationSummary {
@@ -601,10 +735,330 @@ export interface OptimizationState {
   recent_backups: OptimizationBackup[];
 }
 
+export interface PlanGenerationTuningSettingsState {
+  active_config_version_id: number | null;
+  auto_enabled: boolean;
+  auto_promote_enabled: boolean;
+  min_actionable_resolved: number;
+  min_validation_resolved: number;
+}
+
+export interface PlanGenerationTuningCandidate {
+  id: number | null;
+  run_id: number | null;
+  rank: number | null;
+  status: string;
+  is_baseline: boolean;
+  promotion_eligible: boolean;
+  config: Record<string, unknown>;
+  changed_keys: string[];
+  score_summary: Record<string, unknown>;
+  metric_breakdown: Record<string, unknown>;
+  sample_breakdown: Record<string, unknown>;
+  validation_summary: Record<string, unknown>;
+  rejection_reasons: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlanGenerationWalkForwardSlice {
+  slice_index: number;
+  window_label: string;
+  computed_after: string | null;
+  computed_before: string | null;
+  evaluated_after: string | null;
+  evaluated_before: string | null;
+  total_records: number;
+  resolved_records: number;
+  baseline_actionable_count: number;
+  candidate_actionable_count: number;
+  baseline_win_rate_percent: number | null;
+  candidate_win_rate_percent: number | null;
+  baseline_expected_value: number;
+  candidate_expected_value: number;
+  win_rate_delta: number | null;
+  expected_value_delta: number | null;
+  ambiguous_count: number;
+  sample_status: string;
+}
+
+export interface PlanGenerationWalkForwardSummary {
+  total_slices: number;
+  lookback_days: number;
+  validation_days: number;
+  step_days: number;
+  min_validation_resolved: number;
+  candidate_label: string;
+  baseline_label: string;
+  qualified_slices: number;
+  candidate_wins: number;
+  baseline_wins: number;
+  ties: number;
+  average_win_rate_delta: number | null;
+  average_expected_value_delta: number | null;
+  promotion_recommended: boolean;
+  promotion_rationale: string;
+  slices: PlanGenerationWalkForwardSlice[];
+}
+
+export interface PlanGenerationTuningRun {
+  id: number | null;
+  status: string;
+  mode: string;
+  objective_name: string;
+  promotion_mode: string;
+  baseline_config_version_id: number | null;
+  winning_candidate_id: number | null;
+  promoted_config_version_id: number | null;
+  eligible_record_count: number;
+  eligible_tier_a_count: number;
+  validation_record_count: number;
+  candidate_count: number;
+  summary: Record<string, unknown>;
+  filters: Record<string, unknown>;
+  candidates: PlanGenerationTuningCandidate[];
+  error_message: string | null;
+  code_version: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlanGenerationTuningConfigVersion {
+  id: number | null;
+  version_label: string;
+  status: string;
+  source: string;
+  parent_config_version_id: number | null;
+  source_run_id: number | null;
+  source_candidate_id: number | null;
+  config: Record<string, unknown>;
+  parameter_schema_version: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlanGenerationTuningState {
+  objective_name: string;
+  active_config_version_id: number | null;
+  active_config: Record<string, unknown>;
+  auto_enabled: boolean;
+  auto_promote_enabled: boolean;
+  latest_run: PlanGenerationTuningRun | null;
+}
+
+export interface PlanGenerationTuningResponse {
+  objective_name: string;
+  parameter_schema_version: string;
+  parameters: Array<Record<string, unknown>>;
+  state: PlanGenerationTuningState;
+}
+
+export interface PlanGenerationTuningValidationResponse {
+  summary: PlanGenerationWalkForwardSummary;
+  candidate_config: Record<string, unknown>;
+  baseline_config: Record<string, unknown>;
+  candidate_version: PlanGenerationTuningConfigVersion;
+  baseline_version: PlanGenerationTuningConfigVersion;
+}
+
+export interface PlanGenerationTuningRunsResponse {
+  items: PlanGenerationTuningRun[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface PlanGenerationTuningConfigsResponse {
+  items: PlanGenerationTuningConfigVersion[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface SignalGatingTuningState {
+  threshold_offset: number;
+  confidence_adjustment: number;
+  near_miss_gap_cutoff: number;
+  shortlist_aggressiveness: number;
+  degraded_penalty: number;
+}
+
+export interface SignalGatingTuningCandidateResult {
+  threshold: number | null;
+  score: number | null;
+  selected_count: number;
+  resolved_selected_count: number;
+  resolved_sample_count: number;
+  win_count: number;
+  loss_count: number;
+  skipped_win_count: number;
+  skipped_loss_count: number;
+  shortlisted_selected_count: number;
+  near_miss_selected_count: number;
+  degraded_selected_count: number;
+  true_positive_count: number;
+  false_positive_count: number;
+  false_negative_count: number;
+  true_negative_count: number;
+  selection_rate_percent: number | null;
+  precision_percent: number | null;
+  recall_percent: number | null;
+  win_rate_percent: number | null;
+  threshold_offset: number;
+  confidence_adjustment: number;
+  near_miss_gap_cutoff: number;
+  shortlist_aggressiveness: number;
+  degraded_penalty: number;
+  [key: string]: unknown;
+}
+
+export interface SignalGatingTuningRun {
+  id: number | null;
+  objective_name: string;
+  status: string;
+  applied: boolean;
+  filters: Record<string, unknown>;
+  sample_count: number;
+  resolved_sample_count: number;
+  candidate_count: number;
+  baseline_threshold: number | null;
+  baseline_score: number | null;
+  best_threshold: number | null;
+  best_score: number | null;
+  winning_config: Record<string, unknown>;
+  candidate_results: SignalGatingTuningCandidateResult[];
+  summary: Record<string, unknown>;
+  artifact: Record<string, unknown>;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SignalGatingTuningResponse {
+  objective_name: string;
+  current_confidence_threshold: number;
+  active_tuning: SignalGatingTuningState;
+  latest_run: SignalGatingTuningRun | null;
+}
+
+export interface SignalGatingTuningRunsResponse {
+  runs: SignalGatingTuningRun[];
+  limit: number;
+}
+
+export interface CalibrationReliabilityBin {
+  bin_key: string;
+  bin_label: string;
+  sample_count: number;
+  resolved_count: number;
+  predicted_probability: number | null;
+  realized_win_rate_percent: number | null;
+  brier_score: number | null;
+  calibration_error: number | null;
+}
+
+export interface CalibrationReport {
+  version_label: string;
+  method: string;
+  sample_count: number;
+  resolved_count: number;
+  brier_score: number | null;
+  expected_calibration_error: number | null;
+  bins: CalibrationReliabilityBin[];
+}
+
+export interface CalibrationSummary {
+  total_outcomes: number;
+  resolved_outcomes: number;
+  open_outcomes: number;
+  win_outcomes: number;
+  loss_outcomes: number;
+  no_action_outcomes: number;
+  watchlist_outcomes: number;
+  overall_win_rate_percent: number | null;
+  calibration_report: CalibrationReport | null;
+  smoothed_calibration_report: CalibrationReport | null;
+  by_confidence_bucket: unknown[];
+  by_setup_family: unknown[];
+  by_action: unknown[];
+  by_horizon: unknown[];
+  by_transmission_bias: unknown[];
+  by_context_regime: unknown[];
+  by_horizon_setup_family: unknown[];
+}
+
+export interface PerformanceWindowAssessment {
+  window: string;
+  evaluated_after: string;
+  resolved_outcomes: number;
+  overall_win_rate_percent: number | null;
+  calibration_brier_score: number | null;
+  calibration_ece: number | null;
+  actual_actionable_win_rate_percent: number | null;
+  actual_actionable_average_return_5d: number | null;
+  high_confidence_win_rate_percent: number | null;
+  high_confidence_average_return_5d: number | null;
+  family_count: number;
+  ready_for_expansion: boolean;
+}
+
+export interface PerformanceAssessmentResponse {
+  job: Job;
+  history_count: number;
+  latest_run: Run | null;
+  latest_assessment: Record<string, unknown>;
+  calibration_summary: CalibrationSummary | null;
+  windowed_assessments?: PerformanceWindowAssessment[];
+}
+
+export interface WalkForwardSlice {
+  slice_index: number;
+  window_label: string;
+  computed_after: string | null;
+  computed_before: string | null;
+  evaluated_after: string | null;
+  evaluated_before: string | null;
+  total_outcomes: number;
+  resolved_outcomes: number;
+  overall_win_rate_percent: number | null;
+  calibration_report: CalibrationReport | null;
+  actual_actionable_win_rate_percent: number | null;
+  high_confidence_win_rate_percent: number | null;
+  actual_actionable_average_return_5d: number | null;
+  high_confidence_average_return_5d: number | null;
+  ready_for_expansion: boolean;
+  setup_family_count: number;
+  horizon_count: number;
+  transmission_bias_count: number;
+  context_regime_count: number;
+}
+
+export interface WalkForwardValidationResponse {
+  total_slices: number;
+  lookback_days: number;
+  validation_days: number;
+  step_days: number;
+  min_resolved_outcomes: number;
+  slices: WalkForwardSlice[];
+}
+
+export interface CalibrationReportResponse {
+  calibration_summary: CalibrationSummary;
+  calibration_report: CalibrationReport | null;
+}
+
 export interface SettingsResponse {
   settings: AppSetting[];
   providers: ProviderCredential[];
-  optimization: OptimizationState;
+  signal_gating_tuning: SignalGatingTuningState;
+  plan_generation_tuning: {
+    settings: PlanGenerationTuningSettingsState;
+    active_config: Record<string, unknown>;
+  };
 }
 
 export interface DocSection {

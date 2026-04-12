@@ -1,7 +1,8 @@
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import KeyLabelDetail, RecommendationPlanOutcome
@@ -15,34 +16,62 @@ class RecommendationOutcomeRepository:
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
     def upsert_outcome(self, outcome: RecommendationPlanOutcome) -> RecommendationPlanOutcome:
-        record = self.session.scalar(
-            select(RecommendationOutcomeRecord).where(
-                RecommendationOutcomeRecord.recommendation_plan_id == outcome.recommendation_plan_id
+        self.session.rollback()
+        try:
+            record = self.session.scalar(
+                select(RecommendationOutcomeRecord).where(
+                    RecommendationOutcomeRecord.recommendation_plan_id == outcome.recommendation_plan_id
+                )
             )
+            if record is None:
+                record = RecommendationOutcomeRecord(recommendation_plan_id=outcome.recommendation_plan_id)
+                self.session.add(record)
+            self._apply_outcome(record, outcome)
+            self.session.commit()
+            self.session.refresh(record)
+            return self._to_model(record)
+        except IntegrityError:
+            self.session.rollback()
+            record = self.session.scalar(
+                select(RecommendationOutcomeRecord).where(
+                    RecommendationOutcomeRecord.recommendation_plan_id == outcome.recommendation_plan_id
+                )
+            )
+            if record is None:
+                raise
+            self._apply_outcome(record, outcome)
+            self.session.commit()
+            self.session.refresh(record)
+            return self._to_model(record)
+
+    def count_outcomes(self) -> dict[str, int]:
+        self.session.rollback()
+        total = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord)) or 0)
+        resolved = int(
+            self.session.scalar(
+                select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome.in_(["win", "loss"]))
+            )
+            or 0
         )
-        if record is None:
-            record = RecommendationOutcomeRecord(recommendation_plan_id=outcome.recommendation_plan_id)
-            self.session.add(record)
-        record.outcome = outcome.outcome
-        record.status = outcome.status
-        record.evaluated_at = self._normalize_datetime(outcome.evaluated_at)
-        record.entry_touched = outcome.entry_touched
-        record.stop_loss_hit = outcome.stop_loss_hit
-        record.take_profit_hit = outcome.take_profit_hit
-        record.horizon_return_1d = outcome.horizon_return_1d
-        record.horizon_return_3d = outcome.horizon_return_3d
-        record.horizon_return_5d = outcome.horizon_return_5d
-        record.max_favorable_excursion = outcome.max_favorable_excursion
-        record.max_adverse_excursion = outcome.max_adverse_excursion
-        record.realized_holding_period_days = outcome.realized_holding_period_days
-        record.direction_correct = outcome.direction_correct
-        record.confidence_bucket = outcome.confidence_bucket
-        record.setup_family = outcome.setup_family
-        record.notes = outcome.notes
-        record.run_id = outcome.run_id
-        self.session.commit()
-        self.session.refresh(record)
-        return self._to_model(record)
+        open_outcomes = int(
+            self.session.scalar(
+                select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.status == "open")
+            )
+            or 0
+        )
+        wins = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == "win")) or 0)
+        losses = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == "loss")) or 0)
+        no_action = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == "no_action")) or 0)
+        watchlist = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == "watchlist")) or 0)
+        return {
+            "total_outcomes": total,
+            "resolved_outcomes": resolved,
+            "open_outcomes": open_outcomes,
+            "win_outcomes": wins,
+            "loss_outcomes": losses,
+            "no_action_outcomes": no_action,
+            "watchlist_outcomes": watchlist,
+        }
 
     def list_outcomes(
         self,
@@ -52,8 +81,12 @@ class RecommendationOutcomeRepository:
         recommendation_plan_id: int | None = None,
         run_id: int | None = None,
         setup_family: str | None = None,
+        resolved: str | None = None,
+        evaluated_after: datetime | None = None,
+        evaluated_before: datetime | None = None,
         limit: int = 50,
     ) -> list[RecommendationPlanOutcome]:
+        self.session.rollback()
         query = select(RecommendationOutcomeRecord, RecommendationPlanRecord).join(
             RecommendationPlanRecord,
             RecommendationOutcomeRecord.recommendation_plan_id == RecommendationPlanRecord.id,
@@ -68,12 +101,21 @@ class RecommendationOutcomeRepository:
             query = query.where(RecommendationOutcomeRecord.run_id == run_id)
         if setup_family:
             query = query.where(RecommendationOutcomeRecord.setup_family == setup_family)
+        if resolved == "resolved":
+            query = query.where(RecommendationOutcomeRecord.status == "resolved")
+        elif resolved == "unresolved":
+            query = query.where(RecommendationOutcomeRecord.status != "resolved")
+        if evaluated_after is not None:
+            query = query.where(RecommendationOutcomeRecord.evaluated_at >= self._normalize_datetime(evaluated_after))
+        if evaluated_before is not None:
+            query = query.where(RecommendationOutcomeRecord.evaluated_at <= self._normalize_datetime(evaluated_before))
         rows = self.session.execute(
             query.order_by(RecommendationOutcomeRecord.evaluated_at.desc()).limit(limit)
         ).all()
         return [self._to_joined_model(outcome_record, plan_record) for outcome_record, plan_record in rows]
 
     def get_outcomes_by_plan_ids(self, plan_ids: list[int]) -> dict[int, RecommendationPlanOutcome]:
+        self.session.rollback()
         normalized = [plan_id for plan_id in plan_ids if isinstance(plan_id, int)]
         if not normalized:
             return {}
@@ -94,6 +136,25 @@ class RecommendationOutcomeRepository:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
+
+    def _apply_outcome(self, record: RecommendationOutcomeRecord, outcome: RecommendationPlanOutcome) -> None:
+        record.outcome = outcome.outcome
+        record.status = outcome.status
+        record.evaluated_at = self._normalize_datetime(outcome.evaluated_at)
+        record.entry_touched = outcome.entry_touched
+        record.stop_loss_hit = outcome.stop_loss_hit
+        record.take_profit_hit = outcome.take_profit_hit
+        record.horizon_return_1d = outcome.horizon_return_1d
+        record.horizon_return_3d = outcome.horizon_return_3d
+        record.horizon_return_5d = outcome.horizon_return_5d
+        record.max_favorable_excursion = outcome.max_favorable_excursion
+        record.max_adverse_excursion = outcome.max_adverse_excursion
+        record.realized_holding_period_days = outcome.realized_holding_period_days
+        record.direction_correct = outcome.direction_correct
+        record.confidence_bucket = outcome.confidence_bucket
+        record.setup_family = outcome.setup_family
+        record.notes = outcome.notes
+        record.run_id = outcome.run_id
 
     def _to_model(self, record: RecommendationOutcomeRecord) -> RecommendationPlanOutcome:
         return RecommendationPlanOutcome(
@@ -127,6 +188,7 @@ class RecommendationOutcomeRepository:
         model.ticker = plan_record.ticker
         model.action = plan_record.action
         model.horizon = plan_record.horizon
+        model.confidence_percent = plan_record.confidence_percent
         transmission_summary = self._transmission_summary(plan_record)
         model.transmission_bias = self.taxonomy_service.derive_transmission_bias(transmission_summary)
         transmission_bias_definition = self.taxonomy_service.get_transmission_bias_definition(model.transmission_bias)

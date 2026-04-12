@@ -226,8 +226,11 @@ Trade-planning outputs:
   - a `ticker_signal_snapshot`
   - a `job`
   - a `run`
+Outcome evaluation:
 - `recommendation_outcomes` attach to exactly one `recommendation_plan`
 - `recommendation_outcomes` may also attach to the `run` that performed evaluation
+- the `outcome` field can be `win`, `loss`, `expired`, `no_action`, `watchlist`, `phantom_win`, `phantom_loss`, or `phantom_no_entry`
+- phantom outcomes are produced when a `no_action` plan carried an `intended_action` and valid trade levels, allowing the evaluation engine to simulate the skipped trade against real market data
 
 Standalone tables:
 - `app_settings`

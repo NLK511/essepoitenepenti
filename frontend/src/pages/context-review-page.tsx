@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
+import { ContextEventSummary, ContextScoreSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import type { ContextEventRow, IndustryContextSnapshot, MacroContextSnapshot, Run } from "../types";
 import { extractDisplayLabels, formatDate } from "../utils";
 
@@ -59,16 +60,6 @@ function summaryError(snapshot: { metadata?: Record<string, unknown> }): string 
   return typeof snapshot.metadata?.context_summary_error === "string" ? snapshot.metadata.context_summary_error : null;
 }
 
-function provenanceTone(snapshot: { metadata?: Record<string, unknown> }): "ok" | "warning" | "neutral" {
-  if (summaryError(snapshot)) {
-    return "warning";
-  }
-  if (summaryMethod(snapshot) === "llm_summary") {
-    return "ok";
-  }
-  return "neutral";
-}
-
 function provenanceLabel(snapshot: { metadata?: Record<string, unknown> }): string {
   const method = summaryMethod(snapshot);
   if (method === "llm_summary") {
@@ -85,6 +76,20 @@ function actionLabel(scope: "macro" | "industry"): string {
   return scope === "macro" ? "Macro" : "Industry";
 }
 
+function stateTone(value: unknown): "ok" | "warning" | "danger" | "neutral" {
+  const normalized = themeString(value, "").toLowerCase();
+  if (normalized === "easing" || normalized === "stabilizing" || normalized === "relief" || normalized === "growth_supportive") {
+    return "ok";
+  }
+  if (normalized === "escalating" || normalized === "fear" || normalized === "inflationary") {
+    return "danger";
+  }
+  if (normalized === "mixed" || normalized === "unknown") {
+    return "warning";
+  }
+  return "neutral";
+}
+
 function docsLink(doc: string, section?: string): string {
   const params = new URLSearchParams({ doc });
   if (section) {
@@ -95,31 +100,11 @@ function docsLink(doc: string, section?: string): string {
 
 const contextReviewDoc = (section?: string) => docsLink("operator-page-field-guide", section);
 
-function LabeledBadge(props: {
-  label: string;
-  value: string;
-  tone?: "ok" | "warning" | "danger" | "neutral" | "info";
-}) {
-  return (
-    <Badge tone={props.tone}>
-      <span className="context-badge-label">{props.label}</span>
-      <span className="context-badge-value">{props.value}</span>
-    </Badge>
-  );
-}
-
-function InlineMetric(props: { label: string; value: string }) {
-  return (
-    <span className="context-inline-metric">
-      <strong>{props.label}:</strong> {props.value}
-    </span>
-  );
-}
-
 export function ContextReviewPage() {
   const { showToast } = useToast();
   const [macroContexts, setMacroContexts] = useState<MacroContextSnapshot[]>([]);
   const [industryContexts, setIndustryContexts] = useState<IndustryContextSnapshot[]>([]);
+  const [selectedIndustryHistory, setSelectedIndustryHistory] = useState<IndustryContextSnapshot[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<"macro" | "industry" | null>(null);
@@ -142,6 +127,16 @@ export function ContextReviewPage() {
     }
   }
 
+  async function loadIndustryHistory(industryKey: string) {
+    try {
+      const history = await getJson<IndustryContextSnapshot[]>(`/api/context/industry?industry_key=${encodeURIComponent(industryKey)}&limit=50`);
+      setSelectedIndustryHistory(history);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : `Failed to load history for ${industryKey}`);
+      setSelectedIndustryHistory([]);
+    }
+  }
+
   useEffect(() => {
     void load();
   }, []);
@@ -150,7 +145,7 @@ export function ContextReviewPage() {
     try {
       setBusyAction(scope);
       setError(null);
-      const run = await postForm<Run>(`/api/support-snapshots/refresh/${scope}`, {});
+      const run = await postForm<Run>(`/api/context/refresh/${scope}`, {});
       showToast({
         message: `${actionLabel(scope)} refresh queued as run #${run.id}`,
         tone: "success",
@@ -187,6 +182,7 @@ export function ContextReviewPage() {
   useEffect(() => {
     if (industryOptions.length === 0) {
       setSelectedIndustryKey(null);
+      setSelectedIndustryHistory([]);
       return;
     }
     if (!selectedIndustryKey || !latestIndustryByKey.has(selectedIndustryKey)) {
@@ -194,10 +190,16 @@ export function ContextReviewPage() {
     }
   }, [industryOptions, latestIndustryByKey, selectedIndustryKey]);
 
+  useEffect(() => {
+    if (!selectedIndustryKey) {
+      setSelectedIndustryHistory([]);
+      return;
+    }
+    void loadIndustryHistory(selectedIndustryKey);
+  }, [selectedIndustryKey]);
+
   const latestIndustryContext = selectedIndustryKey ? latestIndustryByKey.get(selectedIndustryKey) ?? null : industryContexts[0] ?? null;
-  const visibleIndustryHistory = selectedIndustryKey
-    ? industryContexts.filter((snapshot) => snapshot.industry_key === selectedIndustryKey)
-    : industryContexts;
+  const visibleIndustryHistory = selectedIndustryKey ? selectedIndustryHistory : industryContexts;
 
   const headerMetrics = useMemo(() => {
     if (activeTab === "macro") {
@@ -256,9 +258,9 @@ export function ContextReviewPage() {
   return (
     <>
       <PageHeader
-        kicker="Shared context"
+        kicker="Context"
         title="Context review"
-        subtitle="Review macro and industry context in dedicated tabs, with the latest context snapshots shown first so shared backdrop changes are easier to inspect."
+        subtitle="Review the shared macro and industry backdrop first. Advanced event details stay below the main summary so the page remains readable."
         actions={
           <>
             <button type="button" className="button" onClick={() => void enqueueRefresh(activeScope)} disabled={busyAction !== null}>
@@ -287,7 +289,7 @@ export function ContextReviewPage() {
           </section>
 
           <Card>
-            <SectionTitle title="Choose context scope" actions={<HelpHint tooltip="Switch between macro and industry review so one shared context layer stays in focus at a time." to={contextReviewDoc("context-review")} />} />
+            <SectionTitle title="Choose context scope" subtitle="Keep one shared context layer in focus at a time." actions={<HelpHint tooltip="Switch between macro and industry review so one shared context layer stays in focus at a time." to={contextReviewDoc("context-review")} />} />
             <SegmentedTabs
               value={activeTab}
               onChange={setActiveTab}
@@ -340,7 +342,7 @@ function MacroContextTab(props: {
 
       <section className="card-grid context-review-history-grid">
         <Card>
-          <SectionTitle kicker="Macro context history" title="Recent macro context snapshots" actions={<HelpHint tooltip="Recent macro context snapshots show how the shared backdrop changed over time." to={contextReviewDoc("history-lists")} />} />
+          <SectionTitle kicker="History" title="Recent macro snapshots" actions={<HelpHint tooltip="Recent macro context snapshots show how the shared backdrop changed over time." to={contextReviewDoc("history-lists")} />} />
           {props.history.length === 0 ? <EmptyState message="No macro context snapshots stored yet." /> : <MacroContextList snapshots={props.history} />}
         </Card>
       </section>
@@ -391,7 +393,7 @@ function IndustryContextTab(props: {
 
       <section className="card-grid context-review-history-grid">
         <Card>
-          <SectionTitle kicker="Industry context history" title="Recent industry context snapshots" actions={<HelpHint tooltip="Recent industry context snapshots help you see whether the sector backdrop is stable, shifting, or degraded." to={contextReviewDoc("history-lists")} />} />
+          <SectionTitle kicker="History" title="Recent industry snapshots" actions={<HelpHint tooltip="Recent industry context snapshots help you see whether the sector backdrop is stable, shifting, or degraded." to={contextReviewDoc("history-lists")} />} />
           {props.history.length === 0 ? <EmptyState message="No industry context snapshots stored yet." /> : <IndustryContextList snapshots={props.history} />}
         </Card>
       </section>
@@ -408,15 +410,30 @@ function IndustryContextList({ snapshots }: { snapshots: IndustryContextSnapshot
           <li key={snapshot.id ?? `${snapshot.industry_key}-${snapshot.computed_at}`} className="list-item">
             <div className="card-headline">
               <div>
-                <div className="cluster">
-                  <Badge tone="info">industry context</Badge>
-                  <LabeledBadge tone={contextTone(snapshot)} label="status" value={snapshot.status} />
-                  <LabeledBadge label="industry" value={snapshot.industry_label || snapshot.industry_key} />
-                  {topDriver ? <LabeledBadge label="driver" value={themeString(topDriver.label)} /> : null}
-                  <LabeledBadge tone={provenanceTone(snapshot)} label="summary" value={provenanceLabel(snapshot)} />
+                <ContextScoreSummary
+                  confidence={snapshot.confidence_percent}
+                  saliency={snapshot.saliency_score}
+                  coverage={snapshot.active_drivers.length}
+                  freshness={formatDate(snapshot.computed_at)}
+                  tone={contextTone(snapshot)}
+                />
+                <div className="top-gap-small">
+                  <div className="cluster">
+                    <Badge tone={contextTone(snapshot)}>status {snapshot.status}</Badge>
+                    <Badge tone="neutral">industry {snapshot.industry_label || snapshot.industry_key}</Badge>
+                    {topDriver ? <Badge tone="neutral">driver {themeString(topDriver.label)}</Badge> : null}
+                  </div>
                 </div>
-                <div className="helper-text context-inline-metrics"><InlineMetric label="Direction" value={snapshot.direction} /><InlineMetric label="Saliency" value={snapshot.saliency_score.toFixed(2)} /><InlineMetric label="Confidence" value={`${snapshot.confidence_percent.toFixed(1)}%`} /><InlineMetric label="Computed" value={formatDate(snapshot.computed_at)} /></div>
+                <div className="helper-text context-inline-metrics"><span className="context-inline-metric"><strong>Direction:</strong> {snapshot.direction}</span><span className="context-inline-metric"><strong>Computed:</strong> {formatDate(snapshot.computed_at)}</span></div>
+                {topDriver ? (
+                  <div className="cluster top-gap-small">
+                    <Badge tone={stateTone(topDriver.state_transition)}>state {themeString(topDriver.state_transition)}</Badge>
+                    <Badge tone={stateTone(topDriver.market_interpretation)}>read {themeString(topDriver.market_interpretation)}</Badge>
+                    {themeString(topDriver.trigger_actor) !== "—" ? <Badge tone="neutral">actor {themeString(topDriver.trigger_actor)}</Badge> : null}
+                  </div>
+                ) : null}
                 {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
+                <WarningSummary warnings={snapshot.warnings} />
                 {summaryError(snapshot) ? <div className="helper-text top-gap-small">{summaryError(snapshot)}</div> : null}
               </div>
               <div className="cluster">
@@ -440,14 +457,28 @@ function MacroContextList({ snapshots }: { snapshots: MacroContextSnapshot[] }) 
           <li key={snapshot.id ?? snapshot.computed_at} className="list-item">
             <div className="card-headline">
               <div>
-                <div className="cluster">
-                  <Badge tone="info">macro context</Badge>
-                  <LabeledBadge tone={contextTone(snapshot)} label="status" value={snapshot.status} />
-                  {topTheme ? <LabeledBadge label="theme" value={themeString(topTheme.label)} /> : null}
-                  <LabeledBadge tone={provenanceTone(snapshot)} label="summary" value={provenanceLabel(snapshot)} />
+                <ContextScoreSummary
+                  confidence={snapshot.confidence_percent}
+                  saliency={snapshot.saliency_score}
+                  coverage={snapshot.active_themes.length}
+                  freshness={formatDate(snapshot.computed_at)}
+                  tone={contextTone(snapshot)}
+                />
+                <div className="top-gap-small">
+                  <div className="cluster">
+                    <Badge tone={contextTone(snapshot)}>status {snapshot.status}</Badge>
+                    {topTheme ? <Badge tone="neutral">theme {themeString(topTheme.label)}</Badge> : null}
+                  </div>
                 </div>
-                <div className="helper-text context-inline-metrics"><InlineMetric label="Saliency" value={snapshot.saliency_score.toFixed(2)} /><InlineMetric label="Confidence" value={`${snapshot.confidence_percent.toFixed(1)}%`} /><InlineMetric label="Computed" value={formatDate(snapshot.computed_at)} /></div>
+                {topTheme ? (
+                  <div className="cluster top-gap-small">
+                    <Badge tone={stateTone(topTheme.state_transition)}>state {themeString(topTheme.state_transition)}</Badge>
+                    <Badge tone={stateTone(topTheme.market_interpretation)}>read {themeString(topTheme.market_interpretation)}</Badge>
+                    {themeString(topTheme.trigger_actor) !== "—" ? <Badge tone="neutral">actor {themeString(topTheme.trigger_actor)}</Badge> : null}
+                  </div>
+                ) : null}
                 {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
+                <WarningSummary warnings={snapshot.warnings} />
                 {summaryError(snapshot) ? <div className="helper-text top-gap-small">{summaryError(snapshot)}</div> : null}
               </div>
               <div className="cluster">
@@ -470,15 +501,24 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
 
   return (
     <div className="stack-page top-gap-small">
-      <div className="cluster">
-        <Badge tone="info">industry context</Badge>
-        <LabeledBadge tone={contextTone(snapshot)} label="status" value={snapshot.status} />
-        <LabeledBadge label="industry" value={snapshot.industry_label || snapshot.industry_key} />
-        <LabeledBadge tone="neutral" label="direction" value={snapshot.direction || "—"} />
-        <LabeledBadge tone="neutral" label="confidence" value={`${snapshot.confidence_percent.toFixed(1)}%`} />
-        <LabeledBadge tone={provenanceTone(snapshot)} label="summary" value={provenanceLabel(snapshot)} />
-        {snapshot.warnings.length > 0 ? <LabeledBadge tone="warning" label="warnings" value={String(snapshot.warnings.length)} /> : null}
-        {snapshot.missing_inputs.length > 0 ? <LabeledBadge tone="warning" label="missing" value={String(snapshot.missing_inputs.length)} /> : null}
+      <ContextScoreSummary
+        confidence={snapshot.confidence_percent}
+        saliency={snapshot.saliency_score}
+        coverage={snapshot.active_drivers.length}
+        freshness={formatDate(snapshot.computed_at)}
+        tone={contextTone(snapshot)}
+      />
+      <div className="top-gap-small">
+        <div className="cluster">
+          <Badge tone={contextTone(snapshot)}>status {snapshot.status}</Badge>
+          <Badge tone="neutral">industry {snapshot.industry_label || snapshot.industry_key}</Badge>
+          <Badge tone="neutral">direction {snapshot.direction || "—"}</Badge>
+          {snapshot.warnings.length > 0 ? <Badge tone="warning">warnings {snapshot.warnings.length}</Badge> : null}
+          {snapshot.missing_inputs.length > 0 ? <Badge tone="warning">missing {snapshot.missing_inputs.length}</Badge> : null}
+        </div>
+      </div>
+      <div className="top-gap-small">
+        <ProvenanceStrip method={summaryMethod(snapshot)} backend={summaryBackend(snapshot)} model={summaryModel(snapshot)} error={summaryError(snapshot)} />
       </div>
 
       {snapshot.summary_text ? (
@@ -508,15 +548,19 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
               {drivers.map((driver, index) => {
                 const channels = extractDisplayLabels(driver, "transmission_channel_details", "transmission_channels").slice(0, 4);
                 return (
-                  <div key={`${themeString(driver.label)}-${index}`} className="data-point">
-                    <span className="data-point-label">Driver {index + 1}</span>
-                    <span className="data-point-value">{themeString(driver.label)}</span>
-                    <div className="helper-text top-gap-small context-inline-metrics">
-                      <InlineMetric label="Window" value={detailLabel(driver.window_hint_detail, driver.window_hint)} />
-                      <InlineMetric label="Source" value={detailLabel(driver.source_priority_detail, driver.source_priority)} />
-                    </div>
-                    {channels.length > 0 ? <div className="helper-text context-inline-metrics"><InlineMetric label="Channels" value={channels.join(" · ")} /></div> : null}
-                  </div>
+                  <ContextEventSummary
+                    key={`${themeString(driver.label)}-${index}`}
+                    label={`Driver ${index + 1}`}
+                    value={themeString(driver.label)}
+                    details={[
+                      { label: "Window", value: detailLabel(driver.window_hint_detail, driver.window_hint) },
+                      { label: "State", value: themeString(driver.state_transition) },
+                      { label: "Catalyst", value: themeString(driver.catalyst_type) },
+                      { label: "Read", value: themeString(driver.market_interpretation) },
+                      { label: "Source", value: detailLabel(driver.source_priority_detail, driver.source_priority) },
+                    ]}
+                    channels={channels}
+                  />
                 );
               })}
             </div>
@@ -543,12 +587,7 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
               <div className="cluster">{linkedIndustryThemes.map((theme) => <Badge key={theme}>{theme}</Badge>)}</div>
             </div>
           ) : null}
-          {snapshot.warnings.length > 0 ? (
-            <div className="top-gap-small">
-              <div className="section-heading"><strong>Warnings</strong></div>
-              <ul className="list-reset">{snapshot.warnings.map((warning) => <li key={warning} className="list-item compact-item">{warning}</li>)}</ul>
-            </div>
-          ) : null}
+          <WarningSummary warnings={snapshot.warnings} />
           {snapshot.missing_inputs.length > 0 ? (
             <div className="top-gap-small">
               <div className="section-heading"><strong>Missing inputs</strong></div>
@@ -570,15 +609,23 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
 
   return (
     <div className="stack-page top-gap-small">
-      <div className="cluster">
-        <Badge tone="info">macro context</Badge>
-        <LabeledBadge tone={contextTone(snapshot)} label="status" value={snapshot.status} />
-        {topTheme ? <LabeledBadge label="theme" value={themeString(topTheme.label)} /> : null}
-        <LabeledBadge tone="neutral" label="confidence" value={`${snapshot.confidence_percent.toFixed(1)}%`} />
-        <LabeledBadge tone="neutral" label="saliency" value={snapshot.saliency_score.toFixed(2)} />
-        <LabeledBadge tone={provenanceTone(snapshot)} label="summary" value={provenanceLabel(snapshot)} />
-        {snapshot.warnings.length > 0 ? <LabeledBadge tone="warning" label="warnings" value={String(snapshot.warnings.length)} /> : null}
-        {snapshot.missing_inputs.length > 0 ? <LabeledBadge tone="warning" label="missing" value={String(snapshot.missing_inputs.length)} /> : null}
+      <ContextScoreSummary
+        confidence={snapshot.confidence_percent}
+        saliency={snapshot.saliency_score}
+        coverage={snapshot.active_themes.length}
+        freshness={formatDate(snapshot.computed_at)}
+        tone={contextTone(snapshot)}
+      />
+      <div className="top-gap-small">
+        <div className="cluster">
+          <Badge tone={contextTone(snapshot)}>status {snapshot.status}</Badge>
+          {topTheme ? <Badge tone="neutral">theme {themeString(topTheme.label)}</Badge> : null}
+          {snapshot.warnings.length > 0 ? <Badge tone="warning">warnings {snapshot.warnings.length}</Badge> : null}
+          {snapshot.missing_inputs.length > 0 ? <Badge tone="warning">missing {snapshot.missing_inputs.length}</Badge> : null}
+        </div>
+      </div>
+      <div className="top-gap-small">
+        <ProvenanceStrip method={summaryMethod(snapshot)} backend={summaryBackend(snapshot)} model={summaryModel(snapshot)} error={summaryError(snapshot)} />
       </div>
 
       {snapshot.summary_text ? (
@@ -608,16 +655,20 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
               {themes.map((theme, index) => {
                 const channels = extractDisplayLabels(theme, "transmission_channel_details", "transmission_channels").slice(0, 4);
                 return (
-                  <div key={`${themeString(theme.label)}-${index}`} className="data-point">
-                    <span className="data-point-label">Theme {index + 1}</span>
-                    <span className="data-point-value">{themeString(theme.label)}</span>
-                    <div className="helper-text top-gap-small context-inline-metrics">
-                      <InlineMetric label="State" value={detailLabel(theme.persistence_state_detail, theme.persistence_state)} />
-                      <InlineMetric label="Window" value={detailLabel(theme.window_hint_detail, theme.window_hint)} />
-                    </div>
-                    <div className="helper-text context-inline-metrics"><InlineMetric label="Source" value={detailLabel(theme.source_priority_detail, theme.source_priority)} /></div>
-                    {channels.length > 0 ? <div className="helper-text context-inline-metrics"><InlineMetric label="Channels" value={channels.join(" · ")} /></div> : null}
-                  </div>
+                  <ContextEventSummary
+                    key={`${themeString(theme.label)}-${index}`}
+                    label={`Theme ${index + 1}`}
+                    value={themeString(theme.label)}
+                    details={[
+                      { label: "Persistence", value: detailLabel(theme.persistence_state_detail, theme.persistence_state) },
+                      { label: "Transition", value: themeString(theme.state_transition) },
+                      { label: "Catalyst", value: themeString(theme.catalyst_type) },
+                      { label: "Read", value: themeString(theme.market_interpretation) },
+                      { label: "Window", value: detailLabel(theme.window_hint_detail, theme.window_hint) },
+                      { label: "Source", value: detailLabel(theme.source_priority_detail, theme.source_priority) },
+                    ]}
+                    channels={channels}
+                  />
                 );
               })}
             </div>
@@ -650,12 +701,7 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
               <div className="helper-text">{contradictory.join(" · ")}</div>
             </div>
           ) : null}
-          {snapshot.warnings.length > 0 ? (
-            <div className="top-gap-small">
-              <div className="section-heading"><strong>Warnings</strong></div>
-              <ul className="list-reset">{snapshot.warnings.map((warning) => <li key={warning} className="list-item compact-item">{warning}</li>)}</ul>
-            </div>
-          ) : null}
+          <WarningSummary warnings={snapshot.warnings} />
           {snapshot.missing_inputs.length > 0 ? (
             <div className="top-gap-small">
               <div className="section-heading"><strong>Missing inputs</strong></div>

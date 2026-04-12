@@ -262,21 +262,35 @@ class AppSetting(BaseModel):
     value: str
 
 
-class SupportSnapshot(BaseModel):
-    id: int | None = None
-    scope: str
+class MacroContextRefreshPayload(BaseModel):
     subject_key: str
     subject_label: str
-    status: str = "completed"
     score: float = 0.0
     label: str = "NEUTRAL"
     computed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: datetime | None = None
-    coverage_json: str | None = None
-    source_breakdown_json: str | None = None
-    drivers_json: str | None = None
-    signals_json: str | None = None
-    diagnostics_json: str | None = None
+    coverage: dict[str, object] = Field(default_factory=dict)
+    source_breakdown: dict[str, object] = Field(default_factory=dict)
+    drivers: list[dict[str, object]] = Field(default_factory=list)
+    signals: dict[str, object] = Field(default_factory=dict)
+    diagnostics: dict[str, object] = Field(default_factory=dict)
+    summary_text: str = ""
+    job_id: int | None = None
+    run_id: int | None = None
+
+
+class IndustryContextRefreshPayload(BaseModel):
+    subject_key: str
+    subject_label: str
+    score: float = 0.0
+    label: str = "NEUTRAL"
+    computed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: datetime | None = None
+    coverage: dict[str, object] = Field(default_factory=dict)
+    source_breakdown: dict[str, object] = Field(default_factory=dict)
+    drivers: list[dict[str, object]] = Field(default_factory=list)
+    signals: dict[str, object] = Field(default_factory=dict)
+    diagnostics: dict[str, object] = Field(default_factory=dict)
     summary_text: str = ""
     job_id: int | None = None
     run_id: int | None = None
@@ -484,6 +498,7 @@ class RecommendationPlanOutcome(BaseModel):
     max_adverse_excursion: float | None = None
     realized_holding_period_days: float | None = None
     direction_correct: bool | None = None
+    confidence_percent: float | None = None
     confidence_bucket: str = ""
     setup_family: str = ""
     horizon: str | None = None
@@ -495,6 +510,39 @@ class RecommendationPlanOutcome(BaseModel):
     context_regime_detail: KeyLabelDetail | None = None
     notes: str = ""
     run_id: int | None = None
+
+
+class RecommendationDecisionSample(BaseModel):
+    id: int | None = None
+    recommendation_plan_id: int
+    ticker: str
+    horizon: str
+    action: str
+    decision_type: str = "no_action"
+    decision_reason: str = ""
+    shortlisted: bool = False
+    shortlist_rank: int | None = None
+    shortlist_decision: dict[str, object] = Field(default_factory=dict)
+    confidence_percent: float = 0.0
+    calibrated_confidence_percent: float | None = None
+    effective_threshold_percent: float | None = None
+    confidence_gap_percent: float | None = None
+    setup_family: str = ""
+    transmission_bias: str | None = None
+    context_regime: str | None = None
+    review_priority: str = "normal"
+    review_label: str | None = None
+    review_notes: str = ""
+    reviewed_at: datetime | None = None
+    decision_context: dict[str, object] = Field(default_factory=dict)
+    signal_breakdown: dict[str, object] = Field(default_factory=dict)
+    evidence_summary: dict[str, object] = Field(default_factory=dict)
+    run_id: int | None = None
+    job_id: int | None = None
+    watchlist_id: int | None = None
+    ticker_signal_snapshot_id: int | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class RecommendationPlan(BaseModel):
@@ -547,6 +595,43 @@ class RecommendationCalibrationBucket(DictLikeModel):
     average_mae: float | None = None
 
 
+class RecommendationPlanStats(BaseModel):
+    total_plans: int = 0
+    open_plans: int = 0
+    expired_plans: int = 0
+    scored_outcomes: int = 0
+    win_rate_percent: float | None = None
+    window: str = "all"
+    resolved_outcomes: int = 0
+    open_outcomes: int = 0
+    expired_outcomes: int = 0
+    win_outcomes: int = 0
+    loss_outcomes: int = 0
+    no_action_outcomes: int = 0
+    watchlist_outcomes: int = 0
+
+
+class RecommendationCalibrationReliabilityBin(BaseModel):
+    bin_key: str
+    bin_label: str
+    sample_count: int = 0
+    resolved_count: int = 0
+    predicted_probability: float | None = None
+    realized_win_rate_percent: float | None = None
+    brier_score: float | None = None
+    calibration_error: float | None = None
+
+
+class RecommendationCalibrationReport(BaseModel):
+    version_label: str = "v1"
+    method: str = "confidence_binned_reliability"
+    sample_count: int = 0
+    resolved_count: int = 0
+    brier_score: float | None = None
+    expected_calibration_error: float | None = None
+    bins: list[RecommendationCalibrationReliabilityBin] = Field(default_factory=list)
+
+
 class RecommendationCalibrationSummary(BaseModel):
     total_outcomes: int = 0
     resolved_outcomes: int = 0
@@ -556,8 +641,11 @@ class RecommendationCalibrationSummary(BaseModel):
     no_action_outcomes: int = 0
     watchlist_outcomes: int = 0
     overall_win_rate_percent: float | None = None
+    calibration_report: RecommendationCalibrationReport | None = None
+    smoothed_calibration_report: RecommendationCalibrationReport | None = None
     by_confidence_bucket: list[RecommendationCalibrationBucket] = Field(default_factory=list)
     by_setup_family: list[RecommendationCalibrationBucket] = Field(default_factory=list)
+    by_action: list[RecommendationCalibrationBucket] = Field(default_factory=list)
     by_horizon: list[RecommendationCalibrationBucket] = Field(default_factory=list)
     by_transmission_bias: list[RecommendationCalibrationBucket] = Field(default_factory=list)
     by_context_regime: list[RecommendationCalibrationBucket] = Field(default_factory=list)
@@ -589,6 +677,37 @@ class RecommendationEvidenceConcentrationSummary(BaseModel):
     focus_message: str = ""
     strongest_positive_cohorts: list[RecommendationEvidenceConcentrationCohort] = Field(default_factory=list)
     weakest_cohorts: list[RecommendationEvidenceConcentrationCohort] = Field(default_factory=list)
+
+
+class RecommendationWalkForwardSlice(BaseModel):
+    slice_index: int = 0
+    window_label: str = ""
+    computed_after: datetime | None = None
+    computed_before: datetime | None = None
+    evaluated_after: datetime | None = None
+    evaluated_before: datetime | None = None
+    total_outcomes: int = 0
+    resolved_outcomes: int = 0
+    overall_win_rate_percent: float | None = None
+    calibration_report: RecommendationCalibrationReport | None = None
+    actual_actionable_win_rate_percent: float | None = None
+    high_confidence_win_rate_percent: float | None = None
+    actual_actionable_average_return_5d: float | None = None
+    high_confidence_average_return_5d: float | None = None
+    ready_for_expansion: bool = False
+    setup_family_count: int = 0
+    horizon_count: int = 0
+    transmission_bias_count: int = 0
+    context_regime_count: int = 0
+
+
+class RecommendationWalkForwardSummary(BaseModel):
+    total_slices: int = 0
+    lookback_days: int = 0
+    validation_days: int = 0
+    step_days: int = 0
+    min_resolved_outcomes: int = 0
+    slices: list[RecommendationWalkForwardSlice] = Field(default_factory=list)
 
 
 class RecommendationBaselineComparison(BaseModel):
@@ -635,6 +754,148 @@ class RecommendationSetupFamilyReview(BaseModel):
 class RecommendationSetupFamilyReviewSummary(BaseModel):
     total_outcomes_reviewed: int = 0
     families: list[RecommendationSetupFamilyReview] = Field(default_factory=list)
+
+
+class RecommendationSignalGatingTuningRun(BaseModel):
+    id: int | None = None
+    objective_name: str = "signal_gating_tuning_raw_grid"
+    status: str = "completed"
+    applied: bool = False
+    filters: dict[str, object] = Field(default_factory=dict)
+    sample_count: int = 0
+    resolved_sample_count: int = 0
+    candidate_count: int = 0
+    baseline_threshold: float | None = None
+    baseline_score: float | None = None
+    best_threshold: float | None = None
+    best_score: float | None = None
+    winning_config: dict[str, object] = Field(default_factory=dict)
+    candidate_results: list[dict[str, object]] = Field(default_factory=list)
+    summary: dict[str, object] = Field(default_factory=dict)
+    artifact: dict[str, object] = Field(default_factory=dict)
+    error_message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PlanGenerationTuningCandidate(BaseModel):
+    id: int | None = None
+    run_id: int | None = None
+    rank: int | None = None
+    status: str = "evaluated"
+    is_baseline: bool = False
+    promotion_eligible: bool = False
+    config: dict[str, object] = Field(default_factory=dict)
+    changed_keys: list[str] = Field(default_factory=list)
+    score_summary: dict[str, object] = Field(default_factory=dict)
+    metric_breakdown: dict[str, object] = Field(default_factory=dict)
+    sample_breakdown: dict[str, object] = Field(default_factory=dict)
+    validation_summary: dict[str, object] = Field(default_factory=dict)
+    rejection_reasons: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PlanGenerationTuningConfigVersion(BaseModel):
+    id: int | None = None
+    version_label: str
+    status: str = "candidate"
+    source: str = "manual"
+    parent_config_version_id: int | None = None
+    source_run_id: int | None = None
+    source_candidate_id: int | None = None
+    config: dict[str, object] = Field(default_factory=dict)
+    parameter_schema_version: str = "v1"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PlanGenerationTuningEvent(BaseModel):
+    id: int | None = None
+    event_type: str
+    run_id: int | None = None
+    config_version_id: int | None = None
+    candidate_id: int | None = None
+    actor_type: str = "system"
+    actor_identifier: str | None = None
+    payload: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PlanGenerationWalkForwardSlice(BaseModel):
+    slice_index: int = 0
+    window_label: str = ""
+    computed_after: datetime | None = None
+    computed_before: datetime | None = None
+    evaluated_after: datetime | None = None
+    evaluated_before: datetime | None = None
+    total_records: int = 0
+    resolved_records: int = 0
+    baseline_actionable_count: int = 0
+    candidate_actionable_count: int = 0
+    baseline_win_rate_percent: float | None = None
+    candidate_win_rate_percent: float | None = None
+    baseline_expected_value: float = 0.0
+    candidate_expected_value: float = 0.0
+    win_rate_delta: float | None = None
+    expected_value_delta: float | None = None
+    ambiguous_count: int = 0
+    sample_status: str = "thin"
+
+
+class PlanGenerationWalkForwardSummary(BaseModel):
+    total_slices: int = 0
+    lookback_days: int = 0
+    validation_days: int = 0
+    step_days: int = 0
+    min_validation_resolved: int = 0
+    candidate_label: str = "candidate"
+    baseline_label: str = "baseline"
+    qualified_slices: int = 0
+    candidate_wins: int = 0
+    baseline_wins: int = 0
+    ties: int = 0
+    average_win_rate_delta: float | None = None
+    average_expected_value_delta: float | None = None
+    promotion_recommended: bool = False
+    promotion_rationale: str = ""
+    slices: list[PlanGenerationWalkForwardSlice] = Field(default_factory=list)
+
+
+class PlanGenerationTuningRun(BaseModel):
+    id: int | None = None
+    status: str = "completed"
+    mode: str = "manual"
+    objective_name: str = "plan_generation_precision_tuning_v1"
+    promotion_mode: str = "dry_run"
+    baseline_config_version_id: int | None = None
+    winning_candidate_id: int | None = None
+    promoted_config_version_id: int | None = None
+    eligible_record_count: int = 0
+    eligible_tier_a_count: int = 0
+    validation_record_count: int = 0
+    candidate_count: int = 0
+    summary: dict[str, object] = Field(default_factory=dict)
+    filters: dict[str, object] = Field(default_factory=dict)
+    candidates: list[PlanGenerationTuningCandidate] = Field(default_factory=list)
+    error_message: str | None = None
+    code_version: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PlanGenerationTuningState(BaseModel):
+    objective_name: str = "plan_generation_precision_tuning_v1"
+    active_config_version_id: int | None = None
+    active_config: dict[str, object] = Field(default_factory=dict)
+    auto_enabled: bool = False
+    auto_promote_enabled: bool = False
+    latest_run: PlanGenerationTuningRun | None = None
 
 
 class ProviderCredential(BaseModel):

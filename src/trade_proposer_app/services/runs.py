@@ -15,8 +15,9 @@ from trade_proposer_app.services.builders import (
 )
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.job_execution import JobExecutionService
+from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
+from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
-from trade_proposer_app.services.optimizations import WeightOptimizationService
 from trade_proposer_app.services.scheduling import (
     ScheduleParseError,
     latest_due_at,
@@ -31,7 +32,6 @@ def enqueue_enabled_jobs(now: datetime | None = None) -> int:
     try:
         jobs_repository = JobRepository(session)
         runs_repository = RunRepository(session)
-        settings_repository = SettingsRepository(session)
         watchlists_repository = WatchlistRepository(session)
         policy_service = WatchlistPolicyService()
         jobs = jobs_repository.list_enabled()
@@ -41,10 +41,8 @@ def enqueue_enabled_jobs(now: datetime | None = None) -> int:
             evaluations=EvaluationExecutionService(
                 recommendation_plan_evaluations=RecommendationPlanEvaluationService(session),
             ),
-            optimizations=WeightOptimizationService(
-                session=session,
-                minimum_resolved_trades=settings_repository.get_optimization_minimum_resolved_trades(),
-            ),
+            plan_generation_tuning=PlanGenerationTuningService(session),
+            performance_assessment=PerformanceAssessmentService(session),
             watchlist_orchestration=create_watchlist_orchestration_service(session),
             recommendation_plans=RecommendationPlanRepository(session),
         )
@@ -84,7 +82,7 @@ def enqueue_enabled_jobs(now: datetime | None = None) -> int:
                 continue
             if runs_repository.get_run_for_job_and_scheduled_for(job.id or 0, scheduled_for) is not None:
                 continue
-            if job.job_type == JobType.WEIGHT_OPTIMIZATION and runs_repository.get_active_run_for_job_type(JobType.WEIGHT_OPTIMIZATION) is not None:
+            if job.job_type == JobType.PLAN_GENERATION_TUNING and runs_repository.get_active_run_for_job_type(JobType.PLAN_GENERATION_TUNING) is not None:
                 continue
             if runs_repository.get_active_run_for_job(job.id or 0) is not None:
                 continue

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timezone
 from typing import Any
 
-from trade_proposer_app.domain.models import MacroContextSnapshot, SupportSnapshot
+from trade_proposer_app.domain.models import MacroContextRefreshPayload, MacroContextSnapshot
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.services.event_extraction import (
     EventDefinition,
@@ -36,9 +37,20 @@ MACRO_THEME_DEFINITIONS = [
         loser_tags=("long_duration", "rate_sensitive"),
     ),
     EventDefinition(
-        key="inflation",
-        label="Inflation",
-        phrases=("inflation", "cpi", "ppi", "sticky prices", "disinflation"),
+        key="inflation_cooling",
+        label="Inflation cooling",
+        phrases=("disinflation", "cooling inflation", "cooler cpi", "cooler ppi", "easing prices"),
+        tags=("inflation",),
+        category="macro",
+        window_hint="2d_5d",
+        transmission_channels=("rates", "consumer_pressure"),
+        beneficiary_tags=("long_duration", "consumer"),
+        loser_tags=("pricing_power",),
+    ),
+    EventDefinition(
+        key="inflation_sticky",
+        label="Sticky inflation",
+        phrases=("inflation", "cpi", "ppi", "sticky prices", "hotter inflation"),
         tags=("inflation",),
         category="macro",
         window_hint="2d_5d",
@@ -47,9 +59,20 @@ MACRO_THEME_DEFINITIONS = [
         loser_tags=("margin_pressure",),
     ),
     EventDefinition(
-        key="bond_yields",
-        label="Bond yields",
-        phrases=("yield", "treasury", "10-year", "2-year", "bond market"),
+        key="bond_yield_drop",
+        label="Bond yields easing",
+        phrases=("yields fell", "yield drop", "treasury rally", "bond rally", "lower yields"),
+        tags=("rates", "yield_pressure"),
+        category="macro",
+        window_hint="2d_5d",
+        transmission_channels=("rates", "valuation_duration", "funding_costs"),
+        beneficiary_tags=("long_duration",),
+        loser_tags=("financials",),
+    ),
+    EventDefinition(
+        key="bond_yield_spike",
+        label="Bond yields rising",
+        phrases=("yield", "treasury", "10-year", "2-year", "bond selloff", "higher yields", "yield jump"),
         tags=("rates", "yield_pressure"),
         category="macro",
         window_hint="2d_5d",
@@ -58,9 +81,20 @@ MACRO_THEME_DEFINITIONS = [
         loser_tags=("long_duration",),
     ),
     EventDefinition(
-        key="energy_oil",
-        label="Oil and energy",
-        phrases=("oil", "crude", "opec", "energy prices", "brent", "wti"),
+        key="oil_supply_relief",
+        label="Oil supply relief",
+        phrases=("oil fell", "crude fell", "output increase", "opec supply", "supply relief", "lower energy prices"),
+        tags=("commodities",),
+        category="macro",
+        window_hint="2d_5d",
+        transmission_channels=("commodity_input_costs", "transport_costs"),
+        beneficiary_tags=("airlines", "consumer"),
+        loser_tags=("energy",),
+    ),
+    EventDefinition(
+        key="oil_supply_risk",
+        label="Oil supply risk",
+        phrases=("oil", "crude", "opec", "energy prices", "brent", "wti", "supply disruption", "oil spike"),
         tags=("commodities",),
         category="macro",
         window_hint="2d_5d",
@@ -102,9 +136,20 @@ MACRO_THEME_DEFINITIONS = [
         loser_tags=("real_estate", "euro_cyclicals"),
     ),
     EventDefinition(
-        key="geopolitics",
-        label="Geopolitical risk",
-        phrases=("war", "military tensions", "geopolitical tensions", "missile", "sanctions", "conflict"),
+        key="geopolitical_deescalation",
+        label="Geopolitical de-escalation",
+        phrases=("ceasefire", "truce", "de-escalation", "talks resume", "diplomatic progress", "relief after comments"),
+        tags=("geopolitics",),
+        category="macro_shock",
+        window_hint="1d",
+        transmission_channels=("commodity_risk", "risk_appetite"),
+        beneficiary_tags=("travel", "consumer", "global_supply_chain"),
+        loser_tags=("defense", "energy"),
+    ),
+    EventDefinition(
+        key="geopolitical_escalation",
+        label="Geopolitical escalation",
+        phrases=("war", "military tensions", "geopolitical tensions", "missile", "sanctions", "conflict", "strike", "retaliation"),
         tags=("geopolitics", "risk_off"),
         category="macro_shock",
         window_hint="1d",
@@ -115,11 +160,12 @@ MACRO_THEME_DEFINITIONS = [
 ]
 
 DEFAULT_MACRO_NEWS_QUERIES = [
-    "Federal Reserve OR FOMC OR Powell",
-    "inflation OR CPI OR PPI",
-    "Treasury yields OR bond market",
+    "Federal Reserve OR FOMC OR Powell OR rate cut OR rate hike",
+    "inflation OR CPI OR PPI OR disinflation OR cooling prices",
+    "Treasury yields OR bond market OR higher yields OR lower yields",
     "ECB OR eurozone rates OR Lagarde",
-    "war OR sanctions OR geopolitical tensions OR oil",
+    "war OR sanctions OR geopolitical tensions OR missile OR retaliation OR ceasefire OR truce OR diplomatic progress",
+    "oil OR crude OR OPEC OR supply disruption OR output increase OR energy prices",
 ]
 
 
@@ -137,17 +183,17 @@ class MacroContextService:
         self.summary_service = summary_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
-    def create_from_support_snapshot(
+    def create_from_refresh_payload(
         self,
-        snapshot: SupportSnapshot,
+        payload: MacroContextRefreshPayload,
         *,
         job_id: int | None = None,
         run_id: int | None = None,
     ) -> MacroContextSnapshot:
         previous = self.repository.get_latest_macro_context_snapshot()
-        signals = _load_json(getattr(snapshot, "signals_json", None), {})
-        diagnostics = _load_json(getattr(snapshot, "diagnostics_json", None), {})
-        source_breakdown = _load_json(getattr(snapshot, "source_breakdown_json", None), {})
+        signals = dict(getattr(payload, "signals", {}) or {})
+        diagnostics = dict(getattr(payload, "diagnostics", {}) or {})
+        source_breakdown = dict(getattr(payload, "source_breakdown", {}) or {})
         social_items = signals.get("social_items") if isinstance(signals, dict) else []
         supporting_social_items = social_items if isinstance(social_items, list) else []
 
@@ -185,8 +231,8 @@ class MacroContextService:
         if not supporting_social_items:
             missing_inputs.append("supporting_social_evidence")
 
-        support_score = float(getattr(snapshot, "score", 0.0) or 0.0)
-        support_label = str(getattr(snapshot, "label", "NEUTRAL") or "NEUTRAL")
+        support_score = float(getattr(payload, "score", 0.0) or 0.0)
+        support_label = str(getattr(payload, "label", "NEUTRAL") or "NEUTRAL")
         regime_tags = self._regime_tags(active_themes, support_score, support_label)
         saliency_score = self._saliency_score(active_themes, len(news_items), len(supporting_social_items), abs(support_score), primary_source_counts)
         confidence_percent = self._confidence_percent(
@@ -215,7 +261,7 @@ class MacroContextService:
 
         context = MacroContextSnapshot(
             computed_at=datetime.now(timezone.utc),
-            expires_at=getattr(snapshot, "expires_at", None),
+            expires_at=getattr(payload, "expires_at", None),
             status=status,
             summary_text=summary_text,
             saliency_score=saliency_score,
@@ -225,9 +271,9 @@ class MacroContextService:
             warnings=list(dict.fromkeys(warnings)),
             missing_inputs=list(dict.fromkeys(missing_inputs)),
             source_breakdown={
-                "support_snapshot_id": getattr(snapshot, "id", None),
-                "support_label": support_label,
-                "support_score": support_score,
+                "context_refresh_subject_key": getattr(payload, "subject_key", None),
+                "context_label": support_label,
+                "context_score": support_score,
                 "primary_news_item_count": len(news_items),
                 "supporting_social_item_count": len(supporting_social_items),
                 "primary_news_providers": list(dict.fromkeys(news_bundle.feeds_used)) if news_bundle is not None else [],
@@ -238,8 +284,8 @@ class MacroContextService:
                 "upstream": source_breakdown if isinstance(source_breakdown, dict) else {},
             },
             metadata={
-                "subject_key": getattr(snapshot, "subject_key", None),
-                "subject_label": getattr(snapshot, "subject_label", None),
+                "subject_key": getattr(payload, "subject_key", None),
+                "subject_label": getattr(payload, "subject_label", None),
                 "query_diagnostics": diagnostics.get("query_diagnostics", {}) if isinstance(diagnostics, dict) else {},
                 "news_coverage_insights": news_sentiment.get("coverage_insights", []) if isinstance(news_sentiment, dict) else [],
                 "top_news_titles": [self._item_text(item)[:140] for item in news_items[:5]],
@@ -321,21 +367,29 @@ class MacroContextService:
         primary_source_counts: dict[str, int],
     ) -> float:
         top_event_score = max((float(item.get("saliency_weight", 0.0) or 0.0) for item in active_themes), default=0.0)
-        escalating_boost = min(0.1, sum(1 for item in active_themes if item.get("persistence_state") == "escalating") * 0.05)
-        official_boost = min(0.14, primary_source_counts.get("official", 0) * 0.07)
-        major_boost = min(0.08, primary_source_counts.get("major", 0) * 0.04)
-        score = (
-            0.08
-            + top_event_score * 0.42
-            + (len(active_themes) * 0.08)
-            + (min(news_item_count, 6) * 0.05)
-            + (min(social_item_count, 4) * 0.02)
-            + official_boost
-            + major_boost
-            + escalating_boost
-            + (sentiment_magnitude * 0.12)
+        theme_factor = min(1.0, math.log1p(len(active_themes)) / math.log(6.0)) if active_themes else 0.0
+        news_factor = min(1.0, math.log1p(news_item_count) / math.log(7.0)) if news_item_count > 0 else 0.0
+        social_factor = min(1.0, math.log1p(social_item_count) / math.log(5.0)) if social_item_count > 0 else 0.0
+        source_quality = min(
+            1.0,
+            (
+                (primary_source_counts.get("official", 0) * 1.0)
+                + (primary_source_counts.get("major", 0) * 0.7)
+                + (primary_source_counts.get("trade", 0) * 0.45)
+            )
+            / 3.0,
         )
-        return round(min(1.0, score), 3)
+        escalating_factor = min(1.0, sum(1 for item in active_themes if item.get("persistence_state") == "escalating") / 2.0)
+        raw_score = (
+            top_event_score * 0.52
+            + theme_factor * 0.13
+            + news_factor * 0.12
+            + social_factor * 0.05
+            + source_quality * 0.10
+            + escalating_factor * 0.04
+            + min(1.0, sentiment_magnitude) * 0.04
+        )
+        return round(min(0.98, 1.0 - math.exp(-(raw_score * 1.35))), 3)
 
     @staticmethod
     def _confidence_percent(
@@ -350,28 +404,46 @@ class MacroContextService:
     ) -> float:
         social_provider_count = len(diagnostics.get("providers", [])) if isinstance(diagnostics, dict) and isinstance(diagnostics.get("providers"), list) else 0
         high_saliency_events = count_events_above_saliency(active_themes)
-        confidence = (
-            10.0
-            + (len(active_themes) * 4.0)
-            + (high_saliency_events * 4.5)
-            + (min(news_item_count, 8) * 4.0)
-            + (min(social_item_count, 4) * 1.0)
-            + (social_provider_count * 1.5)
-            + (primary_source_counts.get("official", 0) * 4.0)
-            + (primary_source_counts.get("major", 0) * 2.5)
-            + (primary_source_counts.get("trade", 0) * 2.0)
+        average_saliency = (
+            sum(float(item.get("saliency_weight", 0.0) or 0.0) for item in active_themes) / len(active_themes)
+            if active_themes
+            else 0.0
         )
-        if any(item.get("persistence_state") == "escalating" for item in active_themes):
-            confidence += 3.0
+        theme_factor = min(1.0, math.log1p(len(active_themes)) / math.log(6.0)) if active_themes else 0.0
+        news_factor = min(1.0, math.log1p(news_item_count) / math.log(9.0)) if news_item_count > 0 else 0.0
+        social_factor = min(1.0, math.log1p(social_item_count) / math.log(5.0)) if social_item_count > 0 else 0.0
+        source_quality = min(
+            1.0,
+            (
+                (primary_source_counts.get("official", 0) * 1.0)
+                + (primary_source_counts.get("major", 0) * 0.7)
+                + (primary_source_counts.get("trade", 0) * 0.4)
+            )
+            / 3.0,
+        )
+        saliency_factor = min(1.0, (average_saliency * 0.7) + (min(3, high_saliency_events) / 3.0 * 0.3))
+        escalating_factor = 1.0 if any(item.get("persistence_state") == "escalating" for item in active_themes) else 0.0
+        provider_factor = min(1.0, social_provider_count / 3.0)
+
+        confidence = (
+            18.0
+            + theme_factor * 14.0
+            + news_factor * 18.0
+            + social_factor * 5.0
+            + source_quality * 18.0
+            + saliency_factor * 16.0
+            + escalating_factor * 5.0
+            + provider_factor * 3.0
+        )
         if news_item_count == 0:
-            confidence -= 20.0
+            confidence -= 18.0
         if primary_source_counts.get("official", 0) == 0 and primary_source_counts.get("major", 0) == 0:
             confidence -= 10.0
         if contradiction_count > 0:
-            confidence -= min(15.0, contradiction_count * 5.0)
+            confidence -= min(22.0, contradiction_count * 7.0)
         if feed_errors:
-            confidence -= min(15.0, len(feed_errors) * 5.0)
-        return round(max(0.0, min(100.0, confidence)), 1)
+            confidence -= min(18.0, len(feed_errors) * 6.0)
+        return round(max(0.0, min(97.0, confidence)), 1)
 
     @classmethod
     def _fallback_summary_text(
@@ -399,7 +471,10 @@ class MacroContextService:
         new_labels = [label for label in lifecycle_summary.get("new_event_labels", []) if label != top_label]
         fading_labels = list(lifecycle_summary.get("fading_event_labels", []))
 
-        overview = f"Top macro event: {top_label}. It looks {state}, matters mainly through {why}, and the expected transmission window is {window}."
+        catalyst = str(top_theme.get("catalyst_type", "other") or "other").replace("_", " ")
+        interpretation = str(top_theme.get("market_interpretation", "unknown") or "unknown").replace("_", " ")
+        change_reason = str(top_theme.get("state_change_reason", "") or "").strip()
+        overview = f"Top macro event: {top_label}. It looks {state}, is being driven mainly by {catalyst}, and matters mainly through {why} over {window}."
         evidence = f"Evidence is led by {source} coverage"
         if news_items:
             evidence += f" across {len(news_items)} primary news item{'s' if len(news_items) != 1 else ''}"
@@ -424,9 +499,14 @@ class MacroContextService:
         if warnings and not contradiction_labels:
             updates.append("Coverage is still degraded enough that the overview should be read with caution")
 
+        interpretation_line = ""
+        if interpretation != "unknown":
+            interpretation_line = f" The current market read looks more {interpretation}."
+        reason_line = f" {change_reason}" if change_reason else ""
+
         if updates:
-            return f"{overview} {evidence} {' '.join(updates)}."
-        return f"{overview} {evidence}"
+            return f"{overview} {evidence}{interpretation_line} {' '.join(updates)}.{reason_line}"
+        return f"{overview} {evidence}{interpretation_line}{reason_line}"
 
     def _summarize_context(
         self,
@@ -484,7 +564,7 @@ class MacroContextService:
         for index, event in enumerate(active_themes[:3], start=1):
             channels = event.get("transmission_channels") if isinstance(event.get("transmission_channels"), list) else []
             top_events.append(
-                f"{index}. {event.get('label', 'Unknown event')} | state={event.get('persistence_state', 'unknown')} | saliency={event.get('saliency_weight', 0.0)} | source={event.get('source_priority', 'other')} | window={event.get('window_hint', 'unknown')} | direction={event.get('evidence_direction', 'mixed')} | channels={', '.join(str(channel) for channel in channels[:3]) or 'unknown'}"
+                f"{index}. {event.get('label', 'Unknown event')} | state={event.get('persistence_state', 'unknown')} | transition={event.get('state_transition', 'unknown')} | catalyst={event.get('catalyst_type', 'other')} | interpretation={event.get('market_interpretation', 'unknown')} | saliency={event.get('saliency_weight', 0.0)} | source={event.get('source_priority', 'other')} | window={event.get('window_hint', 'unknown')} | direction={event.get('evidence_direction', 'mixed')} | actor={event.get('trigger_actor', 'unknown')} | channels={', '.join(str(channel) for channel in channels[:3]) or 'unknown'} | why={event.get('state_change_reason', 'n/a')}"
             )
         triaged_news = self._triaged_news_items(news_items, active_themes)
         news_lines = []
@@ -509,7 +589,9 @@ class MacroContextService:
             "Write a short operator-facing macro market summary in 2-4 sentences.",
             "Focus on the top salient events, not just one event.",
             "Ground the summary in the highest-quality fetched sources first. Use social evidence only as secondary support.",
-            "Say what the main macro events are, why they matter, and what short-horizon transmission window they imply.",
+            "Say what the main macro events are, what concrete catalyst or state change is driving them right now, why they matter, and what short-horizon transmission window they imply.",
+            "Explicitly distinguish escalation, easing, stabilization, or mixed conditions when the evidence supports it.",
+            "Prefer durable semantic language over person-specific labels; mention specific actors only as evidence-level detail.",
             "Use the previous snapshot only to explain continuity or change. Do not let old framing override current evidence.",
             "If evidence is contradictory or degraded, say that plainly.",
             "Do not use hype. Do not invent facts beyond the evidence below.",
@@ -555,6 +637,7 @@ class MacroContextService:
             text = f"{title} {summary}".lower()
             event_hits = 0
             saliency_score = 0.0
+            state_change_bonus = 0
             for event in active_themes[:3]:
                 key = str(event.get("key", "") or "")
                 definition = definition_map.get(key)
@@ -563,9 +646,11 @@ class MacroContextService:
                 if any(phrase.lower() in text for phrase in definition.phrases):
                     event_hits += 1
                     saliency_score += float(event.get("saliency_weight", 0.0) or 0.0)
+                    if any(hint in text for hint in ("escalat", "de-escalat", "easing", "relief", "cooling", "ceasefire", "sanction", "disruption", "jump", "cut")):
+                        state_change_bonus += 1
             ranked.append(
                 (
-                    (priority_score, saliency_score, event_hits),
+                    (priority_score, saliency_score + (state_change_bonus * 0.35), event_hits + state_change_bonus),
                     {
                         "title": title,
                         "summary": summary,

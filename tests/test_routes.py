@@ -19,18 +19,21 @@ from trade_proposer_app.domain.models import (
     IndustryContextSnapshot,
     MacroContextSnapshot,
     PreflightCheck,
+    RecommendationDecisionSample,
+    RecommendationDecisionSample,
     RecommendationPlan,
     RecommendationPlanOutcome,
     Run,
     TickerSignalSnapshot,
+    WorkerHeartbeat,
 )
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
-from trade_proposer_app.repositories.support_snapshots import SupportSnapshotRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 
@@ -117,7 +120,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     "ticker_generation": [{"ticker": "AAPL", "duration_seconds": 0.03}],
                 },
             )
-            RecommendationPlanRepository(session).create_plan(
+            plan = RecommendationPlanRepository(session).create_plan(
                 RecommendationPlan(
                     ticker="AAPL",
                     horizon="1w",
@@ -138,12 +141,20 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     job_id=job.id,
                 )
             )
-            SupportSnapshotRepository(session).create_snapshot(
-                scope="macro",
-                subject_key="global",
-                subject_label="Global Macro",
-                job_id=job.id,
-                run_id=run.id,
+            RecommendationDecisionSampleRepository(session).upsert_sample(
+                RecommendationDecisionSample(
+                    recommendation_plan_id=plan.id or 0,
+                    ticker="AAPL",
+                    horizon="1w",
+                    action="long",
+                    decision_type="actionable",
+                    confidence_percent=81.0,
+                    calibrated_confidence_percent=81.0,
+                    setup_family="continuation",
+                    reviewed_at=datetime(2026, 3, 24, tzinfo=timezone.utc),
+                    run_id=run.id,
+                    job_id=job.id,
+                )
             )
             return run.id or 0
         finally:
@@ -258,46 +269,6 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         finally:
             session.close()
 
-    def seed_support_snapshots(self) -> list[int]:
-        session = Session(bind=self.engine)
-        try:
-            repository = SupportSnapshotRepository(session)
-            macro = repository.create_snapshot(
-                scope="macro",
-                subject_key="global_macro",
-                subject_label="Global Macro",
-                score=-0.18,
-                label="NEGATIVE",
-                computed_at=datetime(2026, 3, 22, 6, 0, tzinfo=timezone.utc),
-                expires_at=datetime(2026, 3, 22, 12, 0, tzinfo=timezone.utc),
-                coverage={"social_count": 4},
-                source_breakdown={"social": {"score": -0.18, "item_count": 4}},
-                drivers=["rates rising"],
-                diagnostics={"warnings": ["snapshot fresh"]},
-                summary_text="Global Macro remains negative overall. Compared with the prior snapshot, the backdrop is slightly softer; the main update is rates rising.",
-                job_id=1,
-                run_id=2,
-            )
-            industry = repository.create_snapshot(
-                scope="industry",
-                subject_key="consumer_electronics",
-                subject_label="Consumer Electronics",
-                score=0.27,
-                label="POSITIVE",
-                computed_at=datetime(2026, 3, 22, 7, 0, tzinfo=timezone.utc),
-                expires_at=datetime(2026, 3, 22, 15, 0, tzinfo=timezone.utc),
-                coverage={"social_count": 6},
-                source_breakdown={"social": {"score": 0.27, "item_count": 6}},
-                drivers=["iphone demand stable"],
-                diagnostics={"warnings": []},
-                summary_text="Consumer Electronics remains positive overall. Compared with the prior snapshot, the backdrop is broadly unchanged; the main update is iphone demand stable.",
-                job_id=3,
-                run_id=4,
-            )
-            return [macro.id or 0, industry.id or 0]
-        finally:
-            session.close()
-
     async def test_health_endpoint(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
@@ -306,8 +277,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         payload = response.json()
         self.assertEqual(payload["status"], "degraded")
         self.assertEqual(payload["preflight"]["status"], "warning")
-        self.assertEqual(payload["support_snapshots"]["macro"]["status"], "warning")
-        self.assertEqual(payload["support_snapshots"]["industry"]["status"], "warning")
+        self.assertEqual(payload["context_snapshots"]["macro"]["status"], "warning")
+        self.assertEqual(payload["context_snapshots"]["industry"]["status"], "warning")
 
     async def test_preflight_health_endpoint(self) -> None:
         transport = httpx.ASGITransport(app=app)
@@ -318,12 +289,58 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["status"], "warning")
         self.assertEqual(payload["engine"], "internal_price_pipeline")
         self.assertTrue(any(check["name"] == "module:pandas" for check in payload["checks"]))
-        self.assertTrue(any(check["name"] == "support_snapshot:macro" for check in payload["checks"]))
+        self.assertTrue(any(check["name"] == "context_snapshot:macro" for check in payload["checks"]))
+
+    async def test_active_workers_endpoint_lists_worker_heartbeats(self) -> None:
+        session = Session(bind=self.engine)
+        try:
+            RunRepository(session).upsert_heartbeat(
+                WorkerHeartbeat(
+                    worker_id="worker-test",
+                    hostname="worker-host",
+                    pid=1234,
+                    status="running",
+                    last_heartbeat_at=datetime.now(timezone.utc),
+                    started_at=datetime.now(timezone.utc),
+                    active_run_id=99,
+                )
+            )
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/api/workers/active")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["workers"][0]["worker_id"], "worker-test")
+        self.assertEqual(payload["workers"][0]["active_run_id"], 99)
+
+    async def test_worker_logs_endpoint_returns_tail(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_dir = Path(temp_dir) / ".dev-run" / "workers"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            log_file = log_dir / "worker-test.log"
+            log_file.write_text("line one\nline two\nline three\n", encoding="utf-8")
+
+            with patch("trade_proposer_app.api.routes.workers.WORKER_LOG_DIRECTORIES", (log_dir,)):
+                transport = httpx.ASGITransport(app=app)
+                async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                    response = await client.get("/api/workers/worker-test/logs?tail=1")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["worker_id"], "worker-test")
+        self.assertEqual(payload["line_count"], 3)
+        self.assertTrue(payload["truncated"])
+        self.assertEqual(payload["lines"], ["line three"])
 
     async def test_spa_shell_routes_render(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            for path in ("/", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/context", "/context/sentiment/1", "/context/macro/1", "/sentiment", "/sentiment/1", "/runs/1", "/recommendation-plans", "/tickers/AAPL"):
+            for path in ("/", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/context", "/context/sentiment/1", "/context/macro/1", "/sentiment", "/sentiment/1", "/runs/1", "/workers/worker-test", "/recommendation-plans", "/tickers/AAPL"):
                 response = await client.get(path)
                 self.assertEqual(response.status_code, 200)
                 self.assertIn("<title>Trade Proposer App</title>", response.text)
@@ -344,7 +361,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(document["slug"] == "redesign-readme" for document in payload["documents"]))
         methodology = next(document for document in payload["documents"] if document["slug"] == "recommendation-methodology")
         self.assertTrue(any("Pipeline overview" in section["title"] for section in methodology["sections"]))
-        self.assertTrue(any("App-native independence" in section["title"] for section in methodology["sections"]))
+        self.assertTrue(any("Price levels and risk" in section["title"] for section in methodology["sections"]))
 
     async def test_create_watchlist_and_list_via_api(self) -> None:
         transport = httpx.ASGITransport(app=app)
@@ -481,8 +498,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             optimization = await client.post(
                 "/api/jobs",
                 data={
-                    "name": "Weekly Optimization",
-                    "job_type": JobType.WEIGHT_OPTIMIZATION.value,
+                    "name": "Weekly Plan Generation Tuning",
+                    "job_type": JobType.PLAN_GENERATION_TUNING.value,
                     "tickers": "",
                     "watchlist_id": "",
                     "schedule": "0 2 * * 0",
@@ -502,7 +519,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(evaluation.json()["job_type"], JobType.RECOMMENDATION_EVALUATION.value)
         self.assertEqual(evaluation.json()["tickers"], [])
         self.assertEqual(optimization.status_code, 200)
-        self.assertEqual(optimization.json()["job_type"], JobType.WEIGHT_OPTIMIZATION.value)
+        self.assertEqual(optimization.json()["job_type"], JobType.PLAN_GENERATION_TUNING.value)
         self.assertEqual(invalid.status_code, 400)
         self.assertIn("invalid job_type", invalid.text)
 
@@ -593,7 +610,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             claimed = runs.claim_next_queued_run()
             assert claimed is not None
             runs.update_status(run.id or 0, "completed")
-            RecommendationPlanRepository(session).create_plan(
+            plan = RecommendationPlanRepository(session).create_plan(
                 RecommendationPlan(
                     ticker="AAPL",
                     horizon="1w",
@@ -607,6 +624,21 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     risk_reward_ratio=2.0,
                     thesis_summary="Seeded historical plan",
                     rationale_summary="Job delete cleanup coverage",
+                    run_id=run.id,
+                    job_id=job.id,
+                )
+            )
+            RecommendationDecisionSampleRepository(session).upsert_sample(
+                RecommendationDecisionSample(
+                    recommendation_plan_id=plan.id or 0,
+                    ticker="AAPL",
+                    horizon="1w",
+                    action="long",
+                    decision_type="actionable",
+                    confidence_percent=80.0,
+                    calibrated_confidence_percent=80.0,
+                    setup_family="continuation",
+                    reviewed_at=datetime(2026, 3, 24, tzinfo=timezone.utc),
                     run_id=run.id,
                     job_id=job.id,
                 )
@@ -855,6 +887,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(payload["recommendation_plans"]), 2)
         self.assertEqual(payload["recommendation_plans"][0]["latest_outcome"]["outcome"], "win")
         self.assertNotIn("prototype_trades", payload)
+        self.assertNotIn("legacy_trades", payload)
 
     async def test_failed_run_is_apparent_in_api(self) -> None:
         run_id = self.seed_failed_run()
@@ -884,10 +917,6 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                 "/api/settings/app",
                 data={"key": "confidence_threshold", "value": "75"},
             )
-            optimization_response = await client.post(
-                "/api/settings/optimization",
-                data={"minimum_resolved_trades": "80"},
-            )
             summary_response = await client.post(
                 "/api/settings/summary",
                 data={
@@ -898,6 +927,16 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     "pi_command": "pi",
                     "pi_agent_dir": "/tmp/pi-agent",
                     "prompt": "very short custom summary prompt",
+                },
+            )
+            signal_gating_tuning_response = await client.post(
+                "/api/settings/signal-gating-tuning",
+                data={
+                    "threshold_offset": "-2.5",
+                    "confidence_adjustment": "1.5",
+                    "near_miss_gap_cutoff": "2.0",
+                    "shortlist_aggressiveness": "1.0",
+                    "degraded_penalty": "0.5",
                 },
             )
             social_response = await client.post(
@@ -913,6 +952,15 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     "nitter_enable_ticker": "true",
                 },
             )
+            plan_generation_tuning_response = await client.post(
+                "/api/settings/plan-generation-tuning",
+                data={
+                    "auto_enabled": "true",
+                    "auto_promote_enabled": "true",
+                    "min_actionable_resolved": "31",
+                    "min_validation_resolved": "12",
+                },
+            )
             provider_response = await client.post(
                 "/api/settings/providers",
                 data={"provider": "openai", "api_key": "sk-test", "api_secret": ""},
@@ -920,52 +968,55 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             listed = await client.get("/api/settings")
 
         self.assertEqual(app_setting.status_code, 200)
-        self.assertEqual(optimization_response.status_code, 200)
         self.assertEqual(summary_response.status_code, 200)
+        self.assertEqual(signal_gating_tuning_response.status_code, 200)
         self.assertEqual(social_response.status_code, 200)
+        self.assertEqual(plan_generation_tuning_response.status_code, 200)
         self.assertEqual(provider_response.status_code, 200)
         self.assertEqual(listed.status_code, 200)
         payload = listed.json()
         setting_map = {item["key"]: item["value"] for item in payload["settings"]}
         self.assertEqual(setting_map["confidence_threshold"], "75")
-        self.assertEqual(setting_map["optimization_minimum_resolved_trades"], "80")
+        self.assertEqual(setting_map["signal_gating_tuning_threshold_offset"], "-2.5")
+        self.assertEqual(setting_map["signal_gating_tuning_confidence_adjustment"], "1.5")
+        self.assertEqual(setting_map["signal_gating_tuning_near_miss_gap_cutoff"], "2")
+        self.assertEqual(setting_map["signal_gating_tuning_shortlist_aggressiveness"], "1")
+        self.assertEqual(setting_map["signal_gating_tuning_degraded_penalty"], "0.5")
+        self.assertEqual(payload["signal_gating_tuning"]["threshold_offset"], -2.5)
+        self.assertEqual(payload["signal_gating_tuning"]["confidence_adjustment"], 1.5)
+        self.assertEqual(payload["signal_gating_tuning"]["near_miss_gap_cutoff"], 2.0)
+        self.assertEqual(payload["signal_gating_tuning"]["shortlist_aggressiveness"], 1.0)
+        self.assertEqual(payload["signal_gating_tuning"]["degraded_penalty"], 0.5)
         self.assertEqual(setting_map["summary_model"], "anthropic/claude-sonnet-4-5")
         self.assertEqual(setting_map["summary_prompt"], "very short custom summary prompt")
         self.assertEqual(setting_map["social_nitter_enable_ticker"], "true")
+        self.assertEqual(setting_map["plan_generation_tuning_auto_enabled"], "true")
+        self.assertEqual(setting_map["plan_generation_tuning_auto_promote_enabled"], "true")
+        self.assertEqual(setting_map["plan_generation_tuning_min_actionable_resolved"], "31")
+        self.assertEqual(setting_map["plan_generation_tuning_min_validation_resolved"], "12")
+        self.assertEqual(payload["plan_generation_tuning"]["settings"]["auto_enabled"], True)
+        self.assertEqual(payload["plan_generation_tuning"]["settings"]["auto_promote_enabled"], True)
+        self.assertEqual(payload["plan_generation_tuning"]["settings"]["min_actionable_resolved"], 31)
+        self.assertEqual(payload["plan_generation_tuning"]["settings"]["min_validation_resolved"], 12)
         self.assertEqual(payload["providers"][0]["provider"], "openai")
         self.assertEqual(payload["providers"][0]["api_key"], "sk-test")
-        self.assertEqual(payload["optimization"]["minimum_resolved_trades"], 80)
-        self.assertEqual(payload["optimization"]["weights_path"], str(weights_path))
-
-    async def test_sentiment_snapshot_routes_list_and_detail(self) -> None:
-        snapshot_ids = self.seed_support_snapshots()
+    async def test_context_routes_list_and_detail(self) -> None:
+        self.seed_context_and_recommendation_plan_data()
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            listed = await client.get("/api/support-snapshots")
-            macro = await client.get("/api/support-snapshots/macro")
-            industry = await client.get("/api/support-snapshots/industry")
-            detail = await client.get(f"/api/support-snapshots/{snapshot_ids[1]}")
+            macro = await client.get("/api/context/macro")
+            industry = await client.get("/api/context/industry", params={"industry_key": "consumer_electronics"})
+            macro_detail = await client.get(f"/api/context/macro/{macro.json()[0]['id']}")
+            industry_detail = await client.get(f"/api/context/industry/{industry.json()[0]['id']}")
 
-        self.assertEqual(listed.status_code, 200)
         self.assertEqual(macro.status_code, 200)
         self.assertEqual(industry.status_code, 200)
-        self.assertEqual(detail.status_code, 200)
-        listed_payload = listed.json()
-        macro_payload = macro.json()
-        industry_payload = industry.json()
-        detail_payload = detail.json()
-        self.assertEqual(len(listed_payload["snapshots"]), 2)
-        self.assertEqual(macro_payload["scope"], "macro")
-        self.assertEqual(len(macro_payload["snapshots"]), 1)
-        self.assertEqual(macro_payload["snapshots"][0]["subject_key"], "global_macro")
-        self.assertEqual(industry_payload["scope"], "industry")
-        self.assertEqual(len(industry_payload["snapshots"]), 1)
-        self.assertEqual(detail_payload["id"], snapshot_ids[1])
-        self.assertEqual(detail_payload["subject_key"], "consumer_electronics")
-        self.assertEqual(detail_payload["coverage"]["social_count"], 6)
-        self.assertEqual(detail_payload["drivers"], ["iphone demand stable"])
-        self.assertIn("summary_text", detail_payload)
-        self.assertTrue(detail_payload["summary_text"])
+        self.assertEqual(macro_detail.status_code, 200)
+        self.assertEqual(industry_detail.status_code, 200)
+        self.assertEqual(macro.json()[0]["active_themes"][0]["key"], "fed_policy")
+        self.assertEqual(industry.json()[0]["industry_key"], "consumer_electronics")
+        self.assertEqual(macro_detail.json()["summary_text"], "Fed and yields remain the dominant macro themes.")
+        self.assertEqual(industry_detail.json()["industry_key"], "consumer_electronics")
 
     async def test_context_and_recommendation_plan_routes_list_new_redesign_models(self) -> None:
         self.seed_context_and_recommendation_plan_data()
@@ -990,14 +1041,14 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(macro_detail.json()["summary_text"], "Fed and yields remain the dominant macro themes.")
         self.assertEqual(industry_detail.json()["industry_key"], "consumer_electronics")
         self.assertEqual(ticker_signals.json()[0]["diagnostics"]["mode"], "deep_analysis")
-        self.assertEqual(plans.json()[0]["action"], "long")
-        self.assertEqual(plans.json()[0]["signal_breakdown"]["technical_setup"], 0.77)
-        self.assertEqual(plans.json()[0]["latest_outcome"]["outcome"], "win")
-        self.assertEqual(plans.json()[0]["latest_outcome"]["setup_family"], "continuation")
-        self.assertEqual(plans.json()[0]["latest_outcome"]["transmission_bias_label"], "tailwind")
-        self.assertEqual(plans.json()[0]["latest_outcome"]["transmission_bias_detail"]["label"], "tailwind")
-        self.assertEqual(plans.json()[0]["latest_outcome"]["context_regime_label"], "context + catalyst")
-        self.assertEqual(plans.json()[0]["latest_outcome"]["context_regime_detail"]["label"], "context + catalyst")
+        self.assertEqual(plans.json()["items"][0]["action"], "long")
+        self.assertEqual(plans.json()["items"][0]["signal_breakdown"]["technical_setup"], 0.77)
+        self.assertEqual(plans.json()["items"][0]["latest_outcome"]["outcome"], "win")
+        self.assertEqual(plans.json()["items"][0]["latest_outcome"]["setup_family"], "continuation")
+        self.assertEqual(plans.json()["items"][0]["latest_outcome"]["transmission_bias_label"], "tailwind")
+        self.assertEqual(plans.json()["items"][0]["latest_outcome"]["transmission_bias_detail"]["label"], "tailwind")
+        self.assertEqual(plans.json()["items"][0]["latest_outcome"]["context_regime_label"], "context + catalyst")
+        self.assertEqual(plans.json()["items"][0]["latest_outcome"]["context_regime_detail"]["label"], "context + catalyst")
     async def test_run_detail_and_filtered_redesign_routes_expose_orchestration_results(self) -> None:
         run_id = self.seed_run_with_diagnostics()
         self.seed_context_and_recommendation_plan_data(run_id=run_id)
@@ -1028,7 +1079,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(macro.json()), 1)
         self.assertEqual(len(industry.json()), 1)
         self.assertEqual(len(ticker_signals.json()), 1)
-        self.assertEqual(len(plans.json()), 2)
+        self.assertEqual(len(plans.json()["items"]), 2)
 
     async def test_recommendation_outcome_routes_and_plan_evaluation_queue_runs(self) -> None:
         self.seed_context_and_recommendation_plan_data()
@@ -1063,28 +1114,67 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     notes="Stopped out.",
                 )
             )
+            expired_plan = RecommendationPlanRepository(session).create_plan(
+                RecommendationPlan(
+                    ticker="NVDA",
+                    horizon="1w",
+                    action="long",
+                    confidence_percent=58.0,
+                    thesis_summary="Timing window passed without confirmation.",
+                    signal_breakdown={"setup_family": "breakout"},
+                )
+            )
+            RecommendationOutcomeRepository(session).upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=expired_plan.id or 0,
+                    ticker="NVDA",
+                    action="long",
+                    outcome="expired",
+                    status="resolved",
+                    confidence_bucket="50_to_64",
+                    setup_family="breakout",
+                    notes="Horizon elapsed.",
+                )
+            )
         finally:
             session.close()
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             plans = await client.get("/api/recommendation-plans", params={"ticker": "AAPL"})
-            plan_id = plans.json()[0]["id"]
+            plan_id = plans.json()["items"][0]["id"]
             outcomes = await client.get("/api/recommendation-outcomes", params={"ticker": "AAPL"})
             summary = await client.get("/api/recommendation-outcomes/summary")
+            stats = await client.get("/api/recommendation-plans/stats")
+            expired_stats = await client.get("/api/recommendation-plans/stats", params={"outcome": "expired"})
             family_filtered_summary = await client.get("/api/recommendation-outcomes/summary", params={"setup_family": "continuation"})
             setup_family_review = await client.get("/api/recommendation-outcomes/setup-family-review")
             evidence_concentration = await client.get("/api/recommendation-outcomes/evidence-concentration")
             baselines = await client.get("/api/recommendation-plans/baselines")
             filtered_plans = await client.get("/api/recommendation-plans", params={"setup_family": "continuation"})
+            resolved_plans = await client.get("/api/recommendation-plans", params={"resolved": "resolved"})
+            unresolved_plans = await client.get("/api/recommendation-plans", params={"resolved": "unresolved"})
+            expired_plans = await client.get("/api/recommendation-plans", params={"outcome": "expired"})
+            resolved_summary = await client.get("/api/recommendation-outcomes/summary", params={"resolved": "resolved"})
+            expired_summary = await client.get("/api/recommendation-outcomes/summary", params={"outcome": "expired"})
             queued = await client.post("/api/recommendation-plans/evaluate", data={})
             scoped = await client.post(f"/api/recommendation-plans/{plan_id}/evaluate", data={})
 
         self.assertEqual(outcomes.status_code, 200)
         self.assertEqual(outcomes.json()[0]["outcome"], "win")
         self.assertEqual(summary.status_code, 200)
-        self.assertEqual(summary.json()["total_outcomes"], 2)
+        self.assertEqual(summary.json()["total_outcomes"], 3)
         self.assertEqual(summary.json()["resolved_outcomes"], 2)
         self.assertEqual(summary.json()["overall_win_rate_percent"], 50.0)
+        self.assertEqual(stats.status_code, 200)
+        self.assertEqual(stats.json()["total_plans"], 3)
+        self.assertEqual(stats.json()["open_plans"], 0)
+        self.assertEqual(stats.json()["expired_plans"], 1)
+        self.assertEqual(stats.json()["win_rate_percent"], 50.0)
+        self.assertEqual(stats.json()["win_outcomes"], 1)
+        self.assertEqual(stats.json()["loss_outcomes"], 1)
+        self.assertEqual(expired_stats.json()["total_plans"], 1)
+        self.assertEqual(expired_stats.json()["expired_plans"], 1)
+        self.assertIsNone(expired_stats.json()["win_rate_percent"])
         self.assertEqual(family_filtered_summary.status_code, 200)
         self.assertEqual(family_filtered_summary.json()["total_outcomes"], 1)
         self.assertEqual(family_filtered_summary.json()["overall_win_rate_percent"], 100.0)
@@ -1118,10 +1208,23 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("strongest_positive_cohorts", evidence_concentration.json())
         self.assertIn("slice_label", evidence_concentration.json()["strongest_positive_cohorts"][0])
         self.assertEqual(filtered_plans.status_code, 200)
-        self.assertEqual(len(filtered_plans.json()), 1)
-        self.assertEqual(filtered_plans.json()[0]["ticker"], "AAPL")
+        self.assertEqual(len(filtered_plans.json()["items"]), 1)
+        self.assertEqual(filtered_plans.json()["items"][0]["ticker"], "AAPL")
+        self.assertEqual(resolved_plans.status_code, 200)
+        self.assertEqual(len(resolved_plans.json()["items"]), 3)
+        self.assertEqual(unresolved_plans.status_code, 200)
+        self.assertEqual(len(unresolved_plans.json()["items"]), 0)
+        self.assertEqual(expired_plans.status_code, 200)
+        self.assertEqual(len(expired_plans.json()["items"]), 1)
+        self.assertEqual(expired_plans.json()["items"][0]["ticker"], "NVDA")
+        self.assertEqual(resolved_summary.status_code, 200)
+        self.assertEqual(resolved_summary.json()["total_outcomes"], 3)
+        self.assertEqual(resolved_summary.json()["resolved_outcomes"], 2)
+        self.assertEqual(expired_summary.status_code, 200)
+        self.assertEqual(expired_summary.json()["total_outcomes"], 1)
+        self.assertEqual(expired_summary.json()["resolved_outcomes"], 0)
         self.assertEqual(baselines.status_code, 200)
-        self.assertEqual(baselines.json()["total_trade_plans_reviewed"], 2)
+        self.assertEqual(baselines.json()["total_trade_plans_reviewed"], 3)
         baseline_map = {item["key"]: item for item in baselines.json()["comparisons"]}
         self.assertEqual(baseline_map["actual_actionable"]["resolved_trade_count"], 2)
         self.assertEqual(baseline_map["actual_actionable"]["win_rate_percent"], 50.0)
@@ -1135,30 +1238,22 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(queued.json()["job_type"], JobType.RECOMMENDATION_EVALUATION.value)
         self.assertEqual(scoped.json()["job_type"], JobType.RECOMMENDATION_EVALUATION.value)
 
-    async def test_support_snapshot_detail_returns_404_for_missing_snapshot(self) -> None:
+    async def test_context_manual_refresh_routes_queue_runs(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            response = await client.get("/api/support-snapshots/9999")
-
-        self.assertEqual(response.status_code, 404)
-        self.assertIn("not found", response.text.lower())
-
-    async def test_sentiment_snapshot_manual_refresh_routes_queue_runs(self) -> None:
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            macro = await client.post("/api/support-snapshots/refresh/macro", data={})
-            industry = await client.post("/api/support-snapshots/refresh/industry", data={})
+            macro = await client.post("/api/context/refresh/macro", data={})
+            industry = await client.post("/api/context/refresh/industry", data={})
             runs = await client.get("/api/runs")
 
         self.assertEqual(macro.status_code, 200)
         self.assertEqual(industry.status_code, 200)
-        self.assertEqual(macro.json()["job_type"], JobType.MACRO_SENTIMENT_REFRESH.value)
-        self.assertEqual(industry.json()["job_type"], JobType.INDUSTRY_SENTIMENT_REFRESH.value)
+        self.assertEqual(macro.json()["job_type"], JobType.MACRO_CONTEXT_REFRESH.value)
+        self.assertEqual(industry.json()["job_type"], JobType.INDUSTRY_CONTEXT_REFRESH.value)
         run_job_types = [item["job_type"] for item in runs.json()]
-        self.assertIn(JobType.MACRO_SENTIMENT_REFRESH.value, run_job_types)
-        self.assertIn(JobType.INDUSTRY_SENTIMENT_REFRESH.value, run_job_types)
+        self.assertIn(JobType.MACRO_CONTEXT_REFRESH.value, run_job_types)
+        self.assertIn(JobType.INDUSTRY_CONTEXT_REFRESH.value, run_job_types)
 
-    async def test_sentiment_snapshot_run_now_routes_execute_synchronously(self) -> None:
+    async def test_context_run_now_routes_execute_synchronously(self) -> None:
         class StubSnapshotExecutionService:
             def __init__(self, session: Session) -> None:
                 self.jobs = JobRepository(session)
@@ -1177,12 +1272,12 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
 
         transport = httpx.ASGITransport(app=app)
         with patch(
-            "trade_proposer_app.api.routes.support_snapshots._create_job_execution_service",
+            "trade_proposer_app.api.routes.context._create_job_execution_service",
             side_effect=lambda session: StubSnapshotExecutionService(session),
         ):
             async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-                macro = await client.post("/api/support-snapshots/refresh/macro/run-now", data={})
-                industry = await client.post("/api/support-snapshots/refresh/industry/run-now", data={})
+                macro = await client.post("/api/context/refresh/macro/run-now", data={})
+                industry = await client.post("/api/context/refresh/industry/run-now", data={})
 
         self.assertEqual(macro.status_code, 200)
         self.assertEqual(industry.status_code, 200)
@@ -1191,50 +1286,6 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(macro.json()["run"]["status"], "completed")
         self.assertEqual(industry.json()["run"]["status"], "completed")
         self.assertEqual(macro.json()["artifact"]["snapshot_id"], 99)
-
-    async def test_settings_rollback_restores_latest_weights_backup(self) -> None:
-        weights_path = Path(settings.weights_file_path)
-        data_dir = weights_path.parent
-        data_dir.mkdir(parents=True, exist_ok=True)
-        weights_path.write_text('{"alpha": 9}')
-        backup_dir = data_dir / "weight_backups"
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        backup_path = backup_dir / "weights.20260314T120000000000Z.json.bak"
-        backup_path.write_text('{"alpha": 1}')
-
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            response = await client.post("/api/settings/optimization/rollback", data={})
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["rollback"]["status"], "rolled_back")
-        self.assertEqual(payload["rollback"]["restored_from"], str(backup_path))
-        self.assertEqual(weights_path.read_text(), '{"alpha": 1}')
-
-    async def test_settings_rollback_can_restore_selected_backup_path(self) -> None:
-        weights_path = Path(settings.weights_file_path)
-        data_dir = weights_path.parent
-        data_dir.mkdir(parents=True, exist_ok=True)
-        weights_path.write_text('{"alpha": 9}')
-        backup_dir = data_dir / "weight_backups"
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        older_backup = backup_dir / "weights.20260314T110000000000Z.json.bak"
-        newer_backup = backup_dir / "weights.20260314T120000000000Z.json.bak"
-        older_backup.write_text('{"alpha": 1}')
-        newer_backup.write_text('{"alpha": 2}')
-
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            response = await client.post(
-                "/api/settings/optimization/rollback",
-                data={"backup_path": str(older_backup)},
-            )
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["rollback"]["restored_from"], str(older_backup))
-        self.assertEqual(weights_path.read_text(), '{"alpha": 1}')
 
     async def test_single_user_auth_guarding(self) -> None:
         prev_enabled = settings.single_user_auth_enabled

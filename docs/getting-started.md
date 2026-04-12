@@ -2,9 +2,9 @@
 
 **Status:** canonical setup and operations guide
 
-This guide covers local setup, startup, and the first checks to run when something looks wrong.
+This guide covers local setup, startup, and the first checks to run.
 
-The app has four main pieces:
+The app has four main parts:
 - FastAPI backend
 - React/Vite frontend
 - worker
@@ -12,12 +12,12 @@ The app has four main pieces:
 
 ## What to remember
 
-A few behaviors define the product:
+A few rules explain most first-run behavior:
 - creating or executing a job enqueues a run
-- the worker must be running for queued runs to complete
+- the worker must be running for queued runs to finish
 - the scheduler must be running for scheduled jobs to enqueue automatically
-- startup blocks on known-bad preflight unless you explicitly override it
-- missing inputs should become explicit warnings or neutral outputs, not hidden fallbacks
+- startup blocks on failed preflight unless you explicitly override it
+- missing inputs should appear as warnings or neutral outputs, not hidden fallbacks
 
 ## Prerequisites
 
@@ -29,9 +29,7 @@ Install:
 - `npm`
 - Git
 
-No external prototype repository is required.
-
-## Fastest first-time setup
+## Fastest setup
 
 ```bash
 ./scripts/setup.sh
@@ -41,19 +39,15 @@ No external prototype repository is required.
 What these scripts do:
 - `setup.sh`
   - creates `.venv`
-  - installs the Python project in editable mode
-  - optionally installs dev and OpenAI extras
-  - installs frontend dependencies in `frontend/`
+  - installs backend and frontend dependencies
   - creates or refreshes `.env`
-  - generates a random `SECRET_KEY`
-  - defaults local startup to SQLite for easiest first run
-  - keeps PostgreSQL available through `--database postgres` when you want a production-like local database
+  - generates a `SECRET_KEY`
+  - defaults to SQLite
   - runs migrations
 - `start-dev.sh`
-  - runs migrations again for safety
-  - performs the internal preflight check
-  - refuses startup if preflight fails unless you pass `--allow-degraded-preflight`
-  - starts API, worker, scheduler, and Vite together
+  - runs migrations again
+  - runs preflight
+  - starts API, worker, scheduler, and Vite
 
 Useful options:
 
@@ -78,29 +72,33 @@ Useful options:
 ## Local URLs
 
 After startup:
-- frontend UI: `http://localhost:5173/`
-- docs browser: `http://localhost:5173/docs`
+- frontend: `http://localhost:5173/`
+- docs: `http://localhost:5173/docs`
 - API health: `http://localhost:8000/api/health`
 - preflight: `http://localhost:8000/api/health/preflight`
 
 ## First verification
 
-A good first pass is:
+A good first check is:
 1. open the frontend
 2. open Settings and confirm preflight is healthy
-3. confirm the summary backend configuration
-4. create a watchlist
-5. create a proposal job
-6. run the job
-7. confirm the worker processes the run
-8. review the result in dashboard, run detail, recommendation plans, and ticker drill-downs
-9. open the Context review page and confirm shared context and support-refresh artifacts are present or clearly marked stale/missing
+3. create a watchlist
+4. create and run a proposal job
+5. confirm the worker processes the run
+6. review the result in dashboard, run detail, recommendation plans, and ticker pages
+7. open Context and confirm shared context is present or clearly marked stale/missing
 
 ## Frontend development model
 
-The operator UI lives in `frontend/`. In development, Vite serves the SPA on port `5173` and proxies `/api` to FastAPI on port `8000`. If you build the frontend with `npm run build`, FastAPI serves assets from `frontend/dist` when those files exist.
+The UI lives in `frontend/`.
 
-## Manual environment setup
+In development:
+- Vite serves the SPA on port `5173`
+- `/api` is proxied to FastAPI on port `8000`
+
+If you build the frontend, FastAPI can serve assets from `frontend/dist`.
+
+## Manual setup
 
 If you do not want to use the helper scripts:
 
@@ -111,7 +109,7 @@ pip install -e .
 npm --prefix frontend install
 ```
 
-A minimal local `.env` using SQLite looks like this:
+A minimal SQLite `.env`:
 
 ```env
 APP_NAME=Trade Proposer App
@@ -119,7 +117,6 @@ APP_ENV=development
 APP_HOST=0.0.0.0
 APP_PORT=8000
 DATABASE_URL=sqlite:///./trade_proposer.db
-REDIS_URL=redis://localhost:6379/0
 SECRET_KEY=replace-this-with-a-long-random-secret
 WEIGHTS_FILE_PATH=
 SINGLE_USER_AUTH_ENABLED=true
@@ -129,54 +126,56 @@ SINGLE_USER_AUTH_USERNAME=admin
 SINGLE_USER_AUTH_PASSWORD=change-me
 ```
 
-If you want a production-like local database instead, start local services and switch `DATABASE_URL` to Postgres:
+For a Postgres-backed local setup:
 
 ```bash
-docker compose up -d postgres redis
+docker compose up -d postgres
 ```
 
 ```env
 DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/trade_proposer
 ```
 
-`WEIGHTS_FILE_PATH` is optional. Leave it blank to use the app-managed default at `src/trade_proposer_app/data/weights.json`, or point it at another writable `weights.json` location if you want optimization runs to manage a different file.
+`WEIGHTS_FILE_PATH` is optional. Leave it blank to use the default bundled file.
 
-## Single-user authentication
+## Authentication
 
-Authentication is enabled by default (`SINGLE_USER_AUTH_ENABLED=true`).
+Single-user authentication is enabled by default.
 
 You should:
 - set `SINGLE_USER_AUTH_TOKEN` to a strong secret
-- update `SINGLE_USER_AUTH_USERNAME` / `SINGLE_USER_AUTH_PASSWORD`
+- change `SINGLE_USER_AUTH_USERNAME` and `SINGLE_USER_AUTH_PASSWORD`
 
-Every `/api` request must carry `Authorization: Bearer <token>`, except for allowlisted paths such as:
+Most `/api` requests require:
+
+```text
+Authorization: Bearer <token>
+```
+
+Common allowlisted paths:
 - `/api/health`
 - `/api/health/preflight`
 - `/api/login`
 
-The React UI routes unauthenticated visitors to `/login`. The login page exchanges the configured username/password for the same bearer token and stores it locally for future API requests.
+The frontend uses a login page and stores the bearer token locally.
 
-The frontend now requires an explicit login session; do not bake a bearer token into the client bundle.
-
-## Summary engine and external services
+## Summaries and external services
 
 The app can keep summaries in digest-only mode or route them through:
-- `openai_api` (install optional support with `./scripts/setup.sh --with-openai`)
+- `openai_api`
 - `pi_agent`
 
-The resulting narrative, metadata, and any errors are stored in `analysis_json.summary`.
+The result is stored in `analysis_json.summary`.
 
-Supported external news services currently ingested by the app-native pipeline:
-- Google News RSS: https://news.google.com/
-- Yahoo Finance: https://finance.yahoo.com/
-- Finnhub: https://finnhub.io/
-- NewsAPI: https://newsapi.org/ (disabled by default because the free plan is delayed)
-
-Weight optimization also runs entirely inside the app and stores backup metadata for rollback.
+Current news sources used by the app-native pipeline include:
+- Google News RSS
+- Yahoo Finance
+- Finnhub
+- NewsAPI, disabled by default on the free plan
 
 For stored fields and diagnostics, see `raw-details-reference.md`.
 
-## Manual startup without helper scripts
+## Manual startup
 
 Backend:
 
@@ -186,50 +185,41 @@ python -m trade_proposer_app.migrations
 uvicorn trade_proposer_app.app:app --host 0.0.0.0 --port 8000
 ```
 
-Worker in a second terminal:
+Worker:
 
 ```bash
 source .venv/bin/activate
 python -m trade_proposer_app.workers.tasks
 ```
 
-Scheduler in a third terminal:
+Scheduler:
 
 ```bash
 source .venv/bin/activate
 python -m trade_proposer_app.scheduler
 ```
 
-Frontend in a fourth terminal:
+Frontend:
 
 ```bash
 cd frontend
 npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
-Production-style local stop helper:
+## Seed default watchlists
 
-```bash
-./scripts/stop-prod.sh
-```
-
-## Seeding the default watchlists
-
-If you want the repo's curated default watchlist pack, run:
+To load the curated default watchlist pack:
 
 ```bash
 .venv/bin/python scripts/deploy_watchlists.py
 ```
 
 This seeds:
-- 15 default watchlists
-- 18 matching scheduled `Auto: ...` jobs
-  - 15 proposal-generation jobs, plus 2 macro refresh jobs and 1 industry refresh job
-- 300 total equities split across U.S., Europe, and Asia-Pacific
-- compact continent-plus-macro-industry buckets such as `US-Tech`, `EU-Fin`, and `APAC-Cyc`
+- 15 watchlists
+- 18 scheduled `Auto: ...` jobs
+- 750 equities across U.S., Europe, and Asia-Pacific groups
 
-Design rationale and schedule map:
-- `default-watchlists.md`
+See `default-watchlists.md` for rationale.
 
 ## Validation
 
@@ -240,7 +230,7 @@ python3 -m compileall src tests alembic
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-Optional Postgres migration integration test:
+Optional Postgres migration test:
 
 ```bash
 docker compose up -d postgres
@@ -248,64 +238,47 @@ POSTGRES_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432
   .venv/bin/python -m unittest tests.test_postgres_integration -v
 ```
 
-What this covers:
-- bootstrapping an empty Postgres schema
-- running Alembic migrations to head
-- verifying the main current tables exist
-- verifying the legacy `recommendations` table does not come back
-- verifying the migration chain works with the Postgres-safe Alembic revision ids now used by the repo
-
 Frontend:
 
 ```bash
 npm --prefix frontend run check
 ```
 
-## Manual GitHub workflow for the Postgres integration test
-
-The repo includes a GitHub Actions workflow at:
-- `.github/workflows/postgres-integration.yml`
-
-Current status:
-- kept in the repo as operational reference
-- disabled for automatic `push` / `pull_request` runs
-- available only through manual `workflow_dispatch`
+The repo also includes `.github/workflows/postgres-integration.yml`, kept for manual `workflow_dispatch` runs.
 
 ## Common first-run issues
 
-### `setup.sh` or `start-dev.sh` cannot connect to PostgreSQL
-This only applies when you intentionally selected Postgres with `--database postgres` or set a Postgres `DATABASE_URL` yourself.
-
-Start local dependencies first:
+### Cannot connect to PostgreSQL
+If you selected Postgres, start local services first:
 
 ```bash
-docker compose up -d postgres redis
+docker compose up -d postgres
 ```
 
-If you want to avoid local services entirely, regenerate `.env` with SQLite instead:
+If you want the easiest local setup instead:
 
 ```bash
 ./scripts/setup.sh --force-env --database sqlite
 ```
 
-### `start-dev.sh` refuses to start because preflight failed
+### `start-dev.sh` refuses to start
 Inspect `/api/health/preflight`, rerun `./scripts/setup.sh`, and fix dependency issues. Use `--allow-degraded-preflight` only as a temporary override.
 
 ### Runs stay queued
-Make sure the worker is running. If jobs are scheduled but never appear, make sure the scheduler is running too.
+Make sure the worker is running. If scheduled jobs never enqueue, make sure the scheduler is running too.
 
 ### Runs fail immediately with a data dependency error
 Verify that:
-- `pandas` and `yfinance` import correctly from `.venv`
-- the machine has network access for market/news lookups
+- `pandas` and `yfinance` import from `.venv`
+- the machine has network access
 - `src/trade_proposer_app/data/weights.json` exists and is readable
-- provider credentials are configured if you enabled external services
+- provider credentials are configured if needed
 
 ### Health is green but proposals still look degraded
-Check the snapshot freshness warnings in `/api/health` or the Settings page. Proposal generation can still run when shared macro or industry snapshots are stale, but the app should tell you that sentiment context is degraded.
+Check freshness warnings in `/api/health` or Settings. Proposal generation can still run with stale shared context, but the app should show that degradation clearly.
 
 ## See also
 
 - `operator-page-field-guide.md` — where to go in the UI after startup
 - `glossary.md` — shared terms used across the app
-- `roadmap.md` — what is still being improved
+- `roadmap.md` — current priorities

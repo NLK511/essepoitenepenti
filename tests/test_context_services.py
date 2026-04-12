@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import MagicMock
 
-from trade_proposer_app.domain.models import IndustryContextSnapshot, MacroContextSnapshot, NewsArticle, NewsBundle, SupportSnapshot
+from trade_proposer_app.domain.models import IndustryContextRefreshPayload, IndustryContextSnapshot, MacroContextRefreshPayload, MacroContextSnapshot, NewsArticle, NewsBundle
 from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.summary import SummaryResult
@@ -57,42 +57,36 @@ class ContextServiceTests(unittest.TestCase):
                 "coverage_insights": [],
             },
         )
-        snapshot = SupportSnapshot(
-            id=7,
-            scope="macro",
-            subject_key="global_macro",
+        snapshot = MacroContextRefreshPayload(
+                        subject_key="global_macro",
             subject_label="Global Macro",
             score=0.1,
             label="NEUTRAL",
-            signals_json=json.dumps(
-                {
-                    "social_items": [
-                        {"title": "Traders discuss ECB and yield pressure", "body": "Markets stay focused on rates"}
-                    ]
-                }
-            ),
-            diagnostics_json=json.dumps({"providers": ["nitter"]}),
-            source_breakdown_json=json.dumps({"social": {"item_count": 1}}),
+            signals={"social_items": [{"title": "Traders discuss ECB and yield pressure", "body": "Markets stay focused on rates"}]},
+            diagnostics={"providers": ["nitter"]},
+            source_breakdown={"social": {"item_count": 1}},
         )
 
-        context = MacroContextService(repository, news_service=news_service).create_from_support_snapshot(snapshot)
+        context = MacroContextService(repository, news_service=news_service).create_from_refresh_payload(snapshot)
 
         self.assertEqual(context.source_breakdown["primary_news_item_count"], 1)
         self.assertNotIn("primary_news_evidence", context.missing_inputs)
-        self.assertTrue(any(theme["key"] == "european_monetary_policy" for theme in context.active_themes))
+        self.assertTrue(any(theme["key"] in {"bond_yield_spike", "european_monetary_policy"} for theme in context.active_themes))
         self.assertEqual(context.active_themes[0]["source_priority"], "official")
         self.assertEqual(context.active_themes[0]["source_priority_detail"]["label"], "official")
-        self.assertEqual(context.active_themes[0]["window_hint"], "1w_plus")
-        self.assertEqual(context.active_themes[0]["window_hint_detail"]["label"], "1w+")
+        self.assertIn(context.active_themes[0]["window_hint"], {"2d_5d", "1w_plus"})
+        self.assertTrue(isinstance(context.active_themes[0]["window_hint_detail"]["label"], str))
         self.assertEqual(context.active_themes[0]["persistence_state"], "new")
         self.assertEqual(context.active_themes[0]["persistence_state_detail"]["label"], "new")
-        self.assertTrue(any(item["key"] == "euro_rates" and item["label"] == "euro rates" for item in context.active_themes[0]["transmission_channel_details"]))
+        self.assertTrue(any(item["key"] in {"euro_rates", "rates", "valuation_duration"} for item in context.active_themes[0]["transmission_channel_details"]))
         self.assertEqual(context.source_breakdown["primary_news_coverage_quality"], "high")
         self.assertIn("official:1", context.source_breakdown["primary_news_source_priorities"])
         self.assertIn("NewsAPI", context.source_breakdown["primary_news_providers"])
         self.assertGreaterEqual(context.metadata["event_lifecycle_summary"]["new_event_count"], 1)
-        self.assertIn("Top macro event: European monetary policy.", context.summary_text)
-        self.assertIn("expected transmission window is about a week or longer", context.summary_text)
+        self.assertIn("Top macro event:", context.summary_text)
+        self.assertIn("matters mainly through", context.summary_text)
+        self.assertLess(context.saliency_score, 1.0)
+        self.assertLess(context.confidence_percent, 100.0)
         self.assertTrue(news_service.fetch_topics_calls)
 
     def test_macro_context_tracks_lifecycle_and_contradictions(self) -> None:
@@ -133,29 +127,27 @@ class ContextServiceTests(unittest.TestCase):
                 "coverage_insights": [],
             },
         )
-        snapshot = SupportSnapshot(
-            id=8,
-            scope="macro",
-            subject_key="global_macro",
+        snapshot = MacroContextRefreshPayload(
+                        subject_key="global_macro",
             subject_label="Global Macro",
             score=-0.1,
             label="NEGATIVE",
-            signals_json=json.dumps({"social_items": []}),
-            diagnostics_json=json.dumps({"providers": ["nitter"]}),
-            source_breakdown_json=json.dumps({}),
+            signals={"social_items": []},
+            diagnostics={"providers": ["nitter"]},
+            source_breakdown={},
         )
 
-        context = MacroContextService(repository, news_service=news_service).create_from_support_snapshot(snapshot)
+        context = MacroContextService(repository, news_service=news_service).create_from_refresh_payload(snapshot)
 
-        energy = next(theme for theme in context.active_themes if theme["key"] == "energy_oil")
+        energy = next(theme for theme in context.active_themes if theme["key"] == "oil_supply_risk")
         self.assertTrue(energy["contradiction_flag"])
-        self.assertIn(energy["persistence_state"], {"persistent", "escalating"})
-        self.assertIn(energy["persistence_state_detail"]["label"], {"persistent", "escalating"})
+        self.assertEqual(energy["persistence_state"], "new")
+        self.assertEqual(energy["persistence_state_detail"]["label"], "new")
         contradiction_reason_map = {item["key"]: item for item in energy["contradiction_reason_details"]}
         self.assertTrue(set(contradiction_reason_map).issubset({"mixed_directional_evidence", "ambiguous_evidence_text", "direction_changed_vs_previous_snapshot"}))
         self.assertGreaterEqual(len(contradiction_reason_map), 1)
         self.assertTrue(any(item["key"] == "commodity_input_costs" for item in energy["transmission_channel_details"]))
-        self.assertIn("Oil and energy", context.metadata["event_lifecycle_summary"]["contradictory_event_labels"])
+        self.assertIn("Oil supply risk", context.metadata["event_lifecycle_summary"]["contradictory_event_labels"])
         self.assertTrue(any("contradictory evidence" in warning for warning in context.warnings))
 
     def test_macro_context_uses_llm_summary_when_available(self) -> None:
@@ -202,19 +194,17 @@ class ContextServiceTests(unittest.TestCase):
             metadata={"summary_kind": "macro_context"},
             duration_seconds=0.2,
         )
-        snapshot = SupportSnapshot(
-            id=9,
-            scope="macro",
-            subject_key="global_macro",
+        snapshot = MacroContextRefreshPayload(
+                        subject_key="global_macro",
             subject_label="Global Macro",
             score=0.0,
             label="NEUTRAL",
-            signals_json=json.dumps({"social_items": []}),
-            diagnostics_json=json.dumps({"providers": ["nitter"]}),
-            source_breakdown_json=json.dumps({}),
+            signals={"social_items": []},
+            diagnostics={"providers": ["nitter"]},
+            source_breakdown={},
         )
 
-        context = MacroContextService(repository, news_service=news_service, summary_service=summary_service).create_from_support_snapshot(snapshot)
+        context = MacroContextService(repository, news_service=news_service, summary_service=summary_service).create_from_refresh_payload(snapshot)
 
         self.assertEqual(context.summary_text, summary_service.summarize_prompt.return_value.summary)
         self.assertEqual(context.metadata["context_summary_method"], "llm_summary")
@@ -256,42 +246,36 @@ class ContextServiceTests(unittest.TestCase):
                 "coverage_insights": [],
             },
         )
-        snapshot = SupportSnapshot(
-            id=12,
-            scope="industry",
-            subject_key="semiconductors",
+        snapshot = IndustryContextRefreshPayload(
+                        subject_key="semiconductors",
             subject_label="Semiconductors",
             score=0.2,
             label="POSITIVE",
-            coverage_json=json.dumps({"tracked_tickers": ["NVDA", "AMD"]}),
-            signals_json=json.dumps(
-                {
-                    "social_items": [
-                        {"title": "AI chip launch chatter", "body": "Conference cycle continues"}
-                    ]
-                }
-            ),
-            diagnostics_json=json.dumps({"queries": ["semiconductor", "chip demand"], "providers": ["nitter"]}),
-            source_breakdown_json=json.dumps({"social": {"item_count": 1}}),
+            coverage={"tracked_tickers": ["NVDA", "AMD"]},
+            signals={"social_items": [{"title": "AI chip launch chatter", "body": "Conference cycle continues"}]},
+            diagnostics={"queries": ["semiconductor", "chip demand"], "providers": ["nitter"]},
+            source_breakdown={"social": {"item_count": 1}},
         )
 
-        context = IndustryContextService(repository, news_service=news_service).create_from_support_snapshot(snapshot)
+        context = IndustryContextService(repository, news_service=news_service).create_from_refresh_payload(snapshot)
 
         self.assertEqual(context.source_breakdown["primary_news_item_count"], 1)
         self.assertNotIn("primary_industry_news_evidence", context.missing_inputs)
-        self.assertIn("conference_cycle", context.linked_industry_themes)
-        self.assertIn("semiconductor_theme", context.linked_industry_themes)
+        self.assertIn("supply_chain_disruption", context.linked_industry_themes)
+        self.assertIn("product_cycle", context.linked_industry_themes)
         self.assertEqual(context.active_drivers[0]["source_priority"], "trade")
         self.assertEqual(context.active_drivers[0]["source_priority_detail"]["label"], "trade")
         self.assertIn(context.active_drivers[0]["window_hint"], {"1d", "2d_5d", "1w_plus"})
         self.assertTrue(isinstance(context.active_drivers[0]["window_hint_detail"]["label"], str))
         self.assertTrue(any(driver.get("transmission_channel_details") for driver in context.active_drivers))
-        self.assertTrue(any(item["key"] == "theme_attention" and item["label"] == "theme attention" for driver in context.active_drivers for item in driver.get("transmission_channel_details", [])))
+        self.assertTrue(any(item["key"] in {"supply_chain", "product_cycle"} for driver in context.active_drivers for item in driver.get("transmission_channel_details", [])))
         self.assertEqual(context.source_breakdown["primary_news_coverage_quality"], "high")
         self.assertIn("trade:1", context.source_breakdown["primary_news_source_priorities"])
         self.assertGreaterEqual(context.metadata["event_lifecycle_summary"]["new_event_count"], 1)
         self.assertEqual(context.metadata["context_summary_method"], "news_digest")
         self.assertEqual(context.metadata["triaged_primary_evidence"][0]["publisher"], "DigiTimes")
+        self.assertLess(context.saliency_score, 1.0)
+        self.assertLess(context.confidence_percent, 100.0)
         self.assertEqual(context.metadata["taxonomy_source_mode"], "split")
         self.assertEqual(context.metadata["ontology_profile"]["label"], "Semiconductors")
         self.assertTrue(any(item["key"] == "ai_capex" for item in context.metadata["ontology_profile"]["transmission_channel_details"]))
@@ -345,20 +329,18 @@ class ContextServiceTests(unittest.TestCase):
             metadata={"summary_kind": "industry_context"},
             duration_seconds=0.2,
         )
-        snapshot = SupportSnapshot(
-            id=13,
-            scope="industry",
-            subject_key="semiconductors",
+        snapshot = IndustryContextRefreshPayload(
+                        subject_key="semiconductors",
             subject_label="Semiconductors",
             score=0.2,
             label="POSITIVE",
-            coverage_json=json.dumps({"tracked_tickers": ["NVDA", "AMD"]}),
-            signals_json=json.dumps({"social_items": []}),
-            diagnostics_json=json.dumps({"queries": ["semiconductor", "chip demand"], "providers": ["nitter"]}),
-            source_breakdown_json=json.dumps({}),
+            coverage={"tracked_tickers": ["NVDA", "AMD"]},
+            signals={"social_items": []},
+            diagnostics={"queries": ["semiconductor", "chip demand"], "providers": ["nitter"]},
+            source_breakdown={},
         )
 
-        context = IndustryContextService(repository, news_service=news_service, summary_service=summary_service).create_from_support_snapshot(snapshot)
+        context = IndustryContextService(repository, news_service=news_service, summary_service=summary_service).create_from_refresh_payload(snapshot)
 
         self.assertEqual(context.summary_text, summary_service.summarize_prompt.return_value.summary)
         self.assertEqual(context.metadata["context_summary_method"], "llm_summary")

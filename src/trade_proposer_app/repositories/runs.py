@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import JobType, RunStatus
@@ -10,10 +10,10 @@ from trade_proposer_app.persistence.models import (
     IndustryContextSnapshotRecord,
     JobRecord,
     MacroContextSnapshotRecord,
+    RecommendationDecisionSampleRecord,
     RecommendationOutcomeRecord,
     RecommendationPlanRecord,
     RunRecord,
-    SupportSnapshotRecord,
     TickerSignalSnapshotRecord,
     WorkerHeartbeatRecord,
 )
@@ -254,6 +254,25 @@ class RunRepository:
         rows = self.session.scalars(select(RunRecord).order_by(RunRecord.created_at.desc()).limit(limit)).all()
         return [self._to_run_model(row) for row in rows]
 
+    def list_runs_for_job_type(
+        self,
+        job_type: JobType,
+        *,
+        limit: int = 20,
+        statuses: list[str] | None = None,
+    ) -> list[Run]:
+        query = select(RunRecord).where(RunRecord.job_type == job_type.value)
+        if statuses:
+            query = query.where(RunRecord.status.in_(statuses))
+        rows = self.session.scalars(query.order_by(RunRecord.created_at.desc()).limit(limit)).all()
+        return [self._to_run_model(row) for row in rows]
+
+    def count_runs_for_job_type(self, job_type: JobType, *, statuses: list[str] | None = None) -> int:
+        query = select(func.count()).select_from(RunRecord).where(RunRecord.job_type == job_type.value)
+        if statuses:
+            query = query.where(RunRecord.status.in_(statuses))
+        return int(self.session.scalar(query) or 0)
+
     def list_latest_runs_above_confidence_threshold(self, confidence_threshold: float, limit: int = 20) -> list[Run]:
         rows = self.session.scalars(select(RunRecord).order_by(RunRecord.created_at.desc())).all()
         filtered: list[Run] = []
@@ -333,6 +352,36 @@ class RunRepository:
         ).all()
         return [self._to_heartbeat_model(row) for row in rows]
 
+    def count_runs_by_status(self, status: str) -> int:
+        return int(self.session.scalar(select(func.count()).select_from(RunRecord).where(RunRecord.status == status)) or 0)
+
+    def count_stale_running_runs(self, *, stale_after_seconds: int, now: datetime | None = None) -> int:
+        reference_now = self._normalize_optional_datetime(now) or datetime.now(timezone.utc)
+        stale_before = reference_now - timedelta(seconds=stale_after_seconds)
+        lease_stale = select(func.count()).select_from(RunRecord).where(
+            RunRecord.status == RunStatus.RUNNING.value,
+            RunRecord.lease_expires_at.is_not(None),
+            RunRecord.lease_expires_at < reference_now,
+        )
+        started_at_stale = select(func.count()).select_from(RunRecord).where(
+            RunRecord.status == RunStatus.RUNNING.value,
+            RunRecord.lease_expires_at.is_(None),
+            RunRecord.started_at.is_not(None),
+            RunRecord.completed_at.is_(None),
+            RunRecord.started_at < stale_before,
+        )
+        return int((self.session.scalar(lease_stale) or 0) + (self.session.scalar(started_at_stale) or 0))
+
+    def oldest_active_lease_age_seconds(self, now: datetime | None = None) -> float | None:
+        reference_now = self._normalize_optional_datetime(now) or datetime.now(timezone.utc)
+        started_at = self.session.scalar(
+            select(func.min(RunRecord.started_at)).where(RunRecord.status.in_(ACTIVE_RUN_STATUSES)).where(RunRecord.started_at.is_not(None))
+        )
+        normalized_started = self._normalize_optional_datetime(started_at)
+        if normalized_started is None:
+            return None
+        return max(0.0, (reference_now - normalized_started).total_seconds())
+
     def delete_run(self, run_id: int) -> None:
         record = self.session.get(RunRecord, run_id)
         if record is None:
@@ -344,13 +393,17 @@ class RunRepository:
         )
         if plan_ids:
             self.session.execute(
+                delete(RecommendationDecisionSampleRecord).where(
+                    RecommendationDecisionSampleRecord.recommendation_plan_id.in_(plan_ids)
+                )
+            )
+            self.session.execute(
                 delete(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.recommendation_plan_id.in_(plan_ids))
             )
             self.session.execute(delete(RecommendationPlanRecord).where(RecommendationPlanRecord.id.in_(plan_ids)))
         self.session.execute(delete(TickerSignalSnapshotRecord).where(TickerSignalSnapshotRecord.run_id == run_id))
         self.session.execute(delete(MacroContextSnapshotRecord).where(MacroContextSnapshotRecord.run_id == run_id))
         self.session.execute(delete(IndustryContextSnapshotRecord).where(IndustryContextSnapshotRecord.run_id == run_id))
-        self.session.execute(delete(SupportSnapshotRecord).where(SupportSnapshotRecord.run_id == run_id))
         self.session.delete(record)
         self.session.commit()
 
@@ -358,7 +411,7 @@ class RunRepository:
         return Run(
             id=record.id,
             job_id=record.job_id,
-            job_type=JobType(record.job_type or JobType.PROPOSAL_GENERATION.value),
+            job_type=JobType.parse(record.job_type or JobType.PROPOSAL_GENERATION.value),
             status=record.status,
             error_message=record.error_message or None,
             scheduled_for=self._normalize_optional_datetime(record.scheduled_for),
@@ -395,7 +448,7 @@ class RunRepository:
         job = self.session.get(JobRecord, job_id)
         if job is None:
             raise ValueError(f"Job {job_id} not found")
-        return JobType(job.job_type or JobType.PROPOSAL_GENERATION.value)
+        return JobType.parse(job.job_type or JobType.PROPOSAL_GENERATION.value)
 
     @staticmethod
     def _serialize_timing(timing: dict[str, object]) -> str:

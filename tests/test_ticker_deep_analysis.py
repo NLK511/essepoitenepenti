@@ -1,148 +1,195 @@
+"""
+Comprehensive test suite for TickerDeepAnalysisService.
+
+Design principles:
+  - Verify exact arithmetic for price levels (entry, stop, take profit).
+  - Verify confidence score weighting and quality capping.
+  - Verify setup classification logic (momentum and RSI triggers).
+  - Verify feature vector normalization.
+"""
+
+from __future__ import annotations
+
 import json
 import unittest
+from unittest.mock import Mock
 
 import pandas as pd
 
-from trade_proposer_app.domain.enums import RecommendationDirection, StrategyHorizon
+from trade_proposer_app.domain.enums import RecommendationDirection
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
 
 
-class StubProposalService:
-    def __init__(self) -> None:
-        self.weights = {"confidence": {}, "aggregators": {}}
-
-    def _fetch_price_history(self, ticker: str) -> pd.DataFrame:
-        close = [100.0 + (index * 0.2) for index in range(260)]
-        return pd.DataFrame(
-            {
-                "Open": [value - 0.8 for value in close],
-                "High": [value + 1.0 for value in close],
-                "Low": [value - 1.0 for value in close],
-                "Close": close,
-                "Volume": [1000 + (index * 10) for index in range(260)],
-            },
-            index=pd.date_range("2024-01-02", periods=260, freq="D", tz="UTC"),
-        )
-
-    def _apply_news_context(self, context: dict[str, object], ticker: str) -> dict[str, object]:
-        return {
-            **context,
-            "sentiment_score": 0.22,
-            "sentiment_label": "POSITIVE",
-            "macro_sentiment_score": 0.22,
-            "industry_sentiment_score": 0.3,
-            "ticker_sentiment_score": 0.31,
-            "ticker_sentiment_label": "POSITIVE",
-            "news_item_count": 4,
-            "context_count": 2,
-            "news_feed_errors": [],
-            "problems": [],
-            "summary_text": "AI demand and momentum remain supportive.",
-            "summary_method": "digest",
-            "news_items": [{"title": "AI demand supports the group while suppliers keep the supply chain tight"}],
-            "news_feeds_used": ["stub_news"],
-            "source_count": 1,
-            "news_point_count": 4,
-            "polarity_trend": 0.12,
-            "sentiment_volatility": 0.08,
-            "macro_item_count": 1.0,
-            "industry_item_count": 1.0,
-            "ticker_item_count": 4.0,
-            "social_item_count": 0.0,
-            "context_tag_industry": 1.0,
-            "ticker_profile": {
-                "ticker": ticker,
-                "industry": "Semiconductors",
-                "sector": "Technology",
-                "themes": ["ai", "semiconductor"],
-                "macro_sensitivity": ["rates", "growth"],
-                "industry_keywords": ["semiconductor", "chip"],
-            },
-            "macro_context_events": [
-                {
-                    "key": "bond_yields",
-                    "label": "Bond yields",
-                    "saliency_weight": 0.7,
-                    "event_score": 1.9,
-                    "persistence_state": "escalating",
-                    "recency_bucket": "fresh",
-                    "window_hint": "2d_5d",
-                    "transmission_channels": ["rates", "valuation_duration"],
-                    "regime_tags": ["rates", "yield_pressure"],
-                    "contradiction_flag": False,
-                }
-            ],
-            "industry_context_events": [
-                {
-                    "key": "ai_theme",
-                    "label": "AI theme",
-                    "saliency_weight": 0.8,
-                    "event_score": 2.1,
-                    "persistence_state": "escalating",
-                    "recency_bucket": "fresh",
-                    "window_hint": "2d_5d",
-                    "transmission_channels": ["theme_attention", "compute_demand", "supply_chain"],
-                    "regime_tags": ["industry_dominant"],
-                    "contradiction_flag": False,
-                }
-            ],
-            "macro_context_regime_tags": ["risk_off"],
-            "industry_context_regime_tags": ["industry_dominant"],
-            "macro_context_contradictory_event_labels": [],
-            "industry_context_contradictory_event_labels": [],
-        }
-
-
 class TickerDeepAnalysisServiceTests(unittest.TestCase):
-    def test_analyze_annotates_output_with_native_model_horizon_and_components(self) -> None:
-        service = TickerDeepAnalysisService(StubProposalService())
+    def setUp(self) -> None:
+        from trade_proposer_app.services.proposals import ProposalService
+        self.proposal_service = Mock(spec=ProposalService)
+        # Ensure context passthrough for enrichment
+        self.proposal_service._apply_news_context.side_effect = lambda ctx, t: ctx
+        self.service = TickerDeepAnalysisService(self.proposal_service)
 
-        output = service.analyze("AAPL", horizon=StrategyHorizon.ONE_WEEK)
-        payload = json.loads(output.diagnostics.analysis_json or "{}")
+    # ─── Price Level Arithmetic ───────────────────────────────────────────────
 
-        self.assertEqual(payload["ticker_deep_analysis"]["model"], "ticker_deep_analysis_v2")
-        self.assertEqual(payload["ticker_deep_analysis"]["execution_path"], "native")
-        self.assertEqual(payload["ticker_deep_analysis"]["horizon"], "1w")
-        self.assertIn("setup_family", payload["ticker_deep_analysis"])
-        self.assertIn("confidence_components", payload["ticker_deep_analysis"])
-        self.assertIn("transmission_analysis", payload["ticker_deep_analysis"])
-        self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["context_bias"], "tailwind")
-        self.assertIn("primary_drivers", payload["ticker_deep_analysis"]["transmission_analysis"])
-        self.assertIn("primary_driver_details", payload["ticker_deep_analysis"]["transmission_analysis"])
-        self.assertIn("expected_transmission_window", payload["ticker_deep_analysis"]["transmission_analysis"])
-        self.assertIn("conflict_flags", payload["ticker_deep_analysis"]["transmission_analysis"])
-        self.assertIn("conflict_flag_details", payload["ticker_deep_analysis"]["transmission_analysis"])
-        self.assertIn("context_strength_percent", payload["ticker_deep_analysis"]["transmission_analysis"])
-        self.assertIn("context_event_relevance_percent", payload["ticker_deep_analysis"]["transmission_analysis"])
-        self.assertIn("ticker_relationship_edges", payload["ticker_deep_analysis"]["transmission_analysis"])
-        self.assertIn("matched_ticker_relationships", payload["ticker_deep_analysis"]["transmission_analysis"])
-        self.assertIn("industry_exposure_channel_details", payload["ticker_deep_analysis"]["transmission_analysis"])
-        self.assertIn("ticker_exposure_channel_details", payload["ticker_deep_analysis"]["transmission_analysis"])
-        self.assertIn("transmission_tag_details", payload["ticker_deep_analysis"]["transmission_analysis"])
-        self.assertIn("primary_driver_labels", payload["ticker_deep_analysis"]["transmission_analysis"])
-        self.assertTrue(payload["ticker_deep_analysis"]["transmission_analysis"]["ticker_relationship_edges"])
-        self.assertTrue(payload["ticker_deep_analysis"]["transmission_analysis"]["matched_ticker_relationships"])
-        self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["matched_ticker_relationships"][0]["type"], "supplier_to")
-        self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["matched_ticker_relationships"][0]["type_label"], "supplier to")
-        self.assertTrue(any(item["key"] == "industry_dominant" and item["label"] == "industry dominant" for item in payload["ticker_deep_analysis"]["transmission_analysis"]["transmission_tag_details"]))
-        self.assertTrue(any(item["key"] == "catalyst_active" and item["label"] == "catalyst active" for item in payload["ticker_deep_analysis"]["transmission_analysis"]["transmission_tag_details"]))
-        self.assertTrue(any(item["key"] == "industry_event_cluster" and item["label"] == "industry event cluster" for item in payload["ticker_deep_analysis"]["transmission_analysis"]["primary_driver_details"]))
-        self.assertTrue(any(item["key"] == "macro_regime" and item["label"] == "macro regime" for item in payload["ticker_deep_analysis"]["transmission_analysis"]["industry_exposure_channel_details"]))
-        self.assertTrue(any(item["key"] == "ticker_sentiment" and item["label"] == "ticker sentiment" for item in payload["ticker_deep_analysis"]["transmission_analysis"]["ticker_exposure_channel_details"]))
-        self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["conflict_flag_details"], [])
-        self.assertNotIn("ai", payload["ticker_deep_analysis"]["transmission_analysis"]["ticker_exposure_channels"])
-        self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["expected_transmission_window"], "2d_5d")
-        self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["expected_transmission_window_detail"]["label"], "2d-5d")
-        self.assertEqual(payload["ticker_deep_analysis"]["transmission_analysis"]["decay_state"], "fresh")
-        self.assertEqual(payload["summary"]["method"], "digest")
-        self.assertEqual(payload["news"]["feeds_used"], ["stub_news"])
-        self.assertEqual(output.recommendation.direction, RecommendationDirection.LONG)
-        self.assertGreater(output.recommendation.confidence, 0.0)
-        self.assertEqual(output.diagnostics.analysis_json, output.diagnostics.raw_output)
-        self.assertEqual(output.diagnostics.summary_method, "digest")
-        self.assertIsNotNone(output.diagnostics.feature_vector_json)
-        self.assertIsNotNone(output.diagnostics.aggregations_json)
+    def test_suggest_price_levels_long_with_clamped_stop(self) -> None:
+        """
+        Verify LONG price levels.
+        Inputs: price=100, atr=1.0, risk_stop_offset=0.2 (low volatility)
+        
+        Calculation:
+          base_stop = atr = 1.0
+          adjusted_stop = 1.0 + 0.2 = 1.2
+          min_stop = max(100*0.005, 1.0*0.5, 0.01) = max(0.5, 0.5, 0.01) = 0.5
+          max_stop = 100*0.03 = 3.0
+          stop_distance = 1.2 (within bounds 0.5 - 3.0)
+          
+          raw_tp = 1.2 * 1.5 + (0.0 * 0.5) = 1.8  (assuming risk_tp_offset=0)
+          min_tp = max(1.2 * 1.1, 100*0.0075, 0.01) = max(1.32, 0.75, 0.01) = 1.32
+          tp_distance = 1.8 (within bounds)
+          
+          entry = 100.0 (assuming adjustment=0)
+          stop = 100.0 - 1.2 = 98.8
+          take = 100.0 + 1.8 = 101.8
+        """
+        aggregations = {
+            "risk_stop_offset": 0.2,
+            "risk_take_profit_offset": 0.0,
+            "entry_adjustment": 100.0
+        }
+        entry, stop, take = self.service._suggest_price_levels(
+            RecommendationDirection.LONG, price=100.0, atr=1.0, aggregations=aggregations
+        )
+        self.assertEqual(entry, 100.0)
+        self.assertEqual(stop, 98.8)
+        self.assertEqual(take, 101.8)
 
+    def test_suggest_price_levels_short_with_min_RR_clamp(self) -> None:
+        """
+        Verify SHORT price levels and minimum R:R clamp.
+        Calculation:
+          price=100, atr=2.0, risk_stop_offset=5.0 (extreme risk)
+          base_stop = 2.0
+          adjusted_stop = 2.0 + 5.0 = 7.0
+          max_stop = 100 * 0.03 = 3.0
+          stop_distance = 3.0 (clamped to max)
+          
+          raw_tp = 3.0 * 1.5 = 4.5
+          take = 100 - 4.5 = 95.5
+        """
+        aggregations = {
+            "risk_stop_offset": 5.0,
+            "risk_take_profit_offset": 0.0,
+            "entry_adjustment": 100.0
+        }
+        entry, stop, take = self.service._suggest_price_levels(
+            RecommendationDirection.SHORT, price=100.0, atr=2.0, aggregations=aggregations
+        )
+        self.assertEqual(stop, 103.0) # 100 + 3.0
+        self.assertEqual(take, 95.5)  # 100 - 4.5
+
+    # ─── Confidence & Quality ─────────────────────────────────────────────────
+
+    def test_compose_confidence_applies_data_quality_cap(self) -> None:
+        """
+        Verify weighted confidence and quality cap.
+        Weighted components sum to 80.
+        Data quality cap of 0.5 (50%).
+        Result = 80 * 0.5 = 40.
+        """
+        components = {
+            "context_confidence": 80.0,
+            "directional_confidence": 80.0,
+            "catalyst_confidence": 80.0,
+            "technical_clarity": 80.0,
+            "execution_clarity": 80.0,
+            "data_quality_cap": 50.0 # 50% multiplier
+        }
+        # 80 * (0.18+0.3+0.14+0.2+0.18) = 80 * 1.0 = 80.0
+        # 80 * 0.5 = 40.0
+        result = self.service._compose_confidence(components)
+        self.assertEqual(result, 40.0)
+
+    def test_compose_confidence_clamps_to_95(self) -> None:
+        """System never reports 100% confidence."""
+        components = {k: 100.0 for k in ["context_confidence", "directional_confidence", "catalyst_confidence", "technical_clarity", "execution_clarity", "data_quality_cap"]}
+        result = self.service._compose_confidence(components)
+        self.assertEqual(result, 95.0)
+
+    def test_build_confidence_components_penalizes_problems(self) -> None:
+        """Problems in context should reduce the data_quality_cap."""
+        context = {"problems": ["p1", "p2"], "news_feed_errors": ["e1"]}
+        # cap = 1.0 - min(0.7, (2 * 0.12) + (1 * 0.1)) = 1.0 - (0.24 + 0.1) = 0.66
+        # 0.66 * 100 = 66.0
+        comps = self.service._build_confidence_components(context, RecommendationDirection.LONG)
+        self.assertEqual(comps["data_quality_cap"], 66.0)
+
+    # ─── Setup Classification ─────────────────────────────────────────────────
+
+    def test_classify_setup_breakout(self) -> None:
+        """Breakout: Long + momentum_short > 0.04 + RSI >= 60."""
+        context = {
+            "momentum_short": 0.05,
+            "rsi": 65,
+            "momentum_medium": 0,
+            "news_item_count": 0
+        }
+        setup = self.service._classify_setup(context, {}, RecommendationDirection.LONG)
+        self.assertEqual(setup, "breakout")
+
+    def test_classify_setup_mean_reversion(self) -> None:
+        """Mean Reversion: Long + RSI < 40."""
+        context = {
+            "momentum_short": 0,
+            "rsi": 35,
+            "momentum_medium": 0,
+            "news_item_count": 0
+        }
+        setup = self.service._classify_setup(context, {}, RecommendationDirection.LONG)
+        self.assertEqual(setup, "mean_reversion")
+
+    def test_classify_setup_catalyst(self) -> None:
+        """Catalyst: news >= 4 + sentiment >= 0.2."""
+        context = {
+            "news_item_count": 4,
+            "ticker_sentiment_score": 0.25,
+            "rsi": 50
+        }
+        setup = self.service._classify_setup(context, {}, RecommendationDirection.LONG)
+        self.assertEqual(setup, "catalyst_follow_through")
+
+    # ─── Normalization ────────────────────────────────────────────────────────
+
+    def test_normalize_value_clamps_to_unit_interval(self) -> None:
+        self.assertEqual(self.service._normalize_value(150, (100, 200)), 0.5)
+        self.assertEqual(self.service._normalize_value(250, (100, 200)), 1.0)
+        self.assertEqual(self.service._normalize_value(50, (100, 200)), 0.0)
+
+    def test_normalize_value_handles_zero_range(self) -> None:
+        # If min == max, return 0.5 (neutral)
+        self.assertEqual(self.service._normalize_value(100, (100, 100)), 0.5)
+
+    # ─── End-to-End Integration (Mocked) ──────────────────────────────────────
+
+    def test_analyze_produces_valid_run_output(self) -> None:
+        # Mock history with enough rows for indicators
+        dates = pd.date_range("2026-01-01", periods=250, freq="D")
+        history = pd.DataFrame({
+            "Open": [100.0] * 250,
+            "High": [105.0] * 250,
+            "Low": [95.0] * 250,
+            "Close": [102.0] * 250,
+            "Volume": [1000] * 250
+        }, index=dates)
+        self.proposal_service._fetch_price_history.return_value = history
+        
+        output = self.service.analyze("AAPL")
+        
+        self.assertEqual(output.recommendation.ticker, "AAPL")
+        self.assertIn("AAPL", output.diagnostics.analysis_json)
+        
+        # Verify JSON diagnostics
+        analysis = json.loads(output.diagnostics.analysis_json)
+        self.assertIn("technical", analysis)
+        self.assertIn("feature_vector", analysis)
 
 if __name__ == "__main__":
     unittest.main()

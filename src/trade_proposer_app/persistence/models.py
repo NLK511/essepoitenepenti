@@ -164,37 +164,6 @@ class ProviderCredentialRecord(Base, TimestampMixin):
     api_secret: Mapped[str] = mapped_column(Text, default="")
 
 
-class SupportSnapshotRecord(Base, TimestampMixin):
-    __tablename__ = "sentiment_snapshots"
-    __table_args__ = (
-        Index("ix_sentiment_snapshots_scope", "scope"),
-        Index("ix_sentiment_snapshots_subject_key", "subject_key"),
-        Index("ix_sentiment_snapshots_computed_at", "computed_at"),
-        Index("ix_sentiment_snapshots_expires_at", "expires_at"),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    scope: Mapped[str] = mapped_column(String(32))
-    subject_key: Mapped[str] = mapped_column(String(120))
-    subject_label: Mapped[str] = mapped_column(String(120), default="")
-    status: Mapped[str] = mapped_column(String(32), default="completed")
-    score: Mapped[float] = mapped_column(Float, default=0.0)
-    label: Mapped[str] = mapped_column(String(32), default="NEUTRAL")
-    computed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    coverage_json: Mapped[str] = mapped_column(Text, default="")
-    source_breakdown_json: Mapped[str] = mapped_column(Text, default="")
-    drivers_json: Mapped[str] = mapped_column(Text, default="")
-    signals_json: Mapped[str] = mapped_column(Text, default="")
-    diagnostics_json: Mapped[str] = mapped_column(Text, default="")
-    summary_text: Mapped[str] = mapped_column(Text, default="")
-    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
-    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
-
-
-SupportSnapshotRecord = SupportSnapshotRecord
-
-
 class MacroContextSnapshotRecord(Base, TimestampMixin):
     __tablename__ = "macro_context_snapshots"
 
@@ -318,3 +287,129 @@ class RecommendationOutcomeRecord(Base, TimestampMixin):
     setup_family: Mapped[str] = mapped_column(String(64), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
     run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+
+
+class RecommendationDecisionSampleRecord(Base, TimestampMixin):
+    __tablename__ = "recommendation_decision_samples"
+    __table_args__ = (UniqueConstraint("recommendation_plan_id", name="uq_recommendation_decision_samples_plan_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    recommendation_plan_id: Mapped[int] = mapped_column(ForeignKey("recommendation_plans.id"), index=True)
+    ticker: Mapped[str] = mapped_column(String(32), index=True)
+    horizon: Mapped[str] = mapped_column(String(8), index=True)
+    action: Mapped[str] = mapped_column(String(32), index=True)
+    decision_type: Mapped[str] = mapped_column(String(32), default="no_action", index=True)
+    decision_reason: Mapped[str] = mapped_column(Text, default="")
+    shortlisted: Mapped[bool] = mapped_column(Boolean, default=False)
+    shortlist_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    shortlist_decision_json: Mapped[str] = mapped_column(Text, default="{}")
+    confidence_percent: Mapped[float] = mapped_column(Float, default=0.0)
+    calibrated_confidence_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
+    effective_threshold_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence_gap_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
+    setup_family: Mapped[str] = mapped_column(String(64), default="")
+    transmission_bias: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    context_regime: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    review_priority: Mapped[str] = mapped_column(String(32), default="normal", index=True)
+    review_label: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    review_notes: Mapped[str] = mapped_column(Text, default="")
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    decision_context_json: Mapped[str] = mapped_column(Text, default="{}")
+    signal_breakdown_json: Mapped[str] = mapped_column(Text, default="{}")
+    evidence_summary_json: Mapped[str] = mapped_column(Text, default="{}")
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    watchlist_id: Mapped[int | None] = mapped_column(ForeignKey("watchlists.id"), nullable=True, index=True)
+    ticker_signal_snapshot_id: Mapped[int | None] = mapped_column(ForeignKey("ticker_signal_snapshots.id"), nullable=True, index=True)
+
+
+class RecommendationSignalGatingTuningRunRecord(Base, TimestampMixin):
+    __tablename__ = "signal_gating_tuning_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    objective_name: Mapped[str] = mapped_column(String(120), default="signal_gating_tuning_raw_grid", index=True)
+    status: Mapped[str] = mapped_column(String(32), default="completed", index=True)
+    applied: Mapped[bool] = mapped_column(Boolean, default=False)
+    filters_json: Mapped[str] = mapped_column(Text, default="{}")
+    sample_count: Mapped[int] = mapped_column(Integer, default=0)
+    resolved_sample_count: Mapped[int] = mapped_column(Integer, default=0)
+    candidate_count: Mapped[int] = mapped_column(Integer, default=0)
+    baseline_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    baseline_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    best_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    best_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    winning_config_json: Mapped[str] = mapped_column(Text, default="{}")
+    candidate_results_json: Mapped[str] = mapped_column(Text, default="[]")
+    summary_json: Mapped[str] = mapped_column(Text, default="{}")
+    artifact_json: Mapped[str] = mapped_column(Text, default="{}")
+    error_message: Mapped[str] = mapped_column(Text, default="")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PlanGenerationTuningRunRecord(Base, TimestampMixin):
+    __tablename__ = "plan_generation_tuning_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    status: Mapped[str] = mapped_column(String(32), default="completed", index=True)
+    mode: Mapped[str] = mapped_column(String(32), default="manual", index=True)
+    objective_name: Mapped[str] = mapped_column(String(120), default="plan_generation_precision_tuning_v1", index=True)
+    promotion_mode: Mapped[str] = mapped_column(String(32), default="dry_run")
+    baseline_config_version_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_config_versions.id"), nullable=True, index=True)
+    winning_candidate_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_candidates.id"), nullable=True, index=True)
+    promoted_config_version_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_config_versions.id"), nullable=True, index=True)
+    eligible_record_count: Mapped[int] = mapped_column(Integer, default=0)
+    eligible_tier_a_count: Mapped[int] = mapped_column(Integer, default=0)
+    validation_record_count: Mapped[int] = mapped_column(Integer, default=0)
+    candidate_count: Mapped[int] = mapped_column(Integer, default=0)
+    summary_json: Mapped[str] = mapped_column(Text, default="{}")
+    filters_json: Mapped[str] = mapped_column(Text, default="{}")
+    error_message: Mapped[str] = mapped_column(Text, default="")
+    code_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PlanGenerationTuningCandidateRecord(Base, TimestampMixin):
+    __tablename__ = "plan_generation_tuning_candidates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("plan_generation_tuning_runs.id"), index=True)
+    rank: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(32), default="evaluated", index=True)
+    is_baseline: Mapped[bool] = mapped_column(Boolean, default=False)
+    promotion_eligible: Mapped[bool] = mapped_column(Boolean, default=False)
+    config_json: Mapped[str] = mapped_column(Text, default="{}")
+    changed_keys_json: Mapped[str] = mapped_column(Text, default="[]")
+    score_summary_json: Mapped[str] = mapped_column(Text, default="{}")
+    metric_breakdown_json: Mapped[str] = mapped_column(Text, default="{}")
+    sample_breakdown_json: Mapped[str] = mapped_column(Text, default="{}")
+    validation_summary_json: Mapped[str] = mapped_column(Text, default="{}")
+    rejection_reasons_json: Mapped[str] = mapped_column(Text, default="[]")
+
+
+class PlanGenerationTuningConfigVersionRecord(Base, TimestampMixin):
+    __tablename__ = "plan_generation_tuning_config_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    version_label: Mapped[str] = mapped_column(String(120), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="candidate", index=True)
+    source: Mapped[str] = mapped_column(String(32), default="manual", index=True)
+    parent_config_version_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_config_versions.id"), nullable=True, index=True)
+    source_run_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_runs.id"), nullable=True, index=True)
+    source_candidate_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_candidates.id"), nullable=True, index=True)
+    config_json: Mapped[str] = mapped_column(Text, default="{}")
+    parameter_schema_version: Mapped[str] = mapped_column(String(32), default="v1")
+
+
+class PlanGenerationTuningEventRecord(Base, TimestampMixin):
+    __tablename__ = "plan_generation_tuning_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(64), index=True)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_runs.id"), nullable=True, index=True)
+    config_version_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_config_versions.id"), nullable=True, index=True)
+    candidate_id: Mapped[int | None] = mapped_column(ForeignKey("plan_generation_tuning_candidates.id"), nullable=True, index=True)
+    actor_type: Mapped[str] = mapped_column(String(32), default="system")
+    actor_identifier: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")

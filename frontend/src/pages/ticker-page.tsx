@@ -9,6 +9,7 @@ import {
   TickerRelationshipReadthroughCard,
 } from "../components/ticker-relationship-readthrough";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
+import { ScoreBadge } from "../components/decision-surface";
 import type { TickerAnalysisPage as TickerAnalysisPageData } from "../types";
 import { detailLabel, formatDate } from "../utils";
 
@@ -105,16 +106,10 @@ export function TickerPage() {
                 <SectionTitle kicker="Latest plan" title="Most recent operator context" />
                 {latestPlan ? (
                   <div className="data-stack top-gap-small">
-                    <div className="cluster">
-                      <Badge tone={latestPlan.action === "long" ? "ok" : latestPlan.action === "short" ? "warning" : "neutral"}>{latestPlan.action}</Badge>
-                      <Badge>{latestPlan.horizon}</Badge>
-                      <Badge>{typeof latestPlan.signal_breakdown?.setup_family === "string" ? latestPlan.signal_breakdown.setup_family : "setup —"}</Badge>
-                    </div>
+                    <div className="cluster"><Badge tone={latestPlan.action === "long" ? "ok" : latestPlan.action === "short" ? "warning" : "neutral"}>{latestPlan.action}</Badge><Badge>{latestPlan.horizon}</Badge><Badge>{typeof latestPlan.signal_breakdown?.setup_family === "string" ? latestPlan.signal_breakdown.setup_family : "setup —"}</Badge><ScoreBadge label="Confidence" value={`${latestPlan.confidence_percent}%`} tone="info" /></div>
                     <div className="helper-text">{latestPlan.thesis_summary || latestPlan.rationale_summary || "No thesis summary stored."}</div>
-                    <div className="helper-text">Entry {latestPlan.entry_price_low ?? latestPlan.entry_price_high ?? "—"} · Stop {latestPlan.stop_loss ?? "—"} · Take profit {latestPlan.take_profit ?? "—"}</div>
-                    <div className="helper-text">Ticker relationships {relationshipSummary(latestPlan ?? {})}</div>
-                    <div className="helper-text">Latest outcome {latestPlan.latest_outcome?.outcome ?? "open"}</div>
-                    <div className="helper-text">Bias {latestOutcomeBias} · Regime {latestOutcomeRegime}</div>
+                    <div className="helper-text">Entry {latestPlan.entry_price_low ?? latestPlan.entry_price_high ?? "—"} · Stop {latestPlan.stop_loss ?? "—"} · Take {latestPlan.take_profit ?? "—"}</div>
+                    <div className="helper-text">Relationships {relationshipSummary(latestPlan ?? {})} · Outcome {latestPlan.latest_outcome?.outcome ?? "open"} · Bias {latestOutcomeBias} · Regime {latestOutcomeRegime}</div>
                   </div>
                 ) : (
                   <EmptyState message="No plans stored for this ticker yet." />
@@ -157,23 +152,13 @@ export function TickerPage() {
                               <Badge>{item.horizon}</Badge>
                               {item.run_id ? <Link to={`/runs/${item.run_id}`} className="badge badge-info badge-link">run #{item.run_id}</Link> : null}
                             </div>
-                            <h3 className="data-card-title top-gap-small">{item.confidence_percent}% confidence</h3>
-                            <div className="helper-text">{formatDate(item.computed_at)}</div>
-                          </div>
-                          <div className="data-card-meta">
-                            <Badge tone={item.latest_outcome?.outcome === "win" ? "ok" : item.latest_outcome?.outcome === "loss" ? "danger" : "neutral"}>{item.latest_outcome?.outcome ?? "open"}</Badge>
-                            <Badge tone={item.latest_outcome?.status === "resolved" ? "ok" : "warning"}>{item.latest_outcome?.status ?? "pending"}</Badge>
+                            <div className="cluster top-gap-small"><ScoreBadge label="Confidence" value={`${item.confidence_percent}%`} tone="info" /><Badge tone={item.latest_outcome?.outcome === "win" ? "ok" : item.latest_outcome?.outcome === "loss" ? "danger" : "neutral"}>{item.latest_outcome?.outcome ?? "open"}</Badge><Badge tone={item.latest_outcome?.status === "resolved" ? "ok" : "warning"}>{item.latest_outcome?.status ?? "pending"}</Badge></div>
+                            <div className="helper-text">{formatDate(item.computed_at)} · relationships {relationshipSummary(item)} · status {item.latest_outcome?.status ?? "pending"}</div>
                           </div>
                         </div>
                         <div className="helper-text">{item.thesis_summary || item.rationale_summary || "No thesis summary stored."}</div>
-                        <div className="helper-text top-gap-small">ticker relationships {relationshipSummary(item)}</div>
-                        <div className="data-points top-gap-small">
-                          <div className="data-point"><span className="data-point-label">entry</span><span className="data-point-value">{item.entry_price_low ?? item.entry_price_high ?? "—"}{item.entry_price_high && item.entry_price_low && item.entry_price_high !== item.entry_price_low ? ` to ${item.entry_price_high}` : ""}</span></div>
-                          <div className="data-point"><span className="data-point-label">stop</span><span className="data-point-value">{item.stop_loss ?? "—"}</span></div>
-                          <div className="data-point"><span className="data-point-label">take profit</span><span className="data-point-value">{item.take_profit ?? "—"}</span></div>
-                          <div className="data-point"><span className="data-point-label">outcome note</span><span className="data-point-value">{item.latest_outcome?.notes || (item.warnings.length > 0 ? `${item.warnings.length} warning(s)` : "—")}</span></div>
-                          <div className="data-point"><span className="data-point-label">analytics</span><span className="data-point-value">{item.latest_outcome ? `${outcomeBias} · ${outcomeRegime}` : "—"}</span></div>
-                        </div>
+                        <div className="helper-text top-gap-small">relationships {relationshipSummary(item)} · entry {item.entry_price_low ?? item.entry_price_high ?? "—"}{item.entry_price_high && item.entry_price_low && item.entry_price_high !== item.entry_price_low ? ` to ${item.entry_price_high}` : ""} · stop {item.stop_loss ?? "—"} · take {item.take_profit ?? "—"}</div>
+                        <div className="helper-text">outcome {item.latest_outcome?.notes || (item.warnings.length > 0 ? `${item.warnings.length} warning(s)` : "—")} · analytics {item.latest_outcome ? `${outcomeBias} · ${outcomeRegime}` : "—"}</div>
                       </article>
                     );
                   })}

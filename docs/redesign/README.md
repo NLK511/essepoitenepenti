@@ -2,60 +2,47 @@
 
 **Status:** active redesign reference
 
-This directory contains the redesign docs that are still part of the active technical reference.
+This directory contains the redesign docs that still matter as active technical reference.
 
-Historical redesign planning and convergence material has been moved to `../archive/redesign/` so this folder stays focused on current design guidance.
+Historical redesign planning and convergence material lives in `../archive/redesign/` so this folder can stay focused on current guidance.
+
+## Start here
+
+If you only need the main redesign reading path, use:
+- `principles.md` — redesign rules and guardrails
+- `target-architecture.md` — high-level system shape
+- `short-horizon-recommendation-architecture.md` — fuller combined reference
 
 ## Active redesign docs
 
-### Principles
-- `principles.md`
-- Core product principles: observability, trust, explicit degraded states, and no hidden fallbacks.
-
-### Target architecture
-- `target-architecture.md`
-- High-level design across context, exposure, ticker setup, and trade-plan construction.
-
-### Data model and persistence
-- `data-model-and-persistence.md`
-- Redesign persistence direction, entity framing, and schema-oriented reference.
-
-### Transmission modeling spec
-- `transmission-modeling-spec.md`
-- Rules for mapping macro and industry context into ticker-level exposure, transmission bias, conflicts, and timing windows.
-
-### Calibration governance spec
-- `calibration-governance-spec.md`
-- Rules for sample-aware, operator-visible use of outcome history in confidence and action gating.
-
-### Setup family playbook
-- `setup-family-playbook.md`
-- Setup-family-specific expectations for entry, invalidation, target, context interaction, and evaluation.
-
-### Full combined reference
-- `short-horizon-recommendation-architecture.md`
-- Consolidated design reference containing the broader redesign shape in one file.
+- `principles.md` — observability, trust, explicit degraded states, and no hidden fallbacks
+- `target-architecture.md` — context, exposure, ticker setup, and trade-plan construction
+- `data-model-and-persistence.md` — persistence direction and entity framing
+- `transmission-modeling-spec.md` — context-to-ticker transmission rules
+- `calibration-governance-spec.md` — sample-aware confidence and action-gating rules
+- `setup-family-playbook.md` — setup-family expectations for planning and evaluation
+- `short-horizon-recommendation-architecture.md` — combined redesign reference
 
 ## Archived redesign docs
 
-The following redesign docs were moved to archive because they are now mainly historical or migration-oriented:
+These are mainly historical or migration-oriented:
 - `../archive/redesign/migration-plan.md`
 - `../archive/redesign/implementation-charter.md`
 - `../archive/redesign/legacy-convergence-plan.md`
 - `../archive/redesign/measured-success-criteria.md`
 
-## Operating rules
+## Shared redesign rules
 
-Across all redesign work, preserve these rules:
+Across redesign work, preserve these rules:
 - no hidden fallbacks
 - explicit degraded states
 - structured warnings
-- clear source provenance
+- clear provenance
 - no false confidence
 
 ## See also
 
-- `principles.md` — redesign rules
-- `target-architecture.md` — overall redesign shape
-- `../roadmap.md` — current priorities
-- `../archive/redesign/` — historical redesign planning and convergence docs
+- `principles.md`
+- `target-architecture.md`
+- `../roadmap.md`
+- `../archive/redesign/`

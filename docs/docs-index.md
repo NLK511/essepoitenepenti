@@ -2,152 +2,93 @@
 
 **Status:** canonical navigation guide
 
-This index shows where to start and what each doc is for.
+This index keeps the current reading path short.
 
-It separates current product docs, technical reference, and archived history so the main reading path stays clear.
+Use it to answer two questions:
+- where should I start?
+- which docs are current reference vs planning vs archive?
 
 ## Start here
 
-If you are new to the repo or the app, read these first:
-
-- `../README.md`
-  - repo-level overview and quick start
-- `getting-started.md`
-  - local setup, startup, auth basics, first-run checks
-- `operator-page-field-guide.md`
-  - what each major UI page is for and how to use it
-- `glossary.md`
-  - shared vocabulary across runs, signals, plans, outcomes, and snapshots
+If you are new to the repo, read these first in order:
+- `../README.md` — repo overview and quick start
+- `getting-started.md` — setup, startup, auth basics, troubleshooting
+- `operator-page-field-guide.md` — main UI pages, operator flow, and how to orient yourself in the product
+- `glossary.md` — shared terms used across the app, including cohort, slice, bucket, and calibration language
+- `recommendation-methodology.md` — the live recommendation path after you know the page and term basics
 
 ## Canonical current-state docs
 
-These docs define the current product truth.
+These define the current product truth.
 
-### Product direction
-- `product-thesis.md`
-  - core goal
-  - governing principle
-  - strategic priority order
-  - standard for future decisions
-
-### Current product behavior
-- `features-and-capabilities.md`
-  - what operators can do now
-  - current strengths
-  - current weaknesses
-
-### Recommendation logic
-- `recommendation-methodology.md`
-  - how the app-native scoring and planning pipeline works
-  - context and support-snapshot layers
-  - scoring and risk logic
-  - methodology limits
-
-### Current architecture
-- `architecture.md`
-  - runtime model
-  - module boundaries
-  - workflow topology
-  - operational risks and next moves
-
-### Active implementation tracking
-- `ontology-enrichment-plan.md`
-  - planned expansion of ticker, industry, and relationship coverage
-  - tracking page for ontology work progress
-  - guidance for validation, reporting, and split file structure
-- `historical-replay-backtesting-plan.md`
-  - phased plan for building a point-in-time historical replay dataset
-  - rules for strict vs research backtests
-  - guidance for context, news, and social-data feasibility
-- `historical-replay-implementation-checklist.md`
-  - codebase-specific implementation checklist for historical replay
-  - schema, services, repositories, jobs, and MVP delivery order
+### Product and behavior
+- `product-thesis.md` — product goal, decision rules, and priority order
+- `features-and-capabilities.md` — what the app does today and its current limits
+- `roadmap.md` — active priorities only
+- `user-journeys.md` — intended operator journeys
 
 ### Setup and operations
-- `getting-started.md`
-  - installation
-  - startup
-  - authentication basics
-  - first-run troubleshooting
-  - validation commands
-  - optional Postgres integration-test workflow
-- `default-watchlists.md`
-  - seeded default watchlist strategy
-  - universe construction rationale
-  - compact naming and schedule rationale
+- `getting-started.md` — local setup, scripts, auth, validation, first-run checks
+- `default-watchlists.md` — seeded watchlist pack and rationale
 
-### Current roadmap
-- `roadmap.md`
-  - what is clearly shipped now
-  - what is still active work
-  - what is explicitly later
+### Recommendation workflow
+- `recommendation-methodology.md` — current scoring and planning pipeline
+- `recommendation-plan-resolution-spec.md` — canonical plan outcome semantics
+- `archive/implementation-plans/recommendation-plan-evaluation-recompute-notes.md` — evaluator edge cases and recompute notes
+- `decision-sample-tuning-guide.md` — how to review and tune decision samples
+- `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow and calibration-related review surfaces
 
-### User workflow framing
-- `user-journeys.md`
-  - current intended operator journeys
-  - deferred journeys that should not drive near-term design
+### Architecture and data
+- `architecture.md` — runtime model and module boundaries
+- `raw-details-reference.md` — stored payload and diagnostics reference
+- `er-model.md` — current schema overview
 
-## Technical reference docs
+## Active implementation and research docs
 
-These are useful after you already understand the product shape.
+These are useful, but they are not the main current-state entry point.
 
-### Stored payloads and diagnostics
-- `raw-details-reference.md`
-  - field-level reference for structured payloads
-  - run artifacts
-  - shared context and transitional support-snapshot payloads
-  - diagnostics and timing
+- `recommendation-quality-improvement-plan.md` — working tracker for recommendation-quality, calibration, and validation improvements
+- `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow
+- `plan-generation-tuning-spec.md` — authoritative implementation spec for autonomous plan-generation tuning
+- `nitter-social-relevance-scoring.md` — current Nitter relevance-ranking behavior
 
-### Database structure
-- `er-model.md`
-  - current entity-relationship diagram for the live app schema
-  - main foreign-key links between watchlists, jobs, runs, snapshots, plans, and outcomes
+## Redesign reference
 
-### Redesign specs still useful as active reference
-- `redesign/README.md`
-  - overview of active redesign docs
-- `redesign/principles.md`
-  - redesign rules and trust constraints
-- `redesign/target-architecture.md`
-  - desired longer-shape design for context, exposure, ticker setup, and trade-plan construction
-- `redesign/transmission-modeling-spec.md`
-  - transmission rules for context → industry → ticker reasoning
-- `redesign/calibration-governance-spec.md`
-  - sample-aware calibration and threshold-governance rules
-- `redesign/setup-family-playbook.md`
-  - setup-family-specific plan construction expectations
-- `redesign/data-model-and-persistence.md`
-  - redesign persistence direction and entity framing
+These remain active technical reference docs:
+- `redesign/README.md` — redesign doc map
+- `redesign/principles.md` — redesign rules
+- `redesign/target-architecture.md` — high-level redesign shape
+- `redesign/transmission-modeling-spec.md` — context-to-ticker transmission rules
+- `redesign/calibration-governance-spec.md` — outcome-aware calibration rules
+- `redesign/setup-family-playbook.md` — setup-family expectations
+- `redesign/data-model-and-persistence.md` — redesign persistence direction
+- `redesign/short-horizon-recommendation-architecture.md` — combined redesign reference
 
 ## Archive
 
-Archived docs are still valuable for future development and historical context, but they are not part of the main reading path.
+Archived docs are still useful for history, but they are not part of the main reading path.
 
 Start with:
 - `archive/README.md`
 - `archive/roadmap-history.md`
-
-Archived implementation/planning material includes:
-- `archive/phase-2-app-native.md`
-- `archive/implementation-plans/shared-sentiment-snapshot-implementation-plan.md`
-- `archive/implementation-plans/shared-sentiment-snapshot-refactor.md`
-- `archive/implementation-plans/nitter-social-implementation-checklist.md`
-- `archive/implementation-plans/nitter-social-sentiment-design.md`
-- `archive/redesign/migration-plan.md`
-- `archive/redesign/implementation-charter.md`
-- `archive/redesign/legacy-convergence-plan.md`
-- `archive/redesign/measured-success-criteria.md`
+- `archive/implementation-plans/signal-gating-tuning-plan.md` — historical development plan for signal gating tuning
+- `archive/implementation-plans/plan-generation-tuning-implementation-plan.md` — archived implementation plan and replacement strategy
+- `archive/implementation-plans/historical-replay-backtesting-plan.md` — archived historical replay research plan
+- `archive/implementation-plans/historical-replay-implementation-checklist.md` — archived historical replay implementation checklist
+- `archive/implementation-plans/ontology-enrichment-plan.md` — archived ontology expansion and governance plan
+- `archive/implementation-plans/tech-debt-remediation-plan.md` — archived context-refresh cleanup and terminology convergence plan
+- `archive/implementation-plans/ui-decluttering-plan.md` — archived UI decluttering execution plan
 
 ## Maintenance rule
 
 When a feature ships:
 - update the canonical doc for that topic
 - remove or archive planning language elsewhere
-- do not leave shipped work described as major future work in multiple places
+- avoid describing shipped work as major future work in multiple places
 
-When a doc becomes mainly historical:
+When a doc becomes mostly historical:
 - move it to `docs/archive/`
-- keep a short pointer from the active doc set if the history is still useful
+- keep only a short pointer from active docs if needed
 
 ## Suggested reading paths
 
@@ -155,10 +96,13 @@ When a doc becomes mainly historical:
 - `getting-started.md`
 - `operator-page-field-guide.md`
 - `glossary.md`
+- `recommendation-methodology.md`
 
 ### Product understanding
 - `product-thesis.md`
 - `features-and-capabilities.md`
+- `operator-page-field-guide.md`
+- `glossary.md`
 - `recommendation-methodology.md`
 - `roadmap.md`
 

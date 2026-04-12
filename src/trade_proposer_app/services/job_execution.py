@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import socket
 from datetime import datetime, timezone
@@ -11,9 +12,13 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
-from trade_proposer_app.services.industry_support import IndustrySupportRefreshService
-from trade_proposer_app.services.macro_support import MacroSupportRefreshService
-from trade_proposer_app.services.optimizations import WeightOptimizationService
+from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
+from trade_proposer_app.services.macro_context_refresh import MacroContextRefreshService
+from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
+from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
+
+
+logger = logging.getLogger(__name__)
 
 
 class RunExecutionFailed(Exception):
@@ -29,9 +34,10 @@ class JobExecutionService:
         jobs: JobRepository,
         runs: RunRepository,
         evaluations: EvaluationExecutionService | None = None,
-        optimizations: WeightOptimizationService | None = None,
-        macro_support: MacroSupportRefreshService | None = None,
-        industry_support: IndustrySupportRefreshService | None = None,
+        plan_generation_tuning: PlanGenerationTuningService | None = None,
+        performance_assessment: PerformanceAssessmentService | None = None,
+        macro_context_refresh: MacroContextRefreshService | None = None,
+        industry_context_refresh: IndustryContextRefreshService | None = None,
         macro_context=None,
         industry_context=None,
         watchlist_orchestration=None,
@@ -41,9 +47,10 @@ class JobExecutionService:
         self.jobs = jobs
         self.runs = runs
         self.evaluations = evaluations
-        self.optimizations = optimizations
-        self.macro_support = macro_support
-        self.industry_support = industry_support
+        self.plan_generation_tuning = plan_generation_tuning
+        self.performance_assessment = performance_assessment
+        self.macro_context_refresh = macro_context_refresh
+        self.industry_context_refresh = industry_context_refresh
         self.macro_context = macro_context
         self.industry_context = industry_context
         self.watchlist_orchestration = watchlist_orchestration
@@ -57,10 +64,10 @@ class JobExecutionService:
             existing_scheduled_run = self.runs.get_run_for_job_and_scheduled_for(job.id or job_id, scheduled_for)
             if existing_scheduled_run is not None:
                 return existing_scheduled_run
-        if job.job_type == JobType.WEIGHT_OPTIMIZATION:
-            active_optimization_run = self.runs.get_active_run_for_job_type(JobType.WEIGHT_OPTIMIZATION)
-            if active_optimization_run is not None:
-                return active_optimization_run
+        if job.job_type == JobType.PLAN_GENERATION_TUNING:
+            active_tuning_run = self.runs.get_active_run_for_job_type(JobType.PLAN_GENERATION_TUNING)
+            if active_tuning_run is not None:
+                return active_tuning_run
         active_run = self.runs.get_active_run_for_job(job.id or job_id)
         if active_run is not None:
             return active_run
@@ -70,6 +77,20 @@ class JobExecutionService:
 
     def execute_run(self, run_id: int, worker_id: str | None = None) -> tuple[list[Recommendation], dict[str, object]]:
         run = self.runs.get_run(run_id)
+        logger.info(
+            "job execution dispatch started: run_id=%s job_id=%s job_type=%s worker_id=%s",
+            run.id,
+            run.job_id,
+            run.job_type.value,
+            worker_id,
+        )
+        logger.debug(
+            "job execution dispatch payload: run_id=%s scheduled_for=%s started_at=%s artifact=%s",
+            run.id,
+            self._normalize_datetime(run.scheduled_for),
+            self._normalize_datetime(run.started_at),
+            self._get_run_artifact(run),
+        )
         if worker_id:
             self.runs.upsert_heartbeat(WorkerHeartbeat(
                 worker_id=worker_id,
@@ -84,17 +105,32 @@ class JobExecutionService:
             return self._execute_proposal_run(run)
         if run.job_type == JobType.RECOMMENDATION_EVALUATION:
             return self._execute_evaluation_run(run)
-        if run.job_type == JobType.WEIGHT_OPTIMIZATION:
-            return self._execute_optimization_run(run)
+        if run.job_type == JobType.PLAN_GENERATION_TUNING:
+            return self._execute_plan_generation_tuning_run(run)
+        if run.job_type == JobType.PERFORMANCE_ASSESSMENT:
+            return self._execute_performance_assessment_run(run)
         if run.job_type == JobType.MACRO_CONTEXT_REFRESH:
-            return self._execute_macro_support_run(run)
+            return self._execute_macro_context_refresh_run(run)
         if run.job_type == JobType.INDUSTRY_CONTEXT_REFRESH:
-            return self._execute_industry_support_run(run)
+            return self._execute_industry_context_refresh_run(run)
         if run.job_type == JobType.HISTORICAL_REPLAY:
             return self._execute_historical_replay_run(run)
         raise RuntimeError(f"unsupported job_type execution: {run.job_type.value}")
 
     def _execute_proposal_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
+        logger.info(
+            "job execution proposal started: run_id=%s job_id=%s worker=%s",
+            run.id,
+            run.job_id,
+            socket.gethostname(),
+        )
+        logger.debug(
+            "job execution proposal run payload: run_id=%s scheduled_for=%s started_at=%s artifact=%s",
+            run.id,
+            self._normalize_datetime(run.scheduled_for),
+            self._normalize_datetime(run.started_at),
+            self._get_run_artifact(run),
+        )
         execution_started = perf_counter()
         timing: dict[str, object] = {
             "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
@@ -110,6 +146,19 @@ class JobExecutionService:
         job = self.jobs.get(run.job_id)
         tickers = self.jobs.resolve_tickers(run.job_id)
         watchlist = self._resolve_execution_watchlist(job, tickers)
+        logger.info(
+            "job execution proposal inputs resolved: run_id=%s job_id=%s ticker_count=%s source_kind=%s watchlist_id=%s",
+            run.id,
+            run.job_id,
+            len(tickers),
+            getattr(watchlist, "source_kind", None),
+            getattr(watchlist, "id", None),
+        )
+        logger.debug(
+            "job execution proposal watchlist payload: run_id=%s watchlist=%s",
+            run.id,
+            watchlist,
+        )
         timing["resolve_tickers_seconds"] = round(perf_counter() - resolve_started, 6)
 
         warnings_found = False
@@ -124,6 +173,19 @@ class JobExecutionService:
                 tickers,
                 job_id=run.job_id,
                 run_id=run.id,
+            )
+            logger.info(
+                "job execution proposal orchestration finished: run_id=%s job_id=%s warnings_found=%s",
+                run.id,
+                run.job_id,
+                bool(orchestration.get("warnings_found")),
+            )
+            logger.debug(
+                "job execution proposal orchestration payload: run_id=%s keys=%s summary_keys=%s artifact_keys=%s",
+                run.id,
+                sorted(orchestration.keys()),
+                sorted(orchestration.get("summary", {}).keys()) if isinstance(orchestration.get("summary"), dict) else None,
+                sorted(orchestration.get("artifact", {}).keys()) if isinstance(orchestration.get("artifact"), dict) else None,
             )
             ticker_generation.extend(orchestration.get("ticker_generation", []))
             warnings_found = bool(orchestration.get("warnings_found"))
@@ -142,6 +204,12 @@ class JobExecutionService:
             if isinstance(partial_ticker_generation, list):
                 self._get_ticker_generation_list(timing).extend(partial_ticker_generation)
             timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
+            logger.exception(
+                "job execution proposal failed: run_id=%s job_id=%s elapsed_seconds=%s",
+                run.id,
+                run.job_id,
+                timing["recommendation_generation_seconds"],
+            )
             raise RunExecutionFailed(exc, timing) from exc
 
         persistence_started = perf_counter()
@@ -150,11 +218,37 @@ class JobExecutionService:
 
         final_status = RunStatus.COMPLETED_WITH_WARNINGS.value if warnings_found else RunStatus.COMPLETED.value
         self._finalize_success(run.id or 0, final_status, timing, execution_started)
+        logger.info(
+            "job execution proposal finished: run_id=%s job_id=%s final_status=%s warnings_found=%s total_execution_seconds=%s",
+            run.id,
+            run.job_id,
+            final_status,
+            warnings_found,
+            timing["total_execution_seconds"],
+        )
+        logger.debug(
+            "job execution proposal timing: run_id=%s timing=%s",
+            run.id,
+            timing,
+        )
         return stored, timing
 
     def _execute_evaluation_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
         if self.evaluations is None:
             raise RuntimeError("recommendation evaluation execution service is not configured")
+
+        logger.info(
+            "job execution evaluation started: run_id=%s job_id=%s job_type=%s",
+            run.id,
+            run.job_id,
+            run.job_type.value,
+        )
+        logger.debug(
+            "job execution evaluation run payload: run_id=%s scheduled_for=%s artifact=%s",
+            run.id,
+            self._normalize_datetime(run.scheduled_for),
+            self._get_run_artifact(run),
+        )
 
         execution_started = perf_counter()
         timing: dict[str, object] = {
@@ -166,12 +260,26 @@ class JobExecutionService:
         }
 
         evaluation_started = perf_counter()
+        evaluation_as_of = self._normalize_datetime(run.scheduled_for) or self._normalize_datetime(run.started_at) or datetime.now(timezone.utc)
+        logger.debug(
+            "job execution evaluation as_of resolved: run_id=%s scheduled_for=%s started_at=%s as_of=%s",
+            run.id,
+            self._normalize_datetime(run.scheduled_for),
+            self._normalize_datetime(run.started_at),
+            evaluation_as_of,
+        )
         try:
-            result = self.evaluations.execute(run)
+            result = self.evaluations.execute(run, as_of=evaluation_as_of)
             timing["evaluation_seconds"] = round(perf_counter() - evaluation_started, 6)
         except Exception as exc:
             timing["evaluation_seconds"] = round(perf_counter() - evaluation_started, 6)
             timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
+            logger.exception(
+                "job execution evaluation failed: run_id=%s job_id=%s elapsed_seconds=%s",
+                run.id,
+                run.job_id,
+                timing["evaluation_seconds"],
+            )
             raise RunExecutionFailed(exc, timing) from exc
 
         persistence_started = perf_counter()
@@ -180,34 +288,54 @@ class JobExecutionService:
         if artifact:
             summary["scope"] = artifact.get("scope")
             summary["trigger"] = artifact.get("trigger")
+        timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
+        debug_bundle = self._build_evaluation_debug_bundle(run, result, timing, summary, artifact)
+        summary["debug_bundle"] = debug_bundle
+        artifact["debug_bundle"] = debug_bundle
         self.runs.set_summary(run.id or 0, summary)
+        self.runs.set_artifact(run.id or 0, artifact)
         timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
 
         self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
+        logger.info(
+            "job execution evaluation finished: run_id=%s job_id=%s evaluation_seconds=%s persistence_seconds=%s total_execution_seconds=%s debug_bundle_chars=%s",
+            run.id,
+            run.job_id,
+            timing["evaluation_seconds"],
+            timing["persistence_seconds"],
+            timing["total_execution_seconds"],
+            len(debug_bundle),
+        )
         return [], timing
 
-    def _execute_optimization_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
-        if self.optimizations is None:
-            raise RuntimeError("weight optimization execution service is not configured")
-        conflicting_run = self.runs.get_active_run_for_job_type(JobType.WEIGHT_OPTIMIZATION, exclude_run_id=run.id or 0)
+    def _execute_plan_generation_tuning_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
+        if self.plan_generation_tuning is None:
+            raise RuntimeError("plan generation tuning execution service is not configured")
+        conflicting_run = self.runs.get_active_run_for_job_type(JobType.PLAN_GENERATION_TUNING, exclude_run_id=run.id or 0)
         if conflicting_run is not None:
-            raise RuntimeError(f"weight optimization already active in run {conflicting_run.id}")
+            raise RuntimeError(f"plan generation tuning already active in run {conflicting_run.id}")
 
         execution_started = perf_counter()
         timing: dict[str, object] = {
             "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
-            "optimization_seconds": 0.0,
+            "plan_generation_tuning_seconds": 0.0,
             "persistence_seconds": 0.0,
             "finalize_seconds": 0.0,
             "total_execution_seconds": 0.0,
         }
 
-        optimization_started = perf_counter()
+        tuning_started = perf_counter()
         try:
-            summary, artifact = self.optimizations.execute()
-            timing["optimization_seconds"] = round(perf_counter() - optimization_started, 6)
+            tuning_run = self.plan_generation_tuning.run(mode="scheduled", apply=False)
+            summary = tuning_run.summary
+            artifact = {
+                "plan_generation_tuning_run_id": tuning_run.id,
+                "winner_candidate_id": tuning_run.winning_candidate_id,
+                "promoted_config_version_id": tuning_run.promoted_config_version_id,
+            }
+            timing["plan_generation_tuning_seconds"] = round(perf_counter() - tuning_started, 6)
         except Exception as exc:
-            timing["optimization_seconds"] = round(perf_counter() - optimization_started, 6)
+            timing["plan_generation_tuning_seconds"] = round(perf_counter() - tuning_started, 6)
             timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
             raise RunExecutionFailed(exc, timing) from exc
 
@@ -216,18 +344,51 @@ class JobExecutionService:
         self.runs.set_artifact(run.id or 0, artifact)
         timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
 
-        final_status = RunStatus.COMPLETED_WITH_WARNINGS.value if summary.get("weights_changed") is False else RunStatus.COMPLETED.value
-        self._finalize_success(run.id or 0, final_status, timing, execution_started)
+        self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
         return [], timing
 
-    def _execute_macro_support_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
-        if self.macro_support is None:
-            raise RuntimeError("macro support execution service is not configured")
+    def _execute_performance_assessment_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
+        if self.performance_assessment is None:
+            raise RuntimeError("performance assessment execution service is not configured")
 
         execution_started = perf_counter()
         timing: dict[str, object] = {
             "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
-            "macro_refresh_seconds": 0.0,
+            "performance_assessment_seconds": 0.0,
+            "persistence_seconds": 0.0,
+            "finalize_seconds": 0.0,
+            "total_execution_seconds": 0.0,
+        }
+
+        assessment_started = perf_counter()
+        try:
+            result = self.performance_assessment.run()
+            summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+            artifact = result.get("artifact") if isinstance(result.get("artifact"), dict) else {}
+            warnings_found = bool(result.get("warnings_found"))
+            timing["performance_assessment_seconds"] = round(perf_counter() - assessment_started, 6)
+        except Exception as exc:
+            timing["performance_assessment_seconds"] = round(perf_counter() - assessment_started, 6)
+            timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
+            raise RunExecutionFailed(exc, timing) from exc
+
+        persistence_started = perf_counter()
+        self.runs.set_summary(run.id or 0, summary)
+        self.runs.set_artifact(run.id or 0, artifact)
+        timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
+
+        final_status = RunStatus.COMPLETED_WITH_WARNINGS.value if warnings_found else RunStatus.COMPLETED.value
+        self._finalize_success(run.id or 0, final_status, timing, execution_started)
+        return [], timing
+
+    def _execute_macro_context_refresh_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
+        if self.macro_context_refresh is None:
+            raise RuntimeError("macro context refresh service is not configured")
+
+        execution_started = perf_counter()
+        timing: dict[str, object] = {
+            "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
+            "macro_context_seconds": 0.0,
             "persistence_seconds": 0.0,
             "finalize_seconds": 0.0,
             "total_execution_seconds": 0.0,
@@ -235,37 +396,32 @@ class JobExecutionService:
 
         refresh_started = perf_counter()
         try:
-            result = self.macro_support.refresh(job_id=run.job_id, run_id=run.id)
-            timing["macro_refresh_seconds"] = round(perf_counter() - refresh_started, 6)
+            result = self.macro_context_refresh.refresh(job_id=run.job_id, run_id=run.id)
+            timing["macro_context_seconds"] = round(perf_counter() - refresh_started, 6)
         except Exception as exc:
-            timing["macro_refresh_seconds"] = round(perf_counter() - refresh_started, 6)
+            timing["macro_context_seconds"] = round(perf_counter() - refresh_started, 6)
             timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
             raise RunExecutionFailed(exc, timing) from exc
 
         persistence_started = perf_counter()
-        snapshot = result.get("snapshot") if isinstance(result, dict) else result
+        payload = result.get("payload") if isinstance(result, dict) else result
         context_snapshot = None
         summary = {
             "scope": "macro",
-            "subject_key": getattr(snapshot, "subject_key", None),
-            "subject_label": getattr(snapshot, "subject_label", None),
-            "score": getattr(snapshot, "score", 0.0),
-            "label": getattr(snapshot, "label", "NEUTRAL"),
-            "computed_at": (snapshot.computed_at.isoformat() if snapshot and getattr(snapshot, "computed_at", None) else None),
+            "subject_key": getattr(payload, "subject_key", None),
+            "subject_label": getattr(payload, "subject_label", None),
+            "score": getattr(payload, "score", 0.0),
+            "label": getattr(payload, "label", "NEUTRAL"),
+            "computed_at": (payload.computed_at.isoformat() if payload and getattr(payload, "computed_at", None) else None),
         }
-        if snapshot is not None and self.macro_context is not None:
-            context_snapshot = self.macro_context.create_from_support_snapshot(
-                snapshot,
-                job_id=run.job_id,
-                run_id=run.id,
-            )
+        if payload is not None and self.macro_context is not None:
+            context_snapshot = self.macro_context.create_from_refresh_payload(payload, job_id=run.job_id, run_id=run.id)
             summary["macro_context_snapshot_id"] = getattr(context_snapshot, "id", None)
         self.runs.set_summary(run.id or 0, summary)
         artifact = {
-            "snapshot_id": getattr(snapshot, "id", None),
             "scope": "macro",
-            "subject_key": getattr(snapshot, "subject_key", None),
-            "subject_label": getattr(snapshot, "subject_label", None),
+            "subject_key": getattr(payload, "subject_key", None),
+            "subject_label": getattr(payload, "subject_label", None),
             "macro_context_snapshot_id": getattr(context_snapshot, "id", None),
         }
         self.runs.set_artifact(run.id or 0, artifact)
@@ -274,14 +430,14 @@ class JobExecutionService:
         self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
         return [], timing
 
-    def _execute_industry_support_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
-        if self.industry_support is None:
-            raise RuntimeError("industry support execution service is not configured")
+    def _execute_industry_context_refresh_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
+        if self.industry_context_refresh is None:
+            raise RuntimeError("industry context refresh service is not configured")
 
         execution_started = perf_counter()
         timing: dict[str, object] = {
             "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
-            "industry_refresh_seconds": 0.0,
+            "industry_context_seconds": 0.0,
             "persistence_seconds": 0.0,
             "finalize_seconds": 0.0,
             "total_execution_seconds": 0.0,
@@ -289,52 +445,47 @@ class JobExecutionService:
 
         refresh_started = perf_counter()
         try:
-            result = self.industry_support.refresh_all(job_id=run.job_id, run_id=run.id)
-            timing["industry_refresh_seconds"] = round(perf_counter() - refresh_started, 6)
+            result = self.industry_context_refresh.refresh_all(job_id=run.job_id, run_id=run.id)
+            timing["industry_context_seconds"] = round(perf_counter() - refresh_started, 6)
         except Exception as exc:
-            timing["industry_refresh_seconds"] = round(perf_counter() - refresh_started, 6)
+            timing["industry_context_seconds"] = round(perf_counter() - refresh_started, 6)
             timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
             raise RunExecutionFailed(exc, timing) from exc
 
         persistence_started = perf_counter()
         if isinstance(result, dict):
-            snapshots = list(result.get("snapshots") or [])
-            support_summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+            payloads = list(result.get("payloads") or [])
+            refresh_summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
         else:
-            snapshots = list(result or [])
-            support_summary = {}
+            payloads = list(result or [])
+            refresh_summary = {}
         summary = {
             "scope": "industry",
-            "snapshot_count": len(snapshots),
+            "snapshot_count": len(payloads),
             "industries": [
                 {
-                    "subject_key": getattr(s, "subject_key", None),
-                    "subject_label": getattr(s, "subject_label", None),
-                    "score": getattr(s, "score", 0.0),
-                    "label": getattr(s, "label", "NEUTRAL"),
+                    "subject_key": getattr(p, "subject_key", None),
+                    "subject_label": getattr(p, "subject_label", None),
+                    "score": getattr(p, "score", 0.0),
+                    "label": getattr(p, "label", "NEUTRAL"),
                 }
-                for s in snapshots
+                for p in payloads
             ],
         }
-        summary.update({k: v for k, v in support_summary.items() if k not in summary})
+        summary.update({k: v for k, v in refresh_summary.items() if k not in summary})
         context_snapshots = []
         if self.industry_context is not None:
-            for snapshot in snapshots:
+            for payload in payloads:
                 context_snapshots.append(
-                    self.industry_context.create_from_support_snapshot(
-                        snapshot,
-                        job_id=run.job_id,
-                        run_id=run.id,
-                    )
+                    self.industry_context.create_from_refresh_payload(payload, job_id=run.job_id, run_id=run.id)
                 )
             summary["industry_context_snapshot_count"] = len(context_snapshots)
             summary["industry_context_snapshot_ids"] = [getattr(snapshot, "id", None) for snapshot in context_snapshots]
         self.runs.set_summary(run.id or 0, summary)
         artifact = {
             "scope": "industry",
-            "snapshot_count": len(snapshots),
-            "snapshot_ids": [getattr(snapshot, "id", None) for snapshot in snapshots],
-            "subject_keys": [getattr(snapshot, "subject_key", None) for snapshot in snapshots],
+            "snapshot_count": len(payloads),
+            "subject_keys": [getattr(payload, "subject_key", None) for payload in payloads],
             "industry_context_snapshot_ids": [getattr(snapshot, "id", None) for snapshot in context_snapshots],
         }
         self.runs.set_artifact(run.id or 0, artifact)
@@ -429,18 +580,24 @@ class JobExecutionService:
                 float(exc.timing.get("total_execution_seconds") or 0.0),
                 6,
             )
-            current_run = self.runs.get_run(run.id or 0)
-            self.runs.set_artifact(
-                run.id or 0,
-                self._build_failure_artifact(current_run, run, exc),
-            )
-            self.runs.update_status(run.id or 0, RunStatus.FAILED.value, error_message=str(exc.cause), timing=exc.timing)
-            exc.timing["finalize_seconds"] = round(perf_counter() - finalize_started, 6)
-            exc.timing["total_execution_seconds"] = round(
-                float(exc.timing.get("total_execution_seconds") or 0.0) + float(exc.timing["finalize_seconds"]),
-                6,
-            )
-            self.runs.set_timing(run.id or 0, exc.timing)
+            try:
+                self.runs.session.rollback()
+                current_run = self.runs.get_run(run.id or 0)
+                self.runs.set_artifact(
+                    run.id or 0,
+                    self._build_failure_artifact(current_run, run, exc),
+                )
+                self.runs.update_status(run.id or 0, RunStatus.FAILED.value, error_message=str(exc.cause), timing=exc.timing)
+                exc.timing["finalize_seconds"] = round(perf_counter() - finalize_started, 6)
+                exc.timing["total_execution_seconds"] = round(
+                    float(exc.timing.get("total_execution_seconds") or 0.0) + float(exc.timing["finalize_seconds"]),
+                    6,
+                )
+                self.runs.set_timing(run.id or 0, exc.timing)
+            except Exception as finalize_exc:
+                self.runs.session.rollback()
+                print(f"failed to finalize run {run.id}: {finalize_exc}")
+                traceback.print_exc()
             raise exc.cause
 
     def _finalize_success(
@@ -508,6 +665,33 @@ class JobExecutionService:
             "output": result.output,
         }
 
+    @classmethod
+    def _build_evaluation_debug_bundle(
+        cls,
+        run: Run,
+        result: EvaluationRunResult,
+        timing: dict[str, object],
+        summary: dict[str, object],
+        artifact: dict[str, object],
+    ) -> str:
+        scheduled_for = cls._normalize_datetime(run.scheduled_for)
+        lines: list[str] = [
+            f"run_id={run.id}",
+            f"job_id={run.job_id}",
+            f"job_type={run.job_type.value}",
+            f"scheduled_for={scheduled_for.isoformat() if scheduled_for is not None else 'None'}",
+            f"summary={json.dumps(summary, sort_keys=True, default=str)}",
+            f"artifact={json.dumps(artifact, sort_keys=True, default=str)}",
+            f"timing={json.dumps(timing, sort_keys=True, default=str)}",
+            "decision_trace:",
+        ]
+        output = (result.output or "").strip()
+        if output:
+            lines.append(output)
+        else:
+            lines.append("<empty>")
+        return "\n".join(lines)
+
     @staticmethod
     def _get_run_artifact(run: Run) -> dict[str, object]:
         if not run.artifact_json:
@@ -537,8 +721,8 @@ class JobExecutionService:
         ordered_phases = [
             "resolve_tickers_seconds",
             "recommendation_generation_seconds",
-            "macro_refresh_seconds",
-            "industry_refresh_seconds",
+            "macro_context_seconds",
+            "industry_context_seconds",
             "evaluation_seconds",
             "optimization_seconds",
             "replay_setup_seconds",

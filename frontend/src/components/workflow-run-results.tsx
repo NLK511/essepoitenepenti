@@ -1,6 +1,6 @@
 import { Badge, Card, EmptyState, SectionTitle } from "./ui";
 import type { JobType } from "../types";
-import { formatDate, jobTypeLabel, parseJsonForDisplay, parseJsonRecord } from "../utils";
+import { jobTypeLabel, parseJsonForDisplay, parseJsonRecord } from "../utils";
 
 function renderLabel(key: string): string {
   return key
@@ -44,7 +44,7 @@ function MetadataValue({ label, value }: { label: string; value: unknown }) {
     return (
       <div className="summary-item">
         <span className="summary-label">{label}</span>
-        {longText ? <pre>{value}</pre> : <span className="summary-value">{String(value)}</span>}
+        {longText ? <pre className="workflow-pre">{value}</pre> : <span className="summary-value">{String(value)}</span>}
       </div>
     );
   }
@@ -52,7 +52,7 @@ function MetadataValue({ label, value }: { label: string; value: unknown }) {
     return (
       <div className="summary-item">
         <span className="summary-label">{label}</span>
-        <pre>{JSON.stringify(value, null, 2)}</pre>
+        <pre className="workflow-pre">{JSON.stringify(value, null, 2)}</pre>
       </div>
     );
   }
@@ -70,16 +70,18 @@ function MetadataObject({ value }: { value: Record<string, unknown> }) {
   const nestedEntries = entries.filter((entry): entry is [string, Record<string, unknown>] => isRecord(entry[1]));
 
   return (
-    <div className="stack-page">
+    <div className="stack-page metadata-tree">
       {simpleEntries.length > 0 ? (
-        <div className="summary-grid">
+        <div className="summary-grid workflow-summary-grid">
           {simpleEntries.map(([key, item]) => <MetadataValue key={key} label={renderLabel(key)} value={item} />)}
         </div>
       ) : null}
       {nestedEntries.map(([key, item]) => (
-        <details key={key} open>
+        <details key={key} className="workflow-details" open>
           <summary>{renderLabel(key)}</summary>
-          <MetadataObject value={item} />
+          <div className="workflow-details-body top-gap-small">
+            <MetadataObject value={item} />
+          </div>
         </details>
       ))}
     </div>
@@ -91,21 +93,13 @@ function RawJson({ title, value }: { title: string; value: string | null }) {
     return null;
   }
   return (
-    <details>
-      <summary>{title}</summary>
-      <pre>{parseJsonForDisplay(value)}</pre>
-    </details>
-  );
-}
-
-function FingerprintCard({ title, value }: { title: string; value: Record<string, unknown> | null }) {
-  if (!value) {
-    return null;
-  }
-  return (
-    <Card>
-      <SectionTitle title={title} />
-      <MetadataObject value={value} />
+    <Card className="workflow-section">
+      <details className="workflow-details">
+        <summary>{title}</summary>
+        <div className="workflow-details-body top-gap-small">
+          <pre className="workflow-pre">{parseJsonForDisplay(value)}</pre>
+        </div>
+      </details>
     </Card>
   );
 }
@@ -121,8 +115,8 @@ function EvaluationResultView({ summary, artifact, rawSummary, rawArtifact }: {
   const output = typeof summary?.output === "string" ? summary.output : null;
 
   return (
-    <div className="stack-page">
-      <Card>
+    <div className="stack-page workflow-results">
+      <Card className="workflow-section">
         <SectionTitle kicker="Evaluation summary" title="Outcome" subtitle="Evaluation workflows settle recommendation-plan outcomes and record summary counts on the run." />
         <div className="summary-grid">
           <div className="summary-item"><span className="summary-label">Plans evaluated</span><span className="summary-value">{String(summary?.evaluated_recommendation_plans ?? "—")}</span></div>
@@ -134,88 +128,26 @@ function EvaluationResultView({ summary, artifact, rawSummary, rawArtifact }: {
           <div className="summary-item"><span className="summary-label">Watchlist plans</span><Badge tone="neutral">{String(summary?.watchlist_recommendation_plan_outcomes ?? "—")}</Badge></div>
         </div>
         {output ? (
-          <details className="top-gap-small" open>
+          <details className="workflow-details top-gap-small" open>
             <summary>Evaluator output</summary>
-            <pre>{output}</pre>
+            <div className="workflow-details-body top-gap-small">
+              <pre className="workflow-pre">{output}</pre>
+            </div>
           </details>
         ) : null}
       </Card>
 
       {scope ? (
-        <Card>
+        <Card className="workflow-section">
           <SectionTitle kicker="Evaluation scope" title="What this run evaluated" />
           <MetadataObject value={scope} />
         </Card>
       ) : null}
 
       {trigger ? (
-        <Card>
+        <Card className="workflow-section">
           <SectionTitle kicker="Trigger" title="How this run was started" />
           <MetadataObject value={trigger} />
-        </Card>
-      ) : null}
-
-      <RawJson title="Raw summary JSON" value={rawSummary} />
-      <RawJson title="Raw artifact JSON" value={rawArtifact} />
-    </div>
-  );
-}
-
-function OptimizationResultView({ summary, artifact, rawSummary, rawArtifact }: {
-  summary: Record<string, unknown> | null;
-  artifact: Record<string, unknown> | null;
-  rawSummary: string | null;
-  rawArtifact: string | null;
-}) {
-  const weightsChanged = summary?.weights_changed;
-  const backup = isRecord(artifact?.backup) ? artifact.backup : null;
-  const before = isRecord(artifact?.before) ? artifact.before : null;
-  const after = isRecord(artifact?.after) ? artifact.after : null;
-  const stdout = typeof summary?.stdout === "string" ? summary.stdout : null;
-  const stderr = typeof summary?.stderr === "string" ? summary.stderr : null;
-  const rollbackAvailable = artifact?.rollback_available;
-  const backupCreatedAt = typeof backup?.created_at === "string" ? formatDate(backup.created_at) : "—";
-
-  return (
-    <div className="stack-page">
-      <Card>
-        <SectionTitle kicker="Optimization summary" title="Outcome" subtitle="Optimization workflows update weights using resolved recommendation-plan outcomes and persist before/after fingerprint metadata for audit and rollback." />
-        <div className="summary-grid">
-          <div className="summary-item"><span className="summary-label">Status</span><span className="summary-value">{String(summary?.status ?? "—")}</span></div>
-          <div className="summary-item"><span className="summary-label">Resolved plan outcomes</span><span className="summary-value">{String(summary?.resolved_recommendation_plan_outcomes ?? summary?.resolved_trade_count ?? "—")}</span></div>
-          <div className="summary-item"><span className="summary-label">Minimum required</span><span className="summary-value">{String(summary?.minimum_resolved_recommendation_plan_outcomes ?? summary?.minimum_resolved_trades ?? "—")}</span></div>
-          <div className="summary-item"><span className="summary-label">Weights changed</span><Badge tone={weightsChanged === true ? "ok" : "warning"}>{weightsChanged === true ? "yes" : weightsChanged === false ? "no" : "—"}</Badge></div>
-          <div className="summary-item"><span className="summary-label">Rollback available</span><Badge tone={rollbackAvailable === true ? "ok" : "neutral"}>{rollbackAvailable === true ? "yes" : rollbackAvailable === false ? "no" : "—"}</Badge></div>
-          <div className="summary-item"><span className="summary-label">Weights path</span><span className="summary-value">{String(artifact?.weights_path ?? "—")}</span></div>
-        </div>
-      </Card>
-
-      {backup ? (
-        <Card>
-          <SectionTitle kicker="Recovery" title="Rollback backup" subtitle="Each optimization run records the backup used for rollback before weights are modified." />
-          <div className="summary-grid">
-            <div className="summary-item"><span className="summary-label">Backup path</span><span className="summary-value">{String(backup.path ?? "—")}</span></div>
-            <div className="summary-item"><span className="summary-label">Backup created</span><span className="summary-value">{backupCreatedAt}</span></div>
-          </div>
-          {isRecord(backup.fingerprint) ? <MetadataObject value={backup.fingerprint} /> : null}
-        </Card>
-      ) : null}
-
-      <div className="two-column">
-        <FingerprintCard title="Weights before optimization" value={before} />
-        <FingerprintCard title="Weights after optimization" value={after} />
-      </div>
-
-      {stdout ? (
-        <Card>
-          <SectionTitle title="Optimizer stdout" />
-          <pre>{stdout}</pre>
-        </Card>
-      ) : null}
-      {stderr ? (
-        <Card>
-          <SectionTitle title="Optimizer stderr" />
-          <pre>{stderr}</pre>
         </Card>
       ) : null}
 
@@ -229,15 +161,15 @@ function GenericWorkflowResultView({ rawSummary, rawArtifact }: { rawSummary: st
   const summary = parseJsonRecord(rawSummary);
   const artifact = parseJsonRecord(rawArtifact);
   return (
-    <div className="stack-page">
+    <div className="stack-page workflow-results">
       {summary ? (
-        <Card>
+        <Card className="workflow-section">
           <SectionTitle title="Run summary" />
           <MetadataObject value={summary} />
         </Card>
       ) : null}
       {artifact ? (
-        <Card>
+        <Card className="workflow-section">
           <SectionTitle title="Artifacts" />
           <MetadataObject value={artifact} />
         </Card>
@@ -256,11 +188,11 @@ export function WorkflowRunResults({ jobType, summaryJson, artifactJson }: { job
   if (jobType === "recommendation_evaluation") {
     return <EvaluationResultView summary={summary} artifact={artifact} rawSummary={summaryJson} rawArtifact={artifactJson} />;
   }
-  if (jobType === "weight_optimization") {
-    return <OptimizationResultView summary={summary} artifact={artifact} rawSummary={summaryJson} rawArtifact={artifactJson} />;
+  if (jobType === "plan_generation_tuning") {
+    return <GenericWorkflowResultView rawSummary={summaryJson} rawArtifact={artifactJson} />;
   }
   return (
-    <div className="stack-page">
+    <div className="stack-page workflow-results">
       <div className="helper-text">This run is a {jobTypeLabel(jobType).toLowerCase()} workflow. It stores summary and artifact metadata on the run instead of legacy recommendation rows.</div>
       <GenericWorkflowResultView rawSummary={summaryJson} rawArtifact={artifactJson} />
     </div>

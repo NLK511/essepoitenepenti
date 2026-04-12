@@ -5,104 +5,166 @@
 This document answers one question:
 > what does the app store, and what do the main structured payloads contain?
 
-Trade Proposer App stores diagnostic metadata alongside runs, recommendation plans, recommendation-plan outcomes, ticker signals, and the shared macro/industry refresh workflows.
+Trade Proposer App stores diagnostic metadata alongside runs, signals, plans, outcomes, and shared context workflows.
 
 ## Structured pipeline payloads
 
-The app-native pipeline emits a structured JSON object for each ticker it scores. This object is persisted as `analysis_json`.
+The app-native pipeline persists a structured per-ticker JSON object as `analysis_json`.
 
 ### `analysis_json`
-The main sections are:
-- `metadata`: timestamps, version, and ticker
-- `trade`: direction, confidence, entry, stop-loss, and take-profit
-- `summary`: digest or LLM narrative text plus generation metadata such as method, backend, model, runtime, fallback text, and errors
-- `news`: unified items, feed usage, feed errors, item counts, and keyword-sentiment diagnostics. Free news now comes primarily from Google News RSS (topic queries) and Yahoo Finance (ticker queries); NewsAPI remains wired in the codebase but disabled by default because the free tier is delayed.
-- `signals`: normalized cross-source signal payloads when additional signal providers are enabled
-- `social`: social/Nitter-focused diagnostics when enabled
-- `sentiment`: stored sentiment layers and enhanced/fused sentiment metadata
-- `context_flags`: boolean keyword/context tags
-- `feature_vectors`: nested `raw` and `normalized` values
-- `aggregations`, `confidence_weights`, and `aggregation_weights`: weighted breakdowns and applied weight maps
-- `diagnostics`: problems, provider failures, and summary errors
+Main sections:
+- `metadata` — timestamps, version, ticker
+- `trade` — direction, confidence, entry, stop, take profit
+- `summary` — digest or LLM narrative plus generation metadata
+- `news` — items, feed usage, feed errors, counts, and keyword diagnostics
+- `signals` — optional cross-source signal payloads
+- `social` — social/Nitter diagnostics when enabled
+- `sentiment` — ticker sentiment plus shared macro/industry inputs
+- `context_flags` — boolean context tags
+- `feature_vectors` — `raw` and `normalized` values
+- `aggregations` and weight maps — derived score breakdowns
+- `diagnostics` — problems, provider failures, summary errors
 
 ### `analysis_json.sentiment`
-This section mixes live ticker sentiment with shared support-snapshot inputs.
+This section mixes live ticker sentiment with shared macro and industry inputs.
 
 Typical shape:
-- `macro`: shared macro support snapshot data with fields such as `snapshot_id`, `subject_key`, `label`, `score`, and freshness/source metadata; when available it may also carry `context_snapshot_id`, `context_summary`, `context_events`, `context_lifecycle`, and contradiction labels from the redesign-native macro context object. The `score` is a heuristic confidence percent on a 0-100 scale, not a probability. Extracted context events also carry `saliency_weight`, a normalized 0-1 prominence score derived from source priority, recency, and match strength. Typical guide rails: `0.00–0.20` weak, `0.20–0.45` light, `0.45–0.70` moderate, `0.70–0.90` strong, `0.90–1.00` dominant.
-- `industry`: shared industry support snapshot data with the same kind of fields and optional context-object metadata. The `score` follows the same 0-100 heuristic confidence scale, and its extracted drivers also carry `saliency_weight` on the same normalized 0-1 scale with the same interpretation bands.
-- `ticker`: live per-proposal ticker sentiment
-- `enhanced`: the fused sentiment result used by scoring, plus component contributions
-- `coverage_insights` / `keyword_hits`: transparency fields for sparse or neutral coverage
+- `macro`
+- `industry`
+- `ticker`
+- `enhanced`
+- `coverage_insights`
+- `keyword_hits`
 
-The UI uses stored `snapshot_id` and `context_snapshot_id` values to link runs and trade outputs back to the shared artifacts that influenced them.
+Common macro/industry fields include:
+- `snapshot_id`
+- `context_snapshot_id`
+- `subject_key`
+- `label`
+- `score`
+- freshness and source metadata
+- optional context summary/event fields
+
+Current context-event payloads may also include fields such as:
+- `persistence_state`
+- `state_transition`
+- `catalyst_type`
+- `trigger_actor`
+- `trigger_actor_role`
+- `trigger_source_type`
+- `market_interpretation`
+- `state_change_reason`
+- `evidence_direction`
+- `evidence_samples`
+
+`score` is a heuristic 0-100 confidence-style value, not a probability.
+
+Context events may also carry `saliency_weight`, a normalized 0-1 prominence score.
 
 ### Other stored payloads
-- `raw_output`: scripted stdout/stderr or raw pipeline detail when available
-- `feature_vector_json`: technical feature values before normalization
-- `normalized_feature_vector_json`: the normalized version used by the weights
-- `aggregations_json`: intermediate aggregate metrics such as momentum, volatility, or trend scores
-- `confidence_weights_json`: per-feature weights loaded from `weights.json`
-- `summary_method`: how the summarization backend generated the narrative
+Common related payloads include:
+- `raw_output`
+- `feature_vector_json`
+- `normalized_feature_vector_json`
+- `aggregations_json`
+- `confidence_weights_json`
+- `summary_method`
 
 ## Redesign-native trade objects
 
-The redesign path persists these main trade-review objects:
+The redesign path persists:
 - `TickerSignalSnapshot`
 - `RecommendationPlan`
 - `RecommendationPlanOutcome`
+- `RecommendationDecisionSample`
 
-Important stored fields include:
-- context lifecycle metadata such as `event_lifecycle_summary`, `contradictory_event_labels`, and per-event `persistence_state` / `window_hint`
-- industry-context ontology metadata such as `ontology_profile`, `sector_definition`, `ontology_relationships`, `matched_ontology_relationships`, and `taxonomy_source_mode`
-- ticker-level relationship diagnostics such as `ticker_relationship_edges` and `matched_ticker_relationships` inside deep-analysis `transmission_analysis`
-- the same ticker relationship fields now also propagate into recommendation-plan `signal_breakdown.transmission_summary` when deep analysis produced them
-- matched relationship summaries can indirectly affect stored recommendation-plan explanation fields such as `action_reason_detail`, `rationale_summary`, `invalidation_summary`, and `risks`
-- frontend relationship read-through cards are rendered from the same recommendation-plan transmission payload fields rather than from a separate backend endpoint
-- governed taxonomy registries now live in `src/trade_proposer_app/data/taxonomy/themes.json`, `src/trade_proposer_app/data/taxonomy/macro_channels.json`, `src/trade_proposer_app/data/taxonomy/transmission_channels.json`, `src/trade_proposer_app/data/taxonomy/relationship_types.json`, and `src/trade_proposer_app/data/taxonomy/relationship_target_kinds.json`
-- relationship payloads can now include readable labels like `source_label`, `type_label`, `target_label`, `target_kind_label`, and `channel_label` while still preserving governed canonical keys underneath
-- ticker deep-analysis `transmission_analysis` can now also include labeled channel detail arrays like `industry_exposure_channel_details` and `ticker_exposure_channel_details`, plus `primary_driver_labels`
-- ticker deep-analysis and downstream plan transmission payloads can also include governed detail arrays such as `transmission_tag_details`, `primary_driver_details`, and `conflict_flag_details`
-- watchlist ticker-signal diagnostics and source-breakdown payloads can now also carry those governed detail arrays, plus `industry_exposure_channel_details` and `ticker_exposure_channel_details`, so frontend views do not have to guess labels from raw keys
-- macro and industry context event rows can now also carry `transmission_channel_details`, and industry `ontology_profile` metadata can carry profile-level `transmission_channel_details` too
-- recommendation outcome analytics now also rely on governed transmission-bias and transmission-context-regime registries when deriving fields like `transmission_bias` and `context_regime` for calibration and setup-family review slices
-- stored `RecommendationPlanOutcome` payloads can now also carry `transmission_bias_label` and `context_regime_label` alongside canonical analytics keys
-- calibration and setup-family-review bucket rows can now carry `slice_name` and `slice_label` alongside `key` and `label`
-- shortlist-decision payloads can now carry `reason_details` and `selection_lane_label`, while signal diagnostics can carry `shortlist_reason_details` and `selection_lane_label`
-- calibration-review payloads can now carry `review_status_label` and `reason_details` alongside canonical review status/reason codes
-- recommendation-plan evidence summaries can now carry `action_reason_label` alongside canonical `action_reason`
-- extracted context-event rows can now carry `contradiction_reason_details` alongside canonical `contradiction_reasons`
-- extracted context-event rows can now also carry `source_priority_detail`, `persistence_state_detail`, `window_hint_detail`, and `recency_bucket_detail` alongside their canonical lifecycle/status keys
-- frontend context-review code now treats those event rows more explicitly through a `ContextEventRow` type instead of only generic record casting
-- frontend recommendation-plan and ticker-signal code now also treats stable governed substructures such as transmission summaries, calibration reviews, evidence summaries, signal breakdowns, and diagnostics more explicitly instead of only broad record blobs
-- backend domain models now also represent those same recommendation-plan and ticker-signal substructures explicitly, while preserving dict-like access patterns for existing callers and tests
-- repositories now serialize nested typed JSON payload models safely when storing recommendation-plan and ticker-signal blobs
-- transmission summaries/diagnostics can now carry `expected_transmission_window_detail` beside `expected_transmission_window`, enabling review pages to prefer readable registry-backed timing labels over raw canonical keys
-- latest recommendation outcomes can now carry `transmission_bias_detail` and `context_regime_detail` beside their canonical keys/labels, enabling ticker/run/plan review pages to use the same governed detail-object rendering pattern
-- ticker-signal diagnostics/source breakdown and recommendation transmission summaries can now carry `transmission_bias_detail` beside canonical `transmission_bias` / `context_bias` values, enabling shortlist/run/plan transmission badges to use the same governed detail-object rendering pattern
-- run summaries can now include `shortlist_rejection_details` rows with readable labels and counts in addition to raw `shortlist_rejections` maps
-- evidence-concentration cohorts can now include `slice_label` alongside canonical `slice_name`, plus the existing cohort `key` and `label`
-- event-key detail still persists separately via fields like `macro_event_keys` and `industry_event_keys` instead of being overloaded into governed tag/driver lists
-- industry snapshot resolution can now backfill baseline taxonomy metadata such as `ontology_profile`, `sector_definition`, and `ontology_relationships` even when no fresh industry context snapshot is available yet
-- ticker transmission fields such as `context_strength_percent`, `context_event_relevance_percent`, `contradiction_count`, `decay_state`, and `transmission_confidence_adjustment`
-- recommendation-plan calibration fields such as `raw_confidence_percent`, `calibrated_confidence_percent`, `confidence_adjustment`, `effective_confidence_threshold`, and sample-status snapshots inside `calibration_review`
-- recommendation-plan action reasons such as `context_transmission_headwind` and `context_transmission_contradiction`
+### `TickerSignalSnapshot`
+Typical stored themes:
+- signal status and direction
+- attention and shortlist state
+- cheap-scan/deep-analysis diagnostics
+- transmission summary and warnings
+- source breakdown and supporting diagnostics
+
+### `RecommendationPlan`
+Typical stored themes:
+- action, confidence, entry, stop, target, horizon
+- thesis and rationale
+- evidence summary
+- signal breakdown (includes `intended_action` for phantom-trade-eligible `no_action` plans)
+- calibration review
+- transmission summary
+- warnings and diagnostics
+
+### `RecommendationPlanOutcome`
+Typical stored themes:
+- entry touched, stop hit, target hit
+- fixed-horizon returns
+- favorable/adverse excursion
+- realized holding period
+- direction correctness
+- confidence bucket
+- setup family
+- transmission-bias and context-regime slices used in calibration review
+
+Outcome values include `win`, `loss`, `expired`, `no_action`, `watchlist`, `phantom_win`, `phantom_loss`, and `phantom_no_entry`. Phantom outcomes are produced when a `no_action` or `watchlist` plan retained an intended direction and valid trade levels and is evaluated against real market data.
+
+### `RecommendationDecisionSample`
+A tuning and review snapshot stored for each generated plan.
+
+Common fields include:
+- decision type and action
+- shortlist status and rank
+- confidence, calibrated confidence, threshold, and gap
+- setup family, transmission bias, and context regime
+- compact decision, signal, and evidence snapshots
+- linked run/job/watchlist/ticker-signal identifiers
+
+## Governed and labeled detail fields
+
+Many payloads now carry both canonical keys and readable labeled detail objects.
+
+Common examples include:
+- relationship labels such as `type_label`, `target_label`, and `channel_label`
+- transmission detail arrays such as `transmission_tag_details`, `primary_driver_details`, and `conflict_flag_details`
+- exposure-channel detail arrays
+- event detail objects for contradiction reason, persistence state, window hint, source priority, and recency bucket
+- analytics detail objects such as `transmission_bias_detail`, `context_regime_detail`, and `slice_label`
+- calibration and action labels such as `review_status_label`, `reason_details`, and `action_reason_label`
+
+The purpose is simple: keep stored canonical keys stable while letting the UI render readable labels.
+
+## Context and ontology fields
+
+Important stored context/ontology fields include:
+- `event_lifecycle_summary`
+- `contradictory_event_labels`
+- per-event lifecycle/status fields
+- `ontology_profile`
+- `sector_definition`
+- `ontology_relationships`
+- `matched_ontology_relationships`
+- `ticker_relationship_edges`
+- `matched_ticker_relationships`
+- `expanded_queries` for industry context refreshes when ontology-driven query expansion is used
+
+These support context detail views, recommendation transmission summaries, and relationship read-through UI.
 
 ## Run and workflow artifacts
 
-Run-level artifacts vary by workflow type.
+Run artifacts vary by workflow type.
 
 Examples:
-- proposal generation: recommendation summaries and diagnostics
-- evaluation: evaluation scope and result summary
-- optimization: before/after fingerprint and backup metadata
-- context refresh: created `snapshot_id` or `snapshot_ids`, scope, refresh summary, and any derived context snapshot ids
+- proposal generation — recommendation summaries and diagnostics
+- evaluation — evaluation scope and result summary
+- optimization — before/after fingerprint and backup metadata
+- context refresh — created snapshot ids, scope, refresh summary, and context event metadata
 
-The run detail page uses these artifacts to render workflow-specific cards or link directly to created snapshots.
+## Retired support snapshot records
 
-## Support snapshot records
+Older builds introduced `SupportSnapshot` records during context refresh workflows, but active builds persist context snapshots directly.
 
-Shared macro and industry refresh workflows persist `SupportSnapshot` records with fields such as:
+`SupportSnapshot` is now historical only. Common historical fields were:
 - `id`
 - `scope`
 - `subject_key`
@@ -120,28 +182,25 @@ Shared macro and industry refresh workflows persist `SupportSnapshot` records wi
 - `job_id`
 - `run_id`
 
-These records are both reusable support-cache artifacts and audit objects.
+## Common diagnostics and timing fields
 
-## Diagnostics and timing fields
-
-Common stored diagnostic fields include:
+Frequently stored fields include:
 - `warnings`
 - `provider_errors`
 - `problems`
 - `news_feed_errors`
-- `summary_error` / `llm_error`
+- `summary_error` or `llm_error`
 - `timing_json`
 - `analysis_timestamp`
 
-## Operational reference notes
+## Operational notes
 
-- `weights.json` lives in `src/trade_proposer_app/data/` and is used for scoring runs.
-- `/api/health/preflight` reports dependency readiness and shared support-snapshot freshness.
-- operators configure the summary backend via `/settings` using `news_digest`, `openai_api`, or `pi_agent`.
-- the same stored payloads support the debugger, run detail pages, recommendation-plan pages, ticker pages, and health views.
+- scoring weights live in `src/trade_proposer_app/data/weights.json`
+- `/api/health/preflight` reports dependency readiness and shared-context freshness
+- summary backends are configured in `/settings`
+- the same stored payloads support the debugger, run detail, recommendation review, ticker review, decision-sample review, and health views
 
 ## See also
-
-- `recommendation-methodology.md` — how the pipeline works
-- `features-and-capabilities.md` — what the app can do now
-- `operator-page-field-guide.md` — where those fields appear in the UI
+- `recommendation-methodology.md`
+- `features-and-capabilities.md`
+- `operator-page-field-guide.md`

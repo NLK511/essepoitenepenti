@@ -9,111 +9,109 @@ It covers three things only:
 - what still needs work
 - what is clearly later
 
-Detailed completed-phase history is in `archive/roadmap-history.md`.
+Anything already shipped should live in the current-state docs, not be re-described here as future work.
+
+Detailed history is in `archive/roadmap-history.md`.
 
 ## Current shipped baseline
 
 Trade Proposer App already has its core workflow in place:
-- watchlists, jobs, runs, settings, support snapshots, ticker signals, recommendation plans, and recommendation-plan outcomes all persist inside one app-owned schema
-- the React/Vite operator UI supports dashboard, watchlists, jobs, debugger, run detail, context review, ticker signals, recommendation plans, ticker drill-down, settings, and docs browsing
+- watchlists, jobs, runs, settings, context snapshots, ticker signals, recommendation plans, and outcomes all persist inside one schema
+- the operator UI supports dashboard, watchlists, jobs, debugger, run detail, context review, ticker signals, recommendation plans, ticker drill-down, settings, and docs browsing
 - proposal generation, evaluation, optimization, and macro/industry refresh runs all execute inside this repository through the worker-backed run system
-- recommendation review is now centered on redesign-native objects: `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`
-- health and preflight surface degraded dependencies and snapshot freshness rather than hiding them
-- optimization already uses redesign-native outcomes rather than legacy recommendation history
+- recommendation review is centered on `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`
+- health and preflight surface degraded dependencies and freshness instead of hiding them
+- optimization already uses redesign-native outcomes
 
 ## Active priorities
 
-## 1. Reliability
+### 1. Reliability
 Highest current priority.
 
-Foundations already in place:
-- scheduled runs have a persisted `scheduled_for` slot and a database uniqueness guard on `(job_id, scheduled_for)`
-- run claiming is atomic at the row-update level, so two workers should not both flip the same queued run to `running`
-- enqueue paths already avoid obvious duplicate active runs for the same job, and weight optimization has an explicit single-active-run guard
-- run timing, status, error fields, and failure-phase artifact metadata are persisted so failed executions are inspectable after the fact
-- worker heartbeats and run leases are implemented, ensuring active runs are tied to a specific worker and safely recovered if that worker crashes
-- scheduler and worker entry paths now recover stale `running` runs by failing them once their active lease expires (or via a legacy `started_at` timeout fallback), unblocking fresh scheduled or manual reruns
+Already in place:
+- persisted `scheduled_for` slots with uniqueness guards
+- atomic-enough run claiming for the current model
+- duplicate-run protections on enqueue paths
+- persisted run timing, status, error fields, and failure metadata
+- worker heartbeats and run leases
+- stale-run recovery when leases expire, with older timeout fallback still present in some paths
 
 Still needed:
-- clearer recovery semantics when a run fails after partially persisting summary, artifact, or downstream objects
-- stronger coordination guarantees if scheduler or worker concurrency increases beyond the current simple polling/claim model
+- clearer recovery semantics when a run fails after partial persistence
+- stronger coordination guarantees if concurrency grows
 
-## 2. Observability
-The product is now feature-complete enough that runtime clarity matters more than additional surface area.
+### 2. Observability
+Runtime clarity now matters more than more surface area.
 
-Foundations already in place:
-- runs persist timing, summary, artifact, status, duration, and error payloads, and the operator UI can inspect them through run detail views
-- health and preflight endpoints already surface dependency checks and degraded state instead of silently masking missing inputs
-- context and recommendation review flows now expose warnings, provenance, and degraded summaries in the main UI
-- worker heartbeats are persisted to the database to provide operational visibility into active background processes
+Already in place:
+- persisted run timing, summaries, artifacts, and errors
+- health and preflight visibility for degraded state
+- warnings and provenance on context and recommendation review pages
+- persisted worker heartbeat data
+- `/api/health` separation between service health, dependency health, worker health, scheduler health, run health, and context freshness
+- lease-age, stale-running-run, worker-heartbeat-age, and scheduler-heartbeat diagnostics in `/api/health`
+- worker and scheduler daemon logging
 
 Still needed:
-- structured logs and explicit run correlation across API, worker, and scheduler processes; current daemon logging is still mostly `print(...)`/traceback output
-- clearer production-facing health signals that distinguish app health from refresh freshness and legacy support-snapshot status
-- exposing worker heartbeat status and active lease counts in the `/api/health` endpoint
-- easier diagnosis of provider failures and degraded states across processes without relying on manual log inspection or per-run drill-down
+- richer structured logs and stronger cross-process run correlation
+- easier diagnosis of provider failures across processes
+- continued polish of health signal presentation and operator-facing diagnostics
 
-## 3. Security and credential lifecycle
+### 3. Security and credential lifecycle
 The app should not expand provider surface area faster than it improves secret handling.
 
-Foundations already in place:
-- API access is guarded by a single-user bearer-token middleware with a login endpoint for the operator UI
-- provider credentials are encrypted at rest in the database using the app secret rather than stored as plaintext
+Already in place:
+- single-user bearer-token API protection with login
+- encrypted provider credentials at rest
 
 Still needed:
-- stronger single-user auth hardening; the current model is still shared-secret based and the frontend stores the bearer token in local storage
-- clearer credential rotation and re-encryption workflow; changing the app secret currently changes the encryption key, but there is no built-in rekey path for existing provider credentials
-- safer production defaults and deployment guidance so placeholder auth credentials and tokens are not acceptable long-term
-- optional external secret-backend support if deployment needs justify it
+- stronger auth hardening
+- credential rotation and re-encryption workflow
+- safer production defaults and guidance
+- optional external secret-backend support if needed
 
-## 4. Measured recommendation quality
-The redesign path now has enough persistence and review plumbing that the next question is evidence quality, not raw feature quantity.
+### 4. Measured recommendation quality
+The next question is evidence quality, not raw feature count.
 
-Foundations already in place:
-- recommendation-plan evaluation persists first-class `RecommendationPlanOutcome` records rather than relying on ad hoc historical review
-- the backend already computes calibration summaries, baseline cohorts, setup-family reviews, and evidence-concentration summaries from stored outcomes
-- watchlist orchestration already consumes calibration summaries to adjust confidence and gating thresholds when enough evidence exists
-
-Still needed:
-- accumulate more resolved recommendation-plan outcomes over time; most of the measurement logic is in place, but sample size remains the limiting factor
-- keep using calibration summaries to improve operator trust and confidence discipline without overstating thin buckets
-- keep comparing actual trade-plan behavior against simple baseline cohorts and prune baselines that are no longer informative
-- verify which setup families, horizons, transmission conditions, and regimes are actually working in live accumulated data, not just in the scoring design
-
-## 5. Redesign maturation
-The redesign is already the active product path, but it still needs deeper evidence and cleaner narrowing of transitional concepts.
-
-Foundations already in place:
-- recommendation-plan review is the main operator-facing decision workflow
-- context snapshots now have dedicated review/detail flows, clearer macro-vs-industry navigation, and explicit industry selection
-- operator-facing support-snapshot UI has already been removed from the main review flow
+Already in place:
+- persisted `RecommendationPlanOutcome` records
+- calibration summaries, baseline cohorts, setup-family review, and evidence-concentration review from stored outcomes
+- calibration-aware confidence and gating in the orchestration path
 
 Still needed:
-- continue improving ticker-analysis quality without reopening generic legacy patterns
-- continue retiring the legacy support-snapshot dependency in backend flow:
-  - macro/industry refresh jobs still create support snapshots first and derive context snapshots from them
-  - proposal and ticker-context resolution still depend on `SupportSnapshotResolver`, which blends legacy support data with newer context data
-  - health and freshness reporting still treat support snapshots as a primary operational artifact
-  - remove the remaining support-snapshot dependency from refresh, health, and scoring paths so the legacy layer can be deleted cleanly
-- keep recommendation-plan review as the clear canonical workflow
-- avoid reintroducing duplicate legacy-vs-redesign terminology
+- more resolved outcomes over time
+- continued use of calibration without overstating thin buckets
+- continued comparison against simple baselines
+- validation of which setup families, horizons, transmission conditions, and regimes actually work in live data
+
+### 5. Redesign maturation
+The redesign is already the active path.
+
+Already in place:
+- recommendation-plan review as the main operator-facing decision flow
+- dedicated context review and detail pages
+- support-snapshot UI and persistence have been retired from the active runtime path
+
+Still needed:
+- continued improvement of ticker-analysis quality
+- continued avoidance of duplicate legacy-vs-redesign terminology
 
 ## Explicitly later
-These are lower-priority until the active priorities above improve:
+Lower priority until the active items above improve:
 - additional providers that mainly increase source count without measured quality gains
 - broader automation beyond current operator workflows
-- multi-user scope, RBAC, or tenancy before the single-user model is operationally stronger
+- multi-user scope, RBAC, or tenancy before the single-user model is stronger
 - service extraction unless scale or operational pressure clearly justifies it
-- expansion of predictive claims before outcome history and calibration support them
+- stronger predictive claims before outcome history and calibration support them
 
 ## Maintenance rule
 If a feature is shipped, describe it in the canonical product docs and remove it from the active roadmap unless unfinished follow-through remains.
 
-If a detailed historical record is still useful, move it to archive rather than leaving it in the main reading path.
+If historical detail is still useful, move it to archive rather than leaving it in the main reading path.
 
 ## See also
-- `product-thesis.md` — product intent and decision rules
-- `features-and-capabilities.md` — current behavior
-- `recommendation-methodology.md` — current pipeline logic
-- `architecture.md` — current system structure
-- `archive/roadmap-history.md` — detailed historical roadmap record
+- `product-thesis.md`
+- `features-and-capabilities.md`
+- `recommendation-methodology.md`
+- `architecture.md`
+- `archive/roadmap-history.md`

@@ -19,6 +19,7 @@ SPA_ROUTE_PREFIXES = {
     "sentiment",
     "recommendation-plans",
     "ticker-signals",
+    "workers",
 }
 
 
@@ -52,6 +53,13 @@ def build_frontend_missing_response() -> HTMLResponse:
 
 @router.get("/runs/{run_id}", response_class=HTMLResponse)
 async def run_detail_spa(run_id: int) -> HTMLResponse:
+    if not FRONTEND_INDEX_FILE.exists():
+        return build_frontend_missing_response()
+    return FileResponse(FRONTEND_INDEX_FILE)
+
+
+@router.get("/workers/{worker_id}", response_class=HTMLResponse)
+async def worker_logs_spa(worker_id: str) -> HTMLResponse:
     if not FRONTEND_INDEX_FILE.exists():
         return build_frontend_missing_response()
     return FileResponse(FRONTEND_INDEX_FILE)

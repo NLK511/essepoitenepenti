@@ -1,22 +1,36 @@
 # Trade Proposer App
 
-Trade Proposer App is a deployable application for systematic short-horizon trade planning workflows. It provides a FastAPI backend, a React/Vite operator UI, and worker-backed execution. The recommendation pipeline runs entirely inside this repository: it fetches price history via `yfinance`, builds technical feature vectors with `pandas`, applies the bundled weights (`src/trade_proposer_app/data/weights.json`), ingests news via the native `NewsIngestionService`, reuses shared macro/industry sentiment snapshots, and emits redesign-native ticker signals plus actionable `RecommendationPlan` outputs with auditable diagnostics. The taxonomy layer that feeds industry refresh and query generation now lives primarily under `src/trade_proposer_app/data/taxonomy/` as split ticker, industry, sector, relationship, and event-vocabulary files.
+Trade Proposer App is a deployable short-horizon trade-planning application.
 
-## Core Features
-- **Job Management**: Define scheduled or manual runs for proposal generation, evaluation, weight optimization, and sentiment snapshot refresh.
-- **Traceability**: Full history of runs, recommendation plans/outcomes, and shared sentiment snapshots with drill-down views and stored diagnostics.
-- **Reliability**: Atomic run claiming, duplicate-run prevention, explicit degraded-state reporting, and snapshot freshness checks in health/preflight.
-- **News-aware insights**: Native news ingestion pulls configured articles, derives sentiment, and stores both a digest and structured metadata. Operators can optionally route that digest through OpenAI or the `pi` CLI (configured via `/settings`) so richer narratives and enhanced sentiment metadata appear in detail views.
-- **In-App Docs**: Integrated documentation browser for methodology and technical reference.
+It combines:
+- a FastAPI backend
+- a React/Vite operator UI
+- a worker and scheduler for background runs
 
-## Quick Start
+The recommendation pipeline runs inside this repository. It ingests market/news data, builds features, applies the bundled weights, reuses shared macro and industry context, and emits ticker signals plus `RecommendationPlan` outputs with stored diagnostics.
+
+## Core capabilities
+- **Unified run system** for proposal generation, evaluation, optimization, and context refresh
+- **Operator review flow** for runs, signals, plans, outcomes, and degraded states
+- **Shared context reuse** across proposal and review workflows
+- **Auditable diagnostics** stored with runs and recommendation objects
+- **In-app docs** for product, methodology, and technical reference
+
+## Quick start
 
 ```bash
 ./scripts/setup.sh
 ./scripts/start-dev.sh
 ```
 
-SQLite remains the default local development database for the easiest first run. If you want a Postgres-backed local environment, start local services with `docker compose up -d postgres redis` and run `./scripts/setup.sh --force-env --database postgres`.
+Default local setup uses SQLite.
+
+For a Postgres-backed local environment:
+
+```bash
+docker compose up -d postgres
+./scripts/setup.sh --force-env --database postgres
+```
 
 Useful setup options:
 - `./scripts/setup.sh --with-dev-deps`
@@ -24,31 +38,33 @@ Useful setup options:
 - `./scripts/setup.sh --skip-frontend-deps`
 - `./scripts/setup.sh --database postgres`
 
-- **Frontend**: `http://localhost:5173/`
-- **API Health**: `http://localhost:8000/api/health`
-- **Preflight**: `http://localhost:8000/api/health/preflight`
+Local URLs:
+- frontend: `http://localhost:5173/`
+- API health: `http://localhost:8000/api/health`
+- preflight: `http://localhost:8000/api/health/preflight`
 
-## Database and migration notes
+For full setup and troubleshooting, see `docs/getting-started.md`.
+
+## Database and migrations
 
 Current behavior:
-- SQLite is the default local development database
+- SQLite is the default local database
 - Postgres is supported for production-like local runs and deployment
-- the Python dependency set now includes `psycopg[binary]` so Postgres URLs work without extra manual driver installation
-- startup scripts now perform a friendlier connectivity check when `DATABASE_URL` points at Postgres
-- Alembic revision ids were shortened to stay within Postgres `alembic_version.version_num` limits, and the migration entrypoint normalizes older stored revision ids automatically
+- `psycopg[binary]` is included, so Postgres URLs work without extra driver setup
+- startup scripts perform friendlier connectivity checks for Postgres
+- the migration entrypoint normalizes older Alembic revision ids automatically
 
-Database references:
-- current ER diagram: `docs/er-model.md`
+References:
+- ER model: `docs/er-model.md`
 - migration entrypoint: `python -m trade_proposer_app.migrations`
-- generated local environment template: `.env.example`
+- environment template: `.env.example`
 
-## Postgres integration test
+## Optional Postgres integration test
 
-The repo now includes an optional Postgres migration smoke test:
 - test file: `tests/test_postgres_integration.py`
 - required env var: `POSTGRES_TEST_DATABASE_URL`
 
-Run it locally with something like:
+Example:
 
 ```bash
 docker compose up -d postgres
@@ -57,39 +73,41 @@ POSTGRES_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432
 ```
 
 GitHub workflow:
-- workflow file: `.github/workflows/postgres-integration.yml`
-- status: kept in the repo but not enabled for automatic runs
-- trigger mode: manual `workflow_dispatch` only
+- file: `.github/workflows/postgres-integration.yml`
+- trigger: manual `workflow_dispatch`
 
-## Production deployment
+## Production-style local launch
 
-For production-like launches use `./scripts/start-prod.sh`. The script reads your `.env`, builds the frontend with `npm run build`, runs any pending migrations, runs preflight, and then starts the FastAPI API (which serves the built SPA from `frontend/dist`), the worker, and the scheduler together. Run it from the repo root after installing dependencies (the same setup process as development) and configuring secrets such as `SECRET_KEY`.
+Use `./scripts/start-prod.sh`.
 
-`start-prod.sh` exposes the API and frontend on `APP_HOST:APP_PORT` (defaults to `0.0.0.0:8000`). You can override those values on the command line with `--host` and `--port`, or leave them configured in `.env`. Example:
+It:
+- reads `.env`
+- builds the frontend
+- runs pending migrations
+- runs preflight
+- starts the API, worker, and scheduler
+
+Example:
 
 ```bash
 ./scripts/start-prod.sh --host 0.0.0.0 --port 8000
 ```
 
-Stop production-style local processes with:
+Stop with:
 
 ```bash
 ./scripts/stop-prod.sh
 ```
 
-If you build the frontend separately (with `npm ci` + `npm run build`) in your deployment pipeline, pass `--skip-frontend-build` so the script uses the existing `frontend/dist` assets instead of rebuilding. If preflight is expected to be degraded during a temporary rollout, you can also pass `--allow-degraded-preflight`.
-
-After startup:
-
-- Frontend & SPA routes: `http://<APP_HOST>:<APP_PORT>/`
-- API health: `http://<APP_HOST>:<APP_PORT>/api/health`
-- Preflight: `http://<APP_HOST>:<APP_PORT>/api/health/preflight`
+Useful flags:
+- `--skip-frontend-build`
+- `--allow-degraded-preflight`
 
 ## Documentation
 
-For detailed information, see the `docs/` directory or browse them in-app at `/docs`.
+Read docs in `docs/` or in-app at `/docs`.
 
-Suggested reading order:
+Recommended starting points:
 - [Documentation Index](docs/docs-index.md)
 - [Getting Started](docs/getting-started.md)
 - [Operator Page & Field Guide](docs/operator-page-field-guide.md)
@@ -103,10 +121,10 @@ Canonical current-state docs:
 - [Roadmap](docs/roadmap.md)
 - [Raw Details Reference](docs/raw-details-reference.md)
 
-Historical and archived material is now grouped under `docs/archive/` so it does not clutter the main reading path.
+Historical material lives under `docs/archive/`.
 
-## Tech Stack
-- **Backend**: Python, FastAPI, SQLAlchemy (SQLite by default for local dev, Postgres supported).
-- **Frontend**: React, TypeScript, Vite.
-- **Background**: Custom worker and scheduler.
-- **Dependencies**: `pandas`, `yfinance`, and standard packages for the internal scoring pipeline.
+## Tech stack
+- **Backend**: Python, FastAPI, SQLAlchemy
+- **Frontend**: React, TypeScript, Vite
+- **Background**: custom worker and scheduler
+- **Core data/scoring libs**: `pandas`, `yfinance`

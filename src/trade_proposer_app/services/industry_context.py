@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timezone
 from typing import Any
 
-from trade_proposer_app.domain.models import IndustryContextSnapshot, SupportSnapshot
+from trade_proposer_app.domain.models import IndustryContextRefreshPayload, IndustryContextSnapshot
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.services.event_extraction import (
     EventDefinition,
@@ -24,26 +25,34 @@ from trade_proposer_app.services.summary import SummaryResult, SummaryService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 MACRO_LINK_DEFINITIONS = [
-    EventDefinition("inflation", "Inflation", ("inflation",), category="macro_transmission", window_hint="2d_5d", transmission_channels=("input_costs", "pricing_power")),
+    EventDefinition("inflation_cooling", "Inflation cooling", ("disinflation", "cooling inflation", "easing prices"), category="macro_transmission", window_hint="2d_5d", transmission_channels=("input_costs", "pricing_power")),
+    EventDefinition("inflation_sticky", "Sticky inflation", ("inflation", "sticky prices", "hotter inflation"), category="macro_transmission", window_hint="2d_5d", transmission_channels=("input_costs", "pricing_power")),
     EventDefinition("rates", "Rates", ("rate", "rates"), category="macro_transmission", window_hint="1w_plus", transmission_channels=("funding_costs", "valuation_duration")),
-    EventDefinition("yield_pressure", "Yield pressure", ("yield",), category="macro_transmission", window_hint="2d_5d", transmission_channels=("valuation_duration", "funding_costs")),
-    EventDefinition("energy_costs", "Energy costs", ("oil", "energy prices", "crude"), category="macro_transmission", window_hint="2d_5d", transmission_channels=("transport_costs", "input_costs")),
-    EventDefinition("geopolitics", "Geopolitics", ("war", "geopolitical", "sanctions", "conflict"), category="macro_transmission", window_hint="1d", transmission_channels=("supply_chain", "risk_appetite")),
+    EventDefinition("yield_pressure", "Yield pressure", ("yield", "higher yields", "yield jump", "bond selloff"), category="macro_transmission", window_hint="2d_5d", transmission_channels=("valuation_duration", "funding_costs")),
+    EventDefinition("energy_costs", "Energy costs", ("oil", "energy prices", "crude", "fuel costs"), category="macro_transmission", window_hint="2d_5d", transmission_channels=("transport_costs", "input_costs")),
+    EventDefinition("geopolitical_deescalation", "Geopolitical de-escalation", ("ceasefire", "truce", "de-escalation", "diplomatic progress"), category="macro_transmission", window_hint="1d", transmission_channels=("risk_appetite", "supply_chain")),
+    EventDefinition("geopolitical_escalation", "Geopolitical escalation", ("war", "geopolitical", "sanctions", "conflict", "strike", "retaliation"), category="macro_transmission", window_hint="1d", transmission_channels=("supply_chain", "risk_appetite")),
     EventDefinition("trade_policy", "Trade policy", ("tariff", "export controls", "trade policy"), category="macro_transmission", window_hint="1w_plus", transmission_channels=("trade_flows", "supply_chain")),
     EventDefinition("growth_risk", "Growth risk", ("recession", "slowdown"), category="macro_transmission", window_hint="1w_plus", transmission_channels=("cyclical_demand", "enterprise_spend")),
 ]
 
 INDUSTRY_EVENT_DEFINITIONS = [
     EventDefinition("conference_cycle", "Conference cycle", ("conference", "investor day", "expo"), category="industry_native", window_hint="1d", transmission_channels=("theme_attention", "read_through")),
-    EventDefinition("guidance", "Guidance", ("guidance", "outlook"), category="industry_native", window_hint="2d_5d", transmission_channels=("estimate_revision", "sentiment_revision")),
-    EventDefinition("pricing", "Pricing", ("pricing", "price increase", "price cuts"), category="industry_native", window_hint="1w_plus", transmission_channels=("margin_profile", "competitive_position")),
-    EventDefinition("demand", "Demand", ("demand", "orders", "order growth"), category="industry_native", window_hint="2d_5d", transmission_channels=("revenue_sensitivity", "capacity_utilization")),
+    EventDefinition("guidance_raise", "Guidance raised", ("raised guidance", "guidance raised", "raised outlook", "better outlook"), category="industry_native", window_hint="2d_5d", transmission_channels=("estimate_revision", "sentiment_revision")),
+    EventDefinition("guidance_cut", "Guidance cut", ("cut guidance", "lowered outlook", "trimmed forecast", "weaker outlook"), category="industry_native", window_hint="2d_5d", transmission_channels=("estimate_revision", "sentiment_revision")),
+    EventDefinition("pricing_power", "Pricing power", ("price increase", "pricing power", "price hikes", "firm pricing"), category="industry_native", window_hint="1w_plus", transmission_channels=("margin_profile", "competitive_position")),
+    EventDefinition("pricing_pressure", "Pricing pressure", ("price cuts", "discounting", "pricing pressure", "fare war"), category="industry_native", window_hint="1w_plus", transmission_channels=("margin_profile", "competitive_position")),
+    EventDefinition("demand_acceleration", "Demand acceleration", ("strong demand", "orders", "order growth", "bookings growth", "traffic growth"), category="industry_native", window_hint="2d_5d", transmission_channels=("revenue_sensitivity", "capacity_utilization")),
+    EventDefinition("demand_softening", "Demand softening", ("weak demand", "slow orders", "soft bookings", "traffic slowdown"), category="industry_native", window_hint="2d_5d", transmission_channels=("revenue_sensitivity", "capacity_utilization")),
     EventDefinition("backlog", "Backlog", ("backlog",), category="industry_native", window_hint="1w_plus", transmission_channels=("revenue_visibility",)),
     EventDefinition("innovation", "Innovation", ("innovation", "breakthrough", "roadmap"), category="industry_native", window_hint="1w_plus", transmission_channels=("product_cycle", "multiple_expansion")),
     EventDefinition("product_cycle", "Product cycle", ("launch", "product", "rollout", "release"), category="industry_native", window_hint="2d_5d", transmission_channels=("product_cycle", "channel_checks")),
-    EventDefinition("regulation", "Regulation", ("regulation", "approval", "antitrust", "compliance"), category="industry_native", window_hint="1w_plus", transmission_channels=("regulatory_risk", "market_access")),
-    EventDefinition("supply_chain", "Supply chain", ("supply chain", "capacity", "lead time", "factory"), category="industry_native", window_hint="2d_5d", transmission_channels=("supply_chain", "capacity_utilization")),
-    EventDefinition("inventory", "Inventory", ("inventory", "stock build", "destocking"), category="industry_native", window_hint="2d_5d", transmission_channels=("channel_inventory", "pricing_pressure")),
+    EventDefinition("regulatory_relief", "Regulatory relief", ("approval", "cleared", "authorization", "court win"), category="industry_native", window_hint="1w_plus", transmission_channels=("regulatory_risk", "market_access")),
+    EventDefinition("regulatory_risk", "Regulatory risk", ("regulation", "antitrust", "compliance", "probe", "investigation"), category="industry_native", window_hint="1w_plus", transmission_channels=("regulatory_risk", "market_access")),
+    EventDefinition("supply_chain_disruption", "Supply chain disruption", ("supply chain", "capacity constraint", "lead time", "factory shutdown", "shortage", "delay"), category="industry_native", window_hint="2d_5d", transmission_channels=("supply_chain", "capacity_utilization")),
+    EventDefinition("supply_chain_recovery", "Supply chain recovery", ("capacity normalized", "lead times improved", "factory restart", "supply recovery"), category="industry_native", window_hint="2d_5d", transmission_channels=("supply_chain", "capacity_utilization")),
+    EventDefinition("inventory_destocking", "Inventory destocking", ("destocking", "inventory correction", "inventory drawdown"), category="industry_native", window_hint="2d_5d", transmission_channels=("channel_inventory", "pricing_pressure")),
+    EventDefinition("inventory_restocking", "Inventory restocking", ("restocking", "inventory rebuild", "stock build"), category="industry_native", window_hint="2d_5d", transmission_channels=("channel_inventory", "pricing_pressure")),
     EventDefinition("ai_theme", "AI theme", ("ai", "artificial intelligence", "accelerator"), category="industry_native", window_hint="2d_5d", transmission_channels=("theme_attention", "compute_demand")),
     EventDefinition("semiconductor_theme", "Semiconductor theme", ("chip", "semiconductor", "foundry"), category="industry_native", window_hint="2d_5d", transmission_channels=("compute_demand", "supply_chain")),
     EventDefinition("cloud_theme", "Cloud theme", ("cloud", "hyperscaler"), category="industry_native", window_hint="2d_5d", transmission_channels=("enterprise_spend", "compute_demand")),
@@ -64,26 +73,28 @@ class IndustryContextService:
         self.summary_service = summary_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
-    def create_from_support_snapshot(
+    def create_from_refresh_payload(
         self,
-        snapshot: SupportSnapshot,
+        payload: IndustryContextRefreshPayload,
         *,
         job_id: int | None = None,
         run_id: int | None = None,
     ) -> IndustryContextSnapshot:
-        industry_key = str(getattr(snapshot, "subject_key", "") or "")
-        industry_label = str(getattr(snapshot, "subject_label", "") or industry_key)
+        industry_key = str(getattr(payload, "subject_key", "") or "")
+        industry_label = str(getattr(payload, "subject_label", "") or industry_key)
         previous = self.repository.get_latest_industry_context_snapshot(industry_key)
-        signals = _load_json(getattr(snapshot, "signals_json", None), {})
-        diagnostics = _load_json(getattr(snapshot, "diagnostics_json", None), {})
-        source_breakdown = _load_json(getattr(snapshot, "source_breakdown_json", None), {})
-        coverage = _load_json(getattr(snapshot, "coverage_json", None), {})
+        signals = dict(getattr(payload, "signals", {}) or {})
+        diagnostics = dict(getattr(payload, "diagnostics", {}) or {})
+        source_breakdown = dict(getattr(payload, "source_breakdown", {}) or {})
+        coverage = dict(getattr(payload, "coverage", {}) or {})
         social_items = signals.get("social_items") if isinstance(signals, dict) else []
         supporting_social_items = social_items if isinstance(social_items, list) else []
         tracked_tickers = coverage.get("tracked_tickers", []) if isinstance(coverage, dict) else []
         query_terms = diagnostics.get("queries", []) if isinstance(diagnostics, dict) else []
+        ontology_profile = self._with_profile_channel_details(self.taxonomy_service.get_industry_definition(industry_key or industry_label))
+        expanded_queries = self._expanded_query_terms(industry_label, query_terms, ontology_profile)
 
-        news_bundle, news_sentiment = self._load_news_evidence(industry_label, tracked_tickers, query_terms)
+        news_bundle, news_sentiment = self._load_news_evidence(industry_label, tracked_tickers, expanded_queries)
         primary_news_items = news_sentiment.get("news_items", []) if isinstance(news_sentiment, dict) else []
         news_items = primary_news_items if isinstance(primary_news_items, list) else []
 
@@ -109,7 +120,6 @@ class IndustryContextService:
         linked_macro_themes = event_keys(linked_macro_events)
         linked_industry_themes = self._linked_industry_themes(active_drivers)
         lifecycle_summary = summarize_event_lifecycle(active_drivers, previous_events=previous_drivers)
-        ontology_profile = self._with_profile_channel_details(self.taxonomy_service.get_industry_definition(industry_key or industry_label))
         sector_definition = self.taxonomy_service.get_sector_definition(ontology_profile.get("sector", ""))
         ontology_relationships = self.taxonomy_service.list_relationships(industry_key or industry_label, direction="outbound")
         matched_ontology_relationships = self._matched_ontology_relationships(
@@ -179,10 +189,10 @@ class IndustryContextService:
             industry_key=industry_key,
             industry_label=industry_label,
             computed_at=datetime.now(timezone.utc),
-            expires_at=getattr(snapshot, "expires_at", None),
+            expires_at=getattr(payload, "expires_at", None),
             status="warning" if warnings else "ok",
             summary_text=summary_text,
-            direction=self._direction_from_label(str(getattr(snapshot, "label", "NEUTRAL") or "NEUTRAL")),
+            direction=self._direction_from_label(str(getattr(payload, "label", "NEUTRAL") or "NEUTRAL")),
             saliency_score=saliency_score,
             confidence_percent=confidence_percent,
             active_drivers=active_drivers,
@@ -191,12 +201,13 @@ class IndustryContextService:
             warnings=list(dict.fromkeys(warnings)),
             missing_inputs=list(dict.fromkeys(missing_inputs)),
             source_breakdown={
-                "support_snapshot_id": getattr(snapshot, "id", None),
-                "support_label": getattr(snapshot, "label", None),
-                "support_score": getattr(snapshot, "score", None),
+                "context_refresh_subject_key": getattr(payload, "subject_key", None),
+                "context_label": getattr(payload, "label", None),
+                "context_score": getattr(payload, "score", None),
                 "primary_news_item_count": len(news_items),
                 "supporting_social_item_count": len(supporting_social_items),
                 "tracked_tickers": tracked_tickers,
+                "expanded_queries": expanded_queries,
                 "primary_news_providers": list(dict.fromkeys(news_bundle.feeds_used)) if news_bundle is not None else [],
                 "primary_news_feed_errors": feed_errors,
                 "primary_news_source_priorities": summarize_source_priorities(news_items, source_type="news"),
@@ -209,6 +220,7 @@ class IndustryContextService:
             metadata={
                 "query_diagnostics": diagnostics.get("query_diagnostics", {}) if isinstance(diagnostics, dict) else {},
                 "queries": query_terms,
+                "expanded_queries": expanded_queries,
                 "news_coverage_insights": news_sentiment.get("coverage_insights", []) if isinstance(news_sentiment, dict) else [],
                 "top_news_titles": [self._item_text(item)[:140] for item in news_items[:5]],
                 "top_social_titles": [self._item_text(item)[:140] for item in supporting_social_items[:5]],
@@ -278,14 +290,62 @@ class IndustryContextService:
         if self.news_service is None:
             return None, {}
         normalized_tickers = [str(ticker).strip().upper() for ticker in tracked_tickers if str(ticker).strip()]
-        if normalized_tickers:
-            bundle = self.news_service.fetch_many(normalized_tickers, per_symbol_limit=3)
+        queries = [str(query).strip() for query in query_terms if str(query).strip()]
+        if normalized_tickers and len(normalized_tickers) >= 2:
+            bundle = self.news_service.fetch_many(normalized_tickers[:8], per_symbol_limit=3)
         else:
-            queries = [str(query).strip() for query in query_terms if str(query).strip()]
-            bundle = self.news_service.fetch_topics(industry_label, queries or [industry_label], per_query_limit=3)
+            topical_queries = queries or [industry_label]
+            bundle = self.news_service.fetch_topics(industry_label, topical_queries[:8], per_query_limit=3)
         analyzed = self.news_service.analyze_bundle(bundle)
         sentiment = analyzed.get("sentiment", {}) if isinstance(analyzed, dict) else {}
         return bundle, sentiment if isinstance(sentiment, dict) else {}
+
+    def _expanded_query_terms(
+        self,
+        industry_label: str,
+        query_terms: list[object],
+        ontology_profile: dict[str, object],
+    ) -> list[str]:
+        candidates: list[str] = []
+
+        def add(value: object) -> None:
+            text = str(value or "").strip()
+            if not text:
+                return
+            if text not in candidates:
+                candidates.append(text)
+
+        add(industry_label)
+        for value in query_terms[:4]:
+            add(value)
+        for value in ontology_profile.get("queries", []) if isinstance(ontology_profile.get("queries"), list) else []:
+            add(value)
+        for value in ontology_profile.get("themes", []) if isinstance(ontology_profile.get("themes"), list) else []:
+            add(str(value).replace("_", " "))
+        for value in ontology_profile.get("event_vocab", []) if isinstance(ontology_profile.get("event_vocab"), list) else []:
+            add(str(value).replace("_", " "))
+        for value in ontology_profile.get("risk_flags", []) if isinstance(ontology_profile.get("risk_flags"), list) else []:
+            add(str(value).replace("_", " "))
+        sector_label = str(ontology_profile.get("sector", "") or "").replace("_", " ").strip()
+        if sector_label:
+            add(sector_label)
+        companies = [str(value).strip() for value in (ontology_profile.get("companies", []) if isinstance(ontology_profile.get("companies"), list) else []) if str(value).strip()]
+        if companies:
+            add(" OR ".join(companies[:3]))
+
+        normalized = [item for item in candidates if item]
+        queries: list[str] = []
+        if normalized:
+            queries.append(f"{industry_label} OR {' OR '.join(normalized[1:4])}" if len(normalized) > 1 else industry_label)
+        vocab = [item for item in normalized[1:] if len(item.split()) <= 4][:4]
+        if vocab:
+            queries.append(" OR ".join(vocab[:4]))
+        event_drivers = [str(definition.label) for definition in INDUSTRY_EVENT_DEFINITIONS[:8]]
+        queries.append(f"{industry_label} AND ({' OR '.join(event_drivers[:4])})")
+        risk_terms = [str(value).replace("_", " ") for value in (ontology_profile.get("risk_flags", []) if isinstance(ontology_profile.get("risk_flags"), list) else [])][:4]
+        if risk_terms:
+            queries.append(f"{industry_label} AND ({' OR '.join(risk_terms)})")
+        return list(dict.fromkeys(query for query in queries if query.strip()))[:8]
 
     def _summarize_context(
         self,
@@ -360,12 +420,12 @@ class IndustryContextService:
         for index, event in enumerate(active_drivers[:3], start=1):
             channels = event.get("transmission_channels") if isinstance(event.get("transmission_channels"), list) else []
             driver_lines.append(
-                f"{index}. {event.get('label', 'Unknown driver')} | state={event.get('persistence_state', 'unknown')} | saliency={event.get('saliency_weight', 0.0)} | source={event.get('source_priority', 'other')} | window={event.get('window_hint', 'unknown')} | direction={event.get('evidence_direction', 'mixed')} | channels={', '.join(str(channel) for channel in channels[:3]) or 'unknown'}"
+                f"{index}. {event.get('label', 'Unknown driver')} | state={event.get('persistence_state', 'unknown')} | transition={event.get('state_transition', 'unknown')} | catalyst={event.get('catalyst_type', 'other')} | interpretation={event.get('market_interpretation', 'unknown')} | saliency={event.get('saliency_weight', 0.0)} | source={event.get('source_priority', 'other')} | window={event.get('window_hint', 'unknown')} | direction={event.get('evidence_direction', 'mixed')} | actor={event.get('trigger_actor', 'unknown')} | channels={', '.join(str(channel) for channel in channels[:3]) or 'unknown'} | why={event.get('state_change_reason', 'n/a')}"
             )
         macro_lines = []
         for index, event in enumerate(linked_macro_events[:2], start=1):
             macro_lines.append(
-                f"{index}. {event.get('label', 'Unknown macro link')} | state={event.get('persistence_state', 'unknown')} | saliency={event.get('saliency_weight', 0.0)} | window={event.get('window_hint', 'unknown')}"
+                f"{index}. {event.get('label', 'Unknown macro link')} | state={event.get('persistence_state', 'unknown')} | transition={event.get('state_transition', 'unknown')} | catalyst={event.get('catalyst_type', 'other')} | interpretation={event.get('market_interpretation', 'unknown')} | saliency={event.get('saliency_weight', 0.0)} | window={event.get('window_hint', 'unknown')}"
             )
         triaged_news = self._triaged_news_items(news_items, active_drivers, linked_macro_events)
         news_lines = []
@@ -401,7 +461,9 @@ class IndustryContextService:
             f"Write a short operator-facing industry context summary for {industry_label} in 2-4 sentences.",
             "Focus on the top salient industry drivers, not just one event.",
             "Ground the summary in the highest-quality fetched sources first. Use social evidence only as secondary support.",
-            "Say what the main drivers are, how they matter over the next few trading days to weeks, and whether macro read-through is reinforcing or offsetting them.",
+            "Say what the main drivers are, what concrete catalyst or state change is driving them right now, how they matter over the next few trading days to weeks, and whether macro read-through is reinforcing or offsetting them.",
+            "Explicitly distinguish escalation, easing, stabilization, or mixed conditions when the evidence supports it.",
+            "Prefer durable semantic language over person-specific labels; mention specific actors only as evidence-level detail.",
             "Use the previous snapshot only to explain continuity or change. Do not let old framing override current evidence.",
             "If evidence is contradictory or degraded, say that plainly.",
             "Do not use hype. Do not invent facts beyond the evidence below.",
@@ -458,6 +520,7 @@ class IndustryContextService:
             text = f"{title} {summary}".lower()
             event_hits = 0
             saliency_score = 0.0
+            state_change_bonus = 0
             for event in prioritized_events:
                 key = str(event.get("key", "") or "")
                 definition = definition_map.get(key)
@@ -466,9 +529,11 @@ class IndustryContextService:
                 if any(phrase.lower() in text for phrase in definition.phrases):
                     event_hits += 1
                     saliency_score += float(event.get("saliency_weight", 0.0) or 0.0)
+                    if any(hint in text for hint in ("escalat", "de-escalat", "easing", "relief", "cooling", "approval", "guidance", "pricing", "order", "demand", "destocking", "shortage", "delay")):
+                        state_change_bonus += 1
             ranked.append(
                 (
-                    (priority_score, saliency_score, event_hits),
+                    (priority_score, saliency_score + (state_change_bonus * 0.35), event_hits + state_change_bonus),
                     {
                         "title": title,
                         "summary": summary,
@@ -595,23 +660,30 @@ class IndustryContextService:
         primary_source_counts: dict[str, int],
     ) -> float:
         top_driver_score = max((float(item.get("saliency_weight", 0.0) or 0.0) for item in active_drivers), default=0.0)
-        escalating_boost = min(0.1, sum(1 for item in active_drivers if item.get("persistence_state") == "escalating") * 0.05)
-        trade_boost = min(0.16, primary_source_counts.get("trade", 0) * 0.08)
-        official_boost = min(0.1, primary_source_counts.get("official", 0) * 0.05)
-        major_boost = min(0.08, primary_source_counts.get("major", 0) * 0.04)
-        score = (
-            0.1
-            + top_driver_score * 0.4
-            + (len(active_drivers) * 0.08)
-            + (min(news_item_count, 6) * 0.05)
-            + (min(social_item_count, 4) * 0.02)
-            + (macro_link_count * 0.04)
-            + trade_boost
-            + official_boost
-            + major_boost
-            + escalating_boost
+        driver_factor = min(1.0, math.log1p(len(active_drivers)) / math.log(6.0)) if active_drivers else 0.0
+        news_factor = min(1.0, math.log1p(news_item_count) / math.log(7.0)) if news_item_count > 0 else 0.0
+        social_factor = min(1.0, math.log1p(social_item_count) / math.log(5.0)) if social_item_count > 0 else 0.0
+        macro_link_factor = min(1.0, macro_link_count / 3.0)
+        source_quality = min(
+            1.0,
+            (
+                (primary_source_counts.get("trade", 0) * 1.0)
+                + (primary_source_counts.get("official", 0) * 0.8)
+                + (primary_source_counts.get("major", 0) * 0.65)
+            )
+            / 3.0,
         )
-        return round(min(1.0, score), 3)
+        escalating_factor = min(1.0, sum(1 for item in active_drivers if item.get("persistence_state") == "escalating") / 2.0)
+        raw_score = (
+            top_driver_score * 0.48
+            + driver_factor * 0.12
+            + news_factor * 0.11
+            + social_factor * 0.05
+            + macro_link_factor * 0.07
+            + source_quality * 0.12
+            + escalating_factor * 0.05
+        )
+        return round(min(0.98, 1.0 - math.exp(-(raw_score * 1.35))), 3)
 
     @staticmethod
     def _confidence_percent(
@@ -626,28 +698,46 @@ class IndustryContextService:
     ) -> float:
         social_provider_count = len(diagnostics.get("providers", [])) if isinstance(diagnostics, dict) and isinstance(diagnostics.get("providers"), list) else 0
         high_saliency_drivers = count_events_above_saliency(active_drivers)
-        confidence = (
-            10.0
-            + (len(active_drivers) * 4.0)
-            + (high_saliency_drivers * 4.5)
-            + (min(news_item_count, 8) * 4.0)
-            + (min(social_item_count, 4) * 1.0)
-            + (social_provider_count * 1.5)
-            + (primary_source_counts.get("trade", 0) * 4.0)
-            + (primary_source_counts.get("official", 0) * 3.0)
-            + (primary_source_counts.get("major", 0) * 2.5)
+        average_saliency = (
+            sum(float(item.get("saliency_weight", 0.0) or 0.0) for item in active_drivers) / len(active_drivers)
+            if active_drivers
+            else 0.0
         )
-        if any(item.get("persistence_state") == "escalating" for item in active_drivers):
-            confidence += 3.0
+        driver_factor = min(1.0, math.log1p(len(active_drivers)) / math.log(6.0)) if active_drivers else 0.0
+        news_factor = min(1.0, math.log1p(news_item_count) / math.log(9.0)) if news_item_count > 0 else 0.0
+        social_factor = min(1.0, math.log1p(social_item_count) / math.log(5.0)) if social_item_count > 0 else 0.0
+        source_quality = min(
+            1.0,
+            (
+                (primary_source_counts.get("trade", 0) * 1.0)
+                + (primary_source_counts.get("official", 0) * 0.75)
+                + (primary_source_counts.get("major", 0) * 0.65)
+            )
+            / 3.0,
+        )
+        saliency_factor = min(1.0, (average_saliency * 0.7) + (min(3, high_saliency_drivers) / 3.0 * 0.3))
+        escalating_factor = 1.0 if any(item.get("persistence_state") == "escalating" for item in active_drivers) else 0.0
+        provider_factor = min(1.0, social_provider_count / 3.0)
+
+        confidence = (
+            18.0
+            + driver_factor * 14.0
+            + news_factor * 18.0
+            + social_factor * 5.0
+            + source_quality * 19.0
+            + saliency_factor * 16.0
+            + escalating_factor * 5.0
+            + provider_factor * 3.0
+        )
         if news_item_count == 0:
-            confidence -= 20.0
+            confidence -= 18.0
         if primary_source_counts.get("trade", 0) == 0 and primary_source_counts.get("official", 0) == 0 and primary_source_counts.get("major", 0) == 0:
             confidence -= 10.0
         if contradiction_count > 0:
-            confidence -= min(15.0, contradiction_count * 5.0)
+            confidence -= min(22.0, contradiction_count * 7.0)
         if feed_errors:
-            confidence -= min(15.0, len(feed_errors) * 5.0)
-        return round(max(0.0, min(100.0, confidence)), 1)
+            confidence -= min(18.0, len(feed_errors) * 6.0)
+        return round(max(0.0, min(97.0, confidence)), 1)
 
     @staticmethod
     def _fallback_summary_text(
@@ -663,6 +753,10 @@ class IndustryContextService:
         driver_labels = [str(item.get("label", "")).strip() for item in active_drivers if item.get("label")]
         focus = ", ".join(driver_labels[:2]) if driver_labels else "no dominant industry-native driver"
         macro = ", ".join(linked_macro_themes[:2]) if linked_macro_themes else "limited visible macro transmission"
+        top_driver = active_drivers[0] if active_drivers else {}
+        catalyst = str(top_driver.get("catalyst_type", "other") or "other").replace("_", " ") if isinstance(top_driver, dict) else "other"
+        transition = str(top_driver.get("state_transition", "unknown") or "unknown").replace("_", " ") if isinstance(top_driver, dict) else "unknown"
+        interpretation = str(top_driver.get("market_interpretation", "unknown") or "unknown").replace("_", " ") if isinstance(top_driver, dict) else "unknown"
         new_labels = list(lifecycle_summary.get("new_event_labels", []))
         escalating_labels = list(lifecycle_summary.get("escalating_event_labels", []))
         contradiction_labels = list(lifecycle_summary.get("contradictory_event_labels", []))
@@ -672,15 +766,15 @@ class IndustryContextService:
             top_relationship = matched_ontology_relationships[0]
             relationship_note = f" Ontology read-through most clearly points to {top_relationship.get('type', 'linked_to')} {top_relationship.get('target_label', top_relationship.get('target', 'known transmission path'))} via {top_relationship.get('channel', 'known channel')}."
         if contradiction_labels and driver_labels:
-            return f"{industry_label} remains centered on {focus}, but conflicting industry evidence is visible around {', '.join(contradiction_labels[:2])}.{relationship_note}"
+            return f"{industry_label} remains centered on {focus}, but conflicting industry evidence is visible around {', '.join(contradiction_labels[:2])}. The leading read is still {transition}, driven mainly by {catalyst}, with a more {interpretation} market interpretation.{relationship_note}"
         if escalating_labels:
-            return f"{industry_label} is led by {focus}, with escalation now most visible in {', '.join(escalating_labels[:2])}; macro read-through still points to {macro}.{relationship_note}"
+            return f"{industry_label} is led by {focus}, with escalation now most visible in {', '.join(escalating_labels[:2])}; the dominant catalyst looks like {catalyst} and the market read is {interpretation}; macro read-through still points to {macro}.{relationship_note}"
         if previous and previous.summary_text and new_labels:
-            return f"{industry_label} still leans on {focus}, but fresh attention is shifting toward {', '.join(new_labels[:2])}; macro read-through remains {macro}.{relationship_note}"
+            return f"{industry_label} still leans on {focus}, but fresh attention is shifting toward {', '.join(new_labels[:2])}; the lead driver currently looks {transition} and is being interpreted more as {interpretation}; macro read-through remains {macro}.{relationship_note}"
         if fading_labels and driver_labels:
-            return f"{industry_label} context still points to {focus}, but some earlier pressure is fading around {', '.join(fading_labels[:2])}.{relationship_note}"
+            return f"{industry_label} context still points to {focus}, but some earlier pressure is fading around {', '.join(fading_labels[:2])}. The lead catalyst looks more like {catalyst} than a broad theme-only shift.{relationship_note}"
         if driver_labels and news_items:
-            return f"{industry_label} context is led by {focus}, while macro transmission points to {macro}; primary news is carrying most of the evidence in this run.{relationship_note}"
+            return f"{industry_label} context is led by {focus}, with the main short-horizon change looking {transition} and driven mainly by {catalyst}; the market read is currently more {interpretation}, while macro transmission points to {macro}; primary news is carrying most of the evidence in this run.{relationship_note}"
         if driver_labels and social_items:
             return f"{industry_label} context still points to {focus}, but primary industry news was thin so the run leans more on social confirmation than desired.{relationship_note}"
         if previous and previous.summary_text:

@@ -58,7 +58,7 @@ finally:
     engine.dispose()
 PY
   then
-    fail "could not connect to PostgreSQL. Start local services with 'docker compose up -d postgres redis' or switch DATABASE_URL to a SQLite URL for no-service local mode."
+    fail "could not connect to PostgreSQL. Start local services with 'docker compose up -d postgres' or switch DATABASE_URL to a SQLite URL for no-service local mode."
   fi
 }
 
@@ -68,7 +68,7 @@ Usage: scripts/start-dev.sh [options]
 
 Options:
   --run-scheduler-once        Run the scheduler enqueue pass before starting services
-  --allow-degraded-preflight  Allow startup even if the internal pipeline preflight reports failure (legacy alias --allow-degraded-prototype)
+  --allow-degraded-preflight  Allow startup even if the internal pipeline preflight reports failure
   --backend-only              Start only the API and worker, not the Vite frontend dev server
   --host <host>               Host for uvicorn (default: APP_HOST or 0.0.0.0)
   --port <port>               Port for uvicorn (default: APP_PORT or 8000)
@@ -264,10 +264,20 @@ log "starting api on ${START_HOST}:${START_PORT}"
 API_PID=$!
 printf '%s\n' "$API_PID" > "$API_PID_FILE"
 
-log "starting worker"
+WORKER_ID="$($VENV_PYTHON - <<'PY'
+import uuid
+import socket
+import os
+print(f"worker-{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+PY
+)"
+WORKER_LOG_DIR="$STATE_DIR/workers"
+WORKER_LOG_FILE="$WORKER_LOG_DIR/${WORKER_ID}.log"
+mkdir -p "$WORKER_LOG_DIR"
+log "starting worker (${WORKER_ID})"
 (
   cd "$ROOT_DIR"
-  exec "$VENV_PYTHON" -m trade_proposer_app.workers.tasks
+  WORKER_ID="$WORKER_ID" WORKER_LOG_FILE="$WORKER_LOG_FILE" exec "$VENV_PYTHON" -m trade_proposer_app.workers.tasks >> "$WORKER_LOG_FILE" 2>&1
 ) &
 WORKER_PID=$!
 printf '%s\n' "$WORKER_PID" > "$WORKER_PID_FILE"
@@ -300,6 +310,8 @@ ALLOW_DEGRADED_PROTOTYPE=${ALLOW_DEGRADED_PREFLIGHT}
 START_FRONTEND=${START_FRONTEND}
 API_PID=${API_PID}
 WORKER_PID=${WORKER_PID}
+WORKER_ID=${WORKER_ID}
+WORKER_LOG_FILE=${WORKER_LOG_FILE}
 SCHEDULER_PID=${SCHEDULER_PID}
 FRONTEND_PID=${FRONTEND_PID}
 EOF

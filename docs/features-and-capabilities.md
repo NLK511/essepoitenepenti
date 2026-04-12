@@ -5,113 +5,86 @@
 This document answers one question:
 > what can the app do today?
 
-Trade Proposer App covers the main operator loop inside one product:
+It is a current-state reference, not a roadmap.
+
+Trade Proposer App is a short-horizon analysis and trade-planning tool. It helps operators:
 - define watchlists
-- create and run jobs
-- inspect ticker signals and recommendation plans
-- review degraded runs and missing inputs
-- evaluate outcomes later
-- refresh shared context
-- adjust settings without leaving the app
+- run proposal, evaluation, tuning, and context-refresh jobs
+- review candidates, action plans, and outcomes
+- review shared context when the broader backdrop matters
+- adjust settings and providers inside the app
 
-The product is currently a short-horizon analysis and trade-planning tool. It helps rank names, frame trades, and keep an audit trail. It is not yet a proven short-horizon prediction engine.
+It is not yet a proven short-horizon prediction engine.
 
-## What operators can do now
+## Current capabilities
 
-### Workflow operations
-- Create, edit, delete, and execute jobs.
-- Run proposal generation, recommendation evaluation, weight optimization, and macro/industry context refresh jobs through the same run system.
-- Convert proposal jobs into watchlists and schedule them.
-- Inspect queued, running, completed, failed, cancelled, and warning-heavy runs from the debugger and run detail pages.
-- Review persisted run timing, summary, artifact, failure-phase metadata, and error details after execution finishes or fails.
+### Jobs, runs, and operations
+- Create, edit, delete, schedule, and execute jobs.
+- Run proposal generation, recommendation evaluation, plan-generation tuning, and macro/industry refreshes through the same worker-backed run system.
+- Inspect queued, running, completed, failed, canceled, and warning-heavy runs in the debugger and run detail pages.
+- Review persisted run timing, summaries, artifacts, warnings, and failure metadata.
+- Delete individual runs from the debugger.
 
-### Recommendation workflow
+### Recommendations and review
 - Persist proposal outputs as `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`.
-- Store structured diagnostics beside those objects.
-- Evaluate recommendation plans through the app-native price-history path.
-- Review plans and outcomes through redesign-native pages instead of the old recommendation-history flow.
-- Use ticker drill-down pages to review plan history and latest outcomes for a single name.
+- Review signals, plans, and outcomes through the main review pages.
+- Evaluate recommendation plans through the app-native price-history path, including terminal `expired` handling once a plan passes its intended horizon without a win/loss resolution.
+- Track **phantom trades** for `no_action` or `watchlist` plans that retain an intended direction and valid trade levels, evaluating them against real market data to produce outcomes such as `phantom_win`, `phantom_loss`, or `phantom_no_entry` for recall optimization in tuning engines.
+- Use decision samples to review near-misses, shortlist behavior, triage priority, and richer filters such as shortlist state, setup family, transmission bias, and context regime.
+- Use the calibration report endpoint and the research-page calibration tab to inspect confidence reliability, Brier score, and expected calibration error.
+- Use ticker drill-down pages to inspect plan history and latest outcomes for a single name.
 
-### Shared context workflow
-- Persist shared macro and industry support snapshots plus redesign-native macro and industry context snapshots.
-- Seed industry refresh from a richer taxonomy layer that now includes per-ticker profiles, explicit industry definitions, sector definitions, and first-pass relationship edges.
-- Inspect recent context snapshots from the Context review page and open detail views for macro or industry context objects.
-- Review stored industry ontology context in detail views, including sector, peer-industry framing, risk flags, and matched transmission edges.
-- Store ticker-level relationship provenance in deep-analysis diagnostics so peer, supplier, and customer read-through is available in raw trade-review payloads.
-- Surface matched ticker relationships on recommendation-review pages so operators can see supplier, customer, or peer read-through without opening raw JSON first.
-- Use matched ticker relationships inside stored plan explanation text so operator-facing rationale and risk framing can reflect ticker-specific read-through when the current evidence supports it.
-- Show dedicated ticker relationship read-through cards on key review pages so operators can inspect the matched peer / supplier / customer edges without digging into raw diagnostics.
-- Normalize taxonomy themes and macro-channel values against governed registries so ontology consumers use a controlled vocabulary instead of only ad hoc free-form strings.
-- Normalize transmission-channel values against a governed registry too, so ticker exposure and relationship channel fields move toward fully governed ontology values instead of drifting as free-form strings.
-- Govern ontology relationship types and target kinds too, then derive structural edges like sector membership, macro-channel links, and theme exposure so more of the ontology graph uses controlled values instead of ad hoc strings.
-- Keep deep-analysis transmission summaries closer to governed channel semantics by labeling exposure channels and avoiding the old habit of mixing theme or macro-sensitivity tags into channel lists.
-- Govern transmission-summary tags, primary drivers, and conflict flags too, so operator review surfaces rely less on ad hoc strings and more on controlled summary semantics.
-- Render governed labels for transmission tags, drivers, conflicts, and exposure channels on ticker-signal, recommendation-plan, and run-detail pages so operators can review readable summaries without opening raw JSON.
-- Render governed transmission-channel labels on context snapshot detail pages too, including stored event rows and industry ontology profile channels.
-- Use governed context-regime semantics in recommendation analytics slices too, so calibration and setup-family review cohorts rely less on duplicated ad hoc derivation.
-- Govern transmission-bias analytics semantics too, and expose readable evidence-concentration slice labels so operator review surfaces rely less on raw backend keys.
-- Carry readable analytics labels on stored latest-outcome payloads and calibration buckets too, so recommendation review pages can show governed bias/regime names instead of raw keys.
-- Carry readable shortlist and calibration explanation labels too, including shortlist reason details, selection-lane labels, calibration review-status labels, and governed calibration reason details.
-- Carry readable action-reason and contradiction-reason labels too, so recommendation-plan and context-detail pages rely less on raw internal codes.
-- Carry readable event lifecycle/status labels too, so context event rows can show governed source priority, persistence state, window, and recency semantics instead of raw keys.
-- Use narrower frontend context-event typing on review pages too, reducing dependence on ad hoc record casting when rendering governed event metadata.
-- Use narrower frontend recommendation-plan and ticker-signal typing for governed diagnostics/evidence substructures too, reducing UI dependence on loosely typed payload blobs.
-- Preserve those same governed recommendation/ticker substructures as typed backend payloads too, so persisted plans and signal snapshots round-trip with readable labels and more explicit nested semantics.
-- Render governed transmission-window labels on recommendation and ticker review pages too, replacing raw values like `2d_5d` with readable registry-backed labels like `2d-5d` where available.
-- Render governed latest-outcome analytics labels on ticker/run/recommendation review pages too, so bias/regime summaries can rely on structured detail objects rather than only raw stored keys.
-- Queue macro and industry refresh workflows manually from the operator UI.
-- Execute macro and industry refresh workflows asynchronously through the shared queued run path; immediate `run-now` endpoints still exist in the backend but are no longer the primary operator workflow.
+### Shared context and ontology
+- Persist macro and industry context snapshots as the canonical shared-context artifacts.
+- Review macro and industry context from the Context pages and detail views.
+- Store context-event fields such as persistence state, state transition, catalyst type, market interpretation, trigger actor, trigger actor role, trigger source type, and short "why now" summaries.
 - Trace which shared artifacts were used by a run or recommendation plan.
-- See support-snapshot freshness in `/api/health` and `/api/health/preflight`; context objects are reviewable through the context APIs and UI.
+- Use the taxonomy layer for industry definitions, sector definitions, ticker profiles, and relationship edges.
+- Expand industry refresh queries from ontology context such as industry queries, themes, event vocabulary, risk flags, sector, and known company names.
+- Surface ticker relationship read-throughs such as peer, supplier, and customer links in review pages and stored diagnostics.
+- Use governed labels for transmission, calibration, outcome, and event metadata so UI pages do not depend on raw internal keys.
 - Optionally use Nitter as supporting social input for macro and industry context.
 
-### Watchlist workflow
-- Persist watchlists with metadata such as `description`, `region`, `exchange`, `timezone`, `default_horizon`, `allow_shorts`, and `optimize_evaluation_timing`.
-- Delete watchlists directly from the UI, provided they are not currently required by active background jobs.
-- Seed a curated default watchlist pack through `scripts/deploy_watchlists.py`, covering 300 equities split across U.S., Europe, and Asia-Pacific continent-plus-macro-industry buckets; see `default-watchlists.md` for the rationale.
-- Inspect watchlist policy and timing assumptions through the API and UI.
+### Watchlists and proposal flow
+- Persist watchlists with metadata such as region, exchange, timezone, default horizon, and shorting policy.
+- Seed the curated default watchlist pack with `scripts/deploy_watchlists.py`; see `default-watchlists.md` for rationale.
 - Run watchlist-backed proposal jobs through a staged flow:
-  1. cheap scan across the watchlist
+  1. watchlist scan
   2. shortlist selection
-  3. deep analysis for shortlisted names
-  4. persistence of signals and plans
-- Browse ticker signals and recommendation plans outside the run page.
-- Filter redesign-native objects by `run_id`.
-- Review shortlist rules, rejection counts, shortlist decisions, transmission fields, and warnings in operator views.
+  3. deep analysis for shortlisted names only
+  4. persistence of signals and plans, including cheap-scan-only `no_action` plans for non-shortlisted names and phantom-trade-eligible rejected plans when deep analysis produced valid trade framing
+- Browse signals and plans outside the run page and filter them by `run_id`.
 - Queue recommendation-plan evaluation runs from the recommendation-plans page.
 
-### Diagnostics and docs
-- Inspect structured `analysis_json` sections in the UI.
-- Review news coverage, support/context coverage, feature vectors, aggregations, weights, warnings, and timing metadata.
-- Browse markdown docs in-app.
-- Configure summarization and providers from the settings page.
+### Diagnostics, settings, and docs
+- Inspect structured `analysis_json` payloads in the UI when deeper debugging is needed.
+- Review warnings, timing, calibration summaries, and other diagnostics through detail pages and advanced review surfaces.
+- Configure summarization, providers, and ingestion from Settings.
+- Browse the project markdown docs in-app.
 
-## What is in place
+## What is already in place
 
-These parts of the product are already in place and connected:
-- proposal creation and execution
-- auditable run persistence
-- redesign-native signal and plan storage
-- recommendation-plan outcome evaluation
-- persisted recommendation calibration, baseline, setup-family review, and evidence-concentration summaries derived from stored outcomes
-- weight optimization inside the app
-- shared support snapshots and context snapshots reused across runs
-- operator-visible shortlist reasoning
-- in-app docs and settings
-- single-user bearer-token API protection plus encrypted provider credentials at rest
+The shipped baseline includes:
+- watchlists, jobs, runs, settings, docs browsing, and audit history
+- signal, plan, and outcome persistence
+- recommendation-plan evaluation and advanced review analytics
+- plan-generation tuning inside the app as a research workflow
+- shared context reuse across runs
+- operator-visible shortlist reasoning and degraded-state reporting
+- single-user bearer-token API protection and encrypted provider credentials at rest
 
 ## Current limits
 
-The main limits are still practical ones:
-- scheduler and worker reliability still need more hardening; the app now recovers obviously stale `running` runs with a started-at timeout, but it still lacks heartbeat-based liveness tracking and finer-grained crash recovery
-- observability is still thin for a multi-process workflow app because logs are not yet structured and daemon liveness is not surfaced explicitly
-- auth, RBAC, tenancy, and credential lifecycle are still incomplete; the current security model is single-user and frontend auth tokens are stored in local storage
-- context extraction is still heuristic rather than a mature event model
+The main limits are still practical:
+- reliability still needs more hardening around worker/scheduler crash recovery and partial-persistence edge cases
+- observability is still thin for a multi-process app; logs are not yet structured enough and daemon health is not surfaced clearly enough
+- auth, RBAC, tenancy, and credential lifecycle are still incomplete; the app remains single-user and the frontend stores the bearer token locally
+- context extraction is stronger than before at capturing short-horizon state changes, but it is still heuristic rather than a mature event model
 - ticker deep analysis still reuses some older proposal-engine internals
-- support snapshots are no longer the main review UX, but they still remain in refresh, resolver, and health paths as a transitional backend dependency
-- confidence calibration is present, but it still needs more evidence over time
+- context refresh and proposal-time context reuse are now context-native, but the deeper event model is still heuristic rather than fully mature
+- calibration exists, but evidence remains limited
 
-There is also one analytical limit:
+And one analytical caution still matters:
 - coherent output is not the same as measured edge
 
 ## See also

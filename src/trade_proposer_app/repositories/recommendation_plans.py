@@ -1,15 +1,15 @@
 import json
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import StrategyHorizon
-from trade_proposer_app.domain.models import KeyLabelDetail, RecommendationPlan
+from trade_proposer_app.domain.models import KeyLabelDetail, RecommendationPlan, RecommendationPlanStats
 from trade_proposer_app.persistence.models import RecommendationPlanRecord
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
-from datetime import datetime, timezone
 
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
@@ -60,14 +60,15 @@ class RecommendationPlanRepository:
         plan.latest_outcome = outcome_map.get(record.id)
         return plan
 
-    def list_plans(
+    def _base_plan_query(
         self,
         ticker: str | None = None,
         action: str | None = None,
-        limit: int = 50,
         run_id: int | None = None,
-        setup_family: str | None = None,
-    ) -> list[RecommendationPlan]:
+        plan_id: int | None = None,
+        computed_after: datetime | None = None,
+        computed_before: datetime | None = None,
+    ):
         query = select(RecommendationPlanRecord)
         if ticker:
             query = query.where(RecommendationPlanRecord.ticker == ticker.upper())
@@ -75,22 +76,121 @@ class RecommendationPlanRepository:
             query = query.where(RecommendationPlanRecord.action == action)
         if run_id is not None:
             query = query.where(RecommendationPlanRecord.run_id == run_id)
-        fetch_limit = max(limit * 4, limit) if setup_family else limit
-        rows = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc()).limit(fetch_limit)).all()
-        plans = [self._to_model(row) for row in rows]
-        if setup_family:
-            normalized_setup_family = setup_family.strip().lower()
-            plans = [
-                plan
-                for plan in plans
-                if str(plan.signal_breakdown.get("setup_family") or "").strip().lower() == normalized_setup_family
+        if plan_id is not None:
+            query = query.where(RecommendationPlanRecord.id == plan_id)
+        if computed_after is not None:
+            query = query.where(RecommendationPlanRecord.computed_at >= computed_after)
+        if computed_before is not None:
+            query = query.where(RecommendationPlanRecord.computed_at <= computed_before)
+        return query
+
+    def _record_setup_family(self, record: RecommendationPlanRecord) -> str:
+        signal_breakdown = self._load(record.signal_breakdown_json, {})
+        if not isinstance(signal_breakdown, dict):
+            return ""
+        return str(signal_breakdown.get("setup_family") or "").strip().lower()
+
+    def count_plans(
+        self,
+        ticker: str | None = None,
+        action: str | None = None,
+        run_id: int | None = None,
+        setup_family: str | None = None,
+        plan_id: int | None = None,
+        resolved: str | None = None,
+        outcome: str | None = None,
+        computed_after: datetime | None = None,
+        computed_before: datetime | None = None,
+    ) -> int:
+        query = self._base_plan_query(ticker=ticker, action=action, run_id=run_id, plan_id=plan_id, computed_after=computed_after, computed_before=computed_before)
+        if setup_family or resolved or outcome:
+            rows = self.session.scalars(query).all()
+            outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
+            normalized_setup_family = setup_family.strip().lower() if setup_family else None
+            normalized_resolved = (resolved or "").strip().lower() or None
+            normalized_outcome = (outcome or "").strip().lower() or None
+            return sum(
+                1
+                for row in rows
+                if self._matches_filters(
+                    row,
+                    outcome_map=outcome_map,
+                    setup_family=normalized_setup_family,
+                    resolved=normalized_resolved,
+                    outcome=normalized_outcome,
+                )
+            )
+        count_query = select(func.count()).select_from(query.subquery())
+        return int(self.session.scalar(count_query) or 0)
+
+    def list_plans(
+        self,
+        ticker: str | None = None,
+        action: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        run_id: int | None = None,
+        setup_family: str | None = None,
+        plan_id: int | None = None,
+        resolved: str | None = None,
+        outcome: str | None = None,
+        computed_after: datetime | None = None,
+        computed_before: datetime | None = None,
+    ) -> list[RecommendationPlan]:
+        normalized_limit = max(1, limit)
+        normalized_offset = max(0, offset)
+        query = self._base_plan_query(ticker=ticker, action=action, run_id=run_id, plan_id=plan_id, computed_after=computed_after, computed_before=computed_before)
+        normalized_setup_family = setup_family.strip().lower() if setup_family else None
+        normalized_resolved = (resolved or "").strip().lower() or None
+        normalized_outcome = (outcome or "").strip().lower() or None
+        if normalized_setup_family or normalized_resolved or normalized_outcome:
+            rows = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc())).all()
+            outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
+            filtered_rows = [
+                row
+                for row in rows
+                if self._matches_filters(
+                    row,
+                    outcome_map=outcome_map,
+                    setup_family=normalized_setup_family,
+                    resolved=normalized_resolved,
+                    outcome=normalized_outcome,
+                )
             ]
-        plans = plans[:limit]
-        outcome_map = self.outcomes.get_outcomes_by_plan_ids([plan.id for plan in plans if plan.id is not None])
+            rows = filtered_rows[normalized_offset : normalized_offset + normalized_limit]
+            plans = [self._to_model(row) for row in rows]
+        else:
+            rows = self.session.scalars(
+                query.order_by(RecommendationPlanRecord.computed_at.desc()).offset(normalized_offset).limit(normalized_limit)
+            ).all()
+            plans = [self._to_model(row) for row in rows]
+            outcome_map = self.outcomes.get_outcomes_by_plan_ids([plan.id for plan in plans if plan.id is not None])
         for plan in plans:
             if plan.id is not None:
                 plan.latest_outcome = outcome_map.get(plan.id)
         return plans
+
+    def _matches_filters(
+        self,
+        record: RecommendationPlanRecord,
+        *,
+        outcome_map: dict[int, object],
+        setup_family: str | None,
+        resolved: str | None,
+        outcome: str | None,
+    ) -> bool:
+        if setup_family and self._record_setup_family(record) != setup_family:
+            return False
+        latest_outcome = outcome_map.get(record.id or 0)
+        if resolved:
+            is_resolved = bool(latest_outcome is not None and getattr(latest_outcome, "status", None) == "resolved")
+            if resolved == "resolved" and not is_resolved:
+                return False
+            if resolved == "unresolved" and is_resolved:
+                return False
+        if outcome and (latest_outcome is None or str(getattr(latest_outcome, "outcome", "") or "").strip().lower() != outcome):
+            return False
+        return True
 
     @staticmethod
     def _json_default(value: Any) -> Any:
@@ -126,6 +226,86 @@ class RecommendationPlanRepository:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
+
+    def summarize_stats(
+        self,
+        *,
+        ticker: str | None = None,
+        action: str | None = None,
+        run_id: int | None = None,
+        setup_family: str | None = None,
+        plan_id: int | None = None,
+        resolved: str | None = None,
+        outcome: str | None = None,
+        computed_after: datetime | None = None,
+        computed_before: datetime | None = None,
+        window: str = "all",
+    ) -> RecommendationPlanStats:
+        normalized_window = (window or "all").strip().lower() or "all"
+        window_start = self._window_start(normalized_window)
+        effective_after = computed_after if computed_after is not None else window_start
+        window_label = "custom" if computed_after is not None or computed_before is not None else normalized_window
+        rows = self.session.scalars(
+            self._base_plan_query(
+                ticker=ticker,
+                action=action,
+                run_id=run_id,
+                plan_id=plan_id,
+                computed_after=effective_after,
+                computed_before=computed_before,
+            ).order_by(RecommendationPlanRecord.computed_at.desc())
+        ).all()
+        outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
+        normalized_setup_family = setup_family.strip().lower() if setup_family else None
+        normalized_resolved = (resolved or "").strip().lower() or None
+        normalized_outcome = (outcome or "").strip().lower() or None
+        filtered_rows = [
+            row
+            for row in rows
+            if self._matches_filters(
+                row,
+                outcome_map=outcome_map,
+                setup_family=normalized_setup_family,
+                resolved=normalized_resolved,
+                outcome=normalized_outcome,
+            )
+        ]
+        filtered_outcomes = [outcome_map.get(row.id or 0) for row in filtered_rows]
+        open_plans = sum(1 for item in filtered_outcomes if item is None or getattr(item, "status", None) != "resolved")
+        expired_plans = sum(1 for item in filtered_outcomes if getattr(item, "outcome", None) == "expired")
+        wins = sum(1 for item in filtered_outcomes if getattr(item, "outcome", None) == "win")
+        losses = sum(1 for item in filtered_outcomes if getattr(item, "outcome", None) == "loss")
+        no_action = sum(1 for item in filtered_outcomes if getattr(item, "outcome", None) == "no_action")
+        watchlist = sum(1 for item in filtered_outcomes if getattr(item, "outcome", None) == "watchlist")
+        scored_outcomes = wins + losses
+        return RecommendationPlanStats(
+            total_plans=len(filtered_rows),
+            open_plans=open_plans,
+            expired_plans=expired_plans,
+            scored_outcomes=scored_outcomes,
+            win_rate_percent=round((wins / scored_outcomes) * 100.0, 1) if scored_outcomes > 0 else None,
+            window=window_label,
+            resolved_outcomes=scored_outcomes,
+            open_outcomes=open_plans,
+            expired_outcomes=expired_plans,
+            win_outcomes=wins,
+            loss_outcomes=losses,
+            no_action_outcomes=no_action,
+            watchlist_outcomes=watchlist,
+        )
+
+    @staticmethod
+    def _window_start(window: str | None) -> datetime | None:
+        normalized = (window or "all").strip().lower()
+        if normalized == "day":
+            return datetime.now(timezone.utc) - timedelta(days=1)
+        if normalized == "week":
+            return datetime.now(timezone.utc) - timedelta(days=7)
+        if normalized == "month":
+            return datetime.now(timezone.utc) - timedelta(days=30)
+        if normalized == "year":
+            return datetime.now(timezone.utc) - timedelta(days=365)
+        return None
 
     def _to_model(self, record: RecommendationPlanRecord) -> RecommendationPlan:
         try:

@@ -3,26 +3,23 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import AppSetting, ProviderCredential
+from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.services.optimizations import WeightOptimizationError, WeightOptimizationService
 
 router = APIRouter(prefix="/settings", tags=["settings"])
-
-
-def create_optimization_service(session: Session, repository: SettingsRepository) -> WeightOptimizationService:
-    return WeightOptimizationService(
-        session=session,
-        minimum_resolved_trades=repository.get_optimization_minimum_resolved_trades(),
-    )
-
 
 @router.get("")
 async def list_settings(session: Session = Depends(get_db_session)) -> dict[str, object]:
     repository = SettingsRepository(session)
+    signal_gating_tuning = repository.get_signal_gating_tuning_config()
     return {
         "settings": repository.list_settings(),
         "providers": repository.list_provider_credentials(),
-        "optimization": create_optimization_service(session, repository).describe_state(),
+        "signal_gating_tuning": signal_gating_tuning,
+        "plan_generation_tuning": {
+            "settings": repository.get_plan_generation_tuning_settings(),
+            "active_config": repository.get_plan_generation_active_config(PlanGenerationTuningRepository(session)),
+        },
     }
 
 
@@ -127,43 +124,66 @@ async def set_social_settings(
     return {"settings": repository.get_social_settings()}
 
 
-@router.post("/optimization")
-async def set_optimization_settings(
-    minimum_resolved_trades: str = Form(...),
-    session: Session = Depends(get_db_session),
+def _set_signal_gating_tuning_settings(
+    repository: SettingsRepository,
+    *,
+    threshold_offset: str = "0",
+    confidence_adjustment: str = "0",
+    near_miss_gap_cutoff: str = "0",
+    shortlist_aggressiveness: str = "0",
+    degraded_penalty: str = "0",
 ) -> dict[str, object]:
-    normalized = minimum_resolved_trades.strip()
     try:
-        parsed = int(normalized)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="minimum_resolved_trades must be an integer") from exc
-    if parsed < 1:
-        raise HTTPException(status_code=400, detail="minimum_resolved_trades must be at least 1")
-    repository = SettingsRepository(session)
-    repository.set_setting("optimization_minimum_resolved_trades", str(parsed))
-    return {"optimization": create_optimization_service(session, repository).describe_state()}
-
-
-@router.post("/optimization/rollback")
-async def rollback_optimization_weights(
-    backup_path: str = Form(default=""),
-    session: Session = Depends(get_db_session),
-) -> dict[str, object]:
-    repository = SettingsRepository(session)
-    service = create_optimization_service(session, repository)
-    try:
-        normalized_backup_path = backup_path.strip()
-        rollback = (
-            service.restore_backup(normalized_backup_path)
-            if normalized_backup_path
-            else service.rollback_latest_backup()
+        config = repository.set_signal_gating_tuning_config(
+            threshold_offset=float(threshold_offset.strip() or 0),
+            confidence_adjustment=float(confidence_adjustment.strip() or 0),
+            near_miss_gap_cutoff=float(near_miss_gap_cutoff.strip() or 0),
+            shortlist_aggressiveness=float(shortlist_aggressiveness.strip() or 0),
+            degraded_penalty=float(degraded_penalty.strip() or 0),
         )
-    except WeightOptimizationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {
-        "rollback": rollback,
-        "optimization": service.describe_state(),
-    }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid signal gating tuning settings: {exc}") from exc
+    return {"signal_gating_tuning": config}
+
+
+@router.post("/signal-gating-tuning")
+async def set_signal_gating_tuning_settings(
+    threshold_offset: str = Form(default="0"),
+    confidence_adjustment: str = Form(default="0"),
+    near_miss_gap_cutoff: str = Form(default="0"),
+    shortlist_aggressiveness: str = Form(default="0"),
+    degraded_penalty: str = Form(default="0"),
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    return _set_signal_gating_tuning_settings(
+        SettingsRepository(session),
+        threshold_offset=threshold_offset,
+        confidence_adjustment=confidence_adjustment,
+        near_miss_gap_cutoff=near_miss_gap_cutoff,
+        shortlist_aggressiveness=shortlist_aggressiveness,
+        degraded_penalty=degraded_penalty,
+    )
+
+
+@router.post("/plan-generation-tuning")
+async def set_plan_generation_tuning_settings(
+    auto_enabled: str = Form(default="false"),
+    auto_promote_enabled: str = Form(default="false"),
+    min_actionable_resolved: str = Form(default="20"),
+    min_validation_resolved: str = Form(default="8"),
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    repository = SettingsRepository(session)
+    try:
+        config = repository.set_plan_generation_tuning_settings(
+            auto_enabled=(auto_enabled.strip().lower() in {"1", "true", "yes", "on"}),
+            auto_promote_enabled=(auto_promote_enabled.strip().lower() in {"1", "true", "yes", "on"}),
+            min_actionable_resolved=int(min_actionable_resolved.strip() or 20),
+            min_validation_resolved=int(min_validation_resolved.strip() or 8),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid plan generation tuning settings: {exc}") from exc
+    return {"plan_generation_tuning": config}
 
 
 @router.post("/providers")

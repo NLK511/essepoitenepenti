@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
+import { ContextEventSummary, ContextScoreSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import type { IndustryContextSnapshot, MacroContextSnapshot } from "../types";
 import { extractDisplayLabels, formatDate } from "../utils";
 
@@ -48,6 +49,20 @@ function stringList(value: unknown): string[] {
 
 function eventLabel(value: unknown): string {
   return typeof value === "string" && value.trim() ? value : "—";
+}
+
+function eventTone(value: unknown): "ok" | "warning" | "danger" | "neutral" {
+  const normalized = eventLabel(value).toLowerCase();
+  if (normalized === "easing" || normalized === "stabilizing" || normalized === "relief" || normalized === "growth_supportive") {
+    return "ok";
+  }
+  if (normalized === "escalating" || normalized === "fear" || normalized === "inflationary") {
+    return "danger";
+  }
+  if (normalized === "mixed" || normalized === "unknown") {
+    return "warning";
+  }
+  return "neutral";
 }
 
 function contextEventTitle(row: Record<string, unknown>, index: number, fallbackPrefix: string): string {
@@ -176,7 +191,7 @@ export function ContextSnapshotDetailPage() {
       <PageHeader
         kicker="Context detail"
         title={title}
-        subtitle="Inspect the stored context summary, summary provenance, top events, lifecycle, source mix, and warnings behind a macro or industry context object."
+        subtitle="Read the stored summary first, then open advanced diagnostics only if you need lower-level event or source detail."
         actions={
           <>
             <Link to="/context" className="button-secondary">Back to context review</Link>
@@ -203,19 +218,18 @@ export function ContextSnapshotDetailPage() {
           ) : null}
 
           <Card>
-            <div className="cluster">
+            <ContextScoreSummary
+              confidence={snapshot.confidence_percent}
+              saliency={snapshot.saliency_score}
+              coverage={isIndustrySnapshot(snapshot) ? snapshot.active_drivers.length : snapshot.active_themes.length}
+              freshness={formatDate(snapshot.computed_at)}
+              tone={contextTone(snapshot)}
+            />
+            <div className="cluster top-gap-small">
               <Badge tone="info">{scope}</Badge>
               <Badge tone={contextTone(snapshot)}>{snapshot.status}</Badge>
               <Badge>#{snapshot.id}</Badge>
               {isIndustrySnapshot(snapshot) ? <Badge>{snapshot.industry_label || snapshot.industry_key}</Badge> : null}
-            </div>
-            <div className="summary-grid top-gap-small">
-              <div className="summary-item"><span className="summary-label">Computed</span><span className="summary-value">{formatDate(snapshot.computed_at)}</span></div>
-              <div className="summary-item"><span className="summary-label">Saliency</span><span className="summary-value">{snapshot.saliency_score.toFixed(2)}</span></div>
-              <div className="summary-item"><span className="summary-label">Confidence</span><span className="summary-value">{snapshot.confidence_percent.toFixed(1)}%</span></div>
-              <div className="summary-item"><span className="summary-label">Run</span><span className="summary-value">{snapshot.run_id ?? "—"}</span></div>
-              <div className="summary-item"><span className="summary-label">Job</span><span className="summary-value">{snapshot.job_id ?? "—"}</span></div>
-              {isIndustrySnapshot(snapshot) ? <div className="summary-item"><span className="summary-label">Direction</span><span className="summary-value">{snapshot.direction}</span></div> : null}
             </div>
             {snapshot.summary_text ? (
               <div className="summary-text-block top-gap-small">
@@ -227,23 +241,18 @@ export function ContextSnapshotDetailPage() {
           <section className="card-grid">
             <Card>
               <SectionTitle kicker="Summary provenance" title="How the summary was generated" />
-              <div className="summary-grid">
-                <div className="summary-item"><span className="summary-label">Method</span><span className="summary-value">{summaryMethod}</span></div>
-                <div className="summary-item"><span className="summary-label">Backend</span><span className="summary-value">{summaryBackend}</span></div>
-                <div className="summary-item"><span className="summary-label">Model</span><span className="summary-value">{summaryModel}</span></div>
-                <div className="summary-item"><span className="summary-label">Duration</span><span className="summary-value">{summaryDuration !== null ? `${summaryDuration.toFixed(2)}s` : "—"}</span></div>
-              </div>
-              {summaryError ? <div className="helper-text top-gap-small">Fallback reason: {summaryError}</div> : null}
-              <pre className="markdown-code-block top-gap-small">{JSON.stringify(snapshot.metadata?.context_summary_metadata ?? {}, null, 2)}</pre>
+              <ProvenanceStrip method={summaryMethod} backend={summaryBackend} model={summaryModel} error={summaryError} />
+              <div className="helper-text top-gap-small">Duration {summaryDuration !== null ? `${summaryDuration.toFixed(2)}s` : "—"}</div>
+              <details className="top-gap-small">
+                <summary className="helper-text">Show summary metadata</summary>
+                <pre className="markdown-code-block top-gap-small">{JSON.stringify(snapshot.metadata?.context_summary_metadata ?? {}, null, 2)}</pre>
+              </details>
             </Card>
             <Card>
               <SectionTitle kicker="Lifecycle" title="Event lifecycle and contradiction state" />
               {lifecycle ? (
                 <div className="summary-grid">
-                  <div className="summary-item"><span className="summary-label">New</span><span className="summary-value">{String(lifecycle.new_event_count ?? 0)}</span></div>
-                  <div className="summary-item"><span className="summary-label">Escalating</span><span className="summary-value">{String(lifecycle.escalating_event_count ?? 0)}</span></div>
-                  <div className="summary-item"><span className="summary-label">Persistent</span><span className="summary-value">{String(lifecycle.persistent_event_count ?? 0)}</span></div>
-                  <div className="summary-item"><span className="summary-label">Fading</span><span className="summary-value">{String(lifecycle.fading_event_count ?? 0)}</span></div>
+                  <div className="summary-item"><span className="summary-label">Lifecycle counts</span><span className="summary-value">{String(lifecycle.new_event_count ?? 0)} / {String(lifecycle.escalating_event_count ?? 0)} / {String(lifecycle.persistent_event_count ?? 0)} / {String(lifecycle.fading_event_count ?? 0)}</span></div>
                   <div className="summary-item"><span className="summary-label">Contradictions</span><span className="summary-value">{String(lifecycle.contradiction_count ?? 0)}</span></div>
                 </div>
               ) : <EmptyState message="No lifecycle summary stored on this snapshot." />}
@@ -274,21 +283,39 @@ export function ContextSnapshotDetailPage() {
                   const eventTitle = contextEventTitle(row, index, isIndustrySnapshot(snapshot) ? "Industry driver" : "Macro event");
                   const eventKeyLabel = eventLabel(row.key);
                   const eventLabelText = eventLabel(row.label);
+                  const eventValue = eventLabelText !== "—" && eventLabelText !== eventTitle
+                    ? `${eventLabelText}${eventKeyLabel !== "—" ? ` · ${eventKeyLabel}` : ""}`
+                    : eventTitle;
                   return (
                     <li key={`${index}-${eventKeyLabel}`} className="list-item">
-                      <div className="top-gap-small"><strong>{eventTitle}</strong></div>
-                      {eventLabelText !== "—" && eventLabelText !== eventTitle ? <div className="helper-text">Label: {eventLabelText}</div> : null}
-                      {eventKeyLabel !== "—" && eventKeyLabel !== eventTitle && eventKeyLabel !== eventLabelText ? <div className="helper-text">Key: {eventKeyLabel}</div> : null}
-                      <div className="cluster top-gap-small">
-                        <Badge>{eventLabel(row.label)}</Badge>
-                        <Badge>{persistenceLabel}</Badge>
-                        <Badge>{sourcePriorityLabel}</Badge>
-                        <Badge>{windowLabel}</Badge>
-                        <Badge>{recencyLabel}</Badge>
-                        {typeof row.saliency_weight === "number" ? <Badge>saliency {row.saliency_weight}</Badge> : null}
+                      <ContextEventSummary
+                        label={eventTitle}
+                        value={eventValue}
+                        details={[
+                          { label: "Persistence", value: persistenceLabel },
+                          { label: "Transition", value: eventLabel(row.state_transition) },
+                          { label: "Catalyst", value: eventLabel(row.catalyst_type) },
+                          { label: "Interpretation", value: eventLabel(row.market_interpretation) },
+                          { label: "Actor", value: eventLabel(row.trigger_actor) },
+                          { label: "Actor role", value: eventLabel(row.trigger_actor_role) },
+                          { label: "Actor source", value: eventLabel(row.trigger_source_type) },
+                          { label: "Source", value: sourcePriorityLabel },
+                          { label: "Window", value: windowLabel },
+                          { label: "Recency", value: recencyLabel },
+                          ...(typeof row.saliency_weight === "number" ? [{ label: "Saliency", value: String(row.saliency_weight) }] : []),
+                        ]}
+                        channels={channels}
+                      />
+                      <div className="cluster top-gap-small context-event-badges">
+                        <Badge tone={eventTone(row.state_transition)}>state {eventLabel(row.state_transition)}</Badge>
+                        <Badge tone={eventTone(row.market_interpretation)}>read {eventLabel(row.market_interpretation)}</Badge>
+                        <Badge tone="neutral">catalyst {eventLabel(row.catalyst_type)}</Badge>
+                        {eventLabel(row.trigger_actor) !== "—" ? <Badge tone="neutral">actor {eventLabel(row.trigger_actor)}</Badge> : null}
                       </div>
-                      {channels.length > 0 ? <div className="helper-text top-gap-small">Channels: {channels.join(", ")}</div> : null}
                       {contradictionReasons.length > 0 ? <div className="helper-text top-gap-small">Contradiction reasons: {contradictionReasons.join(", ")}</div> : null}
+                      {typeof row.state_change_reason === "string" && row.state_change_reason.trim() ? (
+                        <div className="helper-text top-gap-small">Why now: {row.state_change_reason}</div>
+                      ) : null}
                       {Array.isArray(row.evidence_samples) && row.evidence_samples.length > 0 ? (
                         <div className="helper-text top-gap-small">Evidence: {row.evidence_samples.slice(0, 3).join(" | ")}</div>
                       ) : null}
@@ -306,11 +333,11 @@ export function ContextSnapshotDetailPage() {
                 <ul className="list-reset">
                   {triagedEvidence.map((item, index) => (
                     <li key={`${index}-${eventLabel(item.title)}`} className="list-item">
-                      <div className="cluster">
-                        <Badge>{eventLabel(item.source_priority)}</Badge>
-                        <span>{eventLabel(item.publisher)}</span>
-                      </div>
-                      <div className="top-gap-small"><strong>{eventLabel(item.title)}</strong></div>
+                      <ContextEventSummary
+                        label={eventLabel(item.title)}
+                        value={eventLabel(item.publisher)}
+                        details={[{ label: "Source priority", value: eventLabel(item.source_priority) }]}
+                      />
                       {typeof item.summary === "string" && item.summary.trim() ? <div className="helper-text top-gap-small">{item.summary}</div> : null}
                     </li>
                   ))}
@@ -321,11 +348,7 @@ export function ContextSnapshotDetailPage() {
               <SectionTitle kicker="Warnings" title="Warnings and missing inputs" />
               {snapshot.warnings.length === 0 && snapshot.missing_inputs.length === 0 ? <EmptyState message="No warnings or missing inputs recorded." /> : (
                 <>
-                  {snapshot.warnings.length > 0 ? (
-                    <ul className="list-reset">
-                      {snapshot.warnings.map((warning) => <li key={warning} className="list-item compact-item">{warning}</li>)}
-                    </ul>
-                  ) : null}
+                  <WarningSummary warnings={snapshot.warnings} />
                   {snapshot.missing_inputs.length > 0 ? <div className="helper-text top-gap-small">Missing inputs: {snapshot.missing_inputs.join(", ")}</div> : null}
                 </>
               )}
@@ -347,7 +370,7 @@ export function ContextSnapshotDetailPage() {
             </Card>
             {isIndustrySnapshot(snapshot) ? (
               <Card>
-                <SectionTitle kicker="Ontology" title="Stored industry ontology context" />
+                <SectionTitle kicker="Advanced detail" title="Stored industry ontology context" />
                 <div className="summary-grid">
                   <div className="summary-item"><span className="summary-label">Sector</span><span className="summary-value">{eventLabel(sectorDefinition?.label ?? ontologyProfile?.sector)}</span></div>
                   <div className="summary-item"><span className="summary-label">Peer industries</span><span className="summary-value">{stringList(ontologyProfile?.peer_industries).join(", ") || "—"}</span></div>
@@ -368,15 +391,21 @@ export function ContextSnapshotDetailPage() {
               </Card>
             ) : (
               <Card>
-                <SectionTitle kicker="Diagnostics" title="Stored JSON detail" />
-                <pre className="markdown-code-block">{JSON.stringify({ source_breakdown: snapshot.source_breakdown, metadata: snapshot.metadata }, null, 2)}</pre>
+                <SectionTitle kicker="Advanced detail" title="Stored JSON detail" />
+                <details>
+                  <summary className="helper-text">Show raw JSON</summary>
+                  <pre className="markdown-code-block top-gap-small">{JSON.stringify({ source_breakdown: snapshot.source_breakdown, metadata: snapshot.metadata }, null, 2)}</pre>
+                </details>
               </Card>
             )}
           </section>
           {isIndustrySnapshot(snapshot) ? (
             <Card>
-              <SectionTitle kicker="Diagnostics" title="Stored JSON detail" />
-              <pre className="markdown-code-block">{JSON.stringify({ source_breakdown: snapshot.source_breakdown, metadata: snapshot.metadata }, null, 2)}</pre>
+              <SectionTitle kicker="Advanced detail" title="Stored JSON detail" />
+              <details>
+                <summary className="helper-text">Show raw JSON</summary>
+                <pre className="markdown-code-block top-gap-small">{JSON.stringify({ source_breakdown: snapshot.source_breakdown, metadata: snapshot.metadata }, null, 2)}</pre>
+              </details>
             </Card>
           ) : null}
         </div>
