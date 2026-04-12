@@ -707,6 +707,10 @@ class RecommendationPlanEvaluationService:
                 return self._finalize_outcome(plan, daily_outcome, as_of=as_of), "daily"
             if intraday_data is not None and not intraday_data.empty:
                 intraday_outcome = self._evaluate_plan(plan, intraday_data, intended_action=intended_action, run_id=run_id, as_of=as_of, intraday_only=True)
+                # Preserve daily horizon returns; intraday horizon metrics are skewed by bar frequency.
+                intraday_outcome.horizon_return_1d = daily_outcome.horizon_return_1d
+                intraday_outcome.horizon_return_3d = daily_outcome.horizon_return_3d
+                intraday_outcome.horizon_return_5d = daily_outcome.horizon_return_5d
                 return self._finalize_outcome(plan, intraday_outcome, as_of=as_of), "intraday"
             pending_outcome = self._pending_resolution_outcome(
                 plan,

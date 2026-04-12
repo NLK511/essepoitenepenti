@@ -229,7 +229,10 @@ class RecommendationQualitySummaryService:
             actions.append("Keep evidence concentration conservative until stronger cohorts separate.")
         if not summary.get("walk_forward_promotion_recommended"):
             actions.append("Validate the active tuning profile against walk-forward slices before promotion.")
-        if summary.get("calibration_report") and summary["calibration_report"].get("brier_score") is not None and summary["calibration_report"].get("brier_score") > 0.3:
+        if summary.get("calibration_report") and (
+            (summary["calibration_report"].get("brier_score") is not None and summary["calibration_report"]["brier_score"] > 0.35) or
+            (summary["calibration_report"].get("expected_calibration_error") is not None and summary["calibration_report"]["expected_calibration_error"] > 0.20)
+        ):
             actions.append("Tighten calibration or reduce confidence over-correction in weak slices.")
         if not actions:
             actions.append("Maintain the current settings and watch for drift in family or horizon slices.")

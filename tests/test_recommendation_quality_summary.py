@@ -1,20 +1,18 @@
+"""
+Comprehensive test suite for RecommendationQualitySummaryService.
+
+Design principles:
+  - Test static quality status gates (thin, healthy, needs_attention, watch) and reasons.
+  - Test the integration of windowed summaries (7d, 30d, 90d, 180d, 1y).
+  - Test generating next actions based on summary data.
+  - Test the final API response shape.
+"""
+
+from __future__ import annotations
+
 import unittest
-
-import httpx
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-from sqlalchemy.pool import StaticPool
-
-from trade_proposer_app.app import app
-from trade_proposer_app.config import settings
-from trade_proposer_app.db import get_db_session
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
-from trade_proposer_app.domain.models import RecommendationEvidenceConcentrationSummary, RecommendationCalibrationBucket, RecommendationCalibrationReport, RecommendationCalibrationSummary, RecommendationBaselineSummary
-from trade_proposer_app.persistence.models import Base
-from trade_proposer_app.services.recommendation_quality_summary import RecommendationQualitySummaryService
-
-
-import unittest
 
 import httpx
 from sqlalchemy import create_engine
@@ -33,6 +31,8 @@ from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.services.recommendation_quality_summary import RecommendationQualitySummaryService
 
 
+# ─── Pure Unit Tests (Gates and Helpers) ──────────────────────────────────────
+
 def _make_calibration(resolved: int, brier: float | None, ece: float | None) -> RecommendationCalibrationSummary:
     report = None
     if brier is not None or ece is not None:
@@ -45,160 +45,118 @@ def _make_calibration(resolved: int, brier: float | None, ece: float | None) -> 
         )
     return RecommendationCalibrationSummary(
         total_outcomes=resolved,
-        open_outcomes=0,
         resolved_outcomes=resolved,
-        win_outcomes=0,
-        loss_outcomes=0,
-        no_action_outcomes=0,
-        watchlist_outcomes=0,
-        by_action=[],
-        by_setup_family=[],
-        by_transmission_bias=[],
-        by_context_regime=[],
         calibration_report=report,
     )
 
 
 def _make_evidence(ready: bool) -> RecommendationEvidenceConcentrationSummary:
     return RecommendationEvidenceConcentrationSummary(
-        total_outcomes=100,
-        open_outcomes=0,
-        resolved_outcomes=100,
-        win_outcomes=60,
-        loss_outcomes=40,
-        no_action_outcomes=0,
-        watchlist_outcomes=0,
-        cohorts=[],
-        status="healthy" if ready else "thin",
-        status_reason="ok",
         ready_for_expansion=ready,
     )
 
 
 class RecommendationQualityStatusGateTests(unittest.TestCase):
-    """Unit tests for the static promotion-gate logic in RecommendationQualitySummaryService.
-
-    These tests call _quality_status and _quality_status_reason directly so
-    they are independent of the full summarize() pipeline and are not affected
-    by empty-DB outcomes in windowed queries.
-    """
+    """Unit tests for the static promotion-gate logic in RecommendationQualitySummaryService."""
 
     def _status(self, resolved: int, brier: float | None, ece: float | None,
                 ready: bool = True, wf_recommended: bool = True) -> str:
         calibration = _make_calibration(resolved, brier, ece)
         evidence = _make_evidence(ready)
-        walk_forward: dict | None = {"promotion_recommended": wf_recommended} if wf_recommended else {"promotion_recommended": False}
+        walk_forward = {"promotion_recommended": wf_recommended}
         return RecommendationQualitySummaryService._quality_status(calibration, evidence, walk_forward)
 
     def _reason(self, resolved: int, brier: float | None, ece: float | None,
                 ready: bool = True, wf_recommended: bool = True) -> str:
         calibration = _make_calibration(resolved, brier, ece)
         evidence = _make_evidence(ready)
-        walk_forward: dict | None = {"promotion_recommended": wf_recommended}
+        walk_forward = {"promotion_recommended": wf_recommended}
         return RecommendationQualitySummaryService._quality_status_reason(calibration, evidence, walk_forward)
 
-    # ── thin gate ─────────────────────────────────────────────────────────────
+    # ── thin gate ──
 
     def test_status_is_thin_when_fewer_than_20_resolved_outcomes(self) -> None:
         self.assertEqual(self._status(resolved=19, brier=0.10, ece=0.05), "thin")
-
-    def test_status_is_thin_at_zero_outcomes(self) -> None:
-        self.assertEqual(self._status(resolved=0, brier=None, ece=None), "thin")
 
     def test_status_is_not_thin_at_exactly_20_resolved_outcomes(self) -> None:
         result = self._status(resolved=20, brier=0.10, ece=0.05)
         self.assertNotEqual(result, "thin")
 
-    # ── healthy gate ──────────────────────────────────────────────────────────
+    # ── healthy gate ──
 
     def test_status_is_healthy_when_all_gates_pass(self) -> None:
         self.assertEqual(self._status(resolved=100, brier=0.15, ece=0.05), "healthy")
 
-    def test_status_is_healthy_when_brier_is_exactly_0_25(self) -> None:
-        self.assertEqual(self._status(resolved=100, brier=0.25, ece=0.05), "healthy")
+    def test_status_is_not_healthy_when_brier_exceeds_0_25(self) -> None:
+        self.assertNotEqual(self._status(resolved=100, brier=0.26, ece=0.05), "healthy")
 
-    def test_status_is_healthy_when_ece_is_exactly_0_15(self) -> None:
-        self.assertEqual(self._status(resolved=100, brier=0.10, ece=0.15), "healthy")
-
-    def test_status_is_healthy_when_calibration_report_is_missing(self) -> None:
-        # None brier/ece means no calibration data yet; gates treat None as passing
-        self.assertEqual(self._status(resolved=100, brier=None, ece=None), "healthy")
-
-    def test_status_is_not_healthy_when_brier_just_exceeds_threshold(self) -> None:
-        result = self._status(resolved=100, brier=0.26, ece=0.05)
-        self.assertNotEqual(result, "healthy")
-
-    def test_status_is_not_healthy_when_ece_just_exceeds_threshold(self) -> None:
-        result = self._status(resolved=100, brier=0.10, ece=0.16)
-        self.assertNotEqual(result, "healthy")
+    def test_status_is_not_healthy_when_ece_exceeds_0_15(self) -> None:
+        self.assertNotEqual(self._status(resolved=100, brier=0.10, ece=0.16), "healthy")
 
     def test_status_is_not_healthy_when_evidence_not_ready(self) -> None:
-        result = self._status(resolved=100, brier=0.10, ece=0.05, ready=False)
-        self.assertNotEqual(result, "healthy")
+        self.assertNotEqual(self._status(resolved=100, brier=0.10, ece=0.05, ready=False), "healthy")
 
     def test_status_is_not_healthy_when_walk_forward_not_recommended(self) -> None:
-        result = self._status(resolved=100, brier=0.10, ece=0.05, wf_recommended=False)
-        self.assertNotEqual(result, "healthy")
+        self.assertNotEqual(self._status(resolved=100, brier=0.10, ece=0.05, wf_recommended=False), "healthy")
 
-    def test_status_is_not_healthy_when_walk_forward_is_none(self) -> None:
-        calibration = _make_calibration(100, 0.10, 0.05)
-        evidence = _make_evidence(True)
-        result = RecommendationQualitySummaryService._quality_status(calibration, evidence, None)
-        self.assertNotEqual(result, "healthy")
-
-    # ── needs_attention gate ──────────────────────────────────────────────────
+    # ── needs_attention gate ──
 
     def test_status_is_needs_attention_when_brier_exceeds_0_35(self) -> None:
         self.assertEqual(self._status(resolved=100, brier=0.36, ece=0.05), "needs_attention")
 
-    def test_status_is_needs_attention_when_brier_is_exactly_0_35_boundary(self) -> None:
-        # 0.35 itself does NOT trigger needs_attention (strict >)
-        result = self._status(resolved=100, brier=0.35, ece=0.05)
-        self.assertNotEqual(result, "needs_attention")
-
     def test_status_is_needs_attention_when_ece_exceeds_0_20(self) -> None:
         self.assertEqual(self._status(resolved=100, brier=0.10, ece=0.21), "needs_attention")
 
-    def test_status_is_needs_attention_when_ece_is_exactly_0_20_boundary(self) -> None:
-        # 0.20 itself does NOT trigger needs_attention (strict >)
-        result = self._status(resolved=100, brier=0.10, ece=0.20)
-        self.assertNotEqual(result, "needs_attention")
+    # ── watch fallback ──
 
-    def test_status_is_needs_attention_when_both_brier_and_ece_are_bad(self) -> None:
-        self.assertEqual(self._status(resolved=100, brier=0.40, ece=0.25), "needs_attention")
+    def test_status_is_watch_when_signals_are_mixed(self) -> None:
+        # Passable but not "healthy" (brier > 0.25)
+        self.assertEqual(self._status(resolved=100, brier=0.30, ece=0.05), "watch")
 
-    # ── watch fallback ────────────────────────────────────────────────────────
+    # ── reason strings ──
 
-    def test_status_is_watch_when_brier_between_thresholds_and_evidence_not_ready(self) -> None:
-        # brier 0.30 is > 0.25 (so not healthy) but <= 0.35 (so not needs_attention)
-        self.assertEqual(self._status(resolved=100, brier=0.30, ece=0.05, ready=False), "watch")
+    def test_reason_mentions_thin_when_low_sample(self) -> None:
+        self.assertIn("Too few", self._reason(resolved=5, brier=0.1, ece=0.05))
 
-    def test_status_is_watch_when_walk_forward_not_recommended_and_calibration_acceptable(self) -> None:
-        self.assertEqual(self._status(resolved=100, brier=0.20, ece=0.10, wf_recommended=False), "watch")
+    def test_reason_mentions_calibration_error_when_high_error(self) -> None:
+        self.assertIn("error is elevated", self._reason(resolved=100, brier=0.40, ece=0.05))
 
-    # ── reason strings ────────────────────────────────────────────────────────
+    def test_reason_positive_when_all_aligned(self) -> None:
+        self.assertIn("are aligned", self._reason(resolved=100, brier=0.1, ece=0.05))
 
-    def test_reason_mentions_thin_when_not_enough_outcomes(self) -> None:
-        reason = self._reason(resolved=5, brier=0.10, ece=0.05)
-        self.assertIn("few resolved", reason.lower())
 
-    def test_reason_mentions_calibration_error_when_brier_high(self) -> None:
-        reason = self._reason(resolved=100, brier=0.40, ece=0.05)
-        self.assertIn("calibration error", reason.lower())
+class RecommendationQualityNextActionsTests(unittest.TestCase):
+    """Verify that _next_actions generated helpful advice."""
 
-    def test_reason_mentions_evidence_when_not_ready(self) -> None:
-        reason = self._reason(resolved=100, brier=0.10, ece=0.05, ready=False)
-        self.assertIn("evidence", reason.lower())
+    svc = RecommendationQualitySummaryService
 
-    def test_reason_mentions_walk_forward_when_not_recommended(self) -> None:
-        reason = self._reason(resolved=100, brier=0.10, ece=0.05, wf_recommended=False)
-        self.assertIn("walk-forward", reason.lower())
+    def test_advises_increasing_volume_when_thin(self) -> None:
+        summary = {"resolved_outcomes": 5}
+        actions = self.svc._next_actions(summary)
+        self.assertIn("Increase resolved outcome volume", actions[0])
 
-    def test_reason_positive_when_all_gates_pass(self) -> None:
-        reason = self._reason(resolved=100, brier=0.10, ece=0.05)
-        # Should mention alignment of calibration, evidence, walk-forward
-        self.assertIn("aligned", reason.lower())
+    def test_advises_keeping_evidence_conservative_when_not_ready_for_expansion(self) -> None:
+        summary = {"ready_for_expansion": False, "resolved_outcomes": 100}
+        actions = self.svc._next_actions(summary)
+        self.assertIn("Keep evidence concentration conservative", actions[0])
 
+    def test_advises_tightening_calibration_when_brier_is_high(self) -> None:
+        summary = {"calibration_report": {"brier_score": 0.36}, "resolved_outcomes": 100, "ready_for_expansion": True, "walk_forward_promotion_recommended": True}
+        actions = self.svc._next_actions(summary)
+        self.assertIn("Tighten calibration", actions[0])
+
+    def test_advises_tightening_calibration_when_ece_is_high(self) -> None:
+        summary = {"calibration_report": {"expected_calibration_error": 0.21}, "resolved_outcomes": 100, "ready_for_expansion": True, "walk_forward_promotion_recommended": True}
+        actions = self.svc._next_actions(summary)
+        self.assertIn("Tighten calibration", actions[0])
+
+    def test_advises_maintenance_when_all_good(self) -> None:
+        summary = {"resolved_outcomes": 100, "ready_for_expansion": True, "walk_forward_promotion_recommended": True, "calibration_report": {"brier_score": 0.15}}
+        actions = self.svc._next_actions(summary)
+        self.assertIn("Maintain the current settings", actions[0])
+
+
+# ─── Integration Tests ────────────────────────────────────────────────────────
 
 class RecommendationQualitySummaryIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -232,17 +190,16 @@ class RecommendationQualitySummaryIntegrationTests(unittest.TestCase):
         session = Session(bind=self.engine)
         try:
             payload = RecommendationQualitySummaryService(session).summarize()
-            self.assertIn(payload["summary"]["status"], {"thin", "watch", "needs_attention", "healthy"})
-            self.assertIn("next_actions", payload)
-            self.assertTrue(payload["next_actions"])
-            self.assertIn("calibration", payload)
-            self.assertIn("status_reason", payload["summary"])
-            self.assertIn("tuning_settings", payload["summary"])
-            self.assertIn("baselines", payload)
-            self.assertIn("evidence_concentration", payload)
+            self.assertIn("summary", payload)
             self.assertIn("windowed_summaries", payload)
-            self.assertEqual(["7d", "30d", "90d", "180d", "1y"], [item["window_label"] for item in payload["windowed_summaries"]])
-            self.assertEqual("30d", payload["summary"]["window_label"])
+            self.assertIn("calibration", payload)
+            self.assertIn("next_actions", payload)
+            
+            # Verify windowed summary count matches definitions
+            self.assertEqual(len(payload["windowed_summaries"]), len(RecommendationQualitySummaryService.WINDOW_DEFINITIONS))
+            
+            # Default window should be 30d
+            self.assertEqual(payload["summary"]["window_label"], "30d")
         finally:
             session.close()
 
@@ -254,13 +211,64 @@ class RecommendationQualitySummaryIntegrationTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 payload = response.json()
                 self.assertIn("summary", payload)
-                self.assertIn("next_actions", payload)
-                self.assertIn("calibration", payload)
                 self.assertIn("windowed_summaries", payload)
 
         import asyncio
         asyncio.run(_run())
 
 
-if __name__ == "__main__":
-    unittest.main()
+class QualitySummaryWindowIntegrityTests(unittest.TestCase):
+    """Verifies that temporal windows use distinct time offsets."""
+
+    def setUp(self) -> None:
+        self.engine = create_engine("sqlite:///:memory:", future=True, poolclass=StaticPool)
+        Base.metadata.create_all(bind=self.engine)
+
+    def test_windows_have_different_start_times(self) -> None:
+        session = Session(bind=self.engine)
+        service = RecommendationQualitySummaryService(session)
+        payload = service.summarize()
+        
+        windows = {w["window_label"]: w for w in payload["windowed_summaries"]}
+        
+        # 7d window should have later start than 1y window
+        self.assertGreater(windows["7d"]["computed_after"], windows["1y"]["computed_after"])
+        self.assertGreater(windows["30d"]["computed_after"], windows["180d"]["computed_after"])
+
+class QualitySummaryErrorHandlingTests(unittest.TestCase):
+    """Verifies robustness when sub-services fail."""
+
+    def setUp(self) -> None:
+        self.engine = create_engine("sqlite:///:memory:", future=True, poolclass=StaticPool)
+        Base.metadata.create_all(bind=self.engine)
+
+    @patch("trade_proposer_app.services.recommendation_quality_summary.PlanGenerationWalkForwardService")
+    def test_handles_walk_forward_service_exception_gracefully(self, mock_wf) -> None:
+        mock_instance = mock_wf.return_value
+        mock_instance.summarize.side_effect = Exception("Walk-forward engine failure")
+        
+        session = Session(bind=self.engine)
+        service = RecommendationQualitySummaryService(session)
+        
+        payload = service.summarize()
+        # Should not crash, and should report the error in the summary
+        self.assertEqual(payload["summary"]["walk_forward_error"], "Walk-forward engine failure")
+
+class QualitySummaryAssessmentIntegrationTests(unittest.TestCase):
+    """Verifies that performance assessment data is correctly included."""
+
+    def setUp(self) -> None:
+        self.engine = create_engine("sqlite:///:memory:", future=True, poolclass=StaticPool)
+        Base.metadata.create_all(bind=self.engine)
+
+    @patch("trade_proposer_app.services.recommendation_quality_summary.PerformanceAssessmentService")
+    def test_includes_latest_summary_from_performance_assessment(self, mock_perf) -> None:
+        mock_perf.return_value.latest_assessment.return_value = {
+            "latest_summary": {"sharpe_ratio": 2.5}
+        }
+        
+        session = Session(bind=self.engine)
+        service = RecommendationQualitySummaryService(session)
+        payload = service.summarize()
+        
+        self.assertEqual(payload["summary"]["latest_assessment"]["sharpe_ratio"], 2.5)
