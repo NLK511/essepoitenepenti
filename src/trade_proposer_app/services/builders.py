@@ -69,11 +69,12 @@ def create_watchlist_orchestration_service(
     except (TypeError, ValueError):
         confidence_threshold = 60.0
 
+    from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
     return WatchlistOrchestrationService(
         context_snapshots=ContextSnapshotRepository(session),
         recommendation_plans=RecommendationPlanRepository(session),
         decision_samples=RecommendationDecisionSampleRepository(session),
-        cheap_scan_service=CheapScanSignalService(),
+        cheap_scan_service=CheapScanSignalService(repository=HistoricalMarketDataRepository(session)),
         deep_analysis_service=create_ticker_deep_analysis_service(session, proposal_service=proposal_service),
         confidence_threshold=confidence_threshold,
         signal_gating_tuning_config=settings_repository.get_signal_gating_tuning_config(),

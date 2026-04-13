@@ -95,13 +95,15 @@ export function DebuggerPage() {
   }
 
   // Extract warnings from run summary if available
-  const activeWarnings = useMemo(() => {
+  const activeWarnings = useMemo<string[]>(() => {
     if (!detail?.run.summary_json) return [];
     try {
-        const summary = JSON.parse(detail.run.summary_json);
-        return Array.isArray(summary.warnings) ? summary.warnings : [];
-    } catch (e) {
-        return [];
+      const summary = JSON.parse(detail.run.summary_json) as { warnings?: unknown };
+      return Array.isArray(summary.warnings)
+        ? summary.warnings.filter((warning): warning is string => typeof warning === "string")
+        : [];
+    } catch {
+      return [];
     }
   }, [detail]);
 

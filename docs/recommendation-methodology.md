@@ -74,9 +74,19 @@ In practical terms:
 ## Data layers used by the methodology
 
 ### Market data
-The app uses `yfinance` for price history and volume.
+The app uses a hybrid market-data strategy that prefers local persistence but falls back to remote providers.
 
-The same price-data path is used for both generation and later evaluation.
+**Preferred Source: Local Database**
+The system first attempts to fetch bars from the `historical_market_bars` table. 
+- **Timeframe Resolution:** It prefers `1m` bars and automatically resamples them to produce Daily OHLCV bars.
+- **Fallback Timeframe:** If `1m` bars are missing, it falls back to `1d` bars stored in the database (replay mode only).
+
+**Fallback Source: Yahoo Finance**
+If local data is missing or insufficient (less than 30 days of history), the system pulls data through `yfinance`.
+- **Lazy Hydration:** When a remote fetch occurs, the system automatically persists the retrieved bars back into the local database to accelerate future requests.
+- **Replay Consistency:** Remote downloads support the `as_of` parameter, ensuring that even fallback data remains point-in-time consistent for historical simulations.
+
+The same hybrid price-data path is used for both generation and later evaluation.
 
 ### Shared macro and industry context
 The app stores reusable macro and industry context and links recommendations back to the artifacts they used.

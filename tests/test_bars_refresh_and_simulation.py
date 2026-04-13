@@ -84,25 +84,24 @@ class BarsRefreshAndSimulationTests(unittest.TestCase):
         finally:
             session.close()
 
-    def test_watchlist_orchestration_passes_as_of(self) -> None:
+    def test_watchlist_orchestration_passes_as_of_to_cheap_scan_and_deep_analysis_in_replay_mode(self) -> None:
         mock_cheap_scan = MagicMock()
         mock_deep_analysis = MagicMock()
         mock_context_repo = MagicMock()
         mock_plan_repo = MagicMock()
-        
+
         from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
-        
+
         service = WatchlistOrchestrationService(
             context_snapshots=mock_context_repo,
             recommendation_plans=mock_plan_repo,
             cheap_scan_service=mock_cheap_scan,
             deep_analysis_service=mock_deep_analysis
         )
-        
+
         watchlist = Watchlist(id=1, name="Test", tickers=["AAPL"], default_horizon=StrategyHorizon.ONE_WEEK)
         as_of = datetime.now(timezone.utc)
-        
-        # Real signal object
+
         mock_signal_obj = CheapScanSignal(
             ticker="AAPL",
             horizon=StrategyHorizon.ONE_WEEK,
@@ -116,14 +115,91 @@ class BarsRefreshAndSimulationTests(unittest.TestCase):
             diagnostics={"model": "test-model"}
         )
         mock_cheap_scan.score.return_value = mock_signal_obj
-        
-        # Deep analysis returns None to trigger the simple path
+
         mock_deep_analysis.analyze.return_value = None
-        mock_context_repo.create_ticker_signal_snapshot.return_value = MagicMock(id=1)
-        mock_plan_repo.create_plan.return_value = MagicMock(id=1, action="no_action")
-        
+        mock_context_repo.create_ticker_signal_snapshot.side_effect = lambda signal: signal.model_copy(update={"id": 1})
+        mock_plan_repo.create_plan.side_effect = lambda plan: plan.model_copy(update={"id": 1})
+
         service.execute(watchlist, ["AAPL"], as_of=as_of)
-        
-        mock_cheap_scan.score.assert_called()
-        args, kwargs = mock_cheap_scan.score.call_args
-        self.assertEqual(kwargs["as_of"], as_of)
+
+        mock_cheap_scan.score.assert_called_once()
+        _, cheap_scan_kwargs = mock_cheap_scan.score.call_args
+        self.assertEqual(cheap_scan_kwargs["as_of"], as_of)
+
+        mock_deep_analysis.analyze.assert_called_once()
+        _, deep_analysis_kwargs = mock_deep_analysis.analyze.call_args
+        self.assertEqual(deep_analysis_kwargs["as_of"], as_of)
+        self.assertEqual(deep_analysis_kwargs["horizon"], StrategyHorizon.ONE_WEEK)
+
+    def test_watchlist_orchestration_passes_none_as_of_in_normal_mode(self) -> None:
+        mock_cheap_scan = MagicMock()
+        mock_deep_analysis = MagicMock()
+        mock_context_repo = MagicMock()
+        mock_plan_repo = MagicMock()
+
+        from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
+
+        service = WatchlistOrchestrationService(
+            context_snapshots=mock_context_repo,
+            recommendation_plans=mock_plan_repo,
+            cheap_scan_service=mock_cheap_scan,
+            deep_analysis_service=mock_deep_analysis
+        )
+
+        watchlist = Watchlist(id=1, name="Test", tickers=["AAPL"], default_horizon=StrategyHorizon.ONE_WEEK)
+
+        mock_signal_obj = CheapScanSignal(
+            ticker="AAPL",
+            horizon=StrategyHorizon.ONE_WEEK,
+            directional_bias="long",
+            confidence_percent=80.0,
+            attention_score=70.0,
+            trend_score=80.0,
+            breakout_score=70.0,
+            momentum_score=60.0,
+            directional_score=0.5,
+            diagnostics={"model": "test-model"}
+        )
+        mock_cheap_scan.score.return_value = mock_signal_obj
+
+        mock_deep_analysis.analyze.return_value = None
+        mock_context_repo.create_ticker_signal_snapshot.side_effect = lambda signal: signal.model_copy(update={"id": 1})
+        mock_plan_repo.create_plan.side_effect = lambda plan: plan.model_copy(update={"id": 1})
+
+        service.execute(watchlist, ["AAPL"])
+
+        mock_cheap_scan.score.assert_called_once()
+        _, cheap_scan_kwargs = mock_cheap_scan.score.call_args
+        self.assertIn("as_of", cheap_scan_kwargs)
+        self.assertIsNone(cheap_scan_kwargs["as_of"])
+
+    def test_cheap_scan_signal_service_lazy_hydration(self) -> None:
+        session = create_session()
+        try:
+            repository = HistoricalMarketDataRepository(session)
+            service = CheapScanSignalService(repository=repository)
+            
+            # 1. Setup: No bars in DB for this ticker
+            ticker = "LAZY"
+            as_of = datetime(2026, 4, 1, tzinfo=timezone.utc)
+            
+            # 2. Mock yfinance to return some data
+            mock_df = pd.DataFrame([
+                {"Open": 100.0 + i, "High": 101.0 + i, "Low": 99.0 + i, "Close": 100.5 + i, "Volume": 1000}
+                for i in range(40)
+            ], index=[as_of - timedelta(days=40-i) for i in range(40)])
+            mock_df.index.name = "Date"
+            
+            with patch("yfinance.download", return_value=mock_df):
+                signal = service.score(ticker, StrategyHorizon.ONE_WEEK, as_of=as_of)
+                
+            # 3. Verify: Remote fallback happened and signal was produced
+            self.assertEqual(signal.ticker, ticker)
+            
+            # 4. Verify: Data was persisted to DB
+            stored_bars = repository.list_bars(ticker=ticker, timeframe="1d")
+            self.assertGreaterEqual(len(stored_bars), 40)
+            self.assertEqual(stored_bars[0].source, "yahoo_fallback")
+            
+        finally:
+            session.close()

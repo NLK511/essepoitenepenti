@@ -37,7 +37,7 @@ It is not yet a proven short-horizon prediction engine.
 ### Shared context and ontology
 - Persist macro and industry context snapshots as the canonical shared-context artifacts.
 - Review macro and industry context from the Context pages and detail views.
-- **Realistic Context Reconstruction:** Re-generate high-fidelity historical context snapshots from past news and social data. This allows for accurate point-in-time backtesting and simulation of the bot's behavior during past market events.
+- **Realistic Context Reconstruction:** Re-generate historical context snapshots from past news and social data. For time-windowed company/ticker news requests, the app now prefers Finnhub and rejects undated or future-dated articles so historical simulations do not silently mix in later company news.
 - Store context-event fields such as persistence state, state transition, catalyst type, market interpretation, trigger actor, trigger actor role, trigger source type, and short "why now" summaries.
 - Trace which shared artifacts were used by a run or recommendation plan.
 - Use the taxonomy layer for industry definitions, sector definitions, ticker profiles, and relationship edges.
@@ -49,13 +49,15 @@ It is not yet a proven short-horizon prediction engine.
 ### Watchlists and proposal flow
 - Persist watchlists with metadata such as region, exchange, timezone, default horizon, and shorting policy.
 - Seed the curated default watchlist pack with `scripts/deploy_watchlists.py`; see `default-watchlists.md` for rationale.
-- Reconstruct high-fidelity historical context using `scripts/reconstruct_context.py`.
+- Reconstruct historical context using `scripts/reconstruct_context.py`.
+- Historical ticker/company news requests prefer Finnhub when a time window is supplied; unsafe live-feed fallbacks are skipped instead of leaking future company articles into replay.
 - Run watchlist-backed proposal jobs through a staged flow:
   1. watchlist scan
   2. shortlist selection
   3. deep analysis for shortlisted names only
   4. persistence of signals and plans, including cheap-scan-only `no_action` plans for non-shortlisted names and phantom-trade-eligible rejected plans when deep analysis produced valid trade framing
-- **Point-in-Time Replay Integrity:** Execute proposal jobs for past dates using historical market data and reconstructed trading context, ensuring that the bot only uses information that was available as of the target date.
+- **Hybrid Market Data Fetching:** Prefer local database for market bars (including 1m-to-daily resampling) but automatically fall back to Yahoo Finance when local data is insufficient.
+- **Lazy Hydration:** Automatically persist remote Yahoo bars to the local database during fallback fetches to accelerate future runs.
 - Browse signals and plans outside the run page and filter them by `run_id`.
 - Queue recommendation-plan evaluation runs from the recommendation-plans page.
 
@@ -85,6 +87,7 @@ The main limits are still practical:
 - context extraction is stronger than before at capturing short-horizon state changes, but it is still heuristic rather than a mature event model
 - ticker deep analysis still reuses some older proposal-engine internals
 - context refresh and proposal-time context reuse are now context-native, but the deeper event model is still heuristic rather than fully mature
+- strict historical macro/topic news is still limited on the free-provider stack because Finnhub free access is company-news oriented rather than broad topic search; in those cases the app now prefers missing evidence over unsafe future leakage
 - calibration exists, but evidence remains limited
 
 And one analytical caution still matters:

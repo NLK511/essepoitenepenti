@@ -4,7 +4,7 @@ import json
 import math
 import re
 from collections import OrderedDict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable
 
@@ -512,9 +512,17 @@ class ProposalService:
             raise ProposalExecutionError(f"failed to download historical data: {exc}") from exc
         if history.empty:
             raise ProposalExecutionError(f"could not retrieve historical data for '{ticker}'")
+        
+        # Handle MultiIndex if present (yfinance v0.2.x behavior)
         if isinstance(history.columns, pd.MultiIndex):
-            history = history.copy()
-            history.columns = history.columns.get_level_values(0)
+            if ticker in history.columns.get_level_values(1):
+                history = history.xs(ticker, axis=1, level=1)
+            elif ticker in history.columns.get_level_values(0):
+                history = history.xs(ticker, axis=1, level=0)
+            else:
+                history = history.copy()
+                history.columns = history.columns.get_level_values(0)
+                
         return history
 
     def _enrich_history(self, df: pd.DataFrame) -> pd.DataFrame:

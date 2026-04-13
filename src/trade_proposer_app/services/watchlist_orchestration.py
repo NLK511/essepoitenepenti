@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import logging
 from dataclasses import dataclass
 from typing import Any
 from datetime import datetime, timezone
@@ -17,6 +18,7 @@ from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal, Ch
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
 
+logger = logging.getLogger(__name__)
 
 @dataclass
 class _CheapScanCandidate:
@@ -102,18 +104,32 @@ class WatchlistOrchestrationService:
         if not normalized_tickers:
             raise ValueError("watchlist job has no effective tickers configured")
 
+        logger.info(f"Starting watchlist orchestration for '{watchlist.name}' ({len(normalized_tickers)} tickers)")
+        if as_of:
+            logger.info(f"  Simulation mode active: as_of {as_of.isoformat()}")
+
         calibration_summary = self._load_calibration_summary()
-        candidates = [self._run_cheap_scan(ticker, watchlist.default_horizon, as_of=as_of) for ticker in normalized_tickers]
+        
+        logger.info("  Running cheap scans...")
+        candidates = []
+        for i, ticker in enumerate(normalized_tickers):
+            if (i + 1) % 50 == 0:
+                logger.info(f"    Cheap scan progress: {i+1}/{len(normalized_tickers)}")
+            candidates.append(self._run_cheap_scan(ticker, watchlist.default_horizon, as_of=as_of))
+
+        logger.info("  Evaluating shortlist...")
         shortlist_evaluation = self._evaluate_shortlist(watchlist, candidates)
         shortlist = shortlist_evaluation["shortlist"]
         shortlist_map = {ticker: rank for rank, ticker in enumerate(shortlist, start=1)}
+        logger.info(f"  Shortlist selected: {len(shortlist)} tickers")
 
         stored_signals: list[TickerSignalSnapshot] = []
         stored_plans: list[RecommendationPlan] = []
         ticker_generation: list[dict[str, object]] = []
         warnings_found = False
 
-        for candidate in candidates:
+        logger.info("  Processing candidates...")
+        for i, candidate in enumerate(candidates):
             shortlist_rank = shortlist_map.get(candidate.ticker)
             if shortlist_rank is None:
                 decision = self._shortlist_decision_for_ticker(shortlist_evaluation, candidate.ticker)
@@ -161,6 +177,7 @@ class WatchlistOrchestrationService:
                     warnings_found = True
                 continue
 
+            logger.info(f"    Running deep analysis for {candidate.ticker} (rank {shortlist_rank})...")
             deep_output, deep_error = self._run_deep_analysis(candidate.ticker, watchlist.default_horizon, as_of=as_of)
             decision = self._shortlist_decision_for_ticker(shortlist_evaluation, candidate.ticker)
             signal = self._build_signal_snapshot(
@@ -240,6 +257,7 @@ class WatchlistOrchestrationService:
             "ticker_signal_snapshot_ids": [item.id for item in stored_signals],
             "recommendation_plan_ids": [item.id for item in stored_plans],
         }
+        logger.info(f"Orchestration complete: {len(stored_plans)} plans generated.")
         return {
             "summary": summary,
             "artifact": artifact,

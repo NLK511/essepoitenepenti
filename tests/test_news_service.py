@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from trade_proposer_app.domain.models import NewsArticle, NewsBundle, ProviderCredential
@@ -154,6 +155,91 @@ class NewsIngestionServiceTests(unittest.TestCase):
         self.assertEqual(bundle.ticker, "inflation")
         self.assertEqual(set(bundle.feeds_used), {"GoogleNews"})
         self.assertFalse(any("finnhub" in error.lower() for error in bundle.feed_errors))
+
+    @patch("trade_proposer_app.services.news.yf.Ticker")
+    @patch("trade_proposer_app.services.news.httpx.get")
+    def test_historical_ticker_fetch_prefers_finnhub_and_skips_live_fallbacks(self, mock_get, mock_ticker):
+        finnhub_response = MagicMock()
+        finnhub_response.status_code = 200
+        finnhub_response.json.return_value = [
+            {
+                "headline": "Finnhub historical article",
+                "summary": "Historical company news",
+                "source": "Reuters",
+                "url": "https://example.com/finnhub",
+                "datetime": int(datetime(2026, 3, 26, 12, 0, tzinfo=timezone.utc).timestamp()),
+            }
+        ]
+
+        def side_effect(url, *args, **kwargs):
+            self.assertEqual(url, "https://finnhub.io/api/v1/company-news")
+            self.assertEqual(kwargs["params"]["symbol"], "AAPL")
+            return finnhub_response
+
+        mock_get.side_effect = side_effect
+        mock_ticker.return_value.news = [
+            {
+                "content": {
+                    "title": "Yahoo future article",
+                    "summary": "Should not be used in historical mode",
+                    "pubDate": "2026-03-27T00:00:00Z",
+                }
+            }
+        ]
+
+        service = NewsIngestionService.from_provider_credentials(
+            {"finnhub": ProviderCredential(provider="finnhub", api_key="key", api_secret="")}
+        )
+        bundle = service.fetch(
+            "AAPL",
+            start_at=datetime(2026, 3, 26, 0, 0, tzinfo=timezone.utc),
+            end_at=datetime(2026, 3, 26, 23, 59, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual([article.title for article in bundle.articles], ["Finnhub historical article"])
+        self.assertEqual(bundle.feeds_used, ["Finnhub"])
+        mock_ticker.assert_not_called()
+
+    def test_historical_window_filters_future_and_undated_articles(self) -> None:
+        class StubProvider:
+            name = "Stub"
+            supports_topic = False
+            historical_replay_safe = True
+
+            def fetch(self, ticker, limit, *, start_at=None, end_at=None):
+                return [
+                    NewsArticle(
+                        title="In window",
+                        summary="ok",
+                        publisher="Stub",
+                        link="https://example.com/in-window",
+                        published_at=datetime(2026, 3, 26, 10, 0, tzinfo=timezone.utc),
+                    ),
+                    NewsArticle(
+                        title="Future",
+                        summary="future",
+                        publisher="Stub",
+                        link="https://example.com/future",
+                        published_at=datetime(2026, 3, 27, 10, 0, tzinfo=timezone.utc),
+                    ),
+                    NewsArticle(
+                        title="Undated",
+                        summary="missing timestamp",
+                        publisher="Stub",
+                        link="https://example.com/undated",
+                        published_at=None,
+                    ),
+                ]
+
+        service = NewsIngestionService([StubProvider()], max_articles=10)
+        bundle = service.fetch(
+            "AAPL",
+            start_at=datetime(2026, 3, 26, 0, 0, tzinfo=timezone.utc),
+            end_at=datetime(2026, 3, 26, 23, 59, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual([article.title for article in bundle.articles], ["In window"])
+        self.assertEqual(bundle.feeds_used, ["Stub"])
 
     def test_naive_sentiment_analyzer_scores_positive_headlines(self) -> None:
         analyzer = NaiveSentimentAnalyzer()

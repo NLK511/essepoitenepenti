@@ -22,7 +22,9 @@ class BarsRefreshService:
         stats = {}
         warnings = []
 
-        for ticker in tickers:
+        logger.info(f"Starting bars refresh for {len(tickers)} tickers (lookback {lookback_days} days)")
+
+        for i, ticker in enumerate(tickers):
             try:
                 # Get latest bar time from DB
                 latest_bar_time = self.repository.session.query(func.max(HistoricalMarketBarRecord.bar_time))\
@@ -40,7 +42,10 @@ class BarsRefreshService:
                 # If already up to date, skip
                 if (end_date - start_date).total_seconds() < 600:
                     stats[ticker] = 0
+                    logger.debug(f"[{i+1}/{len(tickers)}] {ticker} is already up to date")
                     continue
+
+                logger.info(f"[{i+1}/{len(tickers)}] Refreshing {ticker} since {start_date.isoformat()}")
 
                 start_str = start_date.strftime("%Y-%m-%d")
                 end_str = (end_date + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -55,7 +60,9 @@ class BarsRefreshService:
                 )
 
                 if df is None or df.empty:
-                    warnings.append(f"{ticker}: No data returned from Yahoo (possible delisting or holiday)")
+                    msg = f"{ticker}: No data returned from Yahoo"
+                    warnings.append(msg)
+                    logger.warning(f"  {msg}")
                     stats[ticker] = 0
                     continue
 
@@ -74,6 +81,7 @@ class BarsRefreshService:
                 
                 df = df[df.index >= start_date]
                 if df.empty:
+                    logger.info(f"  No new bars found for {ticker}")
                     stats[ticker] = 0
                     continue
 
@@ -84,6 +92,7 @@ class BarsRefreshService:
                         bars_to_upsert.append(bar)
 
                 if bars_to_upsert:
+                    logger.info(f"  Ingesting {len(bars_to_upsert)} bars for {ticker}")
                     sub_batch_size = 1000
                     for j in range(0, len(bars_to_upsert), sub_batch_size):
                         self.repository.upsert_bars(bars_to_upsert[j : j + sub_batch_size])
@@ -91,6 +100,7 @@ class BarsRefreshService:
                     total_ingested += len(bars_to_upsert)
                     stats[ticker] = len(bars_to_upsert)
                 else:
+                    logger.info(f"  No valid bars processed for {ticker}")
                     stats[ticker] = 0
                 
                 del df
@@ -102,6 +112,7 @@ class BarsRefreshService:
                 warnings.append(f"{ticker}: Error during refresh: {str(e)}")
                 stats[ticker] = -1
 
+        logger.info(f"Bars refresh complete. Total ingested: {total_ingested}")
         return {
             "total_ingested": total_ingested,
             "ticker_stats": stats,

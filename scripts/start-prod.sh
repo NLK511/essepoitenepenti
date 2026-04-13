@@ -7,8 +7,10 @@ VENV_DIR="${ROOT_DIR}/.venv"
 ENV_FILE="${ROOT_DIR}/.env"
 STATE_DIR="${ROOT_DIR}/.prod-run"
 API_PID_FILE="${STATE_DIR}/api.pid"
+API_LOG_FILE="${STATE_DIR}/api.log"
 WORKER_PID_FILE="${STATE_DIR}/worker.pid"
 SCHEDULER_PID_FILE="${STATE_DIR}/scheduler.pid"
+SCHEDULER_LOG_FILE="${STATE_DIR}/scheduler.log"
 META_FILE="${STATE_DIR}/meta.env"
 
 SKIP_FRONTEND_BUILD="false"
@@ -88,7 +90,7 @@ load_env_file() {
     local value="${line#*=}"
     key="$(trim "$key")"
     value="$(trim "$value")"
-    export "$key=$value"
+    export "$key"="$value"
   done < "$path"
 }
 
@@ -246,7 +248,7 @@ trap cleanup EXIT INT TERM
 log "starting api on ${START_HOST}:${START_PORT}"
 (
   cd "$ROOT_DIR"
-  exec "$VENV_PYTHON" -m uvicorn trade_proposer_app.app:app --host "$START_HOST" --port "$START_PORT"
+  exec "$VENV_PYTHON" -m uvicorn trade_proposer_app.app:app --host "$START_HOST" --port "$START_PORT" >> "$API_LOG_FILE" 2>&1
 ) &
 API_PID=$!
 echo "$API_PID" > "$API_PID_FILE"
@@ -272,7 +274,7 @@ echo "$WORKER_PID" > "$WORKER_PID_FILE"
 log "starting scheduler"
 (
   cd "$ROOT_DIR"
-  exec "$VENV_PYTHON" -m trade_proposer_app.scheduler
+  exec "$VENV_PYTHON" -m trade_proposer_app.scheduler >> "$SCHEDULER_LOG_FILE" 2>&1
 ) &
 SCHEDULER_PID=$!
 echo "$SCHEDULER_PID" > "$SCHEDULER_PID_FILE"
@@ -303,13 +305,16 @@ printf 'Press Ctrl+C to stop all started processes here as well.\n'
 
 while true; do
   if ! kill -0 "$API_PID" 2>/dev/null; then
-    fail "api process exited"
+    log "error: api process (pid ${API_PID}) exited. check ${API_LOG_FILE} for details."
+    exit 1
   fi
   if ! kill -0 "$WORKER_PID" 2>/dev/null; then
-    fail "worker process exited"
+    log "error: worker process (pid ${WORKER_PID}) exited. check ${WORKER_LOG_FILE} for details."
+    exit 1
   fi
   if ! kill -0 "$SCHEDULER_PID" 2>/dev/null; then
-    fail "scheduler process exited"
+    log "error: scheduler process (pid ${SCHEDULER_PID}) exited. check ${SCHEDULER_LOG_FILE} for details."
+    exit 1
   fi
   sleep 1
 done

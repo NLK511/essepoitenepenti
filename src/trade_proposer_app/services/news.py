@@ -281,6 +281,7 @@ class NewsProvider:
     name: ClassVar[str] = "generic"
     provider_key: ClassVar[str] = ""
     supports_topic: ClassVar[bool] = True
+    historical_replay_safe: ClassVar[bool] = False
 
     def fetch(self, ticker: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
         raise NotImplementedError
@@ -343,6 +344,7 @@ class FinnhubProvider(NewsProvider):
     name: ClassVar[str] = "Finnhub"
     provider_key: ClassVar[str] = "finnhub"
     supports_topic: ClassVar[bool] = False
+    historical_replay_safe: ClassVar[bool] = True
 
     def fetch(self, ticker: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
         api_key = (self.credential.api_key or "").strip()
@@ -643,12 +645,20 @@ class NewsIngestionService:
     def from_provider_credentials(cls, provider_credentials: dict[str, ProviderCredential], *, max_articles: int = 12) -> "NewsIngestionService":
         providers: list[NewsProvider] = []
 
-        # Always include the free, real-time providers by default
+        finnhub_credential = provider_credentials.get(FinnhubProvider.provider_key)
+        if finnhub_credential and (finnhub_credential.api_key or finnhub_credential.api_secret):
+            providers.append(FinnhubProvider(finnhub_credential))
+
+        # Always include the free, real-time providers for live/non-historical flows.
         providers.append(GoogleNewsProvider(credential=ProviderCredential(provider="googlenews")))
         providers.append(YahooFinanceProvider(credential=ProviderCredential(provider="yahoofinance")))
 
         for key, builder in PROVIDER_BUILDERS.items():
-            if key in DISABLED_PROVIDER_KEYS or key in (GoogleNewsProvider.provider_key, YahooFinanceProvider.provider_key):
+            if key in DISABLED_PROVIDER_KEYS or key in (
+                GoogleNewsProvider.provider_key,
+                YahooFinanceProvider.provider_key,
+                FinnhubProvider.provider_key,
+            ):
                 continue
             credential = provider_credentials.get(key)
             if credential and (credential.api_key or credential.api_secret):
@@ -657,30 +667,33 @@ class NewsIngestionService:
 
     def fetch(self, ticker: str, *, start_at: datetime | None = None, end_at: datetime | None = None) -> NewsBundle:
         bundle = NewsBundle(ticker=ticker)
-        if not self.providers:
+        providers = self._providers_for_request(start_at=start_at, end_at=end_at, supports_topic=False)
+        if not providers:
             bundle.feed_errors.append("news: no providers configured")
             return bundle
         seen_links: set[str] = set()
-        for provider in self.providers:
+        for provider in providers:
             try:
                 articles = provider.fetch(ticker, self.max_articles, start_at=start_at, end_at=end_at)
             except Exception as exc:  # noqa: BLE001
                 bundle.feed_errors.append(f"{provider.name}: {exc}")
                 continue
-            self._merge_articles(bundle, articles, seen_links)
-            if articles:
+            filtered_articles = self._filter_articles_for_window(articles, start_at=start_at, end_at=end_at)
+            self._merge_articles(bundle, filtered_articles, seen_links)
+            if filtered_articles:
                 bundle.feeds_used.append(provider.name)
         bundle.articles = bundle.articles[: self.max_articles]
         return bundle
 
     def fetch_topic(self, topic: str, *, limit: int | None = None, start_at: datetime | None = None, end_at: datetime | None = None) -> NewsBundle:
         bundle = NewsBundle(ticker=topic)
-        if not self.providers:
+        providers = self._providers_for_request(start_at=start_at, end_at=end_at, supports_topic=True)
+        if not providers:
             bundle.feed_errors.append("news: no providers configured")
             return bundle
         seen_links: set[str] = set()
         fetch_limit = min(limit or self.max_articles, self.max_articles)
-        for provider in self.providers:
+        for provider in providers:
             if not getattr(provider, "supports_topic", True):
                 continue
             try:
@@ -688,8 +701,9 @@ class NewsIngestionService:
             except Exception as exc:  # noqa: BLE001
                 bundle.feed_errors.append(f"{provider.name}: {exc}")
                 continue
-            self._merge_articles(bundle, articles, seen_links)
-            if articles:
+            filtered_articles = self._filter_articles_for_window(articles, start_at=start_at, end_at=end_at)
+            self._merge_articles(bundle, filtered_articles, seen_links)
+            if filtered_articles:
                 bundle.feeds_used.append(provider.name)
         bundle.articles = bundle.articles[:fetch_limit]
         return bundle
@@ -742,6 +756,51 @@ class NewsIngestionService:
 
     def analyze_bundle(self, bundle: NewsBundle) -> dict[str, object]:
         return {"bundle": bundle, "sentiment": self._sentiment_analyzer.analyze(bundle)}
+
+    def _providers_for_request(
+        self,
+        *,
+        start_at: datetime | None,
+        end_at: datetime | None,
+        supports_topic: bool,
+    ) -> list[NewsProvider]:
+        providers = [
+            provider
+            for provider in self.providers
+            if not supports_topic or getattr(provider, "supports_topic", True)
+        ]
+        if not (start_at or end_at):
+            return providers
+        historical_providers = [
+            provider
+            for provider in providers
+            if getattr(provider, "historical_replay_safe", False)
+        ]
+        if historical_providers:
+            return historical_providers
+        return []
+
+    @staticmethod
+    def _filter_articles_for_window(
+        articles: list[NewsArticle],
+        *,
+        start_at: datetime | None,
+        end_at: datetime | None,
+    ) -> list[NewsArticle]:
+        require_timestamp = bool(start_at or end_at)
+        filtered: list[NewsArticle] = []
+        for article in articles:
+            published_at = article.published_at
+            if require_timestamp and published_at is None:
+                continue
+            if published_at is not None and published_at.tzinfo is None:
+                published_at = published_at.replace(tzinfo=timezone.utc)
+            if start_at and published_at and published_at < start_at:
+                continue
+            if end_at and published_at and published_at > end_at:
+                continue
+            filtered.append(article)
+        return filtered
 
     @staticmethod
     def _merge_articles(bundle: NewsBundle, articles: list[NewsArticle], seen_links: set[str]) -> None:

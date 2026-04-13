@@ -19,13 +19,16 @@ import type {
 } from "../types";
 import { detailLabel, extractDisplayLabels, formatDate, yahooFinanceUrl } from "../utils";
 
-function buildQuery(searchParams: URLSearchParams): string {
+function buildQuery(searchParams: URLSearchParams, computedAfter?: string | null): string {
   const query = new URLSearchParams(searchParams);
   const limit = Math.max(1, Number(query.get("limit") ?? "100") || 100);
   const page = Math.max(1, Number(query.get("page") ?? "1") || 1);
   query.set("limit", String(limit));
   query.set("offset", String((page - 1) * limit));
   query.delete("page");
+  if (computedAfter) {
+    query.set("computed_after", computedAfter);
+  }
   const queryString = query.toString();
   return queryString ? `/api/recommendation-plans?${queryString}` : "/api/recommendation-plans";
 }
@@ -218,7 +221,7 @@ export function RecommendationPlansPage() {
           statsParams.set("computed_after", computedAfter);
         }
         const [planResults, stats] = await Promise.all([
-          getJson<RecommendationPlanListResponse>(buildQuery(searchParams)),
+          getJson<RecommendationPlanListResponse>(buildQuery(searchParams, computedAfter)),
           getJson<RecommendationPlanStats>(`/api/recommendation-plans/stats?${statsParams.toString()}`),
         ]);
         setPlansResponse(planResults);
@@ -290,7 +293,7 @@ export function RecommendationPlansPage() {
           ? `Queued recommendation-plan evaluation run #${run.id} for plan #${planId}.`
           : `Queued recommendation-plan evaluation run #${run.id}.`,
       );
-      setPlansResponse(await getJson<RecommendationPlanListResponse>(buildQuery(searchParams)));
+      setPlansResponse(await getJson<RecommendationPlanListResponse>(buildQuery(searchParams, analyticsWindowStartIso(analyticsWindow))));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to queue recommendation-plan evaluation");
     } finally {
@@ -398,7 +401,7 @@ export function RecommendationPlansPage() {
           <label className="form-field"><span>Setup family</span><select name="setup_family" defaultValue={searchParams.get("setup_family") ?? ""}><option value="">All</option><option value="breakout">breakout</option><option value="continuation">continuation</option><option value="mean_reversion">mean_reversion</option><option value="breakdown">breakdown</option><option value="catalyst_follow_through">catalyst_follow_through</option><option value="macro_beneficiary_loser">macro_beneficiary_loser</option></select></label>
           <label className="form-field"><span>Resolution</span><select name="resolved" defaultValue={searchParams.get("resolved") ?? ""}><option value="">All</option><option value="resolved">Resolved only</option><option value="unresolved">Unresolved only</option></select></label>
           <label className="form-field"><span>Outcome</span><select name="outcome" defaultValue={searchParams.get("outcome") ?? ""}><option value="">All</option><option value="win">win</option><option value="loss">loss</option><option value="expired">expired</option></select></label>
-          <label className="form-field"><span>Limit</span><select name="limit" defaultValue={searchParams.get("limit") ?? "100"}><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option></select></label>
+          <label className="form-field"><span>Limit</span><select name="limit" defaultValue={searchParams.get("limit") ?? "100"}><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option><option value="10000">All</option></select></label>
           <div className="form-actions">
             <button className="icon-button icon-button-primary" type="submit" title="Apply filters" aria-label="Apply filters">
               ✓

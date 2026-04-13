@@ -58,7 +58,7 @@ async def list_recommendation_plans(
     ticker: str | None = Query(default=None),
     action: str | None = Query(default=None),
     setup_family: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=50, ge=1, le=10000),
     offset: int = Query(default=0, ge=0),
     run_id: int | None = Query(default=None),
     plan_id: int | None = Query(default=None),
