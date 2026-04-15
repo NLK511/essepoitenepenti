@@ -13,15 +13,49 @@ class StubNewsService:
     def __init__(self, bundle: NewsBundle, sentiment: dict[str, object]) -> None:
         self.bundle = bundle
         self.sentiment = sentiment
-        self.fetch_topics_calls: list[tuple[str, list[str]]] = []
-        self.fetch_many_calls: list[list[str]] = []
+        self.fetch_topics_calls: list[dict[str, object]] = []
+        self.fetch_many_calls: list[dict[str, object]] = []
 
-    def fetch_topics(self, subject: str, queries: list[str], *, per_query_limit: int = 4, start_at: datetime | None = None, end_at: datetime | None = None) -> NewsBundle:
-        self.fetch_topics_calls.append((subject, list(queries)))
+    def fetch_topics(
+        self,
+        subject: str,
+        queries: list[str],
+        *,
+        per_query_limit: int = 4,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+        request_mode: str = "live",
+        primary_only: bool = False,
+    ) -> NewsBundle:
+        self.fetch_topics_calls.append({
+            "subject": subject,
+            "queries": list(queries),
+            "per_query_limit": per_query_limit,
+            "start_at": start_at,
+            "end_at": end_at,
+            "request_mode": request_mode,
+            "primary_only": primary_only,
+        })
         return self.bundle
 
-    def fetch_many(self, symbols: list[str], *, per_symbol_limit: int = 3, start_at: datetime | None = None, end_at: datetime | None = None) -> NewsBundle:
-        self.fetch_many_calls.append(list(symbols))
+    def fetch_many(
+        self,
+        symbols: list[str],
+        *,
+        per_symbol_limit: int = 3,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+        request_mode: str = "live",
+        primary_only: bool = False,
+    ) -> NewsBundle:
+        self.fetch_many_calls.append({
+            "symbols": list(symbols),
+            "per_symbol_limit": per_symbol_limit,
+            "start_at": start_at,
+            "end_at": end_at,
+            "request_mode": request_mode,
+            "primary_only": primary_only,
+        })
         return self.bundle
 
     def analyze_bundle(self, bundle: NewsBundle) -> dict[str, object]:
@@ -89,6 +123,8 @@ class ContextServiceTests(unittest.TestCase):
         self.assertLess(context.saliency_score, 1.0)
         self.assertLess(context.confidence_percent, 100.0)
         self.assertTrue(news_service.fetch_topics_calls)
+        self.assertEqual(news_service.fetch_topics_calls[0]["request_mode"], "live")
+        self.assertTrue(news_service.fetch_topics_calls[0]["primary_only"])
 
     def test_macro_context_tracks_lifecycle_and_contradictions(self) -> None:
         repository = MagicMock()
@@ -152,6 +188,8 @@ class ContextServiceTests(unittest.TestCase):
         self.assertTrue(any(item["key"] == "commodity_input_costs" for item in energy["transmission_channel_details"]))
         self.assertIn("Oil supply risk", context.metadata["event_lifecycle_summary"]["contradictory_event_labels"])
         self.assertTrue(any("contradictory evidence" in warning for warning in context.warnings))
+        self.assertEqual(news_service.fetch_topics_calls[0]["request_mode"], "live")
+        self.assertTrue(news_service.fetch_topics_calls[0]["primary_only"])
 
     def test_macro_context_uses_llm_summary_when_available(self) -> None:
         repository = MagicMock()
@@ -286,7 +324,10 @@ class ContextServiceTests(unittest.TestCase):
         self.assertTrue(any(item["key"] == "ai_capex" for item in context.metadata["ontology_profile"]["transmission_channel_details"]))
         self.assertTrue(context.metadata["matched_ontology_relationships"])
         self.assertTrue(any(item["target"] == "ai_capex" for item in context.metadata["matched_ontology_relationships"]))
-        self.assertEqual(news_service.fetch_many_calls, [["NVDA", "AMD"]])
+        self.assertEqual(len(news_service.fetch_many_calls), 1)
+        self.assertEqual(news_service.fetch_many_calls[0]["symbols"], ["NVDA", "AMD"])
+        self.assertEqual(news_service.fetch_many_calls[0]["request_mode"], "live")
+        self.assertTrue(news_service.fetch_many_calls[0]["primary_only"])
 
     def test_industry_context_uses_llm_summary_when_available(self) -> None:
         repository = MagicMock()

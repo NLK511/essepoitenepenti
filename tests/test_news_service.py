@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from trade_proposer_app.domain.models import NewsArticle, NewsBundle, ProviderCredential
-from trade_proposer_app.services.news import GoogleNewsProvider, NewsIngestionService, NaiveSentimentAnalyzer, YahooFinanceProvider
+from trade_proposer_app.services.news import GoogleNewsProvider, NewsIngestionService, NaiveSentimentAnalyzer, NewsProvider, YahooFinanceProvider
 
 
 class NewsIngestionServiceTests(unittest.TestCase):
@@ -194,6 +194,7 @@ class NewsIngestionServiceTests(unittest.TestCase):
             "AAPL",
             start_at=datetime(2026, 3, 26, 0, 0, tzinfo=timezone.utc),
             end_at=datetime(2026, 3, 26, 23, 59, tzinfo=timezone.utc),
+            request_mode="replay",
         )
 
         self.assertEqual([article.title for article in bundle.articles], ["Finnhub historical article"])
@@ -203,8 +204,11 @@ class NewsIngestionServiceTests(unittest.TestCase):
     def test_historical_window_filters_future_and_undated_articles(self) -> None:
         class StubProvider:
             name = "Stub"
+            supports_ticker = True
             supports_topic = False
-            historical_replay_safe = True
+            supports_live_windowed_queries = True
+            supports_replay_windowed_queries = True
+            counts_as_primary_news = True
 
             def fetch(self, ticker, limit, *, start_at=None, end_at=None):
                 return [
@@ -236,6 +240,7 @@ class NewsIngestionServiceTests(unittest.TestCase):
             "AAPL",
             start_at=datetime(2026, 3, 26, 0, 0, tzinfo=timezone.utc),
             end_at=datetime(2026, 3, 26, 23, 59, tzinfo=timezone.utc),
+            request_mode="replay",
         )
 
         self.assertEqual([article.title for article in bundle.articles], ["In window"])
@@ -289,6 +294,108 @@ class NewsIngestionServiceTests(unittest.TestCase):
         self.assertEqual(result["label"], "POSITIVE")
         self.assertGreater(result["keyword_hits"], 0)
         self.assertGreater(result["news_items"][0]["compound"], 0.0)
+
+    def test_live_windowed_topic_fetch_uses_google_news_when_topic_provider_is_live_only(self) -> None:
+        service = NewsIngestionService.from_provider_credentials(
+            {"finnhub": ProviderCredential(provider="finnhub", api_key="key", api_secret="")}
+        )
+        with patch.object(GoogleNewsProvider, "fetch_topic", return_value=[
+            NewsArticle(
+                title="Inflation headline",
+                summary="Inflation story",
+                publisher="Reuters",
+                link="https://example.com/google-live-topic",
+                published_at=datetime(2026, 3, 26, 12, 0, tzinfo=timezone.utc),
+            )
+        ]) as google_fetch:
+            bundle = service.fetch_topic(
+                "inflation",
+                start_at=datetime(2026, 3, 26, 0, 0, tzinfo=timezone.utc),
+                end_at=datetime(2026, 3, 26, 23, 59, tzinfo=timezone.utc),
+                request_mode="live",
+                primary_only=True,
+            )
+
+        self.assertEqual([article.title for article in bundle.articles], ["Inflation headline"])
+        self.assertEqual(bundle.feeds_used, ["GoogleNews"])
+        self.assertEqual(bundle.feed_errors, [])
+        google_fetch.assert_called_once()
+
+    def test_replay_windowed_topic_fetch_explains_provider_exclusions(self) -> None:
+        service = NewsIngestionService.from_provider_credentials(
+            {"finnhub": ProviderCredential(provider="finnhub", api_key="key", api_secret="")}
+        )
+        bundle = service.fetch_topic(
+            "inflation",
+            start_at=datetime(2026, 3, 26, 0, 0, tzinfo=timezone.utc),
+            end_at=datetime(2026, 3, 26, 23, 59, tzinfo=timezone.utc),
+            request_mode="replay",
+            primary_only=True,
+        )
+
+        self.assertEqual(bundle.articles, [])
+        self.assertTrue(any("no providers eligible" in error for error in bundle.feed_errors))
+        self.assertTrue(any("query_type=topic" in error for error in bundle.feed_errors))
+        self.assertTrue(any("mode=replay" in error for error in bundle.feed_errors))
+        self.assertTrue(any("Finnhub(topic unsupported)" in error for error in bundle.feed_errors))
+        self.assertTrue(any("GoogleNews(replay window unsupported)" in error for error in bundle.feed_errors))
+
+    def test_primary_only_filters_supporting_only_providers(self) -> None:
+        class PrimaryTopicProvider(NewsProvider):
+            name = "PrimaryTopic"
+            provider_key = "primarytopic"
+            supports_ticker = False
+            supports_topic = True
+            supports_live_windowed_queries = True
+            supports_replay_windowed_queries = False
+            counts_as_primary_news = True
+
+            def fetch(self, ticker, limit, *, start_at=None, end_at=None):
+                raise AssertionError("ticker fetch should not be used")
+
+            def fetch_topic(self, topic, limit, *, start_at=None, end_at=None):
+                return [
+                    NewsArticle(
+                        title="Primary only article",
+                        summary="Primary source coverage",
+                        publisher="Reuters",
+                        link="https://example.com/primary-only",
+                        published_at=datetime(2026, 3, 26, 9, 0, tzinfo=timezone.utc),
+                    )
+                ]
+
+        class SupportingTopicProvider(NewsProvider):
+            name = "SupportingTopic"
+            provider_key = "supportingtopic"
+            supports_ticker = False
+            supports_topic = True
+            supports_live_windowed_queries = True
+            supports_replay_windowed_queries = False
+            counts_as_primary_news = False
+
+            def fetch(self, ticker, limit, *, start_at=None, end_at=None):
+                raise AssertionError("ticker fetch should not be used")
+
+            def fetch_topic(self, topic, limit, *, start_at=None, end_at=None):
+                raise AssertionError("supporting-only provider should be excluded by primary_only")
+
+        service = NewsIngestionService(
+            [
+                SupportingTopicProvider(ProviderCredential(provider="supportingtopic")),
+                PrimaryTopicProvider(ProviderCredential(provider="primarytopic")),
+            ],
+            max_articles=10,
+        )
+        bundle = service.fetch_topic(
+            "inflation",
+            start_at=datetime(2026, 3, 26, 0, 0, tzinfo=timezone.utc),
+            end_at=datetime(2026, 3, 26, 23, 59, tzinfo=timezone.utc),
+            request_mode="live",
+            primary_only=True,
+        )
+
+        self.assertEqual([article.title for article in bundle.articles], ["Primary only article"])
+        self.assertEqual(bundle.feeds_used, ["PrimaryTopic"])
 
     def test_naive_sentiment_analyzer_records_coverage_insights_for_zero_hits(self) -> None:
         analyzer = NaiveSentimentAnalyzer()

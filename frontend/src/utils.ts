@@ -3,6 +3,7 @@ import type {
   JobType,
   RecommendationDirection,
   RecommendationState,
+  RunDetailResponse,
   RunDiagnostics,
   RunStatus,
 } from "./types";
@@ -184,6 +185,62 @@ export function parseJsonRecord(value: string | null): Record<string, unknown> |
   } catch (_error) {
     return null;
   }
+}
+
+function extractStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
+function appendWarningMessages(target: string[], seen: Set<string>, values: string[], prefix?: string): void {
+  for (const value of values) {
+    const normalized = value.trim();
+    if (!normalized) {
+      continue;
+    }
+    const message = prefix ? `${prefix}: ${normalized}` : normalized;
+    if (seen.has(message)) {
+      continue;
+    }
+    seen.add(message);
+    target.push(message);
+  }
+}
+
+export function extractRunWarnings(detail: RunDetailResponse | null): string[] {
+  if (!detail) {
+    return [];
+  }
+
+  const warnings: string[] = [];
+  const seen = new Set<string>();
+  const summary = parseJsonRecord(detail.run.summary_json);
+  const artifact = parseJsonRecord(detail.run.artifact_json);
+
+  appendWarningMessages(warnings, seen, extractStringArray(summary?.warnings));
+  appendWarningMessages(warnings, seen, extractStringArray(artifact?.warnings));
+
+  for (const plan of detail.recommendation_plans) {
+    appendWarningMessages(warnings, seen, plan.warnings, `${plan.ticker} plan`);
+  }
+  for (const signal of detail.ticker_signal_snapshots) {
+    appendWarningMessages(warnings, seen, signal.warnings, `${signal.ticker} signal`);
+  }
+  for (const snapshot of detail.macro_context_snapshots) {
+    appendWarningMessages(warnings, seen, snapshot.warnings, "Macro context");
+  }
+  for (const snapshot of detail.industry_context_snapshots) {
+    appendWarningMessages(warnings, seen, snapshot.warnings, `${snapshot.industry_label} context`);
+  }
+
+  const warningCount = typeof summary?.warning_count === "number" ? summary.warning_count : null;
+  const warningsFound = summary?.warnings_found === true;
+  if (warnings.length === 0 && (warningsFound || (warningCount !== null && warningCount > 0))) {
+    warnings.push("Run was marked completed_with_warnings, but no explicit warning messages were stored.");
+  }
+
+  return warnings;
 }
 
 function humanizeKey(value: string): string {

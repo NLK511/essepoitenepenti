@@ -6,13 +6,14 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from statistics import pstdev
-from typing import ClassVar, Iterable
+from typing import ClassVar, Iterable, Literal
 from urllib.parse import urlparse
 
 import httpx
 import yfinance as yf
 
 from trade_proposer_app.domain.models import NewsArticle, NewsBundle, ProviderCredential
+from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
 from trade_proposer_app.services.constants import DEFAULT_CONTEXT_FLAGS
 
 MAX_ARTICLES_PER_PROVIDER = 10
@@ -273,6 +274,10 @@ class NewsFetchError(Exception):
     pass
 
 
+NewsQueryType = Literal["ticker", "topic"]
+NewsRequestMode = Literal["live", "replay"]
+
+
 @dataclass
 class NewsProvider:
     credential: ProviderCredential
@@ -280,7 +285,12 @@ class NewsProvider:
 
     name: ClassVar[str] = "generic"
     provider_key: ClassVar[str] = ""
+    supports_ticker: ClassVar[bool] = True
     supports_topic: ClassVar[bool] = True
+    supports_live_windowed_queries: ClassVar[bool] = True
+    supports_replay_windowed_queries: ClassVar[bool] = False
+    counts_as_primary_news: ClassVar[bool] = True
+    # Legacy compatibility flag. Capability-based routing is now the source of truth.
     historical_replay_safe: ClassVar[bool] = False
 
     def fetch(self, ticker: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
@@ -293,6 +303,11 @@ class NewsProvider:
 class NewsAPIProvider(NewsProvider):
     name: ClassVar[str] = "NewsAPI"
     provider_key: ClassVar[str] = "newsapi"
+    supports_ticker: ClassVar[bool] = True
+    supports_topic: ClassVar[bool] = True
+    supports_live_windowed_queries: ClassVar[bool] = True
+    supports_replay_windowed_queries: ClassVar[bool] = True
+    counts_as_primary_news: ClassVar[bool] = True
 
     def fetch(self, ticker: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
         return self._fetch_query(f"{ticker} stock", limit, start_at=start_at, end_at=end_at)
@@ -343,7 +358,11 @@ class NewsAPIProvider(NewsProvider):
 class FinnhubProvider(NewsProvider):
     name: ClassVar[str] = "Finnhub"
     provider_key: ClassVar[str] = "finnhub"
+    supports_ticker: ClassVar[bool] = True
     supports_topic: ClassVar[bool] = False
+    supports_live_windowed_queries: ClassVar[bool] = True
+    supports_replay_windowed_queries: ClassVar[bool] = True
+    counts_as_primary_news: ClassVar[bool] = True
     historical_replay_safe: ClassVar[bool] = True
 
     def fetch(self, ticker: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
@@ -387,7 +406,11 @@ class FinnhubProvider(NewsProvider):
 class YahooFinanceProvider(NewsProvider):
     name: ClassVar[str] = "YahooFinance"
     provider_key: ClassVar[str] = "yahoofinance"
+    supports_ticker: ClassVar[bool] = True
     supports_topic: ClassVar[bool] = False
+    supports_live_windowed_queries: ClassVar[bool] = True
+    supports_replay_windowed_queries: ClassVar[bool] = False
+    counts_as_primary_news: ClassVar[bool] = False
 
     def fetch(self, ticker: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
         # yfinance news API doesn't support date ranges directly, but we can filter the results
@@ -457,7 +480,11 @@ class YahooFinanceProvider(NewsProvider):
 class GoogleNewsProvider(NewsProvider):
     name: ClassVar[str] = "GoogleNews"
     provider_key: ClassVar[str] = "googlenews"
+    supports_ticker: ClassVar[bool] = True
     supports_topic: ClassVar[bool] = True
+    supports_live_windowed_queries: ClassVar[bool] = True
+    supports_replay_windowed_queries: ClassVar[bool] = False
+    counts_as_primary_news: ClassVar[bool] = True
 
     def fetch(self, ticker: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
         return self._fetch_query(f"{ticker} stock", limit, start_at=start_at, end_at=end_at)
@@ -636,13 +663,26 @@ class NaiveSentimentAnalyzer:
         }
 
 class NewsIngestionService:
-    def __init__(self, providers: Iterable[NewsProvider] | None = None, *, max_articles: int = 12) -> None:
+    def __init__(
+        self,
+        providers: Iterable[NewsProvider] | None = None,
+        *,
+        max_articles: int = 12,
+        historical_news: HistoricalNewsRepository | None = None,
+    ) -> None:
         self.providers = list(providers or [])
         self.max_articles = max_articles
+        self.historical_news = historical_news
         self._sentiment_analyzer = NaiveSentimentAnalyzer()
 
     @classmethod
-    def from_provider_credentials(cls, provider_credentials: dict[str, ProviderCredential], *, max_articles: int = 12) -> "NewsIngestionService":
+    def from_provider_credentials(
+        cls,
+        provider_credentials: dict[str, ProviderCredential],
+        *,
+        max_articles: int = 12,
+        historical_news: HistoricalNewsRepository | None = None,
+    ) -> "NewsIngestionService":
         providers: list[NewsProvider] = []
 
         finnhub_credential = provider_credentials.get(FinnhubProvider.provider_key)
@@ -663,13 +703,41 @@ class NewsIngestionService:
             credential = provider_credentials.get(key)
             if credential and (credential.api_key or credential.api_secret):
                 providers.append(builder(credential))
-        return cls(providers, max_articles=max_articles)
+        return cls(providers, max_articles=max_articles, historical_news=historical_news)
 
-    def fetch(self, ticker: str, *, start_at: datetime | None = None, end_at: datetime | None = None) -> NewsBundle:
+    def fetch(
+        self,
+        ticker: str,
+        *,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+        request_mode: NewsRequestMode = "live",
+        primary_only: bool = False,
+    ) -> NewsBundle:
         bundle = NewsBundle(ticker=ticker)
-        providers = self._providers_for_request(start_at=start_at, end_at=end_at, supports_topic=False)
+
+        # 1. Try local DB first if date range is provided
+        if self.historical_news and (start_at or end_at):
+            local_articles = self.historical_news.list_news(
+                ticker=ticker,
+                start_at=start_at,
+                end_at=end_at,
+                limit=self.max_articles,
+            )
+            if len(local_articles) >= 3:
+                bundle.articles = local_articles
+                bundle.feeds_used.append("database")
+                return bundle
+
+        providers, selection_errors = self._providers_for_request(
+            query_type="ticker",
+            request_mode=request_mode,
+            primary_only=primary_only,
+            start_at=start_at,
+            end_at=end_at,
+        )
         if not providers:
-            bundle.feed_errors.append("news: no providers configured")
+            bundle.feed_errors.extend(selection_errors)
             return bundle
         seen_links: set[str] = set()
         for provider in providers:
@@ -679,36 +747,88 @@ class NewsIngestionService:
                 bundle.feed_errors.append(f"{provider.name}: {exc}")
                 continue
             filtered_articles = self._filter_articles_for_window(articles, start_at=start_at, end_at=end_at)
+
+            if self.historical_news and filtered_articles:
+                try:
+                    self.historical_news.save_news(ticker, provider.provider_key, filtered_articles)
+                except Exception:
+                    pass
+
             self._merge_articles(bundle, filtered_articles, seen_links)
             if filtered_articles:
                 bundle.feeds_used.append(provider.name)
         bundle.articles = bundle.articles[: self.max_articles]
+        bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
         return bundle
 
-    def fetch_topic(self, topic: str, *, limit: int | None = None, start_at: datetime | None = None, end_at: datetime | None = None) -> NewsBundle:
+    def fetch_topic(
+        self,
+        topic: str,
+        *,
+        limit: int | None = None,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+        request_mode: NewsRequestMode = "live",
+        primary_only: bool = False,
+    ) -> NewsBundle:
         bundle = NewsBundle(ticker=topic)
-        providers = self._providers_for_request(start_at=start_at, end_at=end_at, supports_topic=True)
+        fetch_limit = min(limit or self.max_articles, self.max_articles)
+
+        if self.historical_news and (start_at or end_at):
+            local_articles = self.historical_news.list_news(
+                ticker=topic,
+                start_at=start_at,
+                end_at=end_at,
+                limit=fetch_limit,
+            )
+            if len(local_articles) >= 2:
+                bundle.articles = local_articles
+                bundle.feeds_used.append("database")
+                return bundle
+
+        providers, selection_errors = self._providers_for_request(
+            query_type="topic",
+            request_mode=request_mode,
+            primary_only=primary_only,
+            start_at=start_at,
+            end_at=end_at,
+        )
         if not providers:
-            bundle.feed_errors.append("news: no providers configured")
+            bundle.feed_errors.extend(selection_errors)
             return bundle
         seen_links: set[str] = set()
-        fetch_limit = min(limit or self.max_articles, self.max_articles)
         for provider in providers:
-            if not getattr(provider, "supports_topic", True):
-                continue
             try:
                 articles = provider.fetch_topic(topic, fetch_limit, start_at=start_at, end_at=end_at)
             except Exception as exc:  # noqa: BLE001
                 bundle.feed_errors.append(f"{provider.name}: {exc}")
                 continue
             filtered_articles = self._filter_articles_for_window(articles, start_at=start_at, end_at=end_at)
+
+            if self.historical_news and filtered_articles:
+                try:
+                    self.historical_news.save_news(topic, provider.provider_key, filtered_articles)
+                except Exception:
+                    pass
+
             self._merge_articles(bundle, filtered_articles, seen_links)
             if filtered_articles:
                 bundle.feeds_used.append(provider.name)
         bundle.articles = bundle.articles[:fetch_limit]
+        bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
         return bundle
 
-    def fetch_topics(self, subject: str, queries: list[str], *, per_query_limit: int = 4, start_at: datetime | None = None, end_at: datetime | None = None) -> NewsBundle:
+    def fetch_topics(
+        self,
+        subject: str,
+        queries: list[str],
+        *,
+        per_query_limit: int = 4,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+        request_mode: NewsRequestMode = "live",
+        primary_only: bool = False,
+    ) -> NewsBundle:
         bundle = NewsBundle(ticker=subject)
         if not self.providers:
             bundle.feed_errors.append("news: no providers configured")
@@ -718,7 +838,14 @@ class NewsIngestionService:
         if not normalized_queries:
             normalized_queries = [subject]
         for query in normalized_queries[:5]:
-            query_bundle = self.fetch_topic(query, limit=per_query_limit, start_at=start_at, end_at=end_at)
+            query_bundle = self.fetch_topic(
+                query,
+                limit=per_query_limit,
+                start_at=start_at,
+                end_at=end_at,
+                request_mode=request_mode,
+                primary_only=primary_only,
+            )
             self._merge_articles(bundle, query_bundle.articles, seen_links)
             bundle.feeds_used.extend(query_bundle.feeds_used)
             bundle.feed_errors.extend(query_bundle.feed_errors)
@@ -729,7 +856,16 @@ class NewsIngestionService:
         bundle.articles = bundle.articles[: self.max_articles]
         return bundle
 
-    def fetch_many(self, symbols: list[str], *, per_symbol_limit: int = 3, start_at: datetime | None = None, end_at: datetime | None = None) -> NewsBundle:
+    def fetch_many(
+        self,
+        symbols: list[str],
+        *,
+        per_symbol_limit: int = 3,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+        request_mode: NewsRequestMode = "live",
+        primary_only: bool = False,
+    ) -> NewsBundle:
         subject = ", ".join(symbols[:4]) if symbols else "news"
         bundle = NewsBundle(ticker=subject)
         if not self.providers:
@@ -738,7 +874,13 @@ class NewsIngestionService:
         seen_links: set[str] = set()
         normalized_symbols = [symbol.strip().upper() for symbol in symbols if isinstance(symbol, str) and symbol.strip()]
         for symbol in list(dict.fromkeys(normalized_symbols))[:6]:
-            symbol_bundle = self.fetch(symbol, start_at=start_at, end_at=end_at)
+            symbol_bundle = self.fetch(
+                symbol,
+                start_at=start_at,
+                end_at=end_at,
+                request_mode=request_mode,
+                primary_only=primary_only,
+            )
             self._merge_articles(bundle, symbol_bundle.articles[:per_symbol_limit], seen_links)
             bundle.feeds_used.extend(symbol_bundle.feeds_used)
             bundle.feed_errors.extend(symbol_bundle.feed_errors)
@@ -749,8 +891,22 @@ class NewsIngestionService:
         bundle.articles = bundle.articles[: self.max_articles]
         return bundle
 
-    def analyze(self, ticker: str, *, start_at: datetime | None = None, end_at: datetime | None = None) -> dict[str, object]:
-        bundle = self.fetch(ticker, start_at=start_at, end_at=end_at)
+    def analyze(
+        self,
+        ticker: str,
+        *,
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+        request_mode: NewsRequestMode = "live",
+        primary_only: bool = False,
+    ) -> dict[str, object]:
+        bundle = self.fetch(
+            ticker,
+            start_at=start_at,
+            end_at=end_at,
+            request_mode=request_mode,
+            primary_only=primary_only,
+        )
         sentiment = self._sentiment_analyzer.analyze(bundle)
         return {"bundle": bundle, "sentiment": sentiment}
 
@@ -760,25 +916,64 @@ class NewsIngestionService:
     def _providers_for_request(
         self,
         *,
+        query_type: NewsQueryType,
+        request_mode: NewsRequestMode,
+        primary_only: bool,
         start_at: datetime | None,
         end_at: datetime | None,
-        supports_topic: bool,
-    ) -> list[NewsProvider]:
-        providers = [
-            provider
-            for provider in self.providers
-            if not supports_topic or getattr(provider, "supports_topic", True)
+    ) -> tuple[list[NewsProvider], list[str]]:
+        if not self.providers:
+            return [], ["news: no providers configured"]
+        windowed = bool(start_at or end_at)
+        selected: list[NewsProvider] = []
+        exclusions: list[str] = []
+        for provider in self.providers:
+            reason = self._provider_exclusion_reason(
+                provider,
+                query_type=query_type,
+                request_mode=request_mode,
+                primary_only=primary_only,
+                windowed=windowed,
+            )
+            if reason is None:
+                selected.append(provider)
+            else:
+                exclusions.append(f"{provider.name}({reason})")
+        if selected:
+            return selected, []
+        details = [
+            (
+                f"news: no providers eligible for query_type={query_type} "
+                f"mode={request_mode} windowed={'true' if windowed else 'false'} "
+                f"primary_only={'true' if primary_only else 'false'}"
+            )
         ]
-        if not (start_at or end_at):
-            return providers
-        historical_providers = [
-            provider
-            for provider in providers
-            if getattr(provider, "historical_replay_safe", False)
-        ]
-        if historical_providers:
-            return historical_providers
-        return []
+        if exclusions:
+            details.append(f"news: provider exclusions: {', '.join(exclusions)}")
+        return [], details
+
+    @staticmethod
+    def _provider_exclusion_reason(
+        provider: NewsProvider,
+        *,
+        query_type: NewsQueryType,
+        request_mode: NewsRequestMode,
+        primary_only: bool,
+        windowed: bool,
+    ) -> str | None:
+        if query_type == "ticker" and not getattr(provider, "supports_ticker", True):
+            return "ticker unsupported"
+        if query_type == "topic" and not getattr(provider, "supports_topic", True):
+            return "topic unsupported"
+        if primary_only and not getattr(provider, "counts_as_primary_news", True):
+            return "not primary news"
+        if not windowed:
+            return None
+        if request_mode == "live" and not getattr(provider, "supports_live_windowed_queries", True):
+            return "live window unsupported"
+        if request_mode == "replay" and not getattr(provider, "supports_replay_windowed_queries", False):
+            return "replay window unsupported"
+        return None
 
     @staticmethod
     def _filter_articles_for_window(

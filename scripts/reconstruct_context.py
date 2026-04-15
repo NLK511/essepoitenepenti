@@ -49,7 +49,7 @@ def reconstruct_context():
             # Use end-of-day timestamps so each snapshot reflects the full simulated day.
             macro_refresh_result = macro_refresh_service.refresh(as_of=snapshot_as_of)
             macro_payload = macro_refresh_result.get("payload")
-            macro_snapshot = macro_context_service.create_from_refresh_payload(macro_payload)
+            macro_snapshot = macro_context_service.create_from_refresh_payload(macro_payload, request_mode="replay")
             print(f"  Macro Snapshot created: ID={macro_snapshot.id}, Score={macro_snapshot.saliency_score}")
         except Exception as e:
             print(f"  Error refreshing macro context: {e}")
@@ -59,7 +59,7 @@ def reconstruct_context():
         try:
             industry_refresh_payloads = industry_refresh_service.refresh_all(as_of=snapshot_as_of)
             for payload in industry_refresh_payloads:
-                industry_snapshot = industry_context_service.create_from_refresh_payload(payload)
+                industry_snapshot = industry_context_service.create_from_refresh_payload(payload, request_mode="replay")
                 print(f"  Industry Snapshot created: {industry_snapshot.industry_label}, ID={industry_snapshot.id}")
         except Exception as e:
             print(f"  Error refreshing industry context: {e}")

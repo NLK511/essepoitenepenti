@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
@@ -29,7 +30,11 @@ def create_proposal_service(session: Session) -> ProposalService:
     settings_map = repository.get_setting_map()
     credentials = repository.get_provider_credential_map()
     ticker_limit = int(settings_map.get("news_ticker_article_limit", "12"))
-    news_service = NewsIngestionService.from_provider_credentials(credentials, max_articles=ticker_limit)
+    news_service = NewsIngestionService.from_provider_credentials(
+        credentials,
+        max_articles=ticker_limit,
+        historical_news=HistoricalNewsRepository(session),
+    )
     social_service = SocialIngestionService.from_settings(repository.get_social_settings())
     signal_service = SignalIngestionService(social_service=social_service)
     summary_service = SummaryService(
@@ -88,7 +93,11 @@ def create_macro_context_refresh_service(session: Session) -> MacroContextRefres
     settings_map = repository.get_setting_map()
     credentials = repository.get_provider_credential_map()
     macro_limit = int(settings_map.get("news_macro_article_limit", "12"))
-    news_service = NewsIngestionService.from_provider_credentials(credentials, max_articles=macro_limit)
+    news_service = NewsIngestionService.from_provider_credentials(
+        credentials,
+        max_articles=macro_limit,
+        historical_news=HistoricalNewsRepository(session),
+    )
     social_service = SocialIngestionService.from_settings(repository.get_social_settings())
     return MacroContextRefreshService(social_service=social_service, news_service=news_service)
 
@@ -98,7 +107,11 @@ def create_macro_context_service(session: Session) -> MacroContextService:
     settings_map = repository.get_setting_map()
     credentials = repository.get_provider_credential_map()
     macro_limit = int(settings_map.get("news_macro_article_limit", "12"))
-    news_service = NewsIngestionService.from_provider_credentials(credentials, max_articles=macro_limit)
+    news_service = NewsIngestionService.from_provider_credentials(
+        credentials,
+        max_articles=macro_limit,
+        historical_news=HistoricalNewsRepository(session),
+    )
     summary_service = SummaryService(
         summary_settings=repository.get_summary_settings(),
         provider_credentials=credentials,
@@ -121,7 +134,11 @@ def create_industry_context_service(session: Session) -> IndustryContextService:
     settings_map = repository.get_setting_map()
     credentials = repository.get_provider_credential_map()
     industry_limit = int(settings_map.get("news_industry_article_limit", "12"))
-    news_service = NewsIngestionService.from_provider_credentials(credentials, max_articles=industry_limit)
+    news_service = NewsIngestionService.from_provider_credentials(
+        credentials,
+        max_articles=industry_limit,
+        historical_news=HistoricalNewsRepository(session),
+    )
     summary_service = SummaryService(
         summary_settings=repository.get_summary_settings(),
         provider_credentials=credentials,

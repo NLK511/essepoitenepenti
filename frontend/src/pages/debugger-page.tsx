@@ -6,7 +6,7 @@ import { WorkflowRunResults } from "../components/workflow-run-results";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import { useToast } from "../components/toast";
 import type { Run, RunDetailResponse } from "../types";
-import { formatDate, formatDuration, jobTypeLabel, runTone } from "../utils";
+import { extractRunWarnings, formatDate, formatDuration, jobTypeLabel, runTone } from "../utils";
 
 export function DebuggerPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -94,18 +94,7 @@ export function DebuggerPage() {
     }
   }
 
-  // Extract warnings from run summary if available
-  const activeWarnings = useMemo<string[]>(() => {
-    if (!detail?.run.summary_json) return [];
-    try {
-      const summary = JSON.parse(detail.run.summary_json) as { warnings?: unknown };
-      return Array.isArray(summary.warnings)
-        ? summary.warnings.filter((warning): warning is string => typeof warning === "string")
-        : [];
-    } catch {
-      return [];
-    }
-  }, [detail]);
+  const activeWarnings = useMemo<string[]>(() => extractRunWarnings(detail), [detail]);
 
   return (
     <>
