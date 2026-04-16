@@ -152,7 +152,7 @@ class RecommendationSignalGatingTuningService:
         if not samples:
             raise RecommendationSignalGatingTuningError("no decision samples available for signal gating tuning")
 
-        outcomes = self.outcomes.get_outcomes_by_plan_ids([sample.recommendation_plan_id for sample in samples])
+        outcomes = self.outcomes.get_outcomes_by_plan_ids([sample.recommendation_plan_id for sample in samples if sample.recommendation_plan_id is not None])
         scored_samples = self._resolved_samples(samples, outcomes)
         if not scored_samples:
             raise RecommendationSignalGatingTuningError("no resolved recommendation-plan outcomes available for signal gating tuning")
@@ -229,7 +229,7 @@ class RecommendationSignalGatingTuningService:
         artifact = {
             "objective_name": self.OBJECTIVE_NAME,
             "candidates": [candidate.to_dict() for candidate in evaluated_candidates],
-            "sample_plan_ids": [sample.recommendation_plan_id for sample, _ in scored_samples],
+            "sample_plan_ids": [sample.recommendation_plan_id for sample, _ in scored_samples if sample.recommendation_plan_id is not None],
             "threshold_before": round(threshold_before, 2),
             "threshold_after": applied_threshold,
             "active_tuning": active_tuning,
@@ -330,6 +330,8 @@ class RecommendationSignalGatingTuningService:
     ) -> list[tuple[RecommendationDecisionSample, RecommendationPlanOutcome]]:
         resolved: list[tuple[RecommendationDecisionSample, RecommendationPlanOutcome]] = []
         for sample in samples:
+            if sample.recommendation_plan_id is None:
+                continue
             outcome = outcomes.get(sample.recommendation_plan_id)
             if outcome is None or outcome.outcome not in {"win", "loss", "phantom_win", "phantom_loss"}:
                 continue

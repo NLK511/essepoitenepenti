@@ -494,7 +494,7 @@ export interface RecommendationPlanOutcome {
 
 export interface RecommendationDecisionSample {
   id: number | null;
-  recommendation_plan_id: number;
+  recommendation_plan_id: number | null;
   ticker: string;
   horizon: string;
   action: string;

@@ -59,6 +59,10 @@ This tells you where to spend human review time.
 ### `shortlisted` and `shortlist_decision`
 These fields tell you whether the issue happened **before** the final trade decision.
 
+Implementation status:
+- **shortlisted samples** usually have a linked recommendation plan because downstream framing ran
+- **non-shortlisted samples** may exist without any recommendation plan row because the ticker never reached downstream plan framing
+
 If strong samples were never shortlisted, the problem is probably in:
 - shortlist rules
 - cheap-scan ranking
@@ -120,7 +124,7 @@ Possible actions:
 ## Recommended workflow
 
 1. Filter to `near_miss` and `high` priority samples.
-2. Open the linked recommendation plan.
+2. If a linked recommendation plan exists, open it. If not, stay on the signal / shortlist evidence because the ticker never reached downstream framing.
 3. Compare:
    - raw confidence
    - calibrated confidence

@@ -514,7 +514,7 @@ class RecommendationPlanOutcome(BaseModel):
 
 class RecommendationDecisionSample(BaseModel):
     id: int | None = None
-    recommendation_plan_id: int
+    recommendation_plan_id: int | None = None
     ticker: str
     horizon: str
     action: str

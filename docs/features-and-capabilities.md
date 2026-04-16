@@ -55,7 +55,7 @@ It is not yet a proven short-horizon prediction engine.
   1. watchlist scan
   2. shortlist selection
   3. deep analysis for shortlisted names only
-  4. persistence of signals and plans, including cheap-scan-only `no_action` plans for non-shortlisted names and phantom-trade-eligible rejected plans when deep analysis produced valid trade framing
+  4. persistence of signals for all scanned names, decision samples for audit/tuning, and plans only when downstream plan framing actually ran; cheap-scan-only rejected names stay as signal-plus-decision-sample evidence, while phantom-trade-eligible rejected plans are reserved for shortlisted names that reached real trade framing but still ended as `no_action` or `watchlist`
 - **Hybrid Market Data Fetching:** Cheap scan prefers local database bars (including 1m-to-daily resampling), retries transient remote failures, and still scores the ticker from local data when local history is sufficient. Deep analysis prefers fresh remote bars in live runs, retries transient remote failures, and falls back to persisted local bars before surfacing deep analysis as unavailable.
 - **Market-Data Diagnostics In Details:** cheap-scan and deep-analysis fetch diagnostics are stored in signal details, plan details, and run/job artifact details. They are intentionally not added to compact summary rows.
 - **Lazy Hydration:** Remote Yahoo bars fetched for cheap scan or deep analysis are persisted back to the local database when possible to accelerate future runs.
@@ -72,7 +72,7 @@ It is not yet a proven short-horizon prediction engine.
 
 The shipped baseline includes:
 - watchlists, jobs, runs, settings, docs browsing, and audit history
-- signal, plan, and outcome persistence
+- signal and decision-sample persistence for scanned names, plus plan and outcome persistence for names that reached downstream plan framing
 - recommendation-plan evaluation and advanced review analytics
 - plan-generation tuning inside the app as a research workflow
 - shared context reuse across runs

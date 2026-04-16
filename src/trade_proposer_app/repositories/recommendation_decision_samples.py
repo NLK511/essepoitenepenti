@@ -15,14 +15,28 @@ class RecommendationDecisionSampleRepository:
         self.session = session
 
     def upsert_sample(self, sample: RecommendationDecisionSample) -> RecommendationDecisionSample:
-        record = self.session.scalar(
-            select(RecommendationDecisionSampleRecord).where(
-                RecommendationDecisionSampleRecord.recommendation_plan_id == sample.recommendation_plan_id
+        if sample.recommendation_plan_id is None and sample.ticker_signal_snapshot_id is None:
+            raise ValueError("recommendation decision sample requires recommendation_plan_id or ticker_signal_snapshot_id")
+        record = None
+        if sample.recommendation_plan_id is not None:
+            record = self.session.scalar(
+                select(RecommendationDecisionSampleRecord).where(
+                    RecommendationDecisionSampleRecord.recommendation_plan_id == sample.recommendation_plan_id
+                )
             )
-        )
+        elif sample.ticker_signal_snapshot_id is not None:
+            record = self.session.scalar(
+                select(RecommendationDecisionSampleRecord).where(
+                    RecommendationDecisionSampleRecord.ticker_signal_snapshot_id == sample.ticker_signal_snapshot_id
+                )
+            )
         if record is None:
-            record = RecommendationDecisionSampleRecord(recommendation_plan_id=sample.recommendation_plan_id)
+            record = RecommendationDecisionSampleRecord(
+                recommendation_plan_id=sample.recommendation_plan_id,
+                ticker_signal_snapshot_id=sample.ticker_signal_snapshot_id,
+            )
             self.session.add(record)
+        record.recommendation_plan_id = sample.recommendation_plan_id
         record.ticker = sample.ticker.upper()
         record.horizon = sample.horizon
         record.action = sample.action

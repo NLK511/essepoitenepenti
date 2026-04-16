@@ -308,10 +308,13 @@ class RecommendationOutcomeRecord(Base, TimestampMixin):
 
 class RecommendationDecisionSampleRecord(Base, TimestampMixin):
     __tablename__ = "recommendation_decision_samples"
-    __table_args__ = (UniqueConstraint("recommendation_plan_id", name="uq_recommendation_decision_samples_plan_id"),)
+    __table_args__ = (
+        UniqueConstraint("recommendation_plan_id", name="uq_recommendation_decision_samples_plan_id"),
+        UniqueConstraint("ticker_signal_snapshot_id", name="uq_recommendation_decision_samples_signal_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    recommendation_plan_id: Mapped[int] = mapped_column(ForeignKey("recommendation_plans.id"), index=True)
+    recommendation_plan_id: Mapped[int | None] = mapped_column(ForeignKey("recommendation_plans.id"), nullable=True, index=True)
     ticker: Mapped[str] = mapped_column(String(32), index=True)
     horizon: Mapped[str] = mapped_column(String(8), index=True)
     action: Mapped[str] = mapped_column(String(32), index=True)

@@ -60,3 +60,12 @@ Seeds or updates the canonical default watchlist pack in the database.
 
 ### `scripts/reconstruct_context.py`
 Re-runs the context extraction engine on past news/social data to build historical context snapshots for backtesting.
+
+### `scripts/report_legacy_non_shortlisted_plans.py`
+- Read-only audit helper for identifying historical cheap-scan-only `RecommendationPlan` rows that were created for non-shortlisted tickers before the persistence-policy change.
+- Useful before any manual archive/delete pass so we do not remove shortlisted or phantom-trade-eligible history by mistake.
+- Example:
+
+  ```bash
+  .venv/bin/python scripts/report_legacy_non_shortlisted_plans.py --limit 100 --output legacy-non-shortlisted.json
+  ```

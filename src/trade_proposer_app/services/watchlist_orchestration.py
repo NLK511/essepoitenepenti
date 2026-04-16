@@ -145,25 +145,15 @@ class WatchlistOrchestrationService:
                 )
                 stored_signal = self.context_snapshots.create_ticker_signal_snapshot(signal)
                 stored_signals.append(stored_signal)
-                plan = self._build_no_action_plan(
+                self._record_non_shortlisted_decision_sample(
                     watchlist,
                     candidate,
-                    stored_signal,
+                    signal=stored_signal,
                     calibration_summary=calibration_summary,
                     job_id=job_id,
                     run_id=run_id,
-                    reason="Ticker did not make the deep-analysis shortlist.",
-                )
-                stored_plan = self.recommendation_plans.create_plan(plan)
-                self._record_decision_sample(
-                    stored_plan,
-                    candidate,
-                    signal=stored_signal,
-                    shortlisted=False,
-                    shortlist_rank=None,
                     shortlist_decision=decision,
                 )
-                stored_plans.append(stored_plan)
                 ticker_generation.append(
                     {
                         "ticker": candidate.ticker,
@@ -171,6 +161,7 @@ class WatchlistOrchestrationService:
                         "shortlisted": False,
                         "attention_score": candidate.attention_score,
                         "shortlist_decision": decision,
+                        "recommendation_plan_generated": False,
                         "cheap_scan_price_history": stored_signal.diagnostics.get("cheap_scan_price_history") if hasattr(stored_signal.diagnostics, "get") else None,
                         "deep_analysis_price_history": None,
                     }
@@ -788,6 +779,101 @@ class WatchlistOrchestrationService:
             job_id=job_id,
             watchlist_id=watchlist.id,
             ticker_signal_snapshot_id=signal.id,
+        )
+
+    def _record_non_shortlisted_decision_sample(
+        self,
+        watchlist: Watchlist,
+        candidate: _CheapScanCandidate,
+        *,
+        signal: TickerSignalSnapshot,
+        calibration_summary: object | None,
+        job_id: int | None,
+        run_id: int | None,
+        shortlist_decision: dict[str, object] | None,
+    ) -> None:
+        if self.decision_samples is None or signal.id is None:
+            return
+        setup_family = self._cheap_scan_setup_family(candidate, signal=signal)
+        confidence_components = self._plan_confidence_components(signal, {}, candidate)
+        transmission_summary = self._transmission_summary(signal, {}, candidate)
+        calibration_review = self._calibration_review(
+            calibration_summary,
+            setup_family,
+            signal.confidence_percent,
+            horizon=watchlist.default_horizon.value,
+            transmission_summary=transmission_summary,
+        )
+        calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", signal.confidence_percent) or signal.confidence_percent)
+        effective_threshold = self._float_from_mapping(calibration_review, "effective_confidence_threshold")
+        confidence_gap = None
+        if effective_threshold is not None:
+            confidence_gap = round(calibrated_confidence - effective_threshold, 2)
+        signal_breakdown = self._signal_breakdown(
+            signal,
+            setup_family=setup_family,
+            confidence_components=confidence_components,
+            calibration_review=calibration_review,
+            transmission_summary=transmission_summary,
+            shortlisted=False,
+            shortlist_rank=None,
+        )
+        evidence_summary = self._evidence_summary(
+            candidate.indicator_summary,
+            setup_family,
+            confidence_components,
+            action_reason="not_shortlisted",
+            calibration_review=calibration_review,
+            transmission_summary=transmission_summary,
+        )
+        shortlist_payload = {
+            "shortlisted": False,
+            "shortlist_rank": None,
+            "shortlist_decision": shortlist_decision or {},
+            "shortlist_reasons": signal.diagnostics.get("shortlist_reasons", []),
+            "shortlist_reason_details": signal.diagnostics.get("shortlist_reason_details", []),
+        }
+        decision_type = self._decision_type("no_action", "ok", "not_shortlisted", confidence_gap, shortlisted=False)
+        review_priority = self._review_priority(decision_type, confidence_gap=confidence_gap, shortlisted=False, status="ok")
+        self.decision_samples.upsert_sample(
+            RecommendationDecisionSample(
+                recommendation_plan_id=None,
+                ticker=signal.ticker,
+                horizon=watchlist.default_horizon.value,
+                action="no_action",
+                decision_type=decision_type,
+                decision_reason="not_shortlisted",
+                shortlisted=False,
+                shortlist_rank=None,
+                shortlist_decision=shortlist_payload,
+                confidence_percent=signal.confidence_percent,
+                calibrated_confidence_percent=calibrated_confidence,
+                effective_threshold_percent=effective_threshold,
+                confidence_gap_percent=confidence_gap,
+                setup_family=setup_family,
+                transmission_bias=str(signal_breakdown.get("transmission_bias") or "").strip() or None,
+                context_regime=str(self._pluck(signal_breakdown, "calibration_review", "context_regime", "key") or "").strip() or None,
+                review_priority=review_priority,
+                decision_context={
+                    "status": "ok",
+                    "warnings": list(signal.warnings),
+                    "shortlisted": False,
+                    "shortlist_rank": None,
+                    "shortlist_decision": shortlist_decision or {},
+                    "confidence_percent": signal.confidence_percent,
+                    "calibrated_confidence_percent": calibrated_confidence,
+                    "effective_threshold_percent": effective_threshold,
+                    "confidence_gap_percent": confidence_gap,
+                    "action_reason": "not_shortlisted",
+                    "review_priority": review_priority,
+                },
+                signal_breakdown=signal_breakdown,
+                evidence_summary=evidence_summary,
+                run_id=run_id,
+                job_id=job_id,
+                watchlist_id=watchlist.id,
+                ticker_signal_snapshot_id=signal.id,
+            )
         )
 
     def _record_decision_sample(

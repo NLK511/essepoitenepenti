@@ -856,12 +856,19 @@ class RepositoryTests(unittest.TestCase):
         plans = RecommendationPlanRepository(session).list_plans(limit=10)
         samples = RecommendationDecisionSampleRepository(session).list_samples(limit=10)
         self.assertEqual(len(ticker_signals), 3)
-        self.assertEqual(len(plans), 3)
+        self.assertEqual(len(plans), 1)
         self.assertEqual(len(samples), 3)
         action_map = {plan.ticker: plan.action for plan in plans}
         self.assertEqual(action_map["AAPL"], "long")
-        self.assertEqual(action_map["MSFT"], "no_action")
-        self.assertEqual(action_map["TSLA"], "no_action")
+        sample_map = {sample.ticker: sample for sample in samples}
+        self.assertEqual(sample_map["AAPL"].action, "long")
+        self.assertIsNotNone(sample_map["AAPL"].recommendation_plan_id)
+        self.assertEqual(sample_map["MSFT"].action, "no_action")
+        self.assertIsNone(sample_map["MSFT"].recommendation_plan_id)
+        self.assertEqual(sample_map["MSFT"].decision_reason, "not_shortlisted")
+        self.assertEqual(sample_map["TSLA"].action, "no_action")
+        self.assertIsNone(sample_map["TSLA"].recommendation_plan_id)
+        self.assertEqual(sample_map["TSLA"].decision_reason, "not_shortlisted")
         plan_map = {plan.ticker: plan for plan in plans}
         self.assertIsInstance(plan_map["AAPL"].signal_breakdown, RecommendationPlanSignalBreakdown)
         self.assertIsInstance(plan_map["AAPL"].signal_breakdown.get("transmission_summary"), RecommendationTransmissionSummary)
@@ -875,9 +882,9 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(plan_map["AAPL"].evidence_summary["timing_expectation"], "2d_5d")
         self.assertIn("follow_through_speed", plan_map["AAPL"].evidence_summary["evaluation_focus"])
         self.assertIn("breakout", plan_map["AAPL"].evidence_summary["invalidation_summary"])
-        self.assertEqual(plan_map["TSLA"].evidence_summary["action_reason"], "not_shortlisted")
-        self.assertEqual(plan_map["TSLA"].evidence_summary["action_reason_label"], "not shortlisted")
-        self.assertIn("did not clear shortlist competition", plan_map["TSLA"].evidence_summary["action_reason_detail"])
+        self.assertEqual(sample_map["TSLA"].evidence_summary["action_reason"], "not_shortlisted")
+        self.assertEqual(sample_map["TSLA"].evidence_summary["action_reason_label"], "not shortlisted")
+        self.assertIn("did not clear shortlist competition", sample_map["TSLA"].evidence_summary["action_reason_detail"])
         diagnostics_map = {item.ticker: item.diagnostics for item in ticker_signals}
         source_breakdown_map = {item.ticker: item.source_breakdown for item in ticker_signals}
         self.assertIsInstance(diagnostics_map["AAPL"], TickerSignalDiagnostics)
@@ -928,6 +935,7 @@ class RepositoryTests(unittest.TestCase):
             context_snapshots=ContextSnapshotRepository(session),
             recommendation_plans=RecommendationPlanRepository(session),
             cheap_scan_service=CheapScanProposalService(),
+            decision_samples=RecommendationDecisionSampleRepository(session),
             deep_analysis_service=TickerDeepAnalysisService(DeepAnalysisProposalService()),
             confidence_threshold=60.0,
         )
@@ -957,9 +965,12 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(artifact_payload["manual_job_defaults"]["default_horizon"], "1w")
         ticker_signals = ContextSnapshotRepository(session).list_ticker_signal_snapshots(limit=10)
         plans = RecommendationPlanRepository(session).list_plans(limit=10)
+        samples = RecommendationDecisionSampleRepository(session).list_samples(limit=10)
         self.assertEqual(len(ticker_signals), 2)
-        self.assertEqual(len(plans), 2)
-        self.assertEqual({plan.ticker: plan.action for plan in plans}, {"AAPL": "long", "TSLA": "no_action"})
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(len(samples), 2)
+        self.assertEqual({plan.ticker: plan.action for plan in plans}, {"AAPL": "long"})
+        self.assertIsNone(next(sample for sample in samples if sample.ticker == "TSLA").recommendation_plan_id)
 
     def test_watchlist_orchestration_shortlist_thresholds_vary_by_horizon_and_size(self) -> None:
         session = create_session()
@@ -1455,6 +1466,65 @@ class RepositoryTests(unittest.TestCase):
         self.assertNotIn('"ticker": "MSFT"', latest_run.timing_json)
         self.assertIn('"failed_after_phase": "recommendation_generation"', latest_run.artifact_json or "")
 
+    def test_decision_samples_can_be_upserted_without_plan_rows_when_signal_snapshot_exists(self) -> None:
+        session = create_session()
+        signal = ContextSnapshotRepository(session).create_ticker_signal_snapshot(
+            TickerSignalSnapshot(
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                direction="long",
+                swing_probability_percent=62.0,
+                confidence_percent=66.0,
+                attention_score=74.0,
+                macro_exposure_score=55.0,
+                industry_alignment_score=57.0,
+                ticker_sentiment_score=59.0,
+                technical_setup_score=61.0,
+                catalyst_score=48.0,
+                expected_move_score=43.0,
+                execution_quality_score=58.0,
+            )
+        )
+        repository = RecommendationDecisionSampleRepository(session)
+
+        stored = repository.upsert_sample(
+            RecommendationDecisionSample(
+                recommendation_plan_id=None,
+                ticker="AAPL",
+                horizon="1w",
+                action="no_action",
+                decision_type="no_action",
+                decision_reason="not_shortlisted",
+                shortlisted=False,
+                confidence_percent=66.0,
+                setup_family="continuation",
+                review_priority="low",
+                ticker_signal_snapshot_id=signal.id,
+            )
+        )
+        updated = repository.upsert_sample(
+            RecommendationDecisionSample(
+                recommendation_plan_id=None,
+                ticker="AAPL",
+                horizon="1w",
+                action="no_action",
+                decision_type="near_miss",
+                decision_reason="not_shortlisted",
+                shortlisted=False,
+                confidence_percent=66.0,
+                setup_family="continuation",
+                review_priority="high",
+                ticker_signal_snapshot_id=signal.id,
+            )
+        )
+
+        self.assertEqual(stored.id, updated.id)
+        self.assertIsNone(updated.recommendation_plan_id)
+        self.assertEqual(updated.ticker_signal_snapshot_id, signal.id)
+        self.assertEqual(updated.decision_type, "near_miss")
+        self.assertEqual(updated.review_priority, "high")
+        self.assertEqual(repository.count_samples(), 1)
+
     def test_job_repository_delete_removes_job_runs_and_recommendations_without_nulling_run_job_id(self) -> None:
         session = create_session()
         jobs = JobRepository(session)
@@ -1484,17 +1554,19 @@ class RepositoryTests(unittest.TestCase):
         )
         RecommendationDecisionSampleRepository(session).upsert_sample(
             RecommendationDecisionSample(
-                recommendation_plan_id=plan.id or 0,
+                recommendation_plan_id=None,
                 ticker="AAPL",
                 horizon="1w",
-                action="long",
-                decision_type="actionable",
+                action="no_action",
+                decision_type="no_action",
+                decision_reason="not_shortlisted",
                 confidence_percent=80.0,
                 calibrated_confidence_percent=80.0,
                 setup_family="continuation",
                 reviewed_at=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc),
                 run_id=run.id,
                 job_id=job.id,
+                ticker_signal_snapshot_id=101,
             )
         )
         jobs.delete(job.id or 0)
@@ -1532,17 +1604,19 @@ class RepositoryTests(unittest.TestCase):
         )
         RecommendationDecisionSampleRepository(session).upsert_sample(
             RecommendationDecisionSample(
-                recommendation_plan_id=plan.id or 0,
+                recommendation_plan_id=None,
                 ticker="AAPL",
                 horizon="1w",
-                action="long",
-                decision_type="actionable",
+                action="no_action",
+                decision_type="no_action",
+                decision_reason="not_shortlisted",
                 confidence_percent=80.0,
                 calibrated_confidence_percent=80.0,
                 setup_family="continuation",
                 reviewed_at=datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc),
                 run_id=run.id,
                 job_id=job.id,
+                ticker_signal_snapshot_id=202,
             )
         )
         ContextSnapshotRepository(session).create_macro_context_snapshot(

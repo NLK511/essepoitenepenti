@@ -291,7 +291,11 @@ class PlanGenerationTuningService:
     def _eligible_records(self, *, ticker: str | None, setup_family: str | None, limit: int) -> list[EligibleTuningRecord]:
         plans = self.plans.list_plans(ticker=ticker, action=None, limit=limit, offset=0)
         outcome_map = self.outcomes.get_outcomes_by_plan_ids([plan.id for plan in plans if plan.id is not None])
-        sample_map = {sample.recommendation_plan_id: sample for sample in self.samples.list_samples(ticker=ticker, limit=limit)}
+        sample_map = {
+            sample.recommendation_plan_id: sample
+            for sample in self.samples.list_samples(ticker=ticker, limit=limit)
+            if sample.recommendation_plan_id is not None
+        }
         eligible: list[EligibleTuningRecord] = []
         normalized_setup_family = str(setup_family or "").strip().lower() or None
         for plan in plans:
