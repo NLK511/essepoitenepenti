@@ -1,4 +1,7 @@
+import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+
+import { BrandLoader, BrandLogo } from "./components/brand";
 
 import { AppLayout } from "./components/layout";
 import { LoginPage } from "./pages/login-page";
@@ -27,6 +30,25 @@ function NotFoundPage() {
 }
 
 export default function App() {
+  const [showBootScreen, setShowBootScreen] = useState(true);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setShowBootScreen(false), 900);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  if (showBootScreen) {
+    return (
+      <div className="app-boot-screen">
+        <div className="app-boot-panel">
+          <div className="kicker">Aurelio</div>
+          <BrandLogo markSize="xl" subtitle="Stoic clarity for modern markets" decorativeMark wordmark className="app-boot-brand" />
+          <BrandLoader prominence="hero" message="Preparing the decision workspace…" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <BrowserRouter>
       <Routes>

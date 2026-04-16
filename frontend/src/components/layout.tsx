@@ -3,8 +3,8 @@ import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth";
 import { getJson } from "../api";
+import { BrandLogo, BrandMark } from "../components/brand";
 import { Badge } from "../components/ui";
-import { AurelioMark } from "../theme/aurelio";
 import { ActiveWorkersResponse, AppHealthResponse, WorkerHeartbeat } from "../types";
 
 const THEME_KEY = "trade-proposer-theme";
@@ -336,15 +336,9 @@ export function AppLayout() {
     <div className="workspace-shell">
       <aside className="sidebar-shell">
         <div className="sidebar-shell-content">
-          <div className="sidebar-brand">
-            <NavLink to="/" className="brand-mark brand-mark-large" aria-label="Aurelio home">
-              <AurelioMark className="brand-mark-icon" />
-            </NavLink>
-            <div className="brand-copy">
-              <div className="brand-title">Aurelio</div>
-              <div className="brand-subtitle">Stoic clarity for modern markets</div>
-            </div>
-          </div>
+          <NavLink to="/" className="sidebar-brand" aria-label="Aurelio home">
+            <BrandLogo markSize="lg" subtitle="Stoic clarity for modern markets" decorativeMark className="sidebar-brand-lockup" />
+          </NavLink>
 
           <div
             className="sidebar-status-wrap"
@@ -476,6 +470,10 @@ export function AppLayout() {
       <div className="content-shell">
         <header className="content-topbar">
           <div className="content-topbar-meta">
+            <Link to="/" className="mobile-header-brand" aria-label="Aurelio home">
+              <BrandMark size="sm" decorative />
+              <span className="mobile-header-brand-copy">Aurelio</span>
+            </Link>
             <div className="kicker">{meta.eyebrow}</div>
             <div className="content-topbar-title">{meta.title}</div>
             <div className="content-topbar-subtitle">{meta.description}</div>

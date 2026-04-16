@@ -1,6 +1,8 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import { Link } from "react-router-dom";
 
+import { BrandLoader } from "./brand";
+
 export function PageHeader(props: {
   kicker: string;
   title: string;
@@ -34,12 +36,7 @@ export function EmptyState(props: { message: string }) {
 export function LoadingState(props: { message?: string }) {
   return (
     <div className="empty-state loading-state">
-      <div className="loading-dots" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </div>
-      <div>{props.message ?? "Loading…"}</div>
+      <BrandLoader compact message={props.message ?? "Loading…"} />
     </div>
   );
 }

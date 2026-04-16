@@ -2,6 +2,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth";
+import { BrandLoader, BrandLogo } from "../components/brand";
 
 type LoginLocationState = {
   from?: {
@@ -48,6 +49,12 @@ export function LoginPage() {
   return (
     <div className="login-page">
       <section className="panel login-panel">
+        <div className="login-brand-block">
+          <BrandLogo markSize="xl" subtitle="Stoic clarity for modern markets" decorativeMark wordmark className="login-brand-lockup" />
+          <p className="login-brand-description">
+            A disciplined workspace for swing trading decisions across technical structure, contextual news, fundamentals, and model reasoning.
+          </p>
+        </div>
         <div className="page-header">
           <div>
             <div className="kicker">Authentication</div>
@@ -84,6 +91,11 @@ export function LoginPage() {
             </button>
           </div>
         </form>
+        {submitting ? (
+          <div className="login-submit-loader">
+            <BrandLoader compact message="Verifying credentials…" />
+          </div>
+        ) : null}
       </section>
     </div>
   );
