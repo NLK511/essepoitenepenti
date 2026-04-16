@@ -1,7 +1,5 @@
 import AurelioLogoAnimation from "./aurelio-logo-animation";
 
-const microLogoUrl = "/brand/aurelio_micro.svg";
-
 type BrandSize = "xs" | "sm" | "md" | "lg" | "xl";
 
 const pixelSize: Record<BrandSize, number> = {
@@ -12,6 +10,27 @@ const pixelSize: Record<BrandSize, number> = {
   xl: 72,
 };
 
+function StaticBrandMark(props: { size: number; className?: string; decorative?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 64 64"
+      width={props.size}
+      height={props.size}
+      className={["brand-mark-image", props.className ?? ""].filter(Boolean).join(" ")}
+      fill="none"
+      aria-hidden={props.decorative ? true : undefined}
+      aria-label={props.decorative ? undefined : "Aurelio mark"}
+      role={props.decorative ? undefined : "img"}
+    >
+      <path d="M12 52L31 10L52 52" stroke="#D6BA78" strokeWidth="4.5" strokeLinecap="round" />
+      <path d="M20 52H43" stroke="#D6BA78" strokeWidth="4.5" strokeLinecap="round" />
+      <path d="M24 39V48" stroke="#F3E7C3" strokeWidth="3.5" strokeLinecap="round" />
+      <path d="M32 35V48" stroke="#F3E7C3" strokeWidth="3.5" strokeLinecap="round" />
+      <path d="M40 29V44" stroke="#F3E7C3" strokeWidth="3.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function BrandMark(props: {
   size?: BrandSize;
   className?: string;
@@ -21,16 +40,7 @@ export function BrandMark(props: {
   const size = props.size ?? "md";
 
   if (!(props.animate ?? false)) {
-    return (
-      <img
-        src={microLogoUrl}
-        alt={props.decorative ?? true ? "" : "Aurelio mark"}
-        width={pixelSize[size]}
-        height={pixelSize[size]}
-        className={["brand-mark-image", props.className ?? ""].filter(Boolean).join(" ")}
-        aria-hidden={props.decorative ?? true ? true : undefined}
-      />
-    );
+    return <StaticBrandMark size={pixelSize[size]} className={props.className} decorative={props.decorative ?? true} />;
   }
 
   return (

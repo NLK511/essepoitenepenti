@@ -343,7 +343,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             for path in ("/", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/context", "/context/sentiment/1", "/context/macro/1", "/sentiment", "/sentiment/1", "/runs/1", "/workers/worker-test", "/recommendation-plans", "/tickers/AAPL"):
                 response = await client.get(path)
                 self.assertEqual(response.status_code, 200)
-                self.assertIn("<title>Trade Proposer App</title>", response.text)
+                self.assertIn("<title>Aurelio</title>", response.text)
 
             legacy_redirect = await client.get("/recommendations/1", follow_redirects=False)
             self.assertEqual(legacy_redirect.status_code, 307)
