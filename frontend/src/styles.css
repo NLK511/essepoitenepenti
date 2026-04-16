@@ -188,9 +188,15 @@ html[data-theme="light"] .topbar {
   height: 26px;
 }
 
-.aurelio-logo-animation {
+.aurelio-logo-animation,
+.brand-mark-image {
   display: block;
   line-height: 0;
+}
+
+.brand-mark-image {
+  width: 100%;
+  height: 100%;
 }
 
 .aurelio-logo-animation-svg {

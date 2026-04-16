@@ -1,6 +1,16 @@
 import AurelioLogoAnimation from "./aurelio-logo-animation";
 
+const microLogoUrl = "/brand/aurelio_micro.svg";
+
 type BrandSize = "xs" | "sm" | "md" | "lg" | "xl";
+
+const pixelSize: Record<BrandSize, number> = {
+  xs: 18,
+  sm: 24,
+  md: 32,
+  lg: 48,
+  xl: 72,
+};
 
 export function BrandMark(props: {
   size?: BrandSize;
@@ -8,12 +18,27 @@ export function BrandMark(props: {
   decorative?: boolean;
   animate?: boolean;
 }) {
+  const size = props.size ?? "md";
+
+  if (!(props.animate ?? false)) {
+    return (
+      <img
+        src={microLogoUrl}
+        alt={props.decorative ?? true ? "" : "Aurelio mark"}
+        width={pixelSize[size]}
+        height={pixelSize[size]}
+        className={["brand-mark-image", props.className ?? ""].filter(Boolean).join(" ")}
+        aria-hidden={props.decorative ?? true ? true : undefined}
+      />
+    );
+  }
+
   return (
     <AurelioLogoAnimation
       showWordmark={false}
-      size={props.size ?? "md"}
+      size={size}
       decorative={props.decorative ?? true}
-      animate={props.animate ?? false}
+      animate
       className={["brand-mark-animation", props.className ?? ""].filter(Boolean).join(" ")}
     />
   );
