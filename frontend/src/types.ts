@@ -405,6 +405,8 @@ export interface RecommendationPlanSignalBreakdown {
   calibration_review?: RecommendationCalibrationReview;
   transmission_summary?: RecommendationTransmissionSummary;
   mode?: string;
+  shortlisted?: boolean;
+  shortlist_rank?: number | null;
   [key: string]: unknown;
 }
 

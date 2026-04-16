@@ -25,7 +25,7 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         from trade_proposer_app.services.proposals import ProposalService
         self.proposal_service = Mock(spec=ProposalService)
         # Ensure context passthrough for enrichment
-        self.proposal_service._apply_news_context.side_effect = lambda ctx, t: ctx
+        self.proposal_service._apply_news_context.side_effect = lambda ctx, t, as_of=None: ctx
         self.service = TickerDeepAnalysisService(self.proposal_service)
 
     # ─── Price Level Arithmetic ───────────────────────────────────────────────

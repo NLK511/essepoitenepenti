@@ -33,7 +33,7 @@ class _FakeNewsService:
     def __init__(self, bundle: NewsBundle) -> None:
         self._bundle = bundle
 
-    def fetch(self, ticker: str) -> NewsBundle:
+    def fetch(self, ticker: str, start_at=None, end_at=None) -> NewsBundle:
         self._bundle.ticker = ticker
         return self._bundle
 
@@ -47,7 +47,7 @@ class _StubSummaryService:
 
 
 class _StubSnapshotResolver:
-    def resolve_macro_snapshot(self) -> dict[str, object]:
+    def resolve_macro_snapshot(self, as_of=None) -> dict[str, object]:
         return {
             "score": -0.2,
             "label": "NEGATIVE",
@@ -69,7 +69,7 @@ class _StubSnapshotResolver:
             "diagnostics": {"warnings": ["macro snapshot used"]},
         }
 
-    def resolve_industry_snapshot(self, ticker: str) -> dict[str, object]:
+    def resolve_industry_snapshot(self, ticker: str, as_of=None) -> dict[str, object]:
         return {
             "score": 0.3,
             "label": "POSITIVE",

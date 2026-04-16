@@ -58,7 +58,7 @@ def create_session() -> Session:
 
 
 class StubWatchlistOrchestrationService:
-    def execute(self, watchlist, tickers, *, job_id=None, run_id=None):
+    def execute(self, watchlist, tickers, *, job_id=None, run_id=None, as_of=None):
         return {
             "summary": {
                 "mode": "watchlist_orchestration",
@@ -80,13 +80,13 @@ class StubWatchlistOrchestrationService:
 
 
 class FailingWatchlistOrchestrationService:
-    def execute(self, watchlist, tickers, *, job_id=None, run_id=None):
+    def execute(self, watchlist, tickers, *, job_id=None, run_id=None, as_of=None):
         failing = tickers[0] if tickers else "unknown"
         raise RuntimeError(f"boom: {failing}")
 
 
 class FailOnSecondTickerWatchlistOrchestrationService:
-    def execute(self, watchlist, tickers, *, job_id=None, run_id=None):
+    def execute(self, watchlist, tickers, *, job_id=None, run_id=None, as_of=None):
         ticker_generation = []
         for index, ticker in enumerate(tickers, start=1):
             if index == 2:
@@ -130,7 +130,7 @@ class StubEvaluationExecutionService(EvaluationExecutionService):
 
 
 class CheapScanProposalService:
-    def score(self, ticker: str, horizon: StrategyHorizon):
+    def score(self, ticker: str, horizon: StrategyHorizon, as_of=None):
         from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal
 
         confidence_map = {"AAPL": 84.0, "MSFT": 67.0, "TSLA": 41.0}
@@ -157,7 +157,7 @@ class CheapScanProposalService:
 
 
 class CatalystLaneCheapScanService:
-    def score(self, ticker: str, horizon: StrategyHorizon):
+    def score(self, ticker: str, horizon: StrategyHorizon, as_of=None):
         from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal
 
         fixtures = {
@@ -184,7 +184,7 @@ class CatalystLaneCheapScanService:
 
 
 class DeepAnalysisProposalService:
-    def generate(self, ticker: str) -> RunOutput:
+    def generate(self, ticker: str, as_of=None) -> RunOutput:
         direction_map = {
             "AAPL": RecommendationDirection.LONG,
             "MSFT": RecommendationDirection.SHORT,
@@ -533,6 +533,43 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(plans[0].latest_outcome.transmission_bias_detail["label"], "unknown")
         self.assertEqual(plans[0].latest_outcome.context_regime_label, "mixed context")
         self.assertEqual(plans[0].latest_outcome.context_regime_detail["label"], "mixed context")
+
+    def test_recommendation_plan_repository_filters_shortlisted_state(self) -> None:
+        session = create_session()
+        plan_repository = RecommendationPlanRepository(session)
+
+        shortlisted_plan = plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=70.0,
+                thesis_summary="Shortlisted plan",
+                signal_breakdown={"setup_family": "continuation", "shortlisted": True, "shortlist_rank": 1},
+                evidence_summary={"action_reason": "promoted"},
+            )
+        )
+        not_shortlisted_plan = plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="MSFT",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="no_action",
+                confidence_percent=35.0,
+                thesis_summary="Rejected before deep analysis",
+                signal_breakdown={"setup_family": "continuation"},
+                evidence_summary={"action_reason": "not_shortlisted"},
+            )
+        )
+
+        shortlisted = plan_repository.list_plans(shortlisted=True, limit=10)
+        rejected = plan_repository.list_plans(shortlisted=False, limit=10)
+
+        self.assertEqual([plan.id for plan in shortlisted], [shortlisted_plan.id])
+        self.assertEqual([plan.id for plan in rejected], [not_shortlisted_plan.id])
+        self.assertEqual(plan_repository.count_plans(shortlisted=True), 1)
+        self.assertEqual(plan_repository.count_plans(shortlisted=False), 1)
+        self.assertEqual(plan_repository.summarize_stats(shortlisted=True).total_plans, 1)
+        self.assertEqual(plan_repository.summarize_stats(shortlisted=False).total_plans, 1)
 
     def test_recommendation_outcome_upsert_recovers_from_integrity_error(self) -> None:
         session = create_session()
@@ -1086,7 +1123,7 @@ class RepositoryTests(unittest.TestCase):
         )
 
         class TunedCheapScanService:
-            def score(self, ticker: str, horizon: StrategyHorizon):
+            def score(self, ticker: str, horizon: StrategyHorizon, as_of=None):
                 from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal
 
                 return CheapScanSignal(
@@ -1106,7 +1143,7 @@ class RepositoryTests(unittest.TestCase):
                 )
 
         class TunedDeepAnalysisService:
-            def generate(self, ticker: str) -> RunOutput:
+            def generate(self, ticker: str, as_of=None) -> RunOutput:
                 analysis = {"summary": {"text": f"deep analysis for {ticker}"}, "ticker_deep_analysis": {"transmission_analysis": {"context_bias": "tailwind", "contradiction_count": 0}}}
                 return RunOutput(
                     recommendation=Recommendation(

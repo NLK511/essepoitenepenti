@@ -85,7 +85,7 @@ class StubMacroContextRefreshService:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
-    def refresh(self, *, job_id: int | None = None, run_id: int | None = None) -> Any:
+    def refresh(self, *, job_id: int | None = None, run_id: int | None = None, as_of=None) -> Any:
         return {
             "payload": type(
                 "Payload",
@@ -109,7 +109,7 @@ class StubIndustryContextRefreshService:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
-    def refresh_all(self, *, job_id: int | None = None, run_id: int | None = None) -> list[Any]:
+    def refresh_all(self, *, job_id: int | None = None, run_id: int | None = None, as_of=None) -> list[Any]:
         return [
             type(
                 "Payload",
@@ -119,6 +119,7 @@ class StubIndustryContextRefreshService:
                     "subject_label": "Consumer Electronics",
                     "score": 0.12,
                     "label": "POSITIVE",
+                    "computed_at": datetime(2026, 3, 22, 6, 0, 0, tzinfo=timezone.utc),
                     "expires_at": None,
                     "coverage": {},
                     "signals": {},

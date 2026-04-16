@@ -9,7 +9,7 @@ This document lists the standalone scripts available in the `scripts/` directory
 ### `scripts/hydrate_daily_bars.py`
 Hydrates the local database with historical Daily OHLCV bars from Yahoo! Finance.
 
-- **Use case:** Fixes "insufficient history" issues in replays by backfilling the 30-90 days of history required for SMA/momentum indicators.
+- **Use case:** Fixes "insufficient history" issues in replays by backfilling the 30-90 days of history preferred by the cheap scan. Replays can run with as few as 10 bars, but the `cheap scan used limited lookback history` warning now specifically means fewer than 50 bars were available for the SMA50-style trend context.
 - **Behavior:** Pulls point-in-time consistent bars (using `as_of`) and persists them to `historical_market_bars`.
 - **Usage:**
   ```bash

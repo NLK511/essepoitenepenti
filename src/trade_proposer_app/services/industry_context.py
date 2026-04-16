@@ -79,6 +79,7 @@ class IndustryContextService:
         *,
         job_id: int | None = None,
         run_id: int | None = None,
+        request_mode: str = "live",
     ) -> IndustryContextSnapshot:
         industry_key = str(getattr(payload, "subject_key", "") or "")
         industry_label = str(getattr(payload, "subject_label", "") or industry_key)
@@ -95,7 +96,13 @@ class IndustryContextService:
         ontology_profile = self._with_profile_channel_details(self.taxonomy_service.get_industry_definition(industry_key or industry_label))
         expanded_queries = self._expanded_query_terms(industry_label, query_terms, ontology_profile)
 
-        news_bundle, news_sentiment = self._load_news_evidence(industry_label, tracked_tickers, expanded_queries, as_of=effective_now)
+        news_bundle, news_sentiment = self._load_news_evidence(
+            industry_label,
+            tracked_tickers,
+            expanded_queries,
+            as_of=effective_now,
+            request_mode=request_mode,
+        )
         primary_news_items = news_sentiment.get("news_items", []) if isinstance(news_sentiment, dict) else []
         news_items = primary_news_items if isinstance(primary_news_items, list) else []
 
@@ -289,6 +296,7 @@ class IndustryContextService:
         query_terms: list[object],
         *,
         as_of: datetime | None = None,
+        request_mode: str = "live",
     ) -> tuple[object | None, dict[str, object]]:
         if self.news_service is None:
             return None, {}
@@ -299,10 +307,25 @@ class IndustryContextService:
         normalized_tickers = [str(ticker).strip().upper() for ticker in tracked_tickers if str(ticker).strip()]
         queries = [str(query).strip() for query in query_terms if str(query).strip()]
         if normalized_tickers and len(normalized_tickers) >= 2:
-            bundle = self.news_service.fetch_many(normalized_tickers[:8], per_symbol_limit=3, start_at=start_at, end_at=effective_now)
+            bundle = self.news_service.fetch_many(
+                normalized_tickers[:8],
+                per_symbol_limit=3,
+                start_at=start_at,
+                end_at=effective_now,
+                request_mode=request_mode,
+                primary_only=True,
+            )
         else:
             topical_queries = queries or [industry_label]
-            bundle = self.news_service.fetch_topics(industry_label, topical_queries[:8], per_query_limit=3, start_at=start_at, end_at=effective_now)
+            bundle = self.news_service.fetch_topics(
+                industry_label,
+                topical_queries[:8],
+                per_query_limit=3,
+                start_at=start_at,
+                end_at=effective_now,
+                request_mode=request_mode,
+                primary_only=True,
+            )
         analyzed = self.news_service.analyze_bundle(bundle)
         sentiment = analyzed.get("sentiment", {}) if isinstance(analyzed, dict) else {}
         return bundle, sentiment if isinstance(sentiment, dict) else {}

@@ -37,6 +37,11 @@ class CheapScanError(Exception):
 
 
 class CheapScanSignalService:
+    MIN_HISTORY_BARS_LIVE = 30
+    MIN_HISTORY_BARS_REPLAY = 10
+    REMOTE_FALLBACK_MIN_BARS = 30
+    FULL_SMA_LOOKBACK_BARS = 50
+
     def __init__(
         self,
         history_fetcher: Callable[[str, str, datetime | None], pd.DataFrame] | None = None,
@@ -53,30 +58,34 @@ class CheapScanSignalService:
         logger.info(f"    [CheapScan] {normalized_ticker} as_of={as_of}")
         
         history = pd.DataFrame()
+        history_source = "unavailable"
+        is_replay = bool(as_of)
+
         # 1. Prefer local DB data
         if self.repository:
-            history = self._fetch_from_db(normalized_ticker, as_of or datetime.now(timezone.utc), is_replay=bool(as_of))
-        
-        # 2. Fallback to remote data if local is missing or insufficient (need at least 30 days for indicators)
-        if history.empty or len(history) < 30:
+            history = self._fetch_from_db(normalized_ticker, as_of or datetime.now(timezone.utc), is_replay=is_replay)
+            if not history.empty:
+                history_source = "database"
+
+        # 2. Fallback to remote data if local is missing or insufficient for the live minimum feature set.
+        if history.empty or len(history) < self.REMOTE_FALLBACK_MIN_BARS:
             remote_history = self.history_fetcher(normalized_ticker, period, as_of)
             if not remote_history.empty:
                 # Use remote data if it's better/longer than what we have locally
                 if len(remote_history) > len(history):
                     history = remote_history
+                    history_source = "yahoo"
                     # 3. Take the opportunity to persist it locally
                     if self.repository:
                         try:
                             self._persist_history(normalized_ticker, history)
                         except Exception as e:
                             logger.warning(f"    [CheapScan] failed to persist remote history for {normalized_ticker}: {e}")
-            
+
         if history.empty:
             raise CheapScanError(f"no price history available for {normalized_ticker}")
-        
-        # We lowered this requirement for replay to 10 earlier, but with remote fallback 
-        # we should ideally always target 30+ bars if possible.
-        min_history = 10 if as_of else 30
+
+        min_history = self.MIN_HISTORY_BARS_REPLAY if is_replay else self.MIN_HISTORY_BARS_LIVE
         if len(history) < min_history:
             raise CheapScanError(f"insufficient price history for {normalized_ticker} (found {len(history)} bars)")
 
@@ -90,7 +99,7 @@ class CheapScanSignalService:
         ret20 = self._pct_change(closes, 20)
         rolling_high_20 = float(closes.tail(20).max())
         rolling_low_20 = float(closes.tail(20).min())
-        avg_dollar_volume_20 = float((closes * volumes).tail(20).mean())
+        avg_traded_value_20 = float((closes * volumes).tail(20).mean())
         realized_volatility_20 = float(returns.tail(20).std(ddof=0) * 100.0) if len(returns) >= 5 else 0.0
 
         trend_component = self._clamp(((latest_close / sma20) - 1.0) * 8.0 + ((latest_close / sma50) - 1.0) * 6.0, -1.0, 1.0)
@@ -112,7 +121,7 @@ class CheapScanSignalService:
         momentum_score = round(self._scale_signed_to_percent(momentum_component), 2)
         breakout_score = round(self._scale_signed_to_percent(breakout_component), 2)
         volatility_score = round(self._scale_value(realized_volatility_20, 1.0, 6.0), 2)
-        liquidity_score = round(self._scale_value(avg_dollar_volume_20, 5_000_000.0, 150_000_000.0), 2)
+        liquidity_score = round(self._scale_value(avg_traded_value_20, 5_000_000.0, 150_000_000.0), 2)
         confidence_percent = round(
             self._clamp(
                 abs(directional_score) * 70.0 + liquidity_score * 0.15 + (100.0 - abs(50.0 - volatility_score)) * 0.15,
@@ -131,9 +140,10 @@ class CheapScanSignalService:
         )
 
         warnings: list[str] = []
-        if avg_dollar_volume_20 < 5_000_000:
-            warnings.append("low average dollar volume on cheap scan")
-        if len(history) < 60:
+        history_bar_count = len(history)
+        if avg_traded_value_20 < 5_000_000:
+            warnings.append("low average traded value on cheap scan")
+        if history_bar_count < self.FULL_SMA_LOOKBACK_BARS:
             warnings.append("cheap scan used limited lookback history")
 
         summary_parts = [
@@ -163,10 +173,13 @@ class CheapScanSignalService:
                 "sma50": round(sma50, 4),
                 "return_5d_percent": round(ret5 * 100.0, 4),
                 "return_20d_percent": round(ret20 * 100.0, 4),
-                "avg_dollar_volume_20": round(avg_dollar_volume_20, 2),
+                "avg_traded_value_20": round(avg_traded_value_20, 2),
+                "liquidity_metric_currency": "raw_quote_currency_not_normalized",
                 "realized_volatility_20": round(realized_volatility_20, 4),
+                "history_bar_count": history_bar_count,
+                "effective_sma50_window": min(self.FULL_SMA_LOOKBACK_BARS, history_bar_count),
                 "model": "cheap_scan_v1",
-                "data_source": "database" if self.repository and as_of else "yahoo",
+                "data_source": history_source,
             },
             indicator_summary=" · ".join(summary_parts),
         )
@@ -212,7 +225,7 @@ class CheapScanSignalService:
             
             # For replay, we might have very limited history in the database (e.g. 6-7 days)
             # We relax the requirement slightly but keep it high enough to be meaningful.
-            min_bars = 10 if is_replay else 30
+            min_bars = self.MIN_HISTORY_BARS_REPLAY if is_replay else self.MIN_HISTORY_BARS_LIVE
             if not resampled.empty and len(resampled) >= min_bars:
                 return resampled
 

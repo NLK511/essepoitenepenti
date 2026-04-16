@@ -634,6 +634,8 @@ class WatchlistOrchestrationService:
         calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", signal.confidence_percent) or signal.confidence_percent)
         rationale = self._rationale_summary(signal, candidate, setup_family, transmission_summary)
         warnings = list(signal.warnings)
+        shortlisted = bool(signal.diagnostics.get("shortlisted"))
+        shortlist_rank = signal.diagnostics.get("shortlist_rank") if isinstance(signal.diagnostics.get("shortlist_rank"), int) else None
         if deep_output is None or deep_error is not None:
             return RecommendationPlan(
                 ticker=candidate.ticker,
@@ -645,7 +647,7 @@ class WatchlistOrchestrationService:
                 rationale_summary=rationale,
                 warnings=warnings,
                 evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason="deep_analysis_unavailable", calibration_review=calibration_review, transmission_summary=transmission_summary),
-                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary),
+                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, shortlisted=shortlisted, shortlist_rank=shortlist_rank),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -706,7 +708,7 @@ class WatchlistOrchestrationService:
                 rationale_summary=rationale,
                 warnings=list(dict.fromkeys(warnings)),
                 evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
-                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action),
+                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -731,7 +733,7 @@ class WatchlistOrchestrationService:
             risks=self._plan_risks(warnings, setup_family, action, transmission_summary),
             warnings=list(dict.fromkeys(warnings)),
             evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
-            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action),
+            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank),
             computed_at=signal.computed_at,
             run_id=run_id,
             job_id=job_id,
@@ -771,7 +773,7 @@ class WatchlistOrchestrationService:
             rationale_summary=self._rationale_summary(signal, candidate, setup_family, transmission_summary),
             warnings=list(signal.warnings),
             evidence_summary=self._evidence_summary(candidate.indicator_summary, setup_family, confidence_components, action_reason="not_shortlisted", calibration_review=calibration_review, transmission_summary=transmission_summary),
-            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary),
+            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, shortlisted=False, shortlist_rank=None),
             computed_at=signal.computed_at,
             run_id=run_id,
             job_id=job_id,
@@ -1064,6 +1066,8 @@ class WatchlistOrchestrationService:
         calibration_review: dict[str, object] | None = None,
         transmission_summary: dict[str, object] | None = None,
         intended_action: str | None = None,
+        shortlisted: bool | None = None,
+        shortlist_rank: int | None = None,
     ) -> dict[str, object]:
         calibration = calibration_review or {}
         calibrated_confidence = calibration.get("calibrated_confidence_percent") if isinstance(calibration.get("calibrated_confidence_percent"), (int, float)) else signal.confidence_percent
@@ -1084,6 +1088,8 @@ class WatchlistOrchestrationService:
             "calibration_review": calibration,
             "transmission_summary": transmission_summary or {},
             "mode": signal.diagnostics.get("mode"),
+            "shortlisted": shortlisted,
+            "shortlist_rank": shortlist_rank,
         }
         if intended_action in {"long", "short"}:
             payload["intended_action"] = intended_action

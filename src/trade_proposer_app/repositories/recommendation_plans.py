@@ -90,6 +90,17 @@ class RecommendationPlanRepository:
             return ""
         return str(signal_breakdown.get("setup_family") or "").strip().lower()
 
+    def _record_shortlisted(self, record: RecommendationPlanRecord) -> bool:
+        signal_breakdown = self._load(record.signal_breakdown_json, {})
+        if isinstance(signal_breakdown, dict) and isinstance(signal_breakdown.get("shortlisted"), bool):
+            return bool(signal_breakdown.get("shortlisted"))
+        evidence_summary = self._load(record.evidence_summary_json, {})
+        if isinstance(evidence_summary, dict):
+            action_reason = str(evidence_summary.get("action_reason") or "").strip().lower()
+            if action_reason == "not_shortlisted":
+                return False
+        return True
+
     def count_plans(
         self,
         ticker: str | None = None,
@@ -99,11 +110,12 @@ class RecommendationPlanRepository:
         plan_id: int | None = None,
         resolved: str | None = None,
         outcome: str | None = None,
+        shortlisted: bool | None = None,
         computed_after: datetime | None = None,
         computed_before: datetime | None = None,
     ) -> int:
         query = self._base_plan_query(ticker=ticker, action=action, run_id=run_id, plan_id=plan_id, computed_after=computed_after, computed_before=computed_before)
-        if setup_family or resolved or outcome:
+        if setup_family or resolved or outcome or shortlisted is not None:
             rows = self.session.scalars(query).all()
             outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
             normalized_setup_family = setup_family.strip().lower() if setup_family else None
@@ -118,6 +130,7 @@ class RecommendationPlanRepository:
                     setup_family=normalized_setup_family,
                     resolved=normalized_resolved,
                     outcome=normalized_outcome,
+                    shortlisted=shortlisted,
                 )
             )
         count_query = select(func.count()).select_from(query.subquery())
@@ -134,6 +147,7 @@ class RecommendationPlanRepository:
         plan_id: int | None = None,
         resolved: str | None = None,
         outcome: str | None = None,
+        shortlisted: bool | None = None,
         computed_after: datetime | None = None,
         computed_before: datetime | None = None,
     ) -> list[RecommendationPlan]:
@@ -143,7 +157,7 @@ class RecommendationPlanRepository:
         normalized_setup_family = setup_family.strip().lower() if setup_family else None
         normalized_resolved = (resolved or "").strip().lower() or None
         normalized_outcome = (outcome or "").strip().lower() or None
-        if normalized_setup_family or normalized_resolved or normalized_outcome:
+        if normalized_setup_family or normalized_resolved or normalized_outcome or shortlisted is not None:
             rows = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc())).all()
             outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
             filtered_rows = [
@@ -155,6 +169,7 @@ class RecommendationPlanRepository:
                     setup_family=normalized_setup_family,
                     resolved=normalized_resolved,
                     outcome=normalized_outcome,
+                    shortlisted=shortlisted,
                 )
             ]
             rows = filtered_rows[normalized_offset : normalized_offset + normalized_limit]
@@ -178,8 +193,11 @@ class RecommendationPlanRepository:
         setup_family: str | None,
         resolved: str | None,
         outcome: str | None,
+        shortlisted: bool | None,
     ) -> bool:
         if setup_family and self._record_setup_family(record) != setup_family:
+            return False
+        if shortlisted is not None and self._record_shortlisted(record) is not shortlisted:
             return False
         latest_outcome = outcome_map.get(record.id or 0)
         if resolved:
@@ -237,6 +255,7 @@ class RecommendationPlanRepository:
         plan_id: int | None = None,
         resolved: str | None = None,
         outcome: str | None = None,
+        shortlisted: bool | None = None,
         computed_after: datetime | None = None,
         computed_before: datetime | None = None,
         window: str = "all",
@@ -268,6 +287,7 @@ class RecommendationPlanRepository:
                 setup_family=normalized_setup_family,
                 resolved=normalized_resolved,
                 outcome=normalized_outcome,
+                shortlisted=shortlisted,
             )
         ]
         filtered_outcomes = [outcome_map.get(row.id or 0) for row in filtered_rows]

@@ -195,6 +195,7 @@ class BarsRefreshAndSimulationTests(unittest.TestCase):
                 
             # 3. Verify: Remote fallback happened and signal was produced
             self.assertEqual(signal.ticker, ticker)
+            self.assertEqual(signal.diagnostics["data_source"], "yahoo")
             
             # 4. Verify: Data was persisted to DB
             stored_bars = repository.list_bars(ticker=ticker, timeframe="1d")

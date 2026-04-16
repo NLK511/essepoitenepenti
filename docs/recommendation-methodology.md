@@ -82,11 +82,14 @@ The system first attempts to fetch bars from the `historical_market_bars` table.
 - **Fallback Timeframe:** If `1m` bars are missing, it falls back to `1d` bars stored in the database (replay mode only).
 
 **Fallback Source: Yahoo Finance**
-If local data is missing or insufficient (less than 30 days of history), the system pulls data through `yfinance`.
+If local data is missing or insufficient for the live cheap-scan minimum (less than 30 daily bars), the system pulls data through `yfinance`.
 - **Lazy Hydration:** When a remote fetch occurs, the system automatically persists the retrieved bars back into the local database to accelerate future requests.
 - **Replay Consistency:** Remote downloads support the `as_of` parameter, ensuring that even fallback data remains point-in-time consistent for historical simulations.
+- **Cheap-scan thresholds:** the scan requires at least 30 bars in normal runs and at least 10 bars in replay runs. It emits the warning `cheap scan used limited lookback history` only when fewer than 50 bars were available, because that means the SMA50-style trend context had to use a shortened window.
 
 The same hybrid price-data path is used for both generation and later evaluation.
+
+Cheap-scan liquidity uses a simple `close * volume` notional measure over the last 20 bars. The operator-facing warning is therefore `low average traded value on cheap scan`, not "dollar volume", because the current implementation does not FX-normalize non-USD listings.
 
 ### Shared macro and industry context
 The app stores reusable macro and industry context and links recommendations back to the artifacts they used.

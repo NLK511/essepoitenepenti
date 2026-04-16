@@ -240,6 +240,7 @@ Important nuance:
 - non-shortlisted names usually remain cheap-scan-only `no_action` plans
 - shortlisted names may still end as `no_action` after deep analysis and policy gating
 - only those deep-analysis-derived rejected plans can later produce phantom outcomes, because they retain intended direction and trade levels
+- on the recommendation-plans page, non-shortlisted names are hidden by default so the main review queue stays focused on deeper-review candidates; operators can still reveal them with the filter toggle when they want full audit coverage
 
 Suggested review order:
 1. review the queue first

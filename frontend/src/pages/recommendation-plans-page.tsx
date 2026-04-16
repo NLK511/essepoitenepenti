@@ -23,9 +23,17 @@ function buildQuery(searchParams: URLSearchParams, computedAfter?: string | null
   const query = new URLSearchParams(searchParams);
   const limit = Math.max(1, Number(query.get("limit") ?? "100") || 100);
   const page = Math.max(1, Number(query.get("page") ?? "1") || 1);
+  const showNonShortlisted = query.get("show_non_shortlisted") === "1";
+  const focusedPlanId = query.get("plan_id");
   query.set("limit", String(limit));
   query.set("offset", String((page - 1) * limit));
   query.delete("page");
+  query.delete("show_non_shortlisted");
+  if (!showNonShortlisted && !focusedPlanId) {
+    query.set("shortlisted", "true");
+  } else {
+    query.delete("shortlisted");
+  }
   if (computedAfter) {
     query.set("computed_after", computedAfter);
   }
@@ -175,6 +183,7 @@ export function RecommendationPlansPage() {
   const [pageMode, setPageMode] = useState<"review" | "analytics">("review");
   const pageSize = Math.max(1, Number(searchParams.get("limit") ?? "100") || 100);
   const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
+  const showNonShortlisted = searchParams.get("show_non_shortlisted") === "1";
   const plans = plansResponse?.items ?? null;
   const planTotal = plansResponse?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(planTotal / pageSize));
@@ -392,7 +401,7 @@ export function RecommendationPlansPage() {
 
       {pageMode === "review" ? (
       <Card className="sticky-toolbar">
-        <SectionTitle kicker="Filters" title="Find recommendation plans" subtitle="Filter the review queue by ticker, run, setup, resolution, or outcome." actions={<HelpHint tooltip="Use filters to narrow the recommendation-plan review set before opening plan details." to={recommendationPlansDoc("filter-bar")} />} />
+        <SectionTitle kicker="Filters" title="Find recommendation plans" subtitle="Filter the review queue by ticker, run, setup, resolution, or outcome. Non-shortlisted names stay hidden by default unless you explicitly reveal them." actions={<HelpHint tooltip="Use filters to narrow the recommendation-plan review set before opening plan details." to={recommendationPlansDoc("filter-bar")} />} />
         <form className="form-grid" onSubmit={handleSubmit}>
           <label className="form-field"><span>Ticker</span><input name="ticker" defaultValue={searchParams.get("ticker") ?? ""} placeholder="AAPL" /></label>
           <label className="form-field"><span>Action</span><select name="action" defaultValue={searchParams.get("action") ?? ""}><option value="">All</option><option value="long">long</option><option value="short">short</option><option value="no_action">no_action</option></select></label>
@@ -402,6 +411,10 @@ export function RecommendationPlansPage() {
           <label className="form-field"><span>Resolution</span><select name="resolved" defaultValue={searchParams.get("resolved") ?? ""}><option value="">All</option><option value="resolved">Resolved only</option><option value="unresolved">Unresolved only</option></select></label>
           <label className="form-field"><span>Outcome</span><select name="outcome" defaultValue={searchParams.get("outcome") ?? ""}><option value="">All</option><option value="win">win</option><option value="loss">loss</option><option value="expired">expired</option></select></label>
           <label className="form-field"><span>Limit</span><select name="limit" defaultValue={searchParams.get("limit") ?? "100"}><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option><option value="10000">All</option></select></label>
+          <label className="form-field form-field-checkbox">
+            <span>Queue coverage</span>
+            <span className="checkbox-inline"><input type="checkbox" name="show_non_shortlisted" value="1" defaultChecked={showNonShortlisted} /> Show non-shortlisted names</span>
+          </label>
           <div className="form-actions">
             <button className="icon-button icon-button-primary" type="submit" title="Apply filters" aria-label="Apply filters">
               ✓
@@ -457,7 +470,7 @@ export function RecommendationPlansPage() {
 
       {pageMode === "review" ? (
       <Card className="top-gap">
-        <SectionTitle title="Review queue" subtitle={plans ? `${planTotal} recommendation plan(s) · page ${currentPage} of ${pageCount}` : undefined} actions={<HelpHint tooltip="The main recommendation-plan table: review action, confidence, execution framing, outcomes, and thesis together." to={recommendationPlansDoc("results-table")} />} />
+        <SectionTitle title="Review queue" subtitle={plans ? `${planTotal} recommendation plan(s) · page ${currentPage} of ${pageCount}${showNonShortlisted ? " · all shortlist states" : " · shortlisted only by default"}` : undefined} actions={<HelpHint tooltip="The main recommendation-plan table: review action, confidence, execution framing, outcomes, and thesis together." to={recommendationPlansDoc("results-table")} />} />
         {!plans && !error ? <LoadingState message="Loading recommendation plans…" /> : null}
         {plans && plans.length === 0 ? <EmptyState message="No recommendation plans match the current filters." /> : null}
         {plans ? (
@@ -509,6 +522,8 @@ export function RecommendationPlansPage() {
                   const transmissionSummary = signalBreakdown.transmission_summary ?? evidenceSummary.transmission_summary ?? null;
                   const calibrationReview = signalBreakdown.calibration_review ?? evidenceSummary.calibration_review ?? null;
                   const setupFamily = typeof signalBreakdown?.setup_family === "string" ? signalBreakdown.setup_family : "—";
+                  const shortlisted = signalBreakdown?.shortlisted !== false;
+                  const shortlistRank = typeof signalBreakdown?.shortlist_rank === "number" ? signalBreakdown.shortlist_rank : null;
                   const actionReason = typeof evidenceSummary?.action_reason_label === "string" && evidenceSummary.action_reason_label
                     ? evidenceSummary.action_reason_label
                     : typeof evidenceSummary?.action_reason === "string" ? evidenceSummary.action_reason : "—";
@@ -572,7 +587,8 @@ export function RecommendationPlansPage() {
                         <td>
                           <div className="cluster">
                             <a href={yahooFinanceUrl(plan.ticker)} className="badge badge-info badge-link" target="_blank" rel="noreferrer noopener">{plan.ticker}</a>
-                                                        <Badge tone={plan.warnings.length > 0 ? "warning" : "ok"}>{plan.status}</Badge>
+                            <Badge tone={shortlisted ? "info" : "neutral"}>{shortlisted ? `shortlisted${shortlistRank !== null ? ` #${shortlistRank}` : ""}` : "not shortlisted"}</Badge>
+                            <Badge tone={plan.warnings.length > 0 ? "warning" : "ok"}>{plan.status}</Badge>
                           </div>
                           <div className="helper-text top-gap-small">horizon {plan.horizon} · setup {setupFamily}</div>
                         </td>
