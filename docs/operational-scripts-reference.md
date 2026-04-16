@@ -69,3 +69,14 @@ Re-runs the context extraction engine on past news/social data to build historic
   ```bash
   .venv/bin/python scripts/report_legacy_non_shortlisted_plans.py --limit 100 --output legacy-non-shortlisted.json
   ```
+
+### `scripts/cleanup_legacy_non_shortlisted_plans.py`
+- One-off cleanup helper for the same legacy rows.
+- Defaults to **dry-run**.
+- In `--apply` mode it preserves decision samples, nulls their `recommendation_plan_id`, deletes linked outcome rows, then deletes the legacy plan rows.
+- Requires both `--apply` and `--yes` before making changes.
+- Example:
+
+  ```bash
+  .venv/bin/python scripts/cleanup_legacy_non_shortlisted_plans.py --apply --yes --output legacy-cleanup-backup.json
+  ```
