@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from trade_proposer_app.domain.models import NewsBundle, SignalBundle, SignalItem
 from trade_proposer_app.services.news import NewsIngestionService
 from trade_proposer_app.services.social import SocialIngestionService
@@ -15,16 +17,16 @@ class SignalIngestionService:
         self.news_service = news_service
         self.social_service = social_service
 
-    def fetch(self, ticker: str) -> SignalBundle:
+    def fetch(self, ticker: str, *, start_at: datetime | None = None, end_at: datetime | None = None) -> SignalBundle:
         bundle = SignalBundle(ticker=ticker)
         if self.news_service is not None:
-            news_bundle = self.news_service.fetch(ticker)
+            news_bundle = self.news_service.fetch(ticker, start_at=start_at, end_at=end_at)
             bundle.items.extend(self._signal_items_from_news(news_bundle))
             bundle.feeds_used.extend(news_bundle.feeds_used)
             bundle.feed_errors.extend(news_bundle.feed_errors)
             bundle.coverage["news_count"] = len(news_bundle.articles)
         if self.social_service is not None:
-            social_bundle = self.social_service.fetch(ticker)
+            social_bundle = self.social_service.fetch(ticker, start_at=start_at, end_at=end_at)
             bundle.items.extend(social_bundle.items)
             bundle.feeds_used.extend(social_bundle.feeds_used)
             bundle.feed_errors.extend(social_bundle.feed_errors)

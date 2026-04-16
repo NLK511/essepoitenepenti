@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import httpx
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, update
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -27,7 +27,7 @@ from trade_proposer_app.domain.models import (
     TickerSignalSnapshot,
     WorkerHeartbeat,
 )
-from trade_proposer_app.persistence.models import Base
+from trade_proposer_app.persistence.models import Base, RunRecord
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
@@ -790,6 +790,54 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("queued or running", response.text)
 
+    async def test_delete_stale_running_run_is_recovered_then_deleted(self) -> None:
+        session = Session(bind=self.engine)
+        try:
+            job = JobRepository(session).create("Stale Running", ["AAPL"], None)
+            run = RunRepository(session).enqueue(job.id or 0)
+            session.execute(
+                update(RunRecord)
+                .where(RunRecord.id == run.id)
+                .values(status="running", started_at=datetime(2026, 3, 24, 11, 0, tzinfo=timezone.utc))
+            )
+            session.commit()
+            run_id = run.id or 0
+        finally:
+            session.close()
+
+        previous_timeout = settings.run_stale_after_seconds
+        settings.run_stale_after_seconds = 60
+        try:
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                deleted = await client.delete(f"/api/runs/{run_id}")
+                run_detail = await client.get(f"/api/runs/{run_id}")
+        finally:
+            settings.run_stale_after_seconds = previous_timeout
+
+        self.assertEqual(deleted.status_code, 200)
+        self.assertTrue(deleted.json()["deleted"])
+        self.assertEqual(run_detail.status_code, 404)
+
+    async def test_force_delete_active_run(self) -> None:
+        session = Session(bind=self.engine)
+        try:
+            job = JobRepository(session).create("Force Delete Job", ["AAPL"], None)
+            run = RunRepository(session).enqueue(job.id or 0)
+            run_id = run.id or 0
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            deleted = await client.delete(f"/api/runs/{run_id}?force=true")
+            run_detail = await client.get(f"/api/runs/{run_id}")
+
+        self.assertEqual(deleted.status_code, 200)
+        self.assertTrue(deleted.json()["deleted"])
+        self.assertTrue(deleted.json()["force"])
+        self.assertEqual(run_detail.status_code, 404)
+
     async def test_legacy_recommendation_evaluation_endpoints_are_retired(self) -> None:
         self.seed_run_with_diagnostics()
         transport = httpx.ASGITransport(app=app)
@@ -961,6 +1009,14 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     "min_validation_resolved": "12",
                 },
             )
+            realism_response = await client.post(
+                "/api/settings/evaluation-realism",
+                data={
+                    "stop_buffer_pct": "0.06",
+                    "take_profit_buffer_pct": "0.07",
+                    "friction_pct": "0.15",
+                },
+            )
             provider_response = await client.post(
                 "/api/settings/providers",
                 data={"provider": "openai", "api_key": "sk-test", "api_secret": ""},
@@ -972,12 +1028,15 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(signal_gating_tuning_response.status_code, 200)
         self.assertEqual(social_response.status_code, 200)
         self.assertEqual(plan_generation_tuning_response.status_code, 200)
+        self.assertEqual(realism_response.status_code, 200)
         self.assertEqual(provider_response.status_code, 200)
         self.assertEqual(listed.status_code, 200)
         payload = listed.json()
         setting_map = {item["key"]: item["value"] for item in payload["settings"]}
         self.assertEqual(setting_map["confidence_threshold"], "75")
         self.assertEqual(setting_map["signal_gating_tuning_threshold_offset"], "-2.5")
+        self.assertEqual(setting_map["evaluation_realism_stop_buffer_pct"], "0.06")
+        self.assertEqual(payload["evaluation_realism"]["friction_pct"], 0.15)
         self.assertEqual(setting_map["signal_gating_tuning_confidence_adjustment"], "1.5")
         self.assertEqual(setting_map["signal_gating_tuning_near_miss_gap_cutoff"], "2")
         self.assertEqual(setting_map["signal_gating_tuning_shortlist_aggressiveness"], "1")
@@ -1154,6 +1213,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             resolved_plans = await client.get("/api/recommendation-plans", params={"resolved": "resolved"})
             unresolved_plans = await client.get("/api/recommendation-plans", params={"resolved": "unresolved"})
             expired_plans = await client.get("/api/recommendation-plans", params={"outcome": "expired"})
+            shortlisted_plans = await client.get("/api/recommendation-plans", params={"shortlisted": "true"})
             resolved_summary = await client.get("/api/recommendation-outcomes/summary", params={"resolved": "resolved"})
             expired_summary = await client.get("/api/recommendation-outcomes/summary", params={"outcome": "expired"})
             queued = await client.post("/api/recommendation-plans/evaluate", data={})
@@ -1217,6 +1277,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(expired_plans.status_code, 200)
         self.assertEqual(len(expired_plans.json()["items"]), 1)
         self.assertEqual(expired_plans.json()["items"][0]["ticker"], "NVDA")
+        self.assertEqual(shortlisted_plans.status_code, 200)
+        self.assertTrue(all(item["signal_breakdown"].get("shortlisted", True) for item in shortlisted_plans.json()["items"]))
         self.assertEqual(resolved_summary.status_code, 200)
         self.assertEqual(resolved_summary.json()["total_outcomes"], 3)
         self.assertEqual(resolved_summary.json()["resolved_outcomes"], 2)

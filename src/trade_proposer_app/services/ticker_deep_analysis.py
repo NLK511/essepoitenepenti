@@ -38,17 +38,18 @@ class TickerDeepAnalysisService:
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
         self.model_name = model_name
 
-    def analyze(self, ticker: str, *, horizon: StrategyHorizon | None = None) -> RunOutput:
+    def analyze(self, ticker: str, *, horizon: StrategyHorizon | None = None, as_of: datetime | None = None) -> RunOutput:
         normalized_ticker = ticker.strip().upper()
         if not normalized_ticker:
             raise TickerDeepAnalysisError("ticker is required")
         if not self._supports_native_execution():
-            return self._analyze_with_compatibility_fallback(normalized_ticker, horizon=horizon)
+            return self._analyze_with_compatibility_fallback(normalized_ticker, horizon=horizon, as_of=as_of)
         try:
-            history = self.proposal_service._fetch_price_history(normalized_ticker)
+            history = self.proposal_service._fetch_price_history(normalized_ticker, as_of=as_of)
             enriched = self._enrich_history(history)
             context = self._build_context(enriched)
-            context = self._apply_context_enrichment(context, normalized_ticker)
+            context["price_history_diagnostics"] = dict(getattr(self.proposal_service, "_last_price_history_fetch_diagnostics", {}) or {})
+            context = self._apply_context_enrichment(context, normalized_ticker, as_of=as_of)
             context = self._apply_support_aliases(context)
             context = self._apply_taxonomy_profile(context, normalized_ticker)
             feature_vector = self._build_feature_vector(context)
@@ -106,23 +107,26 @@ class TickerDeepAnalysisService:
         except Exception as exc:  # noqa: BLE001
             raise TickerDeepAnalysisError(str(exc)) from exc
 
-    def _analyze_with_compatibility_fallback(self, ticker: str, *, horizon: StrategyHorizon | None) -> RunOutput:
+    def _analyze_with_compatibility_fallback(self, ticker: str, *, horizon: StrategyHorizon | None, as_of: datetime | None = None) -> RunOutput:
         generate = getattr(self.proposal_service, "generate", None)
         if not callable(generate):
             raise TickerDeepAnalysisError("ticker deep analysis engine is missing native pipeline methods and generate() fallback")
         try:
-            output = generate(ticker)
+            output = generate(ticker, as_of=as_of)
         except Exception as exc:  # noqa: BLE001
             raise TickerDeepAnalysisError(str(exc)) from exc
         diagnostics = output.diagnostics
         analysis_payload = self._load_json(diagnostics.analysis_json) or {"summary": {"text": diagnostics.raw_output or "compatibility fallback analysis"}}
+        existing_ticker_deep_analysis = analysis_payload.get("ticker_deep_analysis") if isinstance(analysis_payload.get("ticker_deep_analysis"), dict) else {}
         analysis_payload["ticker_deep_analysis"] = {
+            **existing_ticker_deep_analysis,
             "model": self.model_name,
             "execution_path": "compatibility_fallback",
             "horizon": horizon.value if horizon is not None else None,
-            "setup_family": "uncategorized",
-            "confidence_components": {},
-            "transmission_analysis": {},
+            "setup_family": existing_ticker_deep_analysis.get("setup_family", "uncategorized"),
+            "confidence_components": existing_ticker_deep_analysis.get("confidence_components", {}),
+            "transmission_analysis": existing_ticker_deep_analysis.get("transmission_analysis", {}),
+            "price_history": existing_ticker_deep_analysis.get("price_history", dict(getattr(self.proposal_service, "_last_price_history_fetch_diagnostics", {}) or {})),
         }
         analysis_json = json.dumps(_sanitize_for_json(analysis_payload), indent=2, sort_keys=True)
         diagnostics = diagnostics.model_copy(update={"analysis_json": analysis_json, "raw_output": analysis_json})
@@ -131,10 +135,10 @@ class TickerDeepAnalysisService:
     def _supports_native_execution(self) -> bool:
         return callable(getattr(self.proposal_service, "_fetch_price_history", None))
 
-    def _apply_context_enrichment(self, context: dict[str, Any], ticker: str) -> dict[str, Any]:
+    def _apply_context_enrichment(self, context: dict[str, Any], ticker: str, *, as_of: datetime | None = None) -> dict[str, Any]:
         apply_news_context = getattr(self.proposal_service, "_apply_news_context", None)
         if callable(apply_news_context):
-            return apply_news_context(context, ticker)
+            return apply_news_context(context, ticker, as_of=as_of)
         return context
 
     @staticmethod
@@ -1188,6 +1192,7 @@ class TickerDeepAnalysisService:
                 "setup_family": setup_family,
                 "confidence_components": confidence_components,
                 "transmission_analysis": transmission_analysis,
+                "price_history": context.get("price_history_diagnostics", {}),
             },
         }
 

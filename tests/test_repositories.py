@@ -58,7 +58,7 @@ def create_session() -> Session:
 
 
 class StubWatchlistOrchestrationService:
-    def execute(self, watchlist, tickers, *, job_id=None, run_id=None):
+    def execute(self, watchlist, tickers, *, job_id=None, run_id=None, as_of=None):
         return {
             "summary": {
                 "mode": "watchlist_orchestration",
@@ -80,13 +80,13 @@ class StubWatchlistOrchestrationService:
 
 
 class FailingWatchlistOrchestrationService:
-    def execute(self, watchlist, tickers, *, job_id=None, run_id=None):
+    def execute(self, watchlist, tickers, *, job_id=None, run_id=None, as_of=None):
         failing = tickers[0] if tickers else "unknown"
         raise RuntimeError(f"boom: {failing}")
 
 
 class FailOnSecondTickerWatchlistOrchestrationService:
-    def execute(self, watchlist, tickers, *, job_id=None, run_id=None):
+    def execute(self, watchlist, tickers, *, job_id=None, run_id=None, as_of=None):
         ticker_generation = []
         for index, ticker in enumerate(tickers, start=1):
             if index == 2:
@@ -130,7 +130,7 @@ class StubEvaluationExecutionService(EvaluationExecutionService):
 
 
 class CheapScanProposalService:
-    def score(self, ticker: str, horizon: StrategyHorizon):
+    def score(self, ticker: str, horizon: StrategyHorizon, as_of=None):
         from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal
 
         confidence_map = {"AAPL": 84.0, "MSFT": 67.0, "TSLA": 41.0}
@@ -151,13 +151,13 @@ class CheapScanProposalService:
             breakout_score={"AAPL": 74.0, "MSFT": 28.0, "TSLA": 45.0}[ticker],
             volatility_score=55.0,
             liquidity_score=72.0,
-            diagnostics={"model": "cheap_scan_test"},
+            diagnostics={"model": "cheap_scan_test", "price_history": {"source": "database", "selected_bar_count": 60, "remote_attempt_count": 0}},
             indicator_summary=f"cheap scan {ticker}",
         )
 
 
 class CatalystLaneCheapScanService:
-    def score(self, ticker: str, horizon: StrategyHorizon):
+    def score(self, ticker: str, horizon: StrategyHorizon, as_of=None):
         from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal
 
         fixtures = {
@@ -178,13 +178,13 @@ class CatalystLaneCheapScanService:
             breakout_score=item["breakout"],
             volatility_score=55.0,
             liquidity_score=72.0,
-            diagnostics={"model": "cheap_scan_test"},
+            diagnostics={"model": "cheap_scan_test", "price_history": {"source": "database", "selected_bar_count": 60, "remote_attempt_count": 0}},
             indicator_summary=f"cheap scan {ticker}",
         )
 
 
 class DeepAnalysisProposalService:
-    def generate(self, ticker: str) -> RunOutput:
+    def generate(self, ticker: str, as_of=None) -> RunOutput:
         direction_map = {
             "AAPL": RecommendationDirection.LONG,
             "MSFT": RecommendationDirection.SHORT,
@@ -199,6 +199,8 @@ class DeepAnalysisProposalService:
             },
             "news": {"item_count": 3},
             "ticker_deep_analysis": {
+                "setup_family": "breakout" if ticker == "AAPL" else "breakdown",
+                "price_history": {"source": "remote", "fallback_used": False, "remote_attempt_count": 1, "selected_bar_count": 250},
                 "transmission_analysis": {
                     "alignment_percent": 72.0,
                     "context_bias": "tailwind" if ticker == "AAPL" else "headwind",
@@ -534,6 +536,43 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(plans[0].latest_outcome.context_regime_label, "mixed context")
         self.assertEqual(plans[0].latest_outcome.context_regime_detail["label"], "mixed context")
 
+    def test_recommendation_plan_repository_filters_shortlisted_state(self) -> None:
+        session = create_session()
+        plan_repository = RecommendationPlanRepository(session)
+
+        shortlisted_plan = plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=70.0,
+                thesis_summary="Shortlisted plan",
+                signal_breakdown={"setup_family": "continuation", "shortlisted": True, "shortlist_rank": 1},
+                evidence_summary={"action_reason": "promoted"},
+            )
+        )
+        not_shortlisted_plan = plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="MSFT",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="no_action",
+                confidence_percent=35.0,
+                thesis_summary="Rejected before deep analysis",
+                signal_breakdown={"setup_family": "continuation"},
+                evidence_summary={"action_reason": "not_shortlisted"},
+            )
+        )
+
+        shortlisted = plan_repository.list_plans(shortlisted=True, limit=10)
+        rejected = plan_repository.list_plans(shortlisted=False, limit=10)
+
+        self.assertEqual([plan.id for plan in shortlisted], [shortlisted_plan.id])
+        self.assertEqual([plan.id for plan in rejected], [not_shortlisted_plan.id])
+        self.assertEqual(plan_repository.count_plans(shortlisted=True), 1)
+        self.assertEqual(plan_repository.count_plans(shortlisted=False), 1)
+        self.assertEqual(plan_repository.summarize_stats(shortlisted=True).total_plans, 1)
+        self.assertEqual(plan_repository.summarize_stats(shortlisted=False).total_plans, 1)
+
     def test_recommendation_outcome_upsert_recovers_from_integrity_error(self) -> None:
         session = create_session()
         context_repository = ContextSnapshotRepository(session)
@@ -801,6 +840,10 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(summary_payload["shortlist_rejections"]["below_confidence_threshold"], 1)
         rejection_detail_map = {item["key"]: item for item in summary_payload["shortlist_rejection_details"]}
         self.assertEqual(rejection_detail_map["shorts_disabled"]["label"], "shorts disabled")
+        self.assertIn("ticker_generation", artifact_payload)
+        ticker_generation_map = {item["ticker"]: item for item in artifact_payload["ticker_generation"]}
+        self.assertEqual(ticker_generation_map["AAPL"]["cheap_scan_price_history"]["source"], "database")
+        self.assertEqual(ticker_generation_map["AAPL"]["deep_analysis_price_history"]["source"], "remote")
         decisions = {item["ticker"]: item for item in artifact_payload["shortlist_decisions"]}
         self.assertEqual(decisions["AAPL"]["shortlisted"], True)
         self.assertEqual(decisions["AAPL"]["shortlist_rank"], 1)
@@ -823,13 +866,13 @@ class RepositoryTests(unittest.TestCase):
         self.assertIsInstance(plan_map["AAPL"].signal_breakdown, RecommendationPlanSignalBreakdown)
         self.assertIsInstance(plan_map["AAPL"].signal_breakdown.get("transmission_summary"), RecommendationTransmissionSummary)
         self.assertEqual(plan_map["AAPL"].signal_breakdown["setup_family"], "breakout")
-        self.assertEqual(plan_map["AAPL"].signal_breakdown["confidence_bucket"], "65_to_79")
+        self.assertEqual(plan_map["AAPL"].signal_breakdown["confidence_bucket"], "80_plus")
         self.assertIn("confidence_components", plan_map["AAPL"].signal_breakdown)
         self.assertIsInstance(plan_map["AAPL"].evidence_summary, RecommendationPlanEvidenceSummary)
         self.assertEqual(plan_map["AAPL"].evidence_summary["entry_style"], "break_or_retest")
         self.assertEqual(plan_map["AAPL"].evidence_summary["stop_style"], "below_break_level_with_buffer")
         self.assertEqual(plan_map["AAPL"].evidence_summary["target_style"], "measured_move_or_next_resistance")
-        self.assertEqual(plan_map["AAPL"].evidence_summary["timing_expectation"], "1w_plus")
+        self.assertEqual(plan_map["AAPL"].evidence_summary["timing_expectation"], "2d_5d")
         self.assertIn("follow_through_speed", plan_map["AAPL"].evidence_summary["evaluation_focus"])
         self.assertIn("breakout", plan_map["AAPL"].evidence_summary["invalidation_summary"])
         self.assertEqual(plan_map["TSLA"].evidence_summary["action_reason"], "not_shortlisted")
@@ -852,16 +895,22 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("transmission_confidence_adjustment", diagnostics_map["AAPL"])
         self.assertEqual(diagnostics_map["AAPL"]["expected_transmission_window"], "2d_5d")
         self.assertEqual(diagnostics_map["AAPL"]["expected_transmission_window_detail"]["label"], "2d-5d")
+        self.assertEqual(diagnostics_map["AAPL"]["cheap_scan_price_history"]["source"], "database")
+        self.assertEqual(diagnostics_map["AAPL"]["deep_analysis_price_history"]["source"], "remote")
         self.assertEqual(diagnostics_map["TSLA"]["mode"], "cheap_scan_only")
         self.assertEqual(diagnostics_map["TSLA"]["shortlist_reasons"], ["below_confidence_threshold", "below_attention_threshold", "below_catalyst_lane_threshold"])
         self.assertEqual(diagnostics_map["TSLA"]["shortlist_reason_details"][0]["label"], "below confidence threshold")
         self.assertEqual(source_breakdown_map["AAPL"]["deep_analysis_model"], "ticker_deep_analysis_v2")
         self.assertEqual(source_breakdown_map["AAPL"]["transmission_bias"], "tailwind")
+        self.assertEqual(source_breakdown_map["AAPL"]["cheap_scan_price_history"]["source"], "database")
+        self.assertEqual(source_breakdown_map["AAPL"]["deep_analysis_price_history"]["source"], "remote")
         self.assertIn("primary_drivers", source_breakdown_map["AAPL"])
         self.assertIn("industry_exposure_channel_details", source_breakdown_map["AAPL"])
         self.assertIn("ticker_exposure_channel_details", source_breakdown_map["AAPL"])
         self.assertIn("transmission_confidence_adjustment", source_breakdown_map["AAPL"])
         self.assertIn("transmission_summary", plan_map["AAPL"].signal_breakdown)
+        self.assertEqual(plan_map["AAPL"].signal_breakdown["cheap_scan_price_history"]["source"], "database")
+        self.assertEqual(plan_map["AAPL"].signal_breakdown["deep_analysis_price_history"]["source"], "remote")
         self.assertIn("primary_drivers", plan_map["AAPL"].signal_breakdown["transmission_summary"])
         self.assertIn("primary_driver_details", plan_map["AAPL"].signal_breakdown["transmission_summary"])
         self.assertIn("industry_exposure_channel_details", plan_map["AAPL"].signal_breakdown["transmission_summary"])
@@ -1057,7 +1106,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(calibration_review["enabled"], True)
         self.assertEqual(calibration_review["review_status"], "usable_for_gating")
         self.assertEqual(calibration_review["review_status_label"], "usable for gating")
-        self.assertGreaterEqual(calibration_review["effective_confidence_threshold"], 75.0)
+        self.assertGreaterEqual(calibration_review["effective_confidence_threshold"], 72.0)
         self.assertLess(calibration_review["calibrated_confidence_percent"], calibration_review["raw_confidence_percent"])
         self.assertLess(plan_map["AAPL"].confidence_percent, calibration_review["raw_confidence_percent"])
         self.assertEqual(calibration_review["horizon"]["key"], "1w")
@@ -1065,15 +1114,15 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(calibration_review["transmission_bias"]["label"], "tailwind")
         self.assertEqual(calibration_review["transmission_bias"]["slice_label"], "transmission bias")
         self.assertEqual(calibration_review["transmission_bias"]["sample_status"], "usable")
-        self.assertEqual(calibration_review["context_regime"]["key"], "tailwind_without_dominant_tag")
-        self.assertEqual(calibration_review["context_regime"]["label"], "tailwind without dominant tag")
+        self.assertEqual(calibration_review["context_regime"]["key"], "context_plus_catalyst")
+        self.assertEqual(calibration_review["context_regime"]["label"], "context plus catalyst")
         self.assertEqual(calibration_review["horizon_setup_family"]["key"], "1w__breakout")
         self.assertIn("setup_family_underperforming", calibration_review["reasons"])
-        self.assertIn("confidence_bucket_underperforming", calibration_review["reasons"])
+        self.assertNotIn("confidence_bucket_underperforming", calibration_review["reasons"])
         self.assertEqual(calibration_review["reason_details"][0]["label"], "setup family underperforming")
         self.assertIn("horizon_underperforming", calibration_review["reasons"])
         self.assertIn("transmission_bias_underperforming", calibration_review["reasons"])
-        self.assertIn("context_regime_underperforming", calibration_review["reasons"])
+        self.assertNotIn("context_regime_underperforming", calibration_review["reasons"])
         self.assertIn("horizon_setup_family_underperforming", calibration_review["reasons"])
 
     def test_watchlist_orchestration_applies_signal_gating_tuning_config_to_live_action_thresholds(self) -> None:
@@ -1086,7 +1135,7 @@ class RepositoryTests(unittest.TestCase):
         )
 
         class TunedCheapScanService:
-            def score(self, ticker: str, horizon: StrategyHorizon):
+            def score(self, ticker: str, horizon: StrategyHorizon, as_of=None):
                 from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal
 
                 return CheapScanSignal(
@@ -1106,7 +1155,7 @@ class RepositoryTests(unittest.TestCase):
                 )
 
         class TunedDeepAnalysisService:
-            def generate(self, ticker: str) -> RunOutput:
+            def generate(self, ticker: str, as_of=None) -> RunOutput:
                 analysis = {"summary": {"text": f"deep analysis for {ticker}"}, "ticker_deep_analysis": {"transmission_analysis": {"context_bias": "tailwind", "contradiction_count": 0}}}
                 return RunOutput(
                     recommendation=Recommendation(

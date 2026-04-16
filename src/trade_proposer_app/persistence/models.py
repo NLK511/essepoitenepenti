@@ -149,6 +149,23 @@ class HistoricalMarketBarRecord(Base, TimestampMixin):
     metadata_json: Mapped[str] = mapped_column(Text, default="{}")
 
 
+class HistoricalNewsRecord(Base, TimestampMixin):
+    __tablename__ = "historical_news_items"
+    __table_args__ = (
+        UniqueConstraint("ticker", "link", "published_at", name="uq_historical_news_items_ticker_link_published_at"),
+        Index("idx_historical_news_ticker_published", "ticker", "published_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(120), index=True)  # ticker or topic
+    published_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    link: Mapped[str] = mapped_column(Text, index=True)
+    publisher: Mapped[str] = mapped_column(String(120), default="")
+    provider: Mapped[str] = mapped_column(String(64), index=True)
+
+
 class AppSettingRecord(Base, TimestampMixin):
     __tablename__ = "app_settings"
 

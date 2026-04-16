@@ -20,7 +20,7 @@ class IndustryContextRefreshService:
         self.social_service = social_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
-    def refresh_all(self, *, job_id: int | None = None, run_id: int | None = None) -> list[IndustryContextRefreshPayload]:
+    def refresh_all(self, *, job_id: int | None = None, run_id: int | None = None, as_of: datetime | None = None) -> list[IndustryContextRefreshPayload]:
         payloads = []
         for profile in self.taxonomy_service.list_industry_profiles():
             payload = self.refresh_industry(
@@ -30,6 +30,7 @@ class IndustryContextRefreshService:
                 tickers=profile.get("tickers", []),
                 job_id=job_id,
                 run_id=run_id,
+                as_of=as_of,
             )
             payloads.append(payload)
         return payloads
@@ -43,13 +44,19 @@ class IndustryContextRefreshService:
         tickers: list[str] | None = None,
         job_id: int | None = None,
         run_id: int | None = None,
+        as_of: datetime | None = None,
     ) -> IndustryContextRefreshPayload:
+        effective_now = as_of or datetime.now(timezone.utc)
+        start_at = effective_now - timedelta(hours=24) # look back 24h for news/social
+
         social_result = (
             self.social_service.analyze_subject(
                 subject_key=subject_key,
                 subject_label=subject_label,
                 queries=queries or [subject_label],
                 scope_tag="industry",
+                start_at=start_at,
+                end_at=effective_now,
             )
             if self.social_service is not None
             else {"sentiment": {}, "bundle": None}
@@ -61,7 +68,7 @@ class IndustryContextRefreshService:
 
         score = social_score
         label = social_sentiment.get("label") or "NEUTRAL"
-        computed_at = datetime.now(timezone.utc)
+        computed_at = effective_now
         expires_at = computed_at + timedelta(hours=INDUSTRY_TTL_HOURS)
 
         return IndustryContextRefreshPayload(

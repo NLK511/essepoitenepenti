@@ -63,10 +63,10 @@ class SocialProvider:
 
     name: ClassVar[str] = "generic-social"
 
-    def fetch(self, ticker: str) -> SignalBundle:
+    def fetch(self, ticker: str, *, start_at: datetime | None = None, end_at: datetime | None = None) -> SignalBundle:
         raise NotImplementedError
 
-    def fetch_subject(self, subject_key: str, queries: list[str], *, scope_tag: str) -> SignalBundle:
+    def fetch_subject(self, subject_key: str, queries: list[str], *, scope_tag: str, start_at: datetime | None = None, end_at: datetime | None = None) -> SignalBundle:
         raise NotImplementedError
 
     @staticmethod
@@ -102,7 +102,7 @@ class NitterProvider(SocialProvider):
         self.supports_ticker = enable_ticker_scope
         self.max_queries_per_subject = None if max_queries_per_subject is None or max_queries_per_subject < 1 else max_queries_per_subject
 
-    def fetch(self, ticker: str) -> SignalBundle:
+    def fetch(self, ticker: str, *, start_at: datetime | None = None, end_at: datetime | None = None) -> SignalBundle:
         query_profile = self.taxonomy_service.build_query_profile(ticker)
         ticker_queries = self._limit_queries(query_profile.get("ticker_queries", []))
         return self._fetch_queries(
@@ -111,9 +111,11 @@ class NitterProvider(SocialProvider):
             scope_tag="ticker",
             ticker=ticker,
             query_profile=query_profile,
+            start_at=start_at,
+            end_at=end_at,
         )
 
-    def fetch_subject(self, subject_key: str, queries: list[str], *, scope_tag: str) -> SignalBundle:
+    def fetch_subject(self, subject_key: str, queries: list[str], *, scope_tag: str, start_at: datetime | None = None, end_at: datetime | None = None) -> SignalBundle:
         query_profile = {
             "ticker_queries": queries if scope_tag == "ticker" else [],
             "industry_queries": queries if scope_tag == "industry" else [],
@@ -126,6 +128,8 @@ class NitterProvider(SocialProvider):
             scope_tag=scope_tag,
             ticker=subject_key,
             query_profile=query_profile,
+            start_at=start_at,
+            end_at=end_at,
         )
 
     def _limit_queries(self, queries: list[str]) -> list[str]:
@@ -232,14 +236,20 @@ class NitterProvider(SocialProvider):
         scope_tag: str,
         ticker: str,
         query_profile: dict[str, list[str]],
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
     ) -> SignalBundle:
         fetched_items: list[SignalItem] = []
         executed_queries: list[str] = []
         query_stats: list[dict[str, object]] = []
-        reference_now = datetime.now(timezone.utc)
-        cutoff = reference_now - timedelta(hours=self.query_window_hours)
+        reference_now = end_at or datetime.now(timezone.utc)
+        cutoff = start_at or (reference_now - timedelta(hours=self.query_window_hours))
         for query in queries:
             url = f"{self.base_url}{NITTER_SEARCH_PATH}?f=tweets&q={quote(query)}"
+            if start_at:
+                url += f"&since={start_at.strftime('%Y-%m-%d')}"
+            if end_at:
+                url += f"&until={end_at.strftime('%Y-%m-%d')}"
             try:
                 response = httpx.get(url, timeout=self.timeout, follow_redirects=True)
             except Exception as exc:  # noqa: BLE001
@@ -567,7 +577,7 @@ class SocialIngestionService:
         )
         return cls([provider], taxonomy_service=taxonomy_service)
 
-    def fetch(self, ticker: str) -> SignalBundle:
+    def fetch(self, ticker: str, *, start_at: datetime | None = None, end_at: datetime | None = None) -> SignalBundle:
         bundle = SignalBundle(ticker=ticker)
         if not self.providers:
             bundle.feed_errors.append("social: no providers configured")
@@ -577,7 +587,7 @@ class SocialIngestionService:
             if not getattr(provider, "supports_ticker", True):
                 continue
             try:
-                provider_bundle = provider.fetch(ticker)
+                provider_bundle = provider.fetch(ticker, start_at=start_at, end_at=end_at)
             except Exception as exc:  # noqa: BLE001
                 bundle.feed_errors.append(f"{provider.name}: {exc}")
                 continue
@@ -601,8 +611,8 @@ class SocialIngestionService:
         bundle.coverage.setdefault("social_count", len(bundle.items))
         return bundle
 
-    def analyze(self, ticker: str) -> dict[str, Any]:
-        bundle = self.fetch(ticker)
+    def analyze(self, ticker: str, *, start_at: datetime | None = None, end_at: datetime | None = None) -> dict[str, Any]:
+        bundle = self.fetch(ticker, start_at=start_at, end_at=end_at)
         sentiment = self.sentiment_analyzer.analyze(bundle)
         profile = self.taxonomy_service.get_ticker_profile(ticker)
         return {
@@ -611,7 +621,7 @@ class SocialIngestionService:
             "profile": profile,
         }
 
-    def analyze_subject(self, subject_key: str, subject_label: str, queries: list[str], *, scope_tag: str) -> dict[str, Any]:
+    def analyze_subject(self, subject_key: str, subject_label: str, queries: list[str], *, scope_tag: str, start_at: datetime | None = None, end_at: datetime | None = None) -> dict[str, Any]:
         bundle = SignalBundle(ticker=subject_key)
         if not self.providers:
             bundle.feed_errors.append("social: no providers configured")
@@ -619,7 +629,7 @@ class SocialIngestionService:
             return {"bundle": bundle, "sentiment": sentiment, "profile": {"subject_label": subject_label}}
         for provider in self.providers:
             try:
-                provider_bundle = provider.fetch_subject(subject_key, queries, scope_tag=scope_tag)
+                provider_bundle = provider.fetch_subject(subject_key, queries, scope_tag=scope_tag, start_at=start_at, end_at=end_at)
             except Exception as exc:  # noqa: BLE001
                 bundle.feed_errors.append(f"{provider.name}: {exc}")
                 continue

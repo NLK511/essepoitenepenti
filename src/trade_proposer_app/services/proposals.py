@@ -4,7 +4,7 @@ import json
 import math
 import re
 from collections import OrderedDict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable
 
@@ -12,7 +12,7 @@ import pandas as pd
 import yfinance as yf
 
 from trade_proposer_app.domain.enums import RecommendationDirection, RecommendationState
-from trade_proposer_app.domain.models import NewsArticle, Recommendation, RunDiagnostics, RunOutput, TechnicalSnapshot
+from trade_proposer_app.domain.models import HistoricalMarketBar, NewsArticle, Recommendation, RunDiagnostics, RunOutput, TechnicalSnapshot
 from trade_proposer_app.services.constants import DEFAULT_CONTEXT_FLAGS
 from trade_proposer_app.services.news import (
     NaiveSentimentAnalyzer,
@@ -27,6 +27,7 @@ from trade_proposer_app.services.signals import SignalIngestionService
 from trade_proposer_app.services.context_snapshot_resolver import ContextSnapshotResolver
 from trade_proposer_app.services.social import SocialIngestionService
 from trade_proposer_app.services.summary import SummaryRequest, SummaryService
+from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 
 
 FEATURE_COLUMN_MAP: dict[str, str] = {
@@ -163,6 +164,9 @@ def _sanitize_for_json(value: Any) -> Any:
 
 
 class ProposalService:
+    LIVE_REMOTE_FETCH_ATTEMPTS = 3
+    LIVE_REMOTE_FETCH_BACKOFF_SECONDS = (0.0, 1.0, 3.0)
+
     def __init__(
         self,
         weights_path: Path | None = None,
@@ -173,6 +177,7 @@ class ProposalService:
         snapshot_resolver: ContextSnapshotResolver | None = None,
         sentiment_analyzer: NaiveSentimentAnalyzer | None = None,
         summary_service: SummaryService | None = None,
+        historical_market_data: HistoricalMarketDataRepository | None = None,
     ) -> None:
         self.weights_path = weights_path or WEIGHTS_PATH
         self.weights = self._load_weights()
@@ -182,13 +187,16 @@ class ProposalService:
         self.snapshot_resolver = snapshot_resolver
         self.sentiment_analyzer = sentiment_analyzer or NaiveSentimentAnalyzer()
         self.summary_service = summary_service or SummaryService()
+        self.historical_market_data = historical_market_data
+        self._last_price_history_fetch_diagnostics: dict[str, Any] = {}
 
-    def generate(self, ticker: str) -> RunOutput:
+    def generate(self, ticker: str, *, as_of: datetime | None = None) -> RunOutput:
         normalized_ticker = ticker.upper()
-        history = self._fetch_price_history(normalized_ticker)
+        history = self._fetch_price_history(normalized_ticker, as_of=as_of)
         enriched = self._enrich_history(history)
         context = self._build_context(enriched)
-        context = self._apply_news_context(context, normalized_ticker)
+        context["price_history_diagnostics"] = dict(self._last_price_history_fetch_diagnostics)
+        context = self._apply_news_context(context, normalized_ticker, as_of=as_of)
         feature_vector = self._build_feature_vector(context)
         column_ranges = self._compute_column_ranges(enriched)
         normalized_vector = self._normalize_feature_vector(feature_vector, column_ranges)
@@ -242,6 +250,7 @@ class ProposalService:
             take_profit=take_profit,
             indicator_summary=self._build_indicator_summary(context, aggregations),
             state=RecommendationState.PENDING,
+            created_at=as_of or datetime.now(timezone.utc),
         )
         return RunOutput(recommendation=recommendation, diagnostics=diagnostics)
 
@@ -499,17 +508,172 @@ class ProposalService:
         }
         return {"confidence": confidence, "aggregators": aggregators}
 
-    def _fetch_price_history(self, ticker: str) -> pd.DataFrame:
+    def _fetch_price_history(self, ticker: str, *, as_of: datetime | None = None) -> pd.DataFrame:
+        normalized_ticker = ticker.strip().upper()
+        is_replay = as_of is not None
+        local_history = self._fetch_price_history_from_local_store(normalized_ticker, as_of=as_of)
+        local_bar_count = len(local_history)
+        self._last_price_history_fetch_diagnostics = {
+            "ticker": normalized_ticker,
+            "mode": "replay" if is_replay else "live",
+            "source": "unavailable",
+            "fallback_used": False,
+            "remote_attempt_count": 0,
+            "remote_attempted": False,
+            "remote_errors": [],
+            "local_bar_count": local_bar_count,
+            "selected_bar_count": 0,
+            "latest_bar_time": self._latest_bar_time_iso(local_history),
+        }
+        if is_replay and not local_history.empty:
+            self._last_price_history_fetch_diagnostics.update(
+                {
+                    "source": "local_replay",
+                    "selected_bar_count": local_bar_count,
+                    "fallback_used": False,
+                }
+            )
+            return local_history
+
+        remote_error: ProposalExecutionError | None = None
+        remote_history = pd.DataFrame()
+        remote_attempts = 1 if is_replay else self.LIVE_REMOTE_FETCH_ATTEMPTS
+        for attempt in range(remote_attempts):
+            backoff = self.LIVE_REMOTE_FETCH_BACKOFF_SECONDS[min(attempt, len(self.LIVE_REMOTE_FETCH_BACKOFF_SECONDS) - 1)] if not is_replay else 0.0
+            if backoff > 0:
+                import time
+                time.sleep(backoff)
+            self._last_price_history_fetch_diagnostics["remote_attempted"] = True
+            self._last_price_history_fetch_diagnostics["remote_attempt_count"] = attempt + 1
+            try:
+                remote_history = self._fetch_price_history_remote(normalized_ticker, as_of=as_of)
+            except ProposalExecutionError as exc:
+                remote_error = exc
+                self._last_price_history_fetch_diagnostics.setdefault("remote_errors", []).append(str(exc))
+                continue
+            if not remote_history.empty:
+                self._last_price_history_fetch_diagnostics.update(
+                    {
+                        "source": "remote",
+                        "fallback_used": False,
+                        "selected_bar_count": len(remote_history),
+                        "latest_bar_time": self._latest_bar_time_iso(remote_history),
+                    }
+                )
+                self._persist_price_history(normalized_ticker, remote_history)
+                return remote_history
+            remote_error = ProposalExecutionError(f"could not retrieve historical data for '{normalized_ticker}'")
+            self._last_price_history_fetch_diagnostics.setdefault("remote_errors", []).append(str(remote_error))
+
+        if not local_history.empty:
+            self._last_price_history_fetch_diagnostics.update(
+                {
+                    "source": "local_fallback",
+                    "fallback_used": True,
+                    "selected_bar_count": local_bar_count,
+                    "latest_bar_time": self._latest_bar_time_iso(local_history),
+                }
+            )
+            return local_history
+        if remote_error is not None:
+            raise remote_error
+        raise ProposalExecutionError(f"could not retrieve historical data for '{normalized_ticker}'")
+
+    @staticmethod
+    def _latest_bar_time_iso(history: pd.DataFrame) -> str | None:
+        if history.empty:
+            return None
+        latest = history.index[-1]
+        if not isinstance(latest, datetime):
+            latest = pd.to_datetime(latest).to_pydatetime()
+        if latest.tzinfo is None:
+            latest = latest.replace(tzinfo=timezone.utc)
+        else:
+            latest = latest.astimezone(timezone.utc)
+        return latest.isoformat()
+
+    def _fetch_price_history_remote(self, ticker: str, *, as_of: datetime | None = None) -> pd.DataFrame:
         try:
-            history = yf.download(ticker, period="1y", interval="1d", progress=False, auto_adjust=False)
+            if as_of:
+                start_at = as_of - timedelta(days=365)
+                history = yf.download(ticker, start=start_at.date().isoformat(), end=(as_of + timedelta(days=1)).date().isoformat(), interval="1d", progress=False, auto_adjust=False)
+            else:
+                history = yf.download(ticker, period="1y", interval="1d", progress=False, auto_adjust=False)
         except Exception as exc:
             raise ProposalExecutionError(f"failed to download historical data: {exc}") from exc
-        if history.empty:
-            raise ProposalExecutionError(f"could not retrieve historical data for '{ticker}'")
+        if history is None or history.empty:
+            return pd.DataFrame()
         if isinstance(history.columns, pd.MultiIndex):
-            history = history.copy()
-            history.columns = history.columns.get_level_values(0)
+            if ticker in history.columns.get_level_values(1):
+                history = history.xs(ticker, axis=1, level=1)
+            elif ticker in history.columns.get_level_values(0):
+                history = history.xs(ticker, axis=1, level=0)
+            else:
+                history = history.copy()
+                history.columns = history.columns.get_level_values(0)
         return history
+
+    def _fetch_price_history_from_local_store(self, ticker: str, *, as_of: datetime | None = None) -> pd.DataFrame:
+        if self.historical_market_data is None:
+            return pd.DataFrame()
+        end_at = as_of or datetime.now(timezone.utc)
+        bars = self.historical_market_data.list_bars(
+            ticker=ticker,
+            timeframe="1d",
+            end_at=end_at,
+            available_at=end_at,
+            limit=260,
+        )
+        if not bars:
+            return pd.DataFrame()
+        records = [
+            {
+                "Date": bar.bar_time,
+                "Open": bar.open_price,
+                "High": bar.high_price,
+                "Low": bar.low_price,
+                "Close": bar.close_price,
+                "Volume": bar.volume,
+            }
+            for bar in bars
+        ]
+        history = pd.DataFrame(records)
+        history.set_index("Date", inplace=True)
+        history.sort_index(inplace=True)
+        return history
+
+    def _persist_price_history(self, ticker: str, history: pd.DataFrame) -> None:
+        if self.historical_market_data is None or history.empty:
+            return
+        bars: list[HistoricalMarketBar] = []
+        for timestamp, row in history.iterrows():
+            bar_time = timestamp if isinstance(timestamp, datetime) else pd.to_datetime(timestamp).to_pydatetime()
+            if bar_time.tzinfo is None:
+                bar_time = bar_time.replace(tzinfo=timezone.utc)
+            else:
+                bar_time = bar_time.astimezone(timezone.utc)
+            bars.append(
+                HistoricalMarketBar(
+                    ticker=ticker,
+                    timeframe="1d",
+                    bar_time=bar_time,
+                    available_at=datetime.combine(bar_time.date(), datetime.max.time(), tzinfo=timezone.utc),
+                    open_price=float(row["Open"]),
+                    high_price=float(row["High"]),
+                    low_price=float(row["Low"]),
+                    close_price=float(row["Close"]),
+                    volume=float(row.get("Volume", 0.0) or 0.0),
+                    adjusted_close=float(row["Adj Close"]) if "Adj Close" in history.columns and pd.notna(row.get("Adj Close")) else None,
+                    source="yahoo_fallback",
+                    source_tier="tier_b",
+                    point_in_time_confidence=0.8,
+                )
+            )
+        if bars:
+            try:
+                self.historical_market_data.upsert_bars(bars)
+            except Exception:
+                pass
 
     def _enrich_history(self, df: pd.DataFrame) -> pd.DataFrame:
         enriched = df.copy()
@@ -960,9 +1124,13 @@ class ProposalService:
             return None
         return numeric
 
-    def _apply_news_context(self, context: dict[str, Any], ticker: str) -> dict[str, Any]:
+    def _apply_news_context(self, context: dict[str, Any], ticker: str, *, as_of: datetime | None = None) -> dict[str, Any]:
         context.update(self._build_news_context_base())
-        signal_bundle = self.signal_service.fetch(ticker) if self.signal_service is not None else None
+        
+        effective_now = as_of or datetime.now(timezone.utc)
+        start_at = effective_now - timedelta(hours=24)
+        
+        signal_bundle = self.signal_service.fetch(ticker, start_at=start_at, end_at=effective_now) if self.signal_service is not None else None
         if signal_bundle is not None:
             signal_items = [item.model_dump(mode="json") for item in signal_bundle.items]
             social_items = [item for item in signal_items if item.get("source_type") == "social"]
@@ -979,7 +1147,7 @@ class ProposalService:
         social_sentiment: dict[str, Any] = {}
         social_scope_breakdown: dict[str, Any] = {}
         if self.social_service is not None:
-            social_result = self.social_service.analyze(ticker)
+            social_result = self.social_service.analyze(ticker, start_at=start_at, end_at=effective_now)
             social_sentiment = social_result.get("sentiment", {})
             social_scope_breakdown = social_sentiment.get("scope_breakdown", {})
             context.update(
@@ -999,7 +1167,7 @@ class ProposalService:
             merged_problems = list(dict.fromkeys(context.get("problems", []) + context.get("signal_feed_errors", [])))
             context["problems"] = merged_problems
             return context
-        bundle = self.news_service.fetch(ticker)
+        bundle = self.news_service.fetch(ticker, start_at=start_at, end_at=effective_now)
         sentiment = self.sentiment_analyzer.analyze(bundle)
         feeds = list(dict.fromkeys(bundle.feeds_used))
         news_items = sentiment.get("news_items") or sentiment.get("news_points", [])
@@ -1025,7 +1193,7 @@ class ProposalService:
             social_breakdown=social_scope_breakdown,
             context_flags=sentiment.get("context_flags", {}),
         )
-        macro_snapshot = self.snapshot_resolver.resolve_macro_snapshot() if self.snapshot_resolver is not None else None
+        macro_snapshot = self.snapshot_resolver.resolve_macro_snapshot(as_of=as_of) if self.snapshot_resolver is not None else None
         if macro_snapshot is not None:
             hierarchical.update(
                 {
@@ -1060,7 +1228,7 @@ class ProposalService:
                     ),
                 }
             )
-        industry_snapshot = self.snapshot_resolver.resolve_industry_snapshot(ticker) if self.snapshot_resolver is not None else None
+        industry_snapshot = self.snapshot_resolver.resolve_industry_snapshot(ticker, as_of=as_of) if self.snapshot_resolver is not None else None
         if industry_snapshot is not None:
             hierarchical.update(
                 {

@@ -595,17 +595,15 @@ The phase checklist below is the target build order. Checked items indicate work
 - [x] add `historical_market_bars` table and repository
 - [x] implement free-provider daily-bar ingestion service
 - [x] implement replay input assembly for bars up to `as_of`
-- [ ] implement technical indicator computation using only prior bars
-- [ ] implement recommendation-plan generation for one replay slice
-- [x] persist run summary/artifact with replay metadata
+- [x] implement technical indicator computation using only prior bars
+- [x] implement recommendation-plan generation for one replay slice
+- x persist run summary/artifact with replay metadata
 
 ## Phase 3 — macro and industry proxy context
-- [ ] add `historical_macro_events` table and repository
-- [ ] ingest macro event calendar
-- [ ] build replayable macro proxy feature bundle
-- [ ] build replayable industry proxy feature bundle
-- [ ] generate replay macro context snapshot
-- [ ] generate replay industry context snapshot
+- [x] build replayable macro proxy feature bundle
+- [x] build replayable industry proxy feature bundle
+- [x] generate replay macro context snapshot
+- [x] generate replay industry context snapshot
 - [ ] compare technical-only vs technical-plus-context outputs
 
 ## Phase 4 — replay outcome evaluation
@@ -617,11 +615,11 @@ The phase checklist below is the target build order. Checked items indicate work
 
 ## Phase 5 — historical news
 - [ ] add `historical_news_items` table and repository
-- [ ] implement historical news ingestion with `published_at` and `available_at`
-- [ ] add ticker/industry mapping for articles
-- [ ] add replay news retrieval for `available_at <= as_of`
-- [ ] adapt event extraction for historical news inputs
-- [ ] integrate news into replay support/context generation
+- [x] implement historical news ingestion with `published_at` and `available_at`
+- [x] add ticker/industry mapping for articles
+- [x] add replay news retrieval for `available_at <= as_of`
+- [x] adapt event extraction for historical news inputs
+- [x] integrate news into replay support/context generation
 
 ## Phase 6 — operator/research visibility
 - [ ] add replay batch list/detail UI

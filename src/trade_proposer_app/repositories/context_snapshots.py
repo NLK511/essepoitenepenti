@@ -53,6 +53,17 @@ class ContextSnapshotRepository:
         ).all()
         return [self._to_macro_model(row) for row in rows]
 
+    def get_latest_macro_context_snapshot_before(self, as_of: datetime) -> MacroContextSnapshot | None:
+        record = self.session.scalar(
+            select(MacroContextSnapshotRecord)
+            .where(MacroContextSnapshotRecord.computed_at <= self._normalize_datetime(as_of))
+            .order_by(MacroContextSnapshotRecord.computed_at.desc())
+            .limit(1)
+        )
+        if record is None:
+            return None
+        return self._to_macro_model(record)
+
     def get_latest_macro_context_snapshot(self) -> MacroContextSnapshot | None:
         record = self.session.scalar(
             select(MacroContextSnapshotRecord).order_by(MacroContextSnapshotRecord.computed_at.desc()).limit(1)
@@ -106,6 +117,18 @@ class ContextSnapshotRepository:
             query = query.where(IndustryContextSnapshotRecord.run_id == run_id)
         rows = self.session.scalars(query.order_by(IndustryContextSnapshotRecord.computed_at.desc()).limit(limit)).all()
         return [self._to_industry_model(row) for row in rows]
+
+    def get_latest_industry_context_snapshot_before(self, industry_key: str, as_of: datetime) -> IndustryContextSnapshot | None:
+        record = self.session.scalar(
+            select(IndustryContextSnapshotRecord)
+            .where(IndustryContextSnapshotRecord.industry_key == industry_key)
+            .where(IndustryContextSnapshotRecord.computed_at <= self._normalize_datetime(as_of))
+            .order_by(IndustryContextSnapshotRecord.computed_at.desc())
+            .limit(1)
+        )
+        if record is None:
+            return None
+        return self._to_industry_model(record)
 
     def get_latest_industry_context_snapshot(self, industry_key: str) -> IndustryContextSnapshot | None:
         record = self.session.scalar(

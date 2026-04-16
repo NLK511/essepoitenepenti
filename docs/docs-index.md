@@ -29,6 +29,7 @@ These define the current product truth.
 
 ### Setup and operations
 - `getting-started.md` — local setup, scripts, auth, validation, first-run checks
+- `operational-scripts-reference.md` — reference for maintenance, hydration, and compare tools
 - `default-watchlists.md` — seeded watchlist pack and rationale
 
 ### Recommendation workflow

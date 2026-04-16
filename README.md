@@ -109,6 +109,7 @@ Read docs in `docs/` or in-app at `/docs`.
 
 Recommended starting points:
 - [Documentation Index](docs/docs-index.md)
+- [Operational Scripts Reference](docs/operational-scripts-reference.md)
 - [Getting Started](docs/getting-started.md)
 - [Operator Page & Field Guide](docs/operator-page-field-guide.md)
 - [Glossary](docs/glossary.md)

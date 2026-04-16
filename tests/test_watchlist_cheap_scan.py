@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -8,9 +9,10 @@ from trade_proposer_app.services.watchlist_cheap_scan import CheapScanError, Che
 
 class CheapScanSignalServiceTests(unittest.TestCase):
     def test_score_uses_dedicated_component_model(self) -> None:
-        def fetcher(ticker: str, period: str) -> pd.DataFrame:
+        def fetcher(ticker: str, period: str, as_of=None) -> pd.DataFrame:
             self.assertEqual(ticker, "AAPL")
             self.assertEqual(period, "6mo")
+            self.assertIsNone(as_of)
             closes = [100 + i for i in range(80)]
             volumes = [1_500_000 + (i * 10_000) for i in range(80)]
             return pd.DataFrame({"Close": closes, "Volume": volumes})
@@ -28,8 +30,81 @@ class CheapScanSignalServiceTests(unittest.TestCase):
         self.assertIn("trend", signal.indicator_summary)
 
     def test_score_raises_for_insufficient_history(self) -> None:
-        def fetcher(ticker: str, period: str) -> pd.DataFrame:
+        def fetcher(ticker: str, period: str, as_of=None) -> pd.DataFrame:
             return pd.DataFrame({"Close": [100 + i for i in range(10)], "Volume": [1_000_000 for _ in range(10)]})
 
         with self.assertRaises(CheapScanError):
             CheapScanSignalService(history_fetcher=fetcher).score("MSFT", StrategyHorizon.ONE_DAY)
+
+    def test_score_warns_only_when_history_is_shorter_than_full_sma_window(self) -> None:
+        def fetcher(ticker: str, period: str, as_of=None) -> pd.DataFrame:
+            closes = [100 + i for i in range(40)]
+            volumes = [1_000_000 for _ in range(40)]
+            return pd.DataFrame({"Close": closes, "Volume": volumes})
+
+        signal = CheapScanSignalService(history_fetcher=fetcher).score("NVDA", StrategyHorizon.ONE_WEEK)
+
+        self.assertIn("cheap scan used limited lookback history", signal.warnings)
+        self.assertEqual(signal.diagnostics["history_bar_count"], 40)
+        self.assertEqual(signal.diagnostics["effective_sma50_window"], 40)
+
+    def test_score_does_not_warn_when_full_sma_window_is_available(self) -> None:
+        def fetcher(ticker: str, period: str, as_of=None) -> pd.DataFrame:
+            closes = [100 + i for i in range(55)]
+            volumes = [1_000_000 for _ in range(55)]
+            return pd.DataFrame({"Close": closes, "Volume": volumes})
+
+        signal = CheapScanSignalService(history_fetcher=fetcher).score("META", StrategyHorizon.ONE_WEEK)
+
+        self.assertNotIn("cheap scan used limited lookback history", signal.warnings)
+        self.assertEqual(signal.diagnostics["history_bar_count"], 55)
+        self.assertEqual(signal.diagnostics["effective_sma50_window"], 50)
+
+    def test_score_uses_traded_value_warning_label_and_diagnostic(self) -> None:
+        def fetcher(ticker: str, period: str, as_of=None) -> pd.DataFrame:
+            closes = [10.0 for _ in range(55)]
+            volumes = [100_000 for _ in range(55)]
+            return pd.DataFrame({"Close": closes, "Volume": volumes})
+
+        signal = CheapScanSignalService(history_fetcher=fetcher).score("PROX.BR", StrategyHorizon.ONE_WEEK)
+
+        self.assertIn("low average traded value on cheap scan", signal.warnings)
+        self.assertNotIn("low average dollar volume on cheap scan", signal.warnings)
+        self.assertEqual(signal.diagnostics["avg_traded_value_20"], 1_000_000.0)
+        self.assertEqual(signal.diagnostics["liquidity_metric_currency"], "raw_quote_currency_not_normalized")
+
+    def test_score_retries_transient_remote_fetch_failures(self) -> None:
+        calls = {"count": 0}
+
+        def fetcher(ticker: str, period: str, as_of=None) -> pd.DataFrame:
+            calls["count"] += 1
+            if calls["count"] < 3:
+                raise RuntimeError("temporary upstream failure")
+            closes = [100 + i for i in range(60)]
+            volumes = [1_000_000 for _ in range(60)]
+            return pd.DataFrame({"Close": closes, "Volume": volumes})
+
+        service = CheapScanSignalService(history_fetcher=fetcher)
+        with patch("time.sleep", return_value=None):
+            signal = service.score("AAPL", StrategyHorizon.ONE_WEEK)
+
+        self.assertEqual(calls["count"], 3)
+        self.assertEqual(signal.ticker, "AAPL")
+        self.assertEqual(signal.diagnostics["data_source"], "yahoo")
+
+    def test_score_uses_local_history_when_remote_fetch_keeps_failing(self) -> None:
+        local_history = pd.DataFrame(
+            {
+                "Close": [100 + i for i in range(60)],
+                "Volume": [1_000_000 for _ in range(60)],
+            }
+        )
+
+        service = CheapScanSignalService(history_fetcher=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("remote down")), repository=object())
+        service._fetch_from_db = lambda ticker, as_of, is_replay=False: local_history  # type: ignore[method-assign]
+
+        with patch("time.sleep", return_value=None):
+            signal = service.score("MSFT", StrategyHorizon.ONE_WEEK)
+
+        self.assertEqual(signal.ticker, "MSFT")
+        self.assertEqual(signal.diagnostics["data_source"], "database")

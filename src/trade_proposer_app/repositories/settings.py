@@ -49,6 +49,9 @@ DEFAULT_APP_SETTINGS = {
     "social_enable_author_weighting": "true",
     "social_enable_engagement_weighting": "true",
     "social_enable_duplicate_suppression": "true",
+    "evaluation_realism_stop_buffer_pct": "0.05",
+    "evaluation_realism_take_profit_buffer_pct": "0.05",
+    "evaluation_realism_friction_pct": "0.1",
 }
 SUMMARY_SETTING_KEYS = (
     "summary_backend",
@@ -117,6 +120,24 @@ class SettingsRepository:
     def get_social_settings(self) -> dict[str, str]:
         setting_map = self.get_setting_map()
         return {key: setting_map.get(key, DEFAULT_APP_SETTINGS.get(key, "")) for key in SOCIAL_SETTING_KEYS}
+
+    def get_evaluation_realism_config(self) -> dict[str, float]:
+        setting_map = self.get_setting_map()
+        return {
+            "stop_buffer_pct": self._get_float(setting_map, "evaluation_realism_stop_buffer_pct", 0.05),
+            "take_profit_buffer_pct": self._get_float(setting_map, "evaluation_realism_take_profit_buffer_pct", 0.05),
+            "friction_pct": self._get_float(setting_map, "evaluation_realism_friction_pct", 0.1),
+        }
+
+    def set_evaluation_realism_config(self, *, stop_buffer_pct: float, take_profit_buffer_pct: float, friction_pct: float) -> dict[str, float]:
+        self.set_settings(
+            {
+                "evaluation_realism_stop_buffer_pct": f"{float(stop_buffer_pct):.4f}".rstrip("0").rstrip("."),
+                "evaluation_realism_take_profit_buffer_pct": f"{float(take_profit_buffer_pct):.4f}".rstrip("0").rstrip("."),
+                "evaluation_realism_friction_pct": f"{float(friction_pct):.4f}".rstrip("0").rstrip("."),
+            }
+        )
+        return self.get_evaluation_realism_config()
 
     def get_confidence_threshold(self) -> float:
         setting_map = self.get_setting_map()

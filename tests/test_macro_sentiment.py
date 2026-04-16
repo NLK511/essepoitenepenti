@@ -13,7 +13,7 @@ class StubSocialService:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
 
-    def analyze_subject(self, *, subject_key: str, subject_label: str, queries: list[str], scope_tag: str) -> dict[str, object]:
+    def analyze_subject(self, *, subject_key: str, subject_label: str, queries: list[str], scope_tag: str, start_at=None, end_at=None) -> dict[str, object]:
         self.calls.append(
             {
                 "subject_key": subject_key,
@@ -101,7 +101,7 @@ class MacroContextRefreshServiceTests(unittest.TestCase):
     def test_industry_summary_uses_previous_snapshot_summary_for_continuity(self) -> None:
 
         class StubSocialServiceWithItem:
-            def analyze_subject(self, *, subject_key: str, subject_label: str, queries: list[str], scope_tag: str) -> dict[str, object]:
+            def analyze_subject(self, *, subject_key: str, subject_label: str, queries: list[str], scope_tag: str, start_at=None, end_at=None) -> dict[str, object]:
                 return {
                     "sentiment": {
                         "score": 0.15,

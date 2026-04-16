@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import Run
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
@@ -34,13 +35,14 @@ async def get_run(run_id: int, session: Session = Depends(get_db_session)) -> di
 
 
 @router.delete("/{run_id}")
-async def delete_run(run_id: int, session: Session = Depends(get_db_session)) -> dict[str, object]:
+async def delete_run(run_id: int, force: bool = False, session: Session = Depends(get_db_session)) -> dict[str, object]:
     repository = RunRepository(session)
+    repository.recover_stale_running_runs(stale_after_seconds=settings.run_stale_after_seconds)
     try:
         run = repository.get_run(run_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    if run.status in ACTIVE_RUN_STATUSES:
-        raise HTTPException(status_code=400, detail="Cannot delete runs that are queued or running")
+    if run.status in ACTIVE_RUN_STATUSES and not force:
+        raise HTTPException(status_code=400, detail="Cannot delete runs that are queued or running; retry with force=true or recover the stale run first")
     repository.delete_run(run_id)
-    return {"deleted": True, "run_id": run_id}
+    return {"deleted": True, "run_id": run_id, "force": force}

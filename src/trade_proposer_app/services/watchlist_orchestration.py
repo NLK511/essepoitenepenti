@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import math
+import logging
 from dataclasses import dataclass
 from typing import Any
+from datetime import datetime, timezone
 
 from trade_proposer_app.domain.enums import RecommendationDirection, StrategyHorizon
 from trade_proposer_app.domain.models import RecommendationDecisionSample, RecommendationPlan, RunOutput, TickerSignalSnapshot, Watchlist
@@ -16,6 +18,7 @@ from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal, Ch
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
 
+logger = logging.getLogger(__name__)
 
 @dataclass
 class _CheapScanCandidate:
@@ -95,23 +98,38 @@ class WatchlistOrchestrationService:
         *,
         job_id: int | None = None,
         run_id: int | None = None,
+        as_of: datetime | None = None,
     ) -> dict[str, object]:
         normalized_tickers = [ticker.strip().upper() for ticker in tickers if ticker and ticker.strip()]
         if not normalized_tickers:
             raise ValueError("watchlist job has no effective tickers configured")
 
+        logger.info(f"Starting watchlist orchestration for '{watchlist.name}' ({len(normalized_tickers)} tickers)")
+        if as_of:
+            logger.info(f"  Simulation mode active: as_of {as_of.isoformat()}")
+
         calibration_summary = self._load_calibration_summary()
-        candidates = [self._run_cheap_scan(ticker, watchlist.default_horizon) for ticker in normalized_tickers]
+        
+        logger.info("  Running cheap scans...")
+        candidates = []
+        for i, ticker in enumerate(normalized_tickers):
+            if (i + 1) % 50 == 0:
+                logger.info(f"    Cheap scan progress: {i+1}/{len(normalized_tickers)}")
+            candidates.append(self._run_cheap_scan(ticker, watchlist.default_horizon, as_of=as_of))
+
+        logger.info("  Evaluating shortlist...")
         shortlist_evaluation = self._evaluate_shortlist(watchlist, candidates)
         shortlist = shortlist_evaluation["shortlist"]
         shortlist_map = {ticker: rank for rank, ticker in enumerate(shortlist, start=1)}
+        logger.info(f"  Shortlist selected: {len(shortlist)} tickers")
 
         stored_signals: list[TickerSignalSnapshot] = []
         stored_plans: list[RecommendationPlan] = []
         ticker_generation: list[dict[str, object]] = []
         warnings_found = False
 
-        for candidate in candidates:
+        logger.info("  Processing candidates...")
+        for i, candidate in enumerate(candidates):
             shortlist_rank = shortlist_map.get(candidate.ticker)
             if shortlist_rank is None:
                 decision = self._shortlist_decision_for_ticker(shortlist_evaluation, candidate.ticker)
@@ -153,13 +171,16 @@ class WatchlistOrchestrationService:
                         "shortlisted": False,
                         "attention_score": candidate.attention_score,
                         "shortlist_decision": decision,
+                        "cheap_scan_price_history": stored_signal.diagnostics.get("cheap_scan_price_history") if hasattr(stored_signal.diagnostics, "get") else None,
+                        "deep_analysis_price_history": None,
                     }
                 )
                 if candidate.warnings or candidate.error_message:
                     warnings_found = True
                 continue
 
-            deep_output, deep_error = self._run_deep_analysis(candidate.ticker, watchlist.default_horizon)
+            logger.info(f"    Running deep analysis for {candidate.ticker} (rank {shortlist_rank})...")
+            deep_output, deep_error = self._run_deep_analysis(candidate.ticker, watchlist.default_horizon, as_of=as_of)
             decision = self._shortlist_decision_for_ticker(shortlist_evaluation, candidate.ticker)
             signal = self._build_signal_snapshot(
                 watchlist,
@@ -203,6 +224,8 @@ class WatchlistOrchestrationService:
                     "attention_score": candidate.attention_score,
                     "plan_action": stored_plan.action,
                     "shortlist_decision": decision,
+                    "cheap_scan_price_history": stored_signal.diagnostics.get("cheap_scan_price_history") if hasattr(stored_signal.diagnostics, "get") else None,
+                    "deep_analysis_price_history": stored_signal.diagnostics.get("deep_analysis_price_history") if hasattr(stored_signal.diagnostics, "get") else None,
                 }
             )
             if candidate.warnings or deep_error or plan.warnings:
@@ -226,6 +249,7 @@ class WatchlistOrchestrationService:
             "shortlist_rejection_details": self._counted_shortlist_reason_details(shortlist_evaluation["rejection_counts"]),
             "calibration_enabled": calibration_summary is not None,
             "warnings_found": warnings_found,
+            "as_of": as_of.isoformat() if as_of else None,
         }
         artifact = {
             "mode": "watchlist_orchestration",
@@ -233,10 +257,12 @@ class WatchlistOrchestrationService:
             "shortlist": shortlist,
             "shortlist_rules": shortlist_evaluation["rules"],
             "shortlist_decisions": shortlist_evaluation["decisions"],
+            "ticker_generation": ticker_generation,
             "calibration_enabled": calibration_summary is not None,
             "ticker_signal_snapshot_ids": [item.id for item in stored_signals],
             "recommendation_plan_ids": [item.id for item in stored_plans],
         }
+        logger.info(f"Orchestration complete: {len(stored_plans)} plans generated.")
         return {
             "summary": summary,
             "artifact": artifact,
@@ -244,9 +270,9 @@ class WatchlistOrchestrationService:
             "warnings_found": warnings_found,
         }
 
-    def _run_cheap_scan(self, ticker: str, horizon: StrategyHorizon) -> _CheapScanCandidate:
+    def _run_cheap_scan(self, ticker: str, horizon: StrategyHorizon, as_of: datetime | None = None) -> _CheapScanCandidate:
         try:
-            signal = self.cheap_scan_service.score(ticker, horizon)
+            signal = self.cheap_scan_service.score(ticker, horizon, as_of=as_of)
         except Exception as exc:
             return _CheapScanCandidate(
                 ticker=ticker,
@@ -270,11 +296,11 @@ class WatchlistOrchestrationService:
             raw_output=None,
         )
 
-    def _run_deep_analysis(self, ticker: str, horizon: StrategyHorizon) -> tuple[RunOutput | None, str | None]:
+    def _run_deep_analysis(self, ticker: str, horizon: StrategyHorizon, as_of: datetime | None = None) -> tuple[RunOutput | None, str | None]:
         try:
             if hasattr(self.deep_analysis_service, "analyze"):
-                return self.deep_analysis_service.analyze(ticker, horizon=horizon), None
-            return self.deep_analysis_service.generate(ticker), None
+                return self.deep_analysis_service.analyze(ticker, horizon=horizon, as_of=as_of), None
+            return self.deep_analysis_service.generate(ticker, as_of=as_of), None
         except Exception as exc:
             return None, str(exc)
 
@@ -525,8 +551,10 @@ class WatchlistOrchestrationService:
             source_breakdown={
                 "cheap_scan_summary": candidate.indicator_summary,
                 "cheap_scan_model": candidate.cheap_scan_signal.diagnostics.get("model") if candidate.cheap_scan_signal is not None else None,
+                "cheap_scan_price_history": candidate.cheap_scan_signal.diagnostics.get("price_history") if candidate.cheap_scan_signal is not None else None,
                 "deep_analysis_available": deep_output is not None,
                 "deep_analysis_model": self._pluck(analysis, "ticker_deep_analysis", "model"),
+                "deep_analysis_price_history": self._pluck(analysis, "ticker_deep_analysis", "price_history"),
                 "summary_method": getattr(deep_output.diagnostics, "summary_method", None) if deep_output is not None else None,
                 "transmission_bias": transmission_bias,
                 "transmission_bias_detail": self._transmission_bias_detail(transmission_bias),
@@ -563,7 +591,9 @@ class WatchlistOrchestrationService:
                     "volatility_score": candidate.cheap_scan_signal.volatility_score if candidate.cheap_scan_signal is not None else None,
                     "liquidity_score": candidate.cheap_scan_signal.liquidity_score if candidate.cheap_scan_signal is not None else None,
                 },
+                "cheap_scan_price_history": candidate.cheap_scan_signal.diagnostics.get("price_history") if candidate.cheap_scan_signal is not None else None,
                 "deep_analysis_error": deep_error,
+                "deep_analysis_price_history": self._pluck(analysis, "ticker_deep_analysis", "price_history"),
                 "base_confidence_percent": base_confidence,
                 "transmission_confidence_adjustment": transmission_effect,
                 "transmission_alignment_score": transmission_alignment_score,
@@ -613,6 +643,8 @@ class WatchlistOrchestrationService:
         calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", signal.confidence_percent) or signal.confidence_percent)
         rationale = self._rationale_summary(signal, candidate, setup_family, transmission_summary)
         warnings = list(signal.warnings)
+        shortlisted = bool(signal.diagnostics.get("shortlisted"))
+        shortlist_rank = signal.diagnostics.get("shortlist_rank") if isinstance(signal.diagnostics.get("shortlist_rank"), int) else None
         if deep_output is None or deep_error is not None:
             return RecommendationPlan(
                 ticker=candidate.ticker,
@@ -624,7 +656,7 @@ class WatchlistOrchestrationService:
                 rationale_summary=rationale,
                 warnings=warnings,
                 evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason="deep_analysis_unavailable", calibration_review=calibration_review, transmission_summary=transmission_summary),
-                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary),
+                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, shortlisted=shortlisted, shortlist_rank=shortlist_rank),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -685,7 +717,7 @@ class WatchlistOrchestrationService:
                 rationale_summary=rationale,
                 warnings=list(dict.fromkeys(warnings)),
                 evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
-                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action),
+                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -710,7 +742,7 @@ class WatchlistOrchestrationService:
             risks=self._plan_risks(warnings, setup_family, action, transmission_summary),
             warnings=list(dict.fromkeys(warnings)),
             evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
-            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action),
+            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank),
             computed_at=signal.computed_at,
             run_id=run_id,
             job_id=job_id,
@@ -750,7 +782,7 @@ class WatchlistOrchestrationService:
             rationale_summary=self._rationale_summary(signal, candidate, setup_family, transmission_summary),
             warnings=list(signal.warnings),
             evidence_summary=self._evidence_summary(candidate.indicator_summary, setup_family, confidence_components, action_reason="not_shortlisted", calibration_review=calibration_review, transmission_summary=transmission_summary),
-            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary),
+            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, shortlisted=False, shortlist_rank=None),
             computed_at=signal.computed_at,
             run_id=run_id,
             job_id=job_id,
@@ -1043,6 +1075,8 @@ class WatchlistOrchestrationService:
         calibration_review: dict[str, object] | None = None,
         transmission_summary: dict[str, object] | None = None,
         intended_action: str | None = None,
+        shortlisted: bool | None = None,
+        shortlist_rank: int | None = None,
     ) -> dict[str, object]:
         calibration = calibration_review or {}
         calibrated_confidence = calibration.get("calibrated_confidence_percent") if isinstance(calibration.get("calibrated_confidence_percent"), (int, float)) else signal.confidence_percent
@@ -1063,6 +1097,10 @@ class WatchlistOrchestrationService:
             "calibration_review": calibration,
             "transmission_summary": transmission_summary or {},
             "mode": signal.diagnostics.get("mode"),
+            "shortlisted": shortlisted,
+            "shortlist_rank": shortlist_rank,
+            "cheap_scan_price_history": signal.diagnostics.get("cheap_scan_price_history"),
+            "deep_analysis_price_history": signal.diagnostics.get("deep_analysis_price_history"),
         }
         if intended_action in {"long", "short"}:
             payload["intended_action"] = intended_action

@@ -15,8 +15,11 @@ class ContextSnapshotResolver:
         self.repository = repository
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
-    def resolve_macro_snapshot(self) -> dict[str, Any]:
-        snapshot = self.repository.get_latest_macro_context_snapshot()
+    def resolve_macro_snapshot(self, *, as_of: datetime | None = None) -> dict[str, Any]:
+        if as_of:
+            snapshot = self.repository.get_latest_macro_context_snapshot_before(as_of)
+        else:
+            snapshot = self.repository.get_latest_macro_context_snapshot()
         if snapshot is None:
             return {
                 "score": 0.0,
@@ -58,11 +61,14 @@ class ContextSnapshotResolver:
             "diagnostics": {"warnings": list(snapshot.warnings)},
         }
 
-    def resolve_industry_snapshot(self, ticker: str) -> dict[str, Any]:
+    def resolve_industry_snapshot(self, ticker: str, *, as_of: datetime | None = None) -> dict[str, Any]:
         industry_profile = self.taxonomy_service.get_industry_profile(ticker)
         subject_key = industry_profile["subject_key"]
         subject_label = industry_profile["subject_label"]
-        snapshot = self.repository.get_latest_industry_context_snapshot(subject_key)
+        if as_of:
+            snapshot = self.repository.get_latest_industry_context_snapshot_before(subject_key, as_of)
+        else:
+            snapshot = self.repository.get_latest_industry_context_snapshot(subject_key)
         taxonomy_metadata = self._industry_taxonomy_metadata(industry_profile)
         if snapshot is None:
             return {

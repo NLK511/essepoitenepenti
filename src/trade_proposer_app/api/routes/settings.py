@@ -12,15 +12,36 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 async def list_settings(session: Session = Depends(get_db_session)) -> dict[str, object]:
     repository = SettingsRepository(session)
     signal_gating_tuning = repository.get_signal_gating_tuning_config()
+    evaluation_realism = repository.get_evaluation_realism_config()
     return {
         "settings": repository.list_settings(),
         "providers": repository.list_provider_credentials(),
         "signal_gating_tuning": signal_gating_tuning,
+        "evaluation_realism": evaluation_realism,
         "plan_generation_tuning": {
             "settings": repository.get_plan_generation_tuning_settings(),
             "active_config": repository.get_plan_generation_active_config(PlanGenerationTuningRepository(session)),
         },
     }
+
+
+@router.post("/evaluation-realism")
+async def set_evaluation_realism_settings(
+    stop_buffer_pct: str = Form(default="0.05"),
+    take_profit_buffer_pct: str = Form(default="0.05"),
+    friction_pct: str = Form(default="0.1"),
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    repository = SettingsRepository(session)
+    try:
+        config = repository.set_evaluation_realism_config(
+            stop_buffer_pct=float(stop_buffer_pct.strip() or 0.05),
+            take_profit_buffer_pct=float(take_profit_buffer_pct.strip() or 0.05),
+            friction_pct=float(friction_pct.strip() or 0.1),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid evaluation realism settings: {exc}") from exc
+    return {"evaluation_realism": config}
 
 
 @router.post("/app")

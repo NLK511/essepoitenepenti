@@ -38,7 +38,7 @@ WATCHLIST_SPECS = [
             "2330.TW", "2317.TW", "2454.TW", "2308.TW", "3711.TW", "3034.TW", "005930.KS", "000660.KS", "035420.KS", "035720.KS",
             "6701.T", "6702.T", "6723.T", "6857.T", "6981.T", "6976.T", "6954.T", "4689.T", "4755.T", "2413.T",
             "9888.HK", "2015.HK", "9866.HK", "9868.HK", "0268.HK", "0762.HK", "0728.HK", "0941.HK", "2303.TW", "2382.TW",
-            "3231.TW", "2357.TW", "2379.TW", "3008.TW", "066570.KS", "018260.KS", "XRO.AX", "WTC.AX", "REA.AX", "NEXT.AX"
+            "3231.TW", "2357.TW", "2379.TW", "3008.TW", "066570.KS", "018260.KS", "XRO.AX", "WTC.AX", "REA.AX", "TNE.AX"
         ],
     },
     {
@@ -65,7 +65,7 @@ WATCHLIST_SPECS = [
             "4502.T", "4568.T", "4519.T", "4523.T", "4578.T", "4507.T", "4543.T", "7741.T", "7733.T", "4901.T",
             "2269.HK", "1093.HK", "1177.HK", "207940.KS", "068270.KS", "CSL.AX", "RMD.AX", "COH.AX", "2359.HK", "6618.HK",
             "4503.T", "4528.T", "4516.T", "4587.T", "4483.T", "1513.HK", "6160.HK", "0999.HK", "1801.HK", "2196.HK",
-            "300760.SZ", "300015.SZ", "600276.SS", "000661.KS", "302440.KS", "128940.KS", "000100.KS", "4105.TW", "4743.TW", "9938.TW",
+            "300760.SZ", "300015.SZ", "600276.SS", "302440.KS", "068760.KS", "128940.KS", "000100.KS", "1760.TW", "6446.TW", "9938.TW",
             "FPH.AX", "SHL.AX", "ANN.AX", "RHC.AX", "REG.AX", "PME.AX", "006280.KS", "008930.KS", "300003.SZ", "300012.SZ"
         ],
     },
@@ -80,7 +80,7 @@ WATCHLIST_SPECS = [
             "2914.T", "2502.T", "2503.T", "4452.T", "4911.T", "WOW.AX", "COL.AX", "QAN.AX", "CAR.AX", "CPU.AX",
             "7201.T", "7270.T", "7261.T", "6902.T", "7272.T", "9201.T", "9202.T", "9020.T", "9022.T", "4661.T",
             "0291.HK", "0151.HK", "0322.HK", "1880.HK", "1928.HK", "0027.HK", "0960.HK", "1109.HK", "6862.HK", "2020.HK",
-            "2331.HK", "097950.KS", "033780.KS", "051900.KS", "139480.KS", "023530.KS", "WES.AX", "ALL.AX", "SHL.T", "7205.T"
+            "2331.HK", "097950.KS", "033780.KS", "051900.KS", "139480.KS", "023530.KS", "WES.AX", "ALL.AX", "2501.T", "7202.T"
         ],
     },
     {
@@ -104,11 +104,11 @@ WATCHLIST_SPECS = [
         "cron": "00 07 * * MON-FRI",
         "schedule_rationale": "Starts at the European cash open so the list catches open-driven repricing in semis, enterprise software, and payment-sensitive names while preserving the 10-minute cadence.",
         "tickers": [
-            "ASML.AS", "SAP.DE", "ADYEN.AS", "PRX.AS", "IFX.DE", "NOKIA.HE", "ERIC-B.ST", "STM.PA", "BEI.DE", "LOGN.SW",
+            "ASML.AS", "SAP.DE", "ADYEN.AS", "PRX.AS", "IFX.DE", "NOKIA.HE", "ERIC-B.ST", "STMPA.PA", "BEI.DE", "LOGN.SW",
             "TEMN.SW", "ASM.AS", "WKL.AS", "S92.DE", "DHER.DE", "DSY.PA", "WLN.PA", "TELIA.ST", "KPN.AS", "AMS.MC",
-            "CAP.PA", "ATO.PA", "SOI.PA", "OVH.PA", "NEXI.MI", "INW.MI", "SINCH.ST", "EVO.ST", "KIND-SDB.ST", "HEXA-B.ST",
-            "WISE.L", "DARK.L", "RMV.L", "ASC.L", "JET.L", "OCDO.L", "NETW.L", "SGE.L", "AUTO.L", "GFT.DE",
-            "UBI.PA", "VIV.PA", "GENT.BR", "PROX.BR", "BELC.BR", "NDA-FI.HE", "ELUX-B.ST", "GETI-B.ST", "TEL2-B.ST", "AZT.ST"
+            "CAP.PA", "ATO.PA", "SOI.PA", "OVH.PA", "NEXI.MI", "INW.MI", "SINCH.ST", "EVO.ST", "BETCO.ST", "HEXA-B.ST",
+            "WISE.L", "MONY.L", "RMV.L", "ASC.L", "PAY.L", "OCDO.L", "SGE.L", "AUTO.L", "THG.L", "GFT.DE",
+            "UBI.PA", "VIV.PA", "EVS.BR", "PROX.BR", "MELE.BR", "NDA-FI.HE", "ELUX-B.ST", "GETI-B.ST", "TEL2-B.ST", "SBB-B.ST"
         ],
     },
     {
@@ -120,9 +120,9 @@ WATCHLIST_SPECS = [
         "tickers": [
             "HSBA.L", "SAN.MC", "BNP.PA", "ALV.DE", "UBSG.SW", "ISP.MI", "BBVA.MC", "INGA.AS", "ACA.PA", "BARC.L",
             "DBK.DE", "KBC.BR", "NWG.L", "CABK.MC", "UCG.MI", "MUV2.DE", "ZURN.SW", "LGEN.L", "PRU.L", "BMED.MI",
-            "GLE.PA", "CS.PA", "CBK.DE", "HNR1.DE", "EXPN.L", "STAN.L", "LLOY.L", "AV.L", "ADEN.SW", "BALN.SW",
-            "SLHN.SW", "SREN.SW", "PGSN.SW", "JULI.SW", "MBK.WA", "PKO.WA", "PEA.WA", "PZU.WA", "SAB.MC", "BKT.MC",
-            "MAP.MC", "SAMPO.HE", "DNB.OL", "SEB-A.ST", "SHB-A.ST", "SWED-A.ST", "Investor-B.ST", "KINV-B.ST", "LUND-B.ST", "AZN.ST"
+            "GLE.PA", "CS.PA", "CBK.DE", "HNR1.DE", "EXPN.L", "STAN.L", "LLOY.L", "AV.L", "ADEN.SW", "BAER.SW",
+            "SLHN.SW", "SREN.SW", "HELN.SW", "VONTO.SW", "MBK.WA", "PKO.WA", "PEO.WA", "PZU.WA", "SAB.MC", "BKT.MC",
+            "MAP.MC", "SAMPO.HE", "DNB.OL", "SEB-A.ST", "SHB-A.ST", "SWED-A.ST", "INVE-B.ST", "KINV-B.ST", "LUND-B.ST", "AZN.ST"
         ],
     },
     {
@@ -132,11 +132,11 @@ WATCHLIST_SPECS = [
         "cron": "20 07 * * MON-FRI",
         "schedule_rationale": "Healthcare is staggered after tech and banks because it is usually more useful to score once the market has revealed whether it wants defense, growth, or policy-sensitive rotation.",
         "tickers": [
-            "NOVO-B.CO", "ROG.SW", "NOVN.SW", "AZN.L", "GSK.L", "SAN.PA", "BAYN.DE", "ALC.SW", "UCB.BR", "FRE.DE",
-            "SHL.DE", "QIA.DE", "GN.CO", "DEMANT.CO", "GMAB.CO", "SRT3.DE", "PHIA.AS", "ALM.MC", "ORNBV.HE", "LUN.CO",
-            "AMBU-B.CO", "ZEAL.CO", "MOR.DE", "EVT.DE", "FME.DE", "GRPN.PA", "IPN.PA", "ERF.PA", "VLA.PA", "BVI.PA",
-            "DBV.PA", "HIK.L", "SN.L", "CON.L", "OXIG.L", "ABAM.MC", "GRI.MC", "ROVI.MC", "PHMR.MC", "CHR.CO",
-            "ELEK-B.ST", "VITR.ST", "REJL-B.ST", "STRA.SW", "IDIA.PA", "MDW.DE", "NHOV.ST", "DIM.PA", "VALN.PA", "GEN.L"
+            "NOVO-B.CO", "RO.SW", "NOVN.SW", "AZN.L", "GSK.L", "SAN.PA", "BAYN.DE", "ALC.SW", "UCB.BR", "FRE.DE",
+            "SHL.DE", "QIA.DE", "GN.CO", "DEMANT.CO", "GMAB.CO", "SRT3.DE", "PHIA.AS", "FAES.MC", "ORNBV.HE", "LUN.CO",
+            "AMBU-B.CO", "ZEAL.CO", "VAR1.DE", "EVT.DE", "FME.DE", "EMEIS.PA", "IPN.PA", "ERF.PA", "VLA.PA", "BVI.PA",
+            "DBV.PA", "HIK.L", "SN.L", "BOL.PA", "OXIG.L", "IDP.MC", "GRI.MC", "ROVI.MC", "PHM.MC", "SKAN.SW",
+            "EKTA-B.ST", "VITR.ST", "REJL-B.ST", "SGL.DE", "VIRP.PA", "MRX.DE", "NEWA-B.ST", "DIM.PA", "BICO.ST", "GNS.L"
         ],
     },
     {
@@ -147,10 +147,10 @@ WATCHLIST_SPECS = [
         "schedule_rationale": "Consumer and luxury names are checked once Europe has a cleaner macro and FX read, which tends to produce more useful demand-sensitive analysis than an immediate open scan.",
         "tickers": [
             "MC.PA", "OR.PA", "NESN.SW", "ABI.BR", "DGE.L", "ULVR.L", "RI.PA", "KER.PA", "ADS.DE", "HEN3.DE",
-            "RKT.L", "CCH.L", "HEIA.AS", "BN.PA", "FERG.L", "BATS.L", "IMB.L", "ZAL.DE", "AUTO1.DE", "JDW.L",
-            "RMS.PA", "CDV.PA", "RNO.PA", "ACCOR.PA", "ELOR.PA", "PUM.DE", "HFG.DE", "PAH3.DE", "HM-B.ST", "ICA.ST",
-            "INDU-C.ST", "PNDORA.CO", "CARL-B.CO", "ITX.MC", "AENA.MC", "IAG.L", "EZJ.L", "RYR.IR", "ABF.L", "NEXT.L",
-            "JD.L", "PFE.L", "CPH.L", "BME.L", "FRAS.L", "VGP.BR", "COFB.BR", "WDP.BR", "SOLB.BR", "SOD.PA"
+            "RKT.L", "CCH.L", "HEIA.AS", "BN.PA", "FERG.L", "BATS.L", "IMB.L", "ZAL.DE", "AG1.DE", "JDW.L",
+            "RMS.PA", "CDA.PA", "RNO.PA", "AC.PA", "ELIOR.PA", "PUM.DE", "HFG.DE", "PAH3.DE", "HM-B.ST", "AXFO.ST",
+            "INDU-C.ST", "PNDORA.CO", "CARL-B.CO", "ITX.MC", "AENA.MC", "IAG.L", "EZJ.L", "RYR.I", "ABF.L", "NXT.L",
+            "JD.L", "PHNX.L", "CPG.L", "BME.L", "FRAS.L", "VGP.BR", "COFB.BR", "WDP.BR", "SOLB.BR", "SW.PA"
         ],
     },
     {
@@ -162,9 +162,9 @@ WATCHLIST_SPECS = [
         "tickers": [
             "SHEL.L", "BP.L", "TTE.PA", "ENI.MI", "EQNR.OL", "RIO.L", "GLEN.L", "AAL.L", "HOLN.SW", "CRH.L",
             "HEI.DE", "SY1.DE", "BAS.DE", "SIKA.SW", "AKZA.AS", "VOW3.DE", "MBG.DE", "BMW.DE", "AIR.PA", "SU.PA",
-            "REP.MC", "ENG.MC", "ELE.MC", "IBE.MC", "FER.MC", "ACS.MC", "GALP.LS", "EDP.LS", "NHY.OL", "AKERBP.OL",
+            "REP.MC", "ENG.MC", "ELE.MC", "IBE.MC", "FER.MC", "ACS.MC", "GALP.LS", "EDP.LS", "NHY.OL", "AKRBP.OL",
             "YAR.OL", "MOWI.OL", "ORK.OL", "SKA-B.ST", "VOLV-B.ST", "SAND.ST", "SKF-B.ST", "EPI-B.ST", "BOL.ST", "SSAB-A.ST",
-            "MAERSK-B.CO", "VWS.CO", "ORSTED.CO", "FLNG.OL", "SUB.OL", "ANTO.L", "EVRE.L", "POLY.L", "KGH.WA", "PGE.WA"
+            "MAERSK-B.CO", "VWS.CO", "ORSTED.CO", "FRO.OL", "SUBC.OL", "ANTO.L", "CWR.L", "HGM.L", "KGH.WA", "PGE.WA"
         ],
     },
     {
@@ -190,9 +190,9 @@ WATCHLIST_SPECS = [
         "tickers": [
             "JPM", "BAC", "WFC", "C", "GS", "MS", "BLK", "SCHW", "PNC", "USB",
             "COF", "AXP", "BK", "TFC", "CME", "ICE", "SPGI", "CB", "AIG", "MMC",
-            "MCO", "MSCI", "NDAQ", "BRK.B", "KRE", "KBE", "XLF", "TRV", "PGR", "ALL",
+            "MCO", "MSCI", "MKTX", "BRK-B", "KRE", "KBE", "XLF", "TRV", "PGR", "ALL",
             "MET", "PRU", "AFL", "AJG", "BRO", "AON", "WTW", "AMP", "TROW", "BEN",
-            "STT", "NTRS", "FITB", "MTB", "HBAN", "RF", "KEY", "CFG", "SYF", "DFS"
+            "STT", "NTRS", "FITB", "MTB", "HBAN", "RF", "KEY", "CFG", "SYF", "ALLY"
         ],
     },
     {
@@ -205,8 +205,8 @@ WATCHLIST_SPECS = [
             "LLY", "UNH", "JNJ", "ABBV", "MRK", "PFE", "TMO", "ABT", "DHR", "AMGN",
             "GILD", "BMY", "MDT", "ISRG", "SYK", "BSX", "CI", "CVS", "HCA", "REGN",
             "VRTX", "ZTS", "BIIB", "MRNA", "BDX", "EW", "IDXX", "HUM", "ELV", "CNC",
-            "MCK", "ABC", "CAH", "ALGN", "DXCM", "IQV", "A", "WAT", "MTLR", "TECH",
-            "STE", "HOLX", "CTLT", "WST", "BIO", "RVTY", "MTD", "INCY", "EXAS", "PODD"
+            "MCK", "COR", "CAH", "ALGN", "DXCM", "IQV", "A", "WAT", "UHS", "TECH",
+            "STE", "HOLX", "RGEN", "WST", "BIO", "RVTY", "MTD", "INCY", "NTRA", "PODD"
         ],
     },
     {
@@ -241,22 +241,43 @@ WATCHLIST_SPECS = [
 
 SUPPORT_REFRESH_JOB_SPECS = [
     {
-        "name": "Auto: Macro Context Refresh AM",
+        "name": "Macro-Refresh-AM",
         "job_type": "macro_context_refresh",
         "cron": "00 06 * * MON-FRI",
-        "schedule_rationale": "Runs before the Europe block so the morning macro read is fresh without colliding with seeded watchlist jobs.",
+        "schedule_rationale": "Runs before the Europe block.",
     },
     {
-        "name": "Auto: Macro Context Refresh PM",
+        "name": "Macro-Refresh-PM",
         "job_type": "macro_context_refresh",
         "cron": "00 18 * * MON-FRI",
-        "schedule_rationale": "Runs after the U.S. block so the evening macro read captures the full session while leaving the watchlist windows clear.",
+        "schedule_rationale": "Runs after the U.S. block.",
     },
     {
-        "name": "Auto: Industry Context Refresh",
+        "name": "Industry-Refresh",
         "job_type": "industry_context_refresh",
         "cron": "30 10 * * MON-FRI",
-        "schedule_rationale": "Placed in the gap between Europe and U.S. batches so industry context refreshes stay out of the way of the seeded equity scans.",
+        "schedule_rationale": "Gap between Europe and U.S. batches.",
+    },
+    {
+        "name": "Bars-APAC",
+        "job_type": "bars_data_refresh",
+        "cron": "30 08 * * MON-FRI",
+        "region_filter": "Asia/Pacific",
+        "schedule_rationale": "Post-APAC close.",
+    },
+    {
+        "name": "Bars-EU",
+        "job_type": "bars_data_refresh",
+        "cron": "00 17 * * MON-FRI",
+        "region_filter": "Europe",
+        "schedule_rationale": "Post-Europe close.",
+    },
+    {
+        "name": "Bars-US",
+        "job_type": "bars_data_refresh",
+        "cron": "30 20 * * MON-FRI",
+        "region_filter": "United States",
+        "schedule_rationale": "Post-US close.",
     },
 ]
 
@@ -271,10 +292,14 @@ def main() -> None:
         watchlist_repo = WatchlistRepository(session)
         job_repo = JobRepository(session)
 
+        # 1. First, delete all OLD jobs with the "Auto: " prefix to clean up
+        _delete_old_jobs(session)
+
         for spec in WATCHLIST_SPECS:
             normalized = _normalize_tickers(spec["tickers"])
-            watchlist_record = _ensure_watchlist(session, watchlist_repo, spec["name"], normalized)
-            job_name = f"Auto: {spec['name']}"
+            # Curated watchlists trigger overlap removal
+            watchlist_record = _ensure_watchlist(session, watchlist_repo, spec["name"], normalized, trigger_removal=True)
+            job_name = f"{spec['name']}" # No prefix
             _ensure_job(
                 session,
                 job_repo,
@@ -285,16 +310,46 @@ def main() -> None:
             )
 
         for spec in SUPPORT_REFRESH_JOB_SPECS:
+            target_watchlist = None
+            job_type = JobType(spec["job_type"])
+            
+            if job_type == JobType.BARS_DATA_REFRESH and "region_filter" in spec:
+                region = spec["region_filter"]
+                region_tickers = []
+                for w_spec in WATCHLIST_SPECS:
+                    if w_spec["region"] == region:
+                        region_tickers.extend(w_spec["tickers"])
+                
+                watchlist_name = f"Ref-{region}" # Less verbose name
+                # System watchlists DO NOT trigger overlap removal
+                target_watchlist = _ensure_watchlist(session, watchlist_repo, watchlist_name, _normalize_tickers(region_tickers), trigger_removal=False)
+
             _ensure_job(
                 session,
                 job_repo,
-                None,
+                target_watchlist,
                 spec["name"],
                 spec["cron"],
-                job_type=JobType(spec["job_type"]),
+                job_type=job_type,
             )
 
     logging.info("Deployment complete")
+
+
+def _delete_old_jobs(session) -> None:
+    # Delete jobs that have "Auto: " prefix
+    old_jobs = session.scalars(select(JobRecord).where(JobRecord.name.like("Auto: %"))).all()
+    for job in old_jobs:
+        logging.info("Deleting old job: %s", job.name)
+        session.delete(job)
+    
+    # Also delete old "System: " watchlists
+    old_ws = session.scalars(select(WatchlistRecord).where(WatchlistRecord.name.like("System: %"))).all()
+    for ws in old_ws:
+        logging.info("Deleting old watchlist: %s", ws.name)
+        session.delete(ws)
+    
+    session.commit()
 
 
 def _validate_watchlist_specs(specs: list[dict[str, object]]) -> None:
@@ -329,14 +384,16 @@ def _normalize_tickers(tickers: Iterable[str]) -> list[str]:
 
 
 def _ensure_watchlist(
-    session, repo: WatchlistRepository, name: str, tickers: list[str]
+    session, repo: WatchlistRepository, name: str, tickers: list[str], trigger_removal: bool = True
 ) -> WatchlistRecord:
-    _remove_tickers_from_other_watchlists(session, tickers, exclude_name=name)
+    if trigger_removal:
+        _remove_tickers_from_other_watchlists(session, tickers, exclude_name=name)
+        
     record = _find_watchlist_record(session, name)
 
     if record:
         current = [ticker for ticker in record.tickers_csv.split(",") if ticker]
-        if current != tickers:
+        if set(current) != set(tickers):
             record.tickers_csv = ",".join(tickers)
             session.commit()
             session.refresh(record)
@@ -389,7 +446,12 @@ def _remove_tickers_from_other_watchlists(
     exclude_name: str,
 ) -> None:
     interested = set(tickers)
-    rows = session.scalars(select(WatchlistRecord).where(WatchlistRecord.name != exclude_name)).all()
+    # We only remove tickers from regular curated watchlists, not system/refresh ones
+    rows = session.scalars(
+        select(WatchlistRecord)
+        .where(WatchlistRecord.name != exclude_name)
+        .where(~WatchlistRecord.name.like("Ref-%"))
+    ).all()
     for row in rows:
         existing = [t for t in row.tickers_csv.split(",") if t]
         filtered = [t for t in existing if t not in interested]

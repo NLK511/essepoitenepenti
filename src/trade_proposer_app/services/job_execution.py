@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import socket
+import traceback
 from datetime import datetime, timezone
 from time import perf_counter
 
@@ -10,6 +11,7 @@ from trade_proposer_app.domain.enums import JobType, RunStatus, StrategyHorizon
 from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, Run, Watchlist, WorkerHeartbeat
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.services.bars_refresh import BarsRefreshService
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
@@ -43,6 +45,7 @@ class JobExecutionService:
         watchlist_orchestration=None,
         recommendation_plans=None,
         historical_replay: HistoricalReplayService | None = None,
+        bars_refresh: BarsRefreshService | None = None,
     ) -> None:
         self.jobs = jobs
         self.runs = runs
@@ -56,6 +59,7 @@ class JobExecutionService:
         self.watchlist_orchestration = watchlist_orchestration
         self.recommendation_plans = recommendation_plans
         self.historical_replay = historical_replay
+        self.bars_refresh = bars_refresh
 
     def enqueue_job(self, job_id: int, scheduled_for: datetime | None = None) -> Run:
         self.runs.recover_stale_running_runs(stale_after_seconds=settings.run_stale_after_seconds)
@@ -115,6 +119,8 @@ class JobExecutionService:
             return self._execute_industry_context_refresh_run(run)
         if run.job_type == JobType.HISTORICAL_REPLAY:
             return self._execute_historical_replay_run(run)
+        if run.job_type == JobType.BARS_DATA_REFRESH:
+            return self._execute_bars_data_refresh_run(run)
         raise RuntimeError(f"unsupported job_type execution: {run.job_type.value}")
 
     def _execute_proposal_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
@@ -168,11 +174,16 @@ class JobExecutionService:
             ticker_generation = self._get_ticker_generation_list(timing)
             if self.watchlist_orchestration is None:
                 raise RuntimeError("proposal_generation runs require the redesign watchlist orchestration service")
+            
+            # Use scheduled_for as the 'as_of' time if provided (for replays/simulations)
+            as_of = self._normalize_datetime(run.scheduled_for)
+            
             orchestration = self.watchlist_orchestration.execute(
                 watchlist,
                 tickers,
                 job_id=run.job_id,
                 run_id=run.id,
+                as_of=as_of,
             )
             logger.info(
                 "job execution proposal orchestration finished: run_id=%s job_id=%s warnings_found=%s",
@@ -335,7 +346,8 @@ class JobExecutionService:
             }
             timing["plan_generation_tuning_seconds"] = round(perf_counter() - tuning_started, 6)
         except Exception as exc:
-            timing["plan_generation_tuning_seconds"] = round(perf_counter() - tuning_started, 6)
+            tuning_run_seconds = round(perf_counter() - tuning_started, 6)
+            timing["plan_generation_tuning_seconds"] = tuning_run_seconds
             timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
             raise RunExecutionFailed(exc, timing) from exc
 
@@ -560,6 +572,45 @@ class JobExecutionService:
         timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
 
         self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
+        return [], timing
+
+    def _execute_bars_data_refresh_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
+        if self.bars_refresh is None:
+            raise RuntimeError("bars data refresh service is not configured")
+
+        execution_started = perf_counter()
+        timing: dict[str, object] = {
+            "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
+            "bars_refresh_seconds": 0.0,
+            "persistence_seconds": 0.0,
+            "finalize_seconds": 0.0,
+            "total_execution_seconds": 0.0,
+        }
+
+        refresh_started = perf_counter()
+        try:
+            tickers = self.jobs.resolve_tickers(run.job_id)
+            result = self.bars_refresh.refresh_bars(tickers)
+            timing["bars_refresh_seconds"] = round(perf_counter() - refresh_started, 6)
+        except Exception as exc:
+            timing["bars_refresh_seconds"] = round(perf_counter() - refresh_started, 6)
+            timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
+            raise RunExecutionFailed(exc, timing) from exc
+
+        persistence_started = perf_counter()
+        warnings = result.get("warnings", [])
+        summary = {
+            "total_ingested": result.get("total_ingested"),
+            "refreshed_at": result.get("refreshed_at"),
+            "warning_count": len(warnings),
+            "warnings": warnings,
+        }
+        self.runs.set_summary(run.id or 0, summary)
+        self.runs.set_artifact(run.id or 0, result)
+        timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
+
+        final_status = RunStatus.COMPLETED_WITH_WARNINGS.value if warnings else RunStatus.COMPLETED.value
+        self._finalize_success(run.id or 0, final_status, timing, execution_started)
         return [], timing
 
     def process_next_queued_run(self, worker_id: str | None = None) -> tuple[Run | None, list[Recommendation]]:

@@ -6,7 +6,7 @@ import { WorkflowRunResults } from "../components/workflow-run-results";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import { useToast } from "../components/toast";
 import type { Run, RunDetailResponse } from "../types";
-import { formatDate, formatDuration, jobTypeLabel, runTone } from "../utils";
+import { extractRunWarnings, formatDate, formatDuration, jobTypeLabel, runTone } from "../utils";
 
 export function DebuggerPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -93,6 +93,8 @@ export function DebuggerPage() {
       setIsDeletingRun(false);
     }
   }
+
+  const activeWarnings = useMemo<string[]>(() => extractRunWarnings(detail), [detail]);
 
   return (
     <>
@@ -195,6 +197,19 @@ export function DebuggerPage() {
                   <div className="helper-text">Completed {formatDate(detail.run.completed_at)}</div>
                 </div>
                 {detail.run.error_message ? <div className="alert alert-danger top-gap-small">{detail.run.error_message}</div> : null}
+                
+                {activeWarnings.length > 0 ? (
+                    <div className="top-gap-small">
+                        <div className="helper-text-label">Active warnings</div>
+                        <div className="alert alert-warning top-gap-tiny">
+                            <ul className="bullet-list-compact">
+                                {activeWarnings.map((warning, index) => (
+                                    <li key={index}>{warning}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                ) : null}
               </Card>
 
               <Card>
