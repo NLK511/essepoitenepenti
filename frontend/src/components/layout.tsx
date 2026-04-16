@@ -4,6 +4,7 @@ import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
 import { getJson } from "../api";
 import { Badge } from "../components/ui";
+import { AurelioMark } from "../theme/aurelio";
 import { ActiveWorkersResponse, AppHealthResponse, WorkerHeartbeat } from "../types";
 
 const THEME_KEY = "trade-proposer-theme";
@@ -230,10 +231,10 @@ function workerStatusTone(status: string): "ok" | "warning" | "danger" | "neutra
     return "ok";
   }
   if (status === "idle") {
-    return "warning";
+    return "danger";
   }
   if (status === "stale") {
-    return "warning";
+    return "danger";
   }
   return "neutral";
 }
@@ -254,10 +255,10 @@ function summarizeWorkers(workers: WorkerHeartbeat[]): { label: string; tone: "o
     return { label: `${running} running`, tone: "ok" };
   }
   if (idle > 0) {
-    return { label: `${idle} idle`, tone: "warning" };
+    return { label: `${idle} idle`, tone: "danger" };
   }
   if (stale > 0) {
-    return { label: `${stale} stale`, tone: "warning" };
+    return { label: `${stale} stale`, tone: "danger" };
   }
   return { label: "No active workers", tone: "neutral" };
 }
@@ -336,12 +337,12 @@ export function AppLayout() {
       <aside className="sidebar-shell">
         <div className="sidebar-shell-content">
           <div className="sidebar-brand">
-            <NavLink to="/" className="brand-mark brand-mark-large">
-              TP
+            <NavLink to="/" className="brand-mark brand-mark-large" aria-label="Aurelio home">
+              <AurelioMark className="brand-mark-icon" />
             </NavLink>
             <div className="brand-copy">
-              <div className="brand-title">Trade Proposer</div>
-              <div className="brand-subtitle">Context-first recommendation workspace</div>
+              <div className="brand-title">Aurelio</div>
+              <div className="brand-subtitle">Stoic clarity for modern markets</div>
             </div>
           </div>
 
@@ -352,13 +353,13 @@ export function AppLayout() {
           >
             <div className="sidebar-status-card">
               <div className="kicker">Current mode</div>
-              <h2>Operator copilot</h2>
+              <h2>Disciplined conviction</h2>
               <p>
                 Review watchlists, shortlist candidates, and inspect recommendation plans with outcome-aware evidence.
               </p>
 
               <div className="sidebar-status-indicator-group">
-                <div className={`status-dot ${workerSummary.tone === "ok" ? "is-ok" : "is-warning"}`} />
+                <div className={`status-dot ${workerSummary.tone === "ok" ? "is-ok" : workerSummary.tone === "danger" ? "is-failed" : "is-warning"}`} />
                 <div className="status-indicator-label">
                   {workerSummary.label === "No active workers"
                     ? workerStatus === "ok"
@@ -391,7 +392,7 @@ export function AppLayout() {
                     <div className="worker-status-popover-title">{workerSummary.label}</div>
                   </div>
                   <div className="worker-status-popover-actions">
-                    <div className={`status-dot ${workerSummary.tone === "ok" ? "is-ok" : "is-warning"}`} />
+                    <div className={`status-dot ${workerSummary.tone === "ok" ? "is-ok" : workerSummary.tone === "danger" ? "is-failed" : "is-warning"}`} />
                     {workerPopoverPinned ? (
                       <button
                         type="button"
