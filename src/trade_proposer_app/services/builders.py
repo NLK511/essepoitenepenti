@@ -7,6 +7,7 @@ from trade_proposer_app.repositories.recommendation_outcomes import Recommendati
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
+from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
 from trade_proposer_app.services.macro_context import MacroContextService
@@ -52,6 +53,7 @@ def create_proposal_service(session: Session) -> ProposalService:
         signal_service=signal_service,
         summary_service=summary_service,
         snapshot_resolver=snapshot_resolver,
+        historical_market_data=HistoricalMarketDataRepository(session),
     )
 
 
@@ -74,7 +76,6 @@ def create_watchlist_orchestration_service(
     except (TypeError, ValueError):
         confidence_threshold = 60.0
 
-    from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
     return WatchlistOrchestrationService(
         context_snapshots=ContextSnapshotRepository(session),
         recommendation_plans=RecommendationPlanRepository(session),

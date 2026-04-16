@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import numpy as np
 import pandas as pd
@@ -7,7 +7,7 @@ import pandas as pd
 from trade_proposer_app.domain.enums import RecommendationDirection
 import json
 
-from trade_proposer_app.domain.models import NewsArticle, NewsBundle
+from trade_proposer_app.domain.models import HistoricalMarketBar, NewsArticle, NewsBundle
 from trade_proposer_app.services.news import SUMMARY_METHOD_NEWS_DIGEST
 from trade_proposer_app.services.proposals import DEFAULT_SUMMARY_METHOD, ProposalExecutionError, ProposalService
 from trade_proposer_app.services.summary import SummaryResult
@@ -117,6 +117,42 @@ class ProposalServiceTests(unittest.TestCase):
         self.assertIn("feature_vectors", output.diagnostics.analysis_json)
         self.assertIn("aggregations", output.diagnostics.analysis_json)
         self.assertIsNotNone(output.diagnostics.feature_vector_json)
+
+    def test_fetch_price_history_retries_live_remote_failures(self) -> None:
+        history = make_sample_history()
+        service = ProposalService()
+        with patch.object(service, "_fetch_price_history_remote", side_effect=[ProposalExecutionError("temporary"), pd.DataFrame(), history]) as remote_fetch:
+            with patch("time.sleep", return_value=None):
+                result = service._fetch_price_history("AAPL")
+
+        self.assertEqual(remote_fetch.call_count, 3)
+        self.assertEqual(len(result), len(history))
+
+    def test_fetch_price_history_falls_back_to_local_store_after_remote_failures(self) -> None:
+        history = make_sample_history()
+        repo = Mock()
+        repo.list_bars.return_value = [
+            HistoricalMarketBar(
+                ticker="AAPL",
+                timeframe="1d",
+                bar_time=index.to_pydatetime(),
+                available_at=index.to_pydatetime(),
+                open_price=float(row["Open"]),
+                high_price=float(row["High"]),
+                low_price=float(row["Low"]),
+                close_price=float(row["Close"]),
+                volume=float(row["Volume"]),
+            )
+            for index, row in history.iterrows()
+        ]
+        service = ProposalService(historical_market_data=repo)
+        with patch.object(service, "_fetch_price_history_remote", side_effect=ProposalExecutionError("remote down")) as remote_fetch:
+            with patch("time.sleep", return_value=None):
+                result = service._fetch_price_history("AAPL")
+
+        self.assertEqual(remote_fetch.call_count, 3)
+        self.assertEqual(len(result), len(history))
+        self.assertEqual(float(result.iloc[-1]["Close"]), float(history.iloc[-1]["Close"]))
 
     def test_build_news_summary_handles_mixed_inputs(self) -> None:
         article = NewsArticle(title="Article", summary=None, publisher=None, link=None, published_at=None)

@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -71,3 +72,39 @@ class CheapScanSignalServiceTests(unittest.TestCase):
         self.assertNotIn("low average dollar volume on cheap scan", signal.warnings)
         self.assertEqual(signal.diagnostics["avg_traded_value_20"], 1_000_000.0)
         self.assertEqual(signal.diagnostics["liquidity_metric_currency"], "raw_quote_currency_not_normalized")
+
+    def test_score_retries_transient_remote_fetch_failures(self) -> None:
+        calls = {"count": 0}
+
+        def fetcher(ticker: str, period: str, as_of=None) -> pd.DataFrame:
+            calls["count"] += 1
+            if calls["count"] < 3:
+                raise RuntimeError("temporary upstream failure")
+            closes = [100 + i for i in range(60)]
+            volumes = [1_000_000 for _ in range(60)]
+            return pd.DataFrame({"Close": closes, "Volume": volumes})
+
+        service = CheapScanSignalService(history_fetcher=fetcher)
+        with patch("time.sleep", return_value=None):
+            signal = service.score("AAPL", StrategyHorizon.ONE_WEEK)
+
+        self.assertEqual(calls["count"], 3)
+        self.assertEqual(signal.ticker, "AAPL")
+        self.assertEqual(signal.diagnostics["data_source"], "yahoo")
+
+    def test_score_uses_local_history_when_remote_fetch_keeps_failing(self) -> None:
+        local_history = pd.DataFrame(
+            {
+                "Close": [100 + i for i in range(60)],
+                "Volume": [1_000_000 for _ in range(60)],
+            }
+        )
+
+        service = CheapScanSignalService(history_fetcher=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("remote down")), repository=object())
+        service._fetch_from_db = lambda ticker, as_of, is_replay=False: local_history  # type: ignore[method-assign]
+
+        with patch("time.sleep", return_value=None):
+            signal = service.score("MSFT", StrategyHorizon.ONE_WEEK)
+
+        self.assertEqual(signal.ticker, "MSFT")
+        self.assertEqual(signal.diagnostics["data_source"], "database")

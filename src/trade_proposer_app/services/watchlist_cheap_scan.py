@@ -41,6 +41,8 @@ class CheapScanSignalService:
     MIN_HISTORY_BARS_REPLAY = 10
     REMOTE_FALLBACK_MIN_BARS = 30
     FULL_SMA_LOOKBACK_BARS = 50
+    LIVE_REMOTE_FETCH_ATTEMPTS = 3
+    LIVE_REMOTE_FETCH_BACKOFF_SECONDS = (0.0, 1.0, 3.0)
 
     def __init__(
         self,
@@ -60,6 +62,8 @@ class CheapScanSignalService:
         history = pd.DataFrame()
         history_source = "unavailable"
         is_replay = bool(as_of)
+        remote_attempt_count = 0
+        remote_errors: list[str] = []
 
         # 1. Prefer local DB data
         if self.repository:
@@ -69,7 +73,7 @@ class CheapScanSignalService:
 
         # 2. Fallback to remote data if local is missing or insufficient for the live minimum feature set.
         if history.empty or len(history) < self.REMOTE_FALLBACK_MIN_BARS:
-            remote_history = self.history_fetcher(normalized_ticker, period, as_of)
+            remote_history, remote_attempt_count, remote_errors = self._fetch_remote_history_with_retry(normalized_ticker, period, as_of=as_of)
             if not remote_history.empty:
                 # Use remote data if it's better/longer than what we have locally
                 if len(remote_history) > len(history):
@@ -180,6 +184,15 @@ class CheapScanSignalService:
                 "effective_sma50_window": min(self.FULL_SMA_LOOKBACK_BARS, history_bar_count),
                 "model": "cheap_scan_v1",
                 "data_source": history_source,
+                "price_history": {
+                    "ticker": normalized_ticker,
+                    "mode": "replay" if is_replay else "live",
+                    "source": history_source,
+                    "fallback_used": history_source == "yahoo" and bool(self.repository),
+                    "remote_attempt_count": remote_attempt_count,
+                    "remote_errors": remote_errors,
+                    "selected_bar_count": history_bar_count,
+                },
             },
             indicator_summary=" · ".join(summary_parts),
         )
@@ -334,6 +347,24 @@ class CheapScanSignalService:
         if horizon == StrategyHorizon.ONE_MONTH:
             return "1y"
         return "6mo"
+
+    def _fetch_remote_history_with_retry(self, ticker: str, period: str, *, as_of: datetime | None = None) -> tuple[pd.DataFrame, int, list[str]]:
+        attempts = 1 if as_of is not None else self.LIVE_REMOTE_FETCH_ATTEMPTS
+        errors: list[str] = []
+        for attempt in range(attempts):
+            backoff = self.LIVE_REMOTE_FETCH_BACKOFF_SECONDS[min(attempt, len(self.LIVE_REMOTE_FETCH_BACKOFF_SECONDS) - 1)] if as_of is None else 0.0
+            if backoff > 0:
+                import time
+                time.sleep(backoff)
+            try:
+                history = self.history_fetcher(ticker, period, as_of)
+            except Exception as exc:
+                errors.append(str(exc))
+                continue
+            if history is not None and not history.empty:
+                return history, attempt + 1, errors
+            errors.append(f"no remote price history returned for {ticker}")
+        return pd.DataFrame(), attempts, errors
 
     @staticmethod
     def _fetch_price_history(ticker: str, period: str, as_of: datetime | None = None) -> pd.DataFrame:

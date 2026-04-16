@@ -32,7 +32,7 @@ For each proposal run, the system:
 2. runs a cheap scan across candidates
 3. selects a shortlist using explicit rules
 4. runs `TickerDeepAnalysisService` for shortlisted names only
-5. fetches recent OHLC data through `yfinance`
+5. fetches recent OHLC data through a live-first hybrid path: fresh remote bars first in live runs, bounded retries on transient remote failures, then persisted local-bar fallback; replay stays point-in-time consistent
 6. computes technical and context-enriched features with `pandas`
 7. loads the latest shared macro and industry context snapshots through the context-native resolver layer
 8. builds recommendation plans, diagnostics, and audit payloads
@@ -74,20 +74,36 @@ In practical terms:
 ## Data layers used by the methodology
 
 ### Market data
-The app uses a hybrid market-data strategy that prefers local persistence but falls back to remote providers.
+**Implementation status:**
+- **implemented now:** live cheap-scan retry, live deep-analysis retry plus local fallback, replay-safe point-in-time behavior, and persisted fetch diagnostics in signal/plan/run detail payloads
+- **still in progress:** better freshness scoring and richer operator-facing rendering of these diagnostics in the UI
 
-**Preferred Source: Local Database**
-The system first attempts to fetch bars from the `historical_market_bars` table. 
-- **Timeframe Resolution:** It prefers `1m` bars and automatically resamples them to produce Daily OHLCV bars.
-- **Fallback Timeframe:** If `1m` bars are missing, it falls back to `1d` bars stored in the database (replay mode only).
+The app uses a hybrid market-data strategy that balances freshness, resilience, and replay consistency.
 
-**Fallback Source: Yahoo Finance**
-If local data is missing or insufficient for the live cheap-scan minimum (less than 30 daily bars), the system pulls data through `yfinance`.
-- **Lazy Hydration:** When a remote fetch occurs, the system automatically persists the retrieved bars back into the local database to accelerate future requests.
-- **Replay Consistency:** Remote downloads support the `as_of` parameter, ensuring that even fallback data remains point-in-time consistent for historical simulations.
+**Cheap scan**
+Cheap scan prefers local persistence first.
+- **Preferred Source: Local Database** — it first attempts to fetch bars from the `historical_market_bars` table.
+- **Timeframe Resolution:** it prefers `1m` bars and automatically resamples them to produce Daily OHLCV bars.
+- **Fallback Timeframe:** if `1m` bars are missing, it falls back to `1d` bars stored in the database in replay mode.
+- **Remote Fallback With Retry:** if local data is missing or insufficient, cheap scan retries transient remote fetch failures before giving up.
+- **Failure Policy:** if remote fetch still fails but local data is sufficient, the ticker is scored from local data instead of being rejected for provider noise alone.
+- **Lazy Hydration:** when a remote fetch succeeds, the system persists the retrieved bars back into the local database to accelerate future requests.
 - **Cheap-scan thresholds:** the scan requires at least 30 bars in normal runs and at least 10 bars in replay runs. It emits the warning `cheap scan used limited lookback history` only when fewer than 50 bars were available, because that means the SMA50-style trend context had to use a shortened window.
 
-The same hybrid price-data path is used for both generation and later evaluation.
+**Deep analysis**
+Deep analysis prefers freshness in live runs without making freshness a hard dependency.
+- **Live Runs:** it tries fresh remote bars first, retries transient failures a bounded number of times, then falls back to persisted local `1d` bars if enough history exists.
+- **Replay Runs:** it stays point-in-time consistent by preferring persisted bars and only using replay-bounded remote windows when needed.
+- **Graceful Degradation:** fallback behavior is still recorded as degraded input rather than being treated as equal to a healthy remote fetch.
+- **Failure Policy:** only after remote retry and local fallback both fail should deep analysis surface as unavailable.
+
+**Where the fetch diagnostics are stored**
+- **signal details:** `TickerSignalSnapshot.source_breakdown` and `TickerSignalSnapshot.diagnostics`
+- **plan details:** `RecommendationPlan.signal_breakdown`
+- **run/job details:** `Run.artifact_json.ticker_generation`
+- **not included in summary rows:** these diagnostics should stay out of summary tables and compact list rows unless a later spec changes that
+
+The same hybrid persistence layer is also reused by later evaluation logic.
 
 Cheap-scan liquidity uses a simple `close * volume` notional measure over the last 20 bars. The operator-facing warning is therefore `low average traded value on cheap scan`, not "dollar volume", because the current implementation does not FX-normalize non-USD listings.
 

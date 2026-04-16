@@ -180,7 +180,8 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
             "Volume": [1000] * 250
         }, index=dates)
         self.proposal_service._fetch_price_history.return_value = history
-        
+        self.proposal_service._last_price_history_fetch_diagnostics = {"source": "remote", "remote_attempt_count": 1, "selected_bar_count": 250}
+
         output = self.service.analyze("AAPL")
         
         self.assertEqual(output.recommendation.ticker, "AAPL")
@@ -190,6 +191,7 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         analysis = json.loads(output.diagnostics.analysis_json)
         self.assertIn("technical", analysis)
         self.assertIn("feature_vector", analysis)
+        self.assertEqual(analysis["ticker_deep_analysis"]["price_history"]["source"], "remote")
 
 if __name__ == "__main__":
     unittest.main()

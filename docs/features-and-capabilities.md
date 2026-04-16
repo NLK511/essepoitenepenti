@@ -56,8 +56,9 @@ It is not yet a proven short-horizon prediction engine.
   2. shortlist selection
   3. deep analysis for shortlisted names only
   4. persistence of signals and plans, including cheap-scan-only `no_action` plans for non-shortlisted names and phantom-trade-eligible rejected plans when deep analysis produced valid trade framing
-- **Hybrid Market Data Fetching:** Prefer local database for market bars (including 1m-to-daily resampling) but automatically fall back to Yahoo Finance when local data is insufficient.
-- **Lazy Hydration:** Automatically persist remote Yahoo bars to the local database during fallback fetches to accelerate future runs.
+- **Hybrid Market Data Fetching:** Cheap scan prefers local database bars (including 1m-to-daily resampling), retries transient remote failures, and still scores the ticker from local data when local history is sufficient. Deep analysis prefers fresh remote bars in live runs, retries transient remote failures, and falls back to persisted local bars before surfacing deep analysis as unavailable.
+- **Market-Data Diagnostics In Details:** cheap-scan and deep-analysis fetch diagnostics are stored in signal details, plan details, and run/job artifact details. They are intentionally not added to compact summary rows.
+- **Lazy Hydration:** Remote Yahoo bars fetched for cheap scan or deep analysis are persisted back to the local database when possible to accelerate future runs.
 - Browse signals and plans outside the run page and filter them by `run_id`.
 - Queue recommendation-plan evaluation runs from the recommendation-plans page.
 

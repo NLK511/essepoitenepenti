@@ -48,6 +48,7 @@ class TickerDeepAnalysisService:
             history = self.proposal_service._fetch_price_history(normalized_ticker, as_of=as_of)
             enriched = self._enrich_history(history)
             context = self._build_context(enriched)
+            context["price_history_diagnostics"] = dict(getattr(self.proposal_service, "_last_price_history_fetch_diagnostics", {}) or {})
             context = self._apply_context_enrichment(context, normalized_ticker, as_of=as_of)
             context = self._apply_support_aliases(context)
             context = self._apply_taxonomy_profile(context, normalized_ticker)
@@ -116,13 +117,16 @@ class TickerDeepAnalysisService:
             raise TickerDeepAnalysisError(str(exc)) from exc
         diagnostics = output.diagnostics
         analysis_payload = self._load_json(diagnostics.analysis_json) or {"summary": {"text": diagnostics.raw_output or "compatibility fallback analysis"}}
+        existing_ticker_deep_analysis = analysis_payload.get("ticker_deep_analysis") if isinstance(analysis_payload.get("ticker_deep_analysis"), dict) else {}
         analysis_payload["ticker_deep_analysis"] = {
+            **existing_ticker_deep_analysis,
             "model": self.model_name,
             "execution_path": "compatibility_fallback",
             "horizon": horizon.value if horizon is not None else None,
-            "setup_family": "uncategorized",
-            "confidence_components": {},
-            "transmission_analysis": {},
+            "setup_family": existing_ticker_deep_analysis.get("setup_family", "uncategorized"),
+            "confidence_components": existing_ticker_deep_analysis.get("confidence_components", {}),
+            "transmission_analysis": existing_ticker_deep_analysis.get("transmission_analysis", {}),
+            "price_history": existing_ticker_deep_analysis.get("price_history", dict(getattr(self.proposal_service, "_last_price_history_fetch_diagnostics", {}) or {})),
         }
         analysis_json = json.dumps(_sanitize_for_json(analysis_payload), indent=2, sort_keys=True)
         diagnostics = diagnostics.model_copy(update={"analysis_json": analysis_json, "raw_output": analysis_json})
@@ -1188,6 +1192,7 @@ class TickerDeepAnalysisService:
                 "setup_family": setup_family,
                 "confidence_components": confidence_components,
                 "transmission_analysis": transmission_analysis,
+                "price_history": context.get("price_history_diagnostics", {}),
             },
         }
 

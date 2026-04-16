@@ -171,6 +171,8 @@ class WatchlistOrchestrationService:
                         "shortlisted": False,
                         "attention_score": candidate.attention_score,
                         "shortlist_decision": decision,
+                        "cheap_scan_price_history": stored_signal.diagnostics.get("cheap_scan_price_history") if hasattr(stored_signal.diagnostics, "get") else None,
+                        "deep_analysis_price_history": None,
                     }
                 )
                 if candidate.warnings or candidate.error_message:
@@ -222,6 +224,8 @@ class WatchlistOrchestrationService:
                     "attention_score": candidate.attention_score,
                     "plan_action": stored_plan.action,
                     "shortlist_decision": decision,
+                    "cheap_scan_price_history": stored_signal.diagnostics.get("cheap_scan_price_history") if hasattr(stored_signal.diagnostics, "get") else None,
+                    "deep_analysis_price_history": stored_signal.diagnostics.get("deep_analysis_price_history") if hasattr(stored_signal.diagnostics, "get") else None,
                 }
             )
             if candidate.warnings or deep_error or plan.warnings:
@@ -253,6 +257,7 @@ class WatchlistOrchestrationService:
             "shortlist": shortlist,
             "shortlist_rules": shortlist_evaluation["rules"],
             "shortlist_decisions": shortlist_evaluation["decisions"],
+            "ticker_generation": ticker_generation,
             "calibration_enabled": calibration_summary is not None,
             "ticker_signal_snapshot_ids": [item.id for item in stored_signals],
             "recommendation_plan_ids": [item.id for item in stored_plans],
@@ -546,8 +551,10 @@ class WatchlistOrchestrationService:
             source_breakdown={
                 "cheap_scan_summary": candidate.indicator_summary,
                 "cheap_scan_model": candidate.cheap_scan_signal.diagnostics.get("model") if candidate.cheap_scan_signal is not None else None,
+                "cheap_scan_price_history": candidate.cheap_scan_signal.diagnostics.get("price_history") if candidate.cheap_scan_signal is not None else None,
                 "deep_analysis_available": deep_output is not None,
                 "deep_analysis_model": self._pluck(analysis, "ticker_deep_analysis", "model"),
+                "deep_analysis_price_history": self._pluck(analysis, "ticker_deep_analysis", "price_history"),
                 "summary_method": getattr(deep_output.diagnostics, "summary_method", None) if deep_output is not None else None,
                 "transmission_bias": transmission_bias,
                 "transmission_bias_detail": self._transmission_bias_detail(transmission_bias),
@@ -584,7 +591,9 @@ class WatchlistOrchestrationService:
                     "volatility_score": candidate.cheap_scan_signal.volatility_score if candidate.cheap_scan_signal is not None else None,
                     "liquidity_score": candidate.cheap_scan_signal.liquidity_score if candidate.cheap_scan_signal is not None else None,
                 },
+                "cheap_scan_price_history": candidate.cheap_scan_signal.diagnostics.get("price_history") if candidate.cheap_scan_signal is not None else None,
                 "deep_analysis_error": deep_error,
+                "deep_analysis_price_history": self._pluck(analysis, "ticker_deep_analysis", "price_history"),
                 "base_confidence_percent": base_confidence,
                 "transmission_confidence_adjustment": transmission_effect,
                 "transmission_alignment_score": transmission_alignment_score,
@@ -1090,6 +1099,8 @@ class WatchlistOrchestrationService:
             "mode": signal.diagnostics.get("mode"),
             "shortlisted": shortlisted,
             "shortlist_rank": shortlist_rank,
+            "cheap_scan_price_history": signal.diagnostics.get("cheap_scan_price_history"),
+            "deep_analysis_price_history": signal.diagnostics.get("deep_analysis_price_history"),
         }
         if intended_action in {"long", "short"}:
             payload["intended_action"] = intended_action
