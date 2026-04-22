@@ -209,7 +209,7 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
     return {
       eyebrow: "Reference",
       title: "Settings",
-      description: "Configure providers, credentials, and operational defaults.",
+      description: "Configure providers, credentials, execution toggles, and operational defaults.",
     };
   }
   if (pathname.startsWith("/docs")) {

@@ -117,6 +117,37 @@ export interface ProviderCredential {
   api_secret: string;
 }
 
+export interface BrokerOrderExecution {
+  id: number | null;
+  broker: string;
+  account_mode: string;
+  recommendation_plan_id: number;
+  recommendation_plan_ticker: string;
+  run_id: number | null;
+  job_id: number | null;
+  ticker: string;
+  action: string;
+  side: string;
+  order_type: string;
+  time_in_force: string;
+  quantity: number;
+  notional_amount: number;
+  entry_price: number | null;
+  stop_loss: number | null;
+  take_profit: number | null;
+  status: string;
+  broker_order_id: string | null;
+  client_order_id: string;
+  submitted_at: string | null;
+  filled_at: string | null;
+  canceled_at: string | null;
+  request_payload: Record<string, unknown>;
+  response_payload: Record<string, unknown>;
+  error_message: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PreflightCheck {
   name: string;
   status: string;
@@ -1088,11 +1119,19 @@ export interface CalibrationReportResponse {
   calibration_report: CalibrationReport | null;
 }
 
+export interface OrderExecutionSettingsState {
+  enabled: boolean;
+  broker: string;
+  account_mode: string;
+  notional_per_plan: number;
+}
+
 export interface SettingsResponse {
   settings: AppSetting[];
   providers: ProviderCredential[];
   signal_gating_tuning: SignalGatingTuningState;
   evaluation_realism: EvaluationRealismState;
+  order_execution: OrderExecutionSettingsState;
   plan_generation_tuning: {
     settings: PlanGenerationTuningSettingsState;
     active_config: Record<string, unknown>;

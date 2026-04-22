@@ -18,6 +18,7 @@ async def list_settings(session: Session = Depends(get_db_session)) -> dict[str,
         "providers": repository.list_provider_credentials(),
         "signal_gating_tuning": signal_gating_tuning,
         "evaluation_realism": evaluation_realism,
+        "order_execution": repository.get_order_execution_config(),
         "plan_generation_tuning": {
             "settings": repository.get_plan_generation_tuning_settings(),
             "active_config": repository.get_plan_generation_active_config(PlanGenerationTuningRepository(session)),
@@ -205,6 +206,27 @@ async def set_plan_generation_tuning_settings(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"invalid plan generation tuning settings: {exc}") from exc
     return {"plan_generation_tuning": config}
+
+
+@router.post("/order-execution")
+async def set_order_execution_settings(
+    enabled: str = Form(default="false"),
+    broker: str = Form(default="alpaca"),
+    account_mode: str = Form(default="paper"),
+    notional_per_plan: str = Form(default="1000"),
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    repository = SettingsRepository(session)
+    try:
+        config = repository.set_order_execution_config(
+            enabled=enabled.strip().lower() in {"1", "true", "yes", "on"},
+            broker=broker,
+            account_mode=account_mode,
+            notional_per_plan=float(notional_per_plan.strip() or 1000),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid order execution settings: {exc}") from exc
+    return {"order_execution": config}
 
 
 @router.post("/providers")

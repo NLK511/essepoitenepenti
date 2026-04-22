@@ -2,14 +2,16 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { getJson, postForm } from "../api";
 import { Card, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
-import type { AppSetting, AppPreflightReport, EvaluationRealismState, ProviderCredential, SettingsResponse } from "../types";
+import type { AppSetting, AppPreflightReport, BrokerOrderExecution, EvaluationRealismState, ProviderCredential, SettingsResponse } from "../types";
 import { toSettingMap } from "../utils";
 
 interface SettingsViewData {
   settings: AppSetting[];
   providers: ProviderCredential[];
+  brokerOrders: BrokerOrderExecution[];
   preflight: AppPreflightReport;
   evaluationRealism: EvaluationRealismState;
+  orderExecution: SettingsResponse["order_execution"];
   planGenerationTuning: SettingsResponse["plan_generation_tuning"];
 }
 
@@ -22,14 +24,17 @@ export function SettingsPage() {
   async function loadData() {
     try {
       setError(null);
-      const [settingsResponse, preflight] = await Promise.all([
+      const [settingsResponse, preflight, brokerOrders] = await Promise.all([
         getJson<SettingsResponse>("/api/settings"),
         getJson<AppPreflightReport>("/api/health/preflight"),
+        getJson<BrokerOrderExecution[]>("/api/broker-orders?limit=12"),
       ]);
       setData({
         settings: settingsResponse.settings,
         providers: settingsResponse.providers,
+        brokerOrders,
         evaluationRealism: settingsResponse.evaluation_realism,
+        orderExecution: settingsResponse.order_execution,
         planGenerationTuning: settingsResponse.plan_generation_tuning,
         preflight,
       });
@@ -168,6 +173,28 @@ export function SettingsPage() {
     }
   }
 
+  async function saveOrderExecutionSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    try {
+      setSaving("order-execution");
+      setError(null);
+      setNotice(null);
+      await postForm<{ order_execution: SettingsResponse["order_execution"] }>("/api/settings/order-execution", {
+        enabled: formData.get("enabled") ? "true" : "false",
+        broker: String(formData.get("broker") ?? data?.orderExecution.broker ?? "alpaca"),
+        account_mode: String(formData.get("account_mode") ?? data?.orderExecution.account_mode ?? "paper"),
+        notional_per_plan: String(formData.get("notional_per_plan") ?? data?.orderExecution.notional_per_plan ?? "1000"),
+      });
+      setNotice("Order execution settings saved");
+      await loadData();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save order execution settings");
+    } finally {
+      setSaving(null);
+    }
+  }
+
   async function saveProvider(event: FormEvent<HTMLFormElement>, provider: string) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -241,6 +268,54 @@ export function SettingsPage() {
                 </form>
               </Card>
             ))}
+          </section>
+
+          <section className="card-grid">
+            <Card>
+              <SectionTitle kicker="Execution" title="Alpaca paper order execution" subtitle="Toggle automated paper trading and control the fixed per-plan notional cap." actions={<HelpHint tooltip="When enabled, actionable plans are converted into Alpaca paper bracket orders with the plan entry, stop loss, and take profit levels." to="/docs?doc=alpaca-paper-order-execution-spec" />} />
+              <form className="stack-form" onSubmit={(event) => void saveOrderExecutionSettings(event)}>
+                <div className="form-grid">
+                  <label className="form-field"><span><input type="checkbox" name="enabled" defaultChecked={data.orderExecution.enabled} /> Order execution enabled</span></label>
+                  <label className="form-field"><span>Broker</span><input name="broker" defaultValue={data.orderExecution.broker} /></label>
+                  <label className="form-field"><span>Account mode</span><input name="account_mode" defaultValue={data.orderExecution.account_mode} /></label>
+                  <label className="form-field"><span>Notional per plan</span><input name="notional_per_plan" type="number" min="1" step="1" defaultValue={String(data.orderExecution.notional_per_plan)} /></label>
+                </div>
+                <div className="helper-text">Actionable long/short plans are submitted as Alpaca paper bracket orders when this toggle is enabled.</div>
+                <div className="cluster"><button className="button" type="submit" disabled={saving === "order-execution"}>{saving === "order-execution" ? "Saving…" : "Save order execution settings"}</button></div>
+              </form>
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Execution audit" title="Recent broker orders" subtitle="Inspect the latest broker submissions, statuses, and per-order quantities." />
+              {data.brokerOrders.length === 0 ? (
+                <div className="helper-text top-gap-small">No broker orders recorded yet.</div>
+              ) : (
+                <div className="table-wrap top-gap-small">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Ticker</th>
+                        <th>Action</th>
+                        <th>Qty</th>
+                        <th>Status</th>
+                        <th>Submitted</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.brokerOrders.map((order) => (
+                        <tr key={order.id ?? order.client_order_id}>
+                          <td>{order.ticker}</td>
+                          <td>{order.side.toUpperCase()}</td>
+                          <td>{order.quantity}</td>
+                          <td>{order.status}</td>
+                          <td>{order.submitted_at ? new Date(order.submitted_at).toLocaleString() : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
           </section>
 
           <Card>
