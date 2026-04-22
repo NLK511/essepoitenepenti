@@ -51,6 +51,7 @@ These are useful, but they are not the main current-state entry point.
 - `recommendation-quality-improvement-plan.md` — working tracker for recommendation-quality, calibration, and validation improvements
 - `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow
 - `plan-generation-tuning-spec.md` — authoritative implementation spec for autonomous plan-generation tuning
+- `alpaca-paper-order-execution-spec.md` — first automated broker-execution spec for Alpaca paper trading
 - `nitter-social-relevance-scoring.md` — current Nitter relevance-ranking behavior
 
 ## Redesign reference

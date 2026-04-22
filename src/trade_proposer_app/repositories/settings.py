@@ -25,6 +25,10 @@ DEFAULT_APP_SETTINGS = {
     "plan_generation_tuning_auto_promote_enabled": "false",
     "plan_generation_tuning_min_actionable_resolved": "20",
     "plan_generation_tuning_min_validation_resolved": "8",
+    "order_execution_enabled": "false",
+    "order_execution_broker": "alpaca",
+    "order_execution_account_mode": "paper",
+    "order_execution_notional_per_plan": "1000",
     "summary_backend": "pi_agent",
     "summary_model": "",
     "summary_timeout_seconds": "60",
@@ -218,6 +222,26 @@ class SettingsRepository:
         except ValueError:
             return normalize_plan_generation_tuning_config(None)
         return normalize_plan_generation_tuning_config(version.config)
+
+    def get_order_execution_config(self) -> dict[str, object]:
+        setting_map = self.get_setting_map()
+        return {
+            "enabled": self._get_bool(setting_map, "order_execution_enabled", False),
+            "broker": (setting_map.get("order_execution_broker", "alpaca") or "alpaca").strip().lower(),
+            "account_mode": (setting_map.get("order_execution_account_mode", "paper") or "paper").strip().lower(),
+            "notional_per_plan": self._get_float(setting_map, "order_execution_notional_per_plan", 1000.0),
+        }
+
+    def set_order_execution_config(self, *, enabled: bool, broker: str = "alpaca", account_mode: str = "paper", notional_per_plan: float = 1000.0) -> dict[str, object]:
+        self.set_settings(
+            {
+                "order_execution_enabled": str(bool(enabled)).lower(),
+                "order_execution_broker": broker.strip().lower() or "alpaca",
+                "order_execution_account_mode": account_mode.strip().lower() or "paper",
+                "order_execution_notional_per_plan": f"{float(notional_per_plan):.4f}".rstrip("0").rstrip("."),
+            }
+        )
+        return self.get_order_execution_config()
 
     @staticmethod
     def _get_float(setting_map: dict[str, str], key: str, default: float) -> float:

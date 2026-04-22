@@ -16,6 +16,7 @@ from trade_proposer_app.services.evaluation_execution import EvaluationExecution
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
 from trade_proposer_app.services.macro_context_refresh import MacroContextRefreshService
+from trade_proposer_app.services.order_execution import OrderExecutionService
 from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 
@@ -44,6 +45,7 @@ class JobExecutionService:
         industry_context=None,
         watchlist_orchestration=None,
         recommendation_plans=None,
+        order_execution: OrderExecutionService | None = None,
         historical_replay: HistoricalReplayService | None = None,
         bars_refresh: BarsRefreshService | None = None,
     ) -> None:
@@ -58,8 +60,13 @@ class JobExecutionService:
         self.industry_context = industry_context
         self.watchlist_orchestration = watchlist_orchestration
         self.recommendation_plans = recommendation_plans
+        self.order_execution = order_execution
         self.historical_replay = historical_replay
         self.bars_refresh = bars_refresh
+        if self.order_execution is None and getattr(self.runs, "session", None) is not None:
+            from trade_proposer_app.services.builders import create_order_execution_service
+
+            self.order_execution = create_order_execution_service(self.runs.session)
 
     def enqueue_job(self, job_id: int, scheduled_for: datetime | None = None) -> Run:
         self.runs.recover_stale_running_runs(stale_after_seconds=settings.run_stale_after_seconds)
@@ -209,6 +216,22 @@ class JobExecutionService:
                 self._annotate_orchestration_payload(artifact, watchlist, job)
                 self.runs.set_artifact(run.id or 0, artifact)
             timing["recommendation_generation_seconds"] = round(perf_counter() - generation_started, 6)
+
+            order_execution_started = perf_counter()
+            order_execution_summary: dict[str, object] | None = None
+            if self.order_execution is not None and self.recommendation_plans is not None:
+                actionable_plans = self.recommendation_plans.list_plans(run_id=run.id or 0, limit=1000)
+                actionable_plans = [plan for plan in actionable_plans if plan.action in {"long", "short"}]
+                order_execution_result = self.order_execution.execute_plans(actionable_plans, run_id=run.id, job_id=run.job_id)
+                order_execution_summary = order_execution_result.summary
+                warnings_found = warnings_found or bool(order_execution_summary.get("warnings_found"))
+                if isinstance(summary, dict):
+                    summary["order_execution"] = order_execution_summary
+                    self.runs.set_summary(run.id or 0, summary)
+                if isinstance(artifact, dict):
+                    artifact["order_execution"] = order_execution_summary
+                    self.runs.set_artifact(run.id or 0, artifact)
+            timing["order_execution_seconds"] = round(perf_counter() - order_execution_started, 6)
         except Exception as exc:
             timing["recommendation_generation_seconds"] = round(perf_counter() - generation_started, 6)
             partial_ticker_generation = getattr(exc, "ticker_generation", None)
@@ -744,6 +767,16 @@ class JobExecutionService:
         return "\n".join(lines)
 
     @staticmethod
+    def _get_run_summary(run: Run) -> dict[str, object]:
+        if not run.summary_json:
+            return {}
+        try:
+            parsed = json.loads(run.summary_json)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+    @staticmethod
     def _get_run_artifact(run: Run) -> dict[str, object]:
         if not run.artifact_json:
             return {}
@@ -779,6 +812,7 @@ class JobExecutionService:
             "replay_setup_seconds",
             "replay_execution_seconds",
             "persistence_seconds",
+            "order_execution_seconds",
             "finalize_seconds",
         ]
         for phase in reversed(ordered_phases):

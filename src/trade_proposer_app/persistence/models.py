@@ -69,6 +69,40 @@ class RunRecord(Base, TimestampMixin):
     job: Mapped[JobRecord] = relationship(back_populates="runs")
 
 
+class BrokerOrderExecutionRecord(Base, TimestampMixin):
+    __tablename__ = "broker_order_executions"
+    __table_args__ = (
+        UniqueConstraint("broker", "client_order_id", name="uq_broker_order_executions_broker_client_order_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    broker: Mapped[str] = mapped_column(String(64), default="alpaca", index=True)
+    account_mode: Mapped[str] = mapped_column(String(32), default="paper", index=True)
+    recommendation_plan_id: Mapped[int] = mapped_column(ForeignKey("recommendation_plans.id"), index=True)
+    recommendation_plan_ticker: Mapped[str] = mapped_column(String(32), default="", index=True)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    ticker: Mapped[str] = mapped_column(String(32), index=True)
+    action: Mapped[str] = mapped_column(String(32), index=True)
+    side: Mapped[str] = mapped_column(String(16), index=True)
+    order_type: Mapped[str] = mapped_column(String(32), default="limit", index=True)
+    time_in_force: Mapped[str] = mapped_column(String(16), default="gtc", index=True)
+    quantity: Mapped[int] = mapped_column(Integer, default=0)
+    notional_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    entry_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    stop_loss: Mapped[float | None] = mapped_column(Float, nullable=True)
+    take_profit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
+    broker_order_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    client_order_id: Mapped[str] = mapped_column(String(120), index=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    filled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    request_payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    response_payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    error_message: Mapped[str] = mapped_column(Text, default="")
+
+
 class WorkerHeartbeatRecord(Base, TimestampMixin):
     __tablename__ = "worker_heartbeats"
 

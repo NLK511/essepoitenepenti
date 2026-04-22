@@ -244,6 +244,37 @@ class Run(BaseModel):
     timing_json: str | None = None
 
 
+class BrokerOrderExecution(BaseModel):
+    id: int | None = None
+    broker: str = "alpaca"
+    account_mode: str = "paper"
+    recommendation_plan_id: int
+    recommendation_plan_ticker: str = ""
+    run_id: int | None = None
+    job_id: int | None = None
+    ticker: str
+    action: str
+    side: str
+    order_type: str
+    time_in_force: str = "gtc"
+    quantity: int = 0
+    notional_amount: float = 0.0
+    entry_price: float | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
+    status: str = "queued"
+    broker_order_id: str | None = None
+    client_order_id: str = ""
+    submitted_at: datetime | None = None
+    filled_at: datetime | None = None
+    canceled_at: datetime | None = None
+    request_payload: dict[str, object] = Field(default_factory=dict)
+    response_payload: dict[str, object] = Field(default_factory=dict)
+    error_message: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class WorkerHeartbeat(BaseModel):
     worker_id: str
     hostname: str

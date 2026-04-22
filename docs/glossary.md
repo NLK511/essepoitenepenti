@@ -66,6 +66,15 @@ A plan proposing a trade, usually `long` or `short`.
 ### Phantom trade
 A simulated trade tracked by the system when it explicitly decides not to take action (`no_action`), but stores intended entry/stop/target levels anyway. This enables the tuning engines to learn if skipping the trade was a mistake (optimizing for recall).
 
+### Broker order
+A submitted order sent to an external trading platform, such as Alpaca.
+
+### Paper account
+A broker account mode that simulates trading without using real money.
+
+### Bracket order
+A parent order with attached stop-loss and take-profit exits.
+
 ### Phantom win / Phantom loss
 The evaluated outcome of a phantom trade. If a `phantom_win` occurs, the system missed a profitable opportunity. If a `phantom_loss` occurs, the system correctly avoided a bad setup.
 

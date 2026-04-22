@@ -8,11 +8,14 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
+from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
+from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClient
 from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
 from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.macro_context_refresh import MacroContextRefreshService
 from trade_proposer_app.services.news import NewsIngestionService
+from trade_proposer_app.services.order_execution import OrderExecutionService
 from trade_proposer_app.services.proposals import ProposalService
 from trade_proposer_app.services.signals import SignalIngestionService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
@@ -101,6 +104,20 @@ def create_macro_context_refresh_service(session: Session) -> MacroContextRefres
     )
     social_service = SocialIngestionService.from_settings(repository.get_social_settings())
     return MacroContextRefreshService(social_service=social_service, news_service=news_service)
+
+
+def create_order_execution_service(session: Session) -> OrderExecutionService:
+    repository = SettingsRepository(session)
+    credentials = repository.get_provider_credential_map()
+    alpaca = credentials.get("alpaca")
+    client = None
+    if alpaca and alpaca.api_key and alpaca.api_secret:
+        client = AlpacaPaperClient(api_key=alpaca.api_key, api_secret=alpaca.api_secret)
+    return OrderExecutionService(
+        settings=repository,
+        executions=BrokerOrderExecutionRepository(session),
+        client=client,
+    )
 
 
 def create_macro_context_service(session: Session) -> MacroContextService:
