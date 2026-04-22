@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from hashlib import sha256
 from typing import Iterable
 
 from sqlalchemy import select
@@ -6,6 +7,10 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import NewsArticle
 from trade_proposer_app.persistence.models import HistoricalNewsRecord
+
+
+MAX_STORED_LINK_LENGTH = 512
+LINK_HASH_SUFFIX_LENGTH = 74  # "__sha256__" + 64 hex chars
 
 
 class HistoricalNewsRepository:
@@ -43,10 +48,12 @@ class HistoricalNewsRepository:
     def save_news(self, ticker: str, provider: str, articles: Iterable[NewsArticle]) -> None:
         try:
             for article in articles:
+                stored_link = self._normalize_link_for_storage(article.link)
+
                 # Check if exists
                 exists_query = select(HistoricalNewsRecord).where(
                     HistoricalNewsRecord.ticker == ticker,
-                    HistoricalNewsRecord.link == (article.link or ""),
+                    HistoricalNewsRecord.link == stored_link,
                     HistoricalNewsRecord.published_at == self._normalize_datetime(article.published_at),
                 )
                 if self.session.scalar(exists_query):
@@ -57,7 +64,7 @@ class HistoricalNewsRepository:
                     published_at=self._normalize_datetime(article.published_at) or datetime.now(timezone.utc),
                     title=article.title or "",
                     summary=article.summary or "",
-                    link=article.link or "",
+                    link=stored_link,
                     publisher=article.publisher or "",
                     provider=provider,
                 )
@@ -67,6 +74,17 @@ class HistoricalNewsRepository:
         except Exception:
             self.session.rollback()
             raise
+
+    @staticmethod
+    def _normalize_link_for_storage(link: str | None) -> str:
+        if not link:
+            return ""
+        normalized = link.strip()
+        if len(normalized) <= MAX_STORED_LINK_LENGTH:
+            return normalized
+        digest = sha256(normalized.encode("utf-8")).hexdigest()
+        prefix_length = MAX_STORED_LINK_LENGTH - LINK_HASH_SUFFIX_LENGTH
+        return f"{normalized[:prefix_length]}__sha256__{digest}"
 
     @staticmethod
     def _normalize_datetime(value: datetime | None) -> datetime | None:

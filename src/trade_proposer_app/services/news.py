@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -274,6 +275,10 @@ class NewsFetchError(Exception):
     pass
 
 
+class UnsupportedMarketError(NewsFetchError):
+    pass
+
+
 NewsQueryType = Literal["ticker", "topic"]
 NewsRequestMode = Literal["live", "replay"]
 
@@ -364,43 +369,58 @@ class FinnhubProvider(NewsProvider):
     supports_replay_windowed_queries: ClassVar[bool] = True
     counts_as_primary_news: ClassVar[bool] = True
     historical_replay_safe: ClassVar[bool] = True
+    MAX_TICKER_FETCH_ATTEMPTS: ClassVar[int] = 3
+    RETRYABLE_STATUS_CODES: ClassVar[set[int]] = {429, 500, 502, 503, 504}
+    RETRY_BACKOFF_SECONDS: ClassVar[tuple[float, ...]] = (0.0, 0.5, 1.0)
 
     def fetch(self, ticker: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
         api_key = (self.credential.api_key or "").strip()
         if not api_key:
             raise NewsFetchError("missing Finnhub api key")
-        
-        # Default to last 7 days if no dates provided
+
         effective_end = end_at or datetime.now(timezone.utc)
         effective_start = start_at or (effective_end - timedelta(days=7))
-        
+
         params = {
             "symbol": ticker,
             "from": effective_start.date().isoformat(),
             "to": effective_end.date().isoformat(),
             "token": api_key,
         }
-        response = httpx.get(FINNHUB_NEWS_URL, params=params, timeout=self.timeout)
-        if response.status_code != 200:
-            raise NewsFetchError(f"unexpected status {response.status_code}")
-        payload = response.json()
-        if not isinstance(payload, list):
-            raise NewsFetchError("unexpected response payload")
-        articles: list[NewsArticle] = []
-        for entry in payload:
-            if not isinstance(entry, dict):
-                continue
-            published = _normalize_timestamp(entry.get("datetime"))
-            articles.append(
-                NewsArticle(
-                    title=_cleanup_text(entry.get("headline")),
-                    summary=_cleanup_text(entry.get("summary") or entry.get("source")),
-                    publisher=_cleanup_text(entry.get("source")),
-                    link=_cleanup_text(entry.get("url")),
-                    published_at=published,
-                )
+
+        last_error: NewsFetchError | None = None
+        for attempt in range(self.MAX_TICKER_FETCH_ATTEMPTS):
+            backoff = self.RETRY_BACKOFF_SECONDS[min(attempt, len(self.RETRY_BACKOFF_SECONDS) - 1)]
+            if attempt > 0 and backoff > 0:
+                time.sleep(backoff)
+            response = httpx.get(FINNHUB_NEWS_URL, params=params, timeout=self.timeout)
+            if response.status_code == 200:
+                payload = response.json()
+                if not isinstance(payload, list):
+                    raise NewsFetchError("unexpected response payload")
+                articles: list[NewsArticle] = []
+                for entry in payload:
+                    if not isinstance(entry, dict):
+                        continue
+                    published = _normalize_timestamp(entry.get("datetime"))
+                    articles.append(
+                        NewsArticle(
+                            title=_cleanup_text(entry.get("headline")),
+                            summary=_cleanup_text(entry.get("summary") or entry.get("source")),
+                            publisher=_cleanup_text(entry.get("source")),
+                            link=_cleanup_text(entry.get("url")),
+                            published_at=published,
+                        )
+                    )
+                return articles[:limit]
+            if response.status_code == 403:
+                raise UnsupportedMarketError(f"unsupported market for {ticker}")
+            last_error = NewsFetchError(
+                f"unexpected status {response.status_code} after attempt {attempt + 1}/{self.MAX_TICKER_FETCH_ATTEMPTS}"
             )
-        return articles[:limit]
+            if response.status_code not in self.RETRYABLE_STATUS_CODES or attempt == self.MAX_TICKER_FETCH_ATTEMPTS - 1:
+                raise last_error
+        raise last_error or NewsFetchError("unexpected Finnhub fetch failure")
 
 
 class YahooFinanceProvider(NewsProvider):
@@ -716,7 +736,6 @@ class NewsIngestionService:
     ) -> NewsBundle:
         bundle = NewsBundle(ticker=ticker)
 
-        # 1. Try local DB first if date range is provided
         if self.historical_news and (start_at or end_at):
             local_articles = self.historical_news.list_news(
                 ticker=ticker,
@@ -727,6 +746,24 @@ class NewsIngestionService:
             if len(local_articles) >= 3:
                 bundle.articles = local_articles
                 bundle.feeds_used.append("database")
+                bundle.query_diagnostics = {
+                    "query_type": "ticker",
+                    "request_mode": request_mode,
+                    "provider_results": [
+                        {
+                            "provider": "database",
+                            "status": "success",
+                            "article_count": len(local_articles),
+                            "attempt_count": 1,
+                            "error": None,
+                        }
+                    ],
+                    "fallback_used": False,
+                    "fallback_succeeded": False,
+                    "successful_provider_count": 1,
+                    "failed_provider_count": 0,
+                    "article_count": len(local_articles),
+                }
                 return bundle
 
         providers, selection_errors = self._providers_for_request(
@@ -738,13 +775,44 @@ class NewsIngestionService:
         )
         if not providers:
             bundle.feed_errors.extend(selection_errors)
+            bundle.query_diagnostics = {
+                "query_type": "ticker",
+                "request_mode": request_mode,
+                "provider_results": [],
+                "fallback_used": False,
+                "fallback_succeeded": False,
+                "successful_provider_count": 0,
+                "failed_provider_count": 0,
+                "article_count": 0,
+            }
             return bundle
         seen_links: set[str] = set()
+        provider_results: list[dict[str, object]] = []
         for provider in providers:
             try:
                 articles = provider.fetch(ticker, self.max_articles, start_at=start_at, end_at=end_at)
+            except UnsupportedMarketError as exc:
+                provider_results.append(
+                    {
+                        "provider": provider.name,
+                        "status": "unsupported_market",
+                        "article_count": 0,
+                        "attempt_count": self._provider_attempt_count(provider, exc),
+                        "error": str(exc),
+                    }
+                )
+                continue
             except Exception as exc:  # noqa: BLE001
                 bundle.feed_errors.append(f"{provider.name}: {exc}")
+                provider_results.append(
+                    {
+                        "provider": provider.name,
+                        "status": "error",
+                        "article_count": 0,
+                        "attempt_count": self._provider_attempt_count(provider, exc),
+                        "error": str(exc),
+                    }
+                )
                 continue
             filtered_articles = self._filter_articles_for_window(articles, start_at=start_at, end_at=end_at)
 
@@ -755,11 +823,81 @@ class NewsIngestionService:
                     pass
 
             self._merge_articles(bundle, filtered_articles, seen_links)
+            provider_results.append(
+                {
+                    "provider": provider.name,
+                    "status": "success" if filtered_articles else "empty",
+                    "article_count": len(filtered_articles),
+                    "attempt_count": 1,
+                    "error": None,
+                }
+            )
             if filtered_articles:
                 bundle.feeds_used.append(provider.name)
         bundle.articles = bundle.articles[: self.max_articles]
         bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
+        bundle.query_diagnostics = self._build_ticker_query_diagnostics(
+            request_mode=request_mode,
+            provider_results=provider_results,
+            feeds_used=bundle.feeds_used,
+            article_count=len(bundle.articles),
+        )
+        fallback_note = self._build_ticker_fallback_note(bundle.query_diagnostics)
+        if fallback_note:
+            bundle.feed_errors.append(fallback_note)
+            bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
         return bundle
+
+    @staticmethod
+    def _provider_attempt_count(provider: NewsProvider, exc: Exception) -> int:
+        if isinstance(exc, UnsupportedMarketError):
+            return 1
+        message = str(exc)
+        match = re.search(r"attempt (\d+)/(\d+)", message)
+        if match:
+            return int(match.group(1))
+        return getattr(provider, "MAX_TICKER_FETCH_ATTEMPTS", 1) if getattr(provider, "name", "") == "Finnhub" else 1
+
+    @staticmethod
+    def _build_ticker_query_diagnostics(
+        *,
+        request_mode: NewsRequestMode,
+        provider_results: list[dict[str, object]],
+        feeds_used: list[str],
+        article_count: int,
+    ) -> dict[str, object]:
+        successful_providers = [str(item.get("provider")) for item in provider_results if item.get("status") == "success"]
+        failed_providers = [str(item.get("provider")) for item in provider_results if item.get("status") == "error"]
+        unsupported_providers = [str(item.get("provider")) for item in provider_results if item.get("status") == "unsupported_market"]
+        fallback_used = bool(failed_providers)
+        fallback_succeeded = bool(failed_providers and successful_providers and article_count > 0)
+        return {
+            "query_type": "ticker",
+            "request_mode": request_mode,
+            "provider_results": provider_results,
+            "successful_providers": successful_providers,
+            "failed_providers": failed_providers,
+            "unsupported_providers": unsupported_providers,
+            "feeds_used": list(dict.fromkeys(feeds_used)),
+            "fallback_used": fallback_used,
+            "fallback_succeeded": fallback_succeeded,
+            "successful_provider_count": len(successful_providers),
+            "failed_provider_count": len(failed_providers),
+            "unsupported_provider_count": len(unsupported_providers),
+            "article_count": article_count,
+        }
+
+    @staticmethod
+    def _build_ticker_fallback_note(query_diagnostics: dict[str, object]) -> str | None:
+        if not query_diagnostics.get("fallback_succeeded"):
+            return None
+        successful = query_diagnostics.get("successful_providers") or []
+        article_count = int(query_diagnostics.get("article_count") or 0)
+        providers_text = ",".join(str(item) for item in successful) if successful else "unknown"
+        return (
+            "news: fallback coverage preserved despite provider errors; "
+            f"successful providers={providers_text} article_count={article_count}"
+        )
 
     def fetch_topic(
         self,

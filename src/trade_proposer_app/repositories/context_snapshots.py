@@ -181,8 +181,11 @@ class ContextSnapshotRepository:
         ticker: str | None = None,
         limit: int = 50,
         run_id: int | None = None,
+        snapshot_id: int | None = None,
     ) -> list[TickerSignalSnapshot]:
         query = select(TickerSignalSnapshotRecord)
+        if snapshot_id is not None:
+            query = query.where(TickerSignalSnapshotRecord.id == snapshot_id)
         if ticker:
             query = query.where(TickerSignalSnapshotRecord.ticker == ticker.upper())
         if run_id is not None:

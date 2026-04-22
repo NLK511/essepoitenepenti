@@ -9,6 +9,7 @@ FRONTEND_DIST_DIR = Path(__file__).resolve().parents[3] / "frontend" / "dist"
 FRONTEND_INDEX_FILE = FRONTEND_DIST_DIR / "index.html"
 SPA_ROUTE_PREFIXES = {
     "",
+    "login",
     "watchlists",
     "jobs",
     "history",
@@ -20,6 +21,8 @@ SPA_ROUTE_PREFIXES = {
     "recommendation-plans",
     "ticker-signals",
     "workers",
+    "research",
+    "recommendation-quality",
 }
 
 

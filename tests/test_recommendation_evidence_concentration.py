@@ -86,8 +86,8 @@ class RecommendationEvidenceConcentrationTests(unittest.TestCase):
             self.assertEqual(summary.strongest_positive_cohorts[0].key, "continuation")
             self.assertEqual(summary.strongest_positive_cohorts[0].slice_label, "setup family")
             self.assertEqual(summary.weakest_cohorts[0].key, "breakout")
-            self.assertIn("strongest usable cohorts", summary.focus_message.lower())
-            self.assertIn("cohort", summary.strongest_positive_cohorts[0].interpretation.lower())
+            self.assertIn("standing out from the average", summary.focus_message.lower())
+            self.assertIn("group", summary.strongest_positive_cohorts[0].interpretation.lower())
         finally:
             session.close()
 

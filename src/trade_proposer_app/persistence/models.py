@@ -296,6 +296,9 @@ class RecommendationOutcomeRecord(Base, TimestampMixin):
     horizon_return_1d: Mapped[float | None] = mapped_column(Float, nullable=True)
     horizon_return_3d: Mapped[float | None] = mapped_column(Float, nullable=True)
     horizon_return_5d: Mapped[float | None] = mapped_column(Float, nullable=True)
+    entry_miss_distance_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
+    near_entry_miss: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    direction_worked_without_entry: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     max_favorable_excursion: Mapped[float | None] = mapped_column(Float, nullable=True)
     max_adverse_excursion: Mapped[float | None] = mapped_column(Float, nullable=True)
     realized_holding_period_days: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -308,10 +311,13 @@ class RecommendationOutcomeRecord(Base, TimestampMixin):
 
 class RecommendationDecisionSampleRecord(Base, TimestampMixin):
     __tablename__ = "recommendation_decision_samples"
-    __table_args__ = (UniqueConstraint("recommendation_plan_id", name="uq_recommendation_decision_samples_plan_id"),)
+    __table_args__ = (
+        UniqueConstraint("recommendation_plan_id", name="uq_recommendation_decision_samples_plan_id"),
+        UniqueConstraint("ticker_signal_snapshot_id", name="uq_recommendation_decision_samples_signal_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    recommendation_plan_id: Mapped[int] = mapped_column(ForeignKey("recommendation_plans.id"), index=True)
+    recommendation_plan_id: Mapped[int | None] = mapped_column(ForeignKey("recommendation_plans.id"), nullable=True, index=True)
     ticker: Mapped[str] = mapped_column(String(32), index=True)
     horizon: Mapped[str] = mapped_column(String(8), index=True)
     action: Mapped[str] = mapped_column(String(32), index=True)
@@ -334,6 +340,12 @@ class RecommendationDecisionSampleRecord(Base, TimestampMixin):
     decision_context_json: Mapped[str] = mapped_column(Text, default="{}")
     signal_breakdown_json: Mapped[str] = mapped_column(Text, default="{}")
     evidence_summary_json: Mapped[str] = mapped_column(Text, default="{}")
+    benchmark_direction: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    benchmark_status: Mapped[str] = mapped_column(String(32), default="pending")
+    benchmark_target_1d_hit: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    benchmark_target_5d_hit: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    benchmark_max_favorable_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    benchmark_evaluated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
     job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
     watchlist_id: Mapped[int | None] = mapped_column(ForeignKey("watchlists.id"), nullable=True, index=True)
@@ -350,6 +362,8 @@ class RecommendationSignalGatingTuningRunRecord(Base, TimestampMixin):
     filters_json: Mapped[str] = mapped_column(Text, default="{}")
     sample_count: Mapped[int] = mapped_column(Integer, default=0)
     resolved_sample_count: Mapped[int] = mapped_column(Integer, default=0)
+    benchmark_sample_count: Mapped[int] = mapped_column(Integer, default=0)
+    scoreable_sample_count: Mapped[int] = mapped_column(Integer, default=0)
     candidate_count: Mapped[int] = mapped_column(Integer, default=0)
     baseline_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
     baseline_score: Mapped[float | None] = mapped_column(Float, nullable=True)

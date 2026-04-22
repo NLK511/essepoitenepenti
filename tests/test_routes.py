@@ -340,10 +340,10 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
     async def test_spa_shell_routes_render(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            for path in ("/", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/context", "/context/sentiment/1", "/context/macro/1", "/sentiment", "/sentiment/1", "/runs/1", "/workers/worker-test", "/recommendation-plans", "/tickers/AAPL"):
+            for path in ("/", "/login", "/watchlists", "/jobs", "/history", "/debugger", "/settings", "/docs", "/context", "/context/sentiment/1", "/context/macro/1", "/sentiment", "/sentiment/1", "/runs/1", "/workers/worker-test", "/recommendation-plans", "/tickers/AAPL", "/research", "/research/signal-gating/gating-job", "/recommendation-quality"):
                 response = await client.get(path)
                 self.assertEqual(response.status_code, 200)
-                self.assertIn("<title>Trade Proposer App</title>", response.text)
+                self.assertIn("<title>Aurelio</title>", response.text)
 
             legacy_redirect = await client.get("/recommendations/1", follow_redirects=False)
             self.assertEqual(legacy_redirect.status_code, 307)
@@ -1084,6 +1084,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             macro = await client.get("/api/context/macro")
             industry = await client.get("/api/context/industry", params={"industry_key": "consumer_electronics"})
             ticker_signals = await client.get("/api/context/ticker-signals", params={"ticker": "AAPL"})
+            signal_id = ticker_signals.json()[0]["id"]
+            ticker_signal_by_id = await client.get("/api/context/ticker-signals", params={"snapshot_id": signal_id})
             plans = await client.get("/api/recommendation-plans", params={"ticker": "AAPL", "action": "long"})
             macro_detail = await client.get(f"/api/context/macro/{macro.json()[0]['id']}")
             industry_detail = await client.get(f"/api/context/industry/{industry.json()[0]['id']}")
@@ -1091,10 +1093,13 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(macro.status_code, 200)
         self.assertEqual(industry.status_code, 200)
         self.assertEqual(ticker_signals.status_code, 200)
+        self.assertEqual(ticker_signal_by_id.status_code, 200)
         self.assertEqual(plans.status_code, 200)
         self.assertEqual(macro.json()[0]["active_themes"][0]["key"], "fed_policy")
         self.assertEqual(industry.json()[0]["industry_key"], "consumer_electronics")
         self.assertEqual(ticker_signals.json()[0]["ticker"], "AAPL")
+        self.assertEqual(len(ticker_signal_by_id.json()), 1)
+        self.assertEqual(ticker_signal_by_id.json()[0]["id"], signal_id)
         self.assertEqual(macro_detail.status_code, 200)
         self.assertEqual(industry_detail.status_code, 200)
         self.assertEqual(macro_detail.json()["summary_text"], "Fed and yields remain the dominant macro themes.")
@@ -1190,6 +1195,10 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     action="long",
                     outcome="expired",
                     status="resolved",
+                    entry_touched=False,
+                    entry_miss_distance_percent=0.12,
+                    near_entry_miss=True,
+                    direction_worked_without_entry=True,
                     confidence_bucket="50_to_64",
                     setup_family="breakout",
                     notes="Horizon elapsed.",
@@ -1214,6 +1223,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             unresolved_plans = await client.get("/api/recommendation-plans", params={"resolved": "unresolved"})
             expired_plans = await client.get("/api/recommendation-plans", params={"outcome": "expired"})
             shortlisted_plans = await client.get("/api/recommendation-plans", params={"shortlisted": "true"})
+            near_miss_plans = await client.get("/api/recommendation-plans", params={"entry_touched": "false", "near_entry_miss": "true", "direction_worked_without_entry": "true"})
+            near_miss_outcomes = await client.get("/api/recommendation-outcomes", params={"entry_touched": "false", "near_entry_miss": "true", "direction_worked_without_entry": "true"})
             resolved_summary = await client.get("/api/recommendation-outcomes/summary", params={"resolved": "resolved"})
             expired_summary = await client.get("/api/recommendation-outcomes/summary", params={"outcome": "expired"})
             queued = await client.post("/api/recommendation-plans/evaluate", data={})
@@ -1279,6 +1290,13 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(expired_plans.json()["items"][0]["ticker"], "NVDA")
         self.assertEqual(shortlisted_plans.status_code, 200)
         self.assertTrue(all(item["signal_breakdown"].get("shortlisted", True) for item in shortlisted_plans.json()["items"]))
+        self.assertEqual(near_miss_plans.status_code, 200)
+        self.assertEqual(len(near_miss_plans.json()["items"]), 1)
+        self.assertEqual(near_miss_plans.json()["items"][0]["ticker"], "NVDA")
+        self.assertEqual(near_miss_outcomes.status_code, 200)
+        self.assertEqual(len(near_miss_outcomes.json()), 1)
+        self.assertTrue(near_miss_outcomes.json()[0]["near_entry_miss"])
+        self.assertTrue(near_miss_outcomes.json()[0]["direction_worked_without_entry"])
         self.assertEqual(resolved_summary.status_code, 200)
         self.assertEqual(resolved_summary.json()["total_outcomes"], 3)
         self.assertEqual(resolved_summary.json()["resolved_outcomes"], 2)

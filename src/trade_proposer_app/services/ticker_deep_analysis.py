@@ -4,6 +4,8 @@ import json
 from collections import OrderedDict
 from typing import Any
 
+import math
+
 import pandas as pd
 
 from trade_proposer_app.domain.enums import RecommendationDirection, RecommendationState, StrategyHorizon
@@ -37,6 +39,7 @@ class TickerDeepAnalysisService:
         self.proposal_service = proposal_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
         self.model_name = model_name
+        self._reference_history_cache: dict[tuple[str, str | None], pd.DataFrame | None] = {}
 
     def analyze(self, ticker: str, *, horizon: StrategyHorizon | None = None, as_of: datetime | None = None) -> RunOutput:
         normalized_ticker = ticker.strip().upper()
@@ -52,6 +55,10 @@ class TickerDeepAnalysisService:
             context = self._apply_context_enrichment(context, normalized_ticker, as_of=as_of)
             context = self._apply_support_aliases(context)
             context = self._apply_taxonomy_profile(context, normalized_ticker)
+            context.update(self._build_reference_features(normalized_ticker, history, context.get("ticker_profile", {}), as_of=as_of))
+            reference_notes = context.get("reference_features", {}).get("notes", []) if isinstance(context.get("reference_features"), dict) else []
+            if isinstance(reference_notes, list) and reference_notes:
+                context["problems"] = list(dict.fromkeys([*(context.get("problems", []) or []), *[str(note) for note in reference_notes if note]]))
             feature_vector = self._build_feature_vector(context)
             column_ranges = self._compute_column_ranges(enriched)
             normalized_vector = self._normalize_feature_vector(feature_vector, column_ranges)
@@ -156,6 +163,141 @@ class TickerDeepAnalysisService:
         merged["relationship_edges"] = self.taxonomy_service.get_ticker_relationships(ticker)
         context["ticker_profile"] = merged
         return context
+
+    def _build_reference_features(
+        self,
+        ticker: str,
+        history: pd.DataFrame,
+        profile: dict[str, Any],
+        *,
+        as_of: datetime | None = None,
+    ) -> dict[str, Any]:
+        features: dict[str, Any] = {
+            "rel_return_5d_vs_spy": 0.0,
+            "rel_return_20d_vs_spy": 0.0,
+            "rel_return_5d_vs_sector": 0.0,
+            "rel_return_20d_vs_sector": 0.0,
+            "volume_ratio_20": self._volume_ratio(history, periods=20),
+            "dollar_volume_ratio_20": self._dollar_volume_ratio(history, periods=20),
+            "reference_features": {
+                "benchmark_symbol": "SPY",
+                "sector_etf_symbol": None,
+                "benchmark_available": False,
+                "sector_available": False,
+                "notes": [],
+            },
+        }
+        notes: list[str] = []
+
+        benchmark_history = self._safe_fetch_reference_history("SPY", as_of=as_of, notes=notes)
+        if benchmark_history is not None:
+            features["rel_return_5d_vs_spy"] = self._relative_return(history, benchmark_history, periods=5)
+            features["rel_return_20d_vs_spy"] = self._relative_return(history, benchmark_history, periods=20)
+            features["reference_features"]["benchmark_available"] = True
+        else:
+            notes.append("reference feature fallback: SPY history unavailable")
+
+        sector_etf = self._sector_etf_symbol(profile)
+        features["reference_features"]["sector_etf_symbol"] = sector_etf
+        if sector_etf:
+            sector_history = self._safe_fetch_reference_history(sector_etf, as_of=as_of, notes=notes)
+            if sector_history is not None:
+                features["rel_return_5d_vs_sector"] = self._relative_return(history, sector_history, periods=5)
+                features["rel_return_20d_vs_sector"] = self._relative_return(history, sector_history, periods=20)
+                features["reference_features"]["sector_available"] = True
+            else:
+                notes.append(f"reference feature fallback: {sector_etf} history unavailable")
+        else:
+            notes.append("reference feature fallback: sector ETF mapping unavailable")
+
+        features["reference_features"]["notes"] = list(dict.fromkeys(notes))
+        return features
+
+    def _safe_fetch_reference_history(
+        self,
+        symbol: str,
+        *,
+        as_of: datetime | None,
+        notes: list[str],
+    ) -> pd.DataFrame | None:
+        cache_key = (symbol, as_of.isoformat() if as_of is not None else None)
+        if cache_key in self._reference_history_cache:
+            cached = self._reference_history_cache[cache_key]
+            if cached is None:
+                notes.append(f"reference feature cache hit: no usable history for {symbol}")
+            return cached
+        try:
+            history = self.proposal_service._fetch_price_history(symbol, as_of=as_of)
+        except Exception as exc:  # noqa: BLE001
+            notes.append(f"reference feature fetch failed for {symbol}: {exc}")
+            self._reference_history_cache[cache_key] = None
+            return None
+        if not isinstance(history, pd.DataFrame) or history.empty or "Close" not in history.columns:
+            notes.append(f"reference feature fetch returned no usable close history for {symbol}")
+            self._reference_history_cache[cache_key] = None
+            return None
+        self._reference_history_cache[cache_key] = history
+        return history
+
+    @staticmethod
+    def _sector_etf_symbol(profile: dict[str, Any]) -> str | None:
+        raw_sector = str(profile.get("sector", "") or "").strip().lower()
+        mapping = {
+            "technology": "XLK",
+            "information technology": "XLK",
+            "financial services": "XLF",
+            "financials": "XLF",
+            "energy": "XLE",
+            "healthcare": "XLV",
+            "health care": "XLV",
+            "industrials": "XLI",
+            "consumer discretionary": "XLY",
+            "consumer cyclical": "XLY",
+            "consumer staples": "XLP",
+            "utilities": "XLU",
+            "materials": "XLB",
+            "real estate": "XLRE",
+            "communication services": "XLC",
+            "communications": "XLC",
+        }
+        return mapping.get(raw_sector)
+
+    @staticmethod
+    def _period_return(history: pd.DataFrame, periods: int) -> float:
+        if periods <= 0 or len(history.index) <= periods or "Close" not in history.columns:
+            return 0.0
+        closes = history["Close"].astype(float)
+        end = float(closes.iloc[-1])
+        start = float(closes.iloc[-(periods + 1)])
+        if start == 0.0 or math.isnan(start) or math.isnan(end):
+            return 0.0
+        return (end / start) - 1.0
+
+    @classmethod
+    def _relative_return(cls, left: pd.DataFrame, right: pd.DataFrame, *, periods: int) -> float:
+        return round(cls._period_return(left, periods) - cls._period_return(right, periods), 6)
+
+    @staticmethod
+    def _volume_ratio(history: pd.DataFrame, *, periods: int) -> float:
+        if "Volume" not in history.columns or len(history.index) < periods:
+            return 1.0
+        volume = history["Volume"].astype(float)
+        baseline = float(volume.tail(periods).mean())
+        latest = float(volume.iloc[-1])
+        if baseline <= 0.0:
+            return 1.0
+        return round(latest / baseline, 6)
+
+    @staticmethod
+    def _dollar_volume_ratio(history: pd.DataFrame, *, periods: int) -> float:
+        if "Volume" not in history.columns or "Close" not in history.columns or len(history.index) < periods:
+            return 1.0
+        dollar_volume = history["Close"].astype(float) * history["Volume"].astype(float)
+        baseline = float(dollar_volume.tail(periods).mean())
+        latest = float(dollar_volume.iloc[-1])
+        if baseline <= 0.0:
+            return 1.0
+        return round(latest / baseline, 6)
 
     def _enrich_history(self, df: pd.DataFrame) -> pd.DataFrame:
         enriched = df.copy()
@@ -293,6 +435,13 @@ class TickerDeepAnalysisService:
             "volatility_band_width": float(latest.get("volatility_band_width") or 0.0),
             "price_above_sma50": price_above_sma50,
             "price_above_sma200": price_above_sma200,
+            "rel_return_5d_vs_spy": 0.0,
+            "rel_return_20d_vs_spy": 0.0,
+            "rel_return_5d_vs_sector": 0.0,
+            "rel_return_20d_vs_sector": 0.0,
+            "volume_ratio_20": 1.0,
+            "dollar_volume_ratio_20": 1.0,
+            "reference_features": {"benchmark_symbol": "SPY", "sector_etf_symbol": None, "benchmark_available": False, "sector_available": False, "notes": []},
             "short_bullish": short_bullish,
             "short_bearish": short_bearish,
             "medium_bullish": medium_bullish,
@@ -376,6 +525,12 @@ class TickerDeepAnalysisService:
             "momentum_short",
             "momentum_medium",
             "momentum_long",
+            "rel_return_5d_vs_spy",
+            "rel_return_20d_vs_spy",
+            "rel_return_5d_vs_sector",
+            "rel_return_20d_vs_sector",
+            "volume_ratio_20",
+            "dollar_volume_ratio_20",
             "price_change_1d",
             "price_change_10d",
             "price_change_63d",
@@ -491,14 +646,17 @@ class TickerDeepAnalysisService:
         direction: RecommendationDirection,
     ) -> dict[str, float]:
         directional_multiplier = 1.0 if direction == RecommendationDirection.LONG else -1.0
+        relative_strength = self._aligned_relative_strength(context, direction)
+        volume_confirmation = self._volume_confirmation_signal(context)
         context_confidence = self._scale_signed(
             (TickerDeepAnalysisService._macro_context_score(context) * 0.45)
             + (TickerDeepAnalysisService._industry_context_score(context) * 0.55),
             directional_multiplier=directional_multiplier,
         )
         directional_confidence = self._scale_signed(
-            (float(context.get("ticker_sentiment_score", 0.0) or 0.0) * 0.65)
-            + (float(context.get("momentum_medium", 0.0) or 0.0) * 1.4),
+            (float(context.get("ticker_sentiment_score", 0.0) or 0.0) * 0.55)
+            + (float(context.get("momentum_medium", 0.0) or 0.0) * 1.2)
+            + (relative_strength * 0.65),
             directional_multiplier=directional_multiplier,
         )
         catalyst_confidence = self._scale_unsigned(
@@ -506,13 +664,16 @@ class TickerDeepAnalysisService:
             + min(1.0, (float(context.get("context_count", 0.0) or 0.0) / 3.0)) * 0.3
         )
         technical_clarity = self._scale_unsigned(
-            (float(context.get("price_above_sma50", 0.0) or 0.0) * 0.25)
-            + (float(context.get("price_above_sma200", 0.0) or 0.0) * 0.35)
-            + max(0.0, 1.0 - abs((float(context.get("rsi", 50.0) or 50.0) - 55.0) / 55.0)) * 0.4
+            (float(context.get("price_above_sma50", 0.0) or 0.0) * 0.22)
+            + (float(context.get("price_above_sma200", 0.0) or 0.0) * 0.31)
+            + max(0.0, 1.0 - abs((float(context.get("rsi", 50.0) or 50.0) - 55.0) / 55.0)) * 0.35
+            + min(1.0, max(0.0, relative_strength) / 0.06) * 0.06
+            + volume_confirmation * 0.06
         )
         execution_clarity = self._scale_unsigned(
-            max(0.0, 1.0 - min(1.0, (float(context.get("atr_pct", 0.0) or 0.0) / 8.0))) * 0.55
-            + min(1.0, abs(float(context.get("momentum_short", 0.0) or 0.0)) * 8.0) * 0.45
+            max(0.0, 1.0 - min(1.0, (float(context.get("atr_pct", 0.0) or 0.0) / 8.0))) * 0.5
+            + min(1.0, abs(float(context.get("momentum_short", 0.0) or 0.0)) * 8.0) * 0.38
+            + volume_confirmation * 0.12
         )
         data_quality_cap = self._scale_unsigned(
             1.0
@@ -526,6 +687,26 @@ class TickerDeepAnalysisService:
             "execution_clarity": round(execution_clarity, 2),
             "data_quality_cap": round(data_quality_cap, 2),
         }
+
+    @staticmethod
+    def _aligned_relative_strength(context: dict[str, Any], direction: RecommendationDirection) -> float:
+        values = [
+            float(context.get("rel_return_5d_vs_spy", 0.0) or 0.0),
+            float(context.get("rel_return_20d_vs_spy", 0.0) or 0.0),
+            float(context.get("rel_return_5d_vs_sector", 0.0) or 0.0),
+            float(context.get("rel_return_20d_vs_sector", 0.0) or 0.0),
+        ]
+        average = sum(values) / len(values)
+        return average if direction == RecommendationDirection.LONG else -average
+
+    @staticmethod
+    def _volume_confirmation_signal(context: dict[str, Any]) -> float:
+        volume_ratio = max(0.0, float(context.get("volume_ratio_20", 1.0) or 1.0))
+        dollar_volume_ratio = max(0.0, float(context.get("dollar_volume_ratio_20", 1.0) or 1.0))
+        average_ratio = (volume_ratio + dollar_volume_ratio) / 2.0
+        if average_ratio <= 1.0:
+            return 0.0
+        return min(1.0, (average_ratio - 1.0) / 0.75)
 
     @staticmethod
     def _scale_signed(value: float, *, directional_multiplier: float) -> float:
@@ -1044,6 +1225,8 @@ class TickerDeepAnalysisService:
         macro_score = TickerDeepAnalysisService._macro_context_score(context)
         industry_score = TickerDeepAnalysisService._industry_context_score(context)
         direction_score = float(aggregations.get("direction_score", 0.5) or 0.5)
+        relative_strength = TickerDeepAnalysisService._aligned_relative_strength(context, direction)
+        volume_confirmation = TickerDeepAnalysisService._volume_confirmation_signal(context)
 
         if news_count >= 4 and abs(float(context.get("ticker_sentiment_score", 0.0) or 0.0)) >= 0.2:
             return "catalyst_follow_through"
@@ -1051,9 +1234,17 @@ class TickerDeepAnalysisService:
             return "continuation"
         if direction == RecommendationDirection.SHORT and momentum_medium < -0.08 and direction_score <= 0.42:
             return "continuation"
+        if direction == RecommendationDirection.LONG and momentum_medium > 0.05 and relative_strength >= 0.015 and volume_confirmation >= 0.1:
+            return "continuation"
+        if direction == RecommendationDirection.SHORT and momentum_medium < -0.05 and relative_strength >= 0.015 and volume_confirmation >= 0.1:
+            return "continuation"
         if direction == RecommendationDirection.LONG and momentum_short > 0.04 and rsi >= 60:
             return "breakout"
         if direction == RecommendationDirection.SHORT and momentum_short < -0.04 and rsi <= 40:
+            return "breakdown"
+        if direction == RecommendationDirection.LONG and momentum_short > 0.03 and rsi >= 55 and relative_strength >= 0.015 and volume_confirmation >= 0.2:
+            return "breakout"
+        if direction == RecommendationDirection.SHORT and momentum_short < -0.03 and rsi <= 45 and relative_strength >= 0.015 and volume_confirmation >= 0.2:
             return "breakdown"
         if direction == RecommendationDirection.LONG and rsi < 40:
             return "mean_reversion"
@@ -1181,6 +1372,13 @@ class TickerDeepAnalysisService:
                 "momentum_short": context.get("momentum_short"),
                 "momentum_medium": context.get("momentum_medium"),
                 "momentum_long": context.get("momentum_long"),
+                "rel_return_5d_vs_spy": context.get("rel_return_5d_vs_spy"),
+                "rel_return_20d_vs_spy": context.get("rel_return_20d_vs_spy"),
+                "rel_return_5d_vs_sector": context.get("rel_return_5d_vs_sector"),
+                "rel_return_20d_vs_sector": context.get("rel_return_20d_vs_sector"),
+                "volume_ratio_20": context.get("volume_ratio_20"),
+                "dollar_volume_ratio_20": context.get("dollar_volume_ratio_20"),
+                "reference_features": context.get("reference_features", {}),
             },
             "feature_vector": feature_vector,
             "normalized_feature_vector": normalized_vector,

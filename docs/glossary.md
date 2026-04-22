@@ -286,9 +286,11 @@ A comparison between actual recommendation behavior and simpler alternative coho
 The purpose is to check whether the full workflow is adding value beyond easier heuristic alternatives.
 
 ### Evidence concentration
-A review concept showing where measured evidence is strongest or weakest.
+A simple review question: are there a few types of recommendations that are clearly doing better than the rest, or is everything still too mixed and noisy?
 
-In practice, this asks whether some cohorts are separating clearly enough to deserve more trust or tighter constraints.
+In practice, this helps operators decide whether to:
+- stay broad and cautious because nothing stands out yet
+- or focus more attention on the small number of groups that are actually showing better measured results
 
 ### Walk-forward validation
 A time-ordered validation method that tests candidate changes on repeated later slices instead of one pooled sample.

@@ -61,7 +61,7 @@ class RecommendationPlanBaselineService:
         open_trades = [
             plan
             for plan in trade_plans
-            if plan.latest_outcome is None or (plan.latest_outcome.outcome not in {"win", "loss"})
+            if plan.latest_outcome is None or plan.latest_outcome.status != "resolved"
         ]
         avg_return_5d_values = [
             float(plan.latest_outcome.horizon_return_5d)

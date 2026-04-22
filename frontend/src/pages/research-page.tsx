@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
-import type { CalibrationReportResponse, CalibrationSummary, PerformanceAssessmentResponse, PerformanceWindowAssessment, WalkForwardValidationResponse } from "../types";
+import type { CalibrationReportResponse, CalibrationSummary, PerformanceAssessmentResponse, PerformanceWindowAssessment, RecommendationPlanOutcome, WalkForwardValidationResponse } from "../types";
 import { formatDate, jobTypeLabel, runTone } from "../utils";
 import { Badge, Card, HelpHint, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 
@@ -83,6 +83,7 @@ export function ResearchPage() {
   const [assessment, setAssessment] = useState<PerformanceAssessmentResponse | null>(null);
   const [calibration, setCalibration] = useState<CalibrationReportResponse | null>(null);
   const [walkForward, setWalkForward] = useState<WalkForwardValidationResponse | null>(null);
+  const [nearMissWinners, setNearMissWinners] = useState<RecommendationPlanOutcome[]>([]);
   const [activeTab, setActiveTab] = useState<"overview" | "calibration" | "validation" | "tuning">("overview");
   const [selectedWindow, setSelectedWindow] = useState<(typeof assessmentWindows)[number]>("30d");
   const [loading, setLoading] = useState(true);
@@ -95,15 +96,17 @@ export function ResearchPage() {
       setLoading(true);
       setError(null);
       try {
-        const [assessmentPayload, calibrationPayload, walkForwardPayload] = await Promise.all([
+        const [assessmentPayload, calibrationPayload, walkForwardPayload, nearMissPayload] = await Promise.all([
           getJson<PerformanceAssessmentResponse>("/api/research/performance-assessment"),
           getJson<CalibrationReportResponse>(`/api/recommendation-outcomes/calibration-report?evaluated_after=${encodeURIComponent(windowStartIso(selectedWindow))}&limit=2000`),
           getJson<WalkForwardValidationResponse>("/api/recommendation-outcomes/walk-forward?lookback_days=365&validation_days=90&step_days=30&min_resolved_outcomes=20"),
+          getJson<RecommendationPlanOutcome[]>("/api/recommendation-outcomes?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&limit=200"),
         ]);
         if (!cancelled) {
           setAssessment(assessmentPayload);
           setCalibration(calibrationPayload);
           setWalkForward(walkForwardPayload);
+          setNearMissWinners(nearMissPayload);
         }
       } catch (err) {
         if (!cancelled) {
@@ -131,20 +134,78 @@ export function ResearchPage() {
   const calibrationBins = calibrationReport?.bins ?? [];
   const windowedAssessments = Array.isArray(assessment?.windowed_assessments) ? (assessment.windowed_assessments as PerformanceWindowAssessment[]) : [];
   const selectedAssessmentWindow = windowedAssessments.find((window) => window.window === selectedWindow) ?? windowedAssessments[0] ?? null;
+  const nearMissFamilies = Object.entries(
+    nearMissWinners.reduce<Record<string, { count: number; workedCount: number; missDistances: number[] }>>((acc, item) => {
+      const key = (item.setup_family || "uncategorized").trim() || "uncategorized";
+      const current = acc[key] ?? { count: 0, workedCount: 0, missDistances: [] };
+      current.count += 1;
+      if (item.direction_worked_without_entry) {
+        current.workedCount += 1;
+      }
+      if (typeof item.entry_miss_distance_percent === "number") {
+        current.missDistances.push(item.entry_miss_distance_percent);
+      }
+      acc[key] = current;
+      return acc;
+    }, {}),
+  )
+    .map(([family, stats]) => {
+      const sortedDistances = [...stats.missDistances].sort((left, right) => left - right);
+      const averageMissDistance = sortedDistances.length > 0
+        ? sortedDistances.reduce((sum, value) => sum + value, 0) / sortedDistances.length
+        : null;
+      const medianMissDistance = sortedDistances.length > 0
+        ? (sortedDistances.length % 2 === 1
+          ? sortedDistances[(sortedDistances.length - 1) / 2]
+          : (sortedDistances[sortedDistances.length / 2 - 1] + sortedDistances[sortedDistances.length / 2]) / 2)
+        : null;
+      return {
+        family,
+        count: stats.count,
+        workedCount: stats.workedCount,
+        averageMissDistance,
+        medianMissDistance,
+        minMissDistance: sortedDistances.length > 0 ? sortedDistances[0] : null,
+        maxMissDistance: sortedDistances.length > 0 ? sortedDistances[sortedDistances.length - 1] : null,
+      };
+    })
+    .sort((left, right) => right.count - left.count || left.family.localeCompare(right.family));
+  const nearMissTickers = Object.entries(
+    nearMissWinners.reduce<Record<string, { count: number; missDistances: number[] }>>((acc, item) => {
+      const key = (item.ticker || "unknown").trim() || "unknown";
+      const current = acc[key] ?? { count: 0, missDistances: [] };
+      current.count += 1;
+      if (typeof item.entry_miss_distance_percent === "number") {
+        current.missDistances.push(item.entry_miss_distance_percent);
+      }
+      acc[key] = current;
+      return acc;
+    }, {}),
+  )
+    .map(([ticker, stats]) => ({
+      ticker,
+      count: stats.count,
+      averageMissDistance: stats.missDistances.length > 0
+        ? stats.missDistances.reduce((sum, value) => sum + value, 0) / stats.missDistances.length
+        : null,
+    }))
+    .sort((left, right) => right.count - left.count || left.ticker.localeCompare(right.ticker));
 
   async function handleRunAssessment() {
     setRunning(true);
     setError(null);
     try {
       await postForm("/api/research/performance-assessment/run", {});
-      const [assessmentPayload, calibrationPayload, walkForwardPayload] = await Promise.all([
+      const [assessmentPayload, calibrationPayload, walkForwardPayload, nearMissPayload] = await Promise.all([
         getJson<PerformanceAssessmentResponse>("/api/research/performance-assessment"),
         getJson<CalibrationReportResponse>(`/api/recommendation-outcomes/calibration-report?evaluated_after=${encodeURIComponent(windowStartIso(selectedWindow))}&limit=2000`),
         getJson<WalkForwardValidationResponse>("/api/recommendation-outcomes/walk-forward?lookback_days=365&validation_days=90&step_days=30&min_resolved_outcomes=20"),
+        getJson<RecommendationPlanOutcome[]>("/api/recommendation-outcomes?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&limit=200"),
       ]);
       setAssessment(assessmentPayload);
       setCalibration(calibrationPayload);
       setWalkForward(walkForwardPayload);
+      setNearMissWinners(nearMissPayload);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -198,6 +259,18 @@ export function ResearchPage() {
                 <div className="data-point"><span className="data-point-label">backend</span><span className="data-point-value">{latestBackend} / {latestMethod}</span></div>
               </div>
               {latestError ? <div className="helper-text top-gap-small">Fallback note: {latestError}</div> : null}
+              {assessment?.entry_miss_diagnostics ? (
+                <Card className="top-gap-medium">
+                  <SectionTitle kicker="Entry quality" title="Almost entered, then moved" subtitle="Use this to spot plans that missed entry by a small amount but still followed the expected direction." />
+                  <div className="data-points top-gap-small">
+                    <div className="data-point"><span className="data-point-label">never entered</span><span className="data-point-value">{assessment.entry_miss_diagnostics.never_entered_count}</span></div>
+                    <div className="data-point"><span className="data-point-label">almost entered</span><span className="data-point-value">{assessment.entry_miss_diagnostics.near_entry_miss_count}</span></div>
+                    <div className="data-point"><span className="data-point-label">still moved right</span><span className="data-point-value">{assessment.entry_miss_diagnostics.direction_worked_without_entry_count}</span></div>
+                    <div className="data-point"><span className="data-point-label">almost entered + worked</span><span className="data-point-value">{assessment.entry_miss_diagnostics.near_entry_and_worked_count}</span></div>
+                    <div className="data-point"><span className="data-point-label">avg miss distance</span><span className="data-point-value">{assessment.entry_miss_diagnostics.average_entry_miss_distance_percent !== null ? `${assessment.entry_miss_diagnostics.average_entry_miss_distance_percent.toFixed(2)}%` : "—"}</span></div>
+                  </div>
+                </Card>
+              ) : null}
               {windowedAssessments.length > 0 ? (
                 <Card className="top-gap-medium">
                   <SectionTitle kicker="Rolling windows" title="Assessment snapshots" subtitle="Select a time window to inspect the matching performance-assessment summary." actions={<HelpHint tooltip="These windows summarize recent assessment posture without forcing you to scan every period at once." to="/docs?doc=glossary&section=walk-forward-validation" />} />
@@ -220,7 +293,7 @@ export function ResearchPage() {
                           <div className="data-point"><span className="data-point-label">confidence return 5d</span><span className="data-point-value">{selectedAssessmentWindow.high_confidence_average_return_5d !== null ? selectedAssessmentWindow.high_confidence_average_return_5d.toFixed(3) : "—"}</span></div>
                           <div className="data-point"><span className="data-point-label">brier / ece</span><span className="data-point-value">{selectedAssessmentWindow.calibration_brier_score !== null ? selectedAssessmentWindow.calibration_brier_score.toFixed(4) : "—"} / {selectedAssessmentWindow.calibration_ece !== null ? selectedAssessmentWindow.calibration_ece.toFixed(4) : "—"}</span></div>
                           <div className="data-point"><span className="data-point-label">family count</span><span className="data-point-value">{selectedAssessmentWindow.family_count}</span></div>
-                          <div className="data-point"><span className="data-point-label">expansion</span><span className="data-point-value">{selectedAssessmentWindow.ready_for_expansion ? "yes" : "no"}</span></div>
+                          <div className="data-point"><span className="data-point-label">clear bright spots?</span><span className="data-point-value">{selectedAssessmentWindow.ready_for_expansion ? "yes" : "no"}</span></div>
                         </div>
                       </Card>
                     </section>
@@ -244,7 +317,7 @@ export function ResearchPage() {
               </div>
             </Card>
             <Card>
-              <SectionTitle kicker="Advanced review" title="Recommendation quality summary" subtitle="Use this for a consolidated view of calibration, baselines, evidence concentration, and walk-forward readiness." />
+              <SectionTitle kicker="Advanced review" title="Recommendation quality summary" subtitle="Use this for a consolidated view of confidence quality, simple baselines, where results look strongest, and walk-forward readiness." />
               <div className="cluster top-gap-small">
                 <Link to="/recommendation-quality" className="button-secondary">Open quality summary</Link>
                 <Badge tone="info">advanced review</Badge>
@@ -255,6 +328,64 @@ export function ResearchPage() {
               <div className="cluster top-gap-small">
                 <Link to="/research/signal-gating/gating-job" className="button-secondary">Open signal gating tuning</Link>
                 <Badge tone="info">research</Badge>
+              </div>
+            </Card>
+            <Card>
+              <SectionTitle kicker="Advanced research" title="Almost entered, then still worked" subtitle="Review plans that never filled, came very close, and still moved in the planned direction." />
+              <div className="data-points top-gap-small">
+                <div className="data-point"><span className="data-point-label">matching plans</span><span className="data-point-value">{nearMissWinners.length}</span></div>
+                <div className="data-point"><span className="data-point-label">top setup family</span><span className="data-point-value">{nearMissFamilies[0]?.family ?? "—"}</span></div>
+              </div>
+              <div className="cluster top-gap-small">
+                <Link to="/jobs/recommendation-plans?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&page=1&limit=100" className="button-secondary">Open filtered plans</Link>
+                <Badge tone="info">advanced research</Badge>
+              </div>
+              <div className="top-gap-small">
+                <div className="helper-text">Setup-family breakdown</div>
+                {nearMissFamilies.length > 0 ? (
+                  <div className="table-wrapper top-gap-small">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>family</th>
+                          <th>count</th>
+                          <th>avg miss</th>
+                          <th>median miss</th>
+                          <th>min miss</th>
+                          <th>max miss</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {nearMissFamilies.slice(0, 8).map((item) => {
+                          const familyHref = `/jobs/recommendation-plans?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&setup_family=${encodeURIComponent(item.family)}&page=1&limit=100`;
+                          return (
+                            <tr key={item.family}>
+                              <td><Link to={familyHref}>{item.family}</Link></td>
+                              <td>{item.count}</td>
+                              <td>{item.averageMissDistance !== null ? `${item.averageMissDistance.toFixed(2)}%` : "—"}</td>
+                              <td>{item.medianMissDistance !== null ? `${item.medianMissDistance.toFixed(2)}%` : "—"}</td>
+                              <td>{item.minMissDistance !== null ? `${item.minMissDistance.toFixed(2)}%` : "—"}</td>
+                              <td>{item.maxMissDistance !== null ? `${item.maxMissDistance.toFixed(2)}%` : "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : <div className="helper-text top-gap-small">No almost-entered directional wins found yet.</div>}
+              </div>
+              <div className="top-gap-small">
+                <div className="helper-text">Top tickers</div>
+                {nearMissTickers.length > 0 ? (
+                  <ul className="list-reset top-gap-small">
+                    {nearMissTickers.slice(0, 8).map((item) => {
+                      const tickerHref = `/jobs/recommendation-plans?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&ticker=${encodeURIComponent(item.ticker)}&page=1&limit=100`;
+                      return (
+                        <li key={item.ticker} className="list-item compact-item"><Link to={tickerHref}>{item.ticker}</Link> · {item.count}{item.averageMissDistance !== null ? ` · avg miss ${item.averageMissDistance.toFixed(2)}%` : ""}</li>
+                      );
+                    })}
+                  </ul>
+                ) : <div className="helper-text top-gap-small">No ticker pattern stands out yet.</div>}
               </div>
             </Card>
             <Card>
@@ -287,7 +418,7 @@ export function ResearchPage() {
                         <div className="data-point"><span className="data-point-label">high confidence</span><span className="data-point-value">{slice.high_confidence_win_rate_percent !== null ? `${slice.high_confidence_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
                         <div className="data-point"><span className="data-point-label">actionable return 5d</span><span className="data-point-value">{slice.actual_actionable_average_return_5d !== null ? slice.actual_actionable_average_return_5d.toFixed(3) : "—"}</span></div>
                         <div className="data-point"><span className="data-point-label">confidence return 5d</span><span className="data-point-value">{slice.high_confidence_average_return_5d !== null ? slice.high_confidence_average_return_5d.toFixed(3) : "—"}</span></div>
-                        <div className="data-point"><span className="data-point-label">ready</span><span className="data-point-value">{slice.ready_for_expansion ? "yes" : "no"}</span></div>
+                        <div className="data-point"><span className="data-point-label">clear bright spots?</span><span className="data-point-value">{slice.ready_for_expansion ? "yes" : "no"}</span></div>
                         <div className="data-point"><span className="data-point-label">brier / ece</span><span className="data-point-value">{slice.calibration_report?.brier_score !== null && slice.calibration_report?.brier_score !== undefined ? slice.calibration_report.brier_score.toFixed(4) : "—"} / {slice.calibration_report?.expected_calibration_error !== null && slice.calibration_report?.expected_calibration_error !== undefined ? slice.calibration_report.expected_calibration_error.toFixed(4) : "—"}</span></div>
                       </div>
                     </Card>

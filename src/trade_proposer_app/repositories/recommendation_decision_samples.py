@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import RecommendationDecisionSample
@@ -15,14 +15,28 @@ class RecommendationDecisionSampleRepository:
         self.session = session
 
     def upsert_sample(self, sample: RecommendationDecisionSample) -> RecommendationDecisionSample:
-        record = self.session.scalar(
-            select(RecommendationDecisionSampleRecord).where(
-                RecommendationDecisionSampleRecord.recommendation_plan_id == sample.recommendation_plan_id
+        if sample.recommendation_plan_id is None and sample.ticker_signal_snapshot_id is None:
+            raise ValueError("recommendation decision sample requires recommendation_plan_id or ticker_signal_snapshot_id")
+        record = None
+        if sample.recommendation_plan_id is not None:
+            record = self.session.scalar(
+                select(RecommendationDecisionSampleRecord).where(
+                    RecommendationDecisionSampleRecord.recommendation_plan_id == sample.recommendation_plan_id
+                )
             )
-        )
+        elif sample.ticker_signal_snapshot_id is not None:
+            record = self.session.scalar(
+                select(RecommendationDecisionSampleRecord).where(
+                    RecommendationDecisionSampleRecord.ticker_signal_snapshot_id == sample.ticker_signal_snapshot_id
+                )
+            )
         if record is None:
-            record = RecommendationDecisionSampleRecord(recommendation_plan_id=sample.recommendation_plan_id)
+            record = RecommendationDecisionSampleRecord(
+                recommendation_plan_id=sample.recommendation_plan_id,
+                ticker_signal_snapshot_id=sample.ticker_signal_snapshot_id,
+            )
             self.session.add(record)
+        record.recommendation_plan_id = sample.recommendation_plan_id
         record.ticker = sample.ticker.upper()
         record.horizon = sample.horizon
         record.action = sample.action
@@ -45,6 +59,12 @@ class RecommendationDecisionSampleRepository:
         record.decision_context_json = self._dump(sample.decision_context)
         record.signal_breakdown_json = self._dump(sample.signal_breakdown)
         record.evidence_summary_json = self._dump(sample.evidence_summary)
+        record.benchmark_direction = sample.benchmark_direction
+        record.benchmark_status = sample.benchmark_status
+        record.benchmark_target_1d_hit = sample.benchmark_target_1d_hit
+        record.benchmark_target_5d_hit = sample.benchmark_target_5d_hit
+        record.benchmark_max_favorable_pct = sample.benchmark_max_favorable_pct
+        record.benchmark_evaluated_at = self._normalize_datetime(sample.benchmark_evaluated_at)
         record.run_id = sample.run_id
         record.job_id = sample.job_id
         record.watchlist_id = sample.watchlist_id
@@ -64,6 +84,7 @@ class RecommendationDecisionSampleRepository:
         setup_family: str | None = None,
         transmission_bias: str | None = None,
         context_regime: str | None = None,
+        benchmark_result: str | None = None,
         created_after: datetime | None = None,
         created_before: datetime | None = None,
     ):
@@ -84,6 +105,22 @@ class RecommendationDecisionSampleRepository:
             query = query.where(RecommendationDecisionSampleRecord.transmission_bias == transmission_bias)
         if context_regime:
             query = query.where(RecommendationDecisionSampleRecord.context_regime == context_regime)
+        if benchmark_result == "pending":
+            query = query.where(RecommendationDecisionSampleRecord.benchmark_status == "pending")
+        elif benchmark_result == "hit":
+            query = query.where(RecommendationDecisionSampleRecord.benchmark_status == "evaluated")
+            query = query.where(
+                or_(
+                    RecommendationDecisionSampleRecord.benchmark_target_1d_hit.is_(True),
+                    RecommendationDecisionSampleRecord.benchmark_target_5d_hit.is_(True),
+                )
+            )
+        elif benchmark_result == "miss":
+            query = query.where(RecommendationDecisionSampleRecord.benchmark_status == "evaluated")
+            query = query.where(RecommendationDecisionSampleRecord.benchmark_target_1d_hit.is_(False))
+            query = query.where(RecommendationDecisionSampleRecord.benchmark_target_5d_hit.is_(False))
+        elif benchmark_result == "failed":
+            query = query.where(RecommendationDecisionSampleRecord.benchmark_status == "failed")
         if created_after is not None:
             query = query.where(RecommendationDecisionSampleRecord.created_at >= created_after)
         if created_before is not None:
@@ -101,6 +138,7 @@ class RecommendationDecisionSampleRepository:
         setup_family: str | None = None,
         transmission_bias: str | None = None,
         context_regime: str | None = None,
+        benchmark_result: str | None = None,
         created_after: datetime | None = None,
         created_before: datetime | None = None,
     ) -> int:
@@ -113,6 +151,7 @@ class RecommendationDecisionSampleRepository:
             setup_family=setup_family,
             transmission_bias=transmission_bias,
             context_regime=context_regime,
+            benchmark_result=benchmark_result,
             created_after=created_after,
             created_before=created_before,
         )
@@ -130,12 +169,13 @@ class RecommendationDecisionSampleRepository:
         setup_family: str | None = None,
         transmission_bias: str | None = None,
         context_regime: str | None = None,
+        benchmark_result: str | None = None,
         created_after: datetime | None = None,
         created_before: datetime | None = None,
-        limit: int = 50,
+        limit: int | None = 50,
         offset: int = 0,
     ) -> list[RecommendationDecisionSample]:
-        normalized_limit = max(1, limit)
+        normalized_limit = max(1, limit) if limit is not None else None
         normalized_offset = max(0, offset)
         query = self._base_query(
             ticker=ticker,
@@ -146,12 +186,13 @@ class RecommendationDecisionSampleRepository:
             setup_family=setup_family,
             transmission_bias=transmission_bias,
             context_regime=context_regime,
+            benchmark_result=benchmark_result,
             created_after=created_after,
             created_before=created_before,
-        )
-        rows = self.session.scalars(
-            query.order_by(RecommendationDecisionSampleRecord.created_at.desc()).offset(normalized_offset).limit(normalized_limit)
-        ).all()
+        ).order_by(RecommendationDecisionSampleRecord.created_at.desc()).offset(normalized_offset)
+        if normalized_limit is not None:
+            query = query.limit(normalized_limit)
+        rows = self.session.scalars(query).all()
         return [self._to_model(row) for row in rows]
 
     @staticmethod
@@ -211,6 +252,12 @@ class RecommendationDecisionSampleRepository:
             decision_context=self._load_json(record.decision_context_json),
             signal_breakdown=self._load_json(record.signal_breakdown_json),
             evidence_summary=self._load_json(record.evidence_summary_json),
+            benchmark_direction=record.benchmark_direction,
+            benchmark_status=record.benchmark_status or "pending",
+            benchmark_target_1d_hit=record.benchmark_target_1d_hit,
+            benchmark_target_5d_hit=record.benchmark_target_5d_hit,
+            benchmark_max_favorable_pct=record.benchmark_max_favorable_pct,
+            benchmark_evaluated_at=self._normalize_datetime(record.benchmark_evaluated_at),
             run_id=record.run_id,
             job_id=record.job_id,
             watchlist_id=record.watchlist_id,

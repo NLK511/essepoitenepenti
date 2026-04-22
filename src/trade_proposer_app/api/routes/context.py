@@ -88,6 +88,7 @@ async def list_ticker_signal_snapshots(
     ticker: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     run_id: int | None = Query(default=None),
+    snapshot_id: int | None = Query(default=None),
     session: Session = Depends(get_db_session),
 ) -> list[TickerSignalSnapshot]:
     normalized_ticker = ticker.strip().upper() if ticker else None
@@ -95,6 +96,7 @@ async def list_ticker_signal_snapshots(
         ticker=normalized_ticker,
         limit=limit,
         run_id=run_id,
+        snapshot_id=snapshot_id,
     )
 
 

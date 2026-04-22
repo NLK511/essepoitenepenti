@@ -137,6 +137,7 @@ class JobRepository:
                     delete(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.recommendation_plan_id.in_(plan_ids))
                 )
                 self.session.execute(delete(RecommendationPlanRecord).where(RecommendationPlanRecord.id.in_(plan_ids)))
+            self.session.execute(delete(RecommendationDecisionSampleRecord).where(RecommendationDecisionSampleRecord.job_id == job_id))
             self.session.execute(delete(TickerSignalSnapshotRecord).where(TickerSignalSnapshotRecord.run_id.in_(run_ids)))
             self.session.execute(delete(MacroContextSnapshotRecord).where(MacroContextSnapshotRecord.run_id.in_(run_ids)))
             self.session.execute(delete(IndustryContextSnapshotRecord).where(IndustryContextSnapshotRecord.run_id.in_(run_ids)))

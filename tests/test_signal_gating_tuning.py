@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -12,14 +12,17 @@ from trade_proposer_app.app import app
 from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import StrategyHorizon
-from trade_proposer_app.domain.models import RecommendationDecisionSample, RecommendationPlan, RecommendationPlanOutcome
+from trade_proposer_app.domain.models import HistoricalMarketBar, RecommendationDecisionSample, RecommendationPlan, RecommendationPlanOutcome, RecommendationSignalGatingTuningRun, TickerSignalSnapshot
 from trade_proposer_app.persistence.models import Base
+from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
+from trade_proposer_app.repositories.signal_gating_tuning_runs import RecommendationSignalGatingTuningRunRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
-from trade_proposer_app.services.signal_gating_tuning import RecommendationSignalGatingTuningService
+from trade_proposer_app.services.signal_gating_tuning import RecommendationSignalGatingTuningError, RecommendationSignalGatingTuningService
 
 
 class RecommendationSignalGatingTuningServiceTests(unittest.TestCase):
@@ -81,6 +84,95 @@ class RecommendationSignalGatingTuningServiceTests(unittest.TestCase):
             )
         )
 
+    def _create_benchmark_sample(self, *, ticker: str, direction: str, created_at: datetime, confidence: float = 59.0) -> int:
+        snapshot = ContextSnapshotRepository(self.session).create_ticker_signal_snapshot(
+            TickerSignalSnapshot(
+                ticker=ticker,
+                horizon=StrategyHorizon.ONE_WEEK,
+                computed_at=created_at,
+                direction=direction,
+                confidence_percent=confidence,
+                attention_score=confidence,
+                macro_exposure_score=0.0,
+                industry_alignment_score=0.0,
+                ticker_sentiment_score=0.0,
+                technical_setup_score=0.0,
+                catalyst_score=0.0,
+                expected_move_score=0.0,
+                execution_quality_score=0.0,
+            )
+        )
+        sample = self.sample_repository.upsert_sample(
+            RecommendationDecisionSample(
+                recommendation_plan_id=None,
+                ticker=ticker,
+                horizon=StrategyHorizon.ONE_WEEK.value,
+                action="no_action",
+                decision_type="rejected",
+                shortlisted=False,
+                confidence_percent=confidence,
+                calibrated_confidence_percent=confidence,
+                setup_family="breakout",
+                reviewed_at=created_at,
+                ticker_signal_snapshot_id=snapshot.id or 0,
+                signal_breakdown={"benchmark_direction": direction},
+            )
+        )
+        bars = [
+            HistoricalMarketBar(
+                ticker=ticker,
+                timeframe="1d",
+                bar_time=created_at - timedelta(days=1),
+                open_price=100.0,
+                high_price=100.0,
+                low_price=100.0,
+                close_price=100.0,
+                volume=1000.0,
+            ),
+            HistoricalMarketBar(
+                ticker=ticker,
+                timeframe="1d",
+                bar_time=created_at + timedelta(days=1),
+                open_price=100.0,
+                high_price=103.5,
+                low_price=99.0,
+                close_price=102.5,
+                volume=1000.0,
+            ),
+            HistoricalMarketBar(
+                ticker=ticker,
+                timeframe="1d",
+                bar_time=created_at + timedelta(days=2),
+                open_price=102.5,
+                high_price=104.0,
+                low_price=101.5,
+                close_price=103.0,
+                volume=1000.0,
+            ),
+            HistoricalMarketBar(
+                ticker=ticker,
+                timeframe="1d",
+                bar_time=created_at + timedelta(days=3),
+                open_price=103.0,
+                high_price=105.5,
+                low_price=102.0,
+                close_price=104.5,
+                volume=1000.0,
+            ),
+            HistoricalMarketBar(
+                ticker=ticker,
+                timeframe="1d",
+                bar_time=created_at + timedelta(days=4),
+                open_price=104.5,
+                high_price=107.0,
+                low_price=103.5,
+                close_price=106.0,
+                volume=1000.0,
+            ),
+        ]
+        HistoricalMarketDataRepository(self.session).upsert_bars(bars)
+        return sample.id or 0
+
     def test_run_persists_best_threshold_and_candidate_results(self) -> None:
         self.settings_repository.set_confidence_threshold(60.0)
         self._create_resolved_sample(confidence=67.0, outcome="win", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc))
@@ -119,6 +211,72 @@ class RecommendationSignalGatingTuningServiceTests(unittest.TestCase):
         self.assertEqual(run.summary["applied_threshold"], 64.0)
         self.assertIn("shortlist_aggressiveness", run.winning_config)
         self.assertIn("near_miss_gap_cutoff", run.winning_config)
+
+    def test_run_defaults_to_samples_since_latest_applied_tuning(self) -> None:
+        self.settings_repository.set_confidence_threshold(60.0)
+        self._create_resolved_sample(confidence=67.0, outcome="win", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc))
+
+        applied_run = RecommendationSignalGatingTuningService(self.session).run(apply=True)
+        applied_boundary = (applied_run.completed_at or applied_run.created_at) + timedelta(seconds=1)
+
+        later_plan = self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="EOG",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=58.0,
+                entry_price_low=100.0,
+                entry_price_high=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                signal_breakdown={"setup_family": "breakout"},
+                computed_at=applied_boundary,
+            )
+        )
+        self.sample_repository.upsert_sample(
+            RecommendationDecisionSample(
+                recommendation_plan_id=later_plan.id or 0,
+                ticker="EOG",
+                horizon=StrategyHorizon.ONE_WEEK.value,
+                action="long",
+                decision_type="actionable",
+                confidence_percent=58.0,
+                calibrated_confidence_percent=58.0,
+                setup_family="breakout",
+                reviewed_at=applied_boundary,
+            )
+        )
+        self.outcome_repository.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=later_plan.id or 0,
+                outcome="expired",
+                status="resolved",
+                evaluated_at=applied_boundary,
+                confidence_bucket="high",
+                setup_family="breakout",
+            )
+        )
+
+        with self.assertRaisesRegex(RecommendationSignalGatingTuningError, "no scoreable win/loss outcomes or benchmark follow-through found for signal gating tuning since"):
+            RecommendationSignalGatingTuningService(self.session).run()
+
+        latest_applied = RecommendationSignalGatingTuningService(self.session).describe()["latest_run"]
+        self.assertIsNotNone(latest_applied)
+        self.assertEqual(applied_run.id, latest_applied.id)
+
+    def test_run_without_applied_history_uses_all_matching_samples(self) -> None:
+        self.settings_repository.set_confidence_threshold(60.0)
+        self._create_resolved_sample(confidence=67.0, outcome="win", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc))
+        self._create_resolved_sample(confidence=61.0, outcome="loss", created_at=datetime(2026, 3, 2, tzinfo=timezone.utc))
+
+        run = RecommendationSignalGatingTuningService(self.session).run()
+
+        self.assertEqual(run.sample_count, 2)
+        self.assertEqual(run.resolved_sample_count, 2)
+        self.assertEqual(run.benchmark_sample_count, 0)
+        self.assertEqual(run.scoreable_sample_count, 2)
+        self.assertEqual(run.summary["filters"]["sample_window_mode"], "all_history")
+        self.assertIsNone(run.summary["filters"]["limit"])
 
     def test_run_scores_multi_parameter_grid_and_prefers_shortlist_promotion(self) -> None:
         self.settings_repository.set_confidence_threshold(60.0)
@@ -179,12 +337,32 @@ class RecommendationSignalGatingTuningServiceTests(unittest.TestCase):
         run = RecommendationSignalGatingTuningService(self.session).run()
 
         self.assertGreaterEqual(run.candidate_count, 100)
+        self.assertEqual(run.benchmark_sample_count, 0)
+        self.assertEqual(run.scoreable_sample_count, 4)
         self.assertGreater(run.best_score or 0.0, run.baseline_score or 0.0)
         self.assertGreater(run.winning_config["shortlist_aggressiveness"], 0)
         self.assertIn("near_miss_gap_cutoff", run.winning_config)
         self.assertTrue(any(candidate["shortlisted_selected_count"] > 0 for candidate in run.candidate_results))
         self.assertTrue(any(candidate["near_miss_selected_count"] > 0 for candidate in run.candidate_results))
         self.assertTrue(any(candidate["degraded_selected_count"] > 0 for candidate in run.candidate_results))
+    def test_run_detects_benchmark_follow_through_for_discarded_signals(self) -> None:
+        self.settings_repository.set_confidence_threshold(60.0)
+        signal_time = datetime(2026, 3, 10, 15, 0, tzinfo=timezone.utc)
+        self._create_benchmark_sample(ticker="AAPL", direction="long", created_at=signal_time, confidence=59.0)
+
+        run = RecommendationSignalGatingTuningService(self.session).run()
+
+        self.assertEqual(run.sample_count, 1)
+        self.assertEqual(run.resolved_sample_count, 0)
+        self.assertEqual(run.benchmark_sample_count, 1)
+        self.assertEqual(run.scoreable_sample_count, 1)
+        self.assertEqual(run.summary["benchmark_sample_count"], 1)
+        self.assertEqual(run.summary["missed_opportunity_count"], 1)
+        self.assertEqual(run.summary["good_reject_count"], 0)
+        self.assertGreater(run.best_score or 0.0, run.baseline_score or 0.0)
+        self.assertTrue(any(candidate["benchmark_selected_count"] > 0 for candidate in run.candidate_results))
+        self.assertTrue(any(candidate["benchmark_hit_count"] > 0 for candidate in run.candidate_results))
+
     def test_repository_filters_samples_by_shortlist_and_context_fields(self) -> None:
         base_time = datetime(2026, 3, 5, tzinfo=timezone.utc)
         long_plan = self.plan_repository.create_plan(
@@ -439,6 +617,7 @@ class RecommendationSignalGatingTuningRouteTests(unittest.IsolatedAsyncioTestCas
             self.assertEqual(state_payload["latest_run"]["best_threshold"], 64.0)
             self.assertIn("active_tuning", state_payload)
             self.assertIn("shortlist_aggressiveness", state_payload["active_tuning"])
+            self.assertGreaterEqual(state_payload["latest_run"]["benchmark_sample_count"], 0)
 
             runs_response = await client.get("/api/signal-gating-tuning/runs?limit=5")
             self.assertEqual(runs_response.status_code, 200)
@@ -493,3 +672,82 @@ class RecommendationSignalGatingTuningRouteTests(unittest.IsolatedAsyncioTestCas
             self.assertIn("calibration_report", payload)
             self.assertIsNotNone(payload["calibration_report"])
             self.assertGreater(payload["calibration_report"]["sample_count"], 0)
+
+    def test_signal_gating_tuning_run_repository_handles_legacy_schema_without_benchmark_columns(self) -> None:
+        engine = create_engine(
+            "sqlite://",
+            future=True,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+            pool_reset_on_return=None,
+        )
+        Base.metadata.create_all(bind=engine)
+        session = Session(bind=engine)
+        try:
+            session.execute(text("DROP TABLE signal_gating_tuning_runs"))
+            session.execute(
+                text(
+                    """
+                    CREATE TABLE signal_gating_tuning_runs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        objective_name VARCHAR(120) NOT NULL,
+                        status VARCHAR(32) NOT NULL,
+                        applied BOOLEAN NOT NULL,
+                        filters_json TEXT NOT NULL,
+                        sample_count INTEGER NOT NULL,
+                        resolved_sample_count INTEGER NOT NULL,
+                        candidate_count INTEGER NOT NULL,
+                        baseline_threshold FLOAT,
+                        baseline_score FLOAT,
+                        best_threshold FLOAT,
+                        best_score FLOAT,
+                        winning_config_json TEXT NOT NULL,
+                        candidate_results_json TEXT NOT NULL,
+                        summary_json TEXT NOT NULL,
+                        artifact_json TEXT NOT NULL,
+                        error_message TEXT NOT NULL,
+                        started_at DATETIME,
+                        completed_at DATETIME,
+                        created_at DATETIME NOT NULL,
+                        updated_at DATETIME NOT NULL
+                    )
+                    """
+                )
+            )
+            session.commit()
+
+            repository = RecommendationSignalGatingTuningRunRepository(session)
+            created = repository.create_run(
+                RecommendationSignalGatingTuningRun(
+                    objective_name="signal_gating_tuning_raw_grid",
+                    status="completed",
+                    applied=False,
+                    sample_count=3,
+                    resolved_sample_count=2,
+                    benchmark_sample_count=7,
+                    scoreable_sample_count=9,
+                    candidate_count=4,
+                    baseline_threshold=60.0,
+                    baseline_score=1.25,
+                    best_threshold=64.0,
+                    best_score=2.5,
+                    winning_config={"threshold_offset": 4.0},
+                    candidate_results=[{"threshold": 64.0, "score": 2.5}],
+                    summary={"sample_count": 3},
+                    artifact={"benchmark_summary": {"benchmark_sample_count": 7}},
+                    started_at=datetime(2026, 4, 20, tzinfo=timezone.utc),
+                    completed_at=datetime(2026, 4, 20, 1, tzinfo=timezone.utc),
+                )
+            )
+            listed = repository.list_runs(limit=10)
+
+            self.assertIsNotNone(created.id)
+            self.assertEqual(created.benchmark_sample_count, 0)
+            self.assertEqual(created.scoreable_sample_count, 0)
+            self.assertEqual(len(listed), 1)
+            self.assertEqual(listed[0].best_threshold, 64.0)
+            self.assertEqual(listed[0].benchmark_sample_count, 0)
+            self.assertEqual(listed[0].scoreable_sample_count, 0)
+        finally:
+            session.close()
+            engine.dispose()

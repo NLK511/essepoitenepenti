@@ -93,6 +93,12 @@ MANUAL_FEATURE_RANGES: dict[str, tuple[float, float]] = {
     "short_bearish": (0.0, 5.0),
     "medium_bullish": (0.0, 5.0),
     "medium_bearish": (0.0, 5.0),
+    "rel_return_5d_vs_spy": (-0.25, 0.25),
+    "rel_return_20d_vs_spy": (-0.4, 0.4),
+    "rel_return_5d_vs_sector": (-0.25, 0.25),
+    "rel_return_20d_vs_sector": (-0.4, 0.4),
+    "volume_ratio_20": (0.0, 3.0),
+    "dollar_volume_ratio_20": (0.0, 3.0),
     "sentiment_score": (-1.0, 1.0),
     "enhanced_sentiment_score": (-1.0, 1.0),
     "news_sentiment_score": (-1.0, 1.0),
@@ -314,6 +320,7 @@ class ProposalService:
             "point_count": context.get("news_point_count", 0),
             "feeds_used": context.get("news_feeds_used", []),
             "feed_errors": context.get("news_feed_errors", []),
+            "query_diagnostics": context.get("news_query_diagnostics", {}),
             "source_count": context.get("source_count", 0),
             "context_count": context.get("context_count", 0),
             "sentiment": {
@@ -417,6 +424,7 @@ class ProposalService:
         diagnostics_section = {
             "problems": context.get("problems", []),
             "news_feed_errors": context.get("news_feed_errors", []),
+            "news_query_diagnostics": context.get("news_query_diagnostics", {}),
             "signal_feed_errors": context.get("signal_feed_errors", []),
             "summary_error": summary_error,
             "llm_error": context.get("llm_error"),
@@ -823,6 +831,7 @@ class ProposalService:
         context["sentiment_label"] = "PRICE_ONLY"
         context["news_feeds_used"] = []
         context["news_feed_errors"] = []
+        context["news_query_diagnostics"] = {}
         context["problems"] = problems
         return context
 
@@ -840,6 +849,7 @@ class ProposalService:
             "sentiment_volatility": 0.0,
             "news_feeds_used": [],
             "news_feed_errors": [],
+            "news_query_diagnostics": {},
             "summary_text": DEFAULT_SUMMARY_TEXT,
             "summary_method": DEFAULT_SUMMARY_METHOD,
             "summary_error": None,
@@ -1282,6 +1292,7 @@ class ProposalService:
             {
                 "news_feeds_used": feeds,
                 "news_feed_errors": bundle.feed_errors,
+                "news_query_diagnostics": bundle.query_diagnostics,
                 "source_count": len(feeds),
                 "context_count": len(sentiment.get("contexts", [])),
                 "news_point_count": len(news_items),

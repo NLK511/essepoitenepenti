@@ -36,8 +36,8 @@ For each proposal run, the system:
 6. computes technical and context-enriched features with `pandas`
 7. loads the latest shared macro and industry context snapshots through the context-native resolver layer
 8. builds recommendation plans, diagnostics, and audit payloads
-9. persists ticker signals, recommendation plans, run summaries, and artifacts
-10. emits explicit `no_action` plans when policy gates fail or evidence is too weak, while preserving cheap-scan-only rejections for non-shortlisted names
+9. persists ticker signals, decision samples, recommendation plans when downstream plan framing actually ran, run summaries, and artifacts
+10. emits explicit `no_action` plans when policy gates fail or evidence is too weak after shortlist/deep-analysis, while preserving cheap-scan-only rejections for non-shortlisted names as signal-plus-decision-sample audit records instead of full plans
 
 `ProposalService` still exists as a lower-level helper for price history, feature engineering, news/context enrichment, and diagnostics, but it is no longer the main run-execution path.
 
@@ -47,7 +47,8 @@ The current redesign path persists:
 - `MacroContextSnapshot`
 - `IndustryContextSnapshot`
 - `TickerSignalSnapshot`
-- `RecommendationPlan`
+- `RecommendationDecisionSample`
+- `RecommendationPlan` when the ticker actually reached downstream plan framing
 - `RecommendationPlanOutcome`
 
 Watchlist-backed jobs follow this staged flow:
@@ -55,7 +56,7 @@ Watchlist-backed jobs follow this staged flow:
 2. shortlist
 3. deep analysis
 4. calibration-aware confidence and policy gating
-5. persistence of signals and plans
+5. persistence of signals for all scanned names, decision samples for audit/tuning, and plans only for shortlisted names that actually entered plan framing
 
 ## How the research and tuning surfaces relate
 
@@ -182,8 +183,15 @@ The feature set includes market-derived inputs such as:
 - volatility
 - mean-reversion signals
 - liquidity and volume context
+- relative-strength comparisons versus the broad market and the ticker's sector ETF
+- simple volume-confirmation measures such as current volume versus its recent baseline
 
 The app persists both raw and normalized values.
+
+### Current implementation status
+- **implemented now:** broad-market relative strength (`SPY`) and sector-ETF relative strength over short and medium lookbacks, plus simple volume-ratio and dollar-volume-ratio confirmation features in ticker deep analysis
+- **implemented now:** if benchmark or sector ETF data is missing, deep analysis falls back to neutral values and records the gap in diagnostics instead of failing the whole recommendation
+- **not implemented yet:** broader feature expansion such as full breadth, gap/overnight behavior, or more advanced chop/compression regime measures
 
 ## Scoring and confidence
 
@@ -203,6 +211,11 @@ Confidence is a weighted aggregation of normalized components:
 - **technical clarity**
 - **execution clarity**
 
+Light feature wiring is now in place:
+- aligned relative strength versus `SPY` and sector can modestly lift directional confidence
+- stronger-than-normal volume participation can modestly lift technical and execution clarity
+- these features are used as supporting evidence, not as dominant drivers yet
+
 A data-quality cap can reduce the final confidence when warnings, weak coverage, or feed errors are present.
 
 ### Setup family
@@ -212,6 +225,10 @@ Each recommendation is classified into a setup family for later analysis and cal
 - breakout/breakdown
 - mean reversion
 - macro beneficiary/loser
+
+Light feature wiring is also in place here:
+- strong relative strength plus above-baseline volume can help confirm a continuation or breakout-style label
+- when those confirming features are absent, the older momentum/RSI rules still remain the main path
 
 ### Transmission analysis
 The methodology also tracks how well a trade idea is supported from macro or industry context down to the ticker.
@@ -251,7 +268,7 @@ Current evaluation records include fields such as:
 
 `watchlist` and `no_action` plans are also preserved as first-class evaluated outcomes. 
 
-To enable recall optimization, the evaluation pipeline actively tracks **phantom trades** for skipped setups that still retain executable framing. If a `no_action` or `watchlist` plan carries an intended direction plus valid entry, stop, and take-profit levels, the evaluator simulates it against live market data and records phantom outcomes such as `phantom_win`, `phantom_loss`, or `phantom_no_entry`. Cheap-scan-only rejected names that never received full trade framing remain ordinary non-trade outcomes. This preserves quota savings from shortlist gating while still letting tuning engines learn from near-miss setups.
+To enable recall optimization, the evaluation pipeline actively tracks **phantom trades** for skipped setups that still retain executable framing. If a `no_action` or `watchlist` plan carries an intended direction plus valid entry, stop, and take-profit levels, the evaluator simulates it against live market data and records phantom outcomes such as `phantom_win`, `phantom_loss`, or `phantom_no_entry`. Cheap-scan-only rejected names that never received full trade framing do not get synthetic plan rows or phantom outcomes; they remain signal-plus-decision-sample audit evidence. This preserves quota savings from shortlist gating while still letting tuning engines learn from genuine near-miss setups that actually reached downstream framing.
 
 If a trade plan is still unresolved after its generated horizon has elapsed, the evaluator resolves it as `expired` so stale plans do not remain indefinitely open.
 
@@ -259,9 +276,13 @@ If a trade plan is still unresolved after its generated horizon has elapsed, the
 
 ## Decision samples for tuning
 
-Every generated plan also produces a `RecommendationDecisionSample` row.
+Every scanned ticker may produce a `RecommendationDecisionSample` row.
 
 This is a tuning and review artifact, not a final outcome record.
+
+Implementation status:
+- **implemented now:** shortlisted names produce both plans and decision samples; cheap-scan-only rejected names still produce decision samples linked to their signal snapshot even when no plan row is created
+- **important boundary:** non-shortlisted decision samples are meant to explain shortlist behavior, not to pretend downstream trade framing happened
 
 It stores decision context such as:
 - action and decision type

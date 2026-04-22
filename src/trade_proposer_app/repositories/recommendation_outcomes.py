@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -82,6 +82,9 @@ class RecommendationOutcomeRepository:
         run_id: int | None = None,
         setup_family: str | None = None,
         resolved: str | None = None,
+        entry_touched: bool | None = None,
+        near_entry_miss: bool | None = None,
+        direction_worked_without_entry: bool | None = None,
         evaluated_after: datetime | None = None,
         evaluated_before: datetime | None = None,
         limit: int = 50,
@@ -105,6 +108,12 @@ class RecommendationOutcomeRepository:
             query = query.where(RecommendationOutcomeRecord.status == "resolved")
         elif resolved == "unresolved":
             query = query.where(RecommendationOutcomeRecord.status != "resolved")
+        if entry_touched is not None:
+            query = query.where(RecommendationOutcomeRecord.entry_touched.is_(entry_touched))
+        if near_entry_miss is not None:
+            query = query.where(RecommendationOutcomeRecord.near_entry_miss.is_(near_entry_miss))
+        if direction_worked_without_entry is not None:
+            query = query.where(RecommendationOutcomeRecord.direction_worked_without_entry.is_(direction_worked_without_entry))
         if evaluated_after is not None:
             query = query.where(RecommendationOutcomeRecord.evaluated_at >= self._normalize_datetime(evaluated_after))
         if evaluated_before is not None:
@@ -129,6 +138,64 @@ class RecommendationOutcomeRepository:
             for outcome_record, plan_record in rows
         }
 
+    def summarize_entry_miss_diagnostics(
+        self,
+        *,
+        ticker: str | None = None,
+        run_id: int | None = None,
+        setup_family: str | None = None,
+        evaluated_after: datetime | None = None,
+        evaluated_before: datetime | None = None,
+    ) -> dict[str, float | int | None]:
+        self.session.rollback()
+        query = select(
+            func.count().label("never_entered_count"),
+            func.sum(case((RecommendationOutcomeRecord.near_entry_miss.is_(True), 1), else_=0)).label("near_entry_miss_count"),
+            func.sum(case((RecommendationOutcomeRecord.direction_worked_without_entry.is_(True), 1), else_=0)).label("direction_worked_without_entry_count"),
+            func.sum(
+                case(
+                    ((RecommendationOutcomeRecord.near_entry_miss.is_(True) & RecommendationOutcomeRecord.direction_worked_without_entry.is_(True)), 1),
+                    else_=0,
+                )
+            ).label("near_entry_and_worked_count"),
+            func.avg(RecommendationOutcomeRecord.entry_miss_distance_percent).label("average_entry_miss_distance_percent"),
+            func.avg(
+                case(
+                    (RecommendationOutcomeRecord.near_entry_miss.is_(True), RecommendationOutcomeRecord.entry_miss_distance_percent),
+                    else_=None,
+                )
+            ).label("average_near_entry_miss_distance_percent"),
+        ).select_from(RecommendationOutcomeRecord).join(
+            RecommendationPlanRecord,
+            RecommendationOutcomeRecord.recommendation_plan_id == RecommendationPlanRecord.id,
+        ).where(RecommendationOutcomeRecord.entry_touched.is_(False))
+        if ticker:
+            query = query.where(RecommendationPlanRecord.ticker == ticker.upper())
+        if run_id is not None:
+            query = query.where(RecommendationOutcomeRecord.run_id == run_id)
+        if setup_family:
+            query = query.where(RecommendationOutcomeRecord.setup_family == setup_family)
+        if evaluated_after is not None:
+            query = query.where(RecommendationOutcomeRecord.evaluated_at >= self._normalize_datetime(evaluated_after))
+        if evaluated_before is not None:
+            query = query.where(RecommendationOutcomeRecord.evaluated_at <= self._normalize_datetime(evaluated_before))
+        row = self.session.execute(query).one()
+        never_entered_count = int(row.never_entered_count or 0)
+        near_entry_miss_count = int(row.near_entry_miss_count or 0)
+        direction_worked_without_entry_count = int(row.direction_worked_without_entry_count or 0)
+        near_entry_and_worked_count = int(row.near_entry_and_worked_count or 0)
+        return {
+            "never_entered_count": never_entered_count,
+            "near_entry_miss_count": near_entry_miss_count,
+            "direction_worked_without_entry_count": direction_worked_without_entry_count,
+            "near_entry_and_worked_count": near_entry_and_worked_count,
+            "near_entry_miss_rate_percent": round((near_entry_miss_count / never_entered_count) * 100.0, 1) if never_entered_count else None,
+            "direction_worked_without_entry_rate_percent": round((direction_worked_without_entry_count / never_entered_count) * 100.0, 1) if never_entered_count else None,
+            "near_entry_and_worked_rate_percent": round((near_entry_and_worked_count / never_entered_count) * 100.0, 1) if never_entered_count else None,
+            "average_entry_miss_distance_percent": round(float(row.average_entry_miss_distance_percent), 4) if row.average_entry_miss_distance_percent is not None else None,
+            "average_near_entry_miss_distance_percent": round(float(row.average_near_entry_miss_distance_percent), 4) if row.average_near_entry_miss_distance_percent is not None else None,
+        }
+
     @staticmethod
     def _normalize_datetime(value: datetime | None) -> datetime | None:
         if value is None:
@@ -147,6 +214,9 @@ class RecommendationOutcomeRepository:
         record.horizon_return_1d = outcome.horizon_return_1d
         record.horizon_return_3d = outcome.horizon_return_3d
         record.horizon_return_5d = outcome.horizon_return_5d
+        record.entry_miss_distance_percent = outcome.entry_miss_distance_percent
+        record.near_entry_miss = outcome.near_entry_miss
+        record.direction_worked_without_entry = outcome.direction_worked_without_entry
         record.max_favorable_excursion = outcome.max_favorable_excursion
         record.max_adverse_excursion = outcome.max_adverse_excursion
         record.realized_holding_period_days = outcome.realized_holding_period_days
@@ -169,6 +239,9 @@ class RecommendationOutcomeRepository:
             horizon_return_1d=record.horizon_return_1d,
             horizon_return_3d=record.horizon_return_3d,
             horizon_return_5d=record.horizon_return_5d,
+            entry_miss_distance_percent=record.entry_miss_distance_percent,
+            near_entry_miss=record.near_entry_miss,
+            direction_worked_without_entry=record.direction_worked_without_entry,
             max_favorable_excursion=record.max_favorable_excursion,
             max_adverse_excursion=record.max_adverse_excursion,
             realized_holding_period_days=record.realized_holding_period_days,

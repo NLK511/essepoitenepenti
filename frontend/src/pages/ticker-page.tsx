@@ -66,7 +66,7 @@ export function TickerPage() {
             <StatCard label="Stored plans" value={data.performance.app_plan_count} helper="Recommendation plans recorded for this ticker" />
             <StatCard label="Actionable plans" value={data.performance.actionable_plan_count} helper="Long and short plans only" />
             <StatCard label="Win / loss" value={`${data.performance.win_plan_count} / ${data.performance.loss_plan_count}`} helper="Resolved plan outcomes" />
-            <StatCard label="Open plans" value={data.performance.open_plan_count} helper="Plans still awaiting resolution" />
+            <StatCard label="Open plans" value={data.performance.open_plan_count} helper="Unresolved plans only; closed outcomes like expired are excluded" />
             <StatCard label="Avg confidence" value={data.performance.average_confidence !== null ? `${data.performance.average_confidence}%` : "—"} helper="Mean stored plan confidence" />
           </section>
 
@@ -110,6 +110,9 @@ export function TickerPage() {
                     <div className="helper-text">{latestPlan.thesis_summary || latestPlan.rationale_summary || "No thesis summary stored."}</div>
                     <div className="helper-text">Entry {latestPlan.entry_price_low ?? latestPlan.entry_price_high ?? "—"} · Stop {latestPlan.stop_loss ?? "—"} · Take {latestPlan.take_profit ?? "—"}</div>
                     <div className="helper-text">Relationships {relationshipSummary(latestPlan ?? {})} · Outcome {latestPlan.latest_outcome?.outcome ?? "open"} · Bias {latestOutcomeBias} · Regime {latestOutcomeRegime}</div>
+                    {latestPlan.latest_outcome?.entry_touched === false ? (
+                      <div className="helper-text">Entry miss {latestPlan.latest_outcome.entry_miss_distance_percent !== null ? `${latestPlan.latest_outcome.entry_miss_distance_percent.toFixed(2)}%` : "—"}{latestPlan.latest_outcome.near_entry_miss ? " · almost entered" : ""}{latestPlan.latest_outcome.direction_worked_without_entry ? " · then still moved right" : ""}</div>
+                    ) : null}
                   </div>
                 ) : (
                   <EmptyState message="No plans stored for this ticker yet." />
@@ -159,6 +162,9 @@ export function TickerPage() {
                         <div className="helper-text">{item.thesis_summary || item.rationale_summary || "No thesis summary stored."}</div>
                         <div className="helper-text top-gap-small">relationships {relationshipSummary(item)} · entry {item.entry_price_low ?? item.entry_price_high ?? "—"}{item.entry_price_high && item.entry_price_low && item.entry_price_high !== item.entry_price_low ? ` to ${item.entry_price_high}` : ""} · stop {item.stop_loss ?? "—"} · take {item.take_profit ?? "—"}</div>
                         <div className="helper-text">outcome {item.latest_outcome?.notes || (item.warnings.length > 0 ? `${item.warnings.length} warning(s)` : "—")} · analytics {item.latest_outcome ? `${outcomeBias} · ${outcomeRegime}` : "—"}</div>
+                        {item.latest_outcome?.entry_touched === false ? (
+                          <div className="helper-text">entry miss {item.latest_outcome.entry_miss_distance_percent !== null ? `${item.latest_outcome.entry_miss_distance_percent.toFixed(2)}%` : "—"}{item.latest_outcome.near_entry_miss ? " · almost entered" : ""}{item.latest_outcome.direction_worked_without_entry ? " · then still moved right" : ""}</div>
+                        ) : null}
                       </article>
                     );
                   })}

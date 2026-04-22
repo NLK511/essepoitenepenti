@@ -48,7 +48,7 @@ export function RecommendationQualityPage() {
       <PageHeader
         kicker="Advanced review"
         title="Recommendation quality summary"
-        subtitle="A consolidated operator view for calibration, baselines, evidence concentration, and walk-forward readiness, anchored to rolling time windows."
+        subtitle="A consolidated operator view for confidence quality, simple baselines, where results look strongest, and walk-forward readiness, anchored to rolling time windows."
         actions={<HelpHint tooltip="This page combines the metrics that matter for recommendation quality into one review surface." to="/docs?doc=recommendation-quality-improvement-plan" />}
       />
       {error ? <ErrorState message={error} /> : null}
@@ -56,10 +56,11 @@ export function RecommendationQualityPage() {
       {data && selectedSummary ? (
         <div className="stack-page">
           <section className="metrics-grid">
-            <StatCard label="Quality status" value={selectedSummary.status} helper={`${selectedSummary.window_label ?? "current"} window · ${selectedSummary.status_reason || `Updated ${formatDate(selectedSummary.generated_at)}`}`} tooltip="Overall recommendation-quality posture from calibration, baseline comparisons, evidence concentration, and walk-forward checks." tooltipTo={recommendationQualityDoc} />
+            <StatCard label="Quality status" value={selectedSummary.status} helper={`${selectedSummary.window_label ?? "current"} window · ${selectedSummary.status_reason || `Updated ${formatDate(selectedSummary.generated_at)}`}`} tooltip="Overall recommendation-quality posture from confidence quality, baseline comparisons, where results look strongest, and walk-forward checks." tooltipTo={recommendationQualityDoc} />
             <StatCard label="Resolved outcomes" value={selectedSummary.resolved_outcomes} helper="Current outcome sample" tooltip="The number of stored outcomes that have resolved strongly enough to contribute to current review metrics." tooltipTo={glossaryDoc("outcome-evaluation")} />
             <StatCard label="Win rate" value={selectedSummary.overall_win_rate_percent !== null ? `${selectedSummary.overall_win_rate_percent.toFixed(1)}%` : "—"} helper="Overall resolved win rate" tooltip="Overall win/loss rate across the currently reviewed resolved outcome set. This is useful, but it should be read alongside calibration and return metrics." tooltipTo={recommendationQualityDoc} />
-            <StatCard label="Evidence" value={selectedSummary.ready_for_expansion ? "ready" : "conservative"} helper="Whether strong cohorts separate clearly enough to trust broader usage" tooltip="Shows whether similar recommendation groups, called cohorts, are separating clearly enough to deserve more trust, or whether the evidence is still too thin and should stay conservative." tooltipTo={glossaryDoc("cohort")} />
+            <StatCard label="Where it works best" value={selectedSummary.ready_for_expansion ? "some groups stand out" : "nothing clear yet"} helper="Checks whether a few groups clearly beat the average" tooltip="This asks a simple question: do a few types of recommendations clearly look better than the rest? If yes, trust can expand there first. If not, stay selective and cautious." tooltipTo={glossaryDoc("evidence-concentration")} />
+            <StatCard label="Almost entered" value={selectedSummary.entry_miss_diagnostics.near_entry_miss_count} helper={selectedSummary.entry_miss_diagnostics.near_entry_and_worked_count > 0 ? `${selectedSummary.entry_miss_diagnostics.near_entry_and_worked_count} then still worked` : "Unfilled plans that came very close"} tooltip="Counts plans that never entered but came within the fixed near-miss threshold. This helps separate bad theses from entries that were likely too strict." tooltipTo={glossaryDoc("entry-stop-take-profit")} />
             <StatCard label="Walk-forward" value={data.summary.walk_forward_promotion_recommended ? "recommended" : data.summary.walk_forward_error ? "error" : "watch"} helper="Active tuning gate status" tooltip="Shows whether later time-slice validation supports promotion. Walk-forward validation checks whether a change still looks good on later data instead of only one pooled sample." tooltipTo={glossaryDoc("walk-forward-validation")} />
             <StatCard label="Families" value={selectedSummary.family_count} helper="Setup families reviewed" tooltip="The number of setup families included in the current review surfaces. Family-level checks help show whether one trade archetype is carrying or hurting results." tooltipTo={glossaryDoc("setup-family")} />
           </section>
@@ -87,7 +88,7 @@ export function RecommendationQualityPage() {
                     <div className="data-points top-gap-small">
                       <div className="data-point"><span className="data-point-label">actual actionable 5d</span><span className="data-point-value">{selectedSummary.actual_actionable_average_return_5d !== null ? selectedSummary.actual_actionable_average_return_5d.toFixed(3) : "—"}</span></div>
                       <div className="data-point"><span className="data-point-label">high-confidence 5d</span><span className="data-point-value">{selectedSummary.high_confidence_average_return_5d !== null ? selectedSummary.high_confidence_average_return_5d.toFixed(3) : "—"}</span></div>
-                      <div className="data-point"><span className="data-point-label">evidence ready</span><span className="data-point-value">{selectedSummary.ready_for_expansion ? "yes" : "no"}</span></div>
+                      <div className="data-point"><span className="data-point-label">clear bright spots?</span><span className="data-point-value">{selectedSummary.ready_for_expansion ? "yes" : "no"}</span></div>
                       <div className="data-point"><span className="data-point-label">families</span><span className="data-point-value">{selectedSummary.family_count}</span></div>
                     </div>
                     <div className="helper-text top-gap-small">{selectedSummary.status_reason}</div>
@@ -138,11 +139,23 @@ export function RecommendationQualityPage() {
 
           <section className="card-grid">
             <Card>
-              <SectionTitle kicker="Evidence concentration" title="Concentration posture" actions={<HelpHint tooltip="Evidence concentration shows where the strongest and weakest measured cohorts are, so operators know where to trust results more and where to stay skeptical." to={glossaryDoc("evidence-concentration")} />} />
+              <SectionTitle kicker="Where it works best" title="Which groups stand out" actions={<HelpHint tooltip="This section tries to answer one down-to-earth question: are a few groups clearly doing better than the rest, or is the picture still too mixed to trust much?" to={glossaryDoc("evidence-concentration")} />} />
               <div className="data-points top-gap-small">
-                <div className="data-point"><span className="data-point-label">strongest cohorts</span><span className="data-point-value">{selectedSummary.strongest_positive_count}</span></div>
-                <div className="data-point"><span className="data-point-label">weakest cohorts</span><span className="data-point-value">{selectedSummary.weakest_count}</span></div>
-                <div className="data-point"><span className="data-point-label">evidence ready</span><span className="data-point-value">{selectedSummary.ready_for_expansion ? "yes" : "no"}</span></div>
+                <div className="data-point"><span className="data-point-label">better-performing groups</span><span className="data-point-value">{selectedSummary.strongest_positive_count}</span></div>
+                <div className="data-point"><span className="data-point-label">weaker groups</span><span className="data-point-value">{selectedSummary.weakest_count}</span></div>
+                <div className="data-point"><span className="data-point-label">safe to widen trust?</span><span className="data-point-value">{selectedSummary.ready_for_expansion ? "yes" : "not yet"}</span></div>
+              </div>
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Entry quality" title="Almost entered, then moved" actions={<HelpHint tooltip="These numbers highlight plans that never filled, but came very close to entry. They help show when the idea may have been fine but the entry was too strict." to={glossaryDoc("entry-stop-take-profit")} />} />
+              <div className="data-points top-gap-small">
+                <div className="data-point"><span className="data-point-label">never entered</span><span className="data-point-value">{selectedSummary.entry_miss_diagnostics.never_entered_count}</span></div>
+                <div className="data-point"><span className="data-point-label">almost entered</span><span className="data-point-value">{selectedSummary.entry_miss_diagnostics.near_entry_miss_count}</span></div>
+                <div className="data-point"><span className="data-point-label">still moved right</span><span className="data-point-value">{selectedSummary.entry_miss_diagnostics.direction_worked_without_entry_count}</span></div>
+                <div className="data-point"><span className="data-point-label">almost entered + worked</span><span className="data-point-value">{selectedSummary.entry_miss_diagnostics.near_entry_and_worked_count}</span></div>
+                <div className="data-point"><span className="data-point-label">almost-entered rate</span><span className="data-point-value">{selectedSummary.entry_miss_diagnostics.near_entry_miss_rate_percent !== null ? `${selectedSummary.entry_miss_diagnostics.near_entry_miss_rate_percent.toFixed(1)}%` : "—"}</span></div>
+                <div className="data-point"><span className="data-point-label">avg miss distance</span><span className="data-point-value">{selectedSummary.entry_miss_diagnostics.average_entry_miss_distance_percent !== null ? `${selectedSummary.entry_miss_diagnostics.average_entry_miss_distance_percent.toFixed(2)}%` : "—"}</span></div>
               </div>
             </Card>
 
