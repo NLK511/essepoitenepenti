@@ -38,6 +38,12 @@ class AlpacaPaperClient:
         self._client = client
 
     def submit_order(self, payload: dict[str, Any]) -> AlpacaOrderSubmissionResult:
+        return self._request("post", "/v2/orders", payload=payload)
+
+    def cancel_order(self, order_id: str) -> AlpacaOrderSubmissionResult:
+        return self._request("delete", f"/v2/orders/{order_id}")
+
+    def _request(self, method: str, path: str, *, payload: dict[str, Any] | None = None) -> AlpacaOrderSubmissionResult:
         if not self.api_key or not self.api_secret:
             raise AlpacaPaperClientError("alpaca api credentials are missing")
 
@@ -46,13 +52,13 @@ class AlpacaPaperClient:
             "APCA-API-SECRET-KEY": self.api_secret,
             "Content-Type": "application/json",
         }
-        url = f"{self.base_url}/v2/orders"
-        body = json.dumps(payload)
+        url = f"{self.base_url}{path}"
+        body = json.dumps(payload) if payload is not None else None
         if self._client is not None:
-            response = self._client.post(url, content=body, headers=headers, timeout=30.0)
+            response = self._client.request(method.upper(), url, content=body, headers=headers, timeout=30.0)
         else:
             with httpx.Client(timeout=30.0) as client:
-                response = client.post(url, content=body, headers=headers)
+                response = client.request(method.upper(), url, content=body, headers=headers)
 
         try:
             response_payload = response.json()
@@ -61,14 +67,14 @@ class AlpacaPaperClient:
 
         if response.status_code >= 400:
             raise AlpacaPaperClientError(
-                f"alpaca order submission failed with status {response.status_code}",
+                f"alpaca request failed with status {response.status_code}",
                 status_code=response.status_code,
                 payload=response_payload if isinstance(response_payload, dict) else {"raw_body": response.text},
             )
 
         if not isinstance(response_payload, dict):
             raise AlpacaPaperClientError(
-                "alpaca order submission returned a non-object payload",
+                "alpaca request returned a non-object payload",
                 status_code=response.status_code,
                 payload={"raw_body": response.text},
             )

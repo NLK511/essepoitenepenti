@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { getJson } from "../api";
+import { getJson, postForm } from "../api";
+import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { BrokerOrderExecution } from "../types";
 import { formatDate } from "../utils";
@@ -31,6 +32,9 @@ export function BrokerOrdersPage() {
   const [searchParams, setSearchParams] = useSearchParams({ limit: "50" });
   const [orders, setOrders] = useState<BrokerOrderExecution[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [activeActionId, setActiveActionId] = useState<number | null>(null);
+  const { showToast } = useToast();
   const limit = Math.max(1, Number(searchParams.get("limit") ?? "50") || 50);
   const runId = searchParams.get("run_id");
   const selectedOrderId = searchParams.get("order_id");
@@ -39,6 +43,7 @@ export function BrokerOrdersPage() {
     async function load() {
       try {
         setError(null);
+        setActionError(null);
         const params = new URLSearchParams({ limit: String(limit) });
         if (runId) {
           params.set("run_id", runId);
@@ -72,6 +77,35 @@ export function BrokerOrdersPage() {
     [orders, selectedOrderId],
   );
 
+  async function reloadOrders(nextSelectedOrderId?: number) {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (runId) {
+      params.set("run_id", runId);
+    }
+    const loadedOrders = await getJson<BrokerOrderExecution[]>(`/api/broker-orders?${params.toString()}`);
+    setOrders(loadedOrders);
+    const nextOrderId = nextSelectedOrderId ?? loadedOrders[0]?.id ?? null;
+    if (nextOrderId) {
+      const next = new URLSearchParams(searchParams);
+      next.set("order_id", String(nextOrderId));
+      setSearchParams(next, { replace: true });
+    }
+  }
+
+  async function handleAction(orderId: number, action: "resubmit" | "cancel") {
+    setActionError(null);
+    setActiveActionId(orderId);
+    try {
+      await postForm(`/api/broker-orders/${orderId}/${action}`, {});
+      showToast({ message: `Order #${orderId} ${action}d`, tone: "success" });
+      await reloadOrders(orderId);
+    } catch (actionErr) {
+      setActionError(actionErr instanceof Error ? actionErr.message : `Failed to ${action} order`);
+    } finally {
+      setActiveActionId(null);
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -81,6 +115,7 @@ export function BrokerOrdersPage() {
         actions={<HelpHint tooltip="This page shows the latest broker submissions, their status, and the exact bracket order payloads sent to Alpaca paper trading." to="/docs?doc=alpaca-paper-order-execution-spec" />}
       />
       {error ? <ErrorState message={error} /> : null}
+      {actionError ? <ErrorState message={actionError} /> : null}
 
       <section className="metrics-grid top-gap">
         <StatCard label="Orders loaded" value={stats.total} helper="Visible broker-order records" />
@@ -155,6 +190,14 @@ export function BrokerOrdersPage() {
               <div className="helper-text">Created {formatDate(selectedOrder.created_at)} · Submitted {formatDate(selectedOrder.submitted_at)}</div>
               {selectedOrder.broker_order_id ? <div className="helper-text">Broker order id: {selectedOrder.broker_order_id}</div> : null}
               {selectedOrder.error_message ? <div className="alert alert-warning">{selectedOrder.error_message}</div> : null}
+              <div className="cluster top-gap-small">
+                {selectedOrder.status === "failed" || selectedOrder.status === "canceled" ? (
+                  <button type="button" className="button-secondary" disabled={activeActionId === selectedOrder.id} onClick={() => selectedOrder.id && void handleAction(selectedOrder.id, "resubmit")}>Resubmit</button>
+                ) : null}
+                {selectedOrder.status !== "canceled" && selectedOrder.status !== "filled" && selectedOrder.broker_order_id ? (
+                  <button type="button" className="button button-danger" disabled={activeActionId === selectedOrder.id} onClick={() => selectedOrder.id && void handleAction(selectedOrder.id, "cancel")}>Cancel</button>
+                ) : null}
+              </div>
 
               <Card>
                 <SectionTitle kicker="Request" title="Bracket order payload" subtitle="Exact JSON submitted to Alpaca paper trading." />

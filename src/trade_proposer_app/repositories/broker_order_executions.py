@@ -53,6 +53,41 @@ class BrokerOrderExecutionRepository:
             return existing
         return self.create(order)
 
+    def update(self, order: BrokerOrderExecution) -> BrokerOrderExecution:
+        if order.id is None:
+            raise ValueError("Broker order execution id is required for update")
+        record = self.session.get(BrokerOrderExecutionRecord, order.id)
+        if record is None:
+            raise ValueError(f"Broker order execution {order.id} not found")
+        record.broker = order.broker
+        record.account_mode = order.account_mode
+        record.recommendation_plan_id = order.recommendation_plan_id
+        record.recommendation_plan_ticker = order.recommendation_plan_ticker
+        record.run_id = order.run_id
+        record.job_id = order.job_id
+        record.ticker = order.ticker
+        record.action = order.action
+        record.side = order.side
+        record.order_type = order.order_type
+        record.time_in_force = order.time_in_force
+        record.quantity = order.quantity
+        record.notional_amount = order.notional_amount
+        record.entry_price = order.entry_price
+        record.stop_loss = order.stop_loss
+        record.take_profit = order.take_profit
+        record.status = order.status
+        record.broker_order_id = order.broker_order_id
+        record.client_order_id = order.client_order_id
+        record.submitted_at = self._normalize_datetime(order.submitted_at)
+        record.filled_at = self._normalize_datetime(order.filled_at)
+        record.canceled_at = self._normalize_datetime(order.canceled_at)
+        record.request_payload_json = self._dump(order.request_payload)
+        record.response_payload_json = self._dump(order.response_payload)
+        record.error_message = order.error_message
+        self.session.commit()
+        self.session.refresh(record)
+        return self._to_model(record)
+
     def get(self, execution_id: int) -> BrokerOrderExecution:
         record = self.session.get(BrokerOrderExecutionRecord, execution_id)
         if record is None:

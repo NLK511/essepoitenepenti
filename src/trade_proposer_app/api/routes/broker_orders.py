@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import BrokerOrderExecution
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
+from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClientError
+from trade_proposer_app.services.builders import create_order_execution_service
 
 router = APIRouter(prefix="/broker-orders", tags=["broker-orders"])
 
@@ -27,3 +29,25 @@ async def get_broker_order(execution_id: int, session: Session = Depends(get_db_
         return repository.get(execution_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/{execution_id}/resubmit")
+async def resubmit_broker_order(execution_id: int, session: Session = Depends(get_db_session)) -> BrokerOrderExecution:
+    service = create_order_execution_service(session)
+    try:
+        return service.resubmit_execution(execution_id)
+    except ValueError as exc:
+        message = str(exc)
+        raise HTTPException(status_code=404 if "not found" in message else 400, detail=message) from exc
+
+
+@router.post("/{execution_id}/cancel")
+async def cancel_broker_order(execution_id: int, session: Session = Depends(get_db_session)) -> BrokerOrderExecution:
+    service = create_order_execution_service(session)
+    try:
+        return service.cancel_execution(execution_id)
+    except AlpacaPaperClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        message = str(exc)
+        raise HTTPException(status_code=404 if "not found" in message else 400, detail=message) from exc

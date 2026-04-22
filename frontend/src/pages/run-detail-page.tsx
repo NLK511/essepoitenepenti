@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { deleteJson, getJson } from "../api";
+import { deleteJson, getJson, postForm } from "../api";
 import {
   matchedRelationshipsFromPlan,
   relationshipSummary,
@@ -95,7 +95,9 @@ export function RunDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [reviewSection, setReviewSection] = useState<"overview" | "shortlist" | "signals" | "plans" | "context">("overview");
+  const [orderActionError, setOrderActionError] = useState<string | null>(null);
+  const [activeOrderActionId, setActiveOrderActionId] = useState<number | null>(null);
+  const [reviewSection, setReviewSection] = useState<"overview" | "shortlist" | "signals" | "plans" | "context" | "broker-orders">("overview");
 
   useEffect(() => {
     async function load() {
@@ -105,6 +107,7 @@ export function RunDetailPage() {
       }
       try {
         setError(null);
+        setOrderActionError(null);
         const runDetail = await getJson<RunDetailResponse>(`/api/runs/${runId}`);
         setDetail(runDetail);
         const jobs = await getJson<Job[]>("/api/jobs");
@@ -142,6 +145,24 @@ export function RunDetailPage() {
       setDeleteError(deleteErr instanceof Error ? deleteErr.message : "Failed to delete run");
     } finally {
       setIsDeleting(false);
+    }
+  }
+
+  async function handleOrderAction(orderId: number, action: "resubmit" | "cancel") {
+    if (!runId) {
+      return;
+    }
+    setOrderActionError(null);
+    setActiveOrderActionId(orderId);
+    try {
+      await postForm(`/api/broker-orders/${orderId}/${action}`, {});
+      showToast({ message: `Order #${orderId} ${action}d`, tone: "success" });
+      const runDetail = await getJson<RunDetailResponse>(`/api/runs/${runId}`);
+      setDetail(runDetail);
+    } catch (actionErr) {
+      setOrderActionError(actionErr instanceof Error ? actionErr.message : `Failed to ${action} order`);
+    } finally {
+      setActiveOrderActionId(null);
     }
   }
 
@@ -205,6 +226,7 @@ export function RunDetailPage() {
       />
       {deleteError ? <ErrorState message={deleteError} /> : null}
       {error ? <ErrorState message={error} /> : null}
+      {orderActionError ? <ErrorState message={orderActionError} /> : null}
       {!detail && !error ? <LoadingState message="Loading run detail…" /> : null}
       {detail ? (
         <div className="stack-page">
@@ -244,7 +266,7 @@ export function RunDetailPage() {
             ) : null}
           </Card>
 
-          {detail.ticker_signal_snapshots.length > 0 || detail.recommendation_plans.length > 0 || detail.macro_context_snapshots.length > 0 || detail.industry_context_snapshots.length > 0 ? (
+          {detail.ticker_signal_snapshots.length > 0 || detail.recommendation_plans.length > 0 || detail.broker_order_executions.length > 0 || detail.macro_context_snapshots.length > 0 || detail.industry_context_snapshots.length > 0 ? (
             <Card>
               <SectionTitle
                 kicker="Redesign orchestration"
@@ -265,6 +287,7 @@ export function RunDetailPage() {
                   { value: "shortlist", label: "Shortlist" },
                   { value: "signals", label: "Signals" },
                   { value: "plans", label: "Plans" },
+                  { value: "broker-orders", label: "Broker orders" },
                   { value: "context", label: "Context" },
                 ]}
               />
@@ -620,6 +643,37 @@ export function RunDetailPage() {
                           ))}
                       </div>
                     ) : null}
+                  </section>
+                ) : null}
+
+                {reviewSection === "broker-orders" && detail.broker_order_executions.length > 0 ? (
+                  <section>
+                    <div className="section-heading">
+                      <strong>Broker orders created by this run</strong>
+                    </div>
+                    <div className="data-stack top-gap-small">
+                      {detail.broker_order_executions.map((order) => (
+                        <div key={order.id ?? order.client_order_id} className="data-card">
+                          <div className="data-card-header">
+                            <div>
+                              <div className="data-card-title">{order.ticker} · {order.action}</div>
+                              <div className="helper-text">order #{order.id ?? "—"} · plan #{order.recommendation_plan_id} · run {order.run_id ?? "—"}</div>
+                            </div>
+                            <Badge tone={order.status === "failed" ? "danger" : order.status === "canceled" ? "warning" : "ok"}>{order.status}</Badge>
+                          </div>
+                          <div className="helper-text top-gap-small">qty {order.quantity} · entry {order.entry_price ?? "—"} · stop {order.stop_loss ?? "—"} · take profit {order.take_profit ?? "—"}</div>
+                          <div className="cluster top-gap-small">
+                            {order.status === "failed" || order.status === "canceled" ? (
+                              <button type="button" className="button-secondary" disabled={activeOrderActionId === order.id} onClick={() => order.id && void handleOrderAction(order.id, "resubmit")}>Resubmit</button>
+                            ) : null}
+                            {order.status !== "canceled" && order.status !== "filled" && order.broker_order_id ? (
+                              <button type="button" className="button button-danger" disabled={activeOrderActionId === order.id} onClick={() => order.id && void handleOrderAction(order.id, "cancel")}>Cancel</button>
+                            ) : null}
+                            {order.run_id ? <Link to={`/broker-orders?run_id=${order.run_id}&order_id=${order.id ?? ""}`} className="button-subtle">Open in broker orders</Link> : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </section>
                 ) : null}
 

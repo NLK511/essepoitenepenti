@@ -15,6 +15,7 @@ from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.domain.models import (
     AppPreflightReport,
+    BrokerOrderExecution,
     EvaluationRunResult,
     IndustryContextSnapshot,
     MacroContextSnapshot,
@@ -28,6 +29,7 @@ from trade_proposer_app.domain.models import (
     WorkerHeartbeat,
 )
 from trade_proposer_app.persistence.models import Base, RunRecord
+from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
@@ -50,6 +52,28 @@ class StubAppPreflightService:
                 PreflightCheck(name="weights_file", status="ok", message="weights file available"),
             ],
         )
+
+
+class StubAlpacaPaperClient:
+    def __init__(self, *args, **kwargs) -> None:
+        self.submitted_requests: list[dict[str, object]] = []
+        self.canceled_order_ids: list[str] = []
+
+    def submit_order(self, payload: dict[str, object]):
+        self.submitted_requests.append(payload)
+        return type(
+            "SubmissionResult",
+            (),
+            {"broker_order_id": "alpaca-order-99", "broker_status": "accepted", "payload": {"id": "alpaca-order-99", "status": "accepted"}},
+        )()
+
+    def cancel_order(self, order_id: str):
+        self.canceled_order_ids.append(order_id)
+        return type(
+            "CancelResult",
+            (),
+            {"broker_order_id": order_id, "broker_status": "canceled", "payload": {"id": order_id, "status": "canceled"}},
+        )()
 
 
 class RouteTests(unittest.IsolatedAsyncioTestCase):
@@ -756,7 +780,87 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail_payload["macro_context_snapshots"], [])
         self.assertEqual(detail_payload["industry_context_snapshots"], [])
         self.assertEqual(detail_payload["ticker_signal_snapshots"], [])
+        self.assertEqual(detail_payload["broker_order_executions"], [])
         self.assertEqual(len(detail_payload["recommendation_plans"]), 1)
+
+    async def test_run_detail_includes_broker_orders_and_manual_actions_work(self) -> None:
+        run_id = self.seed_run_with_diagnostics()
+        session = Session(bind=self.engine)
+        try:
+            settings_repo = SettingsRepository(session)
+            settings_repo.upsert_provider_credential("alpaca", "paper-key", "paper-secret")
+            job = JobRepository(session).list_all()[0]
+            plan = RecommendationPlanRepository(session).list_plans(run_id=run_id, limit=10)[0]
+            broker_orders = BrokerOrderExecutionRepository(session)
+            failed_order = broker_orders.create(
+                BrokerOrderExecution(
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker=plan.ticker,
+                    run_id=run_id,
+                    job_id=job.id,
+                    ticker=plan.ticker,
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    time_in_force="gtc",
+                    quantity=10,
+                    notional_amount=1010.0,
+                    entry_price=101.0,
+                    stop_loss=97.0,
+                    take_profit=111.0,
+                    status="failed",
+                    client_order_id="tp-run-1-plan-1-aapl",
+                    request_payload={"symbol": "AAPL", "qty": 10, "limit_price": 101.0, "client_order_id": "tp-run-1-plan-1-aapl"},
+                    response_payload={"id": "alpaca-order-1", "status": "rejected"},
+                    error_message="alpaca order submission failed",
+                )
+            )
+            open_order = broker_orders.create(
+                BrokerOrderExecution(
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker=plan.ticker,
+                    run_id=run_id,
+                    job_id=job.id,
+                    ticker=plan.ticker,
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    time_in_force="gtc",
+                    quantity=10,
+                    notional_amount=1010.0,
+                    entry_price=101.0,
+                    stop_loss=97.0,
+                    take_profit=111.0,
+                    status="submitted",
+                    broker_order_id="alpaca-order-2",
+                    client_order_id="tp-run-1-plan-1-aapl-live",
+                    submitted_at=datetime.now(timezone.utc),
+                    request_payload={"symbol": "AAPL", "qty": 10, "limit_price": 101.0, "client_order_id": "tp-run-1-plan-1-aapl-live"},
+                    response_payload={"id": "alpaca-order-2", "status": "accepted"},
+                )
+            )
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        with patch("trade_proposer_app.services.builders.AlpacaPaperClient", StubAlpacaPaperClient):
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                run_detail = await client.get(f"/api/runs/{run_id}")
+                resubmit = await client.post(f"/api/broker-orders/{failed_order.id}/resubmit")
+                cancel = await client.post(f"/api/broker-orders/{open_order.id}/cancel")
+                run_detail_after = await client.get(f"/api/runs/{run_id}")
+
+        self.assertEqual(run_detail.status_code, 200)
+        self.assertEqual(len(run_detail.json()["broker_order_executions"]), 2)
+        self.assertEqual(resubmit.status_code, 200)
+        self.assertEqual(resubmit.json()["status"], "accepted")
+        self.assertEqual(cancel.status_code, 200)
+        self.assertEqual(cancel.json()["status"], "canceled")
+        self.assertTrue(any(order["status"] == "canceled" for order in run_detail_after.json()["broker_order_executions"]))
 
     async def test_delete_run_via_api(self) -> None:
         run_id = self.seed_run_with_diagnostics()

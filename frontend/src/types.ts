@@ -755,6 +755,7 @@ export interface RunDetailResponse {
   industry_context_snapshots: IndustryContextSnapshot[];
   ticker_signal_snapshots: TickerSignalSnapshot[];
   recommendation_plans: RecommendationPlan[];
+  broker_order_executions: BrokerOrderExecution[];
 }
 
 export interface EvaluationRunResult {

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import Run
+from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import ACTIVE_RUN_STATUSES, RunRepository
@@ -31,6 +32,7 @@ async def get_run(run_id: int, session: Session = Depends(get_db_session)) -> di
         "industry_context_snapshots": context_repository.list_industry_context_snapshots(run_id=run_id, limit=200),
         "ticker_signal_snapshots": context_repository.list_ticker_signal_snapshots(run_id=run_id, limit=200),
         "recommendation_plans": recommendation_plans.list_plans(run_id=run_id, limit=200),
+        "broker_order_executions": BrokerOrderExecutionRepository(session).list_by_run(run_id=run_id, limit=200),
     }
 
 

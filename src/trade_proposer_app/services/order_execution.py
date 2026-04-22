@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from trade_proposer_app.domain.models import BrokerOrderExecution, RecommendationPlan
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
@@ -152,32 +153,12 @@ class OrderExecutionService:
                 client_order_id=client_order_id,
                 request_payload=request_payload,
             )
-
-            try:
-                result = self.client.submit_order(request_payload)
-                stored_order.broker_order_id = result.broker_order_id
-                stored_order.status = result.broker_status or "submitted"
-                stored_order.submitted_at = datetime.now(timezone.utc)
-                stored_order.response_payload = result.payload
-                stored_order.error_message = ""
-                persisted = self.executions.create(stored_order)
-                ordered_results.append(persisted)
+            ordered_results.append(self._submit_candidate(stored_order))
+            latest_order = ordered_results[-1]
+            if latest_order.status in {"accepted", "filled", "submitted"}:
                 summary["submitted_order_count"] = int(summary["submitted_order_count"]) + 1
-            except AlpacaPaperClientError as exc:
-                warnings.append(str(exc))
+            else:
                 summary["failed_order_count"] = int(summary["failed_order_count"]) + 1
-                stored_order.status = "failed"
-                stored_order.error_message = str(exc)
-                stored_order.response_payload = exc.payload
-                stored_order.submitted_at = datetime.now(timezone.utc)
-                ordered_results.append(self.executions.create(stored_order))
-            except Exception as exc:  # pragma: no cover - defensive catch for broker/client integration
-                warnings.append(str(exc))
-                summary["failed_order_count"] = int(summary["failed_order_count"]) + 1
-                stored_order.status = "failed"
-                stored_order.error_message = str(exc)
-                stored_order.submitted_at = datetime.now(timezone.utc)
-                ordered_results.append(self.executions.create(stored_order))
 
         summary["skipped_order_count"] = sum(skip_reasons.values())
         summary["skips"] = [{"reason": reason, "count": count} for reason, count in sorted(skip_reasons.items())]
@@ -185,6 +166,113 @@ class OrderExecutionService:
         summary["warnings"] = warnings
         summary["warnings_found"] = bool(warnings or skip_reasons)
         return OrderExecutionOutcome(summary=summary, orders=ordered_results)
+
+    def resubmit_execution(self, execution_id: int) -> BrokerOrderExecution:
+        existing = self.executions.get(execution_id)
+        if existing.status not in {"failed", "canceled"}:
+            raise ValueError("only failed or canceled broker orders can be resubmitted")
+        if existing.quantity <= 0:
+            raise ValueError("only orders with a positive quantity can be resubmitted")
+        request_payload = dict(existing.request_payload)
+        if "symbol" not in request_payload or "qty" not in request_payload or "limit_price" not in request_payload:
+            raise ValueError("stored request payload is incomplete and cannot be resubmitted")
+        client_order_id = f"{existing.client_order_id}-retry-{uuid4().hex[:8]}"
+        request_payload["client_order_id"] = client_order_id
+        candidate = BrokerOrderExecution(
+            broker=existing.broker,
+            account_mode=existing.account_mode,
+            recommendation_plan_id=existing.recommendation_plan_id,
+            recommendation_plan_ticker=existing.recommendation_plan_ticker,
+            run_id=existing.run_id,
+            job_id=existing.job_id,
+            ticker=existing.ticker,
+            action=existing.action,
+            side=existing.side,
+            order_type=existing.order_type,
+            time_in_force=existing.time_in_force,
+            quantity=existing.quantity,
+            notional_amount=existing.notional_amount,
+            entry_price=existing.entry_price,
+            stop_loss=existing.stop_loss,
+            take_profit=existing.take_profit,
+            status="queued",
+            client_order_id=client_order_id,
+            request_payload=request_payload,
+        )
+        return self._submit_candidate(candidate)
+
+    def cancel_execution(self, execution_id: int) -> BrokerOrderExecution:
+        existing = self.executions.get(execution_id)
+        if existing.broker_order_id is None:
+            raise ValueError("broker order id is missing, so the order cannot be canceled")
+        if existing.status == "canceled":
+            raise ValueError("broker order is already canceled")
+        if existing.status == "filled":
+            raise ValueError("filled orders cannot be canceled")
+        client = self._ensure_client()
+        result = client.cancel_order(existing.broker_order_id)
+        canceled = BrokerOrderExecution(
+            id=existing.id,
+            broker=existing.broker,
+            account_mode=existing.account_mode,
+            recommendation_plan_id=existing.recommendation_plan_id,
+            recommendation_plan_ticker=existing.recommendation_plan_ticker,
+            run_id=existing.run_id,
+            job_id=existing.job_id,
+            ticker=existing.ticker,
+            action=existing.action,
+            side=existing.side,
+            order_type=existing.order_type,
+            time_in_force=existing.time_in_force,
+            quantity=existing.quantity,
+            notional_amount=existing.notional_amount,
+            entry_price=existing.entry_price,
+            stop_loss=existing.stop_loss,
+            take_profit=existing.take_profit,
+            status="canceled",
+            broker_order_id=existing.broker_order_id,
+            client_order_id=existing.client_order_id,
+            submitted_at=existing.submitted_at,
+            filled_at=existing.filled_at,
+            canceled_at=datetime.now(timezone.utc),
+            request_payload=existing.request_payload,
+            response_payload=result.payload,
+            error_message="",
+            created_at=existing.created_at,
+            updated_at=datetime.now(timezone.utc),
+        )
+        return self.executions.update(canceled)
+
+    def _submit_candidate(self, candidate: BrokerOrderExecution) -> BrokerOrderExecution:
+        self._ensure_client()
+        try:
+            result = self.client.submit_order(candidate.request_payload)  # type: ignore[union-attr]
+            candidate.broker_order_id = result.broker_order_id
+            candidate.status = result.broker_status or "submitted"
+            candidate.submitted_at = datetime.now(timezone.utc)
+            candidate.response_payload = result.payload
+            candidate.error_message = ""
+            return self.executions.create(candidate)
+        except AlpacaPaperClientError as exc:
+            candidate.status = "failed"
+            candidate.error_message = str(exc)
+            candidate.response_payload = exc.payload
+            candidate.submitted_at = datetime.now(timezone.utc)
+            return self.executions.create(candidate)
+        except Exception as exc:  # pragma: no cover - defensive catch for broker/client integration
+            candidate.status = "failed"
+            candidate.error_message = str(exc)
+            candidate.submitted_at = datetime.now(timezone.utc)
+            return self.executions.create(candidate)
+
+    def _ensure_client(self) -> AlpacaPaperClient:
+        if self.client is not None:
+            return self.client
+        alpaca_credential = self.settings.get_provider_credential_map().get("alpaca")
+        if alpaca_credential is None:
+            raise ValueError("alpaca provider credential is missing")
+        self.client = AlpacaPaperClient(api_key=alpaca_credential.api_key, api_secret=alpaca_credential.api_secret)
+        return self.client
 
     @staticmethod
     def _bump(counter: dict[str, int], reason: str) -> None:
