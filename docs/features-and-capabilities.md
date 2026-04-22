@@ -32,6 +32,7 @@ It is not yet a proven short-horizon prediction engine.
 - Evaluate recommendation plans through the app-native price-history path, including terminal `expired` handling once a plan passes its intended horizon without a win/loss resolution.
 - Track **phantom trades** for `no_action` or `watchlist` plans that retain an intended direction and valid trade levels, evaluating them against real market data to produce outcomes such as `phantom_win`, `phantom_loss`, or `phantom_no_entry` for recall optimization in tuning engines.
 - Automatically submit actionable `long`/`short` plans to Alpaca paper trading using a fixed $1,000 notional cap per plan, limit bracket orders, and persisted broker-order records.
+- Inspect broker-order submissions, payloads, and statuses through the Broker Orders page.
 - Use decision samples to review near-misses, shortlist behavior, triage priority, and richer filters such as shortlist state, setup family, transmission bias, and context regime.
 - Use the calibration report endpoint and the research-page calibration tab to inspect confidence reliability, Brier score, and expected calibration error.
 - Use ticker drill-down pages to inspect plan history and latest outcomes for a single name.

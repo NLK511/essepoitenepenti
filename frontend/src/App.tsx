@@ -12,6 +12,7 @@ import { ContextSnapshotDetailPage } from "./pages/context-snapshot-detail-page"
 import { JobsPage } from "./pages/jobs-page";
 import { RecommendationDecisionSamplesPage } from "./pages/recommendation-decision-samples-page";
 import { RecommendationPlansPage } from "./pages/recommendation-plans-page";
+import { BrokerOrdersPage } from "./pages/broker-orders-page";
 import { ResearchPage } from "./pages/research-page";
 import { RecommendationQualityPage } from "./pages/recommendation-quality-page";
 import { SignalGatingJobPage } from "./pages/signal-gating-job-page";
@@ -62,6 +63,7 @@ export default function App() {
           <Route path="jobs/recommendation-plans" element={<RecommendationPlansPage />} />
           <Route path="jobs/decision-samples" element={<Navigate to="/research/decision-samples" replace />} />
           <Route path="jobs/debugger" element={<DebuggerPage />} />
+          <Route path="broker-orders" element={<BrokerOrdersPage />} />
           <Route path="watchlists" element={<Navigate to="/jobs/watchlists" replace />} />
           <Route path="history" element={<Navigate to="/jobs/recommendation-plans" replace />} />
           <Route path="ticker-signals" element={<Navigate to="/jobs/ticker-signals" replace />} />

@@ -14,6 +14,7 @@ SPA_ROUTE_PREFIXES = {
     "jobs",
     "history",
     "debugger",
+    "broker-orders",
     "settings",
     "docs",
     "context",

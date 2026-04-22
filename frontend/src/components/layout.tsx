@@ -46,6 +46,7 @@ const navSections: NavSection[] = [
       { to: "/jobs/ticker-signals", label: "Ticker signals", shortLabel: "Signals", icon: "≈" },
       { to: "/jobs/recommendation-plans", label: "Recommendation plans", shortLabel: "Plans", icon: "↗" },
       { to: "/jobs/debugger", label: "Run debugger", shortLabel: "Debug", icon: "⌘" },
+      { to: "/broker-orders", label: "Broker orders", shortLabel: "Orders", icon: "⟐" },
       { to: "/context", label: "Context review", shortLabel: "Context", icon: "◔" },
     ],
   },
@@ -175,6 +176,13 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
       eyebrow: "Review",
       title: "Run debugger",
       description: "Trace what each run scanned, shortlisted, persisted, and warned about.",
+    };
+  }
+  if (pathname.startsWith("/broker-orders")) {
+    return {
+      eyebrow: "Execution audit",
+      title: "Broker orders",
+      description: "Inspect Alpaca paper submissions, payloads, and statuses for plan-driven trades.",
     };
   }
   if (pathname.startsWith("/runs/")) {
