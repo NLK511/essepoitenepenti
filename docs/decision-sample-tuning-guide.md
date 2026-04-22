@@ -62,6 +62,9 @@ These fields tell you whether the issue happened **before** the final trade deci
 Implementation status:
 - **shortlisted samples** usually have a linked recommendation plan because downstream framing ran
 - **non-shortlisted samples** may exist without any recommendation plan row because the ticker never reached downstream plan framing
+- these discarded samples now also carry benchmark follow-through labels, so signal-gating tuning can detect missed opportunities even when no plan row was created
+- the decision-samples page can filter benchmark hits, benchmark misses, and pending benchmark rows so review can focus on follow-through labels before changing gates
+- plan-linked outcomes still matter for stop-loss / take-profit truth, but decision-sample-only rows are no longer label-less audit records
 
 If strong samples were never shortlisted, the problem is probably in:
 - shortlist rules
@@ -125,19 +128,20 @@ Possible actions:
 
 1. Filter to `near_miss` and `high` priority samples.
 2. If a linked recommendation plan exists, open it. If not, stay on the signal / shortlist evidence because the ticker never reached downstream framing.
-3. Compare:
+3. For signal-gating tuning defaults, prefer the sample window since the latest applied gating run so you are judging the currently active regime rather than an arbitrary newest-N slice.
+4. Compare:
    - raw confidence
    - calibrated confidence
    - threshold
    - gap
    - shortlist decision
    - decision reason
-4. Decide whether the problem is:
+5. Decide whether the problem is:
    - shortlist selection
    - calibration
    - thresholding
    - data quality
-5. Change one lever at a time.
+6. Change one lever at a time.
 
 ## Important rule
 

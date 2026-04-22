@@ -21,6 +21,7 @@ It is not yet a proven short-horizon prediction engine.
 ### Jobs, runs, and operations
 - Create, edit, delete, schedule, and execute jobs.
 - Run proposal generation, recommendation evaluation, plan-generation tuning, and macro/industry refreshes through the same worker-backed run system.
+- Bars-data-refresh runs retry unresolved ticker fetches a bounded number of times, persist per-ticker retry diagnostics in the run artifact, and finish with warnings instead of aborting the whole run when some tickers still fail.
 - Inspect queued, running, completed, failed, canceled, and warning-heavy runs in the debugger and run detail pages.
 - Review persisted run timing, summaries, artifacts, warnings, and failure metadata.
 - Delete individual runs from the debugger.
@@ -57,6 +58,7 @@ It is not yet a proven short-horizon prediction engine.
   3. deep analysis for shortlisted names only
   4. persistence of signals for all scanned names, decision samples for audit/tuning, and plans only when downstream plan framing actually ran; cheap-scan-only rejected names stay as signal-plus-decision-sample evidence, while phantom-trade-eligible rejected plans are reserved for shortlisted names that reached real trade framing but still ended as `no_action` or `watchlist`
 - **Hybrid Market Data Fetching:** Cheap scan prefers local database bars (including 1m-to-daily resampling), retries transient remote failures, and still scores the ticker from local data when local history is sufficient. Deep analysis prefers fresh remote bars in live runs, retries transient remote failures, and falls back to persisted local bars before surfacing deep analysis as unavailable.
+- **Relative-strength and volume-confirmation features:** ticker deep analysis now computes short and medium lookback relative returns versus `SPY` and a sector ETF proxy when available, plus simple `volume_ratio_20` and `dollar_volume_ratio_20` confirmation features. Missing benchmark or sector data degrades to neutral diagnostics instead of aborting the run.
 - **Market-Data Diagnostics In Details:** cheap-scan and deep-analysis fetch diagnostics are stored in signal details, plan details, and run/job artifact details. They are intentionally not added to compact summary rows.
 - **Lazy Hydration:** Remote Yahoo bars fetched for cheap scan or deep analysis are persisted back to the local database when possible to accelerate future runs.
 - Browse signals and plans outside the run page and filter them by `run_id`.
@@ -98,5 +100,7 @@ And one analytical caution still matters:
 
 - `operator-page-field-guide.md` — where these workflows show up in the UI
 - `recommendation-methodology.md` — how the pipeline works
+- `bars-refresh-spec.md` — canonical bars-data-refresh run behavior
+- `news-provider-reliability-spec.md` — canonical ticker-news retry and fallback diagnostics behavior
 - `raw-details-reference.md` — stored fields and payloads
 - `roadmap.md` — current priorities

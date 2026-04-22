@@ -299,12 +299,23 @@ class PlanGenerationTuningService:
         eligible: list[EligibleTuningRecord] = []
         normalized_setup_family = str(setup_family or "").strip().lower() or None
         for plan in plans:
-            if (plan.action or "") not in {"long", "short", "no_action"} or plan.id is None:
+            if (plan.action or "") not in {"long", "short", "no_action", "watchlist"} or plan.id is None:
                 continue
             outcome = outcome_map.get(plan.id)
-            if outcome is None or outcome.outcome not in {"win", "loss", "phantom_win", "phantom_loss"}:
+            if outcome is None:
                 continue
-            signal_breakdown = plan.signal_breakdown if isinstance(plan.signal_breakdown, dict) else {}
+            is_direct_trade = plan.action in {"long", "short"}
+            is_phantom_trade = plan.action in {"no_action", "watchlist"}
+            if is_direct_trade and outcome.outcome not in {"win", "loss"}:
+                continue
+            if is_phantom_trade and outcome.outcome not in {"phantom_win", "phantom_loss"}:
+                continue
+            if not is_direct_trade and not is_phantom_trade:
+                continue
+            signal_breakdown = self._plan_signal_breakdown(plan)
+            intended_action = str(signal_breakdown.get("intended_action") or "").strip().lower() or None
+            if is_phantom_trade and intended_action not in {"long", "short"}:
+                continue
             transmission_summary = signal_breakdown.get("transmission_summary") if isinstance(signal_breakdown.get("transmission_summary"), dict) else {}
             plan_setup_family = str(signal_breakdown.get("setup_family") or outcome.setup_family or "").strip().lower()
             if normalized_setup_family and plan_setup_family != normalized_setup_family:
@@ -410,9 +421,8 @@ class PlanGenerationTuningService:
         if entry is None or entry <= 0 or record.plan.stop_loss is None or record.plan.take_profit is None:
             return None
             
-        intended_action = None
-        if isinstance(record.plan.signal_breakdown, dict):
-            intended_action = record.plan.signal_breakdown.get("intended_action")
+        signal_breakdown = self._plan_signal_breakdown(record.plan)
+        intended_action = str(signal_breakdown.get("intended_action") or "").strip().lower() or None
         effective_action = intended_action if record.plan.action in {"no_action", "watchlist"} and intended_action in {"long", "short"} else record.plan.action
         
         if effective_action not in {"long", "short"}:
@@ -447,6 +457,22 @@ class PlanGenerationTuningService:
                 return None
             return ("win" if float(horizon_return) > 0 else "loss"), reward_pct, risk_pct
         return ("win" if take_reached else "loss"), reward_pct, risk_pct
+
+    @staticmethod
+    def _plan_signal_breakdown(plan: RecommendationPlan) -> dict[str, object]:
+        signal_breakdown = plan.signal_breakdown
+        if isinstance(signal_breakdown, dict):
+            return signal_breakdown
+        model_dump = getattr(signal_breakdown, "model_dump", None)
+        if callable(model_dump):
+            dumped = model_dump()
+            if isinstance(dumped, dict):
+                return dumped
+        if hasattr(signal_breakdown, "dict") and callable(getattr(signal_breakdown, "dict")):
+            dumped = signal_breakdown.dict()  # type: ignore[call-arg]
+            if isinstance(dumped, dict):
+                return dumped
+        return {}
 
     @staticmethod
     def _entry_reference(plan: RecommendationPlan) -> float | None:

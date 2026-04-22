@@ -28,6 +28,7 @@ class RecommendationPlanEvaluationService:
     _preferred_timeframes = ("1d", "1wk", "1mo", "1h", "60m", "30m", "15m", "5m", "2m", "1m")
     _intraday_timeframes = ("1m", "2m", "5m", "15m", "30m", "60m", "1h")
     _intraday_interval = "5m"
+    _near_entry_miss_threshold_percent = 0.25
     _market_open_time = time(9, 30)
     _market_close_time = time(16, 0)
     _market_timezone_by_region = {
@@ -329,15 +330,32 @@ class RecommendationPlanEvaluationService:
         entry_reference = self._entry_reference(plan)
         entry_index = self._find_entry_index(plan, sliced)
         if entry_index is None:
+            horizon_1d = self._horizon_return(effective_action, sliced, 1, entry_reference)
+            horizon_3d = self._horizon_return(effective_action, sliced, 3, entry_reference)
+            horizon_5d = self._horizon_return(effective_action, sliced, 5, entry_reference)
+            direction_worked = self._direction_correct_from_horizons(horizon_1d, horizon_3d, horizon_5d)
+            entry_miss_distance_percent = self._entry_miss_distance_percent(plan, sliced, entry_reference)
+            near_entry_miss = (
+                entry_miss_distance_percent is not None
+                and entry_miss_distance_percent <= self._near_entry_miss_threshold_percent
+            )
             logger.info(
-                "evaluate_plan no_entry: plan_id=%s ticker=%s entry_low=%s entry_high=%s rows=%s last_bar=%s",
+                "evaluate_plan no_entry: plan_id=%s ticker=%s entry_low=%s entry_high=%s rows=%s last_bar=%s miss_pct=%s near_miss=%s direction_worked=%s",
                 plan.id,
                 plan.ticker,
                 plan.entry_price_low,
                 plan.entry_price_high,
                 len(sliced),
                 self._format_datetime(self._last_timestamp(sliced)),
+                entry_miss_distance_percent,
+                near_entry_miss,
+                direction_worked,
             )
+            notes = "Entry zone has not been touched yet."
+            if near_entry_miss and direction_worked:
+                notes += " Price came very close to entry and still moved in the forecasted direction."
+            elif near_entry_miss:
+                notes += " Price came very close to entry without filling."
             return RecommendationPlanOutcome(
                 recommendation_plan_id=plan.id or 0,
                 ticker=plan.ticker,
@@ -346,12 +364,16 @@ class RecommendationPlanEvaluationService:
                 status="open",
                 evaluated_at=self._last_timestamp(sliced) or datetime.now(timezone.utc),
                 entry_touched=False,
-                horizon_return_1d=self._horizon_return(effective_action, sliced, 1, entry_reference),
-                horizon_return_3d=self._horizon_return(effective_action, sliced, 3, entry_reference),
-                horizon_return_5d=self._horizon_return(effective_action, sliced, 5, entry_reference),
+                horizon_return_1d=horizon_1d,
+                horizon_return_3d=horizon_3d,
+                horizon_return_5d=horizon_5d,
+                entry_miss_distance_percent=entry_miss_distance_percent,
+                near_entry_miss=near_entry_miss,
+                direction_worked_without_entry=direction_worked,
+                direction_correct=direction_worked,
                 confidence_bucket=confidence_bucket,
                 setup_family=setup_family,
-                notes="Entry zone has not been touched yet.",
+                notes=notes,
                 run_id=run_id,
             )
 
@@ -363,11 +385,7 @@ class RecommendationPlanEvaluationService:
         horizon_1d = self._horizon_return(effective_action, active, 1, entry_reference)
         horizon_3d = self._horizon_return(effective_action, active, 3, entry_reference)
         horizon_5d = self._horizon_return(effective_action, active, 5, entry_reference)
-        direction_correct = None
-        for candidate in (horizon_5d, horizon_3d, horizon_1d):
-            if candidate is not None:
-                direction_correct = candidate > 0
-                break
+        direction_correct = self._direction_correct_from_horizons(horizon_1d, horizon_3d, horizon_5d)
         outcome = "phantom_pending" if plan.action in {"no_action", "watchlist"} else "open"
         status = "open"
         notes = "Entry touched; waiting for stop, take, or more bars."
@@ -579,6 +597,60 @@ class RecommendationPlanEvaluationService:
             return None
         candidate = min(numeric_lows)
         return round(((entry_reference - candidate) / entry_reference) * 100.0, 4)
+
+    @staticmethod
+    def _entry_zone_bounds(plan: RecommendationPlan) -> tuple[float, float] | None:
+        low = float(plan.entry_price_low if plan.entry_price_low is not None else plan.entry_price_high or 0.0)
+        high = float(plan.entry_price_high if plan.entry_price_high is not None else plan.entry_price_low or 0.0)
+        if low <= 0.0 and high <= 0.0:
+            return None
+        if high < low:
+            low, high = high, low
+        return low, high
+
+    @classmethod
+    def _entry_miss_distance_percent(
+        cls,
+        plan: RecommendationPlan,
+        data: pd.DataFrame,
+        entry_reference: float,
+    ) -> float | None:
+        if data.empty or entry_reference <= 0:
+            return None
+        bounds = cls._entry_zone_bounds(plan)
+        if bounds is None:
+            return None
+        low, high = bounds
+        closest_distance: float | None = None
+        for _, row in data.iterrows():
+            row_high = cls._float_or_none(row.get("High"))
+            row_low = cls._float_or_none(row.get("Low"))
+            if row_high is None or row_low is None:
+                continue
+            if row_low <= high and row_high >= low:
+                return 0.0
+            if row_high < low:
+                distance = low - row_high
+            elif row_low > high:
+                distance = row_low - high
+            else:
+                distance = 0.0
+            if closest_distance is None or distance < closest_distance:
+                closest_distance = distance
+        if closest_distance is None:
+            return None
+        return round((closest_distance / entry_reference) * 100.0, 4)
+
+    @staticmethod
+    def _direction_correct_from_horizons(
+        horizon_1d: float | None,
+        horizon_3d: float | None,
+        horizon_5d: float | None,
+    ) -> bool | None:
+        for candidate in (horizon_5d, horizon_3d, horizon_1d):
+            if candidate is not None:
+                return candidate > 0
+        return None
 
     @staticmethod
     def _last_timestamp(data: pd.DataFrame) -> datetime | None:

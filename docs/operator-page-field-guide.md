@@ -237,7 +237,7 @@ Most important fields:
 - **Open plans / expired plans / win rate** stats for the current filter set
 
 Important nuance:
-- non-shortlisted names usually remain cheap-scan-only `no_action` plans
+- non-shortlisted names now usually remain cheap-scan-only decision samples without a full recommendation plan row
 - shortlisted names may still end as `no_action` after deep analysis and policy gating
 - only those deep-analysis-derived rejected plans can later produce phantom outcomes, because they retain intended direction and trade levels
 - on the recommendation-plans page, non-shortlisted names are hidden by default so the main review queue stays focused on deeper-review candidates; operators can still reveal them with the filter toggle when they want full audit coverage

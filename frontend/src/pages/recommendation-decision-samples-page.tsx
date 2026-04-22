@@ -29,6 +29,16 @@ function priorityTone(priority: string): "ok" | "warning" | "danger" | "neutral"
   return "neutral";
 }
 
+function benchmarkTone(sample: RecommendationDecisionSample): "ok" | "warning" | "danger" | "neutral" | "info" {
+  if (sample.benchmark_status !== "evaluated") {
+    return "neutral";
+  }
+  if (sample.benchmark_target_1d_hit || sample.benchmark_target_5d_hit) {
+    return "ok";
+  }
+  return "warning";
+}
+
 function gapLabel(value: number | null): string {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return "—";
@@ -61,6 +71,7 @@ export function RecommendationDecisionSamplesPage() {
 
   const pageSize = Math.max(1, Number(searchParams.get("limit") ?? "50") || 50);
   const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
+  const benchmarkResult = searchParams.get("benchmark_result") ?? "";
 
   useEffect(() => {
     async function load() {
@@ -84,12 +95,18 @@ export function RecommendationDecisionSamplesPage() {
 
   const summary = useMemo(() => {
     const items = samples ?? [];
+    const benchmarked = items.filter((item) => item.benchmark_status === "evaluated");
+    const benchmarkHits = benchmarked.filter((item) => item.benchmark_target_1d_hit === true || item.benchmark_target_5d_hit === true);
+    const benchmarkMisses = benchmarked.filter((item) => item.benchmark_target_1d_hit !== true && item.benchmark_target_5d_hit !== true);
     return {
       total: items.length,
       actionable: items.filter((item) => item.decision_type === "actionable").length,
       nearMiss: items.filter((item) => item.decision_type === "near_miss").length,
       degraded: items.filter((item) => item.decision_type === "degraded").length,
       highPriority: items.filter((item) => item.review_priority === "high").length,
+      benchmarked: benchmarked.length,
+      benchmarkHits: benchmarkHits.length,
+      benchmarkMisses: benchmarkMisses.length,
     };
   }, [samples]);
 
@@ -114,12 +131,23 @@ export function RecommendationDecisionSamplesPage() {
     setSearchParams(next);
   }
 
+  function handleBenchmarkResultChange(event: ChangeEvent<HTMLSelectElement>) {
+    const next = new URLSearchParams(searchParams);
+    if (event.target.value) {
+      next.set("benchmark_result", event.target.value);
+    } else {
+      next.delete("benchmark_result");
+    }
+    next.set("page", "1");
+    setSearchParams(next);
+  }
+
   return (
     <>
       <PageHeader
         kicker="Research"
         title="Decision samples"
-        subtitle="This page is for reviewing samples and learning from the plans the system already produced. It keeps near-misses, rejected setups, and actionable plans in one central review surface so small action counts do not leave you blind to what the planner is doing."
+        subtitle="This page is for reviewing upstream decisions, shortlist misses, and downstream plan outcomes in one place. It keeps near-misses, rejected setups, decision-sample-only rows, and actionable plans visible so small action counts do not leave you blind to what the system is doing."
         actions={
           <>
             <HelpHint tooltip="Decision samples are for review and learning: actionable, near-miss, and degraded cases stay visible even when final action counts are small." to="/docs?doc=operator-page-field-guide" />
@@ -135,11 +163,34 @@ export function RecommendationDecisionSamplesPage() {
 
       {samples ? (
         <div className="stack-page">
+          <Card>
+            <SectionTitle
+              kicker="Filters"
+              title="Benchmark follow-through"
+              subtitle="Filter the current review queue to pending, benchmark-hit, or benchmark-miss rows before comparing shortlist behavior."
+              actions={<HelpHint tooltip="Use benchmark filters to focus on missed opportunities, clean rejects, or rows that still need follow-through evaluation." to="/docs?doc=signal-gating-benchmark-spec" />}
+            />
+            <div className="form-grid">
+              <label className="form-field">
+                <span>Benchmark result</span>
+                <select value={benchmarkResult} onChange={handleBenchmarkResultChange}>
+                  <option value="">All</option>
+                  <option value="pending">Pending only</option>
+                  <option value="hit">Hit only</option>
+                  <option value="miss">Miss only</option>
+                </select>
+              </label>
+            </div>
+            <div className="helper-text top-gap-small">Current filter: {benchmarkResult || "all"}</div>
+          </Card>
           <section className="metrics-grid">
             <StatCard label="Samples on page" value={summary.total} helper={`Showing ${summary.total} of ${totalSamples} filtered samples`} tooltip="The number of decision samples shown on the current page after filters are applied." tooltipTo="/docs?doc=glossary&section=recommendation-decision-sample" />
             <StatCard label="Actionable on page" value={summary.actionable} helper="Long and short decisions" tooltip="Samples whose final decision was actionable, usually long or short." tooltipTo="/docs?doc=glossary&section=actionable-plan" />
             <StatCard label="Near misses on page" value={summary.nearMiss} helper="High-signal no-action plans" tooltip="Borderline no-action cases that looked close to passing the gate and are often the most useful samples for tuning review." tooltipTo="/docs?doc=decision-sample-tuning-guide" />
             <StatCard label="High priority on page" value={summary.highPriority} helper="Review these first" tooltip="Samples marked as most informative for operator review because they are borderline, degraded, contradictory, or otherwise tuning-relevant." tooltipTo="/docs?doc=decision-sample-tuning-guide" />
+            <StatCard label="Benchmarked on page" value={summary.benchmarked} helper="Discarded signals graded by follow-through" tooltip="Samples that were not primarily plan-linked and now carry a benchmark follow-through label." tooltipTo="/docs?doc=signal-gating-benchmark-spec" />
+            <StatCard label="Benchmark hits" value={summary.benchmarkHits} helper="Likely missed opportunities" tooltip="Benchmarked samples whose later price movement satisfied the follow-through target in the signal direction." tooltipTo="/docs?doc=signal-gating-benchmark-spec" />
+            <StatCard label="Benchmark misses" value={summary.benchmarkMisses} helper="Likely good rejects" tooltip="Benchmarked samples whose later price movement did not satisfy the follow-through target." tooltipTo="/docs?doc=signal-gating-benchmark-spec" />
             <StatCard label="Degraded on page" value={summary.degraded} helper="Plans produced with missing or failed deep analysis" tooltip="Samples carrying degraded evidence, such as missing or failed deep-analysis inputs, and therefore deserving more caution during review." tooltipTo="/docs?doc=glossary&section=degraded" />
           </section>
 
@@ -169,17 +220,31 @@ export function RecommendationDecisionSamplesPage() {
                       <Badge>{sample.horizon}</Badge>
                       <Badge tone={sample.shortlisted ? "ok" : "neutral"}>{sample.shortlisted ? `shortlist #${sample.shortlist_rank ?? "?"}` : "not shortlisted"}</Badge>
                       <Badge tone={sample.confidence_gap_percent !== null && sample.confidence_gap_percent >= 0 ? "ok" : "warning"}>{gapLabel(sample.confidence_gap_percent)}</Badge>
+                      <Badge tone={benchmarkTone(sample)}>{sample.benchmark_status === "evaluated" ? (sample.benchmark_target_1d_hit || sample.benchmark_target_5d_hit ? "benchmark hit" : "benchmark miss") : "benchmark pending"}</Badge>
+                    </div>
+                    <div className="cluster top-gap-small">
+                      <Badge>benchmark dir {sample.benchmark_direction ?? "—"}</Badge>
+                      <Badge>1d {sample.benchmark_target_1d_hit === null ? "—" : sample.benchmark_target_1d_hit ? "hit" : "miss"}</Badge>
+                      <Badge>5d {sample.benchmark_target_5d_hit === null ? "—" : sample.benchmark_target_5d_hit ? "hit" : "miss"}</Badge>
+                      <Badge>mfe {sample.benchmark_max_favorable_pct === null ? "—" : `${sample.benchmark_max_favorable_pct.toFixed(2)}%`}</Badge>
                     </div>
                     <div className="helper-text top-gap-small">Reason: {sample.decision_reason || "—"}</div>
                     <div className="helper-text">Notes: {truncate(sample.review_notes || sample.decision_reason || "No review notes stored.")}</div>
-                    <div className="helper-text">Run {sample.run_id ?? "—"} · Job {sample.job_id ?? "—"} · Signal {sample.ticker_signal_snapshot_id ?? "—"}</div>
+                    <div className="helper-text">Run {sample.run_id ?? "—"} · Job {sample.job_id ?? "—"} · Signal {sample.ticker_signal_snapshot_id ?? "—"} · Benchmarked {sample.benchmark_status}</div>
                     <div className="cluster top-gap-small">
-                      <Link
-                        to={sample.recommendation_plan_id ? `/jobs/recommendation-plans?plan_id=${sample.recommendation_plan_id}` : "/jobs/recommendation-plans"}
-                        className="button-secondary"
-                      >
-                        Open plan
-                      </Link>
+                      {sample.recommendation_plan_id ? (
+                        <Link to={`/jobs/recommendation-plans?plan_id=${sample.recommendation_plan_id}`} className="button-secondary">
+                          Open plan
+                        </Link>
+                      ) : sample.ticker_signal_snapshot_id ? (
+                        <Link to={`/jobs/ticker-signals?snapshot_id=${sample.ticker_signal_snapshot_id}&limit=1`} className="button-secondary">
+                          Open signal
+                        </Link>
+                      ) : (
+                        <Link to={`/jobs/ticker-signals?ticker=${encodeURIComponent(sample.ticker)}${sample.run_id ? `&run_id=${sample.run_id}` : ""}&limit=50`} className="button-secondary">
+                          Open signals
+                        </Link>
+                      )}
                     </div>
                   </article>
                 ))}
@@ -233,17 +298,31 @@ export function RecommendationDecisionSamplesPage() {
                       <Badge>{sample.horizon}</Badge>
                       <Badge tone={sample.shortlisted ? "ok" : "neutral"}>{sample.shortlisted ? `shortlist #${sample.shortlist_rank ?? "?"}` : "not shortlisted"}</Badge>
                       <Badge tone={sample.confidence_gap_percent !== null && sample.confidence_gap_percent >= 0 ? "ok" : "warning"}>{gapLabel(sample.confidence_gap_percent)}</Badge>
+                      <Badge tone={benchmarkTone(sample)}>{sample.benchmark_status === "evaluated" ? (sample.benchmark_target_1d_hit || sample.benchmark_target_5d_hit ? "benchmark hit" : "benchmark miss") : "benchmark pending"}</Badge>
+                    </div>
+                    <div className="cluster top-gap-small">
+                      <Badge>benchmark dir {sample.benchmark_direction ?? "—"}</Badge>
+                      <Badge>1d {sample.benchmark_target_1d_hit === null ? "—" : sample.benchmark_target_1d_hit ? "hit" : "miss"}</Badge>
+                      <Badge>5d {sample.benchmark_target_5d_hit === null ? "—" : sample.benchmark_target_5d_hit ? "hit" : "miss"}</Badge>
+                      <Badge>mfe {sample.benchmark_max_favorable_pct === null ? "—" : `${sample.benchmark_max_favorable_pct.toFixed(2)}%`}</Badge>
                     </div>
                     <div className="helper-text top-gap-small">Reason: {sample.decision_reason || "—"}</div>
                     <div className="helper-text">Notes: {truncate(sample.review_notes || sample.decision_reason || "No review notes stored.")}</div>
-                    <div className="helper-text">Run {sample.run_id ?? "—"} · Job {sample.job_id ?? "—"} · Signal {sample.ticker_signal_snapshot_id ?? "—"}</div>
+                    <div className="helper-text">Run {sample.run_id ?? "—"} · Job {sample.job_id ?? "—"} · Signal {sample.ticker_signal_snapshot_id ?? "—"} · Benchmarked {sample.benchmark_status}</div>
                     <div className="cluster top-gap-small">
-                      <Link
-                        to={sample.recommendation_plan_id ? `/jobs/recommendation-plans?plan_id=${sample.recommendation_plan_id}` : "/jobs/recommendation-plans"}
-                        className="button-secondary"
-                      >
-                        Open plan
-                      </Link>
+                      {sample.recommendation_plan_id ? (
+                        <Link to={`/jobs/recommendation-plans?plan_id=${sample.recommendation_plan_id}`} className="button-secondary">
+                          Open plan
+                        </Link>
+                      ) : sample.ticker_signal_snapshot_id ? (
+                        <Link to={`/jobs/ticker-signals?snapshot_id=${sample.ticker_signal_snapshot_id}&limit=1`} className="button-secondary">
+                          Open signal
+                        </Link>
+                      ) : (
+                        <Link to={`/jobs/ticker-signals?ticker=${encodeURIComponent(sample.ticker)}${sample.run_id ? `&run_id=${sample.run_id}` : ""}&limit=50`} className="button-secondary">
+                          Open signals
+                        </Link>
+                      )}
                     </div>
                   </article>
                 ))}
@@ -260,8 +339,9 @@ export function RecommendationDecisionSamplesPage() {
             <ul className="checklist">
               <li>Start with high-priority near misses before changing thresholds.</li>
               <li>Compare actionable samples with rejected samples at similar confidence.</li>
-              <li>Look at the confidence gap and shortlist decision payload to understand why a plan missed escalation.</li>
-              <li>Use the plan button to jump directly to the canonical recommendation output.</li>
+              <li>Benchmark hits are the most likely shortlist false negatives; benchmark misses are the most likely shortlist true negatives.</li>
+              <li>Look at the confidence gap, shortlist decision payload, and benchmark follow-through to understand why a sample missed escalation or likely was a good reject.</li>
+              <li>Use the plan button when downstream framing exists; otherwise open the linked signal record to inspect shortlist, cheap-scan, and benchmark context.</li>
             </ul>
           </Card>
         </div>

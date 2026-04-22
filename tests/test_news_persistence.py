@@ -132,3 +132,21 @@ def test_save_news_rolls_back_on_commit_failure(session, monkeypatch):
     assert rollback_called
     # Session should remain usable after rollback.
     assert session.query(HistoricalNewsRecord).count() == 0
+
+
+def test_save_news_normalizes_overlong_links(session):
+    repo = HistoricalNewsRepository(session)
+    article = NewsArticle(
+        title="Long link",
+        summary="summary",
+        publisher="Reuters",
+        link="https://news.google.com/rss/articles/" + "a" * 700,
+        published_at=datetime.now(timezone.utc),
+    )
+
+    repo.save_news("AAPL", "googlenews", [article])
+
+    record = session.query(HistoricalNewsRecord).one()
+    assert len(record.link) <= 512
+    assert "__sha256__" in record.link
+    assert record.link.startswith("https://news.google.com/rss/articles/")

@@ -36,7 +36,7 @@ async def run_signal_gating_tuning(
     shortlisted: bool | None = Query(default=None),
     created_after: datetime | None = Query(default=None),
     created_before: datetime | None = Query(default=None),
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int | None = Query(default=None, ge=1, le=5000),
     apply: bool = Query(default=False),
     session: Session = Depends(get_db_session),
 ) -> RecommendationSignalGatingTuningRun:

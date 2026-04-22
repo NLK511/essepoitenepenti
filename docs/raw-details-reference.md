@@ -100,6 +100,7 @@ Typical stored themes:
 Typical stored themes:
 - entry touched, stop hit, target hit
 - fixed-horizon returns
+- near-entry-miss diagnostics for unfilled plans (`entry_miss_distance_percent`, `near_entry_miss`, `direction_worked_without_entry`)
 - favorable/adverse excursion
 - realized holding period
 - direction correctness
@@ -189,6 +190,7 @@ Frequently stored fields include:
 - `provider_errors`
 - `problems`
 - `news_feed_errors`
+- `news_query_diagnostics`
 - `summary_error` or `llm_error`
 - `timing_json`
 - `analysis_timestamp`

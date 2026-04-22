@@ -122,7 +122,7 @@ class RecommendationQualityStatusGateTests(unittest.TestCase):
         self.assertIn("error is elevated", self._reason(resolved=100, brier=0.40, ece=0.05))
 
     def test_reason_positive_when_all_aligned(self) -> None:
-        self.assertIn("are aligned", self._reason(resolved=100, brier=0.1, ece=0.05))
+        self.assertIn("walk-forward checks agree", self._reason(resolved=100, brier=0.1, ece=0.05))
 
 
 class RecommendationQualityNextActionsTests(unittest.TestCase):
@@ -133,12 +133,12 @@ class RecommendationQualityNextActionsTests(unittest.TestCase):
     def test_advises_increasing_volume_when_thin(self) -> None:
         summary = {"resolved_outcomes": 5}
         actions = self.svc._next_actions(summary)
-        self.assertIn("Increase resolved outcome volume", actions[0])
+        self.assertIn("Collect more finished outcomes", actions[0])
 
     def test_advises_keeping_evidence_conservative_when_not_ready_for_expansion(self) -> None:
         summary = {"ready_for_expansion": False, "resolved_outcomes": 100}
         actions = self.svc._next_actions(summary)
-        self.assertIn("Keep evidence concentration conservative", actions[0])
+        self.assertIn("Stay selective", actions[0])
 
     def test_advises_tightening_calibration_when_brier_is_high(self) -> None:
         summary = {"calibration_report": {"brier_score": 0.36}, "resolved_outcomes": 100, "ready_for_expansion": True, "walk_forward_promotion_recommended": True}
@@ -193,7 +193,9 @@ class RecommendationQualitySummaryIntegrationTests(unittest.TestCase):
             self.assertIn("summary", payload)
             self.assertIn("windowed_summaries", payload)
             self.assertIn("calibration", payload)
+            self.assertIn("entry_miss_diagnostics", payload)
             self.assertIn("next_actions", payload)
+            self.assertIn("entry_miss_diagnostics", payload["summary"])
             
             # Verify windowed summary count matches definitions
             self.assertEqual(len(payload["windowed_summaries"]), len(RecommendationQualitySummaryService.WINDOW_DEFINITIONS))
@@ -212,6 +214,7 @@ class RecommendationQualitySummaryIntegrationTests(unittest.TestCase):
                 payload = response.json()
                 self.assertIn("summary", payload)
                 self.assertIn("windowed_summaries", payload)
+                self.assertIn("entry_miss_diagnostics", payload)
 
         import asyncio
         asyncio.run(_run())

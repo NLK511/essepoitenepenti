@@ -125,6 +125,43 @@ class RecommendationPlanBaselineServiceTests(unittest.TestCase):
 
         session.close()
 
+    def test_expired_trade_plans_are_not_counted_as_open(self) -> None:
+        session = create_session()
+        plans = RecommendationPlanRepository(session)
+        outcomes = RecommendationOutcomeRepository(session)
+
+        plan = plans.create_plan(
+            RecommendationPlan(
+                ticker="NVDA",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=72.0,
+                computed_at=datetime(2024, 1, 5, tzinfo=timezone.utc),
+                signal_breakdown={"setup_family": "breakout", "attention_score": 76.0},
+            )
+        )
+
+        outcomes.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=plan.id or 0,
+                ticker="NVDA",
+                action="long",
+                outcome="expired",
+                status="resolved",
+                confidence_bucket="65_to_79",
+                setup_family="breakout",
+            )
+        )
+
+        summary = RecommendationPlanBaselineService(plans).summarize(limit=20)
+        comparison_map = {item.key: item for item in summary.comparisons}
+
+        self.assertEqual(comparison_map["actual_actionable"].trade_plan_count, 1)
+        self.assertEqual(comparison_map["actual_actionable"].resolved_trade_count, 0)
+        self.assertEqual(comparison_map["actual_actionable"].open_trade_count, 0)
+
+        session.close()
+
 
 if __name__ == "__main__":
     unittest.main()

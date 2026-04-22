@@ -171,8 +171,10 @@ export function SignalGatingJobPage() {
                 <section className="metrics-grid">
                   <StatCard label="Status" value={selectedRun.status} helper="Run state" tooltip="The execution state of this signal-gating tuning run." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
                   <StatCard label="Applied" value={selectedRun.applied ? "yes" : "no"} helper="Whether the config was saved" tooltip="Whether the resulting threshold change from this run was saved into the live tuning configuration." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
-                  <StatCard label="Samples" value={formatCount(selectedRun.sample_count)} helper="Sample rows scored" tooltip="How many decision-sample rows were scored in this run before filtering down to resolved evidence." tooltipTo="/docs?doc=glossary&section=recommendation-decision-sample" />
-                  <StatCard label="Resolved" value={formatCount(selectedRun.resolved_sample_count)} helper="Resolved samples used" tooltip="How many samples had resolved evidence strong enough to contribute to the tuning objective." tooltipTo="/docs?doc=glossary&section=outcome-evaluation" />
+                  <StatCard label="Samples" value={formatCount(selectedRun.sample_count)} helper="Sample rows scored" tooltip="How many decision-sample rows were scored in this run before filtering down to resolved evidence or benchmark follow-through." tooltipTo="/docs?doc=glossary&section=recommendation-decision-sample" />
+                  <StatCard label="Resolved" value={formatCount(selectedRun.resolved_sample_count)} helper="Plan-linked samples" tooltip="How many samples had resolved plan evidence strong enough to contribute to the tuning objective." tooltipTo="/docs?doc=glossary&section=outcome-evaluation" />
+                  <StatCard label="Benchmark" value={formatCount(selectedRun.benchmark_sample_count)} helper="Discarded signals graded by follow-through" tooltip="How many non-plan decision samples were benchmarked against later price movement to detect missed opportunities." tooltipTo="/docs?doc=signal-gating-benchmark-spec" />
+                  <StatCard label="Scoreable" value={formatCount(selectedRun.scoreable_sample_count)} helper="All labels used" tooltip="How many samples actually contributed to the objective, including plan outcomes and benchmarked discarded signals." tooltipTo="/docs?doc=signal-gating-benchmark-spec" />
                 </section>
                 <div className="helper-text">Objective: {selectedRun.objective_name} · Best threshold: {formatValue(selectedRun.best_threshold)} · Best score: {formatValue(selectedRun.best_score, 3)}</div>
                 <div className="helper-text">Baseline threshold: {formatValue(selectedRun.baseline_threshold)} · Baseline score: {formatValue(selectedRun.baseline_score, 3)}</div>
@@ -200,6 +202,11 @@ export function SignalGatingJobPage() {
                           <Badge tone={candidate.loss_count > 0 ? "danger" : "neutral"}>losses {String(candidate.loss_count ?? 0)}</Badge>
                           <Badge>precision {candidate.precision_percent ?? "—"}%</Badge>
                           <Badge>recall {candidate.recall_percent ?? "—"}%</Badge>
+                        </div>
+                        <div className="cluster top-gap-small">
+                          <Badge tone={candidate.benchmark_selected_count > 0 ? "ok" : "neutral"}>benchmark selected {String(candidate.benchmark_selected_count ?? 0)}</Badge>
+                          <Badge tone={candidate.benchmark_hit_count > 0 ? "ok" : "warning"}>benchmark hits {String(candidate.benchmark_hit_count ?? 0)}</Badge>
+                          <Badge tone={candidate.benchmark_miss_count > 0 ? "danger" : "neutral"}>benchmark misses {String(candidate.benchmark_miss_count ?? 0)}</Badge>
                         </div>
                         <div className="helper-text top-gap-small">Config: {JSON.stringify({
                           threshold_offset: candidate.threshold_offset,
@@ -242,7 +249,7 @@ export function SignalGatingJobPage() {
                     <div className="helper-text top-gap-small">
                       Best threshold {formatValue(run.best_threshold)} · score {formatValue(run.best_score, 3)} · baseline {formatValue(run.baseline_threshold)}
                     </div>
-                    <div className="helper-text">Samples {run.sample_count} · resolved {run.resolved_sample_count} · candidates {run.candidate_count}</div>
+                    <div className="helper-text">Samples {run.sample_count} · resolved {run.resolved_sample_count} · benchmark {run.benchmark_sample_count} · scoreable {run.scoreable_sample_count} · candidates {run.candidate_count}</div>
                   </button>
                 ))}
               </div>

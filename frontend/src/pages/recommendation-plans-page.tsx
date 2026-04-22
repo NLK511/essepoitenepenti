@@ -370,10 +370,10 @@ export function RecommendationPlansPage() {
         </div>
         <section className="metrics-grid top-gap-small">
           <StatCard label="Total plans" value={planStats?.total_plans ?? "—"} helper={`Broad posture check · ${analyticsWindow === "all" ? "all time" : analyticsWindow.toUpperCase()}`} tooltip="The total number of stored recommendation plans in the selected broad review window, regardless of the current table filters." tooltipTo={recommendationPlansDoc("recommendation-plans")} />
-          <StatCard label="Open plans" value={planStats?.open_plans ?? "—"} helper="Open plans across all recommendations" tooltip="Plans that have not yet resolved to a terminal measured outcome in the selected stats window." tooltipTo={recommendationPlansDoc("outcome-fields")} />
+          <StatCard label="Open plans" value={planStats?.open_plans ?? "—"} helper="Unresolved plans across all recommendations" tooltip="Plans whose latest outcome is not yet resolved in the selected stats window. Closed outcomes, including expired, are excluded from this count." tooltipTo={recommendationPlansDoc("outcome-fields")} />
           <StatCard label="Expired plans" value={planStats?.expired_plans ?? "—"} helper="Terminal expired outcomes across all recommendations" tooltip="Plans whose evaluation horizon elapsed without a terminal win or loss. Expired is operator-visible, but it is excluded from default win/loss scoring." tooltipTo={glossaryDoc("expired-plan")} />
           <StatCard label="Win rate" value={planStats?.win_rate_percent !== null && planStats?.win_rate_percent !== undefined ? `${planStats.win_rate_percent}%` : "—"} helper={`Broad posture check · ${analyticsWindow === "all" ? "all time" : analyticsWindow.toUpperCase()}`} tooltip="Overall win/loss rate in the selected broad review window. Treat this as a quick pulse, not as the full trust verdict." tooltipTo={recommendationPlansDoc("recommendation-plans")} />
-          <StatCard label="Evidence concentration" value={evidenceConcentration ? (evidenceConcentration.ready_for_expansion ? "Ready" : "Focused") : "—"} helper="This card still reflects the current filtered review cohort" tooltip="Shows whether the current filtered cohort has clear enough separation between stronger and weaker groups to justify broader trust, or whether review should stay selective." tooltipTo={glossaryDoc("evidence-concentration")} />
+          <StatCard label="Where results look strongest" value={evidenceConcentration ? (evidenceConcentration.ready_for_expansion ? "some groups stand out" : "nothing clear yet") : "—"} helper="A plain-language read on the current filtered cohort" tooltip="This asks whether a few groups inside the current filtered cohort clearly look better than the rest. If they do, review can focus there first. If they do not, stay selective and cautious." tooltipTo={glossaryDoc("evidence-concentration")} />
         </section>
       </Card>
 
@@ -403,6 +403,14 @@ export function RecommendationPlansPage() {
           <label className="form-field"><span>Resolution</span><select name="resolved" defaultValue={searchParams.get("resolved") ?? ""}><option value="">All</option><option value="resolved">Resolved only</option><option value="unresolved">Unresolved only</option></select></label>
           <label className="form-field"><span>Outcome</span><select name="outcome" defaultValue={searchParams.get("outcome") ?? ""}><option value="">All</option><option value="win">win</option><option value="loss">loss</option><option value="expired">expired</option></select></label>
           <label className="form-field"><span>Limit</span><select name="limit" defaultValue={searchParams.get("limit") ?? "100"}><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option><option value="10000">All</option></select></label>
+          <details className="top-gap-small" style={{ gridColumn: "1 / -1" }}>
+            <summary>Advanced filters</summary>
+            <div className="form-grid top-gap-small">
+              <label className="form-field"><span>Never entered</span><select name="entry_touched" defaultValue={searchParams.get("entry_touched") ?? ""}><option value="">All</option><option value="false">Never entered only</option><option value="true">Entered only</option></select></label>
+              <label className="form-field"><span>Almost entered</span><select name="near_entry_miss" defaultValue={searchParams.get("near_entry_miss") ?? ""}><option value="">All</option><option value="true">Almost entered only</option><option value="false">Exclude almost entered</option></select></label>
+              <label className="form-field"><span>Still moved right</span><select name="direction_worked_without_entry" defaultValue={searchParams.get("direction_worked_without_entry") ?? ""}><option value="">All</option><option value="true">Moved right without entry</option><option value="false">Did not move right</option></select></label>
+            </div>
+          </details>
           <label className="form-field form-field-checkbox">
             <span>Queue coverage</span>
           </label>
@@ -420,14 +428,14 @@ export function RecommendationPlansPage() {
         <SectionTitle
           kicker="Filtered cohort pulse"
           title="Use this only as a lightweight queue-side pulse"
-          subtitle={`This page now keeps only a compact pulse for the ${analyticsWindow === "all" ? "all-time" : analyticsWindow.toUpperCase()} filtered cohort. Use Recommendation Quality and Research for canonical calibration, baselines, evidence concentration, family review, and validation.`}
+          subtitle={`This page now keeps only a compact pulse for the ${analyticsWindow === "all" ? "all-time" : analyticsWindow.toUpperCase()} filtered cohort. Use Recommendation Quality and Research for the fuller trust view: confidence quality, simple baselines, where results look strongest, family review, and validation.`}
           actions={<HelpHint tooltip="Recommendation Plans is now a lighter operator review surface. Use Recommendation Quality and Research for the canonical trust and validation views." to={recommendationPlansDoc("review-workspace-tabs")} />}
         />
         <div className="insight-grid top-gap-small">
           <div className="data-card">
             <div className="data-card-header">
               <div>
-                <h3 className="data-card-title"><HelpLabel label="Filtered cohort pulse" tooltip="A lightweight summary of the currently filtered review cohort so operators can keep context without duplicating the full research surfaces." to={recommendationPlansDoc("recommendation-plans")} /></h3>
+                <h3 className="data-card-title"><HelpLabel label="Filtered cohort pulse" tooltip="A lightweight summary of the currently filtered review cohort so you can keep context while reviewing the queue. It is not the full research surface." to={recommendationPlansDoc("recommendation-plans")} /></h3>
               </div>
               <Badge tone={evidenceConcentration?.ready_for_expansion ? "ok" : "warning"}>{analyticsWindow === "all" ? "all time" : analyticsWindow.toUpperCase()}</Badge>
             </div>
@@ -435,9 +443,9 @@ export function RecommendationPlansPage() {
               <div className="data-point"><span className="data-point-label">resolved outcomes</span><span className="data-point-value">{calibration?.resolved_outcomes ?? "—"}</span></div>
               <div className="data-point"><span className="data-point-label">overall win rate</span><span className="data-point-value">{calibration?.overall_win_rate_percent ?? "—"}%</span></div>
               <div className="data-point"><span className="data-point-label">actual actionable 5d</span><span className="data-point-value">{baselines?.comparisons.find((item) => item.key === "actual_actionable")?.average_return_5d ?? "—"}%</span></div>
-              <div className="data-point"><span className="data-point-label">evidence posture</span><span className="data-point-value">{evidenceConcentration?.ready_for_expansion ? "ready" : "focused"}</span></div>
+              <div className="data-point"><span className="data-point-label">where it works best</span><span className="data-point-value">{evidenceConcentration?.ready_for_expansion ? "some groups stand out" : "nothing clear yet"}</span></div>
             </div>
-            <div className="helper-text top-gap-small">{evidenceConcentration?.focus_message ?? "Use the dedicated research surfaces for full calibration, baselines, evidence concentration, and family review."}</div>
+            <div className="helper-text top-gap-small">{evidenceConcentration?.focus_message ?? "Use Recommendation Quality and Research for the full view of confidence quality, simple baselines, where results look strongest, and family review."}</div>
           </div>
           <div className="data-card">
             <div className="data-card-header">
@@ -451,7 +459,7 @@ export function RecommendationPlansPage() {
               <Link to="/research" className="button-secondary">Research hub</Link>
             </div>
             <ul className="list-reset top-gap-small">
-              <li className="list-item compact-item">Calibration, baselines, evidence concentration, family review, and validation now live on the dedicated quality and research surfaces.</li>
+              <li className="list-item compact-item">Confidence quality, simple baselines, where results look strongest, family review, and validation now live on the dedicated quality and research surfaces.</li>
               <li className="list-item compact-item">Use this page for queue review, plan details, and lightweight filtered-cohort triage.</li>
             </ul>
           </div>
@@ -610,6 +618,9 @@ export function RecommendationPlansPage() {
                                 <span className="helper-text">{plan.latest_outcome.status}</span>
                               </div>
                               <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}%</div>
+                              {plan.latest_outcome.entry_touched === false ? (
+                                <div className="helper-text">miss {plan.latest_outcome.entry_miss_distance_percent !== null ? `${plan.latest_outcome.entry_miss_distance_percent.toFixed(2)}%` : "—"}{plan.latest_outcome.near_entry_miss ? " · almost entered" : ""}{plan.latest_outcome.direction_worked_without_entry ? " · still moved right" : ""}</div>
+                              ) : null}
                             </>
                           ) : (
                             <div className="helper-text">No outcome stored yet.</div>
@@ -693,6 +704,10 @@ export function RecommendationPlansPage() {
                                 <div className="recommendation-plan-detail-block">
                                   <div className="recommendation-plan-detail-label">Outcome bias / regime</div>
                                   <div className="recommendation-plan-detail-value">{plan.latest_outcome ? `${detailLabel(plan.latest_outcome.transmission_bias_detail, plan.latest_outcome.transmission_bias_label ?? plan.latest_outcome.transmission_bias, false) ?? "—"} · ${detailLabel(plan.latest_outcome.context_regime_detail, plan.latest_outcome.context_regime_label ?? plan.latest_outcome.context_regime, false) ?? "—"}` : "—"}</div>
+                                </div>
+                                <div className="recommendation-plan-detail-block">
+                                  <div className="recommendation-plan-detail-label">Entry miss</div>
+                                  <div className="recommendation-plan-detail-value">{plan.latest_outcome && plan.latest_outcome.entry_touched === false ? `${plan.latest_outcome.entry_miss_distance_percent !== null ? `${plan.latest_outcome.entry_miss_distance_percent.toFixed(2)}%` : "—"}${plan.latest_outcome.near_entry_miss ? " · almost entered" : ""}${plan.latest_outcome.direction_worked_without_entry ? " · then still moved in the planned direction" : ""}` : "—"}</div>
                                 </div>
                                 <div className="recommendation-plan-detail-block">
                                   <div className="recommendation-plan-detail-label">Invalidation</div>

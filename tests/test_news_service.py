@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from trade_proposer_app.domain.models import NewsArticle, NewsBundle, ProviderCredential
-from trade_proposer_app.services.news import GoogleNewsProvider, NewsIngestionService, NaiveSentimentAnalyzer, NewsProvider, YahooFinanceProvider
+from trade_proposer_app.services.news import FinnhubProvider, GoogleNewsProvider, NewsIngestionService, NaiveSentimentAnalyzer, NewsProvider, UnsupportedMarketError, YahooFinanceProvider
 
 
 class NewsIngestionServiceTests(unittest.TestCase):
@@ -156,6 +156,18 @@ class NewsIngestionServiceTests(unittest.TestCase):
         self.assertEqual(set(bundle.feeds_used), {"GoogleNews"})
         self.assertFalse(any("finnhub" in error.lower() for error in bundle.feed_errors))
 
+    @patch("trade_proposer_app.services.news.httpx.get")
+    def test_finnhub_provider_treats_403_as_unsupported_market(self, mock_get):
+        response = MagicMock()
+        response.status_code = 403
+        mock_get.return_value = response
+
+        provider = FinnhubProvider(ProviderCredential(provider="finnhub", api_key="key", api_secret=""))
+        with self.assertRaisesRegex(UnsupportedMarketError, "unsupported market for 010950.KS"):
+            provider.fetch("010950.KS", 5)
+
+        self.assertEqual(mock_get.call_count, 1)
+
     @patch("trade_proposer_app.services.news.yf.Ticker")
     @patch("trade_proposer_app.services.news.httpx.get")
     def test_historical_ticker_fetch_prefers_finnhub_and_skips_live_fallbacks(self, mock_get, mock_ticker):
@@ -200,6 +212,136 @@ class NewsIngestionServiceTests(unittest.TestCase):
         self.assertEqual([article.title for article in bundle.articles], ["Finnhub historical article"])
         self.assertEqual(bundle.feeds_used, ["Finnhub"])
         mock_ticker.assert_not_called()
+
+    @patch("trade_proposer_app.services.news.time.sleep", return_value=None)
+    @patch("trade_proposer_app.services.news.yf.Ticker")
+    @patch("trade_proposer_app.services.news.httpx.get")
+    def test_finnhub_retryable_errors_preserve_fallback_coverage(self, mock_get, mock_ticker, _mock_sleep):
+        response_500 = MagicMock()
+        response_500.status_code = 500
+        google_response = MagicMock()
+        google_response.status_code = 200
+        google_response.text = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+        <rss><channel>
+            <item>
+                <title>Google fallback article</title>
+                <link>https://example.com/google-fallback</link>
+                <pubDate>Thu, 26 Mar 2026 00:00:00 GMT</pubDate>
+                <description><![CDATA[<p>Google supplied coverage</p>]]></description>
+                <source url=\"https://reuters.com\">Reuters</source>
+            </item>
+        </channel></rss>"""
+
+        def side_effect(url, *args, **kwargs):
+            if url == "https://finnhub.io/api/v1/company-news":
+                return response_500
+            if url == "https://news.google.com/rss/search":
+                return google_response
+            raise AssertionError(f"unexpected url {url}")
+
+        mock_get.side_effect = side_effect
+
+        yahoo_ticker = MagicMock()
+        yahoo_ticker.news = [
+            {
+                "content": {
+                    "title": "Yahoo fallback article",
+                    "summary": "Yahoo supplied coverage",
+                    "pubDate": "2026-03-26T00:00:00Z",
+                },
+                "provider": {"displayName": "Yahoo Finance"},
+                "clickThroughUrl": {"url": "https://example.com/yahoo-fallback"},
+            }
+        ]
+        mock_ticker.return_value = yahoo_ticker
+
+        service = NewsIngestionService.from_provider_credentials(
+            {"finnhub": ProviderCredential(provider="finnhub", api_key="key", api_secret="")}
+        )
+        bundle = service.fetch(
+            "AAPL",
+            start_at=datetime(2026, 3, 26, 0, 0, tzinfo=timezone.utc),
+            end_at=datetime(2026, 3, 26, 23, 59, tzinfo=timezone.utc),
+            request_mode="live",
+        )
+
+        self.assertIn("GoogleNews", bundle.feeds_used)
+        self.assertIn("YahooFinance", bundle.feeds_used)
+        self.assertTrue(any(error.startswith("Finnhub: unexpected status 500") for error in bundle.feed_errors))
+        self.assertTrue(any("fallback coverage preserved despite provider errors" in error for error in bundle.feed_errors))
+        self.assertEqual(bundle.query_diagnostics["fallback_used"], True)
+        self.assertEqual(bundle.query_diagnostics["fallback_succeeded"], True)
+        self.assertEqual(bundle.query_diagnostics["failed_provider_count"], 1)
+        self.assertGreaterEqual(bundle.query_diagnostics["successful_provider_count"], 2)
+        provider_results = {item["provider"]: item for item in bundle.query_diagnostics["provider_results"]}
+        self.assertEqual(provider_results["Finnhub"]["status"], "error")
+        self.assertEqual(provider_results["Finnhub"]["attempt_count"], 3)
+        self.assertGreaterEqual(bundle.query_diagnostics["article_count"], 2)
+
+    @patch("trade_proposer_app.services.news.time.sleep", return_value=None)
+    @patch("trade_proposer_app.services.news.yf.Ticker")
+    @patch("trade_proposer_app.services.news.httpx.get")
+    def test_live_ticker_fetch_records_unsupported_market_without_warning(self, mock_get, mock_ticker, _mock_sleep):
+        response_403 = MagicMock()
+        response_403.status_code = 403
+        google_response = MagicMock()
+        google_response.status_code = 200
+        google_response.text = """<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+        <rss><channel>
+            <item>
+                <title>Google fallback article</title>
+                <link>https://example.com/google-fallback</link>
+                <pubDate>Thu, 26 Mar 2026 00:00:00 GMT</pubDate>
+                <description><![CDATA[<p>Google supplied coverage</p>]]></description>
+                <source url=\"https://reuters.com\">Reuters</source>
+            </item>
+        </channel></rss>"""
+
+        def side_effect(url, *args, **kwargs):
+            if url == "https://finnhub.io/api/v1/company-news":
+                return response_403
+            if url == "https://news.google.com/rss/search":
+                return google_response
+            raise AssertionError(f"unexpected url {url}")
+
+        mock_get.side_effect = side_effect
+
+        yahoo_ticker = MagicMock()
+        yahoo_ticker.news = [
+            {
+                "content": {
+                    "title": "Yahoo fallback article",
+                    "summary": "Yahoo supplied coverage",
+                    "pubDate": "2026-03-26T00:00:00Z",
+                },
+                "provider": {"displayName": "Yahoo Finance"},
+                "clickThroughUrl": {"url": "https://example.com/yahoo-fallback"},
+            }
+        ]
+        mock_ticker.return_value = yahoo_ticker
+
+        service = NewsIngestionService.from_provider_credentials(
+            {"finnhub": ProviderCredential(provider="finnhub", api_key="key", api_secret="")}
+        )
+        bundle = service.fetch(
+            "AAPL",
+            start_at=datetime(2026, 3, 26, 0, 0, tzinfo=timezone.utc),
+            end_at=datetime(2026, 3, 26, 23, 59, tzinfo=timezone.utc),
+            request_mode="live",
+        )
+
+        self.assertIn("GoogleNews", bundle.feeds_used)
+        self.assertIn("YahooFinance", bundle.feeds_used)
+        self.assertEqual(bundle.feed_errors, [])
+        self.assertEqual(bundle.query_diagnostics["fallback_used"], False)
+        self.assertEqual(bundle.query_diagnostics["fallback_succeeded"], False)
+        self.assertEqual(bundle.query_diagnostics["failed_provider_count"], 0)
+        self.assertEqual(bundle.query_diagnostics["unsupported_provider_count"], 1)
+        provider_results = {item["provider"]: item for item in bundle.query_diagnostics["provider_results"]}
+        self.assertEqual(provider_results["Finnhub"]["status"], "unsupported_market")
+        self.assertEqual(provider_results["Finnhub"]["attempt_count"], 1)
+        self.assertEqual(provider_results["Finnhub"]["error"], "unsupported market for AAPL")
+        self.assertGreaterEqual(bundle.query_diagnostics["article_count"], 2)
 
     def test_historical_window_filters_future_and_undated_articles(self) -> None:
         class StubProvider:

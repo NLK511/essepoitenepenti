@@ -83,11 +83,16 @@ class RecommendationQualitySummaryService:
                 limit=self.METRIC_SAMPLE_LIMIT,
                 evaluated_after=evaluated_after,
             )
+            entry_miss_window = self.outcomes.summarize_entry_miss_diagnostics(
+                evaluated_after=evaluated_after,
+                evaluated_before=now,
+            )
             window_summary = self._summary_payload(
                 calibration_window,
                 baselines_window,
                 evidence_window,
                 family_review_window,
+                entry_miss_window,
                 walk_forward=None,
                 walk_forward_error=None,
                 window_label=label,
@@ -126,6 +131,10 @@ class RecommendationQualitySummaryService:
             "summary": summary,
             "windowed_summaries": windowed_summaries,
             "calibration": calibration.model_dump(mode="json"),
+            "entry_miss_diagnostics": self.outcomes.summarize_entry_miss_diagnostics(
+                evaluated_after=now - timedelta(days=30),
+                evaluated_before=now,
+            ),
             "baselines": baselines.model_dump(mode="json"),
             "evidence_concentration": evidence.model_dump(mode="json"),
             "setup_family_review": family_review.model_dump(mode="json"),
@@ -139,6 +148,7 @@ class RecommendationQualitySummaryService:
         baselines,
         evidence,
         family_review,
+        entry_miss_diagnostics: dict[str, object],
         *,
         walk_forward: dict[str, object] | None,
         walk_forward_error: str | None,
@@ -170,6 +180,7 @@ class RecommendationQualitySummaryService:
             "strongest_positive_count": len(evidence.strongest_positive_cohorts),
             "weakest_count": len(evidence.weakest_cohorts),
             "family_count": len(family_review.families),
+            "entry_miss_diagnostics": entry_miss_diagnostics,
             "walk_forward_promotion_recommended": walk_forward.get("promotion_recommended") if isinstance(walk_forward, dict) else None,
             "walk_forward_average_win_rate_delta": walk_forward.get("average_win_rate_delta") if isinstance(walk_forward, dict) else None,
             "walk_forward_average_expected_value_delta": walk_forward.get("average_expected_value_delta") if isinstance(walk_forward, dict) else None,
@@ -211,11 +222,11 @@ class RecommendationQualitySummaryService:
         if calibration.resolved_outcomes < 20:
             return "Too few resolved outcomes to trust calibration or walk-forward signals yet."
         if evidence.ready_for_expansion and walk_forward_recommended and (brier is None or brier <= 0.25) and (ece is None or ece <= 0.15):
-            return "Calibration, evidence concentration, and walk-forward validation are aligned."
+            return "Confidence looks reasonable, a few groups are clearly stronger than average, and walk-forward checks agree."
         if (brier is not None and brier > 0.35) or (ece is not None and ece > 0.2):
             return "Calibration error is elevated, so confidence and promotion should stay conservative."
         if not evidence.ready_for_expansion:
-            return "Evidence concentration is still thin, so the strongest cohorts are not yet separating clearly."
+            return "We still do not have a few groups that clearly outperform the rest, so trust should stay selective."
         if not walk_forward_recommended:
             return "Walk-forward validation is not yet supportive of promotion for the active tuning profile."
         return "The current signal is acceptable but not yet strong enough to mark the system healthy."
@@ -224,9 +235,9 @@ class RecommendationQualitySummaryService:
     def _next_actions(summary: dict[str, object]) -> list[str]:
         actions: list[str] = []
         if summary.get("resolved_outcomes", 0) < 20:
-            actions.append("Increase resolved outcome volume before trusting thin slices.")
+            actions.append("Collect more finished outcomes before trusting small pockets of performance.")
         if not summary.get("ready_for_expansion"):
-            actions.append("Keep evidence concentration conservative until stronger cohorts separate.")
+            actions.append("Stay selective until a few groups clearly outperform the rest.")
         if not summary.get("walk_forward_promotion_recommended"):
             actions.append("Validate the active tuning profile against walk-forward slices before promotion.")
         if summary.get("calibration_report") and (

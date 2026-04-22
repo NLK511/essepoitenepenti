@@ -111,11 +111,14 @@ class RecommendationPlanRepository:
         resolved: str | None = None,
         outcome: str | None = None,
         shortlisted: bool | None = None,
+        entry_touched: bool | None = None,
+        near_entry_miss: bool | None = None,
+        direction_worked_without_entry: bool | None = None,
         computed_after: datetime | None = None,
         computed_before: datetime | None = None,
     ) -> int:
         query = self._base_plan_query(ticker=ticker, action=action, run_id=run_id, plan_id=plan_id, computed_after=computed_after, computed_before=computed_before)
-        if setup_family or resolved or outcome or shortlisted is not None:
+        if setup_family or resolved or outcome or shortlisted is not None or entry_touched is not None or near_entry_miss is not None or direction_worked_without_entry is not None:
             rows = self.session.scalars(query).all()
             outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
             normalized_setup_family = setup_family.strip().lower() if setup_family else None
@@ -131,6 +134,9 @@ class RecommendationPlanRepository:
                     resolved=normalized_resolved,
                     outcome=normalized_outcome,
                     shortlisted=shortlisted,
+                    entry_touched=entry_touched,
+                    near_entry_miss=near_entry_miss,
+                    direction_worked_without_entry=direction_worked_without_entry,
                 )
             )
         count_query = select(func.count()).select_from(query.subquery())
@@ -148,6 +154,9 @@ class RecommendationPlanRepository:
         resolved: str | None = None,
         outcome: str | None = None,
         shortlisted: bool | None = None,
+        entry_touched: bool | None = None,
+        near_entry_miss: bool | None = None,
+        direction_worked_without_entry: bool | None = None,
         computed_after: datetime | None = None,
         computed_before: datetime | None = None,
     ) -> list[RecommendationPlan]:
@@ -157,7 +166,7 @@ class RecommendationPlanRepository:
         normalized_setup_family = setup_family.strip().lower() if setup_family else None
         normalized_resolved = (resolved or "").strip().lower() or None
         normalized_outcome = (outcome or "").strip().lower() or None
-        if normalized_setup_family or normalized_resolved or normalized_outcome or shortlisted is not None:
+        if normalized_setup_family or normalized_resolved or normalized_outcome or shortlisted is not None or entry_touched is not None or near_entry_miss is not None or direction_worked_without_entry is not None:
             rows = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc())).all()
             outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
             filtered_rows = [
@@ -170,6 +179,9 @@ class RecommendationPlanRepository:
                     resolved=normalized_resolved,
                     outcome=normalized_outcome,
                     shortlisted=shortlisted,
+                    entry_touched=entry_touched,
+                    near_entry_miss=near_entry_miss,
+                    direction_worked_without_entry=direction_worked_without_entry,
                 )
             ]
             rows = filtered_rows[normalized_offset : normalized_offset + normalized_limit]
@@ -194,6 +206,9 @@ class RecommendationPlanRepository:
         resolved: str | None,
         outcome: str | None,
         shortlisted: bool | None,
+        entry_touched: bool | None,
+        near_entry_miss: bool | None,
+        direction_worked_without_entry: bool | None,
     ) -> bool:
         if setup_family and self._record_setup_family(record) != setup_family:
             return False
@@ -207,6 +222,12 @@ class RecommendationPlanRepository:
             if resolved == "unresolved" and is_resolved:
                 return False
         if outcome and (latest_outcome is None or str(getattr(latest_outcome, "outcome", "") or "").strip().lower() != outcome):
+            return False
+        if entry_touched is not None and (latest_outcome is None or getattr(latest_outcome, "entry_touched", None) is not entry_touched):
+            return False
+        if near_entry_miss is not None and (latest_outcome is None or getattr(latest_outcome, "near_entry_miss", None) is not near_entry_miss):
+            return False
+        if direction_worked_without_entry is not None and (latest_outcome is None or getattr(latest_outcome, "direction_worked_without_entry", None) is not direction_worked_without_entry):
             return False
         return True
 
@@ -256,6 +277,9 @@ class RecommendationPlanRepository:
         resolved: str | None = None,
         outcome: str | None = None,
         shortlisted: bool | None = None,
+        entry_touched: bool | None = None,
+        near_entry_miss: bool | None = None,
+        direction_worked_without_entry: bool | None = None,
         computed_after: datetime | None = None,
         computed_before: datetime | None = None,
         window: str = "all",
@@ -288,6 +312,9 @@ class RecommendationPlanRepository:
                 resolved=normalized_resolved,
                 outcome=normalized_outcome,
                 shortlisted=shortlisted,
+                entry_touched=entry_touched,
+                near_entry_miss=near_entry_miss,
+                direction_worked_without_entry=direction_worked_without_entry,
             )
         ]
         filtered_outcomes = [outcome_map.get(row.id or 0) for row in filtered_rows]

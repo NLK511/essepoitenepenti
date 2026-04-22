@@ -24,9 +24,20 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         from trade_proposer_app.services.proposals import ProposalService
         self.proposal_service = Mock(spec=ProposalService)
+        self.taxonomy_service = Mock()
+        self.taxonomy_service.get_ticker_profile.return_value = {"sector": "Technology"}
+        self.taxonomy_service.get_ticker_relationships.return_value = []
+        self.taxonomy_service.get_transmission_window_definition.return_value = None
+        self.taxonomy_service.get_analysis_slice_label.side_effect = lambda value: str(value)
+        self.taxonomy_service.get_transmission_tag_definition.return_value = None
+        self.taxonomy_service.get_transmission_driver_definition.return_value = None
+        self.taxonomy_service.get_transmission_channel_definition.return_value = None
+        self.taxonomy_service.get_transmission_conflict_definition.return_value = None
+        self.taxonomy_service.get_context_regime_definition.return_value = None
+        self.taxonomy_service.get_transmission_bias_definition.return_value = None
         # Ensure context passthrough for enrichment
         self.proposal_service._apply_news_context.side_effect = lambda ctx, t, as_of=None: ctx
-        self.service = TickerDeepAnalysisService(self.proposal_service)
+        self.service = TickerDeepAnalysisService(self.proposal_service, taxonomy_service=self.taxonomy_service)
 
     # ─── Price Level Arithmetic ───────────────────────────────────────────────
 
@@ -122,6 +133,31 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         comps = self.service._build_confidence_components(context, RecommendationDirection.LONG)
         self.assertEqual(comps["data_quality_cap"], 66.0)
 
+    def test_build_confidence_components_reward_relative_strength_and_volume_confirmation(self) -> None:
+        base = self.service._build_confidence_components(
+            {"momentum_medium": 0.06, "momentum_short": 0.03, "rsi": 56, "price_above_sma50": 1, "price_above_sma200": 1},
+            RecommendationDirection.LONG,
+        )
+        boosted = self.service._build_confidence_components(
+            {
+                "momentum_medium": 0.06,
+                "momentum_short": 0.03,
+                "rsi": 56,
+                "price_above_sma50": 1,
+                "price_above_sma200": 1,
+                "rel_return_5d_vs_spy": 0.03,
+                "rel_return_20d_vs_spy": 0.04,
+                "rel_return_5d_vs_sector": 0.02,
+                "rel_return_20d_vs_sector": 0.03,
+                "volume_ratio_20": 1.4,
+                "dollar_volume_ratio_20": 1.5,
+            },
+            RecommendationDirection.LONG,
+        )
+        self.assertGreater(boosted["directional_confidence"], base["directional_confidence"])
+        self.assertGreater(boosted["technical_clarity"], base["technical_clarity"])
+        self.assertGreater(boosted["execution_clarity"], base["execution_clarity"])
+
     # ─── Setup Classification ─────────────────────────────────────────────────
 
     def test_classify_setup_breakout(self) -> None:
@@ -146,6 +182,38 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         setup = self.service._classify_setup(context, {}, RecommendationDirection.LONG)
         self.assertEqual(setup, "mean_reversion")
 
+    def test_classify_setup_continuation_with_relative_strength_confirmation(self) -> None:
+        context = {
+            "momentum_medium": 0.06,
+            "momentum_short": 0.02,
+            "rsi": 58,
+            "news_item_count": 0,
+            "rel_return_5d_vs_spy": 0.02,
+            "rel_return_20d_vs_spy": 0.03,
+            "rel_return_5d_vs_sector": 0.015,
+            "rel_return_20d_vs_sector": 0.02,
+            "volume_ratio_20": 1.2,
+            "dollar_volume_ratio_20": 1.25,
+        }
+        setup = self.service._classify_setup(context, {"direction_score": 0.54}, RecommendationDirection.LONG)
+        self.assertEqual(setup, "continuation")
+
+    def test_classify_setup_breakout_with_relative_strength_confirmation(self) -> None:
+        context = {
+            "momentum_short": 0.035,
+            "momentum_medium": 0.03,
+            "rsi": 56,
+            "news_item_count": 0,
+            "rel_return_5d_vs_spy": 0.02,
+            "rel_return_20d_vs_spy": 0.025,
+            "rel_return_5d_vs_sector": 0.02,
+            "rel_return_20d_vs_sector": 0.02,
+            "volume_ratio_20": 1.3,
+            "dollar_volume_ratio_20": 1.35,
+        }
+        setup = self.service._classify_setup(context, {}, RecommendationDirection.LONG)
+        self.assertEqual(setup, "breakout")
+
     def test_classify_setup_catalyst(self) -> None:
         """Catalyst: news >= 4 + sentiment >= 0.2."""
         context = {
@@ -167,6 +235,78 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         # If min == max, return 0.5 (neutral)
         self.assertEqual(self.service._normalize_value(100, (100, 100)), 0.5)
 
+    def test_build_reference_features_computes_relative_strength_and_volume_confirmation(self) -> None:
+        dates = pd.date_range("2026-01-01", periods=25, freq="D")
+        ticker_history = pd.DataFrame({
+            "Close": [100.0 + i for i in range(25)],
+            "Volume": [1000.0] * 24 + [2000.0],
+        }, index=dates)
+        spy_history = pd.DataFrame({
+            "Close": [100.0 + (i * 0.2) for i in range(25)],
+            "Volume": [1000.0] * 25,
+        }, index=dates)
+        sector_history = pd.DataFrame({
+            "Close": [100.0 + (i * 0.4) for i in range(25)],
+            "Volume": [1000.0] * 25,
+        }, index=dates)
+
+        def fetch_history(symbol: str, as_of=None):
+            return {"SPY": spy_history, "XLK": sector_history}[symbol]
+
+        self.proposal_service._fetch_price_history.side_effect = fetch_history
+        features = self.service._build_reference_features("AAPL", ticker_history, {"sector": "Technology"})
+
+        self.assertGreater(features["rel_return_5d_vs_spy"], 0.0)
+        self.assertGreater(features["rel_return_20d_vs_spy"], 0.0)
+        self.assertGreater(features["rel_return_5d_vs_sector"], 0.0)
+        self.assertGreater(features["rel_return_20d_vs_sector"], 0.0)
+        expected_volume_ratio = float(ticker_history["Volume"].iloc[-1]) / float(ticker_history["Volume"].tail(20).mean())
+        expected_dollar_volume_ratio = float((ticker_history["Close"] * ticker_history["Volume"]).iloc[-1]) / float((ticker_history["Close"] * ticker_history["Volume"]).tail(20).mean())
+        self.assertAlmostEqual(features["volume_ratio_20"], expected_volume_ratio, places=5)
+        self.assertAlmostEqual(features["dollar_volume_ratio_20"], expected_dollar_volume_ratio, places=5)
+        self.assertEqual(features["reference_features"]["sector_etf_symbol"], "XLK")
+        self.assertTrue(features["reference_features"]["benchmark_available"])
+        self.assertTrue(features["reference_features"]["sector_available"])
+
+    def test_build_reference_features_falls_back_cleanly_when_sector_mapping_missing(self) -> None:
+        dates = pd.date_range("2026-01-01", periods=25, freq="D")
+        ticker_history = pd.DataFrame({
+            "Close": [100.0 + i for i in range(25)],
+            "Volume": [1000.0] * 25,
+        }, index=dates)
+        spy_history = pd.DataFrame({
+            "Close": [100.0 + (i * 0.2) for i in range(25)],
+            "Volume": [1000.0] * 25,
+        }, index=dates)
+
+        self.proposal_service._fetch_price_history.side_effect = lambda symbol, as_of=None: spy_history if symbol == "SPY" else None
+        features = self.service._build_reference_features("AAPL", ticker_history, {"sector": "Unknown Sector"})
+
+        self.assertEqual(features["rel_return_5d_vs_sector"], 0.0)
+        self.assertEqual(features["rel_return_20d_vs_sector"], 0.0)
+        self.assertIsNone(features["reference_features"]["sector_etf_symbol"])
+        self.assertFalse(features["reference_features"]["sector_available"])
+        self.assertIn("sector ETF mapping unavailable", " ".join(features["reference_features"]["notes"]))
+
+    def test_reference_history_is_cached_per_symbol_and_as_of(self) -> None:
+        dates = pd.date_range("2026-01-01", periods=25, freq="D")
+        ticker_history = pd.DataFrame({
+            "Close": [100.0 + i for i in range(25)],
+            "Volume": [1000.0] * 25,
+        }, index=dates)
+        reference_history = pd.DataFrame({
+            "Close": [100.0 + (i * 0.2) for i in range(25)],
+            "Volume": [1000.0] * 25,
+        }, index=dates)
+
+        self.proposal_service._fetch_price_history.side_effect = lambda symbol, as_of=None: reference_history
+
+        first = self.service._safe_fetch_reference_history("SPY", as_of=None, notes=[])
+        second = self.service._safe_fetch_reference_history("SPY", as_of=None, notes=[])
+
+        self.assertIs(first, second)
+        self.assertEqual(self.proposal_service._fetch_price_history.call_count, 1)
+
     # ─── End-to-End Integration (Mocked) ──────────────────────────────────────
 
     def test_analyze_produces_valid_run_output(self) -> None:
@@ -179,19 +319,40 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
             "Close": [102.0] * 250,
             "Volume": [1000] * 250
         }, index=dates)
-        self.proposal_service._fetch_price_history.return_value = history
+        benchmark = pd.DataFrame({
+            "Open": [100.0] * 250,
+            "High": [101.0] * 250,
+            "Low": [99.0] * 250,
+            "Close": [100.0 + (i * 0.1) for i in range(250)],
+            "Volume": [900] * 250,
+        }, index=dates)
+        sector = pd.DataFrame({
+            "Open": [100.0] * 250,
+            "High": [101.5] * 250,
+            "Low": [99.0] * 250,
+            "Close": [100.0 + (i * 0.15) for i in range(250)],
+            "Volume": [950] * 250,
+        }, index=dates)
+
+        def fetch_history(symbol: str, as_of=None):
+            return {"AAPL": history, "SPY": benchmark, "XLK": sector}[symbol]
+
+        self.proposal_service._fetch_price_history.side_effect = fetch_history
         self.proposal_service._last_price_history_fetch_diagnostics = {"source": "remote", "remote_attempt_count": 1, "selected_bar_count": 250}
 
         output = self.service.analyze("AAPL")
-        
+
         self.assertEqual(output.recommendation.ticker, "AAPL")
         self.assertIn("AAPL", output.diagnostics.analysis_json)
-        
+
         # Verify JSON diagnostics
         analysis = json.loads(output.diagnostics.analysis_json)
         self.assertIn("technical", analysis)
         self.assertIn("feature_vector", analysis)
         self.assertEqual(analysis["ticker_deep_analysis"]["price_history"]["source"], "remote")
+        self.assertIn("rel_return_5d_vs_spy", analysis["technical"])
+        self.assertIn("volume_ratio_20", analysis["technical"])
+        self.assertEqual(analysis["technical"]["reference_features"]["sector_etf_symbol"], "XLK")
 
 if __name__ == "__main__":
     unittest.main()

@@ -146,7 +146,7 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
     return {
       eyebrow: "Advanced review",
       title: "Recommendation quality summary",
-      description: "Review calibration, evidence concentration, and walk-forward readiness in one consolidated place.",
+      description: "Review confidence quality, where results look strongest, and walk-forward readiness in one consolidated place.",
     };
   }
   if (pathname.startsWith("/research/signal-gating/gating-job") || pathname.startsWith("/research/signal-gating")) {

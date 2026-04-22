@@ -183,8 +183,15 @@ The feature set includes market-derived inputs such as:
 - volatility
 - mean-reversion signals
 - liquidity and volume context
+- relative-strength comparisons versus the broad market and the ticker's sector ETF
+- simple volume-confirmation measures such as current volume versus its recent baseline
 
 The app persists both raw and normalized values.
+
+### Current implementation status
+- **implemented now:** broad-market relative strength (`SPY`) and sector-ETF relative strength over short and medium lookbacks, plus simple volume-ratio and dollar-volume-ratio confirmation features in ticker deep analysis
+- **implemented now:** if benchmark or sector ETF data is missing, deep analysis falls back to neutral values and records the gap in diagnostics instead of failing the whole recommendation
+- **not implemented yet:** broader feature expansion such as full breadth, gap/overnight behavior, or more advanced chop/compression regime measures
 
 ## Scoring and confidence
 
@@ -204,6 +211,11 @@ Confidence is a weighted aggregation of normalized components:
 - **technical clarity**
 - **execution clarity**
 
+Light feature wiring is now in place:
+- aligned relative strength versus `SPY` and sector can modestly lift directional confidence
+- stronger-than-normal volume participation can modestly lift technical and execution clarity
+- these features are used as supporting evidence, not as dominant drivers yet
+
 A data-quality cap can reduce the final confidence when warnings, weak coverage, or feed errors are present.
 
 ### Setup family
@@ -213,6 +225,10 @@ Each recommendation is classified into a setup family for later analysis and cal
 - breakout/breakdown
 - mean reversion
 - macro beneficiary/loser
+
+Light feature wiring is also in place here:
+- strong relative strength plus above-baseline volume can help confirm a continuation or breakout-style label
+- when those confirming features are absent, the older momentum/RSI rules still remain the main path
 
 ### Transmission analysis
 The methodology also tracks how well a trade idea is supported from macro or industry context down to the ticker.

@@ -124,12 +124,12 @@ class RecommendationEvidenceConcentrationService:
         slice_label = self.taxonomy_service.get_analysis_slice_label(slice_name)
         cohort_label = bucket.label or bucket.key.replace("_", " ")
         if bucket.sample_status in {"insufficient", "limited"}:
-            return f"{slice_label} cohort '{cohort_label}' is visible but still too thin for strong trust."
+            return f"{slice_label} group '{cohort_label}' is visible, but there are still too few finished outcomes to trust it much."
         if (edge_win or 0.0) >= 8.0 and (edge_return or 0.0) >= 0.5:
-            return f"{slice_label} cohort '{cohort_label}' is one of the strongest places to concentrate operator attention."
+            return f"{slice_label} group '{cohort_label}' is one of the clearer bright spots right now."
         if (edge_win or 0.0) <= -8.0:
-            return f"{slice_label} cohort '{cohort_label}' is currently underperforming the overall book and should stay constrained."
-        return f"{slice_label} cohort '{cohort_label}' is measurable, but edge concentration remains modest."
+            return f"{slice_label} group '{cohort_label}' is doing worse than the overall average right now, so keep it on a short leash."
+        return f"{slice_label} group '{cohort_label}' is measurable, but it does not stand out strongly yet."
 
     @staticmethod
     def _focus_message(
@@ -138,9 +138,9 @@ class RecommendationEvidenceConcentrationService:
         weakest: list[RecommendationEvidenceConcentrationCohort],
     ) -> str:
         if resolved_outcomes < 20:
-            return "Outcome history is still thin, so the priority remains evidence collection rather than aggressive concentration."
+            return "There are not enough finished outcomes yet to tell where the system really works best. Treat this as early signal only and keep collecting results."
         if not positive_usable:
-            return "No cohort has yet separated cleanly enough to justify stronger concentration; keep the system conservative."
-        weakest_label = weakest[0].label if weakest else "the weaker slices"
-        weakest_slice = weakest[0].slice_label if weakest and weakest[0].slice_label else "weaker slices"
-        return f"Concentrate review on the strongest usable cohorts first and keep {weakest_slice} cohort '{weakest_label}' constrained until the evidence improves."
+            return "No group is clearly outperforming the rest yet. Stay selective and avoid leaning harder into any one pattern for now."
+        weakest_label = weakest[0].label if weakest else "the weaker groups"
+        weakest_slice = weakest[0].slice_label if weakest and weakest[0].slice_label else "weaker groups"
+        return f"A few groups are standing out from the average. Spend more attention on the stronger groups first, and stay cautious with {weakest_slice} '{weakest_label}' until results improve."

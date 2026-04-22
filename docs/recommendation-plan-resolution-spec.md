@@ -55,6 +55,46 @@ If the plan is still unresolved after the full generated horizon has passed, the
 
 This rule exists to prevent stale plans from lingering in the open set after their intended evaluation window is no longer valid.
 
+## Near-entry miss diagnostics
+
+Some expired or `no_entry` plans are not pure thesis failures.
+
+A plan can miss entry by a very small amount and then still move in the forecasted direction. The evaluator should keep the execution truth (`no_entry` while open, `expired` after the horizon), but it should also record extra diagnostics so the operator can distinguish:
+
+- bad thesis
+- bad fill framing
+- almost-entered plans that likely needed a less strict entry zone
+
+### Expected behavior
+
+For plans that never touch entry, the evaluator should also record:
+
+- the closest miss distance to the entry zone, expressed as a percent of the entry reference
+- whether that miss qualifies as a `near_entry_miss`
+- whether price still moved in the forecasted direction without entry (`direction_worked_without_entry`)
+
+These diagnostics are:
+
+- **not** alternative outcomes
+- **not** wins or losses
+- **not** part of headline win-rate math
+- intended for review, diagnostics, and later entry-tuning work
+
+### Fixed threshold policy
+
+To avoid hindsight fitting, near-miss detection should use a fixed rule.
+
+Current rule:
+- `near_entry_miss = true` when the closest miss distance is at most `0.25%` of the entry reference
+
+That threshold may be changed later, but only by explicit spec change and corresponding regression tests.
+
+### Current implementation status
+
+- **implemented now:** `no_entry` and later `expired` outcomes retain `entry_miss_distance_percent`, `near_entry_miss`, and `direction_worked_without_entry`
+- **implemented now:** these diagnostics preserve execution truth instead of relabeling near-miss plans as wins
+- **not implemented yet:** alternate-fill simulation, ATR-scaled miss thresholds, and automatic entry retuning based on these diagnostics
+
 ## Phantom trades (Recall optimization)
 
 To enable recall optimization, the system tracks "phantom trades" for plans where the system decided **not** to trade (`action = "no_action"` or `watchlist`).

@@ -20,13 +20,15 @@ async def get_performance_assessment(session: Session = Depends(get_db_session))
     payload = service.latest_assessment()
     latest_run = payload.get("latest_run")
     latest_summary = payload.get("latest_summary") if isinstance(payload.get("latest_summary"), dict) else {}
-    calibration_summary = RecommendationPlanCalibrationService(RecommendationOutcomeRepository(session)).summarize(limit=500)
+    outcomes = RecommendationOutcomeRepository(session)
+    calibration_summary = RecommendationPlanCalibrationService(outcomes).summarize(limit=500)
     return {
         "job": payload.get("job"),
         "history_count": payload.get("history_count", 0),
         "latest_run": latest_run,
         "latest_assessment": latest_summary,
         "calibration_summary": calibration_summary,
+        "entry_miss_diagnostics": outcomes.summarize_entry_miss_diagnostics(),
         "windowed_assessments": payload.get("windowed_assessments", []),
     }
 

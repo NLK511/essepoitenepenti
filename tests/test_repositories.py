@@ -696,6 +696,48 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(stored.status, "open")
         self.assertEqual(stored.notes, "recomputed with updated algorithm")
 
+    def test_recommendation_outcome_repository_summarizes_entry_miss_diagnostics(self) -> None:
+        session = create_session()
+        plan_repository = RecommendationPlanRepository(session)
+        outcome_repository = RecommendationOutcomeRepository(session)
+        plan = plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="EOG",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=67.95,
+                entry_price_low=151.8925,
+                entry_price_high=151.8925,
+                stop_loss=149.0889,
+                take_profit=156.2066,
+                signal_breakdown={"setup_family": "catalyst_follow_through"},
+                computed_at=datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc),
+            )
+        )
+        outcome_repository.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=plan.id or 0,
+                ticker="EOG",
+                action="long",
+                outcome="expired",
+                status="resolved",
+                entry_touched=False,
+                entry_miss_distance_percent=0.12,
+                near_entry_miss=True,
+                direction_worked_without_entry=True,
+                confidence_bucket="65_to_79",
+                setup_family="catalyst_follow_through",
+            )
+        )
+
+        summary = outcome_repository.summarize_entry_miss_diagnostics()
+        self.assertEqual(summary["never_entered_count"], 1)
+        self.assertEqual(summary["near_entry_miss_count"], 1)
+        self.assertEqual(summary["direction_worked_without_entry_count"], 1)
+        self.assertEqual(summary["near_entry_and_worked_count"], 1)
+        self.assertEqual(summary["near_entry_and_worked_rate_percent"], 100.0)
+        self.assertEqual(summary["average_entry_miss_distance_percent"], 0.12)
+
     def test_historical_market_data_list_bars_handles_missing_available_at_column(self) -> None:
         engine = create_engine("sqlite:///:memory:", future=True)
         with engine.begin() as connection:
@@ -1524,6 +1566,79 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(updated.decision_type, "near_miss")
         self.assertEqual(updated.review_priority, "high")
         self.assertEqual(repository.count_samples(), 1)
+
+    def test_decision_samples_can_filter_by_benchmark_result(self) -> None:
+        session = create_session()
+        repository = RecommendationDecisionSampleRepository(session)
+
+        repository.upsert_sample(
+            RecommendationDecisionSample(
+                recommendation_plan_id=None,
+                ticker="AAPL",
+                horizon="1w",
+                action="no_action",
+                decision_type="no_action",
+                decision_reason="not_shortlisted",
+                shortlisted=False,
+                confidence_percent=61.0,
+                setup_family="continuation",
+                review_priority="low",
+                benchmark_status="pending",
+                ticker_signal_snapshot_id=1001,
+            )
+        )
+        repository.upsert_sample(
+            RecommendationDecisionSample(
+                recommendation_plan_id=None,
+                ticker="MSFT",
+                horizon="1w",
+                action="no_action",
+                decision_type="no_action",
+                decision_reason="not_shortlisted",
+                shortlisted=False,
+                confidence_percent=64.0,
+                setup_family="continuation",
+                review_priority="low",
+                benchmark_status="evaluated",
+                benchmark_target_1d_hit=True,
+                benchmark_target_5d_hit=False,
+                benchmark_max_favorable_pct=3.2,
+                ticker_signal_snapshot_id=1002,
+            )
+        )
+        repository.upsert_sample(
+            RecommendationDecisionSample(
+                recommendation_plan_id=None,
+                ticker="NVDA",
+                horizon="1w",
+                action="no_action",
+                decision_type="no_action",
+                decision_reason="not_shortlisted",
+                shortlisted=False,
+                confidence_percent=66.0,
+                setup_family="continuation",
+                review_priority="low",
+                benchmark_status="evaluated",
+                benchmark_target_1d_hit=False,
+                benchmark_target_5d_hit=False,
+                benchmark_max_favorable_pct=0.8,
+                ticker_signal_snapshot_id=1003,
+            )
+        )
+
+        pending = repository.list_samples(limit=10, benchmark_result="pending")
+        hits = repository.list_samples(limit=10, benchmark_result="hit")
+        misses = repository.list_samples(limit=10, benchmark_result="miss")
+
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0].ticker, "AAPL")
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0].ticker, "MSFT")
+        self.assertEqual(len(misses), 1)
+        self.assertEqual(misses[0].ticker, "NVDA")
+        self.assertEqual(repository.count_samples(benchmark_result="pending"), 1)
+        self.assertEqual(repository.count_samples(benchmark_result="hit"), 1)
+        self.assertEqual(repository.count_samples(benchmark_result="miss"), 1)
 
     def test_job_repository_delete_removes_job_runs_and_recommendations_without_nulling_run_job_id(self) -> None:
         session = create_session()

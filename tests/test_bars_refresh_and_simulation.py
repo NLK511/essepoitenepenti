@@ -54,6 +54,88 @@ class BarsRefreshAndSimulationTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_bars_refresh_service_retries_unresolved_tickers_until_success(self) -> None:
+        session = create_session()
+        try:
+            repository = HistoricalMarketDataRepository(session)
+            service = BarsRefreshService(repository)
+
+            aapl_time = datetime.now(timezone.utc).replace(second=0, microsecond=0) - timedelta(days=1)
+            msft_time = aapl_time + timedelta(minutes=1)
+            aapl_df = pd.DataFrame([
+                {"Open": 101.0, "High": 102.0, "Low": 100.0, "Close": 101.5, "Volume": 2000}
+            ], index=[aapl_time])
+            msft_df = pd.DataFrame([
+                {"Open": 201.0, "High": 202.0, "Low": 200.0, "Close": 201.5, "Volume": 3000}
+            ], index=[msft_time])
+            aapl_df.index = aapl_df.index.tz_localize(timezone.utc) if aapl_df.index.tz is None else aapl_df.index
+            msft_df.index = msft_df.index.tz_localize(timezone.utc) if msft_df.index.tz is None else msft_df.index
+
+            call_counts = {"AAPL": 0, "MSFT": 0}
+
+            def fake_download(ticker: str, *args, **kwargs):
+                call_counts[ticker] += 1
+                if ticker == "AAPL" and call_counts[ticker] == 1:
+                    return pd.DataFrame()
+                if ticker == "AAPL":
+                    return aapl_df
+                return msft_df
+
+            with patch("trade_proposer_app.services.bars_refresh.time.sleep", return_value=None), patch(
+                "yfinance.download", side_effect=fake_download
+            ):
+                result = service.refresh_bars(["AAPL", "MSFT"], lookback_days=7)
+
+            self.assertEqual(result["total_ingested"], 2)
+            self.assertEqual(result["ticker_stats"]["AAPL"], 1)
+            self.assertEqual(result["ticker_stats"]["MSFT"], 1)
+            self.assertEqual(result["retry_diagnostics"]["AAPL"]["attempt_count"], 2)
+            self.assertEqual(result["retry_diagnostics"]["MSFT"]["attempt_count"], 1)
+            self.assertEqual(call_counts["AAPL"], 2)
+            self.assertEqual(call_counts["MSFT"], 1)
+            self.assertEqual(result["warnings"], [])
+        finally:
+            session.close()
+
+    def test_bars_refresh_service_reports_empty_warning_after_retry_exhaustion(self) -> None:
+        session = create_session()
+        try:
+            repository = HistoricalMarketDataRepository(session)
+            service = BarsRefreshService(repository)
+
+            with patch("trade_proposer_app.services.bars_refresh.time.sleep", return_value=None), patch(
+                "yfinance.download", return_value=pd.DataFrame()
+            ):
+                result = service.refresh_bars(["AAPL"], lookback_days=7)
+
+            self.assertEqual(result["total_ingested"], 0)
+            self.assertEqual(result["ticker_stats"]["AAPL"], 0)
+            self.assertEqual(result["retry_diagnostics"]["AAPL"]["attempt_count"], service.MAX_REFRESH_ATTEMPTS)
+            self.assertEqual(len(result["warnings"]), 1)
+            self.assertIn("No data returned from Yahoo after 3 attempts", result["warnings"][0])
+        finally:
+            session.close()
+
+    def test_bars_refresh_service_reports_warning_after_retry_exhaustion(self) -> None:
+        session = create_session()
+        try:
+            repository = HistoricalMarketDataRepository(session)
+            service = BarsRefreshService(repository)
+
+            with patch("trade_proposer_app.services.bars_refresh.time.sleep", return_value=None), patch(
+                "yfinance.download", side_effect=RuntimeError("temporary upstream error")
+            ):
+                result = service.refresh_bars(["AAPL"], lookback_days=7)
+
+            self.assertEqual(result["total_ingested"], 0)
+            self.assertEqual(result["ticker_stats"]["AAPL"], -1)
+            self.assertEqual(result["retry_diagnostics"]["AAPL"]["attempt_count"], service.MAX_REFRESH_ATTEMPTS)
+            self.assertEqual(len(result["warnings"]), 1)
+            self.assertIn("after 3 attempts", result["warnings"][0])
+            self.assertIn("temporary upstream error", result["warnings"][0])
+        finally:
+            session.close()
+
     def test_cheap_scan_signal_service_database_source(self) -> None:
         session = create_session()
         try:

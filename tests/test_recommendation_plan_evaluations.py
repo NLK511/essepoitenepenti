@@ -728,12 +728,27 @@ class EvaluatePlanOutcomeMatrixTests(EvalTestBase):
         self.assertEqual(out.outcome, "no_entry")
         self.assertEqual(out.status, "open")
         self.assertFalse(out.entry_touched)
+        self.assertAlmostEqual(out.entry_miss_distance_percent, 0.1, places=4)
+        self.assertTrue(out.near_entry_miss)
+        self.assertFalse(out.direction_worked_without_entry)
+
+    def test_no_entry_flags_near_miss_when_price_almost_touches_then_moves_right(self) -> None:
+        plan = self._plan_with("long", entry=100.0, stop=90.0, take=110.0)
+        out = self._svc()._evaluate_plan(plan, self._frame_one(104.0, 100.2, 104.0), run_id=None)
+        self.assertEqual(out.outcome, "no_entry")
+        self.assertAlmostEqual(out.entry_miss_distance_percent, 0.2, places=4)
+        self.assertTrue(out.near_entry_miss)
+        self.assertTrue(out.direction_worked_without_entry)
+        self.assertTrue(out.direction_correct)
+        self.assertIn("very close to entry", out.notes)
 
     def test_short_no_entry_when_price_never_touches_entry_zone(self) -> None:
         plan = self._plan_with("short", entry=100.0, stop=110.0, take=90.0)
         out = self._svc()._evaluate_plan(plan, self._frame_one(99.9, 95.0), run_id=None)
         self.assertEqual(out.outcome, "no_entry")
         self.assertFalse(out.entry_touched)
+        self.assertAlmostEqual(out.entry_miss_distance_percent, 0.1, places=4)
+        self.assertTrue(out.near_entry_miss)
 
     # ── entry touched, no exit yet (open) ──
 
@@ -1152,6 +1167,9 @@ class PhantomTradeEndToEndTests(EvalTestBase):
         out = self._get("AMD")
         self.assertEqual(out.outcome, "phantom_no_entry")
         self.assertFalse(out.entry_touched)
+        self.assertEqual(out.entry_miss_distance_percent, 5.0)
+        self.assertFalse(out.near_entry_miss)
+        self.assertTrue(out.direction_worked_without_entry)
 
     def test_phantom_no_entry_after_horizon_becomes_expired(self) -> None:
         # Same setup but as_of is well past the 1w horizon → phantom_no_entry (open) → expired
@@ -1163,11 +1181,14 @@ class PhantomTradeEndToEndTests(EvalTestBase):
             stop_loss=90.0, take_profit=120.0,
             computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
         )
-        cache = self._phantom_cache([115.0, 112.0], [105.0, 108.0], [112.0, 110.0], "AMD2")
+        cache = self._phantom_cache([100.24, 112.0], [100.02, 108.0], [111.5, 110.0], "AMD2")
         self._eval_phantom(plan, cache, as_of=datetime(2026, 2, 1, tzinfo=timezone.utc))
         items = self.outcomes.list_outcomes(ticker="AMD2")
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0].outcome, "expired")
+        self.assertAlmostEqual(items[0].entry_miss_distance_percent, 0.02, places=4)
+        self.assertTrue(items[0].near_entry_miss)
+        self.assertTrue(items[0].direction_worked_without_entry)
 
     def test_phantom_win_for_watchlist_short(self) -> None:
         plan = self._create(

@@ -59,10 +59,17 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         outcome: str,
         setup_family: str = "breakout",
         action: str = "long",
+        intended_action: str | None = None,
         stop_loss_hit: bool | None = None,
         take_profit_hit: bool | None = None,
         horizon_return_5d: float | None = None,
     ) -> None:
+        signal_breakdown = {
+            "setup_family": setup_family,
+            "transmission_summary": {"context_bias": "tailwind"},
+        }
+        if intended_action is not None:
+            signal_breakdown["intended_action"] = intended_action
         plan = self.plan_repository.create_plan(
             RecommendationPlan(
                 ticker="EOG",
@@ -73,10 +80,7 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
                 entry_price_high=100.0,
                 stop_loss=95.0,
                 take_profit=110.0,
-                signal_breakdown={
-                    "setup_family": setup_family,
-                    "transmission_summary": {"context_bias": "tailwind"},
-                },
+                signal_breakdown=signal_breakdown,
                 computed_at=created_at,
             )
         )
@@ -183,6 +187,54 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
 
         self.assertEqual(baseline_levels, (100.0, 100.0, 95.75, 111.2))
         self.assertEqual(overridden_levels, (99.5, 100.5, 96.0, 111.7))
+
+    def test_eligible_records_include_scoreable_phantom_wins_and_losses_only_for_no_action_or_watchlist(self) -> None:
+        self._seed_record(
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            mfe=15.0,
+            mae=4.0,
+            outcome="win",
+            action="long",
+            stop_loss_hit=False,
+            take_profit_hit=True,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 2, tzinfo=timezone.utc),
+            mfe=14.0,
+            mae=4.0,
+            outcome="phantom_win",
+            action="no_action",
+            intended_action="long",
+            stop_loss_hit=False,
+            take_profit_hit=True,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 3, tzinfo=timezone.utc),
+            mfe=2.0,
+            mae=11.0,
+            outcome="phantom_loss",
+            action="watchlist",
+            intended_action="short",
+            stop_loss_hit=True,
+            take_profit_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 4, tzinfo=timezone.utc),
+            mfe=0.0,
+            mae=0.0,
+            outcome="phantom_no_entry",
+            action="no_action",
+            intended_action="long",
+            horizon_return_5d=-0.25,
+        )
+
+        eligible = self.service._eligible_records(ticker="EOG", setup_family=None, limit=50)
+
+        self.assertEqual(len(eligible), 3)
+        self.assertEqual([record.plan.action for record in eligible], ["long", "no_action", "watchlist"])
+        scored = self.service._score_records(eligible, normalize_plan_generation_tuning_config(None))
+        self.assertEqual(scored[0], 3)
+        self.assertEqual(scored[1], 2)
 
 
 class PlanGenerationTuningRouteTests(unittest.IsolatedAsyncioTestCase):

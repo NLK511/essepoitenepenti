@@ -178,6 +178,18 @@ export interface AppPreflightReport {
   checks: PreflightCheck[];
 }
 
+export interface EntryMissDiagnosticsSummary {
+  never_entered_count: number;
+  near_entry_miss_count: number;
+  direction_worked_without_entry_count: number;
+  near_entry_and_worked_count: number;
+  near_entry_miss_rate_percent: number | null;
+  direction_worked_without_entry_rate_percent: number | null;
+  near_entry_and_worked_rate_percent: number | null;
+  average_entry_miss_distance_percent: number | null;
+  average_near_entry_miss_distance_percent: number | null;
+}
+
 export interface RecommendationQualityWindowSummary {
   window_label?: string;
   computed_after?: string;
@@ -199,6 +211,7 @@ export interface RecommendationQualityWindowSummary {
   strongest_positive_count: number;
   weakest_count: number;
   family_count: number;
+  entry_miss_diagnostics: EntryMissDiagnosticsSummary;
   walk_forward_promotion_recommended: boolean | null;
   walk_forward_average_win_rate_delta: number | null;
   walk_forward_average_expected_value_delta: number | null;
@@ -230,6 +243,7 @@ export interface RecommendationQualityResponse {
   summary: RecommendationQualitySummary;
   windowed_summaries: RecommendationQualityWindowSummary[];
   calibration: CalibrationSummary;
+  entry_miss_diagnostics: EntryMissDiagnosticsSummary;
   baselines: RecommendationBaselineSummary;
   evidence_concentration: RecommendationEvidenceConcentrationSummary;
   setup_family_review: Record<string, unknown>;
@@ -475,6 +489,9 @@ export interface RecommendationPlanOutcome {
   horizon_return_1d: number | null;
   horizon_return_3d: number | null;
   horizon_return_5d: number | null;
+  entry_miss_distance_percent: number | null;
+  near_entry_miss: boolean | null;
+  direction_worked_without_entry: boolean | null;
   max_favorable_excursion: number | null;
   max_adverse_excursion: number | null;
   realized_holding_period_days: number | null;
@@ -517,6 +534,12 @@ export interface RecommendationDecisionSample {
   decision_context: Record<string, unknown>;
   signal_breakdown: Record<string, unknown>;
   evidence_summary: Record<string, unknown>;
+  benchmark_direction: string | null;
+  benchmark_status: string;
+  benchmark_target_1d_hit: boolean | null;
+  benchmark_target_5d_hit: boolean | null;
+  benchmark_max_favorable_pct: number | null;
+  benchmark_evaluated_at: string | null;
   run_id: number | null;
   job_id: number | null;
   watchlist_id: number | null;
@@ -898,6 +921,9 @@ export interface SignalGatingTuningCandidateResult {
   score: number | null;
   selected_count: number;
   resolved_selected_count: number;
+  benchmark_selected_count: number;
+  benchmark_hit_count: number;
+  benchmark_miss_count: number;
   resolved_sample_count: number;
   win_count: number;
   loss_count: number;
@@ -930,6 +956,8 @@ export interface SignalGatingTuningRun {
   filters: Record<string, unknown>;
   sample_count: number;
   resolved_sample_count: number;
+  benchmark_sample_count: number;
+  scoreable_sample_count: number;
   candidate_count: number;
   baseline_threshold: number | null;
   baseline_score: number | null;
@@ -1020,6 +1048,7 @@ export interface PerformanceAssessmentResponse {
   latest_run: Run | null;
   latest_assessment: Record<string, unknown>;
   calibration_summary: CalibrationSummary | null;
+  entry_miss_diagnostics?: EntryMissDiagnosticsSummary | null;
   windowed_assessments?: PerformanceWindowAssessment[];
 }
 

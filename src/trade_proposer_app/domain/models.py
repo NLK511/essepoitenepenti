@@ -46,6 +46,7 @@ class NewsBundle(BaseModel):
     articles: list[NewsArticle] = Field(default_factory=list)
     feeds_used: list[str] = Field(default_factory=list)
     feed_errors: list[str] = Field(default_factory=list)
+    query_diagnostics: dict[str, object] = Field(default_factory=dict)
 
 
 class SignalEngagement(BaseModel):
@@ -494,6 +495,9 @@ class RecommendationPlanOutcome(BaseModel):
     horizon_return_1d: float | None = None
     horizon_return_3d: float | None = None
     horizon_return_5d: float | None = None
+    entry_miss_distance_percent: float | None = None
+    near_entry_miss: bool | None = None
+    direction_worked_without_entry: bool | None = None
     max_favorable_excursion: float | None = None
     max_adverse_excursion: float | None = None
     realized_holding_period_days: float | None = None
@@ -537,6 +541,12 @@ class RecommendationDecisionSample(BaseModel):
     decision_context: dict[str, object] = Field(default_factory=dict)
     signal_breakdown: dict[str, object] = Field(default_factory=dict)
     evidence_summary: dict[str, object] = Field(default_factory=dict)
+    benchmark_direction: str | None = None
+    benchmark_status: str = "pending"
+    benchmark_target_1d_hit: bool | None = None
+    benchmark_target_5d_hit: bool | None = None
+    benchmark_max_favorable_pct: float | None = None
+    benchmark_evaluated_at: datetime | None = None
     run_id: int | None = None
     job_id: int | None = None
     watchlist_id: int | None = None
@@ -764,6 +774,8 @@ class RecommendationSignalGatingTuningRun(BaseModel):
     filters: dict[str, object] = Field(default_factory=dict)
     sample_count: int = 0
     resolved_sample_count: int = 0
+    benchmark_sample_count: int = 0
+    scoreable_sample_count: int = 0
     candidate_count: int = 0
     baseline_threshold: float | None = None
     baseline_score: float | None = None

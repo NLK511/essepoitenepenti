@@ -20,6 +20,7 @@ async def list_recommendation_decision_samples(
     setup_family: str | None = Query(default=None),
     transmission_bias: str | None = Query(default=None),
     context_regime: str | None = Query(default=None),
+    benchmark_result: str | None = Query(default=None),
     created_after: str | None = Query(default=None),
     created_before: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
@@ -33,6 +34,7 @@ async def list_recommendation_decision_samples(
     normalized_setup_family = setup_family.strip().lower() if setup_family else None
     normalized_transmission_bias = transmission_bias.strip().lower() if transmission_bias else None
     normalized_context_regime = context_regime.strip().lower() if context_regime else None
+    normalized_benchmark_result = benchmark_result.strip().lower() if benchmark_result else None
     normalized_created_after = _parse_datetime(created_after)
     normalized_created_before = _parse_datetime(created_before)
     items = repository.list_samples(
@@ -44,6 +46,7 @@ async def list_recommendation_decision_samples(
         setup_family=normalized_setup_family,
         transmission_bias=normalized_transmission_bias,
         context_regime=normalized_context_regime,
+        benchmark_result=normalized_benchmark_result,
         created_after=normalized_created_after,
         created_before=normalized_created_before,
         limit=limit,
@@ -58,6 +61,7 @@ async def list_recommendation_decision_samples(
         setup_family=normalized_setup_family,
         transmission_bias=normalized_transmission_bias,
         context_regime=normalized_context_regime,
+        benchmark_result=normalized_benchmark_result,
         created_after=normalized_created_after,
         created_before=normalized_created_before,
     )
