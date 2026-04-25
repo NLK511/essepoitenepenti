@@ -118,6 +118,26 @@ class BrokerOrderExecutionRepository:
         ).all()
         return [self._to_model(row) for row in rows]
 
+    def get_latest_by_plan_ids(self, plan_ids: list[int]) -> dict[int, BrokerOrderExecution]:
+        normalized = [plan_id for plan_id in plan_ids if isinstance(plan_id, int)]
+        if not normalized:
+            return {}
+        rows = self.session.scalars(
+            select(BrokerOrderExecutionRecord)
+            .where(BrokerOrderExecutionRecord.recommendation_plan_id.in_(normalized))
+            .order_by(
+                BrokerOrderExecutionRecord.recommendation_plan_id.asc(),
+                BrokerOrderExecutionRecord.updated_at.desc(),
+                BrokerOrderExecutionRecord.created_at.desc(),
+                BrokerOrderExecutionRecord.id.desc(),
+            )
+        ).all()
+        latest: dict[int, BrokerOrderExecution] = {}
+        for row in rows:
+            if row.recommendation_plan_id not in latest:
+                latest[row.recommendation_plan_id] = self._to_model(row)
+        return latest
+
     def _to_model(self, record: BrokerOrderExecutionRecord) -> BrokerOrderExecution:
         return BrokerOrderExecution(
             id=record.id,

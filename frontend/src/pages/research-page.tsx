@@ -218,32 +218,27 @@ export function ResearchPage() {
       <PageHeader
         kicker="Research"
         title="Keep advanced review and tuning separate from daily operations."
-        subtitle="Use this area for secondary review, tuning, and performance assessment after the main workflow is already running."
         actions={<HelpHint tooltip="Research pages are secondary tools for advanced review, tuning, and performance assessment." to="/docs?doc=operator-page-field-guide" />}
       />
 
       <div className="stack-page">
-        <Card>
-          <SectionTitle kicker="Research view" title="Choose a secondary workflow" />
-          <div className="top-gap-small">
-            <SegmentedTabs
-              value={activeTab}
-              options={[
-                { value: "overview", label: "Overview" },
-                { value: "calibration", label: "Calibration" },
-                { value: "validation", label: "Validation" },
-                { value: "tuning", label: "Tuning" },
-              ]}
-              onChange={setActiveTab}
-            />
-          </div>
-        </Card>
+        <div className="top-gap-small">
+          <SegmentedTabs
+            value={activeTab}
+            options={[
+              { value: "overview", label: "Overview" },
+              { value: "calibration", label: "Calibration" },
+              { value: "validation", label: "Validation" },
+              { value: "tuning", label: "Tuning" },
+            ]}
+            onChange={setActiveTab}
+          />
+        </div>
 
         <Card>
           <SectionTitle
             kicker="Performance assessment"
             title="Latest automated review"
-            subtitle="The performance-assessment job stays available here as a secondary review surface."
             actions={<button type="button" className="button-secondary" onClick={() => void handleRunAssessment()} disabled={running}>{running ? "Queueing…" : "Run now"}</button>}
           />
           {loading ? <div className="helper-text">Loading latest assessment…</div> : null}

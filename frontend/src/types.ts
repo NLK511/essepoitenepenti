@@ -114,7 +114,6 @@ export interface AppSetting {
 export interface ProviderCredential {
   provider: string;
   api_key: string;
-  api_secret: string;
 }
 
 export interface BrokerOrderExecution {
@@ -282,12 +281,51 @@ export interface RecommendationQualityResponse {
   next_actions: string[];
 }
 
+export interface DashboardSummary {
+  plan_amount: number;
+  signals_amount: number;
+  shortlisted_plans: number;
+  shortlist_rate_percent: number | null;
+  actionable_plans: number;
+  actionable_rate_percent: number | null;
+  win_rate_percent: number | null;
+  profit_percent: number | null;
+}
+
+export interface DashboardTechnicalSummary {
+  news_processed: number;
+  tweets_processed: number;
+  bars_stored: number;
+  orders_placed: number;
+}
+
+export interface DashboardFailure {
+  source: string;
+  label: string;
+  detail: string;
+  run_id: number | null;
+  status: string;
+  created_at: string | null;
+}
+
+export interface DashboardWarningSummary {
+  label: string;
+  count: number;
+  sources: string[];
+}
+
 export interface DashboardResponse {
+  dashboard_window: string;
   watchlists: Watchlist[];
   jobs: Job[];
   latest_runs: Run[];
+  recent_runs: Run[];
   recommendation_plans: RecommendationPlan[];
   recommendation_quality?: RecommendationQualityResponse;
+  dashboard_summary: DashboardSummary;
+  technical_summary: DashboardTechnicalSummary;
+  major_failures: DashboardFailure[];
+  distinct_warnings: DashboardWarningSummary[];
 }
 
 export interface KeyLabelDetail {
@@ -612,6 +650,12 @@ export interface RecommendationPlan {
   watchlist_id: number | null;
   ticker_signal_snapshot_id: number | null;
   latest_outcome: RecommendationPlanOutcome | null;
+  broker_order_id: string | null;
+  broker_order_status: string | null;
+  broker_order_updated_at: string | null;
+  effective_evaluation: string | null;
+  effective_evaluation_source: string;
+  effective_evaluation_detail: string;
 }
 
 export interface RecommendationPlanListResponse {

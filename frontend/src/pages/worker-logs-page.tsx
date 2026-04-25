@@ -126,7 +126,6 @@ export function WorkerLogsPage() {
       <PageHeader
         kicker="Worker diagnostics"
         title={workerId ? `Worker logs · ${workerId}` : "Worker logs"}
-        subtitle="Watch the worker heartbeat and inspect the live log stream for the selected process."
         actions={<Link to="/" className="button-secondary">Back to dashboard</Link>}
       />
 
@@ -171,7 +170,6 @@ export function WorkerLogsPage() {
         <SectionTitle
           kicker="Live stream"
           title="Worker log output"
-          subtitle="This tail refreshes automatically so you can watch the worker as it runs."
           actions={
             <div className="worker-log-toolbar">
               <label className="worker-log-toggle">

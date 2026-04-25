@@ -35,8 +35,8 @@ These define the current product truth.
 ### Recommendation workflow
 - `recommendation-methodology.md` — current scoring and planning pipeline
 - `recommendation-plan-resolution-spec.md` — canonical plan outcome semantics
-- `archive/implementation-plans/recommendation-plan-evaluation-recompute-notes.md` — evaluator edge cases and recompute notes
 - `decision-sample-tuning-guide.md` — how to review and tune decision samples
+- `signal-gating-benchmark-spec.md` — current decision-sample benchmark semantics used by gating review
 - `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow and calibration-related review surfaces
 
 ### Architecture and data
@@ -51,7 +51,7 @@ These are useful, but they are not the main current-state entry point.
 - `recommendation-quality-improvement-plan.md` — working tracker for recommendation-quality, calibration, and validation improvements
 - `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow
 - `plan-generation-tuning-spec.md` — authoritative implementation spec for autonomous plan-generation tuning
-- `alpaca-paper-order-execution-spec.md` — first automated broker-execution spec for Alpaca paper trading
+- `alpaca-paper-order-execution-spec.md` — first automated broker-execution spec for Alpaca paper trading, including audit UI and manual resubmit/cancel controls
 - `nitter-social-relevance-scoring.md` — current Nitter relevance-ranking behavior
 
 ## Redesign reference
@@ -75,6 +75,7 @@ Start with:
 - `archive/roadmap-history.md`
 - `archive/implementation-plans/signal-gating-tuning-plan.md` — historical development plan for signal gating tuning
 - `archive/implementation-plans/plan-generation-tuning-implementation-plan.md` — archived implementation plan and replacement strategy
+- `archive/implementation-plans/recommendation-plan-evaluation-recompute-notes.md` — archived evaluator edge cases and recompute notes
 - `archive/implementation-plans/historical-replay-backtesting-plan.md` — archived historical replay research plan
 - `archive/implementation-plans/historical-replay-implementation-checklist.md` — archived historical replay implementation checklist
 - `archive/implementation-plans/ontology-enrichment-plan.md` — archived ontology expansion and governance plan

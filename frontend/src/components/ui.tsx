@@ -6,7 +6,7 @@ import { BrandLoader } from "./brand";
 export function PageHeader(props: {
   kicker: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   actions?: ReactNode;
 }) {
   return (
@@ -14,7 +14,7 @@ export function PageHeader(props: {
       <div>
         <div className="kicker">{props.kicker}</div>
         <h1 className="page-title">{props.title}</h1>
-        <p className="page-subtitle">{props.subtitle}</p>
+        {props.subtitle ? <p className="page-subtitle">{props.subtitle}</p> : null}
       </div>
       {props.actions ? <div className="cluster">{props.actions}</div> : null}
     </section>

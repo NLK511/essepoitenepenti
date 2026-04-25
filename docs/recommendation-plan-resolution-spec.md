@@ -34,6 +34,14 @@ This applies whether the plan was generated:
 - **Not yet fully aligned:** the live evaluator still contains legacy session-based selection behavior; see the recompute notes for details.
 - **Not yet fully aligned:** batch open-plan filtering should be the default policy, but may still need to be enforced in the execution path.
 
+## Live broker execution precedence
+
+When a plan has a live Alpaca broker-order record, operator-facing views should treat the broker-backed execution state as the primary evaluation source for that plan. That means the broker signal should supersede the simulated plan outcome in the main UI/status path when it exists.
+
+A broker order that ends in a terminal failure state (`failed`, `rejected`, `canceled`, or `expired`) is not a pending broker evaluation. It should be treated as a missing broker evaluation, with simulated resolution used only as a fallback if available.
+
+Current broker reconciliation can prove the live order lifecycle up through entry timing and pending status. Simulated market-data resolution remains the fallback for plans without broker execution data, and it remains useful for deeper analytics until live exit tracking is added.
+
 ## What counts as resolution
 
 A plan is resolved when either:

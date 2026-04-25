@@ -101,7 +101,6 @@ export function DebuggerPage() {
       <PageHeader
         kicker="Execution diagnostics"
         title="Run debugger"
-        subtitle="Use debugger mode for fast investigation: select a recent run, review warnings first, and jump to the canonical run page only when you need the full orchestration detail."
         actions={<HelpHint tooltip="Debugger mode keeps run investigation compact: pick a run, inspect warnings and artifacts, then open the full detail only if needed." to="/docs?doc=operator-page-field-guide" />}
       />
       {error ? <ErrorState message={error} /> : null}
@@ -118,7 +117,6 @@ export function DebuggerPage() {
           <SectionTitle
             kicker="Recent runs"
             title="Choose a run"
-            subtitle="Pick a run from the left, then scan the summary on the right before opening the full run page."
             actions={<HelpHint tooltip="Use the left list to move quickly between recent runs without leaving the debugger workflow." to="/docs?doc=operator-page-field-guide" />}
           />
           {deleteError ? <ErrorState message={deleteError} /> : null}
@@ -180,7 +178,6 @@ export function DebuggerPage() {
                 <SectionTitle
                   kicker="Selected run"
                   title={`Run #${detail.run.id}`}
-                  subtitle="Start here: scan status, timing, and persisted output counts before opening deeper detail."
                   actions={<Link to={`/runs/${detail.run.id}`} className="button-secondary">Open full run review</Link>}
                 />
                 <div className="data-points debugger-summary-points top-gap-small" aria-label="Selected run summary">

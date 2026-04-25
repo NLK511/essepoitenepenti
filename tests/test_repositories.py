@@ -24,6 +24,7 @@ from trade_proposer_app.domain.models import (
     RecommendationPlanEvidenceSummary,
     RecommendationPlanOutcome,
     RecommendationPlanSignalBreakdown,
+    BrokerOrderExecution,
     RecommendationTransmissionSummary,
     RunDiagnostics,
     RunOutput,
@@ -38,6 +39,7 @@ from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
+from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
@@ -535,6 +537,129 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(plans[0].latest_outcome.transmission_bias_detail["label"], "unknown")
         self.assertEqual(plans[0].latest_outcome.context_regime_label, "mixed context")
         self.assertEqual(plans[0].latest_outcome.context_regime_detail["label"], "mixed context")
+
+    def test_recommendation_plan_repository_prefers_broker_evaluation_when_available(self) -> None:
+        session = create_session()
+        plan_repository = RecommendationPlanRepository(session)
+        broker_repository = BrokerOrderExecutionRepository(session)
+
+        plan = plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=70.0,
+                thesis_summary="Broker should win precedence",
+                signal_breakdown={"setup_family": "continuation"},
+            )
+        )
+        plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="MSFT",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=70.0,
+                thesis_summary="Unrelated plan",
+                signal_breakdown={"setup_family": "continuation"},
+            )
+        )
+        outcome_repository = RecommendationOutcomeRepository(session)
+        outcome_repository.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=plan.id or 0,
+                ticker="AAPL",
+                action="long",
+                outcome="win",
+                status="resolved",
+                confidence_bucket="65_to_79",
+                setup_family="continuation",
+                notes="Simulated outcome should be secondary.",
+            )
+        )
+        broker_repository.create(
+            BrokerOrderExecution(
+                broker="alpaca",
+                account_mode="paper",
+                recommendation_plan_id=plan.id or 0,
+                recommendation_plan_ticker="AAPL",
+                ticker="AAPL",
+                action="long",
+                side="buy",
+                order_type="limit",
+                quantity=10,
+                notional_amount=1000.0,
+                entry_price=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                status="filled",
+                broker_order_id="alpaca-order-123",
+                client_order_id="tp-run-1-plan-1-aapl-live",
+                submitted_at=datetime.now(timezone.utc),
+                filled_at=datetime.now(timezone.utc),
+                request_payload={"symbol": "AAPL"},
+                response_payload={"id": "alpaca-order-123", "status": "filled"},
+            )
+        )
+
+        loaded = plan_repository.get_plan(plan.id or 0)
+        self.assertEqual(loaded.effective_evaluation_source, "broker")
+        self.assertEqual(loaded.effective_evaluation, "entry")
+        self.assertEqual(loaded.broker_order_status, "filled")
+        self.assertEqual(loaded.broker_order_id, "alpaca-order-123")
+        self.assertIsNotNone(loaded.latest_outcome)
+        self.assertEqual(loaded.latest_outcome.outcome, "win")
+
+        listed = plan_repository.list_plans(ticker="AAPL", action="long", limit=10)
+        self.assertEqual(listed[0].effective_evaluation_source, "broker")
+        self.assertEqual(listed[0].effective_evaluation, "entry")
+
+    def test_recommendation_plan_repository_marks_failed_broker_orders_as_missing(self) -> None:
+        session = create_session()
+        plan_repository = RecommendationPlanRepository(session)
+        broker_repository = BrokerOrderExecutionRepository(session)
+
+        plan = plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="TSLA",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=68.0,
+                thesis_summary="Failed broker order should not be treated as pending evaluation",
+                signal_breakdown={"setup_family": "continuation"},
+            )
+        )
+        broker_repository.create(
+            BrokerOrderExecution(
+                broker="alpaca",
+                account_mode="paper",
+                recommendation_plan_id=plan.id or 0,
+                recommendation_plan_ticker="TSLA",
+                ticker="TSLA",
+                action="long",
+                side="buy",
+                order_type="limit",
+                quantity=5,
+                notional_amount=500.0,
+                entry_price=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                status="failed",
+                broker_order_id="alpaca-order-failed",
+                client_order_id="tp-run-1-plan-1-tsla-live",
+                submitted_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                request_payload={"symbol": "TSLA"},
+                response_payload={"id": "alpaca-order-failed", "status": "failed"},
+                error_message="rejected by broker",
+            )
+        )
+
+        loaded = plan_repository.get_plan(plan.id or 0)
+        self.assertEqual(loaded.broker_order_status, "failed")
+        self.assertEqual(loaded.effective_evaluation_source, "missing")
+        self.assertIsNone(loaded.effective_evaluation)
+        self.assertIn("failed", loaded.effective_evaluation_detail)
+        self.assertEqual(loaded.latest_outcome, None)
 
     def test_recommendation_plan_repository_filters_shortlisted_state(self) -> None:
         session = create_session()
@@ -1825,12 +1950,30 @@ class RepositoryTests(unittest.TestCase):
 
         self.assertEqual(settings_map["confidence_threshold"], "60")
         openai = next(provider for provider in providers if provider.provider == "openai")
+        redacted = repository.list_provider_credentials_redacted()
+        redacted_openai = next(provider for provider in redacted if provider.provider == "openai")
         self.assertEqual(openai.api_key, "key-123")
         self.assertEqual(openai.api_secret, "secret-456")
+        self.assertEqual(redacted_openai.api_key, "key-123")
+        self.assertEqual(redacted_openai.api_secret, "")
         self.assertIsNotNone(stored_row)
         assert stored_row is not None
         self.assertNotEqual(stored_row.api_key, "key-123")
         self.assertNotEqual(stored_row.api_secret, "secret-456")
+
+    def test_settings_repository_preserves_existing_secret_when_secret_input_is_blank(self) -> None:
+        session = create_session()
+        repository = SettingsRepository(session)
+        repository.upsert_provider_credential("openai", "key-123", "secret-456")
+        repository.upsert_provider_credential("openai", "key-789", "")
+
+        providers = repository.list_provider_credentials()
+        openai = next(provider for provider in providers if provider.provider == "openai")
+        redacted_openai = next(provider for provider in repository.list_provider_credentials_redacted() if provider.provider == "openai")
+
+        self.assertEqual(openai.api_key, "key-789")
+        self.assertEqual(openai.api_secret, "secret-456")
+        self.assertEqual(redacted_openai.api_secret, "")
 
 
 if __name__ == "__main__":

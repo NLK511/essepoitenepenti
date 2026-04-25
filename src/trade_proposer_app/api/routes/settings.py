@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.domain.models import AppSetting, ProviderCredential
+from trade_proposer_app.domain.models import AppSetting
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 
@@ -15,7 +15,10 @@ async def list_settings(session: Session = Depends(get_db_session)) -> dict[str,
     evaluation_realism = repository.get_evaluation_realism_config()
     return {
         "settings": repository.list_settings(),
-        "providers": repository.list_provider_credentials(),
+        "providers": [
+            {"provider": item.provider, "api_key": item.api_key}
+            for item in repository.list_provider_credentials_redacted()
+        ],
         "signal_gating_tuning": signal_gating_tuning,
         "evaluation_realism": evaluation_realism,
         "order_execution": repository.get_order_execution_config(),
@@ -235,9 +238,10 @@ async def set_provider_credential(
     api_key: str = Form(default=""),
     api_secret: str = Form(default=""),
     session: Session = Depends(get_db_session),
-) -> ProviderCredential:
-    return SettingsRepository(session).upsert_provider_credential(
+) -> dict[str, str]:
+    credential = SettingsRepository(session).upsert_provider_credential(
         provider=provider.strip(),
         api_key=api_key.strip(),
         api_secret=api_secret.strip(),
     )
+    return {"provider": credential.provider, "api_key": credential.api_key}

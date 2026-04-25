@@ -38,5 +38,6 @@ The decision sample record stores the benchmark fields so the tuning job can reu
 The **Signal Gating Tuning Service** treats these benchmarks as valid labels when plan outcomes are unavailable:
 - A **"Missed Win"** is a rejected sample where the 1d or 5d benchmark target is hit in the signal direction.
 - A **"Good Reject"** is a rejected sample where neither target is hit.
-- The decision-samples page can surface `pending`, `evaluated-hit`, and `evaluated-miss` benchmark cohorts for operator review.
+- The decision-samples page can surface `pending`, `hit`, `miss`, and `failed` benchmark cohorts for operator review.
+- The underlying stored `benchmark_status` remains `pending`, `evaluated`, or `failed`; `hit` and `miss` are the review-time filters derived from evaluated rows.
 - A resolved `RecommendationPlanOutcome` still wins when it exists, because it carries the stop-loss / take-profit truth that benchmarks cannot capture.

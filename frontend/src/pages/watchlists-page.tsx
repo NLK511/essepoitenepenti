@@ -82,7 +82,6 @@ export function WatchlistsPage() {
       <PageHeader
         kicker="Automation"
         title="Watchlists"
-        subtitle="Define the universes the app should monitor. Each watchlist carries market metadata, scheduling assumptions, and evaluation policy context so later recommendation runs remain interpretable."
         actions={<HelpHint tooltip="Watchlists define reusable ticker universes plus the scheduling and evaluation assumptions that follow them into jobs and review pages." to="/docs?doc=default-watchlists" />}
       />
       {error ? <ErrorState message={error} /> : null}

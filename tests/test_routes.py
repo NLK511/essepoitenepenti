@@ -1,6 +1,6 @@
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -17,10 +17,11 @@ from trade_proposer_app.domain.models import (
     AppPreflightReport,
     BrokerOrderExecution,
     EvaluationRunResult,
+    HistoricalMarketBar,
+    NewsArticle,
     IndustryContextSnapshot,
     MacroContextSnapshot,
     PreflightCheck,
-    RecommendationDecisionSample,
     RecommendationDecisionSample,
     RecommendationPlan,
     RecommendationPlanOutcome,
@@ -28,9 +29,11 @@ from trade_proposer_app.domain.models import (
     TickerSignalSnapshot,
     WorkerHeartbeat,
 )
-from trade_proposer_app.persistence.models import Base, RunRecord
+from trade_proposer_app.persistence.models import Base, RecommendationPlanRecord, RunRecord, TickerSignalSnapshotRecord
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
+from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
@@ -38,6 +41,7 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
+from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClientError
 
 
 class StubAppPreflightService:
@@ -58,6 +62,11 @@ class StubAlpacaPaperClient:
     def __init__(self, *args, **kwargs) -> None:
         self.submitted_requests: list[dict[str, object]] = []
         self.canceled_order_ids: list[str] = []
+        self.get_requests: list[str] = []
+        self.order_payloads: dict[str, dict[str, object]] = {
+            "alpaca-order-2": {"id": "alpaca-order-2", "status": "filled", "filled_at": "2026-04-22T15:00:00Z", "submitted_at": "2026-04-22T14:30:00Z"},
+            "alpaca-order-3": {"id": "alpaca-order-3", "status": "canceled", "canceled_at": "2026-04-22T15:05:00Z", "submitted_at": "2026-04-22T14:40:00Z"},
+        }
 
     def submit_order(self, payload: dict[str, object]):
         self.submitted_requests.append(payload)
@@ -67,6 +76,15 @@ class StubAlpacaPaperClient:
             {"broker_order_id": "alpaca-order-99", "broker_status": "accepted", "payload": {"id": "alpaca-order-99", "status": "accepted"}},
         )()
 
+    def get_order(self, order_id: str):
+        self.get_requests.append(order_id)
+        payload = self.order_payloads.get(order_id, {"id": order_id, "status": "accepted"})
+        return type(
+            "GetResult",
+            (),
+            {"broker_order_id": order_id, "broker_status": str(payload.get("status", "accepted")), "payload": payload},
+        )()
+
     def cancel_order(self, order_id: str):
         self.canceled_order_ids.append(order_id)
         return type(
@@ -74,6 +92,20 @@ class StubAlpacaPaperClient:
             (),
             {"broker_order_id": order_id, "broker_status": "canceled", "payload": {"id": order_id, "status": "canceled"}},
         )()
+
+
+class StubOrderActionService:
+    def resubmit_execution(self, execution_id: int):
+        raise ValueError("only failed or canceled broker orders can be resubmitted")
+
+    def cancel_execution(self, execution_id: int):
+        raise AlpacaPaperClientError("alpaca request failed with status 502")
+
+    def refresh_execution(self, execution_id: int):
+        return BrokerOrderExecution(id=execution_id, broker="alpaca", account_mode="paper", recommendation_plan_id=1, recommendation_plan_ticker="AAPL", ticker="AAPL", action="long", side="buy", order_type="limit", time_in_force="gtc", quantity=1, notional_amount=100.0, status="filled", broker_order_id="alpaca-order-1", client_order_id="tp", request_payload={}, response_payload={"id": "alpaca-order-1", "status": "filled"}, error_message="", created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc))
+
+    def sync_open_executions(self):
+        return type("SyncOutcome", (), {"summary": {"requested_count": 1, "synced_count": 1, "skipped_count": 0, "failed_count": 0, "warnings_found": False, "warnings": [], "orders": []}})()
 
 
 class RouteTests(unittest.IsolatedAsyncioTestCase):
@@ -264,6 +296,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     signal_breakdown={
                         "technical_setup": 0.77,
                         "setup_family": "continuation",
+                        "news_item_count": 3,
+                        "social_item_count": 4,
                         "transmission_summary": {
                             "context_bias": "tailwind",
                             "transmission_tags": ["macro_dominant", "catalyst_active"],
@@ -783,6 +817,142 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail_payload["broker_order_executions"], [])
         self.assertEqual(len(detail_payload["recommendation_plans"]), 1)
 
+    async def test_dashboard_filters_by_window_and_keeps_only_proper_failures(self) -> None:
+        winning_run_id = self.seed_run_with_diagnostics()
+        recent_failed_run_id = self.seed_failed_run()
+        self.seed_context_and_recommendation_plan_data(run_id=winning_run_id)
+
+        old_timestamp = datetime.now(timezone.utc) - timedelta(days=45)
+        now = datetime.now(timezone.utc)
+        session = Session(bind=self.engine)
+        try:
+            jobs = JobRepository(session)
+            runs = RunRepository(session)
+            old_job = jobs.create("Failed Old", ["AAPL"], None)
+            old_run = runs.enqueue(old_job.id or 0)
+            claimed = runs.claim_next_queued_run()
+            assert claimed is not None
+            runs.update_status(old_run.id or 0, "failed", error_message="dependency missing: older failure")
+
+            context_repository = ContextSnapshotRepository(session)
+            old_signal = context_repository.create_ticker_signal_snapshot(
+                TickerSignalSnapshot(
+                    ticker="MSFT",
+                    horizon="1w",
+                    direction="long",
+                    swing_probability_percent=55.0,
+                    confidence_percent=58.0,
+                    attention_score=61.0,
+                    diagnostics={"mode": "deep_analysis"},
+                    run_id=winning_run_id,
+                )
+            )
+            old_plan = RecommendationPlanRepository(session).create_plan(
+                RecommendationPlan(
+                    ticker="MSFT",
+                    horizon="1w",
+                    action="long",
+                    confidence_percent=58.0,
+                    entry_price_low=301.0,
+                    entry_price_high=303.0,
+                    stop_loss=297.0,
+                    take_profit=309.0,
+                    holding_period_days=5,
+                    risk_reward_ratio=1.7,
+                    thesis_summary="Old plan outside the 1d window",
+                    rationale_summary="Window filter test",
+                    signal_breakdown={"setup_family": "continuation"},
+                    run_id=winning_run_id,
+                )
+            )
+            HistoricalNewsRepository(session).save_news(
+                "AAPL",
+                "Reuters",
+                [
+                    NewsArticle(title="AAPL earnings headline", summary="News item 1", publisher="Reuters", link="https://example.com/news-1", published_at=now),
+                    NewsArticle(title="AAPL product update", summary="News item 2", publisher="Reuters", link="https://example.com/news-2", published_at=now),
+                ],
+            )
+            HistoricalMarketDataRepository(session).upsert_bars(
+                [
+                    HistoricalMarketBar(ticker="AAPL", timeframe="1d", bar_time=now - timedelta(hours=2), open_price=100.0, high_price=101.0, low_price=99.0, close_price=100.5, volume=1000, source="test", source_tier="tier_a"),
+                    HistoricalMarketBar(ticker="AAPL", timeframe="1d", bar_time=now - timedelta(hours=1), open_price=100.5, high_price=102.0, low_price=100.0, close_price=101.5, volume=1500, source="test", source_tier="tier_a"),
+                    HistoricalMarketBar(ticker="AAPL", timeframe="1d", bar_time=now, open_price=101.5, high_price=103.0, low_price=101.0, close_price=102.5, volume=2000, source="test", source_tier="tier_a"),
+                ]
+            )
+            BrokerOrderExecutionRepository(session).create(
+                BrokerOrderExecution(
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=old_plan.id or 0,
+                    recommendation_plan_ticker="MSFT",
+                    run_id=winning_run_id,
+                    job_id=old_job.id,
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    time_in_force="gtc",
+                    quantity=1,
+                    notional_amount=100.0,
+                    entry_price=100.0,
+                    stop_loss=95.0,
+                    take_profit=110.0,
+                    status="queued",
+                    client_order_id="tp-dashboard-technical-1",
+                    request_payload={"symbol": "AAPL", "qty": 1},
+                    response_payload={},
+                )
+            )
+            session.execute(
+                update(RunRecord)
+                .where(RunRecord.id == old_run.id)
+                .values(created_at=old_timestamp, updated_at=old_timestamp)
+            )
+            session.execute(
+                update(TickerSignalSnapshotRecord)
+                .where(TickerSignalSnapshotRecord.id == old_signal.id)
+                .values(computed_at=old_timestamp, created_at=old_timestamp, updated_at=old_timestamp)
+            )
+            session.execute(
+                update(RecommendationPlanRecord)
+                .where(RecommendationPlanRecord.id == old_plan.id)
+                .values(computed_at=old_timestamp, created_at=old_timestamp, updated_at=old_timestamp)
+            )
+            session.commit()
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            dashboard_all = await client.get("/api/dashboard", params={"window": "all"})
+            dashboard_1d = await client.get("/api/dashboard", params={"window": "1d"})
+
+        self.assertEqual(dashboard_all.status_code, 200)
+        self.assertEqual(dashboard_1d.status_code, 200)
+
+        all_payload = dashboard_all.json()
+        one_day_payload = dashboard_1d.json()
+        self.assertEqual(all_payload["dashboard_window"], "all")
+        self.assertEqual(one_day_payload["dashboard_window"], "1d")
+        self.assertGreater(all_payload["dashboard_summary"]["plan_amount"], one_day_payload["dashboard_summary"]["plan_amount"])
+        self.assertGreater(all_payload["dashboard_summary"]["signals_amount"], one_day_payload["dashboard_summary"]["signals_amount"])
+        self.assertEqual(
+            one_day_payload["dashboard_summary"]["shortlist_rate_percent"],
+            round((one_day_payload["dashboard_summary"]["plan_amount"] / one_day_payload["dashboard_summary"]["signals_amount"]) * 100.0, 1),
+        )
+        self.assertEqual(
+            all_payload["dashboard_summary"]["shortlist_rate_percent"],
+            round((all_payload["dashboard_summary"]["plan_amount"] / all_payload["dashboard_summary"]["signals_amount"]) * 100.0, 1),
+        )
+        self.assertEqual(one_day_payload["technical_summary"]["news_processed"], 2)
+        self.assertEqual(one_day_payload["technical_summary"]["tweets_processed"], 4)
+        self.assertEqual(one_day_payload["technical_summary"]["bars_stored"], 3)
+        self.assertEqual(one_day_payload["technical_summary"]["orders_placed"], 1)
+        self.assertTrue(all(item["status"] == "failed" for item in one_day_payload["major_failures"]))
+        self.assertFalse(any(item["status"] == "completed_with_warnings" for item in all_payload["major_failures"]))
+        self.assertTrue(any(item["label"] == "summary timeout" for item in one_day_payload["distinct_warnings"]))
+
     async def test_run_detail_includes_broker_orders_and_manual_actions_work(self) -> None:
         run_id = self.seed_run_with_diagnostics()
         session = Session(bind=self.engine)
@@ -861,6 +1031,88 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cancel.status_code, 200)
         self.assertEqual(cancel.json()["status"], "canceled")
         self.assertTrue(any(order["status"] == "canceled" for order in run_detail_after.json()["broker_order_executions"]))
+
+    async def test_broker_order_routes_return_expected_errors(self) -> None:
+        run_id = self.seed_run_with_diagnostics()
+        session = Session(bind=self.engine)
+        try:
+            job = JobRepository(session).list_all()[0]
+            plan = RecommendationPlanRepository(session).list_plans(run_id=run_id, limit=10)[0]
+            broker_orders = BrokerOrderExecutionRepository(session)
+            submitted_order = broker_orders.create(
+                BrokerOrderExecution(
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker=plan.ticker,
+                    run_id=run_id,
+                    job_id=job.id,
+                    ticker=plan.ticker,
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    time_in_force="gtc",
+                    quantity=10,
+                    notional_amount=1010.0,
+                    entry_price=101.0,
+                    stop_loss=97.0,
+                    take_profit=111.0,
+                    status="submitted",
+                    broker_order_id="alpaca-order-3",
+                    client_order_id="tp-run-1-plan-1-aapl-open",
+                    submitted_at=datetime.now(timezone.utc),
+                    request_payload={"symbol": "AAPL", "qty": 10, "limit_price": 101.0, "client_order_id": "tp-run-1-plan-1-aapl-open"},
+                    response_payload={"id": "alpaca-order-3", "status": "accepted"},
+                )
+            )
+            missing_broker_id = broker_orders.create(
+                BrokerOrderExecution(
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker=plan.ticker,
+                    run_id=run_id,
+                    job_id=job.id,
+                    ticker=plan.ticker,
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    time_in_force="gtc",
+                    quantity=10,
+                    notional_amount=1010.0,
+                    entry_price=101.0,
+                    stop_loss=97.0,
+                    take_profit=111.0,
+                    status="submitted",
+                    client_order_id="tp-run-1-plan-1-aapl-open-2",
+                    submitted_at=datetime.now(timezone.utc),
+                    request_payload={"symbol": "AAPL", "qty": 10, "limit_price": 101.0, "client_order_id": "tp-run-1-plan-1-aapl-open-2"},
+                    response_payload={"id": "alpaca-order-4", "status": "accepted"},
+                )
+            )
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            not_found = await client.get("/api/broker-orders/999999")
+            resubmit_error = await client.post(f"/api/broker-orders/{submitted_order.id}/resubmit")
+            cancel_error = await client.post(f"/api/broker-orders/{missing_broker_id.id}/cancel")
+
+        with patch("trade_proposer_app.api.routes.broker_orders.create_order_execution_service", return_value=StubOrderActionService()):
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                cancel_gateway_error = await client.post(f"/api/broker-orders/{submitted_order.id}/cancel")
+                refresh_result = await client.post(f"/api/broker-orders/{submitted_order.id}/refresh")
+                sync_result = await client.post("/api/broker-orders/sync")
+
+        self.assertEqual(not_found.status_code, 404)
+        self.assertEqual(resubmit_error.status_code, 400)
+        self.assertEqual(cancel_error.status_code, 400)
+        self.assertEqual(cancel_gateway_error.status_code, 502)
+        self.assertEqual(refresh_result.status_code, 200)
+        self.assertEqual(refresh_result.json()["status"], "filled")
+        self.assertEqual(sync_result.status_code, 200)
+        self.assertEqual(sync_result.json()["synced_count"], 1)
 
     async def test_delete_run_via_api(self) -> None:
         run_id = self.seed_run_with_diagnostics()
@@ -1123,7 +1375,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             )
             provider_response = await client.post(
                 "/api/settings/providers",
-                data={"provider": "openai", "api_key": "sk-test", "api_secret": ""},
+                data={"provider": "openai", "api_key": "sk-test", "api_secret": "secret-test"},
             )
             listed = await client.get("/api/settings")
 
@@ -1163,6 +1415,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["plan_generation_tuning"]["settings"]["min_validation_resolved"], 12)
         self.assertEqual(payload["providers"][0]["provider"], "openai")
         self.assertEqual(payload["providers"][0]["api_key"], "sk-test")
+        self.assertNotIn("api_secret", payload["providers"][0])
+        self.assertNotIn("api_secret", provider_response.json())
     async def test_context_routes_list_and_detail(self) -> None:
         self.seed_context_and_recommendation_plan_data()
         transport = httpx.ASGITransport(app=app)

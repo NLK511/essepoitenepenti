@@ -232,6 +232,14 @@ class JobExecutionService:
                     artifact["order_execution"] = order_execution_summary
                     self.runs.set_artifact(run.id or 0, artifact)
             timing["order_execution_seconds"] = round(perf_counter() - order_execution_started, 6)
+            if isinstance(summary, dict):
+                source_kind = str(summary.get("source_kind") or "").strip().lower()
+                ticker_count = int(summary.get("ticker_count", 0) or 0)
+                if source_kind == "manual_tickers" and ticker_count <= 1:
+                    warnings_found = True
+            if not warnings_found and self.recommendation_plans is not None:
+                persisted_plans = self.recommendation_plans.list_plans(run_id=run.id or 0, limit=1000)
+                warnings_found = any(bool(plan.warnings) for plan in persisted_plans)
         except Exception as exc:
             timing["recommendation_generation_seconds"] = round(perf_counter() - generation_started, 6)
             partial_ticker_generation = getattr(exc, "ticker_generation", None)

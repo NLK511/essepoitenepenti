@@ -147,7 +147,6 @@ export function RecommendationDecisionSamplesPage() {
       <PageHeader
         kicker="Research"
         title="Decision samples"
-        subtitle="This page is for reviewing upstream decisions, shortlist misses, and downstream plan outcomes in one place. It keeps near-misses, rejected setups, decision-sample-only rows, and actionable plans visible so small action counts do not leave you blind to what the system is doing."
         actions={
           <>
             <HelpHint tooltip="Decision samples are for review and learning: actionable, near-miss, and degraded cases stay visible even when final action counts are small." to="/docs?doc=operator-page-field-guide" />
@@ -167,7 +166,6 @@ export function RecommendationDecisionSamplesPage() {
             <SectionTitle
               kicker="Filters"
               title="Benchmark follow-through"
-              subtitle="Filter the current review queue to pending, benchmark-hit, or benchmark-miss rows before comparing shortlist behavior."
               actions={<HelpHint tooltip="Use benchmark filters to focus on missed opportunities, clean rejects, or rows that still need follow-through evaluation." to="/docs?doc=signal-gating-benchmark-spec" />}
             />
             <div className="form-grid">
@@ -198,7 +196,6 @@ export function RecommendationDecisionSamplesPage() {
             <SectionTitle
               kicker="Review queue"
               title="High-priority samples"
-              subtitle="Use this list to inspect borderline no-action plans and the rare actionable cases on the current page side by side."
               actions={<HelpHint tooltip="High-priority samples help you inspect the most informative review cases on the current page first." to="/docs?doc=operator-page-field-guide" />}
             />
             {highPrioritySamples.length === 0 ? (
@@ -277,7 +274,6 @@ export function RecommendationDecisionSamplesPage() {
             <SectionTitle
               kicker="All samples"
               title="Decision sample archive"
-              subtitle="Browse the current page of samples so older records remain visible for review and future research work."
             />
             {allSamples.length === 0 ? (
               <EmptyState message="No decision samples available yet." />
@@ -334,7 +330,6 @@ export function RecommendationDecisionSamplesPage() {
             <SectionTitle
               kicker="Research"
               title="How to use the samples"
-              subtitle="This dataset is intentionally broader than final outcomes so tuning and replay work can reuse it later."
             />
             <ul className="checklist">
               <li>Start with high-priority near misses before changing thresholds.</li>

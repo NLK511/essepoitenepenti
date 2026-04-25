@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
+from decimal import Decimal, ROUND_HALF_UP
+from zoneinfo import ZoneInfo
 from uuid import uuid4
 
 from trade_proposer_app.domain.models import BrokerOrderExecution, RecommendationPlan
@@ -11,13 +13,27 @@ from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClient, AlpacaPaperClientError
 
 
+def result_broker_order_id(payload: dict[str, object]) -> str | None:
+    value = payload.get("id")
+    return str(value) if value is not None else None
+
+
 @dataclass(slots=True)
 class OrderExecutionOutcome:
     summary: dict[str, object]
     orders: list[BrokerOrderExecution] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class BrokerOrderSyncOutcome:
+    summary: dict[str, object]
+    orders: list[BrokerOrderExecution] = field(default_factory=list)
+
+
 class OrderExecutionService:
+    TERMINAL_STATUSES = {"filled", "canceled", "rejected", "expired"}
+    MARKET_TIMEZONE = ZoneInfo("America/New_York")
+
     def __init__(
         self,
         settings: SettingsRepository,
@@ -125,7 +141,8 @@ class OrderExecutionService:
                 continue
 
             request_payload = self._build_order_payload(
-                plan=plan,
+                ticker=plan.ticker,
+                action=plan.action,
                 entry_price=entry_price,
                 stop_loss=stop_loss,
                 take_profit=take_profit,
@@ -173,11 +190,18 @@ class OrderExecutionService:
             raise ValueError("only failed or canceled broker orders can be resubmitted")
         if existing.quantity <= 0:
             raise ValueError("only orders with a positive quantity can be resubmitted")
-        request_payload = dict(existing.request_payload)
-        if "symbol" not in request_payload or "qty" not in request_payload or "limit_price" not in request_payload:
-            raise ValueError("stored request payload is incomplete and cannot be resubmitted")
+        if existing.entry_price is None or existing.stop_loss is None or existing.take_profit is None:
+            raise ValueError("stored order is missing execution levels and cannot be resubmitted")
         client_order_id = f"{existing.client_order_id}-retry-{uuid4().hex[:8]}"
-        request_payload["client_order_id"] = client_order_id
+        request_payload = self._build_order_payload(
+            ticker=existing.ticker,
+            action=existing.action,
+            entry_price=existing.entry_price,
+            stop_loss=existing.stop_loss,
+            take_profit=existing.take_profit,
+            quantity=existing.quantity,
+            client_order_id=client_order_id,
+        )
         candidate = BrokerOrderExecution(
             broker=existing.broker,
             account_mode=existing.account_mode,
@@ -243,6 +267,43 @@ class OrderExecutionService:
         )
         return self.executions.update(canceled)
 
+    def refresh_execution(self, execution_id: int) -> BrokerOrderExecution:
+        existing = self.executions.get(execution_id)
+        if existing.broker_order_id is None:
+            raise ValueError("broker order id is missing, so the order cannot be refreshed")
+        result = self._ensure_client().get_order(existing.broker_order_id)
+        refreshed = self._apply_broker_snapshot(existing, result.payload, broker_status=result.broker_status)
+        return self.executions.update(refreshed)
+
+    def sync_open_executions(self, *, limit: int = 200) -> BrokerOrderSyncOutcome:
+        orders = self.executions.list_all(limit=limit)
+        synced_orders: list[BrokerOrderExecution] = []
+        skipped = 0
+        failed = 0
+        warnings: list[str] = []
+        for order in orders:
+            if order.broker_order_id is None or order.status in self.TERMINAL_STATUSES | {"skipped"}:
+                skipped += 1
+                continue
+            try:
+                synced_orders.append(self.refresh_execution(order.id or 0))
+            except AlpacaPaperClientError as exc:
+                failed += 1
+                warnings.append(f"broker order {order.id} sync failed: {exc}")
+            except ValueError as exc:
+                failed += 1
+                warnings.append(f"broker order {order.id} sync failed: {exc}")
+        summary = {
+            "requested_count": len(orders),
+            "synced_count": len(synced_orders),
+            "skipped_count": skipped,
+            "failed_count": failed,
+            "warnings_found": bool(warnings),
+            "warnings": warnings,
+            "orders": [order.model_dump(mode="json") for order in synced_orders],
+        }
+        return BrokerOrderSyncOutcome(summary=summary, orders=synced_orders)
+
     def _submit_candidate(self, candidate: BrokerOrderExecution) -> BrokerOrderExecution:
         self._ensure_client()
         try:
@@ -305,7 +366,8 @@ class OrderExecutionService:
     @staticmethod
     def _build_order_payload(
         *,
-        plan: RecommendationPlan,
+        ticker: str,
+        action: str,
         entry_price: float,
         stop_loss: float,
         take_profit: float,
@@ -313,17 +375,111 @@ class OrderExecutionService:
         client_order_id: str,
     ) -> dict[str, object]:
         return {
-            "symbol": plan.ticker,
+            "symbol": ticker,
             "qty": quantity,
-            "side": "buy" if plan.action == "long" else "sell",
+            "side": "buy" if action == "long" else "sell",
             "type": "limit",
             "time_in_force": "gtc",
-            "limit_price": round(float(entry_price), 4),
+            "limit_price": OrderExecutionService._normalize_price(entry_price),
             "order_class": "bracket",
-            "take_profit": {"limit_price": round(float(take_profit), 4)},
-            "stop_loss": {"stop_price": round(float(stop_loss), 4)},
+            "take_profit": {"limit_price": OrderExecutionService._normalize_price(take_profit)},
+            "stop_loss": {"stop_price": OrderExecutionService._normalize_price(stop_loss)},
             "client_order_id": client_order_id,
         }
+
+    @staticmethod
+    def _normalize_price(price: float) -> float:
+        value = Decimal(str(price))
+        if abs(value) >= 1:
+            quantum = Decimal("0.01")
+        else:
+            quantum = Decimal("0.0001")
+        return float(value.quantize(quantum, rounding=ROUND_HALF_UP))
+
+    @staticmethod
+    def _parse_datetime(value: object | None) -> datetime | None:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+        if isinstance(value, str):
+            normalized = value.strip()
+            if not normalized:
+                return None
+            normalized = normalized.replace("Z", "+00:00")
+            try:
+                parsed = datetime.fromisoformat(normalized)
+            except ValueError:
+                return None
+            return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+        return None
+
+    @staticmethod
+    def _now() -> datetime:
+        return datetime.now(timezone.utc)
+
+    @staticmethod
+    def _is_market_open(now: datetime | None = None) -> bool:
+        current = (now or OrderExecutionService._now()).astimezone(OrderExecutionService.MARKET_TIMEZONE)
+        if current.weekday() >= 5:
+            return False
+        market_open = current.replace(hour=9, minute=30, second=0, microsecond=0)
+        market_close = current.replace(hour=16, minute=0, second=0, microsecond=0)
+        return market_open <= current <= market_close
+
+    @staticmethod
+    def _broker_timestamp(payload: dict[str, object], *keys: str) -> datetime | None:
+        for key in keys:
+            parsed = OrderExecutionService._parse_datetime(payload.get(key))
+            if parsed is not None:
+                return parsed
+        return None
+
+    def _apply_broker_snapshot(
+        self,
+        existing: BrokerOrderExecution,
+        payload: dict[str, object],
+        *,
+        broker_status: str | None = None,
+    ) -> BrokerOrderExecution:
+        status = (broker_status or str(payload.get("status") or existing.status) or existing.status).strip().lower()
+        now = self._now()
+        filled_at = self._broker_timestamp(payload, "filled_at", "filledAt") or existing.filled_at
+        canceled_at = self._broker_timestamp(payload, "canceled_at", "canceledAt") or existing.canceled_at
+        if status == "filled" and filled_at is None:
+            filled_at = now
+        if status == "canceled" and canceled_at is None:
+            canceled_at = now
+        return BrokerOrderExecution(
+            id=existing.id,
+            broker=existing.broker,
+            account_mode=existing.account_mode,
+            recommendation_plan_id=existing.recommendation_plan_id,
+            recommendation_plan_ticker=existing.recommendation_plan_ticker,
+            run_id=existing.run_id,
+            job_id=existing.job_id,
+            ticker=existing.ticker,
+            action=existing.action,
+            side=existing.side,
+            order_type=existing.order_type,
+            time_in_force=existing.time_in_force,
+            quantity=existing.quantity,
+            notional_amount=existing.notional_amount,
+            entry_price=existing.entry_price,
+            stop_loss=existing.stop_loss,
+            take_profit=existing.take_profit,
+            status=status,
+            broker_order_id=existing.broker_order_id or result_broker_order_id(payload) or existing.broker_order_id,
+            client_order_id=existing.client_order_id,
+            submitted_at=self._broker_timestamp(payload, "submitted_at", "submittedAt") or existing.submitted_at,
+            filled_at=filled_at,
+            canceled_at=canceled_at,
+            request_payload=existing.request_payload,
+            response_payload=payload,
+            error_message="",
+            created_at=existing.created_at,
+            updated_at=now,
+        )
 
     def _store_skip(
         self,

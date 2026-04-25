@@ -69,11 +69,23 @@ A simulated trade tracked by the system when it explicitly decides not to take a
 ### Broker order
 A submitted order sent to an external trading platform, such as Alpaca.
 
+### Broker Orders page
+The dedicated UI page that lists broker-order executions, their statuses, and their raw payloads.
+
+### Broker order execution
+The persisted audit record for one submitted, skipped, failed, canceled, or resubmitted broker-order attempt.
+
 ### Paper account
 A broker account mode that simulates trading without using real money.
 
 ### Bracket order
 A parent order with attached stop-loss and take-profit exits.
+
+### Resubmit
+Replay a failed or canceled broker order with a fresh client-order id.
+
+### Cancel
+Request broker-side cancellation for an order that is still open and cancelable.
 
 ### Phantom win / Phantom loss
 The evaluated outcome of a phantom trade. If a `phantom_win` occurs, the system missed a profitable opportunity. If a `phantom_loss` occurs, the system correctly avoided a bad setup.
@@ -153,7 +165,7 @@ Reusable broader market context.
 Reusable sector or industry context.
 
 ### Snapshot
-A stored reusable artifact representing market context or support state at a point in time.
+A stored reusable artifact representing market context at a point in time.
 
 ### Support snapshot
 A retired transitional shared artifact.

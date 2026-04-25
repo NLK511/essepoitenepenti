@@ -40,6 +40,9 @@ class AlpacaPaperClient:
     def submit_order(self, payload: dict[str, Any]) -> AlpacaOrderSubmissionResult:
         return self._request("post", "/v2/orders", payload=payload)
 
+    def get_order(self, order_id: str) -> AlpacaOrderSubmissionResult:
+        return self._request("get", f"/v2/orders/{order_id}")
+
     def cancel_order(self, order_id: str) -> AlpacaOrderSubmissionResult:
         return self._request("delete", f"/v2/orders/{order_id}")
 

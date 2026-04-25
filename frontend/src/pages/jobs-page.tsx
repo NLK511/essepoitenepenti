@@ -227,7 +227,6 @@ export function JobsPage() {
       <PageHeader
         kicker="Automation"
         title="Launch workflows by goal, not by internal job type."
-        subtitle="Core recommendation workflows come first. Research and maintenance workflows stay separate so daily operation stays simple."
         actions={
           <>
             <HelpHint tooltip="Jobs are grouped into core, research, and maintenance workflows." to={jobsDoc} />

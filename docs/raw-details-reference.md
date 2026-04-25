@@ -95,6 +95,7 @@ Typical stored themes:
 - calibration review
 - transmission summary
 - warnings and diagnostics
+- derived live-execution fields such as `broker_order_id`, `broker_order_status`, `effective_evaluation`, and `effective_evaluation_source` when Alpaca execution records exist
 
 ### `RecommendationPlanOutcome`
 Typical stored themes:
@@ -117,6 +118,7 @@ Common fields include:
 - decision type and action
 - shortlist status and rank
 - confidence, calibrated confidence, threshold, and gap
+- benchmark fields such as `benchmark_status`, `benchmark_target_1d_hit`, `benchmark_target_5d_hit`, `benchmark_max_favorable_pct`, and `benchmark_evaluated_at`
 - setup family, transmission bias, and context regime
 - compact decision, signal, and evidence snapshots
 - linked run/job/watchlist/ticker-signal identifiers
@@ -160,6 +162,24 @@ Examples:
 - evaluation — evaluation scope and result summary
 - optimization — before/after fingerprint and backup metadata
 - context refresh — created snapshot ids, scope, refresh summary, and context event metadata
+- order execution — broker-order summary counts, warnings, and persisted order records
+
+### `BrokerOrderExecution`
+The persisted broker-order audit record stores the execution trail for paper-trading submissions.
+
+Typical stored fields include:
+- `broker` and `account_mode`
+- `recommendation_plan_id` and `recommendation_plan_ticker`
+- `run_id` and `job_id`
+- `ticker`, `action`, `side`, `order_type`, `time_in_force`
+- `quantity`, `notional_amount`, `entry_price`, `stop_loss`, `take_profit`
+- `status`, `broker_order_id`, `client_order_id`
+- `submitted_at`, `filled_at`, `canceled_at`, `updated_at`
+- `request_payload_json`, `response_payload_json`
+- `error_message`
+- `created_at`, `updated_at`
+
+The request payload stores the exact Alpaca order body, including the bracket-order structure and client order id.
 
 ## Retired support snapshot records
 
@@ -200,7 +220,7 @@ Frequently stored fields include:
 - scoring weights live in `src/trade_proposer_app/data/weights.json`
 - `/api/health/preflight` reports dependency readiness and shared-context freshness
 - summary backends are configured in `/settings`
-- the same stored payloads support the debugger, run detail, recommendation review, ticker review, decision-sample review, and health views
+- the same stored payloads support the debugger, run detail, broker-orders review, recommendation review, ticker review, decision-sample review, and health views
 
 ## See also
 - `recommendation-methodology.md`

@@ -260,7 +260,6 @@ export function ContextReviewPage() {
       <PageHeader
         kicker="Context"
         title="Context review"
-        subtitle="Review the shared macro and industry backdrop first. Advanced event details stay below the main summary so the page remains readable."
         actions={
           <>
             <button type="button" className="button" onClick={() => void enqueueRefresh(activeScope)} disabled={busyAction !== null}>
@@ -288,8 +287,7 @@ export function ContextReviewPage() {
             ))}
           </section>
 
-          <Card>
-            <SectionTitle title="Choose context scope" subtitle="Keep one shared context layer in focus at a time." actions={<HelpHint tooltip="Switch between macro and industry review so one shared context layer stays in focus at a time." to={contextReviewDoc("context-review")} />} />
+          <div className="top-gap-small">
             <SegmentedTabs
               value={activeTab}
               onChange={setActiveTab}
@@ -298,7 +296,7 @@ export function ContextReviewPage() {
                 { value: "industry", label: "Industry" },
               ]}
             />
-          </Card>
+          </div>
 
           {activeTab === "macro" ? (
             <MacroContextTab snapshot={latestMacroContext} history={macroContexts} />
@@ -461,6 +459,8 @@ function MacroContextList({ snapshots }: { snapshots: MacroContextSnapshot[] }) 
                   confidence={snapshot.confidence_percent}
                   saliency={snapshot.saliency_score}
                   coverage={snapshot.active_themes.length}
+                  coverageLabel="Themes"
+                  coverageTooltip="Number of active macro themes selected for the snapshot."
                   freshness={formatDate(snapshot.computed_at)}
                   tone={contextTone(snapshot)}
                 />
@@ -613,6 +613,8 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
         confidence={snapshot.confidence_percent}
         saliency={snapshot.saliency_score}
         coverage={snapshot.active_themes.length}
+        coverageLabel="Themes"
+        coverageTooltip="Number of active macro themes selected for the snapshot."
         freshness={formatDate(snapshot.computed_at)}
         tone={contextTone(snapshot)}
       />
@@ -638,6 +640,7 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
         <div className="data-point"><span className="data-point-label">Top event</span><span className="data-point-value">{topTheme ? themeString(topTheme.label) : "—"}</span></div>
         <div className="data-point"><span className="data-point-label">State</span><span className="data-point-value">{topTheme ? detailLabel(topTheme.persistence_state_detail, topTheme.persistence_state) : "—"}</span></div>
         <div className="data-point"><span className="data-point-label">Window</span><span className="data-point-value">{topTheme ? detailLabel(topTheme.window_hint_detail, topTheme.window_hint) : "—"}</span></div>
+        <div className="data-point"><span className="data-point-label">Primary news items</span><span className="data-point-value">{String(snapshot.source_breakdown?.primary_news_item_count ?? 0)}</span></div>
         <div className="data-point"><span className="data-point-label">Source quality</span><span className="data-point-value">{topTheme ? detailLabel(topTheme.source_priority_detail, topTheme.source_priority) : "—"}</span></div>
         <div className="data-point"><span className="data-point-label">Computed</span><span className="data-point-value">{formatDate(snapshot.computed_at)}</span></div>
         <div className="data-point"><span className="data-point-label">Run / job</span><span className="data-point-value">{snapshot.run_id ?? "—"} / {snapshot.job_id ?? "—"}</span></div>

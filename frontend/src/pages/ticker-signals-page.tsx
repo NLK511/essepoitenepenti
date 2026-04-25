@@ -86,7 +86,6 @@ export function TickerSignalsPage() {
       <PageHeader
         kicker="Review"
         title="Ticker signals"
-        subtitle="Use this page for candidate review: what was promoted, what was blocked, and why it got attention before a full plan existed."
         actions={<HelpHint tooltip="Ticker signals are candidate review, not final action review. Use them to understand shortlist decisions before opening recommendation plans." to="/docs?doc=operator-page-field-guide" />}
       />
       {error ? <ErrorState message={error} /> : null}

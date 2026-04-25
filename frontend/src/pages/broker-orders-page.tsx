@@ -4,14 +4,17 @@ import { Link, useSearchParams } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
-import type { BrokerOrderExecution } from "../types";
+import type { AppSetting, BrokerOrderExecution, SettingsResponse } from "../types";
 import { formatDate } from "../utils";
 
 function orderTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
-  if (status === "submitted" || status === "accepted" || status === "filled") {
+  if (status === "submitted" || status === "accepted" || status === "filled" || status === "partially_filled") {
     return "ok";
   }
-  if (status === "failed") {
+  if (status === "canceled" || status === "expired") {
+    return "warning";
+  }
+  if (status === "failed" || status === "rejected") {
     return "danger";
   }
   if (status === "skipped") {
@@ -34,6 +37,7 @@ export function BrokerOrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [activeActionId, setActiveActionId] = useState<number | null>(null);
+  const [settings, setSettings] = useState<AppSetting[] | null>(null);
   const { showToast } = useToast();
   const limit = Math.max(1, Number(searchParams.get("limit") ?? "50") || 50);
   const runId = searchParams.get("run_id");
@@ -48,8 +52,12 @@ export function BrokerOrdersPage() {
         if (runId) {
           params.set("run_id", runId);
         }
-        const loadedOrders = await getJson<BrokerOrderExecution[]>(`/api/broker-orders?${params.toString()}`);
+        const [loadedOrders, loadedSettings] = await Promise.all([
+          getJson<BrokerOrderExecution[]>(`/api/broker-orders?${params.toString()}`),
+          getJson<SettingsResponse>("/api/settings"),
+        ]);
         setOrders(loadedOrders);
+        setSettings(loadedSettings.settings);
         if (!selectedOrderId && loadedOrders[0]?.id) {
           const next = new URLSearchParams(searchParams);
           next.set("order_id", String(loadedOrders[0].id));
@@ -72,6 +80,15 @@ export function BrokerOrdersPage() {
     };
   }, [orders]);
 
+  const syncSettings = useMemo(() => {
+    const map = new Map((settings ?? []).map((setting) => [setting.key, setting.value]));
+    return {
+      lastAt: map.get("broker_order_sync_last_at") ?? null,
+      lastCount: map.get("broker_order_sync_last_count") ?? null,
+      lastError: map.get("broker_order_sync_last_error") ?? null,
+    };
+  }, [settings]);
+
   const selectedOrder = useMemo(
     () => orders?.find((order) => String(order.id) === selectedOrderId) ?? null,
     [orders, selectedOrderId],
@@ -82,8 +99,12 @@ export function BrokerOrdersPage() {
     if (runId) {
       params.set("run_id", runId);
     }
-    const loadedOrders = await getJson<BrokerOrderExecution[]>(`/api/broker-orders?${params.toString()}`);
+    const [loadedOrders, loadedSettings] = await Promise.all([
+      getJson<BrokerOrderExecution[]>(`/api/broker-orders?${params.toString()}`),
+      getJson<SettingsResponse>("/api/settings"),
+    ]);
     setOrders(loadedOrders);
+    setSettings(loadedSettings.settings);
     const nextOrderId = nextSelectedOrderId ?? loadedOrders[0]?.id ?? null;
     if (nextOrderId) {
       const next = new URLSearchParams(searchParams);
@@ -92,12 +113,26 @@ export function BrokerOrdersPage() {
     }
   }
 
-  async function handleAction(orderId: number, action: "resubmit" | "cancel") {
+  async function refreshVisibleOrders() {
+    setActionError(null);
+    setActiveActionId(-1);
+    try {
+      await postForm("/api/broker-orders/sync", {});
+      showToast({ message: "Broker orders refreshed", tone: "success" });
+      await reloadOrders(selectedOrder?.id ?? undefined);
+    } catch (actionErr) {
+      setActionError(actionErr instanceof Error ? actionErr.message : "Failed to refresh broker orders");
+    } finally {
+      setActiveActionId(null);
+    }
+  }
+
+  async function handleAction(orderId: number, action: "resubmit" | "cancel" | "refresh") {
     setActionError(null);
     setActiveActionId(orderId);
     try {
       await postForm(`/api/broker-orders/${orderId}/${action}`, {});
-      showToast({ message: `Order #${orderId} ${action}d`, tone: "success" });
+      showToast({ message: `Order #${orderId} ${action === "refresh" ? "refreshed" : `${action}ed`}`, tone: "success" });
       await reloadOrders(orderId);
     } catch (actionErr) {
       setActionError(actionErr instanceof Error ? actionErr.message : `Failed to ${action} order`);
@@ -110,9 +145,13 @@ export function BrokerOrdersPage() {
     <>
       <PageHeader
         kicker="Execution audit"
-        title="Broker orders"
-        subtitle="Review the paper-trading submissions created from actionable plans. This page is the quick audit trail for Alpaca execution." 
-        actions={<HelpHint tooltip="This page shows the latest broker submissions, their status, and the exact bracket order payloads sent to Alpaca paper trading." to="/docs?doc=alpaca-paper-order-execution-spec" />}
+        title="Broker orders" 
+        actions={
+          <div className="cluster">
+            <button type="button" className="button-secondary" onClick={() => void refreshVisibleOrders()}>Refresh statuses</button>
+            <HelpHint tooltip="This page shows the latest broker submissions, their status, and the exact bracket order payloads sent to Alpaca paper trading." to="/docs?doc=alpaca-paper-order-execution-spec" />
+          </div>
+        }
       />
       {error ? <ErrorState message={error} /> : null}
       {actionError ? <ErrorState message={actionError} /> : null}
@@ -122,6 +161,15 @@ export function BrokerOrdersPage() {
         <StatCard label="Submitted" value={stats.submitted} helper="Accepted or filled orders" />
         <StatCard label="Failed" value={stats.failed} helper="Broker or client errors" />
         <StatCard label="Skipped" value={stats.skipped} helper="Missing levels or disabled execution" />
+        <StatCard
+          label="Last broker sync"
+          value={syncSettings.lastAt ? formatDate(syncSettings.lastAt) : "Never"}
+          helper={
+            syncSettings.lastError
+              ? `Last count ${syncSettings.lastCount ?? "—"} · Error ${syncSettings.lastError}`
+              : `Last count ${syncSettings.lastCount ?? "—"} · Auto-refresh runs about every 2 hours during market hours`
+          }
+        />
       </section>
 
       <section className="two-column top-gap">
@@ -129,7 +177,6 @@ export function BrokerOrdersPage() {
           <SectionTitle
             kicker="Order list"
             title="Recent submissions"
-            subtitle="Choose an order to inspect its payload, levels, and broker status."
             actions={<HelpHint tooltip="If execution is enabled, actionable plans produce a row here after proposal generation finishes." to="/docs?doc=alpaca-paper-order-execution-spec" />}
           />
           {!orders && !error ? <LoadingState message="Loading broker orders…" /> : null}
@@ -171,7 +218,6 @@ export function BrokerOrdersPage() {
           <SectionTitle
             kicker="Order detail"
             title={selectedOrder ? `Order #${selectedOrder.id}` : "Select an order"}
-            subtitle="Inspect the exact bracket payload and trace the execution response back to the originating plan."
             actions={selectedOrder?.run_id ? <Link className="button-secondary" to={`/runs/${selectedOrder.run_id}`}>Open run</Link> : undefined}
           />
           {!selectedOrder && !error ? <EmptyState message="Choose an order from the left panel to inspect its payload and broker response." /> : null}
@@ -187,10 +233,11 @@ export function BrokerOrdersPage() {
                 <div className="data-point"><span className="data-point-label">take profit</span><span className="data-point-value">{selectedOrder.take_profit ?? "—"}</span></div>
                 <div className="data-point"><span className="data-point-label">client id</span><span className="data-point-value">{selectedOrder.client_order_id}</span></div>
               </div>
-              <div className="helper-text">Created {formatDate(selectedOrder.created_at)} · Submitted {formatDate(selectedOrder.submitted_at)}</div>
+              <div className="helper-text">Created {formatDate(selectedOrder.created_at)} · Updated {formatDate(selectedOrder.updated_at)} · Submitted {formatDate(selectedOrder.submitted_at)}</div>
               {selectedOrder.broker_order_id ? <div className="helper-text">Broker order id: {selectedOrder.broker_order_id}</div> : null}
               {selectedOrder.error_message ? <div className="alert alert-warning">{selectedOrder.error_message}</div> : null}
               <div className="cluster top-gap-small">
+                {selectedOrder.id ? <button type="button" className="button-secondary" disabled={activeActionId === selectedOrder.id} onClick={() => void handleAction(selectedOrder.id as number, "refresh")}>Refresh status</button> : null}
                 {selectedOrder.status === "failed" || selectedOrder.status === "canceled" ? (
                   <button type="button" className="button-secondary" disabled={activeActionId === selectedOrder.id} onClick={() => selectedOrder.id && void handleAction(selectedOrder.id, "resubmit")}>Resubmit</button>
                 ) : null}

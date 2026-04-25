@@ -11,7 +11,7 @@ That script is the source of truth for the exact seeded ticker lists and jobs. T
 
 The default watchlist set is designed to:
 1. seed a broad but finite universe of **750 equities**
-2. keep exposure balanced at **250 U.S. / 250 Europe / 250 Asia-Pacific**
+2. keep exposure balanced at **250 U.S. / 250 Europe / 250 Asia/Pacific**
 3. divide the universe by **region + macro-industry**
 4. keep names compact and scan-friendly
 5. stagger schedules to reduce API spikes
@@ -25,7 +25,7 @@ Selection principles:
 - prefer names repeatedly useful in macro-sensitive review
 - include equities only, not ETFs
 - avoid duplicate assignments across watchlists
-- use local-market tickers where practical for Europe and Asia-Pacific
+- use local-market tickers where practical for Europe and Asia/Pacific
 
 The goal is practical default coverage, not index replication.
 
@@ -69,7 +69,7 @@ The default deployment also adds three shared-context refresh jobs:
 - one industry refresh in the midday gap
 
 Regional schedule blocks:
-- **Asia-Pacific:** `00:00` to `00:40` UTC
+- **Asia/Pacific:** `00:00` to `00:40` UTC
 - **Europe:** `07:00` to `07:40` UTC
 - **United States:** `13:00` to `13:40` UTC
 
@@ -83,11 +83,11 @@ Why this matters:
 
 | Watchlist | Region | Group | UTC schedule |
 |---|---|---|---:|
-| `APAC-Tech` | Asia-Pacific | Tech | `00:00` |
-| `APAC-Fin` | Asia-Pacific | Fin | `00:10` |
-| `APAC-Health` | Asia-Pacific | Health | `00:20` |
-| `APAC-Cons` | Asia-Pacific | Cons | `00:30` |
-| `APAC-Cyc` | Asia-Pacific | Cyc | `00:40` |
+| `APAC-Tech` | Asia/Pacific | Tech | `00:00` |
+| `APAC-Fin` | Asia/Pacific | Fin | `00:10` |
+| `APAC-Health` | Asia/Pacific | Health | `00:20` |
+| `APAC-Cons` | Asia/Pacific | Cons | `00:30` |
+| `APAC-Cyc` | Asia/Pacific | Cyc | `00:40` |
 | `EU-Tech` | Europe | Tech | `07:00` |
 | `EU-Fin` | Europe | Fin | `07:10` |
 | `EU-Health` | Europe | Health | `07:20` |
@@ -120,7 +120,7 @@ The default script seeds:
 Regional split:
 - **U.S.:** 5 watchlists / 250 equities
 - **Europe:** 5 watchlists / 250 equities
-- **Asia-Pacific:** 5 watchlists / 250 equities
+- **Asia/Pacific:** 5 watchlists / 250 equities
 
 ## Operational notes
 

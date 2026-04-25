@@ -5,6 +5,7 @@ import { getJson, postForm } from "../api";
 import { relationshipSummary } from "../components/ticker-relationship-readthrough";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import { ScoreBadge } from "../components/decision-surface";
+import { RecommendationPlanEvaluationSummary } from "../components/recommendation-plan-evaluation";
 import type {
   IndustryContextSnapshot,
   MacroContextSnapshot,
@@ -338,7 +339,6 @@ export function RecommendationPlansPage() {
       <PageHeader
         kicker="Review"
         title="Recommendation plans"
-        subtitle="Use this page as the main action-review queue. Review plans here, then open Recommendation Quality or Research when you need deeper trust or validation analysis."
         actions={
           <button
             type="button"
@@ -358,7 +358,6 @@ export function RecommendationPlansPage() {
         <SectionTitle
           kicker="Global stats"
           title="Recommendation plan review stats"
-          subtitle="These headline stats are broad posture checks across recommendation plans. They are not the canonical trust surface."
           actions={<HelpHint tooltip="These headline numbers are global review stats, not just the current table filters. Use them as top-level posture checks before drilling into cohorts or individual plans." to={recommendationPlansDoc("recommendation-plans")} />}
         />
         <div className="top-gap-small">
@@ -377,19 +376,16 @@ export function RecommendationPlansPage() {
         </section>
       </Card>
 
-      <Card className="top-gap">
-        <SectionTitle kicker="Page focus" title="Choose the page focus" subtitle="Keep the default path list-first. Use the secondary cohort pulse only for lightweight queue context, then jump to Research or Recommendation Quality for deeper analysis." actions={<HelpHint tooltip="Review queue is the main operator path for reading plans one by one. The secondary cohort pulse is only lightweight context, not the canonical research surface." to={recommendationPlansDoc("review-workspace-tabs")} />} />
-        <div className="top-gap-small">
-          <SegmentedTabs
-            value={pageMode}
-            onChange={(value) => setPageMode(value as "review" | "analytics")}
-            options={[
-              { value: "review", label: "Review queue" },
-              { value: "analytics", label: "Cohort pulse" },
-            ]}
-          />
-        </div>
-      </Card>
+      <div className="top-gap">
+        <SegmentedTabs
+          value={pageMode}
+          onChange={(value) => setPageMode(value as "review" | "analytics")}
+          options={[
+            { value: "review", label: "Review queue" },
+            { value: "analytics", label: "Cohort pulse" },
+          ]}
+        />
+      </div>
 
       {pageMode === "review" ? (
       <Card className="sticky-toolbar">
@@ -611,16 +607,10 @@ export function RecommendationPlansPage() {
                           <div className="helper-text top-gap-small">alignment {transmissionAlignment !== null ? `${transmissionAlignment.toFixed(1)}%` : "—"} · window {expectedWindow}</div>
                         </td>
                         <td>
-                          {plan.latest_outcome ? (
+                          {plan.latest_outcome || plan.effective_evaluation ? (
                             <>
-                              <div className="cluster">
-                                <Badge tone={plan.latest_outcome.outcome === "win" ? "ok" : plan.latest_outcome.outcome === "loss" ? "danger" : "neutral"}>{plan.latest_outcome.outcome}</Badge>
-                                <span className="helper-text">{plan.latest_outcome.status}</span>
-                              </div>
-                              <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}%</div>
-                              {plan.latest_outcome.entry_touched === false ? (
-                                <div className="helper-text">miss {plan.latest_outcome.entry_miss_distance_percent !== null ? `${plan.latest_outcome.entry_miss_distance_percent.toFixed(2)}%` : "—"}{plan.latest_outcome.near_entry_miss ? " · almost entered" : ""}{plan.latest_outcome.direction_worked_without_entry ? " · still moved right" : ""}</div>
-                              ) : null}
+                              <RecommendationPlanEvaluationSummary plan={plan} compact />
+                              {plan.latest_outcome ? <div className="helper-text top-gap-small">Simulated {plan.latest_outcome.outcome} · 1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}%{plan.latest_outcome.entry_touched === false ? ` · miss ${plan.latest_outcome.entry_miss_distance_percent !== null ? `${plan.latest_outcome.entry_miss_distance_percent.toFixed(2)}%` : "—"}${plan.latest_outcome.near_entry_miss ? " · almost entered" : ""}${plan.latest_outcome.direction_worked_without_entry ? " · still moved right" : ""}` : ""}</div> : null}
                             </>
                           ) : (
                             <div className="helper-text">No outcome stored yet.</div>

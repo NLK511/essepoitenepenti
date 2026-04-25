@@ -12,6 +12,7 @@ import { WorkflowRunResults } from "../components/workflow-run-results";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import { ContextEventSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
+import { RecommendationPlanEvaluationSummary } from "../components/recommendation-plan-evaluation";
 import type { Job, RunDetailResponse, WatchlistEvaluationPolicy } from "../types";
 import { detailLabel, extractDisplayLabels, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, runTone, yahooFinanceUrl } from "../utils";
 
@@ -206,7 +207,6 @@ export function RunDetailPage() {
       <PageHeader
         kicker="Execution review"
         title={detail ? `Run #${detail.run.id}` : "Run detail"}
-        subtitle="Use run review to understand what the workflow scanned, shortlisted, persisted, and warned about. Recommendation plans remain the canonical trade objects; this page explains how they were produced."
         actions={
           <>
             <Link to="/jobs/debugger" className="button-secondary">Back to debugger</Link>
@@ -271,7 +271,6 @@ export function RunDetailPage() {
               <SectionTitle
                 kicker="Redesign orchestration"
                 title="Cheap scan, shortlist, deep analysis, and plan outputs"
-                subtitle="Review one stage at a time so the execution story stays understandable."
                 actions={
                   <>
                     <Link to={detail.run.id ? `/jobs/ticker-signals?run_id=${detail.run.id}` : "/jobs/ticker-signals"} className="button-subtle">Browse ticker signals</Link>
@@ -612,12 +611,12 @@ export function RunDetailPage() {
                                 <td>{plan.stop_loss ?? "—"}</td>
                                 <td>{plan.take_profit ?? "—"}</td>
                                 <td>
-                                  {plan.latest_outcome ? (
-                                    <>
-                                      <Badge tone={plan.latest_outcome.outcome === "win" ? "ok" : plan.latest_outcome.outcome === "loss" ? "danger" : "neutral"}>{plan.latest_outcome.outcome}</Badge>
-                                      <div className="helper-text top-gap-small">1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}% · MFE {plan.latest_outcome.max_favorable_excursion ?? "—"}% · MAE {plan.latest_outcome.max_adverse_excursion ?? "—"}%</div>
-                                      <div className="helper-text">bias {detailLabel(plan.latest_outcome.transmission_bias_detail, plan.latest_outcome.transmission_bias_label ?? plan.latest_outcome.transmission_bias, false) ?? "—"} · regime {detailLabel(plan.latest_outcome.context_regime_detail, plan.latest_outcome.context_regime_label ?? plan.latest_outcome.context_regime, false) ?? "—"}</div>
-                                    </>
+                                  {plan.latest_outcome || plan.effective_evaluation ? (
+                                    <div className="data-stack">
+                                      <RecommendationPlanEvaluationSummary plan={plan} compact />
+                                      {plan.latest_outcome ? <div className="helper-text top-gap-small">Simulated {plan.latest_outcome.outcome} · 1d {plan.latest_outcome.horizon_return_1d ?? "—"}% · 5d {plan.latest_outcome.horizon_return_5d ?? "—"}% · MFE {plan.latest_outcome.max_favorable_excursion ?? "—"}% · MAE {plan.latest_outcome.max_adverse_excursion ?? "—"}%</div> : null}
+                                      {plan.latest_outcome ? <div className="helper-text">bias {detailLabel(plan.latest_outcome.transmission_bias_detail, plan.latest_outcome.transmission_bias_label ?? plan.latest_outcome.transmission_bias, false) ?? "—"} · regime {detailLabel(plan.latest_outcome.context_regime_detail, plan.latest_outcome.context_regime_label ?? plan.latest_outcome.context_regime, false) ?? "—"}</div> : null}
+                                    </div>
                                   ) : "—"}
                                 </td>
                               </tr>

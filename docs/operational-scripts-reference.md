@@ -15,7 +15,7 @@ Hydrates the local database with historical Daily OHLCV bars from Yahoo! Finance
   ```bash
   .venv/bin/python scripts/hydrate_daily_bars.py
   ```
-  *(Note: Hardcoded for core watchlists 7, 11, 13 by default; edit the script to change scope.)*
+  *(Note: The current script uses a fixed `as_of` date and hydrates tickers from watchlists with 100 tickers or fewer; edit the script to change scope.)*
 
 ## Regression Testing and Debugging
 

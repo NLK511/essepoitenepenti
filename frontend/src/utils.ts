@@ -2,6 +2,7 @@ import type {
   AppSetting,
   JobType,
   RecommendationDirection,
+  RecommendationPlan,
   RecommendationState,
   RunDetailResponse,
   RunDiagnostics,
@@ -108,6 +109,45 @@ export function tradeOutcomeTone(status: string): "ok" | "danger" | "warning" | 
     return "warning";
   }
   return "neutral";
+}
+
+export function recommendationPlanEvaluationTone(value: string | null | undefined): "ok" | "warning" | "danger" | "neutral" {
+  if (value === "win" || value === "entry") {
+    return "ok";
+  }
+  if (value === "loss") {
+    return "danger";
+  }
+  if (value === "pending") {
+    return "warning";
+  }
+  return "neutral";
+}
+
+export function recommendationPlanEvaluationLabel(plan: RecommendationPlan): string {
+  if (plan.effective_evaluation_source === "broker" && plan.effective_evaluation) {
+    return plan.effective_evaluation;
+  }
+  if (plan.latest_outcome) {
+    return plan.latest_outcome.outcome;
+  }
+  if (plan.effective_evaluation_source === "missing") {
+    return "missing";
+  }
+  return "open";
+}
+
+export function recommendationPlanEvaluationSubtitle(plan: RecommendationPlan): string {
+  if (plan.effective_evaluation_source === "broker") {
+    return plan.effective_evaluation_detail || (plan.broker_order_status ? `broker ${plan.broker_order_status}` : "broker evaluation");
+  }
+  if (plan.effective_evaluation_source === "missing") {
+    return plan.effective_evaluation_detail || "broker evaluation missing";
+  }
+  if (plan.latest_outcome) {
+    return plan.latest_outcome.notes || "simulated evaluation";
+  }
+  return "simulated evaluation unavailable";
 }
 
 export function toSettingMap(settings: AppSetting[]): Record<string, string> {

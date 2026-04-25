@@ -10,6 +10,7 @@ import {
 } from "../components/ticker-relationship-readthrough";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import { ScoreBadge } from "../components/decision-surface";
+import { RecommendationPlanEvaluationSummary } from "../components/recommendation-plan-evaluation";
 import type { TickerAnalysisPage as TickerAnalysisPageData } from "../types";
 import { detailLabel, formatDate } from "../utils";
 
@@ -50,7 +51,6 @@ export function TickerPage() {
       <PageHeader
         kicker="Ticker drill-down"
         title={data ? `${data.ticker} review` : "Ticker analysis"}
-        subtitle="This page is optimized for one question: should this ticker earn more operator attention? Review plan history, outcome mix, and the latest plan context without wading through redundant run-level detail."
         actions={
           <>
             <Link to="/jobs/recommendation-plans" className="button-secondary">Back to plans</Link>
@@ -109,7 +109,8 @@ export function TickerPage() {
                     <div className="cluster"><Badge tone={latestPlan.action === "long" ? "ok" : latestPlan.action === "short" ? "warning" : "neutral"}>{latestPlan.action}</Badge><Badge>{latestPlan.horizon}</Badge><Badge>{typeof latestPlan.signal_breakdown?.setup_family === "string" ? latestPlan.signal_breakdown.setup_family : "setup —"}</Badge><ScoreBadge label="Confidence" value={`${latestPlan.confidence_percent}%`} tone="info" /></div>
                     <div className="helper-text">{latestPlan.thesis_summary || latestPlan.rationale_summary || "No thesis summary stored."}</div>
                     <div className="helper-text">Entry {latestPlan.entry_price_low ?? latestPlan.entry_price_high ?? "—"} · Stop {latestPlan.stop_loss ?? "—"} · Take {latestPlan.take_profit ?? "—"}</div>
-                    <div className="helper-text">Relationships {relationshipSummary(latestPlan ?? {})} · Outcome {latestPlan.latest_outcome?.outcome ?? "open"} · Bias {latestOutcomeBias} · Regime {latestOutcomeRegime}</div>
+                    <div className="helper-text">Relationships {relationshipSummary(latestPlan ?? {})} · Bias {latestOutcomeBias} · Regime {latestOutcomeRegime}</div>
+                    <RecommendationPlanEvaluationSummary plan={latestPlan} />
                     {latestPlan.latest_outcome?.entry_touched === false ? (
                       <div className="helper-text">Entry miss {latestPlan.latest_outcome.entry_miss_distance_percent !== null ? `${latestPlan.latest_outcome.entry_miss_distance_percent.toFixed(2)}%` : "—"}{latestPlan.latest_outcome.near_entry_miss ? " · almost entered" : ""}{latestPlan.latest_outcome.direction_worked_without_entry ? " · then still moved right" : ""}</div>
                     ) : null}
@@ -121,7 +122,6 @@ export function TickerPage() {
               {latestPlan ? (
                 <TickerRelationshipReadthroughCard
                   title="Latest matched ticker relationships"
-                  subtitle="Use this as secondary read-through. It should explain why peer, supplier, or customer structure mattered for the latest stored plan."
                   matched={latestMatchedTickerRelationships}
                   storedEdges={latestTickerRelationshipEdges}
                   emptyMessage="No ticker relationship read-through was stored for the latest plan yet."
@@ -155,13 +155,14 @@ export function TickerPage() {
                               <Badge>{item.horizon}</Badge>
                               {item.run_id ? <Link to={`/runs/${item.run_id}`} className="badge badge-info badge-link">run #{item.run_id}</Link> : null}
                             </div>
-                            <div className="cluster top-gap-small"><ScoreBadge label="Confidence" value={`${item.confidence_percent}%`} tone="info" /><Badge tone={item.latest_outcome?.outcome === "win" ? "ok" : item.latest_outcome?.outcome === "loss" ? "danger" : "neutral"}>{item.latest_outcome?.outcome ?? "open"}</Badge><Badge tone={item.latest_outcome?.status === "resolved" ? "ok" : "warning"}>{item.latest_outcome?.status ?? "pending"}</Badge></div>
-                            <div className="helper-text">{formatDate(item.computed_at)} · relationships {relationshipSummary(item)} · status {item.latest_outcome?.status ?? "pending"}</div>
+                            <div className="cluster top-gap-small"><ScoreBadge label="Confidence" value={`${item.confidence_percent}%`} tone="info" /></div>
+                            <div className="helper-text">{formatDate(item.computed_at)} · relationships {relationshipSummary(item)} · source {item.effective_evaluation_source === "broker" ? "broker" : item.effective_evaluation_source === "missing" ? "missing" : "simulated"}</div>
+                            <RecommendationPlanEvaluationSummary plan={item} compact />
                           </div>
                         </div>
                         <div className="helper-text">{item.thesis_summary || item.rationale_summary || "No thesis summary stored."}</div>
                         <div className="helper-text top-gap-small">relationships {relationshipSummary(item)} · entry {item.entry_price_low ?? item.entry_price_high ?? "—"}{item.entry_price_high && item.entry_price_low && item.entry_price_high !== item.entry_price_low ? ` to ${item.entry_price_high}` : ""} · stop {item.stop_loss ?? "—"} · take {item.take_profit ?? "—"}</div>
-                        <div className="helper-text">outcome {item.latest_outcome?.notes || (item.warnings.length > 0 ? `${item.warnings.length} warning(s)` : "—")} · analytics {item.latest_outcome ? `${outcomeBias} · ${outcomeRegime}` : "—"}</div>
+                        <div className="helper-text">outcome {item.effective_evaluation_source === "broker" ? item.effective_evaluation_detail || "broker evaluation" : item.effective_evaluation_source === "missing" ? item.effective_evaluation_detail || "broker evaluation missing" : item.latest_outcome?.notes || (item.warnings.length > 0 ? `${item.warnings.length} warning(s)` : "—")} · analytics {item.latest_outcome ? `${outcomeBias} · ${outcomeRegime}` : "—"}</div>
                         {item.latest_outcome?.entry_touched === false ? (
                           <div className="helper-text">entry miss {item.latest_outcome.entry_miss_distance_percent !== null ? `${item.latest_outcome.entry_miss_distance_percent.toFixed(2)}%` : "—"}{item.latest_outcome.near_entry_miss ? " · almost entered" : ""}{item.latest_outcome.direction_worked_without_entry ? " · then still moved right" : ""}</div>
                         ) : null}

@@ -33,6 +33,7 @@ The UI is easiest to understand in four groups:
 3. **Investigate**
    - Run debugger
    - Run detail
+   - Broker Orders
    - Context review
    - Snapshot detail
 4. **Research**
@@ -294,6 +295,7 @@ Main tabs:
 - **Shortlist**
 - **Signals**
 - **Plans**
+- **Broker orders**
 - **Context**
 
 Important fields:
@@ -309,6 +311,7 @@ Use this page to answer questions like:
 - why did a run generate many `no_action` plans?
 - why was a ticker rejected before deep analysis?
 - did context contradictions affect gating?
+- which broker orders were created from the run, and were any manually canceled or resubmitted?
 
 ## 8. Context review
 
@@ -385,7 +388,21 @@ Important fields:
 
 Relationship read-throughs, governed labels, and transmission details may appear here and on newer review pages as readable labeled fields instead of raw internal keys.
 
-## 10. Settings
+## 10. Broker Orders
+
+**Use it for:** auditing Alpaca paper submissions, raw request/response payloads, and manual resubmit/cancel actions.
+
+Important fields:
+- **Status**
+- **Run id / plan id**
+- **Entry / stop / take profit**
+- **Client order id / broker order id**
+- **Raw request / response payloads**
+- **Action buttons** for resubmit and cancel when available
+
+Use this page when you want the execution trail detached from the run detail context.
+
+## 11. Settings
 
 **Use it for:** setup, providers, ingestion controls, and advanced research controls.
 
@@ -398,7 +415,7 @@ Key areas:
 
 Go here early when startup or run quality looks off.
 
-## 11. Ticker drill-down
+## 12. Ticker drill-down
 
 **Use it for:** reviewing one ticker over time.
 
@@ -411,7 +428,7 @@ Important fields:
 
 Use it to decide whether a ticker deserves repeated operator attention.
 
-## 12. In-app docs
+## 13. In-app docs
 
 **Use it for:** reading methodology and reference material without leaving the app.
 

@@ -31,9 +31,13 @@ It is not yet a proven short-horizon prediction engine.
 - Review signals, plans, and outcomes through the main review pages.
 - Evaluate recommendation plans through the app-native price-history path, including terminal `expired` handling once a plan passes its intended horizon without a win/loss resolution.
 - Track **phantom trades** for `no_action` or `watchlist` plans that retain an intended direction and valid trade levels, evaluating them against real market data to produce outcomes such as `phantom_win`, `phantom_loss`, or `phantom_no_entry` for recall optimization in tuning engines.
-- Automatically submit actionable `long`/`short` plans to Alpaca paper trading using a fixed $1,000 notional cap per plan, limit bracket orders, and persisted broker-order records.
-- Inspect broker-order submissions, payloads, statuses, and re-submit/cancel controls through the Broker Orders page and run detail page.
-- Use decision samples to review near-misses, shortlist behavior, triage priority, and richer filters such as shortlist state, setup family, transmission bias, and context regime.
+- Automatically submit actionable `long`/`short` plans to Alpaca paper trading using the Settings-configured notional cap per plan (default $1,000), limit bracket orders, and persisted broker-order records.
+- Periodically reconcile open broker orders against Alpaca during market hours so fulfilled or canceled orders show up in the app without waiting for a manual action.
+- When a plan has live Alpaca execution data, operator-facing plan views treat broker evaluation as the primary status and keep the simulated plan outcome as secondary context.
+- Inspect broker-order submissions, payloads, statuses, and re-submit/cancel/refresh controls through the Broker Orders page and the broker-orders panel on run detail.
+- Run detail now includes the broker-order history for that run so operators can audit execution without switching pages.
+- Use decision samples to review near-misses, shortlist behavior, triage priority, and richer filters such as shortlist state, setup family, transmission bias, context regime, and benchmark result.
+- Run signal-gating tuning through its dedicated research workflow to inspect shortlist recall and calibration-related review surfaces.
 - Use the calibration report endpoint and the research-page calibration tab to inspect confidence reliability, Brier score, and expected calibration error.
 - Use ticker drill-down pages to inspect plan history and latest outcomes for a single name.
 
@@ -69,7 +73,7 @@ It is not yet a proven short-horizon prediction engine.
 ### Diagnostics, settings, and docs
 - Inspect structured `analysis_json` payloads in the UI when deeper debugging is needed.
 - Review warnings, timing, calibration summaries, and other diagnostics through detail pages and advanced review surfaces.
-- Configure summarization, providers, and ingestion from Settings.
+- Configure summarization, providers, and ingestion from Settings. Provider secrets are write-only in the UI and are not returned by the settings API.
 - Browse the project markdown docs in-app.
 
 ## What is already in place
@@ -78,7 +82,7 @@ The shipped baseline includes:
 - watchlists, jobs, runs, settings, docs browsing, and audit history
 - signal and decision-sample persistence for scanned names, plus plan and outcome persistence for names that reached downstream plan framing
 - recommendation-plan evaluation and advanced review analytics
-- plan-generation tuning inside the app as a research workflow
+- signal-gating tuning and plan-generation tuning inside the app as research workflows
 - shared context reuse across runs
 - operator-visible shortlist reasoning and degraded-state reporting
 - single-user bearer-token API protection and encrypted provider credentials at rest

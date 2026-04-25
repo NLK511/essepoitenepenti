@@ -92,6 +92,8 @@ export function ContextScoreSummary(props: {
   confidence: number;
   saliency: number;
   coverage?: string | number | null;
+  coverageLabel?: string;
+  coverageTooltip?: string;
   freshness?: string | null;
   tone?: "ok" | "warning" | "danger" | "neutral" | "info";
 }) {
@@ -110,7 +112,7 @@ export function ContextScoreSummary(props: {
           tone: "neutral",
           tooltip: contextSaliencyTooltip(props.saliency),
         },
-        { label: "Coverage", value: props.coverage ?? "—", tone: "neutral" },
+        { label: props.coverageLabel ?? "Coverage", value: props.coverage ?? "—", tone: "neutral", tooltip: props.coverageTooltip },
         { label: "Freshness", value: props.freshness ?? "—", tone: "neutral" },
       ]}
     />

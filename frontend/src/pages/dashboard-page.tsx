@@ -1,88 +1,90 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson } from "../api";
-import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
-import type { DashboardResponse, IndustryContextSnapshot, MacroContextSnapshot } from "../types";
-import { formatDate, formatDuration, jobTypeLabel, runTone } from "../utils";
+import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
+import type { DashboardResponse } from "../types";
+import { formatDate } from "../utils";
 
-function contextSummaryMethod(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string {
-  return snapshot && typeof snapshot.metadata?.context_summary_method === "string" ? snapshot.metadata.context_summary_method : "unknown";
+const WINDOW_OPTIONS = [
+  { value: "1d", label: "1D" },
+  { value: "7d", label: "7D" },
+  { value: "1m", label: "1M" },
+  { value: "3m", label: "3M" },
+  { value: "6m", label: "6M" },
+  { value: "all", label: "ALL" },
+] as const;
+
+type DashboardWindow = (typeof WINDOW_OPTIONS)[number]["value"];
+
+function formatPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "—";
+  }
+  return `${value.toFixed(1)}%`;
 }
 
-function contextSummaryError(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null): string | null {
-  return snapshot && typeof snapshot.metadata?.context_summary_error === "string" ? snapshot.metadata.context_summary_error : null;
+function boardTone(status: string | null | undefined): "ok" | "warning" | "danger" | "neutral" {
+  if (status === "healthy") {
+    return "ok";
+  }
+  if (status === "watch" || status === "thin") {
+    return "warning";
+  }
+  if (status === "needs_attention") {
+    return "danger";
+  }
+  return "neutral";
+}
+
+function failureTone(status: string): "ok" | "warning" | "danger" | "neutral" {
+  if (status === "failed") {
+    return "danger";
+  }
+  return "neutral";
+}
+
+function normalizeWindow(value: string | null): DashboardWindow {
+  return (WINDOW_OPTIONS.find((option) => option.value === value)?.value ?? "1m") as DashboardWindow;
 }
 
 export function DashboardPage() {
+  const [searchParams, setSearchParams] = useSearchParams({ window: "1m" });
+  const selectedWindow = normalizeWindow(searchParams.get("window"));
   const [data, setData] = useState<DashboardResponse | null>(null);
-  const [latestMacroContext, setLatestMacroContext] = useState<MacroContextSnapshot | null>(null);
-  const [latestIndustryContext, setLatestIndustryContext] = useState<IndustryContextSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
         setError(null);
-        const [dashboard, macroContexts, industryContexts] = await Promise.all([
-          getJson<DashboardResponse>("/api/dashboard"),
-          getJson<MacroContextSnapshot[]>("/api/context/macro?limit=1"),
-          getJson<IndustryContextSnapshot[]>("/api/context/industry?limit=1"),
-        ]);
-        setData(dashboard);
-        setLatestMacroContext(macroContexts[0] ?? null);
-        setLatestIndustryContext(industryContexts[0] ?? null);
+        setData(null);
+        const query = new URLSearchParams({ window: selectedWindow });
+        setData(await getJson<DashboardResponse>(`/api/dashboard?${query.toString()}`));
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
       }
     }
     void load();
-  }, []);
+  }, [selectedWindow]);
 
-  const attentionItems = useMemo(() => {
-    if (!data) {
-      return [] as string[];
-    }
-    const items: string[] = [];
-    if (data.watchlists.length === 0) {
-      items.push("No watchlists yet. Create one before relying on scheduled proposal jobs.");
-    }
-    if (data.jobs.length === 0) {
-      items.push("No jobs configured yet. Add a proposal workflow to generate candidates and plans.");
-    }
-    if (data.latest_runs.some((run) => run.status === "failed" || run.status === "completed_with_warnings")) {
-      items.push("Recent runs include failures or warnings. Open the debugger before trusting new output.");
-    }
-    if (!latestMacroContext) {
-      items.push("No macro context snapshot is stored yet.");
-    }
-    if (!latestIndustryContext) {
-      items.push("No industry context snapshot is stored yet.");
-    }
-    if (latestMacroContext && contextSummaryError(latestMacroContext)) {
-      items.push("Latest macro summary used a fallback path.");
-    }
-    if (latestIndustryContext && contextSummaryError(latestIndustryContext)) {
-      items.push("Latest industry summary used a fallback path.");
-    }
-    return items;
-  }, [data, latestIndustryContext, latestMacroContext]);
+  const summary = data?.dashboard_summary ?? null;
+  const technical = data?.technical_summary ?? null;
+  const quality = data?.recommendation_quality?.summary ?? null;
+  const majorFailures = data?.major_failures ?? [];
+  const distinctWarnings = data?.distinct_warnings ?? [];
+  const windowLabel = useMemo(() => WINDOW_OPTIONS.find((option) => option.value === selectedWindow)?.label ?? "1M", [selectedWindow]);
 
   return (
     <>
       <PageHeader
-        kicker="Workspace overview"
-        title="Start with what needs attention."
-        subtitle="Use the dashboard for fast triage: check workflow health, context freshness, and the next page you should open."
+        kicker="Performance board"
+        title="Green / yellow / red"
         actions={
           <>
-            <HelpHint tooltip="The dashboard is a triage page. Use it to spot what needs attention, then jump into review, jobs, or context." to="/docs?doc=operator-page-field-guide" />
-            <Link to="/jobs" className="button">
-              Run workflows
-            </Link>
-            <Link to="/jobs/recommendation-plans" className="button-secondary">
-              Review plans
-            </Link>
+            <HelpHint tooltip="Use this board to judge edge and operational risk quickly. Open deeper review screens only after one of the three colors looks concerning." to="/docs?doc=operator-page-field-guide" />
+            <Link to="/jobs/recommendation-plans" className="button-secondary">Review plans</Link>
+            <Link to="/recommendation-quality" className="button">Quality report</Link>
           </>
         }
       />
@@ -92,146 +94,114 @@ export function DashboardPage() {
 
       {data ? (
         <div className="stack-page">
-          <section className="metrics-grid">
-            <StatCard label="Plans to review" value={data.recommendation_plans.length} helper="Latest persisted recommendation plans" tooltip="A quick count of the most recent recommendation plans available for operator review." tooltipTo="/docs?doc=operator-page-field-guide&section=4-recommendation-plans" />
-            <StatCard label="Recent runs" value={data.latest_runs.length} helper="Most recent workflow executions" tooltip="The number of recent workflow runs surfaced on the dashboard for quick health and activity checks." tooltipTo="/docs?doc=glossary&section=run" />
-            <StatCard label="Watchlists" value={data.watchlists.length} helper="Reusable universes feeding proposal jobs" tooltip="The number of stored watchlists currently available to seed proposal-generation workflows." tooltipTo="/docs?doc=glossary&section=watchlist" />
-            <StatCard label="Jobs" value={data.jobs.length} helper="Saved workflows" tooltip="The number of saved workflows that can be run manually or by the scheduler." tooltipTo="/docs?doc=glossary&section=job" />
-            <StatCard
-              label="Macro context"
-              value={latestMacroContext ? latestMacroContext.status : "—"}
-              helper={latestMacroContext ? `${formatDate(latestMacroContext.computed_at)} · ${contextSummaryMethod(latestMacroContext)}` : "No macro snapshot yet"}
+          <Card>
+            <SectionTitle
+              kicker="Time window"
+              title={`Showing ${windowLabel}`}
             />
-            <StatCard
-              label="Industry context"
-              value={latestIndustryContext ? latestIndustryContext.status : "—"}
-              helper={latestIndustryContext ? `${formatDate(latestIndustryContext.computed_at)} · ${contextSummaryMethod(latestIndustryContext)}` : "No industry snapshot yet"}
+            <div className="top-gap-small">
+              <SegmentedTabs
+                value={selectedWindow}
+                onChange={(value) => {
+                  const next = new URLSearchParams(searchParams);
+                  next.set("window", value);
+                  setSearchParams(next, { replace: true });
+                }}
+                options={[...WINDOW_OPTIONS]}
+              />
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle
+              kicker="Board verdict"
+              title={quality ? `Status: ${quality.status}` : "Status unavailable"}
+              subtitle={quality?.status_reason || "No quality summary available yet."}
             />
-          </section>
+            <div className="cluster top-gap-small">
+              <Badge tone={boardTone(quality?.status)}>{quality?.status ?? "unknown"}</Badge>
+              <Badge tone={boardTone(quality?.status)}>{quality?.status === "healthy" ? "green" : quality?.status === "needs_attention" ? "red" : "yellow"}</Badge>
+              <span className="helper-text">Updated {quality?.generated_at ? formatDate(quality.generated_at) : "—"} · resolved outcomes {quality?.resolved_outcomes ?? "—"}</span>
+            </div>
+          </Card>
 
-          {data.recommendation_quality ? (
+          <section className="insight-grid">
             <Card>
-              <SectionTitle kicker="Quality snapshot" title="Recommendation quality at a glance" subtitle={`Status: ${data.recommendation_quality.summary.status} · Updated ${formatDate(data.recommendation_quality.summary.generated_at)}`} actions={<><Link to="/recommendation-quality" className="button-secondary">Open summary</Link><Link to="/research" className="button-subtle">Open research</Link></>} />
-              <section className="metrics-grid top-gap-small">
-                <StatCard label="Win rate" value={data.recommendation_quality.summary.overall_win_rate_percent !== null ? `${data.recommendation_quality.summary.overall_win_rate_percent.toFixed(1)}%` : "—"} helper="Overall resolved recommendation outcomes" tooltip="Overall win/loss rate across the currently reviewed resolved recommendation outcomes. It should be read together with calibration and evidence, not alone." tooltipTo="/docs?doc=recommendation-quality-improvement-plan" />
-                <StatCard label="Brier / ECE" value={data.recommendation_quality.summary.calibration_report ? `${data.recommendation_quality.summary.calibration_report.brier_score?.toFixed(4) ?? "—"} / ${data.recommendation_quality.summary.calibration_report.expected_calibration_error?.toFixed(4) ?? "—"}` : "—"} helper="Current calibration snapshot" tooltip="A compact calibration snapshot. Brier score and expected calibration error both describe how closely displayed confidence matched realized outcomes." tooltipTo="/docs?doc=glossary&section=calibration" />
-                <StatCard label="Walk-forward" value={data.recommendation_quality.summary.walk_forward_promotion_recommended ? "recommended" : data.recommendation_quality.summary.walk_forward_error ? "error" : "watch"} helper="Active tuning profile gate" tooltip="Whether the active tuning profile currently looks strong enough under walk-forward validation to support promotion or continued trust." tooltipTo="/docs?doc=glossary&section=walk-forward-validation" />
-                <StatCard label="Where it works best" value={data.recommendation_quality.summary.ready_for_expansion ? "some groups stand out" : "nothing clear yet"} helper="Checks whether a few groups are clearly beating the average" tooltip="This asks a simple question: do a few types of recommendations clearly look better than the rest? If yes, that is where trust can expand first. If not, stay broad and cautious." tooltipTo="/docs?doc=glossary&section=evidence-concentration" />
-              </section>
-              <div className="helper-text top-gap-small">Next: {data.recommendation_quality.next_actions[0] ?? "Maintain the current settings."}</div>
-            </Card>
-          ) : null}
-
-          <section className="card-grid">
-            <Card>
-              <SectionTitle kicker="Primary actions" title="Run the core workflow" />
-              <div className="cluster top-gap-small">
-                <Link to="/jobs" className="button">Open jobs</Link>
-                <Link to="/jobs/ticker-signals" className="button-secondary">Review candidates</Link>
-                <Link to="/jobs/recommendation-plans" className="button-secondary">Review plans</Link>
-                <Link to="/context" className="button-subtle">Check context</Link>
-              </div>
-            </Card>
-
-            <Card>
-              <SectionTitle kicker="Attention" title="What to check next" />
-              {attentionItems.length === 0 ? (
-                <EmptyState message="Nothing urgent stands out right now." />
-              ) : (
-                <ul className="list-reset">
-                  {attentionItems.map((item) => (
-                    <li key={item} className="list-item compact-item">{item}</li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          </section>
-
-          <section className="two-column">
-            <Card>
-              <SectionTitle kicker="Recent runs" title="Execution triage" actions={<Link to="/jobs/debugger" className="button-subtle">Open debugger</Link>} />
-              {data.latest_runs.length === 0 ? (
-                <EmptyState message="No runs yet." />
-              ) : (
-                <ul className="list-reset">
-                  {data.latest_runs.map((run) => (
-                    <li key={run.id ?? run.created_at} className="list-item">
-                      <div>
-                        <Link to={`/runs/${run.id}`} className="strong-link">
-                          Run #{run.id}
-                        </Link>
-                        <div className="helper-text">{jobTypeLabel(run.job_type)} · {formatDate(run.created_at)}</div>
-                        <div className="helper-text">Duration {formatDuration(run.duration_seconds)}</div>
-                        {run.error_message ? <div className="warning-text">{run.error_message}</div> : null}
-                      </div>
-                      <Badge tone={runTone(run.status)}>{run.status}</Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-
-            <Card>
-              <SectionTitle kicker="Context freshness" title="Latest shared backdrop" actions={<Link to="/context" className="button-subtle">Open context review</Link>} />
+              <SectionTitle kicker="Green" title="Edge" subtitle="The only numbers that matter when deciding whether the system is improving." />
               <div className="data-stack top-gap-small">
-                <div className="data-card">
-                  <div className="data-card-header">
-                    <div>
-                      <div className="data-card-title">Macro</div>
-                      <div className="helper-text">{latestMacroContext ? formatDate(latestMacroContext.computed_at) : "No snapshot stored"}</div>
-                    </div>
-                    <Badge tone={latestMacroContext?.warnings.length ? "warning" : "neutral"}>{latestMacroContext?.status ?? "missing"}</Badge>
-                  </div>
-                  <div className="helper-text">
-                    {latestMacroContext?.summary_text || "No macro summary stored yet."}
-                  </div>
-                  {contextSummaryError(latestMacroContext) ? <div className="helper-text top-gap-small">Fallback note: {contextSummaryError(latestMacroContext)}</div> : null}
-                </div>
-                <div className="data-card">
-                  <div className="data-card-header">
-                    <div>
-                      <div className="data-card-title">Industry</div>
-                      <div className="helper-text">{latestIndustryContext ? `${latestIndustryContext.industry_label || latestIndustryContext.industry_key} · ${formatDate(latestIndustryContext.computed_at)}` : "No snapshot stored"}</div>
-                    </div>
-                    <Badge tone={latestIndustryContext?.warnings.length ? "warning" : "neutral"}>{latestIndustryContext?.status ?? "missing"}</Badge>
-                  </div>
-                  <div className="helper-text">
-                    {latestIndustryContext?.summary_text || "No industry summary stored yet."}
-                  </div>
-                  {contextSummaryError(latestIndustryContext) ? <div className="helper-text top-gap-small">Fallback note: {contextSummaryError(latestIndustryContext)}</div> : null}
-                </div>
+                <StatCard label="Win rate" value={formatPercent(summary?.win_rate_percent)} helper="Resolved plan outcomes" />
+                <StatCard label="Profit %" value={formatPercent(summary?.profit_percent)} helper="Avg 5d return on actionable plans" />
+                <StatCard label="Shortlist rate" value={formatPercent(summary?.shortlist_rate_percent)} helper={`${summary?.plan_amount ?? 0} plans / ${summary?.signals_amount ?? 0} signals`} />
+                <StatCard label="Actionable rate" value={formatPercent(summary?.actionable_rate_percent)} helper={`${summary?.actionable_plans ?? 0} actionable / ${summary?.plan_amount ?? 0} plans`} />
               </div>
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Yellow" title="Warnings" subtitle="Recurring problems that may not be fatal yet, but deserve operator attention." />
+              {distinctWarnings.length === 0 ? (
+                <EmptyState message="No warning patterns collected in the current dashboard window." />
+              ) : (
+                <div className="data-stack top-gap-small">
+                  {distinctWarnings.slice(0, 6).map((warning) => (
+                    <details key={warning.label} className="data-card">
+                      <summary className="data-card-header" style={{ cursor: "pointer" }}>
+                        <div>
+                          <div className="data-card-title">{warning.label}</div>
+                          <div className="helper-text">Open to see sources</div>
+                        </div>
+                        <Badge tone={warning.count >= 3 ? "danger" : warning.count === 2 ? "warning" : "neutral"}>{warning.count}</Badge>
+                      </summary>
+                      <div className="helper-text top-gap-small">Sources: {warning.sources.length > 0 ? warning.sources.join(" · ") : "—"}</div>
+                    </details>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Red" title="Failures" subtitle="Only the broken items that should change your behavior right now." />
+              {majorFailures.length === 0 ? (
+                <EmptyState message="No major failures in the current dashboard window." />
+              ) : (
+                <div className="data-stack top-gap-small">
+                  {majorFailures.map((failure) => (
+                    <article key={`${failure.source}-${failure.label}-${failure.run_id ?? failure.created_at ?? failure.detail}`} className="data-card">
+                      <div className="data-card-header">
+                        <div>
+                          <div className="cluster">
+                            <Badge tone={failureTone(failure.status)}>{failure.status.replace(/_/g, " ")}</Badge>
+                            <Badge>{failure.source}</Badge>
+                          </div>
+                          <div className="data-card-title top-gap-small">{failure.label}</div>
+                        </div>
+                        {failure.run_id ? <Link to={`/runs/${failure.run_id}`} className="button-subtle">Open run</Link> : null}
+                      </div>
+                      <div className="helper-text top-gap-small">{failure.detail}</div>
+                      <div className="helper-text">{failure.created_at ? formatDate(failure.created_at) : "—"}</div>
+                    </article>
+                  ))}
+                </div>
+              )}
             </Card>
           </section>
 
           <Card>
-            <SectionTitle kicker="Latest output" title="Recent recommendation plans" actions={<Link to="/jobs/recommendation-plans" className="button-secondary">Browse plans</Link>} />
-            {data.recommendation_plans.length === 0 ? (
-              <EmptyState message="No recommendation plans persisted yet." />
-            ) : (
-              <div className="card-grid">
-                {data.recommendation_plans.map((item) => (
-                  <article key={item.id ?? `${item.ticker}-${item.computed_at}`} className="recommendation-card">
-                    <div className="card-headline">
-                      <div>
-                        <div className="cluster">
-                          <Badge tone="info">{item.ticker}</Badge>
-                          <Badge tone={item.action === "long" ? "ok" : item.action === "short" ? "warning" : "neutral"}>{item.action}</Badge>
-                          <Badge tone={item.latest_outcome?.outcome === "win" ? "ok" : item.latest_outcome?.outcome === "loss" ? "danger" : "neutral"}>
-                            {item.latest_outcome?.outcome ?? item.status}
-                          </Badge>
-                        </div>
-                        <div className="helper-text top-gap-small">Confidence {item.confidence_percent}% · {formatDate(item.computed_at)}</div>
-                      </div>
-                      <Link to={item.run_id ? `/runs/${item.run_id}` : "/jobs/recommendation-plans"} className="button-subtle">
-                        Open run
-                      </Link>
-                    </div>
-                    <div className="helper-text">{item.thesis_summary || "No thesis summary stored."}</div>
-                  </article>
-                ))}
-              </div>
-            )}
+            <SectionTitle kicker="Next move" title="Open the deeper evidence only when needed" subtitle="The board should stay minimal; everything else belongs on a dedicated detail page." />
+            <div className="cluster top-gap-small">
+              <Link to="/jobs/recommendation-plans" className="button-secondary">Review plans</Link>
+              <Link to="/recommendation-quality" className="button-secondary">Quality report</Link>
+              <Link to="/jobs/debugger" className="button-subtle">Debugger</Link>
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle kicker="Technical" title="Pipeline volume" subtitle="Selected-window volume of the main data feeds and execution layer." />
+            <div className="data-stack top-gap-small">
+              <StatCard label="News processed" value={String(technical?.news_processed ?? 0)} helper="Historical news items" />
+              <StatCard label="Tweets processed" value={String(technical?.tweets_processed ?? 0)} helper="Social items used by plans" />
+              <StatCard label="Bars stored" value={String(technical?.bars_stored ?? 0)} helper="Historical market bars" />
+              <StatCard label="Orders placed" value={String(technical?.orders_placed ?? 0)} helper="Broker executions" />
+            </div>
           </Card>
         </div>
       ) : null}

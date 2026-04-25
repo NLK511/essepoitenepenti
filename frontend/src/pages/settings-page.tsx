@@ -221,7 +221,6 @@ export function SettingsPage() {
       <PageHeader
         kicker="Reference"
         title="Configure the app without digging into internals."
-        subtitle="System providers and ingestion controls come first. Advanced research controls stay separate at the bottom."
         actions={<HelpHint tooltip="Settings is split into system setup, data ingestion, and advanced research controls." to="/docs?doc=operator-page-field-guide" />}
       />
       {error ? <ErrorState message={error} /> : null}
@@ -236,13 +235,9 @@ export function SettingsPage() {
             <StatCard label="Live tuning profile" value={data.planGenerationTuning.settings.active_config_version_id ?? "baseline"} helper="Current plan-generation config" />
           </section>
 
-          <Card>
-            <SectionTitle kicker="System and providers" title="Configure providers and summarization" subtitle="Handle provider credentials and summarization defaults before touching advanced controls." />
-          </Card>
-
           <section className="card-grid">
             <Card>
-              <SectionTitle kicker="Summarization" title="Summary engine" subtitle="Choose the backend and local Pi CLI settings used for summaries." actions={<HelpHint tooltip="Summarization controls which backend and prompt shape context summaries." to="/docs?doc=operator-page-field-guide" />} />
+              <SectionTitle kicker="Summarization" title="Summary engine" subtitle="System and providers: choose the backend and local Pi CLI settings used for summaries before touching advanced controls." actions={<HelpHint tooltip="Summarization controls which backend and prompt shape context summaries." to="/docs?doc=operator-page-field-guide" />} />
               <form className="stack-form" onSubmit={(event) => void saveSummarySettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span>Backend</span><select name="backend" defaultValue={settingMap.summary_backend ?? "news_digest"}><option value="news_digest">news_digest</option><option value="openai_api">openai_api</option><option value="pi_agent">pi_agent</option></select></label>
@@ -260,10 +255,10 @@ export function SettingsPage() {
 
             {data.providers.map((provider) => (
               <Card key={provider.provider}>
-                <SectionTitle kicker="Provider credential" title={provider.provider} subtitle="Credentials are stored server-side and returned through the existing settings API." />
+                <SectionTitle kicker="Provider credential" title={provider.provider} subtitle="API secrets are write-only. The UI never rehydrates them." />
                 <form className="stack-form" onSubmit={(event) => void saveProvider(event, provider.provider)}>
                   <label className="form-field"><span>API key</span><input name="api_key" defaultValue={provider.api_key} /></label>
-                  <label className="form-field"><span>API secret</span><input name="api_secret" defaultValue={provider.api_secret} /></label>
+                  <label className="form-field"><span>API secret</span><input name="api_secret" type="password" autoComplete="new-password" placeholder="Enter a new secret to create or rotate the credential" defaultValue="" /></label>
                   <div className="cluster"><button className="button" type="submit" disabled={saving === provider.provider}>{saving === provider.provider ? "Saving…" : `Save ${provider.provider}`}</button></div>
                 </form>
               </Card>
@@ -318,13 +313,9 @@ export function SettingsPage() {
             </Card>
           </section>
 
-          <Card>
-            <SectionTitle kicker="Data ingestion" title="Control how much source material enters the pipeline" subtitle="These settings affect how much news and social evidence is gathered before review pages render summaries." />
-          </Card>
-
           <section className="card-grid">
             <Card>
-              <SectionTitle kicker="News ingestion" title="News fetch limits" subtitle="Adjust article limits for macro, industry, and ticker summarization paths." actions={<HelpHint tooltip="Article limits cap how much raw source material feeds each summarization path." to="/docs?doc=operator-page-field-guide" />} />
+              <SectionTitle kicker="News ingestion" title="News fetch limits" subtitle="Data ingestion: adjust article limits for macro, industry, and ticker summarization paths before review pages render summaries." actions={<HelpHint tooltip="Article limits cap how much raw source material feeds each summarization path." to="/docs?doc=operator-page-field-guide" />} />
               <form className="stack-form" onSubmit={(event) => void saveNewsSettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span>Macro article limit</span><input name="macro_article_limit" defaultValue={settingMap.news_macro_article_limit ?? "12"} /></label>

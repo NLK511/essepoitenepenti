@@ -692,7 +692,6 @@ export function DocsPage() {
       <PageHeader
         kicker="Documentation"
         title="Read the app docs in a tighter, operator-first layout."
-        subtitle="Start with setup and day-to-day usage at the top, then move into methodology, planning, and technical reference as needed."
       />
       {error ? <ErrorState message={error} /> : null}
       {!documents && !error ? <LoadingState message="Loading docs…" /> : null}

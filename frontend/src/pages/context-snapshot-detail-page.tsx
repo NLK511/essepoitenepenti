@@ -191,7 +191,6 @@ export function ContextSnapshotDetailPage() {
       <PageHeader
         kicker="Context detail"
         title={title}
-        subtitle="Read the stored summary first, then open advanced diagnostics only if you need lower-level event or source detail."
         actions={
           <>
             <Link to="/context" className="button-secondary">Back to context review</Link>
@@ -222,6 +221,8 @@ export function ContextSnapshotDetailPage() {
               confidence={snapshot.confidence_percent}
               saliency={snapshot.saliency_score}
               coverage={isIndustrySnapshot(snapshot) ? snapshot.active_drivers.length : snapshot.active_themes.length}
+              coverageLabel={isIndustrySnapshot(snapshot) ? undefined : "Themes"}
+              coverageTooltip={isIndustrySnapshot(snapshot) ? undefined : "Number of active macro themes selected for the snapshot."}
               freshness={formatDate(snapshot.computed_at)}
               tone={contextTone(snapshot)}
             />

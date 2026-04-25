@@ -90,7 +90,6 @@ export function PlanGenerationTuningPage() {
       <PageHeader
         kicker="Research"
         title="Plan generation tuning"
-        subtitle="Run candidate-based precision tuning for live plan construction, inspect ranked backtests, and promote guarded config versions."
         actions={<HelpHint tooltip="This page shows the dedicated plan-generation tuning workflow: live config, ranked candidates, and guarded promotions." to="/docs?doc=plan-generation-tuning-spec" />}
       />
       {error ? <ErrorState message={error} /> : null}

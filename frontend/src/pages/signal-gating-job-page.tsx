@@ -112,7 +112,6 @@ export function SignalGatingJobPage() {
       <PageHeader
         kicker="Research"
         title="Signal gating tuning"
-        subtitle="Tune the live gating controls and inspect the job history that produced each result. Decision samples live alongside this page as the review dataset, while the tuning job page stays focused on configuration and outcomes."
         actions={
           <>
             <HelpHint tooltip="Signal-gating tuning adjusts upstream selection thresholds to improve recall before plans are generated." to="/docs?doc=signal-gating-tuning-guide" />
@@ -138,7 +137,6 @@ export function SignalGatingJobPage() {
             <SectionTitle
               kicker="Configuration"
               title="Signal gating controls"
-              subtitle="Adjust the live base threshold and the tuning parameters that shape recommendation selection."
               actions={<HelpHint tooltip="These controls tune shortlist selection and threshold behavior before downstream plan generation." to="/docs?doc=signal-gating-tuning-guide" />}
             />
             <form className="stack-form" onSubmit={(event) => void saveSignalGatingSettings(event)}>
@@ -163,7 +161,6 @@ export function SignalGatingJobPage() {
             <SectionTitle
               kicker="Latest result"
               title="Selected tuning run"
-              subtitle="Inspect the currently selected run and its candidate scores."
               actions={<HelpHint tooltip="Review the winning threshold, baseline comparison, and candidate score distribution before applying changes." to="/docs?doc=signal-gating-tuning-guide" />}
             />
             {selectedRun ? (

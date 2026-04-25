@@ -612,6 +612,12 @@ class RecommendationPlan(BaseModel):
     watchlist_id: int | None = None
     ticker_signal_snapshot_id: int | None = None
     latest_outcome: RecommendationPlanOutcome | None = None
+    broker_order_id: str | None = None
+    broker_order_status: str | None = None
+    broker_order_updated_at: datetime | None = None
+    effective_evaluation: str | None = None
+    effective_evaluation_source: str = "simulated"
+    effective_evaluation_detail: str = ""
 
 
 class RecommendationCalibrationBucket(DictLikeModel):

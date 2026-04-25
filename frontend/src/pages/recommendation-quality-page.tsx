@@ -48,7 +48,6 @@ export function RecommendationQualityPage() {
       <PageHeader
         kicker="Advanced review"
         title="Recommendation quality summary"
-        subtitle="A consolidated operator view for confidence quality, simple baselines, where results look strongest, and walk-forward readiness, anchored to rolling time windows."
         actions={<HelpHint tooltip="This page combines the metrics that matter for recommendation quality into one review surface." to="/docs?doc=recommendation-quality-improvement-plan" />}
       />
       {error ? <ErrorState message={error} /> : null}

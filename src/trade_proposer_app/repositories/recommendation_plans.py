@@ -7,8 +7,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import StrategyHorizon
-from trade_proposer_app.domain.models import KeyLabelDetail, RecommendationPlan, RecommendationPlanStats
+from trade_proposer_app.domain.models import BrokerOrderExecution, KeyLabelDetail, RecommendationPlan, RecommendationPlanOutcome, RecommendationPlanStats
 from trade_proposer_app.persistence.models import RecommendationPlanRecord
+from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
@@ -18,6 +19,7 @@ class RecommendationPlanRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
         self.outcomes = RecommendationOutcomeRepository(session)
+        self.broker_orders = BrokerOrderExecutionRepository(session)
         self.taxonomy_service = TickerTaxonomyService()
 
     def create_plan(self, plan: RecommendationPlan) -> RecommendationPlan:
@@ -57,7 +59,8 @@ class RecommendationPlanRepository:
             raise ValueError(f"Recommendation plan {plan_id} not found")
         plan = self._to_model(record)
         outcome_map = self.outcomes.get_outcomes_by_plan_ids([record.id])
-        plan.latest_outcome = outcome_map.get(record.id)
+        broker_order_map = self.broker_orders.get_latest_by_plan_ids([record.id])
+        self._attach_execution_context(plan, latest_outcome=outcome_map.get(record.id), broker_order=broker_order_map.get(record.id))
         return plan
 
     def _base_plan_query(
@@ -169,6 +172,7 @@ class RecommendationPlanRepository:
         if normalized_setup_family or normalized_resolved or normalized_outcome or shortlisted is not None or entry_touched is not None or near_entry_miss is not None or direction_worked_without_entry is not None:
             rows = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc())).all()
             outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
+            broker_order_map = self.broker_orders.get_latest_by_plan_ids([row.id for row in rows if row.id is not None])
             filtered_rows = [
                 row
                 for row in rows
@@ -192,9 +196,14 @@ class RecommendationPlanRepository:
             ).all()
             plans = [self._to_model(row) for row in rows]
             outcome_map = self.outcomes.get_outcomes_by_plan_ids([plan.id for plan in plans if plan.id is not None])
+            broker_order_map = self.broker_orders.get_latest_by_plan_ids([plan.id for plan in plans if plan.id is not None])
         for plan in plans:
             if plan.id is not None:
-                plan.latest_outcome = outcome_map.get(plan.id)
+                self._attach_execution_context(
+                    plan,
+                    latest_outcome=outcome_map.get(plan.id),
+                    broker_order=broker_order_map.get(plan.id),
+                )
         return plans
 
     def _matches_filters(
@@ -265,6 +274,71 @@ class RecommendationPlanRepository:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
+
+    def _attach_execution_context(
+        self,
+        plan: RecommendationPlan,
+        *,
+        latest_outcome: RecommendationPlanOutcome | None,
+        broker_order: BrokerOrderExecution | None,
+    ) -> None:
+        plan.latest_outcome = latest_outcome
+        if broker_order is not None:
+            plan.broker_order_id = broker_order.broker_order_id
+            plan.broker_order_status = broker_order.status
+            plan.broker_order_updated_at = broker_order.updated_at
+            broker_source = self._broker_evaluation_source(broker_order)
+            if broker_source == "broker":
+                plan.effective_evaluation_source = "broker"
+                plan.effective_evaluation = self._broker_evaluation_label(broker_order)
+                plan.effective_evaluation_detail = self._broker_evaluation_detail(broker_order)
+                return
+            if broker_source == "simulated" and plan.latest_outcome is not None:
+                plan.effective_evaluation_source = "simulated"
+                plan.effective_evaluation = plan.latest_outcome.outcome
+                plan.effective_evaluation_detail = f"{self._broker_evaluation_detail(broker_order)}; simulated outcome used as fallback"
+                return
+            plan.effective_evaluation_source = "missing"
+            plan.effective_evaluation = None
+            plan.effective_evaluation_detail = self._broker_evaluation_detail(broker_order)
+            return
+        if plan.latest_outcome is not None:
+            plan.effective_evaluation_source = "simulated"
+            plan.effective_evaluation = plan.latest_outcome.outcome
+            plan.effective_evaluation_detail = plan.latest_outcome.notes
+        else:
+            plan.effective_evaluation_source = "missing"
+            plan.effective_evaluation = None
+            plan.effective_evaluation_detail = "broker evaluation unavailable"
+
+    @staticmethod
+    def _broker_evaluation_source(order: BrokerOrderExecution) -> str:
+        status = str(order.status or "").strip().lower()
+        if status in {"submitted", "accepted", "partially_filled", "filled"}:
+            return "broker"
+        if status in {"canceled", "expired", "rejected", "failed"}:
+            return "simulated"
+        return "missing"
+
+    @staticmethod
+    def _broker_evaluation_label(order: BrokerOrderExecution) -> str:
+        status = str(order.status or "").strip().lower()
+        if status in {"submitted", "accepted", "partially_filled"}:
+            return "pending"
+        if status == "filled":
+            return "entry"
+        return "missing"
+
+    @staticmethod
+    def _broker_evaluation_detail(order: BrokerOrderExecution) -> str:
+        status = str(order.status or "").strip().lower() or "unknown"
+        if status == "filled":
+            return "broker order filled"
+        if status in {"submitted", "accepted", "partially_filled"}:
+            return f"broker order {status}"
+        if status in {"canceled", "expired", "rejected", "failed"}:
+            return f"broker order {status}"
+        return f"broker order {status}"
 
     def summarize_stats(
         self,

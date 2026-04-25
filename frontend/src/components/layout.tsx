@@ -111,125 +111,125 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
   if (pathname === "/") {
     return {
       eyebrow: "Workspace overview",
-      title: "Decision-support cockpit",
+      title: "Aurelio’s Forum",
       description: "Track runs, context, watchlists, and recommendation plans from one place.",
     };
   }
   if (pathname === "/jobs") {
     return {
       eyebrow: "Automation",
-      title: "Jobs and execution",
+      title: "Orders of the Empire",
       description: "Create repeatable workflows, queue runs, and monitor operational health.",
     };
   }
   if (pathname.startsWith("/jobs/watchlists")) {
     return {
       eyebrow: "Automation",
-      title: "Watchlists",
+      title: "Legions",
       description: "Define the universes, default horizons, and scheduling assumptions that shape plan generation.",
     };
   }
   if (pathname.startsWith("/jobs/ticker-signals")) {
     return {
       eyebrow: "Review",
-      title: "Ticker signals",
+      title: "Omens",
       description: "Review candidates before they become action plans.",
     };
   }
   if (pathname.startsWith("/jobs/recommendation-plans")) {
     return {
       eyebrow: "Review",
-      title: "Recommendation plans",
+      title: "Battle Plans",
       description: "Review action plans first, with advanced analytics available when needed.",
     };
   }
   if (pathname.startsWith("/recommendation-quality")) {
     return {
       eyebrow: "Advanced review",
-      title: "Recommendation quality summary",
+      title: "The Stoic Ledger",
       description: "Review confidence quality, where results look strongest, and walk-forward readiness in one consolidated place.",
     };
   }
   if (pathname.startsWith("/research/signal-gating/gating-job") || pathname.startsWith("/research/signal-gating")) {
     return {
       eyebrow: "Research",
-      title: "Signal gating tuning",
+      title: "Cato’s Gate",
       description: "Adjust upstream selection controls, launch tuning runs, and inspect candidate results without a separate hub page.",
     };
   }
   if (pathname.startsWith("/research/plan-generation-tuning")) {
     return {
       eyebrow: "Research",
-      title: "Plan generation tuning",
+      title: "The Forge of Plans",
       description: "Inspect active plan-generation configs, ranked backtest candidates, and guarded promotions.",
     };
   }
   if (pathname.startsWith("/research")) {
     return {
       eyebrow: "Research",
-      title: "Research hub",
+      title: "The Academy",
       description: "Review tuning, calibration, and backtesting work without mixing it into the operational workflow.",
     };
   }
   if (pathname.startsWith("/jobs/debugger")) {
     return {
       eyebrow: "Review",
-      title: "Run debugger",
+      title: "The Tribunal",
       description: "Trace what each run scanned, shortlisted, persisted, and warned about.",
     };
   }
   if (pathname.startsWith("/broker-orders")) {
     return {
       eyebrow: "Execution audit",
-      title: "Broker orders",
+      title: "The Tribute Ledger",
       description: "Inspect Alpaca paper submissions, payloads, and statuses for plan-driven trades.",
     };
   }
   if (pathname.startsWith("/runs/")) {
     return {
       eyebrow: "Execution detail",
-      title: "Run review",
+      title: "After-Action Scroll",
       description: "Follow the full execution path from cheap scan to context objects, signals, and plans.",
     };
   }
   if (pathname.startsWith("/workers/")) {
     return {
       eyebrow: "Worker diagnostics",
-      title: "Worker logs",
+      title: "The Scriptorium",
       description: "Inspect live worker output and follow a running worker’s progress in real time.",
     };
   }
   if (pathname.startsWith("/tickers/")) {
     return {
       eyebrow: "Ticker review",
-      title: "Ticker drill-down",
+      title: "The Scroll of One Ticker",
       description: "Inspect a ticker’s recent plans, outcomes, and supporting context.",
     };
   }
   if (pathname.startsWith("/context") || pathname.startsWith("/sentiment")) {
     return {
       eyebrow: "Context",
-      title: "Context review",
+      title: "The Agora",
       description: "Review the shared macro and industry backdrop behind current plans and signals.",
     };
   }
   if (pathname.startsWith("/settings")) {
     return {
       eyebrow: "Reference",
-      title: "Settings",
+      title: "The Villa of Keys",
       description: "Configure providers, credentials, execution toggles, and operational defaults.",
     };
   }
   if (pathname.startsWith("/docs")) {
     return {
       eyebrow: "Reference",
-      title: "Docs",
+      title: "The Codex",
       description: "Read product, redesign, and operator guidance without leaving the app.",
     };
   }
   return {
     eyebrow: "Trade proposer app",
-    title: "Workspace",
+    title: "The Atrium",
     description: "Navigate the recommendation workflow, supporting context, and system settings.",
   };
 }

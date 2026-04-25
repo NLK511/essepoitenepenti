@@ -22,6 +22,16 @@ async def list_broker_orders(
     return repository.list_all(limit=limit)
 
 
+@router.post("/sync")
+async def sync_broker_orders(session: Session = Depends(get_db_session)) -> dict[str, object]:
+    service = create_order_execution_service(session)
+    try:
+        outcome = service.sync_open_executions()
+        return outcome.summary
+    except AlpacaPaperClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @router.get("/{execution_id}")
 async def get_broker_order(execution_id: int, session: Session = Depends(get_db_session)) -> BrokerOrderExecution:
     repository = BrokerOrderExecutionRepository(session)
@@ -46,6 +56,18 @@ async def cancel_broker_order(execution_id: int, session: Session = Depends(get_
     service = create_order_execution_service(session)
     try:
         return service.cancel_execution(execution_id)
+    except AlpacaPaperClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        message = str(exc)
+        raise HTTPException(status_code=404 if "not found" in message else 400, detail=message) from exc
+
+
+@router.post("/{execution_id}/refresh")
+async def refresh_broker_order(execution_id: int, session: Session = Depends(get_db_session)) -> BrokerOrderExecution:
+    service = create_order_execution_service(session)
+    try:
+        return service.refresh_execution(execution_id)
     except AlpacaPaperClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:

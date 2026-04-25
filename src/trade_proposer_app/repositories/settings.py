@@ -287,23 +287,30 @@ class SettingsRepository:
             )
         return credentials
 
+    def list_provider_credentials_redacted(self) -> list[ProviderCredential]:
+        return [ProviderCredential(provider=item.provider, api_key=item.api_key, api_secret="") for item in self.list_provider_credentials()]
+
     def get_provider_credential_map(self) -> dict[str, ProviderCredential]:
         return {item.provider: item for item in self.list_provider_credentials()}
 
     def upsert_provider_credential(self, provider: str, api_key: str, api_secret: str) -> ProviderCredential:
-        encrypted_api_key = credential_cipher.encrypt(api_key)
-        encrypted_api_secret = credential_cipher.encrypt(api_secret)
+        api_key = api_key.strip()
+        api_secret = api_secret.strip()
         record = self.session.get(ProviderCredentialRecord, provider)
         if record is None:
+            if not api_key or not api_secret:
+                raise ValueError("api key and api secret are required when creating a provider credential")
             record = ProviderCredentialRecord(
                 provider=provider,
-                api_key=encrypted_api_key,
-                api_secret=encrypted_api_secret,
+                api_key=credential_cipher.encrypt(api_key),
+                api_secret=credential_cipher.encrypt(api_secret),
             )
             self.session.add(record)
         else:
-            record.api_key = encrypted_api_key
-            record.api_secret = encrypted_api_secret
+            if api_key:
+                record.api_key = credential_cipher.encrypt(api_key)
+            if api_secret:
+                record.api_secret = credential_cipher.encrypt(api_secret)
         self.session.commit()
         return ProviderCredential(
             provider=record.provider,

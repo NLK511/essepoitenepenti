@@ -63,7 +63,7 @@ Implementation status:
 - **shortlisted samples** usually have a linked recommendation plan because downstream framing ran
 - **non-shortlisted samples** may exist without any recommendation plan row because the ticker never reached downstream plan framing
 - these discarded samples now also carry benchmark follow-through labels, so signal-gating tuning can detect missed opportunities even when no plan row was created
-- the decision-samples page can filter benchmark hits, benchmark misses, and pending benchmark rows so review can focus on follow-through labels before changing gates
+- the decision-samples page can filter benchmark `pending`, `hit`, `miss`, and `failed` rows so review can focus on follow-through labels before changing gates
 - plan-linked outcomes still matter for stop-loss / take-profit truth, but decision-sample-only rows are no longer label-less audit records
 
 If strong samples were never shortlisted, the problem is probably in:
