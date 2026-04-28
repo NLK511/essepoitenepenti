@@ -5,6 +5,7 @@ import sys
 import unittest
 from pathlib import Path
 
+from scripts.deploy_watchlists import WATCHLIST_SPECS
 from trade_proposer_app.services.taxonomy import (
     EVENT_VOCAB_PATH,
     INDUSTRIES_PATH,
@@ -48,6 +49,14 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertGreaterEqual(len(industries), 12)
         self.assertTrue({"US", "Europe", "Asia-Pacific"}.issubset(regions))
 
+    def test_default_watchlist_universe_is_fully_represented(self) -> None:
+        service = TickerTaxonomyService()
+        default_tickers = list(dict.fromkeys(ticker for spec in WATCHLIST_SPECS for ticker in spec["tickers"]))
+        missing = [ticker for ticker in default_tickers if ticker not in service._taxonomy]
+
+        self.assertEqual([], missing)
+        self.assertEqual(750, len(default_tickers))
+
     def test_split_taxonomy_files_exist_and_are_loaded(self) -> None:
         self.assertTrue(TICKERS_PATH.exists())
         self.assertTrue(INDUSTRIES_PATH.exists())
@@ -82,7 +91,9 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertGreaterEqual(overview["sector_count"], 8)
         self.assertGreaterEqual(overview["event_vocab_group_count"], 12)
         self.assertGreaterEqual(overview["theme_count"], 40)
+        self.assertGreaterEqual(overview["theme_parent_count"], 10)
         self.assertGreaterEqual(overview["macro_channel_count"], 20)
+        self.assertGreaterEqual(overview["macro_channel_parent_count"], 10)
         self.assertGreaterEqual(overview["transmission_channel_count"], 30)
         self.assertGreaterEqual(overview["transmission_tag_count"], 3)
         self.assertGreaterEqual(overview["transmission_primary_driver_count"], 8)
@@ -102,7 +113,18 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertGreaterEqual(overview["event_recency_bucket_count"], 4)
         self.assertGreaterEqual(overview["relationship_type_count"], 8)
         self.assertGreaterEqual(overview["relationship_target_kind_count"], 4)
+        self.assertGreaterEqual(overview["relationship_direction_count"], 20)
+        self.assertGreaterEqual(overview["relationship_mechanism_count"], 20)
+        self.assertGreaterEqual(overview["relationship_confidence_count"], 20)
+        self.assertGreaterEqual(overview["relationship_provenance_count"], 20)
         self.assertGreaterEqual(overview["derived_relationship_count"], 20)
+        self.assertGreaterEqual(overview["ticker_industry_link_count"], 100)
+        self.assertGreaterEqual(overview["ticker_sector_link_count"], 700)
+        self.assertGreaterEqual(overview["ticker_macro_link_count"], 100)
+        self.assertGreaterEqual(overview["ticker_supplier_link_count"], 10)
+        self.assertGreaterEqual(overview["ticker_customer_link_count"], 10)
+        self.assertGreaterEqual(overview["ticker_with_supplier_count"], 8)
+        self.assertGreaterEqual(overview["ticker_with_customer_count"], 8)
 
     def test_query_profile_and_industry_profile_use_explicit_industry_definitions(self) -> None:
         service = TickerTaxonomyService()
@@ -151,7 +173,27 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertEqual(service.get_event_recency_bucket_definition("fresh")["label"], "fresh")
         self.assertEqual(service.derive_transmission_context_regime({"context_bias": "tailwind", "transmission_tags": ["macro_dominant", "catalyst_active"]}), "context_plus_catalyst")
         self.assertEqual(service.get_analysis_bucket_label("transmission_bias", "tailwind"), "tailwind")
+        self.assertEqual(service.get_theme_definition("consumer_electronics")["parent"], "consumer")
+        self.assertEqual(service.get_theme_definition("ai_capex")["parent"], "ai")
+        self.assertEqual(service.get_macro_channel_definition("yield_curve")["parent"], "rates")
+        self.assertEqual(service.get_macro_channel_definition("cloud_capex")["parent"], "enterprise_spend")
         self.assertIn("consumer_spending", aapl_profile["exposure_channels"])
+        self.assertIn("consumer", service.get_industry_profile("AAPL")["queries"])
+        self.assertIn("enterprise spend", service.build_query_profile("NVDA")["macro_queries"])
+
+    def test_provider_backed_reclassification_and_domicile_fill(self) -> None:
+        service = TickerTaxonomyService()
+
+        abbv_profile = service.get_ticker_profile("ABBV")
+        self.assertEqual(abbv_profile["domicile"], "United States")
+
+        adsk_profile = service.get_ticker_profile("ADSK")
+        self.assertEqual(adsk_profile["industry"], "Software - Application")
+
+        nee_industry_profile = service.get_industry_profile("NEE")
+        self.assertEqual(nee_industry_profile["subject_label"], "Utilities - Regulated Electric")
+        self.assertEqual(nee_industry_profile["resolution_mode"], "taxonomy")
+        self.assertIn("Utilities - Regulated Electric", nee_industry_profile["queries"])
 
     def test_list_industry_profiles_groups_multiple_tickers_and_relationships(self) -> None:
         service = TickerTaxonomyService()
@@ -185,9 +227,9 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertEqual(ticker_profile["company_name"], "Acme Cloud")
         self.assertEqual(ticker_profile["sector"], "Technology")
         self.assertEqual(ticker_profile["industry"], "Software - Infrastructure")
-        self.assertEqual(industry_profile["subject_key"], "information_technology")
-        self.assertEqual(industry_profile["subject_label"], "Information Technology")
-        self.assertEqual(industry_profile["resolution_mode"], "sector_fallback")
+        self.assertEqual(industry_profile["subject_key"], "software_infrastructure")
+        self.assertEqual(industry_profile["subject_label"], "Software - Infrastructure")
+        self.assertEqual(industry_profile["resolution_mode"], "taxonomy")
         self.assertIn("Software - Infrastructure", industry_profile["queries"])
         self.assertIn("Technology", industry_profile["queries"])
 
@@ -210,9 +252,82 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
         self.assertTrue(any(item["type"] == "exposed_to_theme" and item["target_kind"] == "theme" for item in consumer_electronics_relationships))
         self.assertTrue(any(item.get("type_label") == "linked macro channel" for item in consumer_electronics_relationships))
 
+        software_relationships = service.list_relationships("software", direction="outbound")
+        self.assertTrue(any(item["target"] == "cloud_capex" and item.get("direction") == "positive" for item in software_relationships))
+        self.assertTrue(any(item["target"] == "cloud_capex" and item.get("mechanism") == "renewal_and_expansion" for item in software_relationships))
+        self.assertTrue(any(item["target"] == "cloud_capex" and item.get("confidence") == "high" for item in software_relationships))
+        self.assertTrue(any(item["target"] == "cloud_capex" and item.get("relationship_score", 0.0) > 0.8 for item in software_relationships))
+
         ticker_relationships = service.get_ticker_relationships("AAPL")
         self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "SONY" for item in ticker_relationships))
         self.assertTrue(any(item["type"] == "supplier_to" and item["target"] == "TSM" for item in ticker_relationships))
+
+    def test_top_watchlist_ticker_relationship_depth_is_present(self) -> None:
+        service = TickerTaxonomyService()
+        first_100 = list(dict.fromkeys(ticker for spec in WATCHLIST_SPECS[:2] for ticker in spec["tickers"]))
+        tickers_with_supply_chain_depth = [
+            ticker
+            for ticker in first_100
+            if service.get_ticker_profile(ticker).get("suppliers") or service.get_ticker_profile(ticker).get("customers")
+        ]
+        self.assertGreaterEqual(len(tickers_with_supply_chain_depth), 10)
+
+        tsm_relationships = service.get_ticker_relationships("2330.TW")
+        self.assertTrue(any(item["type"] == "supplier_to" and item["target"] == "ASML.AS" for item in tsm_relationships))
+        self.assertTrue(any(item["type"] == "customer_of" and item["target"] == "AAPL" for item in tsm_relationships))
+
+        samsung_relationships = service.get_ticker_relationships("005930.KS")
+        self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "000660.KS" for item in samsung_relationships))
+        self.assertTrue(any(item["type"] == "customer_of" and item["target"] == "AAPL" for item in samsung_relationships))
+
+    def test_us_and_europe_mega_cap_relationship_depth_is_present(self) -> None:
+        service = TickerTaxonomyService()
+
+        aapl_profile = service.get_ticker_profile("AAPL")
+        self.assertIn("TSM", aapl_profile["suppliers"])
+        self.assertIn("005930.KS", aapl_profile["suppliers"])
+        aapl_relationships = service.get_ticker_relationships("AAPL")
+        self.assertTrue(any(item["type"] == "supplier_to" and item["target"] == "TSM" for item in aapl_relationships))
+        self.assertTrue(any(item["type"] == "supplier_to" and item["target"] == "005930.KS" for item in aapl_relationships))
+        self.assertTrue(any(item["type"] == "belongs_to_sector" and item["target"] == "information_technology" for item in aapl_relationships))
+        self.assertTrue(any(item["type"] == "linked_macro_channel" and item["target"] == "consumer_spending" for item in aapl_relationships))
+
+        sap_relationships = service.get_ticker_relationships("SAP.DE")
+        self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "ORCL" for item in sap_relationships))
+        self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "MSFT" for item in sap_relationships))
+
+        asml_relationships = service.get_ticker_relationships("ASML.AS")
+        self.assertTrue(any(item["type"] == "customer_of" and item["target"] == "TSM" for item in asml_relationships))
+        self.assertTrue(any(item["type"] == "customer_of" and item["target"] == "005930.KS" for item in asml_relationships))
+
+        novo_relationships = service.get_ticker_relationships("NOVO-B.CO")
+        self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "AZN.L" for item in novo_relationships))
+
+    def test_mid_cap_industrial_and_financial_relationship_depth_is_present(self) -> None:
+        service = TickerTaxonomyService()
+
+        jpm_relationships = service.get_ticker_relationships("JPM")
+        self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "BAC" for item in jpm_relationships))
+        self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "GS" for item in jpm_relationships))
+        self.assertTrue(any(item["type"] == "belongs_to_sector" and item["target"] == "financials" for item in jpm_relationships))
+        self.assertTrue(any(item["type"] == "linked_macro_channel" and item["target"] == "yield_curve" for item in jpm_relationships))
+
+        cat_relationships = service.get_ticker_relationships("CAT")
+        self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "DE" for item in cat_relationships))
+        self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "RTX" for item in cat_relationships))
+        self.assertTrue(any(item["type"] == "belongs_to_sector" and item["target"] == "industrials" for item in cat_relationships))
+        self.assertTrue(any(item["type"] == "linked_macro_channel" and item["target"] == "infrastructure_spend" for item in cat_relationships))
+
+        amt_profile = service.get_ticker_profile("AMT")
+        self.assertIn("TMUS", amt_profile["customers"])
+        self.assertIn("VZ", amt_profile["customers"])
+        amt_relationships = service.get_ticker_relationships("AMT")
+        self.assertTrue(any(item["type"] == "customer_of" and item["target"] == "TMUS" for item in amt_relationships))
+        self.assertTrue(any(item["type"] == "customer_of" and item["target"] == "VZ" for item in amt_relationships))
+
+        plld_relationships = service.get_ticker_relationships("PLD")
+        self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "AMT" for item in plld_relationships))
+        self.assertTrue(any(item["type"] == "peer_of" and item["target"] == "EQIX" for item in plld_relationships))
 
     def test_validation_and_report_scripts_pass(self) -> None:
         root = Path(__file__).resolve().parents[1]

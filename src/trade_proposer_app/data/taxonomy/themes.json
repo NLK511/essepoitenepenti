@@ -1,7 +1,8 @@
 {
   "accelerators": {
     "label": "accelerators",
-    "aliases": []
+    "aliases": [],
+    "parent": "semiconductors"
   },
   "aerospace": {
     "label": "aerospace",
@@ -21,27 +22,33 @@
   },
   "ai_assistants": {
     "label": "ai assistants",
-    "aliases": []
+    "aliases": [],
+    "parent": "ai"
   },
   "ai_capex": {
     "label": "ai capex",
-    "aliases": []
+    "aliases": [],
+    "parent": "ai"
   },
   "ai_compute": {
     "label": "ai compute",
-    "aliases": []
+    "aliases": [],
+    "parent": "ai"
   },
   "ai_tools": {
     "label": "ai tools",
-    "aliases": []
+    "aliases": [],
+    "parent": "ai"
   },
   "aircraft": {
     "label": "aircraft",
-    "aliases": []
+    "aliases": [],
+    "parent": "travel"
   },
   "airlines": {
     "label": "airlines",
-    "aliases": []
+    "aliases": [],
+    "parent": "travel"
   },
   "aluminum": {
     "label": "aluminum",
@@ -53,7 +60,8 @@
   },
   "asset_management": {
     "label": "asset management",
-    "aliases": []
+    "aliases": [],
+    "parent": "markets"
   },
   "athleisure": {
     "label": "athleisure",
@@ -65,7 +73,8 @@
   },
   "aviation": {
     "label": "aviation",
-    "aliases": []
+    "aliases": [],
+    "parent": "travel"
   },
   "banking": {
     "label": "banking",
@@ -97,7 +106,8 @@
   },
   "capital_markets": {
     "label": "capital markets",
-    "aliases": []
+    "aliases": [],
+    "parent": "markets"
   },
   "checkout": {
     "label": "checkout",
@@ -117,11 +127,13 @@
   },
   "cloud_infrastructure": {
     "label": "cloud infrastructure",
-    "aliases": []
+    "aliases": [],
+    "parent": "cloud"
   },
   "cloud_transition": {
     "label": "cloud transition",
-    "aliases": []
+    "aliases": [],
+    "parent": "cloud"
   },
   "commercial_lending": {
     "label": "commercial lending",
@@ -137,25 +149,30 @@
   },
   "consumer_banking": {
     "label": "consumer banking",
-    "aliases": []
+    "aliases": [],
+    "parent": "banking"
   },
   "consumer_electronics": {
     "label": "consumer electronics",
-    "aliases": []
+    "aliases": [],
+    "parent": "consumer"
   },
   "consumer_finance": {
     "label": "consumer finance",
-    "aliases": []
+    "aliases": [],
+    "parent": "consumer"
   },
   "consumer_internet": {
     "label": "consumer internet",
-    "aliases": []
+    "aliases": [],
+    "parent": "consumer"
   },
   "consumer_spending": {
     "label": "consumer spend",
     "aliases": [
       "consumer spending"
-    ]
+    ],
+    "parent": "consumer"
   },
   "consumer_staples": {
     "label": "consumer staples",
@@ -163,7 +180,8 @@
   },
   "content": {
     "label": "content",
-    "aliases": []
+    "aliases": [],
+    "parent": "consumer_internet"
   },
   "copper": {
     "label": "copper",
@@ -171,15 +189,18 @@
   },
   "creative_software": {
     "label": "creative software",
-    "aliases": []
+    "aliases": [],
+    "parent": "software"
   },
   "crm": {
     "label": "crm",
-    "aliases": []
+    "aliases": [],
+    "parent": "enterprise_software"
   },
   "custom_silicon": {
     "label": "custom silicon",
-    "aliases": []
+    "aliases": [],
+    "parent": "semiconductors"
   },
   "data_center": {
     "label": "data center",
@@ -187,7 +208,8 @@
   },
   "database": {
     "label": "database",
-    "aliases": []
+    "aliases": [],
+    "parent": "enterprise_software"
   },
   "defense": {
     "label": "defense",
@@ -205,19 +227,23 @@
     "label": "advertising",
     "aliases": [
       "digital ads"
-    ]
+    ],
+    "parent": "consumer_internet"
   },
   "digital_documents": {
     "label": "digital documents",
-    "aliases": []
+    "aliases": [],
+    "parent": "software"
   },
   "digital_payments": {
     "label": "digital payments",
-    "aliases": []
+    "aliases": [],
+    "parent": "payments"
   },
   "discount_retail": {
     "label": "discount retail",
-    "aliases": []
+    "aliases": [],
+    "parent": "retail"
   },
   "domestic_demand": {
     "label": "domestic demand",
@@ -229,7 +255,8 @@
   },
   "e_commerce": {
     "label": "e-commerce",
-    "aliases": []
+    "aliases": [],
+    "parent": "retail"
   },
   "engines": {
     "label": "engines",
@@ -241,7 +268,8 @@
   },
   "erp": {
     "label": "erp",
-    "aliases": []
+    "aliases": [],
+    "parent": "enterprise_software"
   },
   "ev": {
     "label": "ev",
@@ -257,11 +285,13 @@
   },
   "foundry": {
     "label": "foundry",
-    "aliases": []
+    "aliases": [],
+    "parent": "semiconductors"
   },
   "gaming": {
     "label": "gaming",
-    "aliases": []
+    "aliases": [],
+    "parent": "consumer_internet"
   },
   "general_merchandise": {
     "label": "general merchandise",
@@ -313,7 +343,8 @@
   },
   "leading_edge_nodes": {
     "label": "leading-edge nodes",
-    "aliases": []
+    "aliases": [],
+    "parent": "semiconductors"
   },
   "lithography": {
     "label": "lithography",
@@ -365,7 +396,8 @@
   },
   "mobile": {
     "label": "mobile",
-    "aliases": []
+    "aliases": [],
+    "parent": "consumer"
   },
   "net_lease": {
     "label": "net lease",
@@ -393,7 +425,8 @@
   },
   "pc": {
     "label": "pc",
-    "aliases": []
+    "aliases": [],
+    "parent": "semiconductors"
   },
   "pc_cycle": {
     "label": "pc cycle",
@@ -445,7 +478,8 @@
   },
   "restaurants": {
     "label": "restaurants",
-    "aliases": []
+    "aliases": [],
+    "parent": "consumer"
   },
   "retail": {
     "label": "retail",
@@ -453,15 +487,18 @@
   },
   "retail_real_estate": {
     "label": "retail real estate",
-    "aliases": []
+    "aliases": [],
+    "parent": "real_estate"
   },
   "search": {
     "label": "search",
-    "aliases": []
+    "aliases": [],
+    "parent": "consumer_internet"
   },
   "semiconductor_equipment": {
     "label": "semiconductor equipment",
-    "aliases": []
+    "aliases": [],
+    "parent": "semiconductors"
   },
   "semiconductors": {
     "label": "semiconductors",
@@ -475,7 +512,8 @@
     "label": "social media",
     "aliases": [
       "social platforms"
-    ]
+    ],
+    "parent": "consumer_internet"
   },
   "software": {
     "label": "software",
@@ -487,7 +525,8 @@
   },
   "trading": {
     "label": "trading",
-    "aliases": []
+    "aliases": [],
+    "parent": "markets"
   },
   "traffic": {
     "label": "traffic",
@@ -523,6 +562,7 @@
   },
   "wealth_management": {
     "label": "wealth management",
-    "aliases": []
+    "aliases": [],
+    "parent": "markets"
   }
 }

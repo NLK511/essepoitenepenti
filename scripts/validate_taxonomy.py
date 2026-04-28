@@ -51,6 +51,32 @@ def main() -> int:
     service = TickerTaxonomyService()
     alias_to_tickers: dict[str, set[str]] = {}
 
+    def validate_registry_parent_links(registry_name: str, registry: dict[str, dict[str, object]]) -> None:
+        for key, definition in sorted(registry.items()):
+            parent = service._normalize_subject_key(definition.get("parent"))
+            if not parent or parent == "unknown":
+                continue
+            if parent == key:
+                errors.append(f"{registry_name} {key} cannot parent itself")
+                continue
+            if parent not in registry:
+                errors.append(f"{registry_name} {key} references unknown parent {parent!r}")
+                continue
+            chain: set[str] = {key}
+            current = parent
+            while current:
+                if current in chain:
+                    errors.append(f"{registry_name} {key} has a cyclic parent chain involving {current!r}")
+                    break
+                chain.add(current)
+                next_parent = service._normalize_subject_key((registry.get(current) or {}).get("parent"))
+                if not next_parent or next_parent == "unknown":
+                    break
+                if next_parent not in registry:
+                    errors.append(f"{registry_name} {current} references unknown parent {next_parent!r}")
+                    break
+                current = next_parent
+
     expected_paths = [TICKERS_PATH, INDUSTRIES_PATH, SECTORS_PATH, RELATIONSHIPS_PATH, EVENT_VOCAB_PATH, THEMES_PATH, MACRO_CHANNELS_PATH, TRANSMISSION_CHANNELS_PATH, TRANSMISSION_TAGS_PATH, TRANSMISSION_PRIMARY_DRIVERS_PATH, TRANSMISSION_CONFLICT_FLAGS_PATH, TRANSMISSION_BIASES_PATH, TRANSMISSION_CONTEXT_REGIMES_PATH, TRANSMISSION_WINDOWS_PATH, SHORTLIST_REASON_CODES_PATH, SHORTLIST_SELECTION_LANES_PATH, CALIBRATION_REVIEW_STATUSES_PATH, CALIBRATION_REASON_CODES_PATH, ACTION_REASON_CODES_PATH, CONTRADICTION_REASON_CODES_PATH, EVENT_SOURCE_PRIORITIES_PATH, EVENT_PERSISTENCE_STATES_PATH, EVENT_WINDOW_HINTS_PATH, EVENT_RECENCY_BUCKETS_PATH, RELATIONSHIP_TYPES_PATH, RELATIONSHIP_TARGET_KINDS_PATH]
     split_mode = all(path.exists() for path in expected_paths)
     if not split_mode and not TAXONOMY_PATH.exists():
@@ -136,8 +162,14 @@ def main() -> int:
             if macro_definition.get("key") not in service._macro_channels:
                 errors.append(f"sector {sector_key} uses ungoverned macro channel {raw_macro!r}")
 
+    validate_registry_parent_links("theme", service._themes)
+    validate_registry_parent_links("macro channel", service._macro_channels)
+
     valid_relationship_types = set(service._relationship_types)
     valid_target_kinds = set(service._relationship_target_kinds)
+    valid_directions = {"positive", "negative", "mixed"}
+    valid_provenance = {"curated", "provider_backed", "derived", "heuristic"}
+    valid_confidence = {"low", "medium", "high"}
     sector_keys = set(service._sectors)
     for index, relationship in enumerate(service._relationships, start=1):
         relation_type = str(relationship.get("type", "")).strip()
@@ -165,6 +197,24 @@ def main() -> int:
             channel_definition = service.get_transmission_channel_definition(channel)
             if channel_definition.get("key") not in service._transmission_channels:
                 errors.append(f"relationship #{index} channel {channel!r} is not a governed transmission channel")
+        direction = str(relationship.get("direction", "")).strip()
+        if direction and direction not in valid_directions:
+            errors.append(f"relationship #{index} direction {direction!r} is not one of {sorted(valid_directions)}")
+        confidence = str(relationship.get("confidence", "")).strip()
+        if confidence and confidence not in valid_confidence:
+            errors.append(f"relationship #{index} confidence {confidence!r} is not one of {sorted(valid_confidence)}")
+        provenance = str(relationship.get("provenance", "")).strip()
+        if provenance and provenance not in valid_provenance:
+            errors.append(f"relationship #{index} provenance {provenance!r} is not one of {sorted(valid_provenance)}")
+        for field in ("valid_from", "valid_to"):
+            value = str(relationship.get(field, "")).strip()
+            if not value:
+                continue
+            try:
+                from datetime import datetime
+                datetime.fromisoformat(value)
+            except ValueError:
+                errors.append(f"relationship #{index} {field} {value!r} is not an ISO-8601 date")
         if not relation_type:
             errors.append(f"relationship #{index} missing type")
 
@@ -182,9 +232,14 @@ def main() -> int:
     print(f"Industries: {overview['industry_count']}")
     print(f"Sectors: {overview['sector_count']}")
     print(f"Relationships: {overview['relationship_count']}")
+    print(f"Relationship directions: {overview['relationship_direction_count']}")
+    print(f"Relationship mechanisms: {overview['relationship_mechanism_count']}")
+    print(f"Relationship confidence values: {overview['relationship_confidence_count']}")
+    print(f"Relationship provenance values: {overview['relationship_provenance_count']}")
+    print(f"Relationship validity windows: {overview['relationship_validity_count']}")
     print(f"Event vocab groups: {overview['event_vocab_group_count']}")
-    print(f"Themes: {overview['theme_count']}")
-    print(f"Macro channels: {overview['macro_channel_count']}")
+    print(f"Themes: {overview['theme_count']} (parents: {overview['theme_parent_count']})")
+    print(f"Macro channels: {overview['macro_channel_count']} (parents: {overview['macro_channel_parent_count']})")
     print(f"Transmission channels: {overview['transmission_channel_count']}")
     print(f"Transmission tags: {overview['transmission_tag_count']}")
     print(f"Transmission primary drivers: {overview['transmission_primary_driver_count']}")
@@ -205,6 +260,12 @@ def main() -> int:
     print(f"Relationship types: {overview['relationship_type_count']}")
     print(f"Relationship target kinds: {overview['relationship_target_kind_count']}")
     print(f"Derived relationships: {overview['derived_relationship_count']}")
+    print(f"Ticker peer links: {overview['ticker_peer_link_count']} (tickers with peers: {overview['ticker_with_peer_count']})")
+    print(f"Ticker supplier links: {overview['ticker_supplier_link_count']} (tickers with suppliers: {overview['ticker_with_supplier_count']})")
+    print(f"Ticker customer links: {overview['ticker_customer_link_count']} (tickers with customers: {overview['ticker_with_customer_count']})")
+    print(f"Ticker industry links: {overview['ticker_industry_link_count']}")
+    print(f"Ticker sector links: {overview['ticker_sector_link_count']}")
+    print(f"Ticker macro links: {overview['ticker_macro_link_count']}")
     if warnings:
         print("Warnings:")
         for warning in warnings:

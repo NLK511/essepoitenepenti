@@ -68,6 +68,8 @@ The default deployment also adds three shared-context refresh jobs:
 - two macro refreshes per day
 - one industry refresh in the midday gap
 
+It also adds three regional bars refresh jobs (`Bars-APAC`, `Bars-EU`, `Bars-US`) that resolve their tickers from the current regional watchlists at runtime, so bars recovery stays aligned with the seeded universe.
+
 Regional schedule blocks:
 - **Asia/Pacific:** `00:00` to `00:40` UTC
 - **Europe:** `07:00` to `07:40` UTC

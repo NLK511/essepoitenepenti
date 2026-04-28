@@ -22,6 +22,7 @@ It is not yet a proven short-horizon prediction engine.
 - Create, edit, delete, schedule, and execute jobs.
 - Run proposal generation, recommendation evaluation, plan-generation tuning, and macro/industry refreshes through the same worker-backed run system.
 - Bars-data-refresh runs retry unresolved ticker fetches a bounded number of times, persist per-ticker retry diagnostics in the run artifact, and finish with warnings instead of aborting the whole run when some tickers still fail.
+- Regional bars-data-refresh jobs resolve their tickers from the current seeded regional watchlists at runtime, so bars recovery stays in sync when the watchlist pack is updated.
 - Inspect queued, running, completed, failed, canceled, and warning-heavy runs in the debugger and run detail pages.
 - Review persisted run timing, summaries, artifacts, warnings, and failure metadata.
 - Delete individual runs from the debugger.
@@ -47,8 +48,11 @@ It is not yet a proven short-horizon prediction engine.
 - **Realistic Context Reconstruction:** Re-generate historical context snapshots from past news and social data. For time-windowed company/ticker news requests, the app now prefers Finnhub and rejects undated or future-dated articles so historical simulations do not silently mix in later company news.
 - Store context-event fields such as persistence state, state transition, catalyst type, market interpretation, trigger actor, trigger actor role, trigger source type, and short "why now" summaries.
 - Trace which shared artifacts were used by a run or recommendation plan.
-- Use the taxonomy layer for industry definitions, sector definitions, ticker profiles, and relationship edges.
-- Expand industry refresh queries from ontology context such as industry queries, themes, event vocabulary, risk flags, sector, and known company names.
+- Use the taxonomy layer for industry definitions, sector definitions, ticker profiles, relationship edges, and governed parent/child lineage for macro and theme vocabularies.
+- Transmission edges are now treated as typed graph entries with direction, mechanism, confidence, provenance, and optional point-in-time validity semantics.
+- Provider-backed taxonomy enrichment now promotes specific industry labels from market metadata where available and fills missing domiciles from the same source instead of guessing.
+- The seeded 750-ticker default watchlist universe is now explicitly represented in the ontology, so default-region coverage no longer depends on sector fallback alone.
+- Expand industry refresh queries from ontology context such as industry queries, themes, event vocabulary, risk flags, sector, known company names, and governed ancestor labels when they improve recall.
 - Surface ticker relationship read-throughs such as peer, supplier, and customer links in review pages and stored diagnostics.
 - Use governed labels for transmission, calibration, outcome, and event metadata so UI pages do not depend on raw internal keys.
 - Optionally use Nitter as supporting social input for macro and industry context.
@@ -56,7 +60,7 @@ It is not yet a proven short-horizon prediction engine.
 ### Watchlists and proposal flow
 - Persist watchlists with metadata such as region, exchange, timezone, default horizon, and shorting policy.
 - Seed the curated default watchlist pack with `scripts/deploy_watchlists.py`; see `default-watchlists.md` for rationale.
-- Reconstruct historical context using `scripts/reconstruct_context.py`.
+- Reconstruct historical macro and industry context using `scripts/reconstruct_context.py` with a NewsAPI credential when the shared-context tables need to be backfilled.
 - Historical ticker/company news requests prefer Finnhub when a time window is supplied; unsafe live-feed fallbacks are skipped instead of leaking future company articles into replay.
 - Run watchlist-backed proposal jobs through a staged flow:
   1. watchlist scan

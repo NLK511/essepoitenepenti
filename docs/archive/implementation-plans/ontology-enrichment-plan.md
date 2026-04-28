@@ -25,11 +25,12 @@ This document is a live implementation plan and progress tracker.
 ### Already in place
 - the ontology is split into ticker, industry, sector, relationship, and event-vocabulary files
 - the taxonomy service already validates governed registries and typed taxonomy payloads
+- the governed theme and macro-channel registries now carry optional parent lineage so query expansion can roll up from specific channels into broader concepts
 - many ticker, industry, relationship, and review-label governance tasks are already complete
 
 ### Still in progress
 - a few remaining relationship/channel fields still need governed-registry cleanup where practical
-- some taxonomy coverage and query-quality improvements remain unfinished
+- provider-backed subindustry reclassification and domicile backfilling are now in place for the covered universe; remaining work is mostly query-quality and ontology-depth improvements
 
 ## Current baseline
 

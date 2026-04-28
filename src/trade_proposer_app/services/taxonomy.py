@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -374,11 +375,16 @@ class TickerTaxonomyService:
             canonical_key = self._normalize_subject_key(key)
             label = str(value.get("label", canonical_key.replace("_", " "))).strip() or canonical_key.replace("_", " ")
             aliases = self._normalize_string_list(value.get("aliases"))
-            registry[canonical_key] = {
+            entry: dict[str, Any] = {
                 "key": canonical_key,
                 "label": label,
                 "aliases": aliases,
             }
+            for field, field_value in value.items():
+                if field in {"label", "aliases"}:
+                    continue
+                entry[field] = field_value
+            registry[canonical_key] = entry
         return registry
 
     def _load_relationships(self, payload: object) -> list[dict[str, Any]]:
@@ -395,6 +401,10 @@ class TickerTaxonomyService:
             channel = self._canonicalize_transmission_channel(value.get("channel"))
             if not source or source == "unknown" or not target or target == "unknown" or not relation_type:
                 continue
+            direction = self._normalize_relationship_direction(value.get("direction"), relation_type)
+            mechanism = self._normalize_subject_key(value.get("mechanism") or channel or relation_type)
+            confidence, confidence_score = self._normalize_relationship_confidence(value.get("confidence"), relation_type)
+            provenance = self._normalize_relationship_provenance(value.get("provenance"))
             relationships.append(
                 {
                     "source": source,
@@ -402,6 +412,14 @@ class TickerTaxonomyService:
                     "type": relation_type,
                     "target_kind": target_kind,
                     "channel": channel,
+                    "direction": direction,
+                    "mechanism": mechanism,
+                    "confidence": confidence,
+                    "confidence_score": confidence_score,
+                    "provenance": provenance,
+                    "valid_from": self._normalize_iso_date_string(value.get("valid_from")),
+                    "valid_to": self._normalize_iso_date_string(value.get("valid_to")),
+                    "state_condition": self._normalize_subject_key(value.get("state_condition")),
                     "strength": str(value.get("strength", "")).strip(),
                     "note": str(value.get("note", "")).strip(),
                 }
@@ -436,6 +454,71 @@ class TickerTaxonomyService:
         if target_kind == "sector":
             return self._resolve_sector_key(str(value or ""))
         return self._normalize_subject_key(value)
+
+    def _normalize_relationship_direction(self, value: object, relation_type: str) -> str:
+        normalized = self._normalize_subject_key(value)
+        if normalized in {"positive", "negative", "mixed"}:
+            return normalized
+        type_defaults = {
+            "benefits_from": "positive",
+            "hurt_by": "negative",
+            "sensitive_to": "mixed",
+            "exposed_to_theme": "mixed",
+            "linked_macro_channel": "mixed",
+            "belongs_to_sector": "mixed",
+            "belongs_to_industry": "mixed",
+            "peer_of": "mixed",
+            "supplier_to": "mixed",
+            "customer_of": "mixed",
+        }
+        return type_defaults.get(relation_type, "mixed")
+
+    def _normalize_relationship_confidence(self, value: object, relation_type: str) -> tuple[str, float]:
+        default_bucket = {
+            "benefits_from": "high",
+            "hurt_by": "high",
+            "sensitive_to": "medium",
+            "exposed_to_theme": "medium",
+            "linked_macro_channel": "medium",
+            "belongs_to_sector": "high",
+            "belongs_to_industry": "high",
+            "peer_of": "medium",
+            "supplier_to": "medium",
+            "customer_of": "medium",
+        }.get(relation_type, "medium")
+        if isinstance(value, (int, float)):
+            score = max(0.0, min(1.0, float(value)))
+            bucket = "high" if score >= 0.75 else "medium" if score >= 0.5 else "low"
+            return bucket, round(score, 3)
+        text = str(value or "").strip().lower()
+        if not text:
+            return default_bucket, {"low": 0.35, "medium": 0.65, "high": 0.9}.get(default_bucket, 0.65)
+        if text in {"low", "medium", "high"}:
+            return text, {"low": 0.35, "medium": 0.65, "high": 0.9}[text]
+        try:
+            score = max(0.0, min(1.0, float(text)))
+        except ValueError:
+            return default_bucket, {"low": 0.35, "medium": 0.65, "high": 0.9}.get(default_bucket, 0.65)
+        bucket = "high" if score >= 0.75 else "medium" if score >= 0.5 else "low"
+        return bucket, round(score, 3)
+
+    def _normalize_relationship_provenance(self, value: object) -> str:
+        normalized = self._normalize_subject_key(value)
+        if normalized in {"curated", "provider_backed", "derived", "heuristic"}:
+            return normalized
+        return "curated"
+
+    @staticmethod
+    def _normalize_iso_date_string(value: object) -> str:
+        if value is None:
+            return ""
+        text = str(value).strip()
+        if not text:
+            return ""
+        try:
+            return datetime.fromisoformat(text).date().isoformat()
+        except ValueError:
+            return text
 
     def get_ticker_profile(self, ticker: str) -> dict[str, Any]:
         normalized = ticker.upper()
@@ -474,8 +557,8 @@ class TickerTaxonomyService:
         industry_queries = [str(value).strip() for value in industry_profile.get("queries", []) if str(value).strip()]
         macro_queries = list(
             dict.fromkeys(
-                self._macro_channel_query_terms(profile.get("macro_sensitivity"))
-                + self._macro_channel_query_terms(industry_profile.get("macro_sensitivity"))
+                self._macro_channel_query_terms(profile.get("macro_sensitivity"), expand_lineage=True)
+                + self._macro_channel_query_terms(industry_profile.get("macro_sensitivity"), expand_lineage=True)
             )
         )
         return {
@@ -519,7 +602,7 @@ class TickerTaxonomyService:
         themes = self._normalize_string_list(ticker_profile.get("themes"))
         industry_keywords = self._normalize_string_list(ticker_profile.get("industry_keywords"))
         event_vocab = self._normalize_string_list(explicit_definition.get("event_vocab")) + self._normalize_string_list(ticker_profile.get("event_vocab")) + self._event_vocab.get(subject_key, [])
-        derived_queries = industry_keywords + themes + ([subindustry] if subindustry else []) + ([industry] if industry else []) + ([sector] if sector else [])
+        derived_queries = industry_keywords + self._theme_query_terms(themes) + ([subindustry] if subindustry else []) + ([industry] if industry else []) + ([sector] if sector else [])
         relationships = self.list_relationships(subject_key, direction="outbound")
         return {
             "subject_key": subject_key,
@@ -690,7 +773,15 @@ class TickerTaxonomyService:
                             "target": theme_key,
                             "type": "exposed_to_theme",
                             "target_kind": "theme",
-                            "channel": "",
+                            "channel": "theme",
+                            "direction": "mixed",
+                            "mechanism": "theme_exposure",
+                            "confidence": "low",
+                            "confidence_score": 0.45,
+                            "provenance": "derived",
+                            "valid_from": "",
+                            "valid_to": "",
+                            "state_condition": "",
                             "strength": "structural",
                             "note": "industry theme exposure mapping",
                         }
@@ -707,7 +798,15 @@ class TickerTaxonomyService:
                             "target": macro_key,
                             "type": "linked_macro_channel",
                             "target_kind": "macro_channel",
-                            "channel": "",
+                            "channel": "macro_channel",
+                            "direction": "mixed",
+                            "mechanism": "macro_transmission",
+                            "confidence": "low",
+                            "confidence_score": 0.45,
+                            "provenance": "derived",
+                            "valid_from": "",
+                            "valid_to": "",
+                            "state_condition": "",
                             "strength": "structural",
                             "note": "sector macro sensitivity mapping",
                         }
@@ -722,7 +821,15 @@ class TickerTaxonomyService:
                             "target": theme_key,
                             "type": "exposed_to_theme",
                             "target_kind": "theme",
-                            "channel": "",
+                            "channel": "theme",
+                            "direction": "mixed",
+                            "mechanism": "theme_exposure",
+                            "confidence": "low",
+                            "confidence_score": 0.45,
+                            "provenance": "derived",
+                            "valid_from": "",
+                            "valid_to": "",
+                            "state_condition": "",
                             "strength": "structural",
                             "note": "sector theme exposure mapping",
                         }
@@ -743,9 +850,42 @@ class TickerTaxonomyService:
             deduped.append(item)
         return deduped
 
-    def list_relationships(self, subject_key: str | None = None, *, direction: str = "any") -> list[dict[str, Any]]:
+    def _relationship_is_effective(self, relationship: dict[str, Any], as_of: object | None = None) -> bool:
+        if as_of is None:
+            return True
+        if isinstance(as_of, datetime):
+            effective_date = as_of.date()
+        else:
+            text = str(as_of).strip()
+            if not text:
+                return True
+            try:
+                effective_date = datetime.fromisoformat(text).date()
+            except ValueError:
+                return True
+        valid_from = str(relationship.get("valid_from", "")).strip()
+        valid_to = str(relationship.get("valid_to", "")).strip()
+        if valid_from:
+            try:
+                if effective_date < datetime.fromisoformat(valid_from).date():
+                    return False
+            except ValueError:
+                pass
+        if valid_to:
+            try:
+                if effective_date > datetime.fromisoformat(valid_to).date():
+                    return False
+            except ValueError:
+                pass
+        return True
+
+    def list_relationships(self, subject_key: str | None = None, *, direction: str = "any", as_of: object | None = None) -> list[dict[str, Any]]:
         normalized = self._normalize_subject_key(subject_key) if subject_key else None
-        relationships = [self._enrich_relationship(relationship) for relationship in [*self._relationships, *self._derived_relationships(normalized)]]
+        relationships = [
+            self._enrich_relationship(relationship)
+            for relationship in [*self._relationships, *self._derived_relationships(normalized)]
+            if self._relationship_is_effective(relationship, as_of)
+        ]
         if normalized is None:
             return list(relationships)
         if direction == "outbound":
@@ -792,11 +932,53 @@ class TickerTaxonomyService:
         channel_definition = self.get_transmission_channel_definition(str(enriched.get("channel", "")))
         if channel_definition.get("label"):
             enriched["channel_label"] = channel_definition.get("label")
+        enriched["relationship_score"] = self._relationship_score(enriched)
         return enriched
 
-    def get_ticker_relationships(self, ticker: str) -> list[dict[str, str]]:
+    @staticmethod
+    def _relationship_strength_score(relationship: dict[str, Any]) -> float:
+        strength = str(relationship.get("strength", "")).strip().lower()
+        return {
+            "structural": 0.9,
+            "high": 0.85,
+            "medium": 0.65,
+            "low": 0.4,
+            "weak": 0.3,
+        }.get(strength, 0.55)
+
+    def _relationship_score(self, relationship: dict[str, Any]) -> float:
+        confidence_score = relationship.get("confidence_score")
+        if isinstance(confidence_score, (int, float)):
+            confidence = max(0.0, min(1.0, float(confidence_score)))
+        else:
+            confidence = {"low": 0.35, "medium": 0.65, "high": 0.9}.get(str(relationship.get("confidence", "")).strip().lower(), 0.6)
+        strength_score = self._relationship_strength_score(relationship)
+        direction = str(relationship.get("direction", "")).strip().lower()
+        direction_bonus = 0.03 if direction in {"positive", "negative"} else 0.0
+        return round(min(1.0, (confidence * 0.75) + (strength_score * 0.22) + direction_bonus), 3)
+
+    def get_ticker_relationships(self, ticker: str, *, as_of: object | None = None) -> list[dict[str, Any]]:
         profile = self.get_ticker_profile(ticker)
-        relationships: list[dict[str, str]] = []
+        industry_profile = self.get_industry_profile(ticker)
+        relationships: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str, str, str]] = set()
+
+        def add_relationship(relationship: dict[str, Any]) -> None:
+            key = (
+                str(relationship.get("source", "")),
+                str(relationship.get("type", "")),
+                str(relationship.get("target_kind", "")),
+                str(relationship.get("target", "")),
+                str(relationship.get("channel", "")),
+            )
+            if key in seen:
+                return
+            if not self._relationship_is_effective(relationship, as_of):
+                return
+            seen.add(key)
+            relationship["relationship_score"] = self._relationship_score(relationship)
+            relationships.append(relationship)
+
         mapping = (
             ("peers", "peer_of", "competitive_position", "peer read-through and competitive positioning"),
             ("suppliers", "supplier_to", "supply_chain", "supplier and component dependency"),
@@ -805,7 +987,7 @@ class TickerTaxonomyService:
         for field, relation_type, channel, note in mapping:
             for target in self._normalize_ticker_list(profile.get(field)):
                 target_profile = self.get_ticker_profile(target)
-                relationships.append(
+                add_relationship(
                     {
                         "source": profile["ticker"],
                         "source_label": profile.get("company_name", profile["ticker"]),
@@ -818,22 +1000,160 @@ class TickerTaxonomyService:
                         "target_industry": target_profile.get("industry", ""),
                         "channel": channel,
                         "channel_label": self.get_transmission_channel_definition(channel).get("label", channel.replace("_", " ")),
+                        "direction": "mixed",
+                        "mechanism": channel,
+                        "confidence": "medium",
+                        "confidence_score": 0.65,
+                        "provenance": "curated",
+                        "valid_from": "",
+                        "valid_to": "",
+                        "state_condition": "",
                         "strength": "medium",
                         "note": note,
                     }
                 )
+
+        industry_key = self._subject_key_for_input(str(profile.get("industry", "")))
+        if industry_key in self._industries:
+            add_relationship(
+                {
+                    "source": profile["ticker"],
+                    "source_label": profile.get("company_name", profile["ticker"]),
+                    "type": "belongs_to_industry",
+                    "type_label": self.get_relationship_type_definition("belongs_to_industry").get("label", "belongs to industry"),
+                    "target": industry_key,
+                    "target_kind": "industry",
+                    "target_kind_label": self.get_relationship_target_kind_definition("industry").get("label", "industry"),
+                    "target_label": industry_profile.get("subject_label") or industry_profile.get("industry") or industry_key.replace("_", " "),
+                    "channel": "",
+                    "channel_label": "",
+                    "direction": "mixed",
+                    "mechanism": "classification",
+                    "confidence": "high",
+                    "confidence_score": 0.9,
+                    "provenance": "curated",
+                    "valid_from": "",
+                    "valid_to": "",
+                    "state_condition": "",
+                    "strength": "structural",
+                    "note": "ticker industry classification edge",
+                }
+            )
+
+        sector_key = str(industry_profile.get("sector_definition", {}).get("key", "")).strip()
+        if sector_key in self._sectors:
+            add_relationship(
+                {
+                    "source": profile["ticker"],
+                    "source_label": profile.get("company_name", profile["ticker"]),
+                    "type": "belongs_to_sector",
+                    "type_label": self.get_relationship_type_definition("belongs_to_sector").get("label", "belongs to sector"),
+                    "target": sector_key,
+                    "target_kind": "sector",
+                    "target_kind_label": self.get_relationship_target_kind_definition("sector").get("label", "sector"),
+                    "target_label": industry_profile.get("sector_definition", {}).get("label") or sector_key.replace("_", " "),
+                    "channel": "",
+                    "channel_label": "",
+                    "direction": "mixed",
+                    "mechanism": "classification",
+                    "confidence": "high",
+                    "confidence_score": 0.9,
+                    "provenance": "curated",
+                    "valid_from": "",
+                    "valid_to": "",
+                    "state_condition": "",
+                    "strength": "structural",
+                    "note": "ticker sector classification edge",
+                }
+            )
+
+        macro_terms = list(
+            dict.fromkeys(
+                self._normalize_macro_channel_values(profile.get("macro_sensitivity"))
+                + self._normalize_macro_channel_values(industry_profile.get("macro_sensitivity"))
+            )
+        )
+        for raw_macro in macro_terms:
+            macro_definition = self.get_macro_channel_definition(raw_macro)
+            macro_key = str(macro_definition.get("key", "")).strip()
+            if not macro_key or macro_key == "unknown":
+                continue
+            add_relationship(
+                {
+                    "source": profile["ticker"],
+                    "source_label": profile.get("company_name", profile["ticker"]),
+                    "type": "linked_macro_channel",
+                    "type_label": self.get_relationship_type_definition("linked_macro_channel").get("label", "linked macro channel"),
+                    "target": macro_key,
+                    "target_kind": "macro_channel",
+                    "target_kind_label": self.get_relationship_target_kind_definition("macro_channel").get("label", "macro channel"),
+                    "target_label": macro_definition.get("label") or macro_key.replace("_", " "),
+                    "channel": "macro_channel",
+                    "channel_label": self.get_transmission_channel_definition("macro_channel").get("label", "macro channel"),
+                    "direction": "mixed",
+                    "mechanism": "macro_transmission",
+                    "confidence": "medium",
+                    "confidence_score": 0.65,
+                    "provenance": "derived",
+                    "valid_from": "",
+                    "valid_to": "",
+                    "state_condition": "",
+                    "strength": "structural",
+                    "note": "ticker macro sensitivity mapping",
+                }
+            )
         return relationships
 
     def taxonomy_overview(self) -> dict[str, Any]:
+        relationship_direction_count = sum(1 for item in self._relationships if str(item.get("direction", "")).strip())
+        relationship_mechanism_count = sum(1 for item in self._relationships if str(item.get("mechanism", "")).strip())
+        relationship_confidence_count = sum(1 for item in self._relationships if str(item.get("confidence", "")).strip())
+        relationship_provenance_count = sum(1 for item in self._relationships if str(item.get("provenance", "")).strip())
+        relationship_validity_count = sum(1 for item in self._relationships if str(item.get("valid_from", "")).strip() or str(item.get("valid_to", "")).strip())
+        ticker_peer_link_count = sum(len(self._normalize_ticker_list(profile.get("peers"))) for profile in self._taxonomy.values())
+        ticker_supplier_link_count = sum(len(self._normalize_ticker_list(profile.get("suppliers"))) for profile in self._taxonomy.values())
+        ticker_customer_link_count = sum(len(self._normalize_ticker_list(profile.get("customers"))) for profile in self._taxonomy.values())
+        ticker_with_peer_count = sum(1 for profile in self._taxonomy.values() if self._normalize_ticker_list(profile.get("peers")))
+        ticker_with_supplier_count = sum(1 for profile in self._taxonomy.values() if self._normalize_ticker_list(profile.get("suppliers")))
+        ticker_with_customer_count = sum(1 for profile in self._taxonomy.values() if self._normalize_ticker_list(profile.get("customers")))
+        ticker_industry_link_count = sum(
+            1
+            for profile in self._taxonomy.values()
+            if self._subject_key_for_input(str(profile.get("industry", ""))) in self._industries
+        )
+        ticker_sector_link_count = sum(
+            1
+            for profile in self._taxonomy.values()
+            if self._resolve_sector_key(str(profile.get("sector", ""))) in self._sectors
+        )
+        ticker_macro_link_count = 0
+        for profile in self._taxonomy.values():
+            subject_key = self._subject_key_for_input(str(profile.get("industry", "")))
+            industry_macro_sensitivity = self._industries.get(subject_key, {}).get("macro_sensitivity", []) if subject_key in self._industries else []
+            macro_keys = {
+                str(self.get_macro_channel_definition(raw_macro).get("key", "")).strip()
+                for raw_macro in dict.fromkeys(
+                    self._normalize_macro_channel_values(profile.get("macro_sensitivity"))
+                    + self._normalize_macro_channel_values(industry_macro_sensitivity)
+                )
+            }
+            ticker_macro_link_count += sum(1 for macro_key in macro_keys if macro_key and macro_key != "unknown")
         return {
             "source_mode": self._source_mode,
             "ticker_count": len(self._taxonomy),
             "industry_count": len(self._industries),
             "sector_count": len(self._sectors),
             "relationship_count": len(self._relationships),
+            "relationship_direction_count": relationship_direction_count,
+            "relationship_mechanism_count": relationship_mechanism_count,
+            "relationship_confidence_count": relationship_confidence_count,
+            "relationship_provenance_count": relationship_provenance_count,
+            "relationship_validity_count": relationship_validity_count,
             "event_vocab_group_count": len(self._event_vocab),
             "theme_count": len(self._themes),
+            "theme_parent_count": sum(1 for item in self._themes.values() if str(item.get("parent", "")).strip()),
             "macro_channel_count": len(self._macro_channels),
+            "macro_channel_parent_count": sum(1 for item in self._macro_channels.values() if str(item.get("parent", "")).strip()),
             "transmission_channel_count": len(self._transmission_channels),
             "transmission_tag_count": len(self._transmission_tags),
             "transmission_primary_driver_count": len(self._transmission_primary_drivers),
@@ -854,6 +1174,15 @@ class TickerTaxonomyService:
             "relationship_type_count": len(self._relationship_types),
             "relationship_target_kind_count": len(self._relationship_target_kinds),
             "derived_relationship_count": len(self._derived_relationships()),
+            "ticker_peer_link_count": ticker_peer_link_count,
+            "ticker_supplier_link_count": ticker_supplier_link_count,
+            "ticker_customer_link_count": ticker_customer_link_count,
+            "ticker_with_peer_count": ticker_with_peer_count,
+            "ticker_with_supplier_count": ticker_with_supplier_count,
+            "ticker_with_customer_count": ticker_with_customer_count,
+            "ticker_industry_link_count": ticker_industry_link_count,
+            "ticker_sector_link_count": ticker_sector_link_count,
+            "ticker_macro_link_count": ticker_macro_link_count,
         }
 
     def _fetch_external_profile(self, ticker: str) -> dict[str, Any]:
@@ -967,13 +1296,31 @@ class TickerTaxonomyService:
                 normalized.append(value)
         return normalized
 
-    def _macro_channel_query_terms(self, values: object) -> list[str]:
+    def _macro_channel_query_terms(self, values: object, *, expand_lineage: bool = False) -> list[str]:
         terms: list[str] = []
-        for value in self._normalize_string_list(values):
+        sources = self._registry_lineage_keys(self._macro_channels, values) if expand_lineage else self._normalize_string_list(values)
+        for value in sources:
             canonical_key = self._macro_channel_alias_map.get(self._normalize_subject_key(value))
             if canonical_key and canonical_key in self._macro_channels:
                 definition = self._macro_channels[canonical_key]
-                candidates = [definition.get("label", ""), *definition.get("aliases", [])]
+                candidates = [definition.get("label", ""), *self._normalize_string_list(definition.get("aliases"))]
+                for candidate in candidates:
+                    text = str(candidate).strip().replace("_", " ")
+                    if text and text not in terms:
+                        terms.append(text)
+                continue
+            text = str(value).strip()
+            if text and text not in terms:
+                terms.append(text)
+        return terms
+
+    def _theme_query_terms(self, values: object) -> list[str]:
+        terms: list[str] = []
+        for value in self._registry_lineage_keys(self._themes, values):
+            canonical_key = self._theme_alias_map.get(self._normalize_subject_key(value))
+            if canonical_key and canonical_key in self._themes:
+                definition = self._themes[canonical_key]
+                candidates = [definition.get("label", ""), *self._normalize_string_list(definition.get("aliases"))]
                 for candidate in candidates:
                     text = str(candidate).strip().replace("_", " ")
                     if text and text not in terms:
@@ -1198,6 +1545,33 @@ class TickerTaxonomyService:
             if text and text not in normalized:
                 normalized.append(text)
         return normalized
+
+    def _registry_lineage_keys(self, registry: dict[str, dict[str, Any]], values: object) -> list[str]:
+        keys: list[str] = []
+        seen: set[str] = set()
+        for value in self._normalize_string_list(values):
+            key = self._normalize_subject_key(value)
+            while key and key != "unknown" and key not in seen:
+                seen.add(key)
+                keys.append(key)
+                entry = registry.get(key) or {}
+                parent = self._normalize_subject_key(entry.get("parent"))
+                if parent in {"", "unknown", key}:
+                    break
+                key = parent
+        return keys
+
+    def _registry_lineage_terms(self, registry: dict[str, dict[str, Any]], values: object) -> list[str]:
+        terms: list[str] = []
+        seen: set[str] = set()
+        for key in self._registry_lineage_keys(registry, values):
+            entry = registry.get(key) or {}
+            for candidate in [entry.get("label"), *self._normalize_string_list(entry.get("aliases"))]:
+                text = str(candidate or "").strip()
+                if text and text not in seen:
+                    seen.add(text)
+                    terms.append(text)
+        return terms
 
     @staticmethod
     def _normalize_ticker_list(values: object) -> list[str]:

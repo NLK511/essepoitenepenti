@@ -183,6 +183,8 @@ It should combine:
 2. **industry-native developments**
 3. **ticker read-throughs from important names in the industry**
 
+The transmission layer should be a typed graph, not a plain keyword bridge. Explicit edges should carry polarity, mechanism, confidence, provenance, and when known, point-in-time validity so industry summaries can distinguish strong structural links from weak heuristic spillovers.
+
 Industry-native developments include:
 
 - innovations

@@ -640,11 +640,17 @@ class IndustryContextService:
                     "target_label": str(target_label).strip() or target,
                     "channel": channel or "unknown channel",
                     "channel_label": str(relationship.get("channel_label", channel.replace("_", " "))).strip() if channel else "unknown channel",
+                    "direction": str(relationship.get("direction", "mixed")).strip() or "mixed",
+                    "mechanism": str(relationship.get("mechanism", channel or "")).strip() or channel or "unknown",
+                    "confidence": str(relationship.get("confidence", "medium")).strip() or "medium",
+                    "provenance": str(relationship.get("provenance", "curated")).strip() or "curated",
                     "strength": str(relationship.get("strength", "")).strip() or "unspecified",
                     "note": str(relationship.get("note", "")).strip(),
+                    "relationship_score": float(relationship.get("relationship_score", 0.0) or 0.0),
                     "relevance_hits": relevance_hits,
                 }
             )
+        matched.sort(key=lambda item: (int(item.get("relevance_hits", 0)), float(item.get("relationship_score", 0.0))), reverse=True)
         return matched[:6]
 
     @staticmethod

@@ -1,7 +1,8 @@
 {
   "ad_budgets": {
     "label": "ad budgets",
-    "aliases": []
+    "aliases": [],
+    "parent": "ad_spend"
   },
   "ad_spend": {
     "label": "ad spend",
@@ -17,35 +18,42 @@
   },
   "air_travel": {
     "label": "air travel",
-    "aliases": []
+    "aliases": [],
+    "parent": "travel_demand"
   },
   "auto_credit": {
     "label": "auto credit",
     "aliases": [
       "auto_credit"
-    ]
+    ],
+    "parent": "credit_cycle"
   },
   "auto_demand": {
     "label": "auto demand",
-    "aliases": []
+    "aliases": [],
+    "parent": "consumer_spending"
   },
   "business_travel": {
     "label": "business travel",
-    "aliases": []
+    "aliases": [],
+    "parent": "travel_demand"
   },
   "china_demand": {
     "label": "china demand",
     "aliases": [
       "china_demand"
-    ]
+    ],
+    "parent": "global_growth"
   },
   "cloud_capex": {
     "label": "cloud capex",
-    "aliases": []
+    "aliases": [],
+    "parent": "enterprise_spend"
   },
   "commodity_capex": {
     "label": "commodity capex",
-    "aliases": []
+    "aliases": [],
+    "parent": "commodity_prices"
   },
   "commodity_prices": {
     "label": "commodity prices",
@@ -55,19 +63,23 @@
   },
   "construction_demand": {
     "label": "construction demand",
-    "aliases": []
+    "aliases": [],
+    "parent": "industrial_demand"
   },
   "consumer_creators": {
     "label": "consumer creators",
-    "aliases": []
+    "aliases": [],
+    "parent": "consumer_spending"
   },
   "consumer_engagement": {
     "label": "consumer engagement",
-    "aliases": []
+    "aliases": [],
+    "parent": "consumer_spending"
   },
   "consumer_health_demand": {
     "label": "consumer health demand",
-    "aliases": []
+    "aliases": [],
+    "parent": "healthcare_demand"
   },
   "consumer_spending": {
     "label": "consumer spending",
@@ -86,19 +98,23 @@
     "label": "credit deterioration",
     "aliases": [
       "credit_deterioration"
-    ]
+    ],
+    "parent": "credit_cycle"
   },
   "credit_quality": {
     "label": "credit quality",
-    "aliases": []
+    "aliases": [],
+    "parent": "credit_cycle"
   },
   "credit_spreads": {
     "label": "credit spreads",
-    "aliases": []
+    "aliases": [],
+    "parent": "credit_cycle"
   },
   "cross_border_travel": {
     "label": "cross-border travel",
-    "aliases": []
+    "aliases": [],
+    "parent": "travel_demand"
   },
   "deal_activity": {
     "label": "deal activity",
@@ -106,33 +122,40 @@
   },
   "defense_budgets": {
     "label": "defense budgets",
-    "aliases": []
+    "aliases": [],
+    "parent": "geopolitics"
   },
   "device_cycle": {
     "label": "device cycle",
-    "aliases": []
+    "aliases": [],
+    "parent": "global_electronics_demand"
   },
   "drug_pricing": {
     "label": "drug pricing",
     "aliases": [
       "drug_pricing"
-    ]
+    ],
+    "parent": "healthcare_demand"
   },
   "e_commerce": {
     "label": "e-commerce",
-    "aliases": []
+    "aliases": [],
+    "parent": "consumer_spending"
   },
   "e_commerce_demand": {
     "label": "e-commerce demand",
-    "aliases": []
+    "aliases": [],
+    "parent": "consumer_spending"
   },
   "employment": {
     "label": "employment",
-    "aliases": []
+    "aliases": [],
+    "parent": "wage_pressure"
   },
   "energy_prices": {
     "label": "energy prices",
-    "aliases": []
+    "aliases": [],
+    "parent": "commodity_prices"
   },
   "enterprise_spend": {
     "label": "enterprise spend",
@@ -142,29 +165,35 @@
   },
   "european_gas_prices": {
     "label": "european gas prices",
-    "aliases": []
+    "aliases": [],
+    "parent": "energy_prices"
   },
   "european_growth": {
     "label": "european growth",
-    "aliases": []
+    "aliases": [],
+    "parent": "global_growth"
   },
   "eurusd": {
     "label": "eurusd",
-    "aliases": []
+    "aliases": [],
+    "parent": "fx"
   },
   "export_controls": {
     "label": "export controls",
     "aliases": [
       "export_controls"
-    ]
+    ],
+    "parent": "trade_policy"
   },
   "fab_capex": {
     "label": "fab capex",
-    "aliases": []
+    "aliases": [],
+    "parent": "enterprise_spend"
   },
   "farm_income": {
     "label": "farm income",
-    "aliases": []
+    "aliases": [],
+    "parent": "commodity_prices"
   },
   "fx": {
     "label": "fx",
@@ -176,7 +205,8 @@
   },
   "gaming_demand": {
     "label": "gaming demand",
-    "aliases": []
+    "aliases": [],
+    "parent": "consumer_spending"
   },
   "geopolitics": {
     "label": "geopolitics",
@@ -198,19 +228,23 @@
     "label": "housing turnover",
     "aliases": [
       "housing_turnover"
-    ]
+    ],
+    "parent": "rates"
   },
   "industrial_demand": {
     "label": "industrial demand",
-    "aliases": []
+    "aliases": [],
+    "parent": "global_growth"
   },
   "industrial_policy": {
     "label": "industrial policy",
-    "aliases": []
+    "aliases": [],
+    "parent": "trade_policy"
   },
   "industrial_production": {
     "label": "industrial production",
-    "aliases": []
+    "aliases": [],
+    "parent": "global_growth"
   },
   "inflation": {
     "label": "inflation",
@@ -218,7 +252,8 @@
   },
   "infrastructure_spend": {
     "label": "infrastructure spend",
-    "aliases": []
+    "aliases": [],
+    "parent": "industrial_demand"
   },
   "inventory": {
     "label": "inventory",
@@ -226,17 +261,20 @@
   },
   "labor_costs": {
     "label": "labor costs",
-    "aliases": []
+    "aliases": [],
+    "parent": "wage_pressure"
   },
   "logistics_costs": {
     "label": "logistics costs",
-    "aliases": []
+    "aliases": [],
+    "parent": "supply_chain"
   },
   "medical_cost_trend": {
     "label": "medical cost trend",
     "aliases": [
       "medical_cost_trend"
-    ]
+    ],
+    "parent": "healthcare_demand"
   },
   "nasdaq": {
     "label": "nasdaq",
@@ -244,19 +282,23 @@
   },
   "north_america_demand": {
     "label": "north america demand",
-    "aliases": []
+    "aliases": [],
+    "parent": "global_growth"
   },
   "oil_prices": {
     "label": "oil prices",
-    "aliases": []
+    "aliases": [],
+    "parent": "energy_prices"
   },
   "pc_demand": {
     "label": "pc demand",
-    "aliases": []
+    "aliases": [],
+    "parent": "device_cycle"
   },
   "power_demand": {
     "label": "power demand",
-    "aliases": []
+    "aliases": [],
+    "parent": "energy_prices"
   },
   "pricing": {
     "label": "pricing",
@@ -274,7 +316,8 @@
     "label": "regulatory risk",
     "aliases": [
       "regulatory_risk"
-    ]
+    ],
+    "parent": "regulation"
   },
   "retail_occupancy": {
     "label": "retail occupancy",
@@ -286,11 +329,13 @@
   },
   "scrap_prices": {
     "label": "scrap prices",
-    "aliases": []
+    "aliases": [],
+    "parent": "commodity_prices"
   },
   "shipping_costs": {
     "label": "shipping costs",
-    "aliases": []
+    "aliases": [],
+    "parent": "supply_chain"
   },
   "supply_chain": {
     "label": "supply chain",
@@ -298,7 +343,8 @@
   },
   "taiwan_risk": {
     "label": "taiwan risk",
-    "aliases": []
+    "aliases": [],
+    "parent": "geopolitics"
   },
   "tenant_health": {
     "label": "tenant health",
@@ -318,20 +364,24 @@
   },
   "usd": {
     "label": "usd",
-    "aliases": []
+    "aliases": [],
+    "parent": "fx"
   },
   "wage_pressure": {
     "label": "wage pressure",
-    "aliases": []
+    "aliases": [],
+    "parent": "inflation"
   },
   "yen": {
     "label": "yen",
-    "aliases": []
+    "aliases": [],
+    "parent": "fx"
   },
   "yield_curve": {
     "label": "yield curve",
     "aliases": [
       "yield_curve"
-    ]
+    ],
+    "parent": "rates"
   }
 }

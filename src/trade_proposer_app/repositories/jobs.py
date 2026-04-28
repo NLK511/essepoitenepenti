@@ -166,10 +166,40 @@ class JobRepository:
             tickers = [ticker for ticker in watchlist.tickers_csv.split(",") if ticker]
         else:
             tickers = [ticker for ticker in record.tickers_csv.split(",") if ticker]
+            if not tickers and JobType.parse(record.job_type or JobType.PROPOSAL_GENERATION.value) == JobType.BARS_DATA_REFRESH:
+                tickers = self._resolve_region_bars_tickers(record.name)
 
         if not tickers:
             raise ValueError("job has no effective tickers configured")
         return tickers
+
+    def _resolve_region_bars_tickers(self, job_name: str) -> list[str]:
+        normalized_name = (job_name or "").strip().lower()
+        region_map = {
+            "bars-apac": "Asia/Pacific",
+            "bars-eu": "Europe",
+            "bars-us": "United States",
+        }
+        region = region_map.get(normalized_name)
+        if region is None:
+            raise ValueError(f"bars_data_refresh job '{job_name}' has no configured ticker source")
+        rows = self.session.scalars(
+            select(WatchlistRecord)
+            .where(WatchlistRecord.region == region)
+            .order_by(WatchlistRecord.name)
+        ).all()
+        tickers: list[str] = []
+        for watchlist in rows:
+            tickers.extend([ticker for ticker in watchlist.tickers_csv.split(",") if ticker])
+        # Preserve first-seen order while removing duplicates.
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for ticker in tickers:
+            if ticker in seen:
+                continue
+            seen.add(ticker)
+            deduped.append(ticker)
+        return deduped
 
     def get_or_create_system_job(self, name: str, job_type: JobType) -> Job:
         normalized_name = f"{SYSTEM_JOB_PREFIX}{name.strip()}"
@@ -194,8 +224,12 @@ class JobRepository:
     def _validate_job_source(job_type: JobType, tickers: list[str], watchlist_id: int | None) -> None:
         has_tickers = bool(tickers)
         has_watchlist = watchlist_id is not None
-        if job_type in {JobType.PROPOSAL_GENERATION, JobType.BARS_DATA_REFRESH}:
+        if job_type == JobType.PROPOSAL_GENERATION:
             if has_tickers == has_watchlist:
+                raise ValueError("job must use exactly one source: either manual tickers or a watchlist")
+            return
+        if job_type == JobType.BARS_DATA_REFRESH:
+            if has_tickers and has_watchlist:
                 raise ValueError("job must use exactly one source: either manual tickers or a watchlist")
             return
         if has_tickers or has_watchlist:

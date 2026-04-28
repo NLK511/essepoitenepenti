@@ -17,13 +17,21 @@ from typing import Iterable
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from sqlalchemy import select
-
-from trade_proposer_app.db import SessionLocal
-from trade_proposer_app.domain.enums import JobType
-from trade_proposer_app.persistence.models import JobRecord, WatchlistRecord
-from trade_proposer_app.repositories.watchlists import WatchlistRepository
-from trade_proposer_app.repositories.jobs import JobRepository
+try:
+    from sqlalchemy import select
+    from trade_proposer_app.db import SessionLocal
+    from trade_proposer_app.domain.enums import JobType
+    from trade_proposer_app.persistence.models import JobRecord, WatchlistRecord
+    from trade_proposer_app.repositories.watchlists import WatchlistRepository
+    from trade_proposer_app.repositories.jobs import JobRepository
+except ModuleNotFoundError:  # pragma: no cover - allows importing WATCHLIST_SPECS without optional runtime deps
+    select = None
+    SessionLocal = None
+    JobType = None
+    JobRecord = None
+    WatchlistRecord = None
+    WatchlistRepository = None
+    JobRepository = None
 
 
 WATCHLIST_SPECS = [
@@ -106,9 +114,9 @@ WATCHLIST_SPECS = [
         "tickers": [
             "ASML.AS", "SAP.DE", "ADYEN.AS", "PRX.AS", "IFX.DE", "NOKIA.HE", "ERIC-B.ST", "STMPA.PA", "BEI.DE", "LOGN.SW",
             "TEMN.SW", "ASM.AS", "WKL.AS", "S92.DE", "DHER.DE", "DSY.PA", "WLN.PA", "TELIA.ST", "KPN.AS", "AMS.MC",
-            "CAP.PA", "ATO.PA", "SOI.PA", "OVH.PA", "NEXI.MI", "INW.MI", "SINCH.ST", "EVO.ST", "BETCO.ST", "HEXA-B.ST",
-            "WISE.L", "MONY.L", "RMV.L", "ASC.L", "PAY.L", "OCDO.L", "SGE.L", "AUTO.L", "THG.L", "GFT.DE",
-            "UBI.PA", "VIV.PA", "EVS.BR", "PROX.BR", "MELE.BR", "NDA-FI.HE", "ELUX-B.ST", "GETI-B.ST", "TEL2-B.ST", "SBB-B.ST"
+            "CAP.PA", "ATO.PA", "SOI.PA", "OVH.PA", "NEXI.MI", "INW.MI", "SINCH.ST", "EVO.ST", "UMG.AS", "WISE.L",
+            "MONY.L", "RMV.L", "ASC.L", "PAY.L", "OCDO.L", "SGE.L", "AUTO.L", "BT-A.L", "VOD.L", "UBI.PA",
+            "PROX.BR", "DTE.DE", "TEF.MC", "ELUX-B.ST", "GETI-B.ST", "TEL2-B.ST", "VIV.PA", "NDA-FI.HE", "GFT.DE", "SBB-B.ST"
         ],
     },
     {
@@ -119,10 +127,10 @@ WATCHLIST_SPECS = [
         "schedule_rationale": "European financials are most informative once rates, sovereign spreads, and open auction pressure have started to settle, so this run follows the first open burst by 10 minutes.",
         "tickers": [
             "HSBA.L", "SAN.MC", "BNP.PA", "ALV.DE", "UBSG.SW", "ISP.MI", "BBVA.MC", "INGA.AS", "ACA.PA", "BARC.L",
-            "DBK.DE", "KBC.BR", "NWG.L", "CABK.MC", "UCG.MI", "MUV2.DE", "ZURN.SW", "LGEN.L", "PRU.L", "BMED.MI",
-            "GLE.PA", "CS.PA", "CBK.DE", "HNR1.DE", "EXPN.L", "STAN.L", "LLOY.L", "AV.L", "ADEN.SW", "BAER.SW",
-            "SLHN.SW", "SREN.SW", "HELN.SW", "VONTO.SW", "MBK.WA", "PKO.WA", "PEO.WA", "PZU.WA", "SAB.MC", "BKT.MC",
-            "MAP.MC", "SAMPO.HE", "DNB.OL", "SEB-A.ST", "SHB-A.ST", "SWED-A.ST", "INVE-B.ST", "KINV-B.ST", "LUND-B.ST", "AZN.ST"
+            "DBK.DE", "KBC.BR", "NWG.L", "CABK.MC", "UCG.MI", "MUV2.DE", "ZURN.SW", "LGEN.L", "PRU.L", "EXPN.L",
+            "GLE.PA", "CS.PA", "CBK.DE", "STAN.L", "LLOY.L", "AV.L", "ADEN.SW", "BAER.SW", "SLHN.SW", "SREN.SW",
+            "HELN.SW", "VONTO.SW", "SAB.MC", "BKT.MC", "MAP.MC", "SAMPO.HE", "DNB.OL", "SEB-A.ST", "SHB-A.ST", "SWED-A.ST",
+            "INVE-B.ST", "KINV-B.ST", "LUND-B.ST", "AZN.ST", "DB1.DE", "LSEG.L", "ENX.PA", "BME.MC", "MBK.WA", "PKO.WA"
         ],
     },
     {
@@ -164,7 +172,7 @@ WATCHLIST_SPECS = [
             "HEI.DE", "SY1.DE", "BAS.DE", "SIKA.SW", "AKZA.AS", "VOW3.DE", "MBG.DE", "BMW.DE", "AIR.PA", "SU.PA",
             "REP.MC", "ENG.MC", "ELE.MC", "IBE.MC", "FER.MC", "ACS.MC", "GALP.LS", "EDP.LS", "NHY.OL", "AKRBP.OL",
             "YAR.OL", "MOWI.OL", "ORK.OL", "SKA-B.ST", "VOLV-B.ST", "SAND.ST", "SKF-B.ST", "EPI-B.ST", "BOL.ST", "SSAB-A.ST",
-            "MAERSK-B.CO", "VWS.CO", "ORSTED.CO", "FRO.OL", "SUBC.OL", "ANTO.L", "CWR.L", "HGM.L", "KGH.WA", "PGE.WA"
+            "MAERSK-B.CO", "VWS.CO", "ORSTED.CO", "FRO.OL", "SUBC.OL", "ANTO.L", "BAE.L", "RHM.DE", "RWE.DE", "EOAN.DE"
         ],
     },
     {
@@ -177,8 +185,8 @@ WATCHLIST_SPECS = [
             "AAPL", "MSFT", "GOOGL", "META", "AMZN", "NFLX", "CRM", "ORCL", "ADBE", "NOW",
             "INTU", "PANW", "CRWD", "SNOW", "DDOG", "MDB", "TEAM", "ZS", "UBER", "ABNB",
             "NVDA", "AVGO", "AMD", "QCOM", "TXN", "MU", "ADI", "AMAT", "LRCX", "KLAC",
-            "CDNS", "SNPS", "SHOP", "SQ", "PYPL", "DASH", "PDD", "SE", "CPNG", "NET",
-            "OKTA", "FTNT", "ANET", "MSTR", "PLTR", "ARM", "U", "RBLX", "PATH", "AFRM"
+            "CDNS", "SNPS", "SHOP", "SQ", "PYPL", "DASH", "V", "MA", "ADP", "IBM",
+            "CSCO", "INTC", "HPE", "DELL", "NET", "FTNT", "ANET", "ARM", "RBLX", "PLTR"
         ],
     },
     {
@@ -231,10 +239,10 @@ WATCHLIST_SPECS = [
         "schedule_rationale": "Placed last in the U.S. block so industrial, transport, and energy names can incorporate the clearest read on open leadership, crude tone, and macro risk appetite while still avoiding overlap.",
         "tickers": [
             "CAT", "DE", "GE", "HON", "RTX", "UNP", "UPS", "BA", "ETN", "MMM",
-            "XOM", "CVX", "COP", "SLB", "EOG", "OXY", "MPC", "PSX", "KMI", "FCX",
-            "LMT", "NOC", "GD", "TDG", "HWM", "IR", "ITW", "EMR", "ROP", "PH",
-            "CMI", "PCAR", "FDX", "CSX", "NSC", "WM", "RSG", "VMC", "MLM", "SHW",
-            "ECL", "APD", "LIN", "CTVA", "NEM", "NUE", "STLD", "CLF", "AA", "VLO"
+            "XOM", "CVX", "COP", "SLB", "EOG", "PSX", "FCX", "LMT", "NOC", "GD",
+            "TDG", "HWM", "IR", "ITW", "EMR", "ROP", "PH", "CMI", "PCAR", "FDX",
+            "CSX", "NSC", "WM", "RSG", "VMC", "MLM", "SHW", "ECL", "APD", "LIN",
+            "NEE", "DUK", "SO", "XEL", "PLD", "AMT", "CCI", "EQIX", "SPG", "O"
         ],
     },
 ]
@@ -285,6 +293,8 @@ SUPPORT_REFRESH_JOB_SPECS = [
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
     logging.info("Deploying curated default watchlists and jobs")
+    if SessionLocal is None or JobType is None or WatchlistRepository is None or JobRepository is None or JobRecord is None or WatchlistRecord is None or select is None:
+        raise RuntimeError("deploy_watchlists.py requires the project runtime dependencies to be installed")
 
     _validate_watchlist_specs(WATCHLIST_SPECS)
 
@@ -298,7 +308,15 @@ def main() -> None:
         for spec in WATCHLIST_SPECS:
             normalized = _normalize_tickers(spec["tickers"])
             # Curated watchlists trigger overlap removal
-            watchlist_record = _ensure_watchlist(session, watchlist_repo, spec["name"], normalized, trigger_removal=True)
+            watchlist_record = _ensure_watchlist(
+                session,
+                watchlist_repo,
+                spec["name"],
+                normalized,
+                trigger_removal=True,
+                region=spec["region"],
+                description=spec["macro_industry"],
+            )
             job_name = f"{spec['name']}" # No prefix
             _ensure_job(
                 session,
@@ -311,18 +329,8 @@ def main() -> None:
 
         for spec in SUPPORT_REFRESH_JOB_SPECS:
             target_watchlist = None
+            job_tickers: list[str] = []
             job_type = JobType(spec["job_type"])
-            
-            if job_type == JobType.BARS_DATA_REFRESH and "region_filter" in spec:
-                region = spec["region_filter"]
-                region_tickers = []
-                for w_spec in WATCHLIST_SPECS:
-                    if w_spec["region"] == region:
-                        region_tickers.extend(w_spec["tickers"])
-                
-                watchlist_name = f"Ref-{region}" # Less verbose name
-                # System watchlists DO NOT trigger overlap removal
-                target_watchlist = _ensure_watchlist(session, watchlist_repo, watchlist_name, _normalize_tickers(region_tickers), trigger_removal=False)
 
             _ensure_job(
                 session,
@@ -331,6 +339,7 @@ def main() -> None:
                 spec["name"],
                 spec["cron"],
                 job_type=job_type,
+                tickers=job_tickers,
             )
 
     logging.info("Deployment complete")
@@ -384,7 +393,14 @@ def _normalize_tickers(tickers: Iterable[str]) -> list[str]:
 
 
 def _ensure_watchlist(
-    session, repo: WatchlistRepository, name: str, tickers: list[str], trigger_removal: bool = True
+    session,
+    repo: WatchlistRepository,
+    name: str,
+    tickers: list[str],
+    trigger_removal: bool = True,
+    *,
+    region: str = "",
+    description: str = "",
 ) -> WatchlistRecord:
     if trigger_removal:
         _remove_tickers_from_other_watchlists(session, tickers, exclude_name=name)
@@ -393,8 +409,17 @@ def _ensure_watchlist(
 
     if record:
         current = [ticker for ticker in record.tickers_csv.split(",") if ticker]
+        dirty = False
         if set(current) != set(tickers):
             record.tickers_csv = ",".join(tickers)
+            dirty = True
+        if (record.region or "") != region:
+            record.region = region
+            dirty = True
+        if (record.description or "") != description:
+            record.description = description
+            dirty = True
+        if dirty:
             session.commit()
             session.refresh(record)
             logging.info("Updated watchlist '%s'", name)
@@ -402,7 +427,7 @@ def _ensure_watchlist(
             logging.info("Watchlist '%s' already configured", name)
         return record
 
-    watchlist = repo.create(name, tickers)
+    watchlist = repo.create(name, tickers, description=description, region=region)
     logging.info("Created watchlist '%s'", watchlist.name)
     return _find_watchlist_record(session, watchlist.name)
 
@@ -414,14 +439,16 @@ def _ensure_job(
     job_name: str,
     cron: str,
     job_type: JobType,
+    tickers: list[str] | None = None,
 ) -> None:
     record = session.scalars(select(JobRecord).where(JobRecord.name == job_name)).first()
     watchlist_id = watchlist.id if watchlist is not None else None
+    normalized_tickers = _normalize_tickers(tickers or [])
     if record:
         repo.update(
             job_id=record.id,
             name=job_name,
-            tickers=[],
+            tickers=normalized_tickers,
             schedule=cron,
             enabled=True,
             watchlist_id=watchlist_id,
@@ -431,7 +458,7 @@ def _ensure_job(
     else:
         repo.create(
             name=job_name,
-            tickers=[],
+            tickers=normalized_tickers,
             schedule=cron,
             enabled=True,
             watchlist_id=watchlist_id,
