@@ -202,6 +202,9 @@ The system resolves a directional bias (`LONG`, `SHORT`, or `NEUTRAL`) from:
 - trend context such as price vs SMA200
 - momentum across multiple lookback windows
 - ticker, industry, and macro alignment
+- catalyst/news pressure when it is strong enough to move the aggregate score
+
+The final direction should follow the combined directional score, not price-vs-SMA200 alone. If technical trend and catalyst evidence materially disagree, the divergence should remain visible in diagnostics and the plan may stay non-actionable when confidence does not clear the gating threshold.
 
 ### Confidence
 Confidence is a weighted aggregation of normalized components:
@@ -233,11 +236,19 @@ Light feature wiring is also in place here:
 ### Transmission analysis
 The methodology also tracks how well a trade idea is supported from macro or industry context down to the ticker.
 
+Transmission is now treated as a governed edge graph rather than a flat label match. Each edge can carry:
+- direction (`positive`, `negative`, `mixed`)
+- mechanism (`demand`, `valuation`, `supply_chain`, `pricing`, `regulation`, etc.)
+- confidence and provenance
+- validity windows when they are known
+- a lightweight relationship score used for ranking and inspection
+
 In broad terms it considers:
 - alignment across macro, industry, and ticker evidence
 - relevance of matched themes or events
 - freshness of supporting context
 - contradiction penalties when major signals conflict
+- whether an edge is explicit, derived, or only a weak structural fallback
 
 The app stores intermediate vectors, aggregations, and weights so operators can inspect what influenced the result.
 

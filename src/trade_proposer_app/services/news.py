@@ -313,12 +313,28 @@ class NewsAPIProvider(NewsProvider):
     supports_live_windowed_queries: ClassVar[bool] = True
     supports_replay_windowed_queries: ClassVar[bool] = True
     counts_as_primary_news: ClassVar[bool] = True
+    historical_replay_safe: ClassVar[bool] = True
+    MAX_QUERY_FETCH_ATTEMPTS: ClassVar[int] = 4
+    RETRYABLE_STATUS_CODES: ClassVar[set[int]] = {429, 500, 502, 503, 504}
+    RETRY_BACKOFF_SECONDS: ClassVar[tuple[float, ...]] = (0.0, 1.0, 2.5, 5.0)
 
     def fetch(self, ticker: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
         return self._fetch_query(f"{ticker} stock", limit, start_at=start_at, end_at=end_at)
 
     def fetch_topic(self, topic: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
         return self._fetch_query(topic, limit, start_at=start_at, end_at=end_at)
+
+    def _retry_delay_seconds(self, response: httpx.Response | None, attempt_index: int) -> float:
+        if response is not None:
+            retry_after = str(response.headers.get("Retry-After", "")).strip()
+            if retry_after:
+                try:
+                    return max(0.0, float(retry_after))
+                except ValueError:
+                    pass
+        if attempt_index < len(self.RETRY_BACKOFF_SECONDS):
+            return self.RETRY_BACKOFF_SECONDS[attempt_index]
+        return self.RETRY_BACKOFF_SECONDS[-1]
 
     def _fetch_query(self, query: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
         api_key = (self.credential.api_key or "").strip()
@@ -337,27 +353,55 @@ class NewsAPIProvider(NewsProvider):
             params["from"] = start_at.isoformat()
         if end_at:
             params["to"] = end_at.isoformat()
-        response = httpx.get(NEWS_API_BASE_URL, params=params, timeout=self.timeout)
-        if response.status_code != 200:
-            raise NewsFetchError(f"unexpected status {response.status_code}")
-        payload = response.json()
-        if payload.get("status") != "ok":
-            raise NewsFetchError(payload.get("message", "invalid payload"))
-        articles: list[NewsArticle] = []
-        for entry in payload.get("articles", []):
-            if not isinstance(entry, dict):
-                continue
-            published = _normalize_timestamp(entry.get("publishedAt"))
-            articles.append(
-                NewsArticle(
-                    title=_cleanup_text(entry.get("title")),
-                    summary=_cleanup_text(entry.get("description") or entry.get("content")),
-                    publisher=_cleanup_text(entry.get("source", {}).get("name")),
-                    link=_cleanup_text(entry.get("url")),
-                    published_at=published,
+
+        last_error: NewsFetchError | None = None
+        for attempt in range(self.MAX_QUERY_FETCH_ATTEMPTS):
+            try:
+                response = httpx.get(NEWS_API_BASE_URL, params=params, timeout=self.timeout)
+            except Exception as exc:  # noqa: BLE001
+                last_error = NewsFetchError(f"attempt {attempt + 1}/{self.MAX_QUERY_FETCH_ATTEMPTS}: failed to fetch NewsAPI data: {exc}")
+                if attempt < self.MAX_QUERY_FETCH_ATTEMPTS - 1:
+                    time.sleep(self._retry_delay_seconds(None, attempt))
+                    continue
+                raise last_error from exc
+
+            if response.status_code != 200:
+                last_error = NewsFetchError(
+                    f"attempt {attempt + 1}/{self.MAX_QUERY_FETCH_ATTEMPTS}: unexpected status {response.status_code}"
                 )
-            )
-        return articles[:limit]
+                if response.status_code in self.RETRYABLE_STATUS_CODES and attempt < self.MAX_QUERY_FETCH_ATTEMPTS - 1:
+                    time.sleep(self._retry_delay_seconds(response, attempt))
+                    continue
+                raise last_error
+
+            payload = response.json()
+            if payload.get("status") != "ok":
+                message = str(payload.get("message", "invalid payload"))
+                last_error = NewsFetchError(
+                    f"attempt {attempt + 1}/{self.MAX_QUERY_FETCH_ATTEMPTS}: {message}"
+                )
+                if any(token in message.lower() for token in ("rate limit", "too many requests")) and attempt < self.MAX_QUERY_FETCH_ATTEMPTS - 1:
+                    time.sleep(self._retry_delay_seconds(response, attempt))
+                    continue
+                raise last_error
+
+            articles: list[NewsArticle] = []
+            for entry in payload.get("articles", []):
+                if not isinstance(entry, dict):
+                    continue
+                published = _normalize_timestamp(entry.get("publishedAt"))
+                articles.append(
+                    NewsArticle(
+                        title=_cleanup_text(entry.get("title")),
+                        summary=_cleanup_text(entry.get("description") or entry.get("content")),
+                        publisher=_cleanup_text(entry.get("source", {}).get("name")),
+                        link=_cleanup_text(entry.get("url")),
+                        published_at=published,
+                    )
+                )
+            return articles[:limit]
+
+        raise last_error or NewsFetchError("unexpected NewsAPI fetch failure")
 
 
 class FinnhubProvider(NewsProvider):
@@ -694,6 +738,7 @@ class NewsIngestionService:
         self.max_articles = max_articles
         self.historical_news = historical_news
         self._sentiment_analyzer = NaiveSentimentAnalyzer()
+        self._windowed_query_cache: dict[tuple[object, ...], NewsBundle] = {}
 
     @classmethod
     def from_provider_credentials(
@@ -734,6 +779,18 @@ class NewsIngestionService:
         request_mode: NewsRequestMode = "live",
         primary_only: bool = False,
     ) -> NewsBundle:
+        cache_key = self._windowed_query_cache_key(
+            "ticker",
+            ticker,
+            start_at=start_at,
+            end_at=end_at,
+            request_mode=request_mode,
+            primary_only=primary_only,
+            limit=self.max_articles,
+        )
+        if cache_key is not None and cache_key in self._windowed_query_cache:
+            return self._clone_bundle(self._windowed_query_cache[cache_key])
+
         bundle = NewsBundle(ticker=ticker)
 
         if self.historical_news and (start_at or end_at):
@@ -846,7 +903,36 @@ class NewsIngestionService:
         if fallback_note:
             bundle.feed_errors.append(fallback_note)
             bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
+        if cache_key is not None:
+            self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
         return bundle
+
+    @staticmethod
+    def _clone_bundle(bundle: NewsBundle) -> NewsBundle:
+        return NewsBundle.model_validate(bundle.model_dump())
+
+    @staticmethod
+    def _windowed_query_cache_key(
+        query_type: str,
+        subject: str,
+        *,
+        start_at: datetime | None,
+        end_at: datetime | None,
+        request_mode: NewsRequestMode,
+        primary_only: bool,
+        limit: int,
+    ) -> tuple[object, ...] | None:
+        if start_at is None and end_at is None:
+            return None
+        return (
+            query_type,
+            subject.strip().lower(),
+            start_at.isoformat() if start_at else None,
+            end_at.isoformat() if end_at else None,
+            request_mode,
+            primary_only,
+            limit,
+        )
 
     @staticmethod
     def _provider_attempt_count(provider: NewsProvider, exc: Exception) -> int:
@@ -909,8 +995,20 @@ class NewsIngestionService:
         request_mode: NewsRequestMode = "live",
         primary_only: bool = False,
     ) -> NewsBundle:
-        bundle = NewsBundle(ticker=topic)
         fetch_limit = min(limit or self.max_articles, self.max_articles)
+        cache_key = self._windowed_query_cache_key(
+            "topic",
+            topic,
+            start_at=start_at,
+            end_at=end_at,
+            request_mode=request_mode,
+            primary_only=primary_only,
+            limit=fetch_limit,
+        )
+        if cache_key is not None and cache_key in self._windowed_query_cache:
+            return self._clone_bundle(self._windowed_query_cache[cache_key])
+
+        bundle = NewsBundle(ticker=topic)
 
         if self.historical_news and (start_at or end_at):
             local_articles = self.historical_news.list_news(
@@ -954,6 +1052,8 @@ class NewsIngestionService:
                 bundle.feeds_used.append(provider.name)
         bundle.articles = bundle.articles[:fetch_limit]
         bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
+        if cache_key is not None:
+            self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
         return bundle
 
     def fetch_topics(
@@ -972,7 +1072,19 @@ class NewsIngestionService:
             bundle.feed_errors.append("news: no providers configured")
             return bundle
         seen_links: set[str] = set()
-        normalized_queries = [query.strip() for query in queries if isinstance(query, str) and query.strip()]
+        normalized_queries: list[str] = []
+        seen_queries: set[str] = set()
+        for query in queries:
+            if not isinstance(query, str):
+                continue
+            normalized = query.strip()
+            if not normalized:
+                continue
+            dedupe_key = normalized.lower()
+            if dedupe_key in seen_queries:
+                continue
+            seen_queries.add(dedupe_key)
+            normalized_queries.append(normalized)
         if not normalized_queries:
             normalized_queries = [subject]
         for query in normalized_queries[:5]:
@@ -1121,6 +1233,10 @@ class NewsIngestionService:
         end_at: datetime | None,
     ) -> list[NewsArticle]:
         require_timestamp = bool(start_at or end_at)
+        if start_at is not None and start_at.tzinfo is None:
+            start_at = start_at.replace(tzinfo=timezone.utc)
+        if end_at is not None and end_at.tzinfo is None:
+            end_at = end_at.replace(tzinfo=timezone.utc)
         filtered: list[NewsArticle] = []
         for article in articles:
             published_at = article.published_at

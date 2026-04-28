@@ -69,7 +69,7 @@ class TickerDeepAnalysisService:
                 float(context.get("atr", 0.0) or 0.0),
                 float(context.get("price", 0.0) or 0.0),
             )
-            direction = self._direction_from_context(context)
+            direction = self._resolve_direction(context, aggregations)
             confidence_components = self._build_confidence_components(context, direction)
             confidence = self._compose_confidence(confidence_components)
             entry_price, stop_loss, take_profit = self._suggest_price_levels(
@@ -83,6 +83,8 @@ class TickerDeepAnalysisService:
             analysis = self._build_analysis_payload(
                 ticker=normalized_ticker,
                 direction=direction.value,
+                technical_direction=context.get("technical_direction", context.get("direction", direction.value)),
+                direction_score=float(aggregations.get("direction_score", 0.5) or 0.5),
                 confidence=confidence,
                 entry_price=entry_price,
                 stop_loss=stop_loss,
@@ -633,9 +635,14 @@ class TickerDeepAnalysisService:
             "entry_drift_signal": round(entry_signal, 4),
         }
 
-    @staticmethod
-    def _direction_from_context(context: dict[str, Any]) -> RecommendationDirection:
-        raw_direction = str(context.get("direction", "LONG") or "LONG").strip().upper()
+    def _resolve_direction(self, context: dict[str, Any], aggregations: dict[str, float]) -> RecommendationDirection:
+        direction_score = aggregations.get("direction_score")
+        if isinstance(direction_score, (int, float)):
+            if float(direction_score) > 0.5:
+                return RecommendationDirection.LONG
+            if float(direction_score) < 0.5:
+                return RecommendationDirection.SHORT
+        raw_direction = str(context.get("technical_direction", context.get("direction", "LONG")) or "LONG").strip().upper()
         if raw_direction == RecommendationDirection.SHORT.value:
             return RecommendationDirection.SHORT
         return RecommendationDirection.LONG
@@ -984,8 +991,18 @@ class TickerDeepAnalysisService:
                 relevance += 1
             if relevance <= 0:
                 continue
-            matched.append({**edge, "relevance_hits": relevance})
-        matched.sort(key=lambda item: int(item.get("relevance_hits", 0)), reverse=True)
+            matched.append(
+                {
+                    **edge,
+                    "direction": str(edge.get("direction", "mixed")).strip() or "mixed",
+                    "mechanism": str(edge.get("mechanism", channel or "")).strip() or channel or "unknown",
+                    "confidence": str(edge.get("confidence", "medium")).strip() or "medium",
+                    "provenance": str(edge.get("provenance", "curated")).strip() or "curated",
+                    "relationship_score": float(edge.get("relationship_score", 0.0) or 0.0),
+                    "relevance_hits": relevance,
+                }
+            )
+        matched.sort(key=lambda item: (int(item.get("relevance_hits", 0)), float(item.get("relationship_score", 0.0))), reverse=True)
         return matched[:6]
 
     @staticmethod
@@ -1300,6 +1317,8 @@ class TickerDeepAnalysisService:
         *,
         ticker: str,
         direction: str,
+        technical_direction: str,
+        direction_score: float,
         confidence: float,
         entry_price: float,
         stop_loss: float,
@@ -1354,6 +1373,8 @@ class TickerDeepAnalysisService:
             "proposal": {
                 "ticker": ticker,
                 "direction": direction,
+                "technical_direction": technical_direction,
+                "direction_score": direction_score,
                 "confidence": confidence,
                 "entry_price": entry_price,
                 "stop_loss": stop_loss,

@@ -354,5 +354,41 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         self.assertIn("volume_ratio_20", analysis["technical"])
         self.assertEqual(analysis["technical"]["reference_features"]["sector_etf_symbol"], "XLK")
 
+    def test_analyze_resolves_direction_from_aggregated_score(self) -> None:
+        dates = pd.date_range("2026-01-01", periods=250, freq="B")
+        downtrend = pd.DataFrame(
+            {
+                "Open": [120.0 - (i * 0.1) for i in range(250)],
+                "High": [121.0 - (i * 0.1) for i in range(250)],
+                "Low": [119.0 - (i * 0.1) for i in range(250)],
+                "Close": [120.0 - (i * 0.1) for i in range(250)],
+                "Volume": [1000] * 250,
+            },
+            index=dates,
+        )
+
+        self.proposal_service._fetch_price_history.side_effect = lambda symbol, as_of=None: downtrend
+        self.proposal_service._last_price_history_fetch_diagnostics = {"source": "remote", "remote_attempt_count": 1, "selected_bar_count": 250}
+
+        original_compute = self.service._compute_aggregations
+        self.service._compute_aggregations = lambda normalized, atr, price: {
+            "direction_score": 0.82,
+            "risk_offset_pct": 0.0,
+            "risk_stop_offset": 0.0,
+            "risk_take_profit_offset": 0.0,
+            "entry_adjustment": price,
+            "entry_drift_signal": 0.0,
+        }
+        try:
+            output = self.service.analyze("AAPL")
+        finally:
+            self.service._compute_aggregations = original_compute
+
+        analysis = json.loads(output.diagnostics.analysis_json)
+        self.assertEqual(output.recommendation.direction, RecommendationDirection.LONG)
+        self.assertEqual(analysis["proposal"]["direction"], "LONG")
+        self.assertEqual(analysis["proposal"]["technical_direction"], "SHORT")
+        self.assertEqual(analysis["proposal"]["direction_score"], 0.82)
+
 if __name__ == "__main__":
     unittest.main()

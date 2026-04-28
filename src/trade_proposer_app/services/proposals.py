@@ -209,7 +209,7 @@ class ProposalService:
         normalized_vector["normalized_atr_pct"] = normalized_vector.get("atr_pct", 0.5)
         feature_vector["normalized_atr_pct"] = normalized_vector["normalized_atr_pct"]
         aggregations = self._compute_aggregations(normalized_vector, context["atr"], context["price"])
-        direction = RecommendationDirection.LONG if context["direction"] == "LONG" else RecommendationDirection.SHORT
+        direction = self._resolve_direction(context, aggregations)
         confidence = self._calculate_confidence(
             direction,
             context["sentiment_score"],
@@ -235,7 +235,9 @@ class ProposalService:
         )
         analysis = self._build_analysis_payload(
             ticker=normalized_ticker,
-            direction=context["direction"],
+            direction=direction.value,
+            technical_direction=context.get("technical_direction", context["direction"]),
+            direction_score=float(aggregations.get("direction_score", 0.5) or 0.5),
             confidence=confidence,
             entry_price=entry_price,
             stop_loss=stop_loss,
@@ -259,6 +261,16 @@ class ProposalService:
             created_at=as_of or datetime.now(timezone.utc),
         )
         return RunOutput(recommendation=recommendation, diagnostics=diagnostics)
+
+    def _resolve_direction(self, context: dict[str, Any], aggregations: dict[str, float]) -> RecommendationDirection:
+        direction_score = aggregations.get("direction_score")
+        if isinstance(direction_score, (int, float)):
+            if float(direction_score) > 0.5:
+                return RecommendationDirection.LONG
+            if float(direction_score) < 0.5:
+                return RecommendationDirection.SHORT
+        raw_direction = str(context.get("technical_direction", context.get("direction", "LONG")) or "LONG").strip().upper()
+        return RecommendationDirection.SHORT if raw_direction == RecommendationDirection.SHORT.value else RecommendationDirection.LONG
 
     def _build_indicator_summary(self, context: dict[str, Any], aggregations: dict[str, float]) -> str:
         parts: list[str] = []
@@ -284,6 +296,8 @@ class ProposalService:
         self,
         ticker: str,
         direction: str,
+        technical_direction: str,
+        direction_score: float,
         confidence: float,
         entry_price: float,
         stop_loss: float,
@@ -445,6 +459,8 @@ class ProposalService:
             },
             "trade": {
                 "direction": direction,
+                "technical_direction": technical_direction,
+                "direction_score": direction_score,
                 "confidence": confidence,
                 "entry_price": entry_price,
                 "stop_loss": stop_loss,
@@ -761,7 +777,8 @@ class ProposalService:
         price_above_sma50 = 1 if price > sma50 else 0
         price_above_sma200 = 1 if price > sma200 else 0
         trend_bullish = price > sma200
-        direction = "LONG" if trend_bullish else "SHORT"
+        technical_direction = "LONG" if trend_bullish else "SHORT"
+        direction = technical_direction
         short_bullish = short_bearish = 0
         if price > sma20:
             short_bullish += 1
@@ -824,6 +841,7 @@ class ProposalService:
             "short_bearish": float(short_bearish),
             "medium_bullish": float(med_bullish),
             "medium_bearish": float(med_bearish),
+            "technical_direction": technical_direction,
             "direction": direction,
         }
         news_context = self._build_news_context_base()

@@ -29,6 +29,22 @@ def make_sample_history(days: int = 260) -> pd.DataFrame:
     return df
 
 
+def make_downtrend_history(days: int = 260) -> pd.DataFrame:
+    dates = pd.date_range(end=pd.Timestamp.today(), periods=days, freq="B")
+    base = np.linspace(120, 90, len(dates))
+    df = pd.DataFrame(
+        {
+            "Open": base * 0.995,
+            "High": base * 1.01,
+            "Low": base * 0.99,
+            "Close": base,
+            "Volume": np.full(len(dates), 100_0000),
+        },
+        index=dates,
+    )
+    return df
+
+
 class _FakeNewsService:
     def __init__(self, bundle: NewsBundle) -> None:
         self._bundle = bundle
@@ -109,14 +125,77 @@ class ProposalServiceTests(unittest.TestCase):
         stop_pct = ((output.recommendation.entry_price - output.recommendation.stop_loss) / output.recommendation.entry_price) * 100
         take_pct = ((output.recommendation.take_profit - output.recommendation.entry_price) / output.recommendation.entry_price) * 100
 
-        self.assertEqual(output.recommendation.direction, RecommendationDirection.LONG)
+        self.assertIn(output.recommendation.direction, {RecommendationDirection.LONG, RecommendationDirection.SHORT})
         self.assertGreater(output.recommendation.confidence, 0)
-        self.assertTrue(output.recommendation.take_profit > output.recommendation.entry_price)
+        if output.recommendation.direction == RecommendationDirection.LONG:
+            self.assertGreater(output.recommendation.take_profit, output.recommendation.entry_price)
+            self.assertLess(output.recommendation.stop_loss, output.recommendation.entry_price)
+        else:
+            self.assertLess(output.recommendation.take_profit, output.recommendation.entry_price)
+            self.assertGreater(output.recommendation.stop_loss, output.recommendation.entry_price)
         self.assertLessEqual(stop_pct, 3.0)
         self.assertLessEqual(take_pct, 4.5)
         self.assertIn("feature_vectors", output.diagnostics.analysis_json)
         self.assertIn("aggregations", output.diagnostics.analysis_json)
         self.assertIsNotNone(output.diagnostics.feature_vector_json)
+
+    def test_generate_resolves_direction_from_aggregated_score(self) -> None:
+        history = make_downtrend_history()
+        article = NewsArticle(
+            title="Strong earnings beat",
+            summary="Revenue guidance raised",
+            publisher="Reuters",
+            link="https://example.com/beat",
+            published_at=None,
+        )
+        bundle = NewsBundle(ticker="", articles=[article], feeds_used=["Finnhub"])
+        service = ProposalService(
+            news_service=_FakeNewsService(bundle),
+            summary_service=_StubSummaryService(
+                SummaryResult(
+                    summary="Positive catalyst digest",
+                    method="news_digest",
+                    backend="test",
+                    model=None,
+                    llm_error=None,
+                    metadata={},
+                    duration_seconds=None,
+                )
+            ),
+        )
+        service.sentiment_analyzer.analyze = MagicMock(
+            return_value={
+                "score": 0.8,
+                "label": "POSITIVE",
+                "contexts": [],
+                "context_flags": {},
+                "sentiment_volatility": 0.0,
+                "polarity_trend": 0.9,
+                "sources": ["Finnhub"],
+                "news_items": [{"title": "Strong earnings beat", "link": "https://example.com/beat", "compound": 0.8}],
+                "problems": [],
+            }
+        )
+
+        with patch.object(ProposalService, "_fetch_price_history", return_value=history), patch.object(
+            ProposalService,
+            "_compute_aggregations",
+            return_value={
+                "direction_score": 0.82,
+                "risk_offset_pct": 0.0,
+                "risk_stop_offset": 0.0,
+                "risk_take_profit_offset": 0.0,
+                "entry_adjustment": 100.0,
+                "entry_drift_signal": 0.0,
+            },
+        ):
+            output = service.generate("AAPL")
+
+        analysis = json.loads(output.diagnostics.analysis_json)
+        self.assertEqual(output.recommendation.direction, RecommendationDirection.LONG)
+        self.assertEqual(analysis["trade"]["direction"], "LONG")
+        self.assertEqual(analysis["trade"]["technical_direction"], "SHORT")
+        self.assertEqual(analysis["trade"]["direction_score"], 0.82)
 
     def test_fetch_price_history_retries_live_remote_failures(self) -> None:
         history = make_sample_history()
