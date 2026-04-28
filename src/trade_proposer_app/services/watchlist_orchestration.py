@@ -624,14 +624,16 @@ class WatchlistOrchestrationService:
         setup_family = self._plan_setup_family(signal, analysis, candidate)
         confidence_components = self._plan_confidence_components(signal, analysis, candidate)
         transmission_summary = self._transmission_summary(signal, analysis, candidate)
+        raw_plan_confidence = self._plan_gate_confidence(signal, deep_output=deep_output, deep_error=deep_error)
+        deep_analysis_confidence = self._deep_analysis_confidence(deep_output, deep_error=deep_error)
         calibration_review = self._calibration_review(
             calibration_summary,
             setup_family,
-            signal.confidence_percent,
+            raw_plan_confidence,
             horizon=watchlist.default_horizon.value,
             transmission_summary=transmission_summary,
         )
-        calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", signal.confidence_percent) or signal.confidence_percent)
+        calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", raw_plan_confidence) or raw_plan_confidence)
         rationale = self._rationale_summary(signal, candidate, setup_family, transmission_summary)
         warnings = list(signal.warnings)
         shortlisted = bool(signal.diagnostics.get("shortlisted"))
@@ -647,7 +649,7 @@ class WatchlistOrchestrationService:
                 rationale_summary=rationale,
                 warnings=warnings,
                 evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason="deep_analysis_unavailable", calibration_review=calibration_review, transmission_summary=transmission_summary),
-                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, shortlisted=shortlisted, shortlist_rank=shortlist_rank),
+                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, shortlisted=shortlisted, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -660,7 +662,7 @@ class WatchlistOrchestrationService:
         intended_action = direction if direction in {"long", "short"} else None
         action_reason = "actionable_setup"
         effective_threshold = float(calibration_review.get("effective_confidence_threshold", self.confidence_threshold))
-        calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", signal.confidence_percent) or signal.confidence_percent)
+        calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", raw_plan_confidence) or raw_plan_confidence)
         
         entry_price_low, entry_price_high, stop_loss, take_profit, risk_reward_ratio = None, None, None, None, None
         if intended_action:
@@ -678,11 +680,11 @@ class WatchlistOrchestrationService:
             action_reason = "shorts_disabled"
         elif calibrated_confidence < effective_threshold:
             action = "no_action"
-            action_reason = "below_calibrated_action_threshold" if effective_threshold > self.confidence_threshold or calibrated_confidence != signal.confidence_percent else "below_action_confidence_threshold"
+            action_reason = "below_calibrated_action_threshold" if effective_threshold > self.confidence_threshold or calibrated_confidence != raw_plan_confidence else "below_action_confidence_threshold"
         elif direction not in {"long", "short"}:
             action = "no_action"
             action_reason = "direction_not_actionable"
-        elif int(transmission_summary.get("contradiction_count", 0) or 0) > 0 and calibrated_confidence < min(95.0, effective_threshold + 4.0):
+        elif self._should_block_for_transmission_contradiction(transmission_summary, calibrated_confidence, effective_threshold):
             action = "no_action"
             action_reason = "context_transmission_contradiction"
         elif transmission_summary.get("context_bias") == "headwind" and calibrated_confidence < min(95.0, effective_threshold + 5.0):
@@ -708,7 +710,7 @@ class WatchlistOrchestrationService:
                 rationale_summary=rationale,
                 warnings=list(dict.fromkeys(warnings)),
                 evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
-                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank),
+                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
                 computed_at=signal.computed_at,
                 run_id=run_id,
                 job_id=job_id,
@@ -733,7 +735,7 @@ class WatchlistOrchestrationService:
             risks=self._plan_risks(warnings, setup_family, action, transmission_summary),
             warnings=list(dict.fromkeys(warnings)),
             evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
-            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank),
+            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
             computed_at=signal.computed_at,
             run_id=run_id,
             job_id=job_id,
@@ -1019,6 +1021,27 @@ class WatchlistOrchestrationService:
         return "medium" if shortlisted else "low"
 
     @staticmethod
+    def _deep_analysis_confidence(output: RunOutput | None, *, deep_error: str | None = None) -> float | None:
+        if output is None or deep_error is not None:
+            return None
+        try:
+            return round(float(output.recommendation.confidence), 2)
+        except (TypeError, ValueError):
+            return None
+
+    def _plan_gate_confidence(
+        self,
+        signal: TickerSignalSnapshot,
+        *,
+        deep_output: RunOutput | None,
+        deep_error: str | None = None,
+    ) -> float:
+        deep_confidence = self._deep_analysis_confidence(deep_output, deep_error=deep_error)
+        if deep_confidence is not None:
+            return deep_confidence
+        return round(float(signal.confidence_percent), 2)
+
+    @staticmethod
     def _analysis_payload(output: RunOutput | None) -> dict[str, Any]:
         if output is None or not output.diagnostics.analysis_json:
             return {}
@@ -1163,9 +1186,11 @@ class WatchlistOrchestrationService:
         intended_action: str | None = None,
         shortlisted: bool | None = None,
         shortlist_rank: int | None = None,
+        deep_analysis_confidence_percent: float | None = None,
     ) -> dict[str, object]:
         calibration = calibration_review or {}
-        calibrated_confidence = calibration.get("calibrated_confidence_percent") if isinstance(calibration.get("calibrated_confidence_percent"), (int, float)) else signal.confidence_percent
+        raw_plan_confidence = calibration.get("raw_confidence_percent") if isinstance(calibration.get("raw_confidence_percent"), (int, float)) else signal.confidence_percent
+        calibrated_confidence = calibration.get("calibrated_confidence_percent") if isinstance(calibration.get("calibrated_confidence_percent"), (int, float)) else raw_plan_confidence
         payload = {
             "attention_score": signal.attention_score,
             "macro_exposure_score": signal.macro_exposure_score,
@@ -1177,7 +1202,10 @@ class WatchlistOrchestrationService:
             "execution_quality_score": signal.execution_quality_score,
             "setup_family": setup_family,
             "confidence_components": confidence_components,
-            "raw_confidence_percent": signal.confidence_percent,
+            "raw_confidence_percent": round(float(raw_plan_confidence), 2),
+            "raw_plan_confidence_percent": round(float(raw_plan_confidence), 2),
+            "cheap_scan_confidence_percent": round(float(signal.confidence_percent), 2),
+            "deep_analysis_confidence_percent": round(float(deep_analysis_confidence_percent), 2) if deep_analysis_confidence_percent is not None else None,
             "calibrated_confidence_percent": round(float(calibrated_confidence), 2),
             "confidence_bucket": WatchlistOrchestrationService._confidence_bucket(float(calibrated_confidence)),
             "calibration_review": calibration,
@@ -1191,6 +1219,26 @@ class WatchlistOrchestrationService:
         if intended_action in {"long", "short"}:
             payload["intended_action"] = intended_action
         return payload
+
+    @staticmethod
+    def _should_block_for_transmission_contradiction(
+        transmission_summary: dict[str, object],
+        calibrated_confidence: float,
+        effective_threshold: float,
+    ) -> bool:
+        contradiction_count = int(transmission_summary.get("contradiction_count", 0) or 0)
+        if contradiction_count <= 0:
+            return False
+        conflict_flags = transmission_summary.get("conflict_flags")
+        normalized_flags = {
+            str(flag).strip().lower()
+            for flag in conflict_flags
+            if str(flag).strip()
+        } if isinstance(conflict_flags, list) else set()
+        severe_flags = {"directional_conflict", "technical_context_conflict"}
+        if not normalized_flags.intersection(severe_flags):
+            return False
+        return calibrated_confidence < min(95.0, effective_threshold + 4.0)
 
     def _plan_setup_family(
         self,

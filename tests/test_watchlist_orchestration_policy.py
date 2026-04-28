@@ -10,11 +10,12 @@ Design principles:
 
 from __future__ import annotations
 
+import json
 import unittest
 from unittest.mock import Mock, patch
 
 from trade_proposer_app.domain.enums import RecommendationDirection, StrategyHorizon
-from trade_proposer_app.domain.models import Recommendation, RunDiagnostics, RunOutput, Watchlist
+from trade_proposer_app.domain.models import Recommendation, RunDiagnostics, RunOutput, TickerSignalSnapshot, Watchlist
 from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService, _CheapScanCandidate
 
 
@@ -150,6 +151,203 @@ class WatchlistOrchestrationPolicyTests(unittest.TestCase):
         }
         adj = self.service._transmission_confidence_adjustment(analysis, transmission_bias="headwind", alignment_score=40.0)
         self.assertEqual(adj, -2.4)
+
+    # ─── Plan Confidence Source ───────────────────────────────────────────────
+
+    def test_build_plan_uses_deep_analysis_confidence_for_action_gate(self) -> None:
+        watchlist = Watchlist(name="test", default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)
+        candidate = _CheapScanCandidate("AAPL", "long", 42.0, 85.0, [], "")
+        signal = TickerSignalSnapshot(
+            ticker="AAPL",
+            direction="long",
+            confidence_percent=42.0,
+            attention_score=85.0,
+            diagnostics={"shortlisted": True, "mode": "deep_analysis"},
+        )
+        deep_output = RunOutput(
+            recommendation=Recommendation(
+                ticker="AAPL",
+                direction=RecommendationDirection.LONG,
+                confidence=72.0,
+                entry_price=100.0,
+                stop_loss=95.0,
+                take_profit=112.0,
+            ),
+            diagnostics=RunDiagnostics(
+                analysis_json=json.dumps(
+                    {
+                        "summary": {"text": "Strong deep-analysis setup"},
+                        "ticker_deep_analysis": {
+                            "setup_family": "continuation",
+                            "confidence_components": {
+                                "context_confidence": 60.0,
+                                "directional_confidence": 72.0,
+                                "catalyst_confidence": 65.0,
+                                "technical_clarity": 70.0,
+                                "execution_clarity": 75.0,
+                                "data_quality_cap": 90.0,
+                            },
+                            "transmission_analysis": {
+                                "alignment_percent": 65.0,
+                                "contradiction_count": 0,
+                                "context_bias": "tailwind",
+                            },
+                        },
+                    }
+                )
+            ),
+        )
+
+        plan = self.service._build_plan_from_signal(
+            watchlist,
+            candidate,
+            signal,
+            deep_output=deep_output,
+            deep_error=None,
+            calibration_summary=None,
+            job_id=None,
+            run_id=None,
+        )
+
+        self.assertEqual(plan.action, "long")
+        self.assertEqual(plan.confidence_percent, 72.0)
+        self.assertEqual(plan.evidence_summary["action_reason"], "actionable_setup")
+        self.assertEqual(plan.signal_breakdown["cheap_scan_confidence_percent"], 42.0)
+        self.assertEqual(plan.signal_breakdown["deep_analysis_confidence_percent"], 72.0)
+        self.assertEqual(plan.signal_breakdown["raw_plan_confidence_percent"], 72.0)
+
+    def test_build_plan_allows_mixed_context_contradiction_without_directional_conflict(self) -> None:
+        watchlist = Watchlist(name="test", default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)
+        candidate = _CheapScanCandidate("AAPL", "long", 42.0, 85.0, [], "")
+        signal = TickerSignalSnapshot(
+            ticker="AAPL",
+            direction="long",
+            confidence_percent=42.0,
+            attention_score=85.0,
+            diagnostics={"shortlisted": True, "mode": "deep_analysis"},
+        )
+        deep_output = RunOutput(
+            recommendation=Recommendation(
+                ticker="AAPL",
+                direction=RecommendationDirection.LONG,
+                confidence=62.0,
+                entry_price=100.0,
+                stop_loss=95.0,
+                take_profit=112.0,
+            ),
+            diagnostics=RunDiagnostics(
+                analysis_json=json.dumps(
+                    {
+                        "summary": {"text": "Threshold-clearing mixed-context setup"},
+                        "ticker_deep_analysis": {
+                            "setup_family": "continuation",
+                            "confidence_components": {"directional_confidence": 62.0},
+                            "transmission_analysis": {
+                                "alignment_percent": 48.0,
+                                "contradiction_count": 10,
+                                "conflict_flags": ["timing_conflict", "context_contradiction", "context_quality_conflict"],
+                            },
+                        },
+                    }
+                )
+            ),
+        )
+
+        plan = self.service._build_plan_from_signal(
+            watchlist,
+            candidate,
+            signal,
+            deep_output=deep_output,
+            deep_error=None,
+            calibration_summary=None,
+            job_id=None,
+            run_id=None,
+        )
+
+        self.assertEqual(plan.action, "long")
+        self.assertEqual(plan.confidence_percent, 62.0)
+
+    def test_build_plan_blocks_severe_directional_contradiction_until_extra_buffer_clears(self) -> None:
+        watchlist = Watchlist(name="test", default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)
+        candidate = _CheapScanCandidate("AAPL", "long", 42.0, 85.0, [], "")
+        signal = TickerSignalSnapshot(
+            ticker="AAPL",
+            direction="long",
+            confidence_percent=42.0,
+            attention_score=85.0,
+            diagnostics={"shortlisted": True, "mode": "deep_analysis"},
+        )
+        deep_output = RunOutput(
+            recommendation=Recommendation(
+                ticker="AAPL",
+                direction=RecommendationDirection.LONG,
+                confidence=62.0,
+                entry_price=100.0,
+                stop_loss=95.0,
+                take_profit=112.0,
+            ),
+            diagnostics=RunDiagnostics(
+                analysis_json=json.dumps(
+                    {
+                        "summary": {"text": "Directionally conflicted setup"},
+                        "ticker_deep_analysis": {
+                            "setup_family": "continuation",
+                            "confidence_components": {"directional_confidence": 62.0},
+                            "transmission_analysis": {
+                                "alignment_percent": 48.0,
+                                "contradiction_count": 2,
+                                "conflict_flags": ["directional_conflict"],
+                            },
+                        },
+                    }
+                )
+            ),
+        )
+
+        plan = self.service._build_plan_from_signal(
+            watchlist,
+            candidate,
+            signal,
+            deep_output=deep_output,
+            deep_error=None,
+            calibration_summary=None,
+            job_id=None,
+            run_id=None,
+        )
+
+        self.assertEqual(plan.action, "no_action")
+        self.assertEqual(plan.evidence_summary["action_reason"], "context_transmission_contradiction")
+        self.assertEqual(plan.confidence_percent, 62.0)
+
+    def test_build_plan_falls_back_to_signal_confidence_when_deep_analysis_unavailable(self) -> None:
+        watchlist = Watchlist(name="test", default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)
+        candidate = _CheapScanCandidate("AAPL", "long", 42.0, 85.0, [], "")
+        signal = TickerSignalSnapshot(
+            ticker="AAPL",
+            direction="long",
+            confidence_percent=42.0,
+            attention_score=85.0,
+            diagnostics={"shortlisted": True, "mode": "deep_analysis"},
+        )
+
+        plan = self.service._build_plan_from_signal(
+            watchlist,
+            candidate,
+            signal,
+            deep_output=None,
+            deep_error="provider unavailable",
+            calibration_summary=None,
+            job_id=None,
+            run_id=None,
+        )
+
+        self.assertEqual(plan.action, "no_action")
+        self.assertEqual(plan.status, "degraded")
+        self.assertEqual(plan.confidence_percent, 42.0)
+        self.assertEqual(plan.evidence_summary["action_reason"], "deep_analysis_unavailable")
+        self.assertEqual(plan.signal_breakdown["cheap_scan_confidence_percent"], 42.0)
+        self.assertIsNone(plan.signal_breakdown["deep_analysis_confidence_percent"])
+        self.assertEqual(plan.signal_breakdown["raw_plan_confidence_percent"], 42.0)
 
 if __name__ == "__main__":
     unittest.main()

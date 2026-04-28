@@ -1157,8 +1157,13 @@ class ProposalService:
         
         effective_now = as_of or datetime.now(timezone.utc)
         start_at = effective_now - timedelta(hours=24)
+        request_mode = "replay" if as_of is not None else "live"
         
-        signal_bundle = self.signal_service.fetch(ticker, start_at=start_at, end_at=effective_now) if self.signal_service is not None else None
+        signal_bundle = (
+            self.signal_service.fetch(ticker, start_at=start_at, end_at=effective_now, request_mode=request_mode)
+            if self.signal_service is not None
+            else None
+        )
         if signal_bundle is not None:
             signal_items = [item.model_dump(mode="json") for item in signal_bundle.items]
             social_items = [item for item in signal_items if item.get("source_type") == "social"]
@@ -1195,7 +1200,7 @@ class ProposalService:
             merged_problems = list(dict.fromkeys(context.get("problems", []) + context.get("signal_feed_errors", [])))
             context["problems"] = merged_problems
             return context
-        bundle = self.news_service.fetch(ticker, start_at=start_at, end_at=effective_now)
+        bundle = self.news_service.fetch(ticker, start_at=start_at, end_at=effective_now, request_mode=request_mode)
         sentiment = self.sentiment_analyzer.analyze(bundle)
         feeds = list(dict.fromkeys(bundle.feeds_used))
         news_items = sentiment.get("news_items") or sentiment.get("news_points", [])

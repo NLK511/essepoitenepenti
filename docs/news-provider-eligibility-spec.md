@@ -80,6 +80,9 @@ If `primary_only = true`, the provider must satisfy:
 ### Historical / reconstruction workflows
 - must be able to request `request_mode = replay`
 - replay requests must never silently fall back to live-only providers
+- ticker/deep-analysis reconstruction must pass `request_mode = replay` when an explicit historical `as_of` is used
+- historical database articles inside the requested window must be attached to the returned bundle even when fewer than the normal early-return minimum are available
+- replay diagnostics must expose whether database articles were used, how many were attached, and whether providers were skipped because the database already supplied enough coverage
 
 ## Diagnostics requirements
 
@@ -131,3 +134,5 @@ The unit test suite must prove at least:
 - macro context forwards `request_mode = live` and `primary_only = true`
 - industry context forwards `request_mode = live` and `primary_only = true`
 - diagnostics explain provider exclusions when eligibility fails
+- replay ticker fetches include available historical database articles even when fewer than three articles exist
+- window filtering handles mixed naive and timezone-aware datetimes without raising comparison errors

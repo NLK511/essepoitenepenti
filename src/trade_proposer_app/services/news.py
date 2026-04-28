@@ -793,6 +793,8 @@ class NewsIngestionService:
 
         bundle = NewsBundle(ticker=ticker)
 
+        seen_links: set[str] = set()
+        provider_results: list[dict[str, object]] = []
         if self.historical_news and (start_at or end_at):
             local_articles = self.historical_news.list_news(
                 ticker=ticker,
@@ -800,27 +802,39 @@ class NewsIngestionService:
                 end_at=end_at,
                 limit=self.max_articles,
             )
-            if len(local_articles) >= 3:
-                bundle.articles = local_articles
+            if local_articles:
+                self._merge_articles(bundle, local_articles, seen_links)
                 bundle.feeds_used.append("database")
+                provider_results.append(
+                    {
+                        "provider": "database",
+                        "status": "success",
+                        "article_count": len(local_articles),
+                        "attempt_count": 1,
+                        "error": None,
+                    }
+                )
+            if len(local_articles) >= 3:
                 bundle.query_diagnostics = {
                     "query_type": "ticker",
                     "request_mode": request_mode,
-                    "provider_results": [
-                        {
-                            "provider": "database",
-                            "status": "success",
-                            "article_count": len(local_articles),
-                            "attempt_count": 1,
-                            "error": None,
-                        }
-                    ],
+                    "provider_results": provider_results,
+                    "successful_providers": ["database"],
+                    "failed_providers": [],
+                    "unsupported_providers": [],
+                    "feeds_used": ["database"],
                     "fallback_used": False,
                     "fallback_succeeded": False,
                     "successful_provider_count": 1,
                     "failed_provider_count": 0,
-                    "article_count": len(local_articles),
+                    "unsupported_provider_count": 0,
+                    "article_count": len(bundle.articles),
+                    "database_article_count": len(local_articles),
+                    "provider_fetch_skipped": True,
+                    "provider_fetch_skip_reason": "database coverage satisfied minimum",
                 }
+                if cache_key is not None:
+                    self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
                 return bundle
 
         providers, selection_errors = self._providers_for_request(
@@ -832,19 +846,23 @@ class NewsIngestionService:
         )
         if not providers:
             bundle.feed_errors.extend(selection_errors)
-            bundle.query_diagnostics = {
-                "query_type": "ticker",
-                "request_mode": request_mode,
-                "provider_results": [],
-                "fallback_used": False,
-                "fallback_succeeded": False,
-                "successful_provider_count": 0,
-                "failed_provider_count": 0,
-                "article_count": 0,
-            }
+            bundle.query_diagnostics = self._build_ticker_query_diagnostics(
+                request_mode=request_mode,
+                provider_results=provider_results,
+                feeds_used=bundle.feeds_used,
+                article_count=len(bundle.articles),
+            )
+            if any(result.get("provider") == "database" for result in provider_results):
+                bundle.query_diagnostics["database_article_count"] = sum(
+                    int(result.get("article_count") or 0)
+                    for result in provider_results
+                    if result.get("provider") == "database"
+                )
+                bundle.query_diagnostics["provider_fetch_skipped"] = True
+                bundle.query_diagnostics["provider_fetch_skip_reason"] = "no eligible providers"
+            if cache_key is not None:
+                self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
             return bundle
-        seen_links: set[str] = set()
-        provider_results: list[dict[str, object]] = []
         for provider in providers:
             try:
                 articles = provider.fetch(ticker, self.max_articles, start_at=start_at, end_at=end_at)
@@ -899,6 +917,13 @@ class NewsIngestionService:
             feeds_used=bundle.feeds_used,
             article_count=len(bundle.articles),
         )
+        if any(result.get("provider") == "database" for result in provider_results):
+            bundle.query_diagnostics["database_article_count"] = sum(
+                int(result.get("article_count") or 0)
+                for result in provider_results
+                if result.get("provider") == "database"
+            )
+            bundle.query_diagnostics["provider_fetch_skipped"] = False
         fallback_note = self._build_ticker_fallback_note(bundle.query_diagnostics)
         if fallback_note:
             bundle.feed_errors.append(fallback_note)
@@ -1009,6 +1034,7 @@ class NewsIngestionService:
             return self._clone_bundle(self._windowed_query_cache[cache_key])
 
         bundle = NewsBundle(ticker=topic)
+        seen_links: set[str] = set()
 
         if self.historical_news and (start_at or end_at):
             local_articles = self.historical_news.list_news(
@@ -1017,9 +1043,12 @@ class NewsIngestionService:
                 end_at=end_at,
                 limit=fetch_limit,
             )
-            if len(local_articles) >= 2:
-                bundle.articles = local_articles
+            if local_articles:
+                self._merge_articles(bundle, local_articles, seen_links)
                 bundle.feeds_used.append("database")
+            if len(local_articles) >= 2:
+                if cache_key is not None:
+                    self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
                 return bundle
 
         providers, selection_errors = self._providers_for_request(
@@ -1031,8 +1060,9 @@ class NewsIngestionService:
         )
         if not providers:
             bundle.feed_errors.extend(selection_errors)
+            if cache_key is not None:
+                self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
             return bundle
-        seen_links: set[str] = set()
         for provider in providers:
             try:
                 articles = provider.fetch_topic(topic, fetch_limit, start_at=start_at, end_at=end_at)

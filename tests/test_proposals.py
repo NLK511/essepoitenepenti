@@ -48,8 +48,10 @@ def make_downtrend_history(days: int = 260) -> pd.DataFrame:
 class _FakeNewsService:
     def __init__(self, bundle: NewsBundle) -> None:
         self._bundle = bundle
+        self.fetch_calls: list[dict[str, object]] = []
 
-    def fetch(self, ticker: str, start_at=None, end_at=None) -> NewsBundle:
+    def fetch(self, ticker: str, start_at=None, end_at=None, request_mode="live") -> NewsBundle:
+        self.fetch_calls.append({"ticker": ticker, "start_at": start_at, "end_at": end_at, "request_mode": request_mode})
         self._bundle.ticker = ticker
         return self._bundle
 
@@ -258,6 +260,28 @@ class ProposalServiceTests(unittest.TestCase):
         self.assertEqual(context["summary_method"], SUMMARY_METHOD_NEWS_DIGEST)
         self.assertEqual(context["news_items"], sentiment_payload["news_items"])
         self.assertEqual(context["news_point_count"], 1)
+
+    def test_apply_news_context_uses_replay_mode_for_historical_as_of(self) -> None:
+        bundle = NewsBundle(ticker="", articles=[], feeds_used=["database"])
+        news_service = _FakeNewsService(bundle)
+        service = ProposalService(news_service=news_service)
+        service.sentiment_analyzer.analyze = MagicMock(
+            return_value={
+                "score": 0.0,
+                "label": "NEUTRAL",
+                "contexts": [],
+                "context_flags": {},
+                "sentiment_volatility": 0.0,
+                "polarity_trend": 0.0,
+                "sources": ["database"],
+                "news_items": [],
+                "problems": [],
+            }
+        )
+
+        service._apply_news_context({}, "AAPL", as_of=pd.Timestamp("2026-04-27T12:00:00Z").to_pydatetime())
+
+        self.assertEqual(news_service.fetch_calls[0]["request_mode"], "replay")
 
     def test_apply_news_context_records_llm_summary(self) -> None:
         article = NewsArticle(

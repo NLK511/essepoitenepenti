@@ -482,6 +482,177 @@ class NewsIngestionServiceTests(unittest.TestCase):
         self.assertTrue(any("Finnhub(topic unsupported)" in error for error in bundle.feed_errors))
         self.assertTrue(any("GoogleNews(replay window unsupported)" in error for error in bundle.feed_errors))
 
+    def test_replay_fetch_uses_sparse_historical_database_articles(self) -> None:
+        class FakeHistoricalNews:
+            def list_news(self, ticker, *, start_at=None, end_at=None, limit=50):
+                return [
+                    NewsArticle(
+                        title="Sparse database article",
+                        summary="Historical context",
+                        publisher="Reuters",
+                        link="https://example.com/sparse",
+                        published_at=datetime(2026, 4, 27, 9, 0, tzinfo=timezone.utc),
+                    )
+                ]
+
+            def save_news(self, ticker, provider, articles):
+                raise AssertionError("replay without eligible providers should not save news")
+
+        class LiveOnlyProvider(NewsProvider):
+            name = "LiveOnly"
+            provider_key = "liveonly"
+            supports_ticker = True
+            supports_topic = False
+            supports_live_windowed_queries = True
+            supports_replay_windowed_queries = False
+            counts_as_primary_news = True
+
+            def __init__(self) -> None:
+                super().__init__(ProviderCredential(provider="liveonly"))
+
+            def fetch(self, ticker, limit, *, start_at=None, end_at=None):
+                raise AssertionError("replay must not call live-only providers")
+
+        service = NewsIngestionService([LiveOnlyProvider()], max_articles=10, historical_news=FakeHistoricalNews())
+        bundle = service.fetch(
+            "AAPL",
+            start_at=datetime(2026, 4, 27, 0, 0, tzinfo=timezone.utc),
+            end_at=datetime(2026, 4, 28, 0, 0, tzinfo=timezone.utc),
+            request_mode="replay",
+        )
+
+        self.assertEqual([article.title for article in bundle.articles], ["Sparse database article"])
+        self.assertEqual(bundle.feeds_used, ["database"])
+        self.assertEqual(bundle.query_diagnostics["database_article_count"], 1)
+        self.assertEqual(bundle.query_diagnostics["provider_fetch_skip_reason"], "no eligible providers")
+        self.assertTrue(any("LiveOnly(replay window unsupported)" in error for error in bundle.feed_errors))
+
+    def test_filter_articles_for_window_normalizes_mixed_datetime_awareness(self) -> None:
+        articles = [
+            NewsArticle(
+                title="naive kept",
+                summary="",
+                published_at=datetime(2026, 4, 27, 12, 0),
+            ),
+            NewsArticle(
+                title="aware filtered",
+                summary="",
+                published_at=datetime(2026, 4, 26, 23, 59, tzinfo=timezone.utc),
+            ),
+        ]
+
+        filtered = NewsIngestionService._filter_articles_for_window(
+            articles,
+            start_at=datetime(2026, 4, 27, 0, 0),
+            end_at=datetime(2026, 4, 28, 0, 0, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual([article.title for article in filtered], ["naive kept"])
+
+    def test_fetch_topic_caches_windowed_requests(self) -> None:
+        class CountingTopicProvider(NewsProvider):
+            name = "CountingTopic"
+            provider_key = "countingtopic"
+            supports_ticker = False
+            supports_topic = True
+            supports_live_windowed_queries = True
+            supports_replay_windowed_queries = True
+            counts_as_primary_news = True
+
+            def __init__(self) -> None:
+                super().__init__(ProviderCredential(provider="countingtopic"))
+                self.topic_calls = 0
+
+            def fetch(self, ticker, limit, *, start_at=None, end_at=None):
+                raise AssertionError("ticker fetch should not be used")
+
+            def fetch_topic(self, topic, limit, *, start_at=None, end_at=None):
+                self.topic_calls += 1
+                return [
+                    NewsArticle(
+                        title=f"{topic} headline",
+                        summary="cached coverage",
+                        publisher="Reuters",
+                        link=f"https://example.com/{topic}",
+                        published_at=datetime(2026, 3, 26, 9, 0, tzinfo=timezone.utc),
+                    )
+                ]
+
+        provider = CountingTopicProvider()
+        service = NewsIngestionService([provider], max_articles=10)
+        window_start = datetime(2026, 3, 26, 0, 0, tzinfo=timezone.utc)
+        window_end = datetime(2026, 3, 26, 23, 59, tzinfo=timezone.utc)
+
+        first = service.fetch_topic("inflation", start_at=window_start, end_at=window_end, request_mode="replay")
+        second = service.fetch_topic("inflation", start_at=window_start, end_at=window_end, request_mode="replay")
+
+        self.assertEqual(provider.topic_calls, 1)
+        self.assertEqual([article.title for article in first.articles], ["inflation headline"])
+        self.assertEqual([article.title for article in second.articles], ["inflation headline"])
+        self.assertEqual(first.feeds_used, ["CountingTopic"])
+        self.assertEqual(second.feeds_used, ["CountingTopic"])
+
+    def test_fetch_topics_deduplicates_identical_queries(self) -> None:
+        class CountingService(NewsIngestionService):
+            def __init__(self, providers):
+                super().__init__(providers, max_articles=10)
+                self.topic_calls = 0
+
+            def fetch_topic(self, topic, *, limit=None, start_at=None, end_at=None, request_mode="live", primary_only=False):
+                self.topic_calls += 1
+                return super().fetch_topic(
+                    topic,
+                    limit=limit,
+                    start_at=start_at,
+                    end_at=end_at,
+                    request_mode=request_mode,
+                    primary_only=primary_only,
+                )
+
+        class CountingTopicProvider(NewsProvider):
+            name = "CountingTopic"
+            provider_key = "countingtopic"
+            supports_ticker = False
+            supports_topic = True
+            supports_live_windowed_queries = True
+            supports_replay_windowed_queries = True
+            counts_as_primary_news = True
+
+            def __init__(self) -> None:
+                super().__init__(ProviderCredential(provider="countingtopic"))
+
+            def fetch(self, ticker, limit, *, start_at=None, end_at=None):
+                raise AssertionError("ticker fetch should not be used")
+
+            def fetch_topic(self, topic, limit, *, start_at=None, end_at=None):
+                return [
+                    NewsArticle(
+                        title=f"{topic} headline",
+                        summary="coverage",
+                        publisher="Reuters",
+                        link=f"https://example.com/{topic}",
+                        published_at=datetime(2026, 3, 26, 9, 0, tzinfo=timezone.utc),
+                    )
+                ]
+
+        provider = CountingTopicProvider()
+        service = CountingService([provider])
+        window_start = datetime(2026, 3, 26, 0, 0, tzinfo=timezone.utc)
+        window_end = datetime(2026, 3, 26, 23, 59, tzinfo=timezone.utc)
+
+        bundle = service.fetch_topics(
+            "macro",
+            ["inflation", "inflation", " inflation  "],
+            per_query_limit=2,
+            start_at=window_start,
+            end_at=window_end,
+            request_mode="replay",
+        )
+
+        self.assertEqual(service.topic_calls, 1)
+        self.assertEqual([article.title for article in bundle.articles], ["inflation headline"])
+        self.assertEqual(bundle.feeds_used, ["CountingTopic"])
+
     def test_primary_only_filters_supporting_only_providers(self) -> None:
         class PrimaryTopicProvider(NewsProvider):
             name = "PrimaryTopic"

@@ -214,6 +214,8 @@ Confidence is a weighted aggregation of normalized components:
 - **technical clarity**
 - **execution clarity**
 
+For watchlist proposal generation, cheap-scan confidence is a shortlist/triage score. Once `TickerDeepAnalysisService` completes, the final recommendation-plan action gate must use the deep-analysis recommendation confidence as the raw plan confidence. If deep analysis is unavailable, the gate falls back to the cheap-scan signal confidence and records the degraded state. Plan diagnostics should preserve both cheap-scan and deep-analysis confidence so operators can inspect disagreements.
+
 Light feature wiring is now in place:
 - aligned relative strength versus `SPY` and sector can modestly lift directional confidence
 - stronger-than-normal volume participation can modestly lift technical and execution clarity
@@ -249,6 +251,8 @@ In broad terms it considers:
 - freshness of supporting context
 - contradiction penalties when major signals conflict
 - whether an edge is explicit, derived, or only a weak structural fallback
+
+Contradictions are not all hard vetoes. Timing conflicts, context-quality conflicts, or broad mixed-context contradictions should remain visible in diagnostics, but they should not automatically block an otherwise threshold-clearing plan. The hard contradiction gate is reserved for severe conflicts, such as explicit directional conflict or technical/context conflict, where the trade direction itself is challenged. Headwind context remains governed by the separate headwind gate.
 
 The app stores intermediate vectors, aggregations, and weights so operators can inspect what influenced the result.
 
