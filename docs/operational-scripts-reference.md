@@ -57,9 +57,35 @@ Initializes the local environment, virtual environment, and dependency stack.
 
 ### `scripts/deploy_watchlists.py`
 Seeds or updates the canonical default watchlist pack in the database.
+- Proposal-generation jobs stay linked to the seeded watchlists by name.
+- Regional bars refresh jobs (`Bars-APAC`, `Bars-EU`, `Bars-US`) derive their ticker list from the current regional watchlists at runtime, so rerunning the seed script keeps bars coverage aligned with watchlist changes.
 
 ### `scripts/reconstruct_context.py`
-Re-runs the context extraction engine on past news/social data to build historical context snapshots for backtesting.
+Rebuilds historical macro and industry context snapshots from NewsAPI-backed historical news windows.
+
+- **Use case:** Recover lost shared-context data for a specific date range, or re-run the latest completed business week when no dates are supplied.
+- **Behavior:** Iterates business days, rebuilds the macro snapshot plus all taxonomy-driven industry snapshots, and uses `request_mode=replay` so replay-safe provider selection applies. The backfill is rate-limit aware: it backs off on NewsAPI 429s, sleeps briefly between snapshot attempts, and stops after repeated consecutive rate-limit errors.
+- **Usage:**
+  ```bash
+  .venv/bin/python scripts/reconstruct_context.py \
+    --start-date 2026-04-20 \
+    --end-date 2026-04-24 \
+    --newsapi-api-key "$NEWSAPI_API_KEY"
+  ```
+- **Notes:** If `--start-date` / `--end-date` are omitted, the script defaults to the latest completed business week. Use `--industry-key` to limit the scope when you do not want the full taxonomy-driven rebuild. `--inter-request-delay-seconds`, `--rate-limit-backoff-seconds`, and `--max-consecutive-rate-limit-errors` can be used to tune NewsAPI throttling behavior.
+
+### `scripts/cleanup_context_missing_primary_sources.py`
+Reports and optionally deletes macro and industry context snapshots that were created without primary news evidence.
+
+- **Use case:** Clean up reconstructed context rows that fell back to secondary-only evidence or have zero primary-news items.
+- **Behavior:** Scans context snapshots, flags rows with `primary_news_evidence` / `primary_industry_news_evidence` missing inputs or a zero `primary_news_item_count`, and can delete only those rows when run with `--apply --yes`.
+- **Usage:**
+  ```bash
+  .venv/bin/python scripts/cleanup_context_missing_primary_sources.py \
+    --start-date 2026-04-20 \
+    --end-date 2026-04-24
+  ```
+- **Notes:** Dry-run by default. Use `--macro-only` or `--industry-only` to narrow scope. Add `--json` or `--output <path>` for machine-readable reports.
 
 ### `scripts/report_legacy_non_shortlisted_plans.py`
 - Read-only audit helper for identifying historical cheap-scan-only `RecommendationPlan` rows that were created for non-shortlisted tickers before the persistence-policy change.
