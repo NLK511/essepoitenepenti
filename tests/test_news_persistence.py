@@ -70,12 +70,14 @@ def test_news_lazy_hydration(session):
                 NewsArticle(title="3", summary="3", publisher="3", link="3", published_at=end_at - timedelta(minutes=1))
             ]
             
-    service.providers = [MockNewsProvider3(credential=ProviderCredential(provider="mock"))]
+    service = NewsIngestionService(providers=[MockNewsProvider3(credential=ProviderCredential(provider="mock"))], historical_news=repo)
     bundle2 = service.fetch(ticker, start_at=start_at, end_at=end_at)
     assert len(bundle2.articles) == 3
+    assert "database" in bundle2.feeds_used
     assert "Mock" in bundle2.feeds_used # Saved the 3rd one
     
     # 3. Third fetch - now should be 100% from DB
+    service = NewsIngestionService(providers=[MockNewsProvider3(credential=ProviderCredential(provider="mock"))], historical_news=repo)
     bundle3 = service.fetch(ticker, start_at=start_at, end_at=end_at)
     assert len(bundle3.articles) >= 3
     assert "database" in bundle3.feeds_used
@@ -94,7 +96,8 @@ def test_news_topic_lazy_hydration(session):
     bundle = service.fetch_topic(topic, start_at=start_at, end_at=end_at)
     assert len(bundle.articles) == 2
     
-    # 2. Second fetch (threshold for topic is 2)
+    # 2. Second fetch from a fresh service instance (threshold for topic is 2)
+    service = NewsIngestionService(providers=[provider], historical_news=repo)
     bundle2 = service.fetch_topic(topic, start_at=start_at, end_at=end_at)
     assert "database" in bundle2.feeds_used
 
