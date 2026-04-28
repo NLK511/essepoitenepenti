@@ -294,23 +294,30 @@ class SettingsRepository:
         return {item.provider: item for item in self.list_provider_credentials()}
 
     def upsert_provider_credential(self, provider: str, api_key: str, api_secret: str) -> ProviderCredential:
+        provider = provider.strip().lower()
         api_key = api_key.strip()
         api_secret = api_secret.strip()
+        if not provider:
+            raise ValueError("provider is required")
+        if not api_key:
+            raise ValueError("api key is required when creating or updating a provider credential")
+        requires_secret = provider == "alpaca"
         record = self.session.get(ProviderCredentialRecord, provider)
         if record is None:
-            if not api_key or not api_secret:
-                raise ValueError("api key and api secret are required when creating a provider credential")
+            if requires_secret and not api_secret:
+                raise ValueError("api secret is required when creating an alpaca provider credential")
             record = ProviderCredentialRecord(
                 provider=provider,
                 api_key=credential_cipher.encrypt(api_key),
-                api_secret=credential_cipher.encrypt(api_secret),
+                api_secret=credential_cipher.encrypt(api_secret) if api_secret else credential_cipher.encrypt(""),
             )
             self.session.add(record)
         else:
-            if api_key:
-                record.api_key = credential_cipher.encrypt(api_key)
+            record.api_key = credential_cipher.encrypt(api_key)
             if api_secret:
                 record.api_secret = credential_cipher.encrypt(api_secret)
+            elif requires_secret and not record.api_secret:
+                raise ValueError("api secret is required when creating an alpaca provider credential")
         self.session.commit()
         return ProviderCredential(
             provider=record.provider,

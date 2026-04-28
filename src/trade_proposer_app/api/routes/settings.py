@@ -239,9 +239,12 @@ async def set_provider_credential(
     api_secret: str = Form(default=""),
     session: Session = Depends(get_db_session),
 ) -> dict[str, str]:
-    credential = SettingsRepository(session).upsert_provider_credential(
-        provider=provider.strip(),
-        api_key=api_key.strip(),
-        api_secret=api_secret.strip(),
-    )
+    try:
+        credential = SettingsRepository(session).upsert_provider_credential(
+            provider=provider.strip(),
+            api_key=api_key.strip(),
+            api_secret=api_secret.strip(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid provider credential: {exc}") from exc
     return {"provider": credential.provider, "api_key": credential.api_key}

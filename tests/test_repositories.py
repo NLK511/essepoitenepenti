@@ -1978,6 +1978,22 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(openai.api_secret, "secret-456")
         self.assertEqual(redacted_openai.api_secret, "")
 
+    def test_settings_repository_allows_key_only_credentials_for_newsapi(self) -> None:
+        session = create_session()
+        repository = SettingsRepository(session)
+        credential = repository.upsert_provider_credential("newsapi", "news-key-123", "")
+
+        self.assertEqual(credential.provider, "newsapi")
+        self.assertEqual(credential.api_key, "news-key-123")
+        self.assertEqual(credential.api_secret, "")
+
+    def test_settings_repository_requires_secret_for_alpaca_creation(self) -> None:
+        session = create_session()
+        repository = SettingsRepository(session)
+
+        with self.assertRaisesRegex(ValueError, "api secret is required"):
+            repository.upsert_provider_credential("alpaca", "alpaca-key", "")
+
 
 if __name__ == "__main__":
     unittest.main()

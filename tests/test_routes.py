@@ -1373,6 +1373,10 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     "friction_pct": "0.15",
                 },
             )
+            newsapi_response = await client.post(
+                "/api/settings/providers",
+                data={"provider": "newsapi", "api_key": "news-key", "api_secret": ""},
+            )
             provider_response = await client.post(
                 "/api/settings/providers",
                 data={"provider": "openai", "api_key": "sk-test", "api_secret": "secret-test"},
@@ -1413,10 +1417,12 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["plan_generation_tuning"]["settings"]["auto_promote_enabled"], True)
         self.assertEqual(payload["plan_generation_tuning"]["settings"]["min_actionable_resolved"], 31)
         self.assertEqual(payload["plan_generation_tuning"]["settings"]["min_validation_resolved"], 12)
-        self.assertEqual(payload["providers"][0]["provider"], "openai")
-        self.assertEqual(payload["providers"][0]["api_key"], "sk-test")
-        self.assertNotIn("api_secret", payload["providers"][0])
+        providers = {item["provider"]: item for item in payload["providers"]}
+        self.assertEqual(providers["newsapi"]["api_key"], "news-key")
+        self.assertEqual(providers["openai"]["api_key"], "sk-test")
+        self.assertNotIn("api_secret", providers["newsapi"])
         self.assertNotIn("api_secret", provider_response.json())
+        self.assertNotIn("api_secret", newsapi_response.json())
     async def test_context_routes_list_and_detail(self) -> None:
         self.seed_context_and_recommendation_plan_data()
         transport = httpx.ASGITransport(app=app)
