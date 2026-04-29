@@ -123,7 +123,9 @@ class RecommendationPlanRepository:
         query = self._base_plan_query(ticker=ticker, action=action, run_id=run_id, plan_id=plan_id, computed_after=computed_after, computed_before=computed_before)
         if setup_family or resolved or outcome or shortlisted is not None or entry_touched is not None or near_entry_miss is not None or direction_worked_without_entry is not None:
             rows = self.session.scalars(query).all()
-            outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
+            plan_ids = [row.id for row in rows if row.id is not None]
+            outcome_map = self.outcomes.get_outcomes_by_plan_ids(plan_ids)
+            broker_order_map = self.broker_orders.get_latest_by_plan_ids(plan_ids)
             normalized_setup_family = setup_family.strip().lower() if setup_family else None
             normalized_resolved = (resolved or "").strip().lower() or None
             normalized_outcome = (outcome or "").strip().lower() or None
@@ -133,6 +135,7 @@ class RecommendationPlanRepository:
                 if self._matches_filters(
                     row,
                     outcome_map=outcome_map,
+                    broker_order_map=broker_order_map,
                     setup_family=normalized_setup_family,
                     resolved=normalized_resolved,
                     outcome=normalized_outcome,
@@ -171,14 +174,16 @@ class RecommendationPlanRepository:
         normalized_outcome = (outcome or "").strip().lower() or None
         if normalized_setup_family or normalized_resolved or normalized_outcome or shortlisted is not None or entry_touched is not None or near_entry_miss is not None or direction_worked_without_entry is not None:
             rows = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc())).all()
-            outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
-            broker_order_map = self.broker_orders.get_latest_by_plan_ids([row.id for row in rows if row.id is not None])
+            plan_ids = [row.id for row in rows if row.id is not None]
+            outcome_map = self.outcomes.get_outcomes_by_plan_ids(plan_ids)
+            broker_order_map = self.broker_orders.get_latest_by_plan_ids(plan_ids)
             filtered_rows = [
                 row
                 for row in rows
                 if self._matches_filters(
                     row,
                     outcome_map=outcome_map,
+                    broker_order_map=broker_order_map,
                     setup_family=normalized_setup_family,
                     resolved=normalized_resolved,
                     outcome=normalized_outcome,
@@ -211,6 +216,7 @@ class RecommendationPlanRepository:
         record: RecommendationPlanRecord,
         *,
         outcome_map: dict[int, object],
+        broker_order_map: dict[int, BrokerOrderExecution],
         setup_family: str | None,
         resolved: str | None,
         outcome: str | None,
@@ -224,13 +230,16 @@ class RecommendationPlanRepository:
         if shortlisted is not None and self._record_shortlisted(record) is not shortlisted:
             return False
         latest_outcome = outcome_map.get(record.id or 0)
+        effective_outcome, effective_resolved = self._effective_filter_state(
+            latest_outcome=latest_outcome,
+            broker_order=broker_order_map.get(record.id or 0),
+        )
         if resolved:
-            is_resolved = bool(latest_outcome is not None and getattr(latest_outcome, "status", None) == "resolved")
-            if resolved == "resolved" and not is_resolved:
+            if resolved == "resolved" and not effective_resolved:
                 return False
-            if resolved == "unresolved" and is_resolved:
+            if resolved == "unresolved" and effective_resolved:
                 return False
-        if outcome and (latest_outcome is None or str(getattr(latest_outcome, "outcome", "") or "").strip().lower() != outcome):
+        if outcome and effective_outcome != outcome:
             return False
         if entry_touched is not None and (latest_outcome is None or getattr(latest_outcome, "entry_touched", None) is not entry_touched):
             return False
@@ -239,6 +248,20 @@ class RecommendationPlanRepository:
         if direction_worked_without_entry is not None and (latest_outcome is None or getattr(latest_outcome, "direction_worked_without_entry", None) is not direction_worked_without_entry):
             return False
         return True
+
+    def _effective_filter_state(
+        self,
+        *,
+        latest_outcome: object | None,
+        broker_order: BrokerOrderExecution | None,
+    ) -> tuple[str | None, bool]:
+        if broker_order is not None and self._broker_evaluation_source(broker_order) == "broker":
+            broker_label = self._broker_evaluation_label(broker_order)
+            return broker_label, broker_label in {"win", "loss"}
+        if latest_outcome is None:
+            return None, False
+        outcome = str(getattr(latest_outcome, "outcome", "") or "").strip().lower() or None
+        return outcome, bool(getattr(latest_outcome, "status", None) == "resolved")
 
     @staticmethod
     def _json_default(value: Any) -> Any:
@@ -314,7 +337,7 @@ class RecommendationPlanRepository:
     @staticmethod
     def _broker_evaluation_source(order: BrokerOrderExecution) -> str:
         status = str(order.status or "").strip().lower()
-        if status in {"submitted", "accepted", "partially_filled", "filled"}:
+        if status in {"new", "submitted", "accepted", "partially_filled", "open", "closed_win", "closed_loss"}:
             return "broker"
         if status in {"canceled", "expired", "rejected", "failed"}:
             return "simulated"
@@ -323,18 +346,26 @@ class RecommendationPlanRepository:
     @staticmethod
     def _broker_evaluation_label(order: BrokerOrderExecution) -> str:
         status = str(order.status or "").strip().lower()
-        if status in {"submitted", "accepted", "partially_filled"}:
+        if status in {"new", "submitted", "accepted", "partially_filled"}:
             return "pending"
-        if status == "filled":
+        if status == "open":
             return "entry"
+        if status == "closed_win":
+            return "win"
+        if status == "closed_loss":
+            return "loss"
         return "missing"
 
     @staticmethod
     def _broker_evaluation_detail(order: BrokerOrderExecution) -> str:
         status = str(order.status or "").strip().lower() or "unknown"
-        if status == "filled":
-            return "broker order filled"
-        if status in {"submitted", "accepted", "partially_filled"}:
+        if status == "open":
+            return "broker entry filled; exit still open"
+        if status == "closed_win":
+            return "broker take-profit filled"
+        if status == "closed_loss":
+            return "broker stop-loss filled"
+        if status in {"new", "submitted", "accepted", "partially_filled"}:
             return f"broker order {status}"
         if status in {"canceled", "expired", "rejected", "failed"}:
             return f"broker order {status}"
@@ -372,7 +403,9 @@ class RecommendationPlanRepository:
                 computed_before=computed_before,
             ).order_by(RecommendationPlanRecord.computed_at.desc())
         ).all()
-        outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
+        plan_ids = [row.id for row in rows if row.id is not None]
+        outcome_map = self.outcomes.get_outcomes_by_plan_ids(plan_ids)
+        broker_order_map = self.broker_orders.get_latest_by_plan_ids(plan_ids)
         normalized_setup_family = setup_family.strip().lower() if setup_family else None
         normalized_resolved = (resolved or "").strip().lower() or None
         normalized_outcome = (outcome or "").strip().lower() or None
@@ -382,6 +415,7 @@ class RecommendationPlanRepository:
             if self._matches_filters(
                 row,
                 outcome_map=outcome_map,
+                broker_order_map=broker_order_map,
                 setup_family=normalized_setup_family,
                 resolved=normalized_resolved,
                 outcome=normalized_outcome,
@@ -391,13 +425,19 @@ class RecommendationPlanRepository:
                 direction_worked_without_entry=direction_worked_without_entry,
             )
         ]
-        filtered_outcomes = [outcome_map.get(row.id or 0) for row in filtered_rows]
-        open_plans = sum(1 for item in filtered_outcomes if item is None or getattr(item, "status", None) != "resolved")
-        expired_plans = sum(1 for item in filtered_outcomes if getattr(item, "outcome", None) == "expired")
-        wins = sum(1 for item in filtered_outcomes if getattr(item, "outcome", None) == "win")
-        losses = sum(1 for item in filtered_outcomes if getattr(item, "outcome", None) == "loss")
-        no_action = sum(1 for item in filtered_outcomes if getattr(item, "outcome", None) == "no_action")
-        watchlist = sum(1 for item in filtered_outcomes if getattr(item, "outcome", None) == "watchlist")
+        filtered_effective_states = [
+            self._effective_filter_state(
+                latest_outcome=outcome_map.get(row.id or 0),
+                broker_order=broker_order_map.get(row.id or 0),
+            )
+            for row in filtered_rows
+        ]
+        open_plans = sum(1 for _, is_resolved in filtered_effective_states if not is_resolved)
+        expired_plans = sum(1 for effective_outcome, _ in filtered_effective_states if effective_outcome == "expired")
+        wins = sum(1 for effective_outcome, _ in filtered_effective_states if effective_outcome == "win")
+        losses = sum(1 for effective_outcome, _ in filtered_effective_states if effective_outcome == "loss")
+        no_action = sum(1 for effective_outcome, _ in filtered_effective_states if effective_outcome == "no_action")
+        watchlist = sum(1 for effective_outcome, _ in filtered_effective_states if effective_outcome == "watchlist")
         scored_outcomes = wins + losses
         return RecommendationPlanStats(
             total_plans=len(filtered_rows),

@@ -665,7 +665,7 @@ export function RunDetailPage() {
                             {order.status === "failed" || order.status === "canceled" ? (
                               <button type="button" className="button-secondary" disabled={activeOrderActionId === order.id} onClick={() => order.id && void handleOrderAction(order.id, "resubmit")}>Resubmit</button>
                             ) : null}
-                            {order.status !== "canceled" && order.status !== "filled" && order.broker_order_id ? (
+                            {!["canceled", "filled", "closed_win", "closed_loss"].includes(order.status) && order.broker_order_id ? (
                               <button type="button" className="button button-danger" disabled={activeOrderActionId === order.id} onClick={() => order.id && void handleOrderAction(order.id, "cancel")}>Cancel</button>
                             ) : null}
                             {order.run_id ? <Link to={`/broker-orders?run_id=${order.run_id}&order_id=${order.id ?? ""}`} className="button-subtle">Open in broker orders</Link> : null}

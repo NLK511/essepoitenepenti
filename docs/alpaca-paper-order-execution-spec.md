@@ -108,7 +108,7 @@ Implemented endpoints:
 
 Run detail also exposes `broker_order_executions` so the operator can see execution history without leaving the run page.
 
-When broker execution records exist for a plan, the operator UI should prefer the broker-backed evaluation state over the simulated plan outcome for the primary status badge. Terminal broker failures (`failed`, `rejected`, `canceled`, `expired`) should not be shown as pending broker evaluation; they count as missing broker evaluation and may fall back to simulated resolution if one exists. The simulated outcome remains available as secondary context until full live exit tracking exists.
+When broker execution records exist for a plan, the operator UI should prefer the broker-backed evaluation state over the simulated plan outcome for the primary status badge. Terminal broker failures (`failed`, `rejected`, `canceled`, `expired`) should not be shown as pending broker evaluation; they count as missing broker evaluation and may fall back to simulated resolution if one exists. For Alpaca bracket orders, the parent order being `filled` only means the entry was filled and the position may still be open. Broker-backed win/loss evaluation must come from the bracket exit legs: a filled take-profit leg is a win, and a filled stop-loss leg is a loss. Parent-filled orders with no filled exit leg are open entries, must continue to be refreshed, and must not be counted as wins or losses yet. The simulated outcome remains available as secondary context.
 
 ## Implementation status
 
@@ -120,4 +120,5 @@ When broker execution records exist for a plan, the operator UI should prefer th
 - [x] run-detail broker-orders panel
 - [x] manual resubmit/cancel/refresh controls for valid paper orders
 - [x] automatic broker-order reconciliation during market hours
-- [x] tests for order sizing, submission handling, price normalization, cancel/resubmit/refresh handling, route visibility, and broker-vs-simulated evaluation precedence in plan views
+- [x] Alpaca bracket exit-leg detection for open-entry, closed-win, and closed-loss states
+- [x] tests for order sizing, submission handling, price normalization, cancel/resubmit/refresh handling, bracket exit-leg classification, route visibility, and broker-vs-simulated evaluation precedence in plan views

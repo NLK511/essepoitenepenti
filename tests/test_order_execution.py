@@ -42,7 +42,7 @@ class StubAlpacaClient:
         self.get_requests.append(order_id)
         return AlpacaOrderSubmissionResult(
             status_code=200,
-            payload={"id": order_id, "status": "filled", "filled_at": "2026-04-22T15:00:00Z", "submitted_at": "2026-04-22T14:30:00Z"},
+            payload={"id": order_id, "status": "filled", "filled_at": "2026-04-22T15:00:00Z", "submitted_at": "2026-04-22T14:30:00Z", "legs": []},
         )
 
     def cancel_order(self, order_id: str) -> AlpacaOrderSubmissionResult:
@@ -294,7 +294,7 @@ class OrderExecutionTests(unittest.TestCase):
             canceled = service.cancel_execution(cancel_target.id or 0)
 
             self.assertEqual(client.get_requests, ["alpaca-order-2"])
-            self.assertEqual(refreshed.status, "filled")
+            self.assertEqual(refreshed.status, "open")
             self.assertIsNotNone(refreshed.filled_at)
             self.assertEqual(client.cancel_requests, ["alpaca-order-3"])
             self.assertEqual(canceled.status, "canceled")
@@ -303,6 +303,67 @@ class OrderExecutionTests(unittest.TestCase):
             self.assertEqual(repository.get(cancel_target.id or 0).status, "canceled")
         finally:
             session.close()
+
+    def test_order_execution_service_classifies_filled_bracket_exit_legs(self) -> None:
+        class ExitLegClient(StubAlpacaClient):
+            def __init__(self, payload: dict[str, object]) -> None:
+                super().__init__()
+                self.payload = payload
+
+            def get_order(self, order_id: str) -> AlpacaOrderSubmissionResult:
+                self.get_requests.append(order_id)
+                return AlpacaOrderSubmissionResult(status_code=200, payload={"id": order_id, **self.payload})
+
+        for leg_type, expected_status in (("limit", "closed_win"), ("stop", "closed_loss")):
+            session = create_session()
+            try:
+                settings = SettingsRepository(session)
+                settings.upsert_provider_credential("alpaca", "paper-key", "paper-secret")
+                repository = BrokerOrderExecutionRepository(session)
+                stored = repository.create(
+                    BrokerOrderExecution(
+                        broker="alpaca",
+                        account_mode="paper",
+                        recommendation_plan_id=1,
+                        recommendation_plan_ticker="AAPL",
+                        ticker="AAPL",
+                        action="long",
+                        side="buy",
+                        order_type="limit",
+                        quantity=10,
+                        notional_amount=1000.0,
+                        entry_price=100.0,
+                        stop_loss=95.0,
+                        take_profit=110.0,
+                        status="open",
+                        broker_order_id=f"alpaca-order-{leg_type}",
+                        client_order_id=f"tp-run-10-plan-1-aapl-{leg_type}",
+                        request_payload={"symbol": "AAPL"},
+                        response_payload={"id": f"alpaca-order-{leg_type}", "status": "filled"},
+                    )
+                )
+                client = ExitLegClient(
+                    {
+                        "status": "filled",
+                        "filled_at": "2026-04-22T14:30:00Z",
+                        "legs": [
+                            {
+                                "id": f"exit-{leg_type}",
+                                "type": leg_type,
+                                "status": "filled",
+                                "filled_at": "2026-04-22T15:00:00Z",
+                            }
+                        ],
+                    }
+                )
+                service = OrderExecutionService(settings=settings, executions=repository, client=client)
+
+                refreshed = service.refresh_execution(stored.id or 0)
+
+                self.assertEqual(refreshed.status, expected_status)
+                self.assertIsNotNone(refreshed.filled_at)
+            finally:
+                session.close()
 
     def test_order_execution_service_sync_open_executions_refreshes_active_orders(self) -> None:
         session = create_session()
@@ -328,12 +389,12 @@ class OrderExecutionTests(unittest.TestCase):
                     entry_price=100.0,
                     stop_loss=95.0,
                     take_profit=110.0,
-                    status="submitted",
+                    status="filled",
                     broker_order_id="alpaca-order-2",
                     client_order_id="tp-run-10-plan-1-aapl-live",
                     submitted_at=datetime.now(timezone.utc),
                     request_payload={"symbol": "AAPL", "qty": 10, "limit_price": 100.0, "client_order_id": "tp-run-10-plan-1-aapl-live"},
-                    response_payload={"id": "alpaca-order-2", "status": "accepted"},
+                    response_payload={"id": "alpaca-order-2", "status": "filled"},
                 )
             )
             repository.create(
@@ -371,7 +432,7 @@ class OrderExecutionTests(unittest.TestCase):
             self.assertEqual(outcome.summary["synced_count"], 1)
             self.assertEqual(outcome.summary["skipped_count"], 1)
             self.assertEqual(client.get_requests, ["alpaca-order-2"])
-            self.assertEqual(repository.get_by_client_order_id("alpaca", "tp-run-10-plan-1-aapl-live").status, "filled")
+            self.assertEqual(repository.get_by_client_order_id("alpaca", "tp-run-10-plan-1-aapl-live").status, "open")
         finally:
             session.close()
 
@@ -725,20 +786,24 @@ class OrderExecutionTests(unittest.TestCase):
         finally:
             session.close()
 
-    def test_alpaca_paper_client_supports_submit_and_cancel(self) -> None:
+    def test_alpaca_paper_client_supports_submit_get_and_cancel(self) -> None:
         responses = [
             FakeHttpxResponse(200, {"id": "alpaca-order-1", "status": "accepted"}),
+            FakeHttpxResponse(200, {"id": "alpaca-order-1", "status": "filled", "legs": []}),
             FakeHttpxResponse(200, {"id": "alpaca-order-1", "status": "canceled"}),
         ]
         client = FakeHttpxClient(responses)
         alpaca = AlpacaPaperClient(api_key="paper-key", api_secret="paper-secret", client=client)
 
         submitted = alpaca.submit_order({"symbol": "AAPL", "qty": 10})
+        fetched = alpaca.get_order("alpaca-order-1")
         canceled = alpaca.cancel_order("alpaca-order-1")
 
         self.assertEqual(submitted.broker_order_id, "alpaca-order-1")
+        self.assertEqual(fetched.payload["legs"], [])
         self.assertEqual(canceled.broker_status, "canceled")
-        self.assertEqual([call[0] for call in client.calls], ["POST", "DELETE"])
+        self.assertEqual([call[0] for call in client.calls], ["POST", "GET", "DELETE"])
+        self.assertTrue(str(client.calls[1][1]).endswith("/v2/orders/alpaca-order-1?nested=true"))
 
     def test_alpaca_paper_client_raises_on_http_error_and_non_object_payload(self) -> None:
         error_client = AlpacaPaperClient(

@@ -241,7 +241,7 @@ export function BrokerOrdersPage() {
                 {selectedOrder.status === "failed" || selectedOrder.status === "canceled" ? (
                   <button type="button" className="button-secondary" disabled={activeActionId === selectedOrder.id} onClick={() => selectedOrder.id && void handleAction(selectedOrder.id, "resubmit")}>Resubmit</button>
                 ) : null}
-                {selectedOrder.status !== "canceled" && selectedOrder.status !== "filled" && selectedOrder.broker_order_id ? (
+                {!["canceled", "filled", "closed_win", "closed_loss"].includes(selectedOrder.status) && selectedOrder.broker_order_id ? (
                   <button type="button" className="button button-danger" disabled={activeActionId === selectedOrder.id} onClick={() => selectedOrder.id && void handleAction(selectedOrder.id, "cancel")}>Cancel</button>
                 ) : null}
               </div>

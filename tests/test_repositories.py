@@ -591,20 +591,20 @@ class RepositoryTests(unittest.TestCase):
                 entry_price=100.0,
                 stop_loss=95.0,
                 take_profit=110.0,
-                status="filled",
+                status="open",
                 broker_order_id="alpaca-order-123",
                 client_order_id="tp-run-1-plan-1-aapl-live",
                 submitted_at=datetime.now(timezone.utc),
                 filled_at=datetime.now(timezone.utc),
                 request_payload={"symbol": "AAPL"},
-                response_payload={"id": "alpaca-order-123", "status": "filled"},
+                response_payload={"id": "alpaca-order-123", "status": "filled", "legs": []},
             )
         )
 
         loaded = plan_repository.get_plan(plan.id or 0)
         self.assertEqual(loaded.effective_evaluation_source, "broker")
         self.assertEqual(loaded.effective_evaluation, "entry")
-        self.assertEqual(loaded.broker_order_status, "filled")
+        self.assertEqual(loaded.broker_order_status, "open")
         self.assertEqual(loaded.broker_order_id, "alpaca-order-123")
         self.assertIsNotNone(loaded.latest_outcome)
         self.assertEqual(loaded.latest_outcome.outcome, "win")
@@ -612,6 +612,65 @@ class RepositoryTests(unittest.TestCase):
         listed = plan_repository.list_plans(ticker="AAPL", action="long", limit=10)
         self.assertEqual(listed[0].effective_evaluation_source, "broker")
         self.assertEqual(listed[0].effective_evaluation, "entry")
+
+        self.assertEqual(plan_repository.list_plans(ticker="AAPL", resolved="resolved"), [])
+        self.assertEqual(plan_repository.list_plans(ticker="AAPL", outcome="win"), [])
+        self.assertEqual(plan_repository.count_plans(ticker="AAPL", resolved="resolved"), 0)
+        self.assertEqual(plan_repository.count_plans(ticker="AAPL", outcome="win"), 0)
+        unresolved = plan_repository.list_plans(ticker="AAPL", resolved="unresolved")
+        self.assertEqual([item.id for item in unresolved], [plan.id])
+        stats = plan_repository.summarize_stats(ticker="AAPL")
+        self.assertEqual(stats.open_plans, 1)
+        self.assertEqual(stats.win_outcomes, 0)
+
+    def test_recommendation_plan_repository_counts_closed_broker_orders_as_resolved(self) -> None:
+        session = create_session()
+        plan_repository = RecommendationPlanRepository(session)
+        broker_repository = BrokerOrderExecutionRepository(session)
+
+        plan = plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="NVDA",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=72.0,
+                thesis_summary="Closed broker winner should count as resolved",
+                signal_breakdown={"setup_family": "continuation"},
+            )
+        )
+        broker_repository.create(
+            BrokerOrderExecution(
+                broker="alpaca",
+                account_mode="paper",
+                recommendation_plan_id=plan.id or 0,
+                recommendation_plan_ticker="NVDA",
+                ticker="NVDA",
+                action="long",
+                side="buy",
+                order_type="limit",
+                quantity=2,
+                notional_amount=500.0,
+                entry_price=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                status="closed_win",
+                broker_order_id="alpaca-order-win",
+                client_order_id="tp-run-1-plan-1-nvda-live",
+                submitted_at=datetime.now(timezone.utc),
+                filled_at=datetime.now(timezone.utc),
+                request_payload={"symbol": "NVDA"},
+                response_payload={"id": "alpaca-order-win", "status": "filled"},
+            )
+        )
+
+        loaded = plan_repository.get_plan(plan.id or 0)
+        self.assertEqual(loaded.effective_evaluation_source, "broker")
+        self.assertEqual(loaded.effective_evaluation, "win")
+        self.assertEqual(plan_repository.list_plans(ticker="NVDA", resolved="resolved")[0].id, plan.id)
+        self.assertEqual(plan_repository.list_plans(ticker="NVDA", outcome="win")[0].id, plan.id)
+        stats = plan_repository.summarize_stats(ticker="NVDA")
+        self.assertEqual(stats.open_plans, 0)
+        self.assertEqual(stats.win_outcomes, 1)
 
     def test_recommendation_plan_repository_marks_failed_broker_orders_as_missing(self) -> None:
         session = create_session()

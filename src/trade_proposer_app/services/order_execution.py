@@ -31,7 +31,7 @@ class BrokerOrderSyncOutcome:
 
 
 class OrderExecutionService:
-    TERMINAL_STATUSES = {"filled", "canceled", "rejected", "expired"}
+    TERMINAL_STATUSES = {"closed_win", "closed_loss", "canceled", "rejected", "expired"}
     MARKET_TIMEZONE = ZoneInfo("America/New_York")
 
     def __init__(
@@ -231,8 +231,8 @@ class OrderExecutionService:
             raise ValueError("broker order id is missing, so the order cannot be canceled")
         if existing.status == "canceled":
             raise ValueError("broker order is already canceled")
-        if existing.status == "filled":
-            raise ValueError("filled orders cannot be canceled")
+        if existing.status in {"filled", "closed_win", "closed_loss"}:
+            raise ValueError("filled or closed orders cannot be canceled")
         client = self._ensure_client()
         result = client.cancel_order(existing.broker_order_id)
         canceled = BrokerOrderExecution(
@@ -435,6 +435,24 @@ class OrderExecutionService:
                 return parsed
         return None
 
+    @staticmethod
+    def _derive_bracket_status(payload: dict[str, object], *, fallback_status: str) -> str:
+        legs_value = payload.get("legs")
+        legs = [leg for leg in legs_value if isinstance(leg, dict)] if isinstance(legs_value, list) else []
+        for leg in legs:
+            leg_status = str(leg.get("status") or "").strip().lower()
+            leg_filled_at = OrderExecutionService._broker_timestamp(leg, "filled_at", "filledAt")
+            if leg_status != "filled" and leg_filled_at is None:
+                continue
+            leg_type = str(leg.get("type") or leg.get("order_type") or "").strip().lower()
+            if leg_type in {"limit", "limit_order"}:
+                return "closed_win"
+            if leg_type in {"stop", "stop_limit", "stop_order"}:
+                return "closed_loss"
+        if fallback_status == "filled":
+            return "open"
+        return fallback_status
+
     def _apply_broker_snapshot(
         self,
         existing: BrokerOrderExecution,
@@ -442,11 +460,12 @@ class OrderExecutionService:
         *,
         broker_status: str | None = None,
     ) -> BrokerOrderExecution:
-        status = (broker_status or str(payload.get("status") or existing.status) or existing.status).strip().lower()
+        broker_parent_status = (broker_status or str(payload.get("status") or existing.status) or existing.status).strip().lower()
+        status = self._derive_bracket_status(payload, fallback_status=broker_parent_status)
         now = self._now()
         filled_at = self._broker_timestamp(payload, "filled_at", "filledAt") or existing.filled_at
         canceled_at = self._broker_timestamp(payload, "canceled_at", "canceledAt") or existing.canceled_at
-        if status == "filled" and filled_at is None:
+        if status in {"open", "closed_win", "closed_loss"} and filled_at is None:
             filled_at = now
         if status == "canceled" and canceled_at is None:
             canceled_at = now
