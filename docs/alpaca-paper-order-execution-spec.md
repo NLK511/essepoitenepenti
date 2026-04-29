@@ -120,5 +120,5 @@ When broker execution records exist for a plan, the operator UI should prefer th
 - [x] run-detail broker-orders panel
 - [x] manual resubmit/cancel/refresh controls for valid paper orders
 - [x] automatic broker-order reconciliation during market hours
-- [x] Alpaca bracket exit-leg detection for open-entry, closed-win, and closed-loss states
+- [x] Alpaca bracket exit-leg detection for open-entry, win, and loss states
 - [x] tests for order sizing, submission handling, price normalization, cancel/resubmit/refresh handling, bracket exit-leg classification, route visibility, and broker-vs-simulated evaluation precedence in plan views

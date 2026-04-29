@@ -653,7 +653,7 @@ class RepositoryTests(unittest.TestCase):
                 entry_price=100.0,
                 stop_loss=95.0,
                 take_profit=110.0,
-                status="closed_win",
+                status="win",
                 broker_order_id="alpaca-order-win",
                 client_order_id="tp-run-1-plan-1-nvda-live",
                 submitted_at=datetime.now(timezone.utc),

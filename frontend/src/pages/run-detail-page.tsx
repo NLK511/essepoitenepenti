@@ -658,14 +658,14 @@ export function RunDetailPage() {
                               <div className="data-card-title">{order.ticker} · {order.action}</div>
                               <div className="helper-text">order #{order.id ?? "—"} · plan #{order.recommendation_plan_id} · run {order.run_id ?? "—"}</div>
                             </div>
-                            <Badge tone={order.status === "failed" ? "danger" : order.status === "canceled" ? "warning" : "ok"}>{order.status}</Badge>
+                            <Badge tone={order.status === "loss" || order.status === "failed" ? "danger" : order.status === "canceled" ? "warning" : order.status === "win" ? "ok" : "ok"}>{order.status}</Badge>
                           </div>
                           <div className="helper-text top-gap-small">qty {order.quantity} · entry {order.entry_price ?? "—"} · stop {order.stop_loss ?? "—"} · take profit {order.take_profit ?? "—"}</div>
                           <div className="cluster top-gap-small">
                             {order.status === "failed" || order.status === "canceled" ? (
                               <button type="button" className="button-secondary" disabled={activeOrderActionId === order.id} onClick={() => order.id && void handleOrderAction(order.id, "resubmit")}>Resubmit</button>
                             ) : null}
-                            {!["canceled", "filled", "closed_win", "closed_loss"].includes(order.status) && order.broker_order_id ? (
+                            {!["canceled", "filled", "win", "loss"].includes(order.status) && order.broker_order_id ? (
                               <button type="button" className="button button-danger" disabled={activeOrderActionId === order.id} onClick={() => order.id && void handleOrderAction(order.id, "cancel")}>Cancel</button>
                             ) : null}
                             {order.run_id ? <Link to={`/broker-orders?run_id=${order.run_id}&order_id=${order.id ?? ""}`} className="button-subtle">Open in broker orders</Link> : null}

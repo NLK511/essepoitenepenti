@@ -337,7 +337,7 @@ class RecommendationPlanRepository:
     @staticmethod
     def _broker_evaluation_source(order: BrokerOrderExecution) -> str:
         status = str(order.status or "").strip().lower()
-        if status in {"new", "submitted", "accepted", "partially_filled", "open", "closed_win", "closed_loss"}:
+        if status in {"new", "submitted", "accepted", "partially_filled", "open", "win", "loss"}:
             return "broker"
         if status in {"canceled", "expired", "rejected", "failed"}:
             return "simulated"
@@ -350,9 +350,9 @@ class RecommendationPlanRepository:
             return "pending"
         if status == "open":
             return "entry"
-        if status == "closed_win":
+        if status == "win":
             return "win"
-        if status == "closed_loss":
+        if status == "loss":
             return "loss"
         return "missing"
 
@@ -361,9 +361,9 @@ class RecommendationPlanRepository:
         status = str(order.status or "").strip().lower() or "unknown"
         if status == "open":
             return "broker entry filled; exit still open"
-        if status == "closed_win":
+        if status == "win":
             return "broker take-profit filled"
-        if status == "closed_loss":
+        if status == "loss":
             return "broker stop-loss filled"
         if status in {"new", "submitted", "accepted", "partially_filled"}:
             return f"broker order {status}"

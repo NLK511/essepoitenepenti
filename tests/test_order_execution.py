@@ -314,7 +314,7 @@ class OrderExecutionTests(unittest.TestCase):
                 self.get_requests.append(order_id)
                 return AlpacaOrderSubmissionResult(status_code=200, payload={"id": order_id, **self.payload})
 
-        for leg_type, expected_status in (("limit", "closed_win"), ("stop", "closed_loss")):
+        for leg_type, expected_status in (("limit", "win"), ("stop", "loss")):
             session = create_session()
             try:
                 settings = SettingsRepository(session)

@@ -31,7 +31,7 @@ class BrokerOrderSyncOutcome:
 
 
 class OrderExecutionService:
-    TERMINAL_STATUSES = {"closed_win", "closed_loss", "canceled", "rejected", "expired"}
+    TERMINAL_STATUSES = {"win", "loss", "canceled", "rejected", "expired"}
     MARKET_TIMEZONE = ZoneInfo("America/New_York")
 
     def __init__(
@@ -231,7 +231,7 @@ class OrderExecutionService:
             raise ValueError("broker order id is missing, so the order cannot be canceled")
         if existing.status == "canceled":
             raise ValueError("broker order is already canceled")
-        if existing.status in {"filled", "closed_win", "closed_loss"}:
+        if existing.status in {"filled", "win", "loss"}:
             raise ValueError("filled or closed orders cannot be canceled")
         client = self._ensure_client()
         result = client.cancel_order(existing.broker_order_id)
@@ -446,9 +446,9 @@ class OrderExecutionService:
                 continue
             leg_type = str(leg.get("type") or leg.get("order_type") or "").strip().lower()
             if leg_type in {"limit", "limit_order"}:
-                return "closed_win"
+                return "win"
             if leg_type in {"stop", "stop_limit", "stop_order"}:
-                return "closed_loss"
+                return "loss"
         if fallback_status == "filled":
             return "open"
         return fallback_status
@@ -465,7 +465,7 @@ class OrderExecutionService:
         now = self._now()
         filled_at = self._broker_timestamp(payload, "filled_at", "filledAt") or existing.filled_at
         canceled_at = self._broker_timestamp(payload, "canceled_at", "canceledAt") or existing.canceled_at
-        if status in {"open", "closed_win", "closed_loss"} and filled_at is None:
+        if status in {"open", "win", "loss"} and filled_at is None:
             filled_at = now
         if status == "canceled" and canceled_at is None:
             canceled_at = now

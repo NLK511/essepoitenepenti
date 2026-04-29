@@ -8,6 +8,12 @@ import type { AppSetting, BrokerOrderExecution, SettingsResponse } from "../type
 import { formatDate } from "../utils";
 
 function orderTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
+  if (status === "win") {
+    return "ok";
+  }
+  if (status === "loss") {
+    return "danger";
+  }
   if (status === "submitted" || status === "accepted" || status === "filled" || status === "partially_filled") {
     return "ok";
   }
@@ -241,7 +247,7 @@ export function BrokerOrdersPage() {
                 {selectedOrder.status === "failed" || selectedOrder.status === "canceled" ? (
                   <button type="button" className="button-secondary" disabled={activeActionId === selectedOrder.id} onClick={() => selectedOrder.id && void handleAction(selectedOrder.id, "resubmit")}>Resubmit</button>
                 ) : null}
-                {!["canceled", "filled", "closed_win", "closed_loss"].includes(selectedOrder.status) && selectedOrder.broker_order_id ? (
+                {!["canceled", "filled", "win", "loss"].includes(selectedOrder.status) && selectedOrder.broker_order_id ? (
                   <button type="button" className="button button-danger" disabled={activeActionId === selectedOrder.id} onClick={() => selectedOrder.id && void handleAction(selectedOrder.id, "cancel")}>Cancel</button>
                 ) : null}
               </div>
