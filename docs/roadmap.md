@@ -76,6 +76,7 @@ The next question is evidence quality, not raw feature count.
 Already in place:
 - persisted `RecommendationPlanOutcome` records
 - broker-position lifecycle records for app-submitted Alpaca paper bracket orders, including realized P&L when entry/exit fills are available
+- broker-backed pre-trade risk limits and manual kill switch for autonomous execution safety
 - calibration summaries, baseline cohorts, setup-family review, and evidence-concentration review from stored outcomes
 - calibration-aware confidence and gating in the orchestration path
 

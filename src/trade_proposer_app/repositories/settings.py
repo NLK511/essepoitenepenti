@@ -29,6 +29,15 @@ DEFAULT_APP_SETTINGS = {
     "order_execution_broker": "alpaca",
     "order_execution_account_mode": "paper",
     "order_execution_notional_per_plan": "1000",
+    "risk_management_enabled": "true",
+    "risk_halt_enabled": "false",
+    "risk_halt_reason": "",
+    "risk_max_daily_realized_loss_usd": "50",
+    "risk_max_open_positions": "3",
+    "risk_max_open_notional_usd": "3000",
+    "risk_max_position_notional_usd": "1000",
+    "risk_max_same_ticker_open_positions": "1",
+    "risk_max_consecutive_losses": "3",
     "summary_backend": "pi_agent",
     "summary_model": "",
     "summary_timeout_seconds": "60",
@@ -231,6 +240,48 @@ class SettingsRepository:
             "account_mode": (setting_map.get("order_execution_account_mode", "paper") or "paper").strip().lower(),
             "notional_per_plan": self._get_float(setting_map, "order_execution_notional_per_plan", 1000.0),
         }
+
+    def get_risk_management_config(self) -> dict[str, object]:
+        setting_map = self.get_setting_map()
+        return {
+            "enabled": self._get_bool(setting_map, "risk_management_enabled", True),
+            "halt_enabled": self._get_bool(setting_map, "risk_halt_enabled", False),
+            "halt_reason": (setting_map.get("risk_halt_reason", "") or "").strip(),
+            "max_daily_realized_loss_usd": self._get_float(setting_map, "risk_max_daily_realized_loss_usd", 50.0),
+            "max_open_positions": self._get_int(setting_map, "risk_max_open_positions", 3),
+            "max_open_notional_usd": self._get_float(setting_map, "risk_max_open_notional_usd", 3000.0),
+            "max_position_notional_usd": self._get_float(setting_map, "risk_max_position_notional_usd", 1000.0),
+            "max_same_ticker_open_positions": self._get_int(setting_map, "risk_max_same_ticker_open_positions", 1),
+            "max_consecutive_losses": self._get_int(setting_map, "risk_max_consecutive_losses", 3),
+        }
+
+    def set_risk_management_config(
+        self,
+        *,
+        enabled: bool,
+        max_daily_realized_loss_usd: float,
+        max_open_positions: int,
+        max_open_notional_usd: float,
+        max_position_notional_usd: float,
+        max_same_ticker_open_positions: int,
+        max_consecutive_losses: int,
+    ) -> dict[str, object]:
+        self.set_settings(
+            {
+                "risk_management_enabled": str(bool(enabled)).lower(),
+                "risk_max_daily_realized_loss_usd": f"{float(max_daily_realized_loss_usd):.4f}".rstrip("0").rstrip("."),
+                "risk_max_open_positions": str(max(0, int(max_open_positions))),
+                "risk_max_open_notional_usd": f"{float(max_open_notional_usd):.4f}".rstrip("0").rstrip("."),
+                "risk_max_position_notional_usd": f"{float(max_position_notional_usd):.4f}".rstrip("0").rstrip("."),
+                "risk_max_same_ticker_open_positions": str(max(0, int(max_same_ticker_open_positions))),
+                "risk_max_consecutive_losses": str(max(0, int(max_consecutive_losses))),
+            }
+        )
+        return self.get_risk_management_config()
+
+    def set_risk_halt(self, *, enabled: bool, reason: str = "") -> dict[str, object]:
+        self.set_settings({"risk_halt_enabled": str(bool(enabled)).lower(), "risk_halt_reason": reason.strip()})
+        return self.get_risk_management_config()
 
     def set_order_execution_config(self, *, enabled: bool, broker: str = "alpaca", account_mode: str = "paper", notional_per_plan: float = 1000.0) -> dict[str, object]:
         self.set_settings(

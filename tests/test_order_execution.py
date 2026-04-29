@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import JobType, StrategyHorizon
-from trade_proposer_app.domain.models import BrokerOrderExecution, RecommendationPlan
+from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPosition, RecommendationPlan
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
@@ -686,6 +686,51 @@ class OrderExecutionTests(unittest.TestCase):
             self.assertEqual(outcome.summary["orders"], [])
             self.assertEqual(outcome.orders, [])
             self.assertEqual(BrokerOrderExecutionRepository(session).list_all(), [])
+        finally:
+            session.close()
+
+    def test_order_execution_service_skips_when_risk_manager_blocks_candidate(self) -> None:
+        session = create_session()
+        try:
+            settings = SettingsRepository(session)
+            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            settings.set_risk_management_config(
+                enabled=True,
+                max_daily_realized_loss_usd=50.0,
+                max_open_positions=3,
+                max_open_notional_usd=3000.0,
+                max_position_notional_usd=500.0,
+                max_same_ticker_open_positions=1,
+                max_consecutive_losses=3,
+            )
+            client = StubAlpacaClient()
+            service = OrderExecutionService(
+                settings=settings,
+                executions=BrokerOrderExecutionRepository(session),
+                positions=BrokerPositionRepository(session),
+                client=client,
+            )
+            plan = RecommendationPlan(
+                id=1,
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=80.0,
+                entry_price_low=99.0,
+                entry_price_high=101.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                computed_at=datetime.now(timezone.utc),
+            )
+
+            outcome = service.execute_plans([plan])
+            stored = BrokerOrderExecutionRepository(session).list_all(limit=10)
+
+            self.assertEqual(outcome.summary["submitted_order_count"], 0)
+            self.assertEqual(outcome.summary["skipped_order_count"], 1)
+            self.assertEqual(client.requests, [])
+            self.assertEqual(stored[0].status, "skipped")
+            self.assertIn("risk_position_notional_limit_exceeded", stored[0].error_message)
         finally:
             session.close()
 

@@ -961,6 +961,15 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         try:
             settings_repo = SettingsRepository(session)
             settings_repo.upsert_provider_credential("alpaca", "paper-key", "paper-secret")
+            settings_repo.set_risk_management_config(
+                enabled=True,
+                max_daily_realized_loss_usd=50.0,
+                max_open_positions=3,
+                max_open_notional_usd=3000.0,
+                max_position_notional_usd=2000.0,
+                max_same_ticker_open_positions=1,
+                max_consecutive_losses=3,
+            )
             job = JobRepository(session).list_all()[0]
             plan = RecommendationPlanRepository(session).list_plans(run_id=run_id, limit=10)[0]
             broker_orders = BrokerOrderExecutionRepository(session)
@@ -1033,6 +1042,46 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cancel.status_code, 200)
         self.assertEqual(cancel.json()["status"], "canceled")
         self.assertTrue(any(order["status"] == "canceled" for order in run_detail_after.json()["broker_order_executions"]))
+
+    async def test_risk_routes_assess_halt_and_resume(self) -> None:
+        run_id = self.seed_run_with_diagnostics()
+        session = Session(bind=self.engine)
+        try:
+            plan = RecommendationPlanRepository(session).list_plans(run_id=run_id, limit=10)[0]
+            BrokerPositionRepository(session).create(
+                BrokerPosition(
+                    broker_order_execution_id=1,
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker=plan.ticker,
+                    run_id=run_id,
+                    ticker=plan.ticker,
+                    action="long",
+                    side="buy",
+                    quantity=10,
+                    current_quantity=0,
+                    status="loss",
+                    realized_pnl=-10.0,
+                    exit_filled_at=datetime.now(timezone.utc),
+                )
+            )
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            risk = await client.get("/api/risk")
+            halted = await client.post("/api/risk/halt", data={"reason": "test halt"})
+            resumed = await client.post("/api/risk/resume")
+
+        self.assertEqual(risk.status_code, 200)
+        self.assertEqual(risk.json()["metrics"]["today_loss_count"], 1)
+        self.assertEqual(halted.status_code, 200)
+        self.assertFalse(halted.json()["allowed"])
+        self.assertIn("manual_halt_active", halted.json()["reasons"])
+        self.assertEqual(resumed.status_code, 200)
+        self.assertFalse(resumed.json()["halt_enabled"])
 
     async def test_broker_position_routes_list_and_fetch_positions(self) -> None:
         run_id = self.seed_run_with_diagnostics()

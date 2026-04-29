@@ -12,6 +12,7 @@ interface SettingsViewData {
   preflight: AppPreflightReport;
   evaluationRealism: EvaluationRealismState;
   orderExecution: SettingsResponse["order_execution"];
+  riskManagement: SettingsResponse["risk_management"];
   planGenerationTuning: SettingsResponse["plan_generation_tuning"];
 }
 
@@ -35,6 +36,7 @@ export function SettingsPage() {
         brokerOrders,
         evaluationRealism: settingsResponse.evaluation_realism,
         orderExecution: settingsResponse.order_execution,
+        riskManagement: settingsResponse.risk_management,
         planGenerationTuning: settingsResponse.plan_generation_tuning,
         preflight,
       });
@@ -195,6 +197,31 @@ export function SettingsPage() {
     }
   }
 
+  async function saveRiskManagementSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    try {
+      setSaving("risk-management");
+      setError(null);
+      setNotice(null);
+      await postForm<{ risk_management: SettingsResponse["risk_management"] }>("/api/settings/risk-management", {
+        enabled: formData.get("enabled") ? "true" : "false",
+        max_daily_realized_loss_usd: String(formData.get("max_daily_realized_loss_usd") ?? data?.riskManagement.max_daily_realized_loss_usd ?? "50"),
+        max_open_positions: String(formData.get("max_open_positions") ?? data?.riskManagement.max_open_positions ?? "3"),
+        max_open_notional_usd: String(formData.get("max_open_notional_usd") ?? data?.riskManagement.max_open_notional_usd ?? "3000"),
+        max_position_notional_usd: String(formData.get("max_position_notional_usd") ?? data?.riskManagement.max_position_notional_usd ?? "1000"),
+        max_same_ticker_open_positions: String(formData.get("max_same_ticker_open_positions") ?? data?.riskManagement.max_same_ticker_open_positions ?? "1"),
+        max_consecutive_losses: String(formData.get("max_consecutive_losses") ?? data?.riskManagement.max_consecutive_losses ?? "3"),
+      });
+      setNotice("Risk management settings saved");
+      await loadData();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save risk management settings");
+    } finally {
+      setSaving(null);
+    }
+  }
+
   async function saveProvider(event: FormEvent<HTMLFormElement>, provider: string) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -277,6 +304,23 @@ export function SettingsPage() {
                 </div>
                 <div className="helper-text">Actionable long/short plans are submitted as Alpaca paper bracket orders when this toggle is enabled.</div>
                 <div className="cluster"><button className="button" type="submit" disabled={saving === "order-execution"}>{saving === "order-execution" ? "Saving…" : "Save order execution settings"}</button></div>
+              </form>
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Risk management" title="Broker kill switch limits" subtitle="Pre-trade guardrails used before automated Alpaca paper submissions and manual resubmits." actions={<HelpHint tooltip="The risk manager blocks new broker submissions when halt, loss, exposure, or concentration limits are breached." to="/docs?doc=broker-risk-management-spec" />} />
+              <form className="stack-form" onSubmit={(event) => void saveRiskManagementSettings(event)}>
+                <div className="form-grid">
+                  <label className="form-field"><span><input type="checkbox" name="enabled" defaultChecked={data.riskManagement.enabled} /> Risk management enabled</span></label>
+                  <label className="form-field"><span>Daily realized loss limit $</span><input name="max_daily_realized_loss_usd" type="number" min="0" step="1" defaultValue={String(data.riskManagement.max_daily_realized_loss_usd)} /></label>
+                  <label className="form-field"><span>Max open positions</span><input name="max_open_positions" type="number" min="0" step="1" defaultValue={String(data.riskManagement.max_open_positions)} /></label>
+                  <label className="form-field"><span>Max open notional $</span><input name="max_open_notional_usd" type="number" min="0" step="1" defaultValue={String(data.riskManagement.max_open_notional_usd)} /></label>
+                  <label className="form-field"><span>Max position notional $</span><input name="max_position_notional_usd" type="number" min="0" step="1" defaultValue={String(data.riskManagement.max_position_notional_usd)} /></label>
+                  <label className="form-field"><span>Max same ticker open positions</span><input name="max_same_ticker_open_positions" type="number" min="0" step="1" defaultValue={String(data.riskManagement.max_same_ticker_open_positions)} /></label>
+                  <label className="form-field"><span>Max consecutive losses</span><input name="max_consecutive_losses" type="number" min="0" step="1" defaultValue={String(data.riskManagement.max_consecutive_losses)} /></label>
+                </div>
+                <div className="helper-text">Manual halt state: {data.riskManagement.halt_enabled ? `halted · ${data.riskManagement.halt_reason || "no reason"}` : "clear"}. Use the Risk Manager page to halt or resume trading.</div>
+                <div className="cluster"><button className="button" type="submit" disabled={saving === "risk-management"}>{saving === "risk-management" ? "Saving…" : "Save risk settings"}</button></div>
               </form>
             </Card>
 

@@ -12,6 +12,7 @@ from trade_proposer_app.repositories.broker_order_executions import BrokerOrderE
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClient, AlpacaPaperClientError
+from trade_proposer_app.services.risk_management import BrokerRiskManager, TradeCandidate
 
 
 def result_broker_order_id(payload: dict[str, object]) -> str | None:
@@ -152,6 +153,26 @@ class OrderExecutionService:
                 quantity=quantity,
                 client_order_id=client_order_id,
             )
+            notional_amount = round(quantity * entry_price, 4)
+            risk_assessment = self._risk_manager().assess(TradeCandidate(ticker=plan.ticker, notional_amount=notional_amount))
+            if not risk_assessment.allowed:
+                risk_reason = "risk_" + "_".join(risk_assessment.reasons or ["blocked"])
+                warnings.append(f"{plan.ticker} broker execution blocked by risk manager: {', '.join(risk_assessment.reasons)}")
+                self._bump(skip_reasons, risk_reason)
+                ordered_results.append(
+                    self._store_skip(
+                        plan,
+                        run_id=run_id,
+                        job_id=job_id,
+                        reason=risk_reason,
+                        config=config,
+                        entry_price=entry_price,
+                        stop_loss=stop_loss,
+                        take_profit=take_profit,
+                    )
+                )
+                continue
+
             stored_order = BrokerOrderExecution(
                 broker=str(config["broker"]),
                 account_mode=str(config["account_mode"]),
@@ -165,7 +186,7 @@ class OrderExecutionService:
                 order_type="limit",
                 time_in_force="gtc",
                 quantity=quantity,
-                notional_amount=round(quantity * entry_price, 4),
+                notional_amount=notional_amount,
                 entry_price=entry_price,
                 stop_loss=stop_loss,
                 take_profit=take_profit,
@@ -205,6 +226,10 @@ class OrderExecutionService:
             quantity=existing.quantity,
             client_order_id=client_order_id,
         )
+        risk_assessment = self._risk_manager().assess(TradeCandidate(ticker=existing.ticker, notional_amount=existing.notional_amount))
+        if not risk_assessment.allowed:
+            raise ValueError(f"broker order resubmit blocked by risk manager: {', '.join(risk_assessment.reasons)}")
+
         candidate = BrokerOrderExecution(
             broker=existing.broker,
             account_mode=existing.account_mode,
@@ -512,6 +537,12 @@ class OrderExecutionService:
             created_at=existing.created_at,
             updated_at=now,
         )
+
+    def _risk_manager(self) -> BrokerRiskManager:
+        repository = self._position_repository()
+        if repository is None:
+            raise ValueError("broker position repository is required for risk management")
+        return BrokerRiskManager(self.settings, repository)
 
     def _position_repository(self) -> BrokerPositionRepository | None:
         if self.positions is not None:

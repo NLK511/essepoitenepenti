@@ -47,6 +47,7 @@ const navSections: NavSection[] = [
       { to: "/jobs/recommendation-plans", label: "Recommendation plans", shortLabel: "Plans", icon: "↗" },
       { to: "/jobs/debugger", label: "Run debugger", shortLabel: "Debug", icon: "⌘" },
       { to: "/broker-orders", label: "Broker orders", shortLabel: "Orders", icon: "⟐" },
+      { to: "/risk", label: "Risk manager", shortLabel: "Risk", icon: "⊘" },
       { to: "/context", label: "Context review", shortLabel: "Context", icon: "◔" },
     ],
   },
@@ -183,6 +184,13 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
       eyebrow: "Execution audit",
       title: "The Tribute Ledger",
       description: "Inspect Alpaca paper submissions, payloads, and statuses for plan-driven trades.",
+    };
+  }
+  if (pathname.startsWith("/risk")) {
+    return {
+      eyebrow: "Execution safety",
+      title: "The Red Line",
+      description: "Review broker-backed risk state and control the autonomous execution kill switch.",
     };
   }
   if (pathname.startsWith("/runs/")) {

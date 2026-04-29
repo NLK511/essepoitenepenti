@@ -1202,12 +1202,35 @@ export interface OrderExecutionSettingsState {
   notional_per_plan: number;
 }
 
+export interface RiskManagementSettingsState {
+  enabled: boolean;
+  halt_enabled: boolean;
+  halt_reason: string;
+  max_daily_realized_loss_usd: number;
+  max_open_positions: number;
+  max_open_notional_usd: number;
+  max_position_notional_usd: number;
+  max_same_ticker_open_positions: number;
+  max_consecutive_losses: number;
+}
+
+export interface BrokerRiskAssessment {
+  allowed: boolean;
+  enabled: boolean;
+  halt_enabled: boolean;
+  halt_reason: string;
+  reasons: string[];
+  metrics: Record<string, unknown>;
+  config: RiskManagementSettingsState;
+}
+
 export interface SettingsResponse {
   settings: AppSetting[];
   providers: ProviderCredential[];
   signal_gating_tuning: SignalGatingTuningState;
   evaluation_realism: EvaluationRealismState;
   order_execution: OrderExecutionSettingsState;
+  risk_management: RiskManagementSettingsState;
   plan_generation_tuning: {
     settings: PlanGenerationTuningSettingsState;
     active_config: Record<string, unknown>;

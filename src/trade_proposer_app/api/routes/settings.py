@@ -22,6 +22,7 @@ async def list_settings(session: Session = Depends(get_db_session)) -> dict[str,
         "signal_gating_tuning": signal_gating_tuning,
         "evaluation_realism": evaluation_realism,
         "order_execution": repository.get_order_execution_config(),
+        "risk_management": repository.get_risk_management_config(),
         "plan_generation_tuning": {
             "settings": repository.get_plan_generation_tuning_settings(),
             "active_config": repository.get_plan_generation_active_config(PlanGenerationTuningRepository(session)),
@@ -209,6 +210,33 @@ async def set_plan_generation_tuning_settings(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"invalid plan generation tuning settings: {exc}") from exc
     return {"plan_generation_tuning": config}
+
+
+@router.post("/risk-management")
+async def set_risk_management_settings(
+    enabled: str = Form(default="true"),
+    max_daily_realized_loss_usd: str = Form(default="50"),
+    max_open_positions: str = Form(default="3"),
+    max_open_notional_usd: str = Form(default="3000"),
+    max_position_notional_usd: str = Form(default="1000"),
+    max_same_ticker_open_positions: str = Form(default="1"),
+    max_consecutive_losses: str = Form(default="3"),
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    repository = SettingsRepository(session)
+    try:
+        config = repository.set_risk_management_config(
+            enabled=enabled.strip().lower() in {"1", "true", "yes", "on"},
+            max_daily_realized_loss_usd=float(max_daily_realized_loss_usd.strip() or 50),
+            max_open_positions=int(max_open_positions.strip() or 3),
+            max_open_notional_usd=float(max_open_notional_usd.strip() or 3000),
+            max_position_notional_usd=float(max_position_notional_usd.strip() or 1000),
+            max_same_ticker_open_positions=int(max_same_ticker_open_positions.strip() or 1),
+            max_consecutive_losses=int(max_consecutive_losses.strip() or 3),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid risk management settings: {exc}") from exc
+    return {"risk_management": config}
 
 
 @router.post("/order-execution")

@@ -275,6 +275,16 @@ class BrokerOrderExecution(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class BrokerRiskAssessment(BaseModel):
+    allowed: bool = True
+    enabled: bool = True
+    halt_enabled: bool = False
+    halt_reason: str = ""
+    reasons: list[str] = Field(default_factory=list)
+    metrics: dict[str, object] = Field(default_factory=dict)
+    config: dict[str, object] = Field(default_factory=dict)
+
+
 class BrokerPosition(BaseModel):
     id: int | None = None
     broker_order_execution_id: int
