@@ -275,6 +275,37 @@ class BrokerOrderExecution(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class BrokerPosition(BaseModel):
+    id: int | None = None
+    broker_order_execution_id: int
+    broker: str = "alpaca"
+    account_mode: str = "paper"
+    recommendation_plan_id: int
+    recommendation_plan_ticker: str = ""
+    run_id: int | None = None
+    job_id: int | None = None
+    ticker: str
+    action: str
+    side: str
+    quantity: int = 0
+    current_quantity: int = 0
+    status: str = "submitted"
+    entry_order_id: str | None = None
+    entry_avg_price: float | None = None
+    entry_filled_at: datetime | None = None
+    exit_order_id: str | None = None
+    exit_reason: str | None = None
+    exit_avg_price: float | None = None
+    exit_filled_at: datetime | None = None
+    realized_pnl: float | None = None
+    realized_return_pct: float | None = None
+    realized_r_multiple: float | None = None
+    raw_broker_payload: dict[str, object] = Field(default_factory=dict)
+    error_message: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class WorkerHeartbeat(BaseModel):
     worker_id: str
     hostname: str

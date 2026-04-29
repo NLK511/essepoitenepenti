@@ -10,6 +10,7 @@ from trade_proposer_app.domain.enums import JobType, StrategyHorizon
 from trade_proposer_app.domain.models import BrokerOrderExecution, RecommendationPlan
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
+from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
@@ -364,6 +365,76 @@ class OrderExecutionTests(unittest.TestCase):
                 self.assertIsNotNone(refreshed.filled_at)
             finally:
                 session.close()
+
+    def test_order_execution_service_persists_position_lifecycle_and_realized_pnl(self) -> None:
+        class ExitLegClient(StubAlpacaClient):
+            def get_order(self, order_id: str) -> AlpacaOrderSubmissionResult:
+                self.get_requests.append(order_id)
+                return AlpacaOrderSubmissionResult(
+                    status_code=200,
+                    payload={
+                        "id": order_id,
+                        "status": "filled",
+                        "filled_qty": "10",
+                        "filled_avg_price": "100.00",
+                        "filled_at": "2026-04-22T14:30:00Z",
+                        "legs": [
+                            {
+                                "id": "take-profit-leg",
+                                "type": "limit",
+                                "status": "filled",
+                                "filled_qty": "10",
+                                "filled_avg_price": "110.00",
+                                "filled_at": "2026-04-22T15:00:00Z",
+                            },
+                            {"id": "stop-leg", "type": "stop", "status": "canceled"},
+                        ],
+                    },
+                )
+
+        session = create_session()
+        try:
+            settings = SettingsRepository(session)
+            settings.upsert_provider_credential("alpaca", "paper-key", "paper-secret")
+            orders = BrokerOrderExecutionRepository(session)
+            positions = BrokerPositionRepository(session)
+            stored = orders.create(
+                BrokerOrderExecution(
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=1,
+                    recommendation_plan_ticker="AAPL",
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    quantity=10,
+                    notional_amount=1000.0,
+                    entry_price=100.0,
+                    stop_loss=95.0,
+                    take_profit=110.0,
+                    status="open",
+                    broker_order_id="alpaca-order-win",
+                    client_order_id="tp-run-10-plan-1-aapl-win",
+                    request_payload={"symbol": "AAPL"},
+                    response_payload={"id": "alpaca-order-win", "status": "filled"},
+                )
+            )
+            service = OrderExecutionService(settings=settings, executions=orders, positions=positions, client=ExitLegClient())
+
+            refreshed = service.refresh_execution(stored.id or 0)
+            position = positions.get_by_order_execution_id(refreshed.id or 0)
+
+            self.assertEqual(refreshed.status, "win")
+            self.assertIsNotNone(position)
+            self.assertEqual(position.status, "win")
+            self.assertEqual(position.exit_reason, "take_profit")
+            self.assertEqual(position.current_quantity, 0)
+            self.assertEqual(position.realized_pnl, 100.0)
+            self.assertEqual(position.realized_return_pct, 10.0)
+            self.assertEqual(position.realized_r_multiple, 2.0)
+        finally:
+            session.close()
 
     def test_order_execution_service_sync_open_executions_refreshes_active_orders(self) -> None:
         session = create_session()

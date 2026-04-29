@@ -52,6 +52,7 @@ These are useful, but they are not the main current-state entry point.
 - `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow
 - `plan-generation-tuning-spec.md` — authoritative implementation spec for autonomous plan-generation tuning
 - `alpaca-paper-order-execution-spec.md` — first automated broker-execution spec for Alpaca paper trading, including audit UI and manual resubmit/cancel controls
+- `broker-position-lifecycle-spec.md` — broker-backed position state and realized P&L ledger for app-submitted bracket orders
 - `nitter-social-relevance-scoring.md` — current Nitter relevance-ranking behavior
 
 ## Redesign reference

@@ -4,15 +4,21 @@ import { Link, useSearchParams } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
-import type { AppSetting, BrokerOrderExecution, SettingsResponse } from "../types";
+import type { AppSetting, BrokerOrderExecution, BrokerPosition, SettingsResponse } from "../types";
 import { formatDate } from "../utils";
 
 function orderTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
   if (status === "win") {
     return "ok";
   }
-  if (status === "loss") {
+  if (status === "loss" || status === "error") {
     return "danger";
+  }
+  if (status === "open") {
+    return "info";
+  }
+  if (status === "needs_review") {
+    return "warning";
   }
   if (status === "submitted" || status === "accepted" || status === "filled" || status === "partially_filled") {
     return "ok";
@@ -44,6 +50,7 @@ export function BrokerOrdersPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [activeActionId, setActiveActionId] = useState<number | null>(null);
   const [settings, setSettings] = useState<AppSetting[] | null>(null);
+  const [positions, setPositions] = useState<BrokerPosition[] | null>(null);
   const { showToast } = useToast();
   const limit = Math.max(1, Number(searchParams.get("limit") ?? "50") || 50);
   const runId = searchParams.get("run_id");
@@ -58,11 +65,13 @@ export function BrokerOrdersPage() {
         if (runId) {
           params.set("run_id", runId);
         }
-        const [loadedOrders, loadedSettings] = await Promise.all([
+        const [loadedOrders, loadedPositions, loadedSettings] = await Promise.all([
           getJson<BrokerOrderExecution[]>(`/api/broker-orders?${params.toString()}`),
+          getJson<BrokerPosition[]>(`/api/broker-positions?${params.toString()}`),
           getJson<SettingsResponse>("/api/settings"),
         ]);
         setOrders(loadedOrders);
+        setPositions(loadedPositions);
         setSettings(loadedSettings.settings);
         if (!selectedOrderId && loadedOrders[0]?.id) {
           const next = new URLSearchParams(searchParams);
@@ -95,21 +104,32 @@ export function BrokerOrdersPage() {
     };
   }, [settings]);
 
+  const positionByOrderId = useMemo(() => {
+    const map = new Map<number, BrokerPosition>();
+    for (const position of positions ?? []) {
+      map.set(position.broker_order_execution_id, position);
+    }
+    return map;
+  }, [positions]);
+
   const selectedOrder = useMemo(
     () => orders?.find((order) => String(order.id) === selectedOrderId) ?? null,
     [orders, selectedOrderId],
   );
+  const selectedPosition = selectedOrder?.id ? positionByOrderId.get(selectedOrder.id) ?? null : null;
 
   async function reloadOrders(nextSelectedOrderId?: number) {
     const params = new URLSearchParams({ limit: String(limit) });
     if (runId) {
       params.set("run_id", runId);
     }
-    const [loadedOrders, loadedSettings] = await Promise.all([
+    const [loadedOrders, loadedPositions, loadedSettings] = await Promise.all([
       getJson<BrokerOrderExecution[]>(`/api/broker-orders?${params.toString()}`),
+      getJson<BrokerPosition[]>(`/api/broker-positions?${params.toString()}`),
       getJson<SettingsResponse>("/api/settings"),
     ]);
     setOrders(loadedOrders);
+    setPositions(loadedPositions);
     setSettings(loadedSettings.settings);
     const nextOrderId = nextSelectedOrderId ?? loadedOrders[0]?.id ?? null;
     if (nextOrderId) {
@@ -242,6 +262,23 @@ export function BrokerOrdersPage() {
               <div className="helper-text">Created {formatDate(selectedOrder.created_at)} · Updated {formatDate(selectedOrder.updated_at)} · Submitted {formatDate(selectedOrder.submitted_at)}</div>
               {selectedOrder.broker_order_id ? <div className="helper-text">Broker order id: {selectedOrder.broker_order_id}</div> : null}
               {selectedOrder.error_message ? <div className="alert alert-warning">{selectedOrder.error_message}</div> : null}
+              {selectedPosition ? (
+                <Card>
+                  <SectionTitle kicker="Position lifecycle" title="Broker-backed position" subtitle="Derived from the latest Alpaca bracket snapshot." />
+                  <div className="data-points top-gap-small">
+                    <div className="data-point"><span className="data-point-label">position status</span><span className="data-point-value"><Badge tone={orderTone(selectedPosition.status)}>{selectedPosition.status}</Badge></span></div>
+                    <div className="data-point"><span className="data-point-label">current qty</span><span className="data-point-value">{selectedPosition.current_quantity}</span></div>
+                    <div className="data-point"><span className="data-point-label">entry avg</span><span className="data-point-value">{selectedPosition.entry_avg_price ?? "—"}</span></div>
+                    <div className="data-point"><span className="data-point-label">exit avg</span><span className="data-point-value">{selectedPosition.exit_avg_price ?? "—"}</span></div>
+                    <div className="data-point"><span className="data-point-label">exit reason</span><span className="data-point-value">{selectedPosition.exit_reason ?? "—"}</span></div>
+                    <div className="data-point"><span className="data-point-label">realized P&L</span><span className="data-point-value">{selectedPosition.realized_pnl === null ? "—" : selectedPosition.realized_pnl.toFixed(2)}</span></div>
+                    <div className="data-point"><span className="data-point-label">return</span><span className="data-point-value">{selectedPosition.realized_return_pct === null ? "—" : `${selectedPosition.realized_return_pct.toFixed(2)}%`}</span></div>
+                    <div className="data-point"><span className="data-point-label">R multiple</span><span className="data-point-value">{selectedPosition.realized_r_multiple === null ? "—" : selectedPosition.realized_r_multiple.toFixed(2)}</span></div>
+                  </div>
+                  <div className="helper-text top-gap-small">Entry {formatDate(selectedPosition.entry_filled_at)} · Exit {formatDate(selectedPosition.exit_filled_at)}</div>
+                  {selectedPosition.error_message ? <div className="alert alert-warning top-gap-small">{selectedPosition.error_message}</div> : null}
+                </Card>
+              ) : null}
               <div className="cluster top-gap-small">
                 {selectedOrder.id ? <button type="button" className="button-secondary" disabled={activeActionId === selectedOrder.id} onClick={() => void handleAction(selectedOrder.id as number, "refresh")}>Refresh status</button> : null}
                 {selectedOrder.status === "failed" || selectedOrder.status === "canceled" ? (

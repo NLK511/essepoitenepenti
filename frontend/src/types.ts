@@ -147,6 +147,37 @@ export interface BrokerOrderExecution {
   updated_at: string;
 }
 
+export interface BrokerPosition {
+  id: number | null;
+  broker_order_execution_id: number;
+  broker: string;
+  account_mode: string;
+  recommendation_plan_id: number;
+  recommendation_plan_ticker: string;
+  run_id: number | null;
+  job_id: number | null;
+  ticker: string;
+  action: string;
+  side: string;
+  quantity: number;
+  current_quantity: number;
+  status: string;
+  entry_order_id: string | null;
+  entry_avg_price: number | null;
+  entry_filled_at: string | null;
+  exit_order_id: string | null;
+  exit_reason: string | null;
+  exit_avg_price: number | null;
+  exit_filled_at: string | null;
+  realized_pnl: number | null;
+  realized_return_pct: number | null;
+  realized_r_multiple: number | null;
+  raw_broker_payload: Record<string, unknown>;
+  error_message: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PreflightCheck {
   name: string;
   status: string;

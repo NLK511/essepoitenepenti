@@ -16,6 +16,7 @@ from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.domain.models import (
     AppPreflightReport,
     BrokerOrderExecution,
+    BrokerPosition,
     EvaluationRunResult,
     HistoricalMarketBar,
     NewsArticle,
@@ -31,6 +32,7 @@ from trade_proposer_app.domain.models import (
 )
 from trade_proposer_app.persistence.models import Base, RecommendationPlanRecord, RunRecord, TickerSignalSnapshotRecord
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
+from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
@@ -1031,6 +1033,77 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cancel.status_code, 200)
         self.assertEqual(cancel.json()["status"], "canceled")
         self.assertTrue(any(order["status"] == "canceled" for order in run_detail_after.json()["broker_order_executions"]))
+
+    async def test_broker_position_routes_list_and_fetch_positions(self) -> None:
+        run_id = self.seed_run_with_diagnostics()
+        session = Session(bind=self.engine)
+        try:
+            job = JobRepository(session).list_all()[0]
+            plan = RecommendationPlanRepository(session).list_plans(run_id=run_id, limit=10)[0]
+            order = BrokerOrderExecutionRepository(session).create(
+                BrokerOrderExecution(
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker=plan.ticker,
+                    run_id=run_id,
+                    job_id=job.id,
+                    ticker=plan.ticker,
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    quantity=10,
+                    notional_amount=1000.0,
+                    entry_price=100.0,
+                    stop_loss=95.0,
+                    take_profit=110.0,
+                    status="win",
+                    broker_order_id="alpaca-order-position",
+                    client_order_id="tp-run-1-plan-1-position",
+                    request_payload={"symbol": "AAPL"},
+                    response_payload={"id": "alpaca-order-position", "status": "filled"},
+                )
+            )
+            position = BrokerPositionRepository(session).create(
+                BrokerPosition(
+                    broker_order_execution_id=order.id or 0,
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker=plan.ticker,
+                    run_id=run_id,
+                    job_id=job.id,
+                    ticker=plan.ticker,
+                    action="long",
+                    side="buy",
+                    quantity=10,
+                    current_quantity=0,
+                    status="win",
+                    entry_order_id="alpaca-order-position",
+                    entry_avg_price=100.0,
+                    exit_order_id="take-profit-leg",
+                    exit_reason="take_profit",
+                    exit_avg_price=110.0,
+                    realized_pnl=100.0,
+                    realized_return_pct=10.0,
+                    realized_r_multiple=2.0,
+                )
+            )
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            listed = await client.get(f"/api/broker-positions?run_id={run_id}")
+            fetched = await client.get(f"/api/broker-positions/{position.id}")
+            missing = await client.get("/api/broker-positions/999999")
+
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.json()[0]["status"], "win")
+        self.assertEqual(listed.json()[0]["realized_pnl"], 100.0)
+        self.assertEqual(fetched.status_code, 200)
+        self.assertEqual(fetched.json()["exit_reason"], "take_profit")
+        self.assertEqual(missing.status_code, 404)
 
     async def test_broker_order_routes_return_expected_errors(self) -> None:
         run_id = self.seed_run_with_diagnostics()

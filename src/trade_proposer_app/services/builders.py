@@ -9,6 +9,7 @@ from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
+from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClient
 from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
@@ -117,6 +118,7 @@ def create_order_execution_service(session: Session) -> OrderExecutionService:
         settings=repository,
         executions=BrokerOrderExecutionRepository(session),
         client=client,
+        positions=BrokerPositionRepository(session),
     )
 
 

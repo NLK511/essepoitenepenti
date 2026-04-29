@@ -75,11 +75,12 @@ The next question is evidence quality, not raw feature count.
 
 Already in place:
 - persisted `RecommendationPlanOutcome` records
+- broker-position lifecycle records for app-submitted Alpaca paper bracket orders, including realized P&L when entry/exit fills are available
 - calibration summaries, baseline cohorts, setup-family review, and evidence-concentration review from stored outcomes
 - calibration-aware confidence and gating in the orchestration path
 
 Still needed:
-- more resolved outcomes over time
+- more resolved live broker positions and simulated outcomes over time
 - continued use of calibration without overstating thin buckets
 - continued comparison against simple baselines
 - validation of which setup families, horizons, transmission conditions, and regimes actually work in live data

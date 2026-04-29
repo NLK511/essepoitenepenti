@@ -34,8 +34,9 @@ It is not yet a proven short-horizon prediction engine.
 - Track **phantom trades** for `no_action` or `watchlist` plans that retain an intended direction and valid trade levels, evaluating them against real market data to produce outcomes such as `phantom_win`, `phantom_loss`, or `phantom_no_entry` for recall optimization in tuning engines.
 - Automatically submit actionable `long`/`short` plans to Alpaca paper trading using the Settings-configured notional cap per plan (default $1,000), limit bracket orders, and persisted broker-order records.
 - Periodically reconcile open broker orders against Alpaca during market hours so fulfilled or canceled orders show up in the app without waiting for a manual action.
+- Maintain a broker-position lifecycle ledger for app-submitted Alpaca bracket orders, including submitted/open/win/loss states, entry/exit fills, realized P&L, return percentage, and R multiple when the latest broker snapshot contains enough data.
 - When a plan has live Alpaca execution data, operator-facing plan views treat broker evaluation as the primary status and keep the simulated plan outcome as secondary context.
-- Inspect broker-order submissions, payloads, statuses, and re-submit/cancel/refresh controls through the Broker Orders page and the broker-orders panel on run detail.
+- Inspect broker-order submissions, payloads, statuses, linked position lifecycle state, realized P&L, and re-submit/cancel/refresh controls through the Broker Orders page and the broker-orders panel on run detail.
 - Run detail now includes the broker-order history for that run so operators can audit execution without switching pages.
 - Use decision samples to review near-misses, shortlist behavior, triage priority, and richer filters such as shortlist state, setup family, transmission bias, context regime, and benchmark result.
 - Run signal-gating tuning through its dedicated research workflow to inspect shortlist recall and calibration-related review surfaces.

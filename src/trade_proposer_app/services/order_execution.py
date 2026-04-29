@@ -7,8 +7,9 @@ from decimal import Decimal, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 from uuid import uuid4
 
-from trade_proposer_app.domain.models import BrokerOrderExecution, RecommendationPlan
+from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPosition, RecommendationPlan
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
+from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClient, AlpacaPaperClientError
 
@@ -39,10 +40,12 @@ class OrderExecutionService:
         settings: SettingsRepository,
         executions: BrokerOrderExecutionRepository,
         client: AlpacaPaperClient | None = None,
+        positions: BrokerPositionRepository | None = None,
     ) -> None:
         self.settings = settings
         self.executions = executions
         self.client = client
+        self.positions = positions
 
     def execute_plans(
         self,
@@ -265,7 +268,9 @@ class OrderExecutionService:
             created_at=existing.created_at,
             updated_at=datetime.now(timezone.utc),
         )
-        return self.executions.update(canceled)
+        updated = self.executions.update(canceled)
+        self._sync_position_from_order(updated)
+        return updated
 
     def refresh_execution(self, execution_id: int) -> BrokerOrderExecution:
         existing = self.executions.get(execution_id)
@@ -273,7 +278,9 @@ class OrderExecutionService:
             raise ValueError("broker order id is missing, so the order cannot be refreshed")
         result = self._ensure_client().get_order(existing.broker_order_id)
         refreshed = self._apply_broker_snapshot(existing, result.payload, broker_status=result.broker_status)
-        return self.executions.update(refreshed)
+        updated = self.executions.update(refreshed)
+        self._sync_position_from_order(updated)
+        return updated
 
     def sync_open_executions(self, *, limit: int = 200) -> BrokerOrderSyncOutcome:
         orders = self.executions.list_all(limit=limit)
@@ -313,18 +320,24 @@ class OrderExecutionService:
             candidate.submitted_at = datetime.now(timezone.utc)
             candidate.response_payload = result.payload
             candidate.error_message = ""
-            return self.executions.create(candidate)
+            created = self.executions.create(candidate)
+            self._sync_position_from_order(created)
+            return created
         except AlpacaPaperClientError as exc:
             candidate.status = "failed"
             candidate.error_message = str(exc)
             candidate.response_payload = exc.payload
             candidate.submitted_at = datetime.now(timezone.utc)
-            return self.executions.create(candidate)
+            created = self.executions.create(candidate)
+            self._sync_position_from_order(created)
+            return created
         except Exception as exc:  # pragma: no cover - defensive catch for broker/client integration
             candidate.status = "failed"
             candidate.error_message = str(exc)
             candidate.submitted_at = datetime.now(timezone.utc)
-            return self.executions.create(candidate)
+            created = self.executions.create(candidate)
+            self._sync_position_from_order(created)
+            return created
 
     def _ensure_client(self) -> AlpacaPaperClient:
         if self.client is not None:
@@ -499,6 +512,130 @@ class OrderExecutionService:
             created_at=existing.created_at,
             updated_at=now,
         )
+
+    def _position_repository(self) -> BrokerPositionRepository | None:
+        if self.positions is not None:
+            return self.positions
+        session = getattr(self.executions, "session", None)
+        if session is None:
+            return None
+        self.positions = BrokerPositionRepository(session)
+        return self.positions
+
+    def _sync_position_from_order(self, order: BrokerOrderExecution) -> BrokerPosition | None:
+        if order.id is None or order.broker_order_id is None or order.status == "skipped":
+            return None
+        repository = self._position_repository()
+        if repository is None:
+            return None
+        position = self._derive_position(order)
+        return repository.upsert_by_order_execution(position)
+
+    def _derive_position(self, order: BrokerOrderExecution) -> BrokerPosition:
+        payload = order.response_payload if isinstance(order.response_payload, dict) else {}
+        entry_avg_price = self._payload_float(payload, "filled_avg_price")
+        entry_filled_at = self._broker_timestamp(payload, "filled_at", "filledAt") or order.filled_at
+        entry_filled_qty = self._payload_float(payload, "filled_qty") or 0.0
+        quantity = int(order.quantity or entry_filled_qty or 0)
+        status = "submitted"
+        current_quantity = 0
+        exit_order_id: str | None = None
+        exit_reason: str | None = None
+        exit_avg_price: float | None = None
+        exit_filled_at: datetime | None = None
+        error_message = ""
+
+        broker_status = str(payload.get("status") or order.status or "").strip().lower()
+        legs_value = payload.get("legs")
+        legs = [leg for leg in legs_value if isinstance(leg, dict)] if isinstance(legs_value, list) else []
+        filled_exit_legs: list[tuple[str, dict[str, object]]] = []
+        for leg in legs:
+            leg_status = str(leg.get("status") or "").strip().lower()
+            leg_filled_at = self._broker_timestamp(leg, "filled_at", "filledAt")
+            if leg_status != "filled" and leg_filled_at is None:
+                continue
+            leg_type = str(leg.get("type") or leg.get("order_type") or "").strip().lower()
+            if leg_type in {"limit", "limit_order"}:
+                filled_exit_legs.append(("take_profit", leg))
+            elif leg_type in {"stop", "stop_limit", "stop_order"}:
+                filled_exit_legs.append(("stop_loss", leg))
+
+        if len(filled_exit_legs) > 1:
+            status = "needs_review"
+            error_message = "multiple filled exit legs found"
+        elif filled_exit_legs:
+            exit_reason, exit_leg = filled_exit_legs[0]
+            status = "win" if exit_reason == "take_profit" else "loss"
+            exit_order_id = str(exit_leg.get("id")) if exit_leg.get("id") is not None else None
+            exit_avg_price = self._payload_float(exit_leg, "filled_avg_price")
+            exit_filled_at = self._broker_timestamp(exit_leg, "filled_at", "filledAt")
+            current_quantity = 0
+        elif entry_filled_at is not None or broker_status == "filled" or entry_filled_qty > 0:
+            status = "open"
+            current_quantity = quantity
+        elif broker_status == "canceled" or order.status == "canceled":
+            status = "canceled"
+        elif broker_status in {"failed", "rejected", "expired"} or order.status in {"failed", "rejected", "expired"}:
+            status = "error"
+            error_message = order.error_message or f"broker order {broker_status or order.status}"
+
+        realized_pnl = self._realized_pnl(order=order, quantity=quantity, entry_avg_price=entry_avg_price, exit_avg_price=exit_avg_price)
+        realized_return_pct = None
+        realized_r_multiple = None
+        if realized_pnl is not None and entry_avg_price and quantity > 0:
+            basis = abs(entry_avg_price * quantity)
+            if basis > 0:
+                realized_return_pct = round((realized_pnl / basis) * 100.0, 4)
+            if order.stop_loss is not None:
+                risk_per_share = abs(entry_avg_price - float(order.stop_loss))
+                if risk_per_share > 0:
+                    realized_r_multiple = round(realized_pnl / (risk_per_share * quantity), 4)
+
+        return BrokerPosition(
+            broker_order_execution_id=order.id or 0,
+            broker=order.broker,
+            account_mode=order.account_mode,
+            recommendation_plan_id=order.recommendation_plan_id,
+            recommendation_plan_ticker=order.recommendation_plan_ticker,
+            run_id=order.run_id,
+            job_id=order.job_id,
+            ticker=order.ticker,
+            action=order.action,
+            side=order.side,
+            quantity=quantity,
+            current_quantity=current_quantity,
+            status=status,
+            entry_order_id=order.broker_order_id,
+            entry_avg_price=entry_avg_price,
+            entry_filled_at=entry_filled_at,
+            exit_order_id=exit_order_id,
+            exit_reason=exit_reason,
+            exit_avg_price=exit_avg_price,
+            exit_filled_at=exit_filled_at,
+            realized_pnl=realized_pnl,
+            realized_return_pct=realized_return_pct,
+            realized_r_multiple=realized_r_multiple,
+            raw_broker_payload=payload,
+            error_message=error_message,
+        )
+
+    @staticmethod
+    def _payload_float(payload: dict[str, object], key: str) -> float | None:
+        value = payload.get(key)
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _realized_pnl(*, order: BrokerOrderExecution, quantity: int, entry_avg_price: float | None, exit_avg_price: float | None) -> float | None:
+        if entry_avg_price is None or exit_avg_price is None or quantity <= 0:
+            return None
+        if order.action == "short" or order.side == "sell":
+            return round((entry_avg_price - exit_avg_price) * quantity, 4)
+        return round((exit_avg_price - entry_avg_price) * quantity, 4)
 
     def _store_skip(
         self,
