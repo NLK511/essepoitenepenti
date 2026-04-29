@@ -79,13 +79,13 @@ No Alpaca submission may be attempted for a risk-blocked candidate.
 
 ## Operator UI
 
-The app must provide a risk dashboard at `/risk` showing current risk state and manual controls:
+The Broker Orders page must include the risk dashboard directly because risk state is part of broker execution, not a separate operator workflow. The merged Broker Orders view shows current risk state and manual controls:
 
 - Halt trading
 - Resume trading
-- Refresh
+- Refresh risk/orders
 
-The Settings response also includes risk settings so operators can see the active limits alongside execution settings.
+The Settings response also includes risk settings so operators can see and edit the active limits alongside execution settings.
 
 ## v1 limitations
 
