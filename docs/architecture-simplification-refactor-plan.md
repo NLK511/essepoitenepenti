@@ -1,7 +1,7 @@
 # Architecture Simplification Refactor Plan
 
 ## Status
-In progress. Phase 1 effective outcomes is implemented. Phase 2 shared performance metrics is implemented. Phase 3 now has the normalized `TradeDecisionPolicy` foundation and live watchlist orchestration is built from the active policy. Phase 4, Phase 5, and Phase 6 now have typed foundations. Later consumer migrations must continue incrementally with specs/tests before behavior changes.
+In progress. Phase 1 effective outcomes is implemented. Phase 2 shared performance metrics is implemented. Phase 3 now has the normalized `TradeDecisionPolicy` foundation and live watchlist orchestration is built from the active policy. Phase 4, Phase 5, and Phase 6 now have typed foundations. Phase 7 has the first broker workbench read model. Later consumer migrations must continue incrementally with specs/tests before behavior changes.
 
 ## Goal
 Make the app leaner and safer for autonomous trading by replacing overlapping, source-specific abstractions with a few explicit product contracts.
@@ -157,16 +157,16 @@ Acceptance criteria:
 - order execution, position lifecycle, plan status, outcome status, and job status remain distinct
 
 ### Phase 6 — Plan responsibility split
-Status: execution-candidate foundation implemented; consumer migration still planned.
+Status: execution-candidate foundation implemented; order-execution migration implemented.
 
 Implemented:
 - `ExecutionCandidate`
 - `ExecutionCandidateResult`
 - `ExecutionCandidateBuilder`
+- order execution submission path uses `ExecutionCandidateBuilder` for candidate validation and quantity/client-order-id derivation
 - tests for valid candidate extraction and invalid-plan skip reason
 
 Still needed:
-- migrate order execution submission logic onto `ExecutionCandidateBuilder` without changing broker-order audit details
 - `PlanReliabilityFeatures` builder for tuning/search/calibration
 - recommendation plans remain stable proposed-plan artifacts
 
@@ -175,12 +175,15 @@ Acceptance criteria:
 - broad search consumes normalized features and effective outcomes
 
 ### Phase 7 — Backend read models for complex pages
-Status: planned.
+Status: first broker workbench read model implemented.
 
-Deliverables:
-- broker workbench read model
+Implemented:
+- `/api/broker-workbench` returns broker orders, broker positions, risk state, and counts in one backend-reconciled payload
+- route test for broker workbench payload
+
+Still needed:
 - research performance workbench read model
-- frontend pages stop duplicating backend reconciliation rules
+- frontend pages migrate from multiple local fetches to read-model endpoints where useful
 
 Acceptance criteria:
 - page payloads contain source labels and pre-reconciled metrics

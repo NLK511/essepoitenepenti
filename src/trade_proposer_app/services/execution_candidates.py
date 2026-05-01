@@ -24,6 +24,9 @@ class ExecutionCandidate:
 class ExecutionCandidateResult:
     candidate: ExecutionCandidate | None = None
     skip_reason: str | None = None
+    entry_price: float | None = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
 
     @property
     def is_candidate(self) -> bool:
@@ -41,24 +44,27 @@ class ExecutionCandidateBuilder:
         entry_price = self.entry_reference(plan)
         if entry_price is None or entry_price <= 0:
             return ExecutionCandidateResult(skip_reason="missing_entry_price")
-        stop_loss = plan.stop_loss
-        take_profit = plan.take_profit
+        stop_loss = float(plan.stop_loss) if plan.stop_loss is not None else None
+        take_profit = float(plan.take_profit) if plan.take_profit is not None else None
         if stop_loss is None or take_profit is None:
-            return ExecutionCandidateResult(skip_reason="missing_exit_levels")
+            return ExecutionCandidateResult(skip_reason="missing_exit_levels", entry_price=entry_price)
         if not self.levels_are_directionally_valid(plan.action, entry_price, stop_loss, take_profit):
-            return ExecutionCandidateResult(skip_reason="invalid_trade_levels")
+            return ExecutionCandidateResult(skip_reason="invalid_trade_levels", entry_price=entry_price, stop_loss=stop_loss, take_profit=take_profit)
         quantity = int(math.floor(float(notional_per_plan) / float(entry_price)))
         if quantity < 1:
-            return ExecutionCandidateResult(skip_reason="quantity_below_minimum")
+            return ExecutionCandidateResult(skip_reason="quantity_below_minimum", entry_price=entry_price, stop_loss=stop_loss, take_profit=take_profit)
         return ExecutionCandidateResult(
             candidate=ExecutionCandidate(
                 plan=plan,
                 entry_price=entry_price,
                 stop_loss=float(stop_loss),
-                take_profit=float(take_profit),
+                take_profit=take_profit,
                 quantity=quantity,
                 client_order_id=self.client_order_id(plan, run_id=run_id),
-            )
+            ),
+            entry_price=entry_price,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
         )
 
     @staticmethod

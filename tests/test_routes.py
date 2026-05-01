@@ -1154,6 +1154,68 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fetched.json()["exit_reason"], "take_profit")
         self.assertEqual(missing.status_code, 404)
 
+    async def test_broker_workbench_returns_orders_positions_and_risk(self) -> None:
+        run_id = self.seed_run_with_diagnostics()
+        session = Session(bind=self.engine)
+        try:
+            job = JobRepository(session).list_all()[0]
+            plan = RecommendationPlanRepository(session).list_plans(run_id=run_id, limit=10)[0]
+            order = BrokerOrderExecutionRepository(session).create(
+                BrokerOrderExecution(
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker=plan.ticker,
+                    run_id=run_id,
+                    job_id=job.id,
+                    ticker=plan.ticker,
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    quantity=1,
+                    notional_amount=100.0,
+                    entry_price=100.0,
+                    stop_loss=95.0,
+                    take_profit=110.0,
+                    status="open",
+                    client_order_id="tp-workbench",
+                    request_payload={"symbol": plan.ticker},
+                    response_payload={},
+                )
+            )
+            BrokerPositionRepository(session).create(
+                BrokerPosition(
+                    broker_order_execution_id=order.id or 0,
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker=plan.ticker,
+                    run_id=run_id,
+                    job_id=job.id,
+                    ticker=plan.ticker,
+                    action="long",
+                    side="buy",
+                    quantity=1,
+                    current_quantity=1,
+                    status="open",
+                    entry_avg_price=100.0,
+                )
+            )
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get(f"/api/broker-workbench?run_id={run_id}")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["counts"]["broker_orders"], 1)
+        self.assertEqual(payload["counts"]["broker_positions"], 1)
+        self.assertEqual(payload["broker_orders"][0]["client_order_id"], "tp-workbench")
+        self.assertEqual(payload["broker_positions"][0]["status"], "open")
+        self.assertIn("allowed", payload["risk"])
+
     async def test_broker_order_routes_return_expected_errors(self) -> None:
         run_id = self.seed_run_with_diagnostics()
         session = Session(bind=self.engine)

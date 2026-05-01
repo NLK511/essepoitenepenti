@@ -18,6 +18,7 @@ from trade_proposer_app.api.routes.recommendation_quality import router as recom
 from trade_proposer_app.api.routes.risk import router as risk_router
 from trade_proposer_app.api.routes.broker_orders import router as broker_orders_router
 from trade_proposer_app.api.routes.broker_positions import router as broker_positions_router
+from trade_proposer_app.api.routes.broker_workbench import router as broker_workbench_router
 from trade_proposer_app.api.routes.runs import router as runs_router
 from trade_proposer_app.api.routes.settings import router as settings_router
 from trade_proposer_app.api.routes.tickers import router as tickers_router
@@ -41,6 +42,7 @@ router.include_router(recommendation_plans_router)
 router.include_router(recommendation_quality_router)
 router.include_router(broker_orders_router)
 router.include_router(broker_positions_router)
+router.include_router(broker_workbench_router)
 router.include_router(risk_router)
 router.include_router(watchlists_router)
 router.include_router(jobs_router)

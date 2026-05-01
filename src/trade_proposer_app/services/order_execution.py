@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from datetime import datetime, time, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -12,6 +11,7 @@ from trade_proposer_app.repositories.broker_order_executions import BrokerOrderE
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClient, AlpacaPaperClientError
+from trade_proposer_app.services.execution_candidates import ExecutionCandidateBuilder
 from trade_proposer_app.services.risk_management import BrokerRiskManager, TradeCandidate
 
 
@@ -47,6 +47,7 @@ class OrderExecutionService:
         self.executions = executions
         self.client = client
         self.positions = positions
+        self.candidate_builder = ExecutionCandidateBuilder()
 
     def execute_plans(
         self,
@@ -93,51 +94,34 @@ class OrderExecutionService:
         skip_reasons: dict[str, int] = {}
 
         for plan in plans:
-            if plan.id is None:
-                self._bump(skip_reasons, "missing_plan_id")
-                ordered_results.append(
-                    self._store_skip(plan, run_id=run_id, job_id=job_id, reason="missing_plan_id", config=config)
-                )
-                continue
-            if plan.action not in {"long", "short"}:
+            candidate_result = self.candidate_builder.build(plan, notional_per_plan=float(config["notional_per_plan"]), run_id=run_id)
+            if candidate_result.skip_reason == "non_actionable":
                 skip_reasons["non_actionable"] = skip_reasons.get("non_actionable", 0) + 1
+                continue
+            if candidate_result.candidate is None:
+                reason = candidate_result.skip_reason or "invalid_execution_candidate"
+                self._bump(skip_reasons, reason)
+                ordered_results.append(
+                    self._store_skip(
+                        plan,
+                        run_id=run_id,
+                        job_id=job_id,
+                        reason=reason,
+                        config=config,
+                        entry_price=candidate_result.entry_price,
+                        stop_loss=candidate_result.stop_loss,
+                        take_profit=candidate_result.take_profit,
+                    )
+                )
                 continue
 
             summary["actionable_plan_count"] = int(summary["actionable_plan_count"]) + 1
-
-            entry_price = self._entry_reference(plan)
-            if entry_price is None or entry_price <= 0:
-                self._bump(skip_reasons, "missing_entry_price")
-                ordered_results.append(
-                    self._store_skip(plan, run_id=run_id, job_id=job_id, reason="missing_entry_price", config=config)
-                )
-                continue
-
-            stop_loss = plan.stop_loss
-            take_profit = plan.take_profit
-            if stop_loss is None or take_profit is None:
-                self._bump(skip_reasons, "missing_exit_levels")
-                ordered_results.append(
-                    self._store_skip(plan, run_id=run_id, job_id=job_id, reason="missing_exit_levels", config=config, entry_price=entry_price)
-                )
-                continue
-
-            if not self._levels_are_directionally_valid(plan.action, entry_price, stop_loss, take_profit):
-                self._bump(skip_reasons, "invalid_trade_levels")
-                ordered_results.append(
-                    self._store_skip(plan, run_id=run_id, job_id=job_id, reason="invalid_trade_levels", config=config, entry_price=entry_price, stop_loss=stop_loss, take_profit=take_profit)
-                )
-                continue
-
-            quantity = int(math.floor(float(config["notional_per_plan"]) / float(entry_price)))
-            if quantity < 1:
-                self._bump(skip_reasons, "quantity_below_minimum")
-                ordered_results.append(
-                    self._store_skip(plan, run_id=run_id, job_id=job_id, reason="quantity_below_minimum", config=config, entry_price=entry_price, stop_loss=stop_loss, take_profit=take_profit)
-                )
-                continue
-
-            client_order_id = self._client_order_id(plan, run_id=run_id)
+            candidate = candidate_result.candidate
+            entry_price = candidate.entry_price
+            stop_loss = candidate.stop_loss
+            take_profit = candidate.take_profit
+            quantity = candidate.quantity
+            client_order_id = candidate.client_order_id
             existing = self.executions.get_by_client_order_id(config["broker"], client_order_id)
             if existing is not None:
                 summary["duplicate_order_count"] = int(summary["duplicate_order_count"]) + 1
@@ -378,28 +362,8 @@ class OrderExecutionService:
         counter[reason] = counter.get(reason, 0) + 1
 
     @staticmethod
-    def _entry_reference(plan: RecommendationPlan) -> float | None:
-        if plan.entry_price_low is not None and plan.entry_price_high is not None:
-            return (float(plan.entry_price_low) + float(plan.entry_price_high)) / 2.0
-        if plan.entry_price_low is not None:
-            return float(plan.entry_price_low)
-        if plan.entry_price_high is not None:
-            return float(plan.entry_price_high)
-        return None
-
-    @staticmethod
-    def _levels_are_directionally_valid(action: str, entry_price: float, stop_loss: float, take_profit: float) -> bool:
-        if action == "long":
-            return stop_loss < entry_price < take_profit
-        if action == "short":
-            return take_profit < entry_price < stop_loss
-        return False
-
-    @staticmethod
     def _client_order_id(plan: RecommendationPlan, *, run_id: int | None) -> str:
-        run_part = f"run-{run_id}" if run_id is not None else "run-none"
-        plan_part = f"plan-{plan.id or 'new'}"
-        return f"tp-{run_part}-{plan_part}-{plan.ticker.lower()}"
+        return ExecutionCandidateBuilder.client_order_id(plan, run_id=run_id)
 
     @staticmethod
     def _build_order_payload(
