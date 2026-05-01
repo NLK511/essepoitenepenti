@@ -4,7 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
-import type { AppSetting, BrokerOrderExecution, BrokerPosition, BrokerRiskAssessment, BrokerWorkbench, RiskHaltEvent, SettingsResponse } from "../types";
+import type { AppSetting, BrokerOrderExecution, BrokerPosition, BrokerRiskAssessment, BrokerWorkbench, RiskHaltEvent } from "../types";
 import { formatDate } from "../utils";
 
 function orderTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
@@ -75,16 +75,13 @@ export function BrokerOrdersPage() {
         if (runId) {
           params.set("run_id", runId);
         }
-        const [workbench, loadedSettings] = await Promise.all([
-          getJson<BrokerWorkbench>(`/api/broker-workbench?${params.toString()}`),
-          getJson<SettingsResponse>("/api/settings"),
-        ]);
+        const workbench = await getJson<BrokerWorkbench>(`/api/broker-workbench?${params.toString()}`);
         const loadedOrders = workbench.broker_orders;
         setOrders(loadedOrders);
         setPositions(workbench.broker_positions);
         setRisk(workbench.risk);
         setHaltEvents(workbench.risk_halt_events ?? []);
-        setSettings(loadedSettings.settings);
+        setSettings(workbench.settings ?? []);
         if (!selectedOrderId && loadedOrders[0]?.id) {
           const next = new URLSearchParams(searchParams);
           next.set("order_id", String(loadedOrders[0].id));
@@ -135,16 +132,13 @@ export function BrokerOrdersPage() {
     if (runId) {
       params.set("run_id", runId);
     }
-    const [workbench, loadedSettings] = await Promise.all([
-      getJson<BrokerWorkbench>(`/api/broker-workbench?${params.toString()}`),
-      getJson<SettingsResponse>("/api/settings"),
-    ]);
+    const workbench = await getJson<BrokerWorkbench>(`/api/broker-workbench?${params.toString()}`);
     const loadedOrders = workbench.broker_orders;
     setOrders(loadedOrders);
     setPositions(workbench.broker_positions);
     setRisk(workbench.risk);
     setHaltEvents(workbench.risk_halt_events ?? []);
-    setSettings(loadedSettings.settings);
+    setSettings(workbench.settings ?? []);
     const nextOrderId = nextSelectedOrderId ?? loadedOrders[0]?.id ?? null;
     if (nextOrderId) {
       const next = new URLSearchParams(searchParams);

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
-import type { CalibrationReportResponse, CalibrationSummary, PerformanceAssessmentResponse, PerformanceWindowAssessment, RecommendationPlanOutcome, WalkForwardValidationResponse } from "../types";
+import type { CalibrationSummary, PerformanceAssessmentResponse, PerformanceWindowAssessment } from "../types";
 import { formatDate, jobTypeLabel, runTone } from "../utils";
 import { Badge, Card, HelpHint, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 
@@ -81,9 +81,7 @@ function renderAssessment(content: string) {
 
 export function ResearchPage() {
   const [assessment, setAssessment] = useState<PerformanceAssessmentResponse | null>(null);
-  const [calibration, setCalibration] = useState<CalibrationReportResponse | null>(null);
-  const [walkForward, setWalkForward] = useState<WalkForwardValidationResponse | null>(null);
-  const [nearMissWinners, setNearMissWinners] = useState<RecommendationPlanOutcome[]>([]);
+
   const [activeTab, setActiveTab] = useState<"overview" | "calibration" | "validation" | "tuning">("overview");
   const [selectedWindow, setSelectedWindow] = useState<(typeof assessmentWindows)[number]>("30d");
   const [loading, setLoading] = useState(true);
@@ -96,17 +94,9 @@ export function ResearchPage() {
       setLoading(true);
       setError(null);
       try {
-        const [assessmentPayload, calibrationPayload, walkForwardPayload, nearMissPayload] = await Promise.all([
-          getJson<PerformanceAssessmentResponse>("/api/research/performance-workbench"),
-          getJson<CalibrationReportResponse>(`/api/recommendation-outcomes/calibration-report?evaluated_after=${encodeURIComponent(windowStartIso(selectedWindow))}&limit=2000`),
-          getJson<WalkForwardValidationResponse>("/api/recommendation-outcomes/walk-forward?lookback_days=365&validation_days=90&step_days=30&min_resolved_outcomes=20"),
-          getJson<RecommendationPlanOutcome[]>("/api/recommendation-outcomes?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&limit=200"),
-        ]);
+        const assessmentPayload = await getJson<PerformanceAssessmentResponse>(`/api/research/performance-workbench?calibration_evaluated_after=${encodeURIComponent(windowStartIso(selectedWindow))}`);
         if (!cancelled) {
           setAssessment(assessmentPayload);
-          setCalibration(calibrationPayload);
-          setWalkForward(walkForwardPayload);
-          setNearMissWinners(nearMissPayload);
         }
       } catch (err) {
         if (!cancelled) {
@@ -129,13 +119,15 @@ export function ResearchPage() {
   const latestMethod = typeof assessment?.latest_assessment?.method === "string" ? assessment.latest_assessment.method : "—";
   const latestGeneratedAt = typeof assessment?.latest_assessment?.generated_at === "string" ? assessment.latest_assessment.generated_at : assessment?.latest_run?.completed_at ?? null;
   const latestError = typeof assessment?.latest_assessment?.llm_error === "string" ? assessment.latest_assessment.llm_error : null;
-  const calibrationSummary: CalibrationSummary | null = calibration?.calibration_summary ?? assessment?.calibration_summary ?? null;
-  const calibrationReport = calibration?.calibration_report ?? calibrationSummary?.calibration_report ?? null;
+  const calibrationSummary: CalibrationSummary | null = assessment?.calibration_summary ?? null;
+  const calibrationReport = assessment?.calibration_report ?? calibrationSummary?.calibration_report ?? null;
   const calibrationBins = calibrationReport?.bins ?? [];
+  const walkForward = assessment?.walk_forward_validation ?? null;
+  const nearMissWinners = assessment?.near_miss_winners ?? [];
   const windowedAssessments = Array.isArray(assessment?.windowed_assessments) ? (assessment.windowed_assessments as PerformanceWindowAssessment[]) : [];
   const selectedAssessmentWindow = windowedAssessments.find((window) => window.window === selectedWindow) ?? windowedAssessments[0] ?? null;
   const nearMissFamilies = Object.entries(
-    nearMissWinners.reduce<Record<string, { count: number; workedCount: number; missDistances: number[] }>>((acc, item) => {
+    (assessment?.near_miss_winners ?? []).reduce<Record<string, { count: number; workedCount: number; missDistances: number[] }>>((acc, item) => {
       const key = (item.setup_family || "uncategorized").trim() || "uncategorized";
       const current = acc[key] ?? { count: 0, workedCount: 0, missDistances: [] };
       current.count += 1;
@@ -171,7 +163,7 @@ export function ResearchPage() {
     })
     .sort((left, right) => right.count - left.count || left.family.localeCompare(right.family));
   const nearMissTickers = Object.entries(
-    nearMissWinners.reduce<Record<string, { count: number; missDistances: number[] }>>((acc, item) => {
+    (assessment?.near_miss_winners ?? []).reduce<Record<string, { count: number; missDistances: number[] }>>((acc, item) => {
       const key = (item.ticker || "unknown").trim() || "unknown";
       const current = acc[key] ?? { count: 0, missDistances: [] };
       current.count += 1;
@@ -196,16 +188,8 @@ export function ResearchPage() {
     setError(null);
     try {
       await postForm("/api/research/performance-assessment/run", {});
-      const [assessmentPayload, calibrationPayload, walkForwardPayload, nearMissPayload] = await Promise.all([
-        getJson<PerformanceAssessmentResponse>("/api/research/performance-workbench"),
-        getJson<CalibrationReportResponse>(`/api/recommendation-outcomes/calibration-report?evaluated_after=${encodeURIComponent(windowStartIso(selectedWindow))}&limit=2000`),
-        getJson<WalkForwardValidationResponse>("/api/recommendation-outcomes/walk-forward?lookback_days=365&validation_days=90&step_days=30&min_resolved_outcomes=20"),
-        getJson<RecommendationPlanOutcome[]>("/api/recommendation-outcomes?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&limit=200"),
-      ]);
+      const assessmentPayload = await getJson<PerformanceAssessmentResponse>(`/api/research/performance-workbench?calibration_evaluated_after=${encodeURIComponent(windowStartIso(selectedWindow))}`);
       setAssessment(assessmentPayload);
-      setCalibration(calibrationPayload);
-      setWalkForward(walkForwardPayload);
-      setNearMissWinners(nearMissPayload);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

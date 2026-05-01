@@ -162,6 +162,7 @@ export interface BrokerWorkbench {
   broker_positions: BrokerPosition[];
   risk: BrokerRiskAssessment;
   risk_halt_events: RiskHaltEvent[];
+  settings: AppSetting[];
   counts: {
     broker_orders: number;
     broker_positions: number;
@@ -1206,6 +1207,9 @@ export interface PerformanceAssessmentResponse {
   latest_run: Run | null;
   latest_assessment: Record<string, unknown>;
   calibration_summary: CalibrationSummary | null;
+  calibration_report?: CalibrationReport | null;
+  walk_forward_validation?: WalkForwardValidationResponse | null;
+  near_miss_winners?: RecommendationPlanOutcome[];
   broker_performance?: Record<string, unknown> | null;
   broker_summary?: PerformanceSummary | null;
   effective_summary?: PerformanceSummary | null;
@@ -1289,6 +1293,11 @@ export interface SettingsResponse {
     settings: PlanGenerationTuningSettingsState;
     active_config: Record<string, unknown>;
   };
+}
+
+export interface SettingsWorkbench extends SettingsResponse {
+  preflight: AppPreflightReport;
+  broker_orders: BrokerOrderExecution[];
 }
 
 export interface DocSection {

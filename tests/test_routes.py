@@ -1043,6 +1043,20 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cancel.json()["status"], "canceled")
         self.assertTrue(any(order["status"] == "canceled" for order in run_detail_after.json()["broker_order_executions"]))
 
+    async def test_settings_workbench_returns_preflight_and_recent_broker_orders(self) -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/api/settings/workbench")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("settings", payload)
+        self.assertIn("providers", payload)
+        self.assertIn("preflight", payload)
+        self.assertIn("broker_orders", payload)
+        self.assertIn("order_execution", payload)
+        self.assertIn("risk_management", payload)
+
     async def test_risk_routes_assess_halt_and_resume(self) -> None:
         run_id = self.seed_run_with_diagnostics()
         session = Session(bind=self.engine)
@@ -1163,7 +1177,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
 
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            response = await client.get("/api/research/performance-workbench")
+            response = await client.get("/api/research/performance-workbench?calibration_evaluated_after=2024-01-01T00:00:00Z")
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -1171,6 +1185,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("broker_summary", payload)
         self.assertIn("effective_summary", payload)
         self.assertIn("calibration_summary", payload)
+        self.assertIn("calibration_report", payload)
+        self.assertIn("walk_forward_validation", payload)
+        self.assertIn("near_miss_winners", payload)
         self.assertIn("entry_miss_diagnostics", payload)
         self.assertIn("closed_positions", payload["broker_summary"])
         self.assertIn("resolved_outcomes", payload["effective_summary"])
@@ -1237,6 +1254,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["broker_positions"][0]["status"], "open")
         self.assertIn("allowed", payload["risk"])
         self.assertIn("risk_halt_events", payload)
+        self.assertIn("settings", payload)
 
     async def test_broker_order_routes_return_expected_errors(self) -> None:
         run_id = self.seed_run_with_diagnostics()

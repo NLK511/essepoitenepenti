@@ -3,15 +3,17 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import AppSetting
+from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
+from trade_proposer_app.services.preflight import AppPreflightService
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
-@router.get("")
-async def list_settings(session: Session = Depends(get_db_session)) -> dict[str, object]:
-    repository = SettingsRepository(session)
+
+def _settings_payload(session: Session, repository: SettingsRepository | None = None) -> dict[str, object]:
+    repository = repository or SettingsRepository(session)
     domain_settings = SettingsDomainService(repository=repository)
     strategy_settings = domain_settings.strategy_settings()
     execution_settings = domain_settings.execution_settings()
@@ -30,6 +32,23 @@ async def list_settings(session: Session = Depends(get_db_session)) -> dict[str,
             "settings": strategy_settings.plan_generation_tuning,
             "active_config": repository.get_plan_generation_active_config(PlanGenerationTuningRepository(session)),
         },
+    }
+
+
+@router.get("")
+async def list_settings(session: Session = Depends(get_db_session)) -> dict[str, object]:
+    return _settings_payload(session)
+
+
+@router.get("/workbench")
+async def get_settings_workbench(session: Session = Depends(get_db_session)) -> dict[str, object]:
+    repository = SettingsRepository(session)
+    settings_payload = _settings_payload(session, repository)
+    preflight = AppPreflightService(SettingsDomainService(repository=repository).operator_settings().social).run()
+    return {
+        **settings_payload,
+        "preflight": preflight,
+        "broker_orders": BrokerOrderExecutionRepository(session).list_all(limit=12),
     }
 
 

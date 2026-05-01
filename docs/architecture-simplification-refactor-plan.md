@@ -185,13 +185,17 @@ Acceptance criteria:
 Status: broker and research read model foundations implemented.
 
 Implemented:
-- `/api/broker-workbench` returns broker orders, broker positions, risk state, recent halt audit events, and counts in one backend-reconciled payload
+- `/api/broker-workbench` returns broker orders, broker positions, risk state, recent halt audit events, sync-related settings, and counts in one backend-reconciled payload
 - Broker Orders frontend page consumes `/api/broker-workbench` instead of separately stitching orders, positions, and risk
-- `/api/research/performance-workbench` returns latest assessment, broker summary, effective outcome summary, calibration summary, entry-miss diagnostics, and windows in one backend-reconciled payload
+- `/api/research/performance-workbench` returns latest assessment, broker summary, effective outcome summary, calibration summary/report, walk-forward validation, near-entry-miss winners, entry-miss diagnostics, and windows in one backend-reconciled payload
 - route tests for broker and research workbench payloads
 
+Implemented additionally:
+- Research frontend page consumes the expanded research performance workbench instead of stitching separate calibration-report, walk-forward, and near-entry-miss API calls
+- `/api/settings/workbench` returns settings, preflight, and recent broker order audit context
+- Settings frontend page consumes `/api/settings/workbench` instead of separately fetching settings, preflight, and broker orders
+
 Still needed:
-- Research frontend page migrate from multiple local fetches to the research performance workbench endpoint where useful
 - remove legacy endpoints only if no longer useful for API consumers; for now they stay as focused lower-level contracts
 
 Acceptance criteria:
@@ -217,8 +221,8 @@ Order of work:
 Current migration batches:
 - Batch A: settings-domain consumers and broker/risk status constants. Status: implemented for backend service/route consumers that only read domain settings; mutation methods remain in `SettingsRepository`.
 - Batch B: recommendation/outcome analytics status constants. Status: implemented for core outcome repositories, calibration, setup-family review, ticker summary, broker risk, and order execution paths.
-- Batch C: remaining frontend duplicate fetches that have a suitable backend workbench contract. Status: pending; keep lower-level endpoint calls where they still request focused data not included in a workbench contract.
-- Batch D: deprecate/remove only confirmed dead code after a final consumer inventory. Status: pending; no lower-level API endpoint has been removed yet.
+- Batch C: remaining frontend duplicate fetches that have a suitable backend workbench contract. Status: implemented for Research, Settings, and Broker Orders. Research now consumes one performance workbench payload for performance assessment, calibration report, walk-forward validation, and near-entry-miss winners. Settings now consumes one settings workbench payload for settings, preflight, and recent broker audit context. Broker Orders now consumes sync-related settings included in broker workbench instead of issuing a separate `/api/settings` read.
+- Batch D: deprecate/remove only confirmed dead code after a final consumer inventory. Status: pending; no lower-level API endpoint has been removed yet because they remain focused API/debug contracts.
 
 ## Regression protocol
 For each phase:

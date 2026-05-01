@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { getJson, postForm } from "../api";
 import { Card, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
-import type { AppSetting, AppPreflightReport, BrokerOrderExecution, EvaluationRealismState, ProviderCredential, SettingsResponse } from "../types";
+import type { AppSetting, AppPreflightReport, BrokerOrderExecution, EvaluationRealismState, ProviderCredential, SettingsResponse, SettingsWorkbench } from "../types";
 import { toSettingMap } from "../utils";
 
 interface SettingsViewData {
@@ -25,20 +25,16 @@ export function SettingsPage() {
   async function loadData() {
     try {
       setError(null);
-      const [settingsResponse, preflight, brokerOrders] = await Promise.all([
-        getJson<SettingsResponse>("/api/settings"),
-        getJson<AppPreflightReport>("/api/health/preflight"),
-        getJson<BrokerOrderExecution[]>("/api/broker-orders?limit=12"),
-      ]);
+      const settingsResponse = await getJson<SettingsWorkbench>("/api/settings/workbench");
       setData({
         settings: settingsResponse.settings,
         providers: settingsResponse.providers,
-        brokerOrders,
+        brokerOrders: settingsResponse.broker_orders,
         evaluationRealism: settingsResponse.evaluation_realism,
         orderExecution: settingsResponse.order_execution,
         riskManagement: settingsResponse.risk_management,
         planGenerationTuning: settingsResponse.plan_generation_tuning,
-        preflight,
+        preflight: settingsResponse.preflight,
       });
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load settings");
