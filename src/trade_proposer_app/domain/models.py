@@ -275,6 +275,16 @@ class BrokerOrderExecution(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class RiskHaltEvent(BaseModel):
+    id: int | None = None
+    action: str
+    reason: str = ""
+    previous_halt_enabled: bool = False
+    new_halt_enabled: bool = False
+    actor: str = "operator"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class BrokerRiskAssessment(BaseModel):
     allowed: bool = True
     enabled: bool = True

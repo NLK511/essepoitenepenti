@@ -132,10 +132,13 @@ Implemented:
 - `ExecutionSettings`
 - `OperatorSettings`
 - tests proving the legacy key/value settings can be read through domain-specific views
+- `RiskHaltEvent` audit records
+- `/api/risk/halt-events`
+- risk halt/resume writes an audit event while keeping current halt state in compatible settings keys
 
 Still needed:
-- migration path that keeps existing persisted setting keys compatible
-- kill-switch state separated from durable risk-limit settings, with audit trail
+- migration path that keeps existing persisted setting keys compatible if settings are later split into physical tables
+- optional actor identity beyond the current `operator` default
 
 Acceptance criteria:
 - risk halt/resume history is queryable

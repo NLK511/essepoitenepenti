@@ -1074,6 +1074,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             risk = await client.get("/api/risk")
             halted = await client.post("/api/risk/halt", data={"reason": "test halt"})
             resumed = await client.post("/api/risk/resume")
+            halt_events = await client.get("/api/risk/halt-events")
 
         self.assertEqual(risk.status_code, 200)
         self.assertEqual(risk.json()["metrics"]["today_loss_count"], 1)
@@ -1082,6 +1083,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("manual_halt_active", halted.json()["reasons"])
         self.assertEqual(resumed.status_code, 200)
         self.assertFalse(resumed.json()["halt_enabled"])
+        self.assertEqual(halt_events.status_code, 200)
+        self.assertEqual([event["action"] for event in halt_events.json()], ["resume", "halt"])
+        self.assertEqual(halt_events.json()[1]["reason"], "test halt")
 
     async def test_broker_position_routes_list_and_fetch_positions(self) -> None:
         run_id = self.seed_run_with_diagnostics()

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from trade_proposer_app.domain.models import BrokerPosition, BrokerRiskAssessment
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
+from trade_proposer_app.repositories.risk_halt_events import RiskHaltEventRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 
 OPEN_STATUSES = {"submitted", "open"}
@@ -18,9 +19,15 @@ class TradeCandidate:
 
 
 class BrokerRiskManager:
-    def __init__(self, settings: SettingsRepository, positions: BrokerPositionRepository) -> None:
+    def __init__(
+        self,
+        settings: SettingsRepository,
+        positions: BrokerPositionRepository,
+        halt_events: RiskHaltEventRepository | None = None,
+    ) -> None:
         self.settings = settings
         self.positions = positions
+        self.halt_events = halt_events
 
     def assess(self, candidate: TradeCandidate | None = None, *, now: datetime | None = None) -> BrokerRiskAssessment:
         config = self.settings.get_risk_management_config()
@@ -78,11 +85,27 @@ class BrokerRiskManager:
         )
 
     def halt(self, reason: str) -> BrokerRiskAssessment:
+        previous = bool(self.settings.get_risk_management_config()["halt_enabled"])
         self.settings.set_risk_halt(enabled=True, reason=reason or "manual halt")
+        if self.halt_events is not None:
+            self.halt_events.create(
+                action="halt",
+                reason=reason or "manual halt",
+                previous_halt_enabled=previous,
+                new_halt_enabled=True,
+            )
         return self.assess()
 
     def resume(self) -> BrokerRiskAssessment:
+        previous = bool(self.settings.get_risk_management_config()["halt_enabled"])
         self.settings.set_risk_halt(enabled=False, reason="")
+        if self.halt_events is not None:
+            self.halt_events.create(
+                action="resume",
+                reason="",
+                previous_halt_enabled=previous,
+                new_halt_enabled=False,
+            )
         return self.assess()
 
     def _metrics(self, positions: list[BrokerPosition], *, now: datetime) -> dict[str, object]:

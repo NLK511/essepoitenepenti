@@ -103,6 +103,18 @@ class BrokerOrderExecutionRecord(Base, TimestampMixin):
     error_message: Mapped[str] = mapped_column(Text, default="")
 
 
+class RiskHaltEventRecord(Base):
+    __tablename__ = "risk_halt_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    action: Mapped[str] = mapped_column(String(32), index=True)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    previous_halt_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    new_halt_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    actor: Mapped[str] = mapped_column(String(64), default="operator")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
 class BrokerPositionRecord(Base, TimestampMixin):
     __tablename__ = "broker_positions"
     __table_args__ = (
