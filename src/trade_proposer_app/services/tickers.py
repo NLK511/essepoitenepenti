@@ -1,6 +1,7 @@
 from statistics import mean
 
 from trade_proposer_app.domain.models import RecommendationPlan, TickerAnalysisPage, TickerPerformanceSummary
+from trade_proposer_app.domain.statuses import OutcomeStatus, TradeOutcome
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 
 
@@ -35,10 +36,10 @@ class TickerAnalysisService:
             open_plan_count=sum(
                 1
                 for item in recommendation_plans
-                if item.latest_outcome is None or item.latest_outcome.status not in {"resolved"}
+                if item.latest_outcome is None or item.latest_outcome.status != OutcomeStatus.RESOLVED.value
             ),
-            win_plan_count=sum(1 for item in recommendation_plans if item.latest_outcome and item.latest_outcome.outcome == "win"),
-            loss_plan_count=sum(1 for item in recommendation_plans if item.latest_outcome and item.latest_outcome.outcome == "loss"),
+            win_plan_count=sum(1 for item in recommendation_plans if item.latest_outcome and item.latest_outcome.outcome == TradeOutcome.WIN.value),
+            loss_plan_count=sum(1 for item in recommendation_plans if item.latest_outcome and item.latest_outcome.outcome == TradeOutcome.LOSS.value),
             warning_plan_count=sum(1 for item in recommendation_plans if item.warnings),
             average_confidence=round(mean(confidence_values), 2) if confidence_values else None,
         )

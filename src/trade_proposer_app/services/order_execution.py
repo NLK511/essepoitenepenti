@@ -7,13 +7,14 @@ from zoneinfo import ZoneInfo
 from uuid import uuid4
 
 from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPosition, RecommendationPlan
-from trade_proposer_app.domain.statuses import TERMINAL_EXECUTION_STATUSES
+from trade_proposer_app.domain.statuses import BrokerPositionStatus, ExecutionStatus, TERMINAL_EXECUTION_STATUSES, TradeOutcome
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClient, AlpacaPaperClientError
 from trade_proposer_app.services.execution_candidates import ExecutionCandidateBuilder
 from trade_proposer_app.services.risk_management import BrokerRiskManager, TradeCandidate
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 
 
 def result_broker_order_id(payload: dict[str, object]) -> str | None:
@@ -56,7 +57,7 @@ class OrderExecutionService:
         run_id: int | None = None,
         job_id: int | None = None,
     ) -> OrderExecutionOutcome:
-        config = self.settings.get_order_execution_config()
+        config = SettingsDomainService(repository=self.settings).execution_settings().broker_order_execution
         warnings: list[str] = []
         summary: dict[str, object] = {
             "enabled": config["enabled"],
@@ -180,7 +181,7 @@ class OrderExecutionService:
             )
             ordered_results.append(self._submit_candidate(stored_order))
             latest_order = ordered_results[-1]
-            if latest_order.status in {"accepted", "filled", "submitted"}:
+            if latest_order.status in {ExecutionStatus.ACCEPTED.value, ExecutionStatus.FILLED.value, ExecutionStatus.SUBMITTED.value}:
                 summary["submitted_order_count"] = int(summary["submitted_order_count"]) + 1
             else:
                 summary["failed_order_count"] = int(summary["failed_order_count"]) + 1
@@ -194,7 +195,7 @@ class OrderExecutionService:
 
     def resubmit_execution(self, execution_id: int) -> BrokerOrderExecution:
         existing = self.executions.get(execution_id)
-        if existing.status not in {"failed", "canceled"}:
+        if existing.status not in {ExecutionStatus.FAILED.value, ExecutionStatus.CANCELED.value}:
             raise ValueError("only failed or canceled broker orders can be resubmitted")
         if existing.quantity <= 0:
             raise ValueError("only orders with a positive quantity can be resubmitted")
@@ -241,9 +242,9 @@ class OrderExecutionService:
         existing = self.executions.get(execution_id)
         if existing.broker_order_id is None:
             raise ValueError("broker order id is missing, so the order cannot be canceled")
-        if existing.status == "canceled":
+        if existing.status == ExecutionStatus.CANCELED.value:
             raise ValueError("broker order is already canceled")
-        if existing.status in {"filled", "win", "loss"}:
+        if existing.status in {ExecutionStatus.FILLED.value, TradeOutcome.WIN.value, TradeOutcome.LOSS.value}:
             raise ValueError("filled or closed orders cannot be canceled")
         client = self._ensure_client()
         result = client.cancel_order(existing.broker_order_id)
@@ -265,7 +266,7 @@ class OrderExecutionService:
             entry_price=existing.entry_price,
             stop_loss=existing.stop_loss,
             take_profit=existing.take_profit,
-            status="canceled",
+            status=ExecutionStatus.CANCELED.value,
             broker_order_id=existing.broker_order_id,
             client_order_id=existing.client_order_id,
             submitted_at=existing.submitted_at,
@@ -298,7 +299,7 @@ class OrderExecutionService:
         failed = 0
         warnings: list[str] = []
         for order in orders:
-            if order.broker_order_id is None or order.status in TERMINAL_EXECUTION_STATUSES - {"failed"}:
+            if order.broker_order_id is None or order.status in TERMINAL_EXECUTION_STATUSES - {ExecutionStatus.FAILED.value}:
                 skipped += 1
                 continue
             try:
@@ -325,7 +326,7 @@ class OrderExecutionService:
         try:
             result = self.client.submit_order(candidate.request_payload)  # type: ignore[union-attr]
             candidate.broker_order_id = result.broker_order_id
-            candidate.status = result.broker_status or "submitted"
+            candidate.status = result.broker_status or ExecutionStatus.SUBMITTED.value
             candidate.submitted_at = datetime.now(timezone.utc)
             candidate.response_payload = result.payload
             candidate.error_message = ""
@@ -333,7 +334,7 @@ class OrderExecutionService:
             self._sync_position_from_order(created)
             return created
         except AlpacaPaperClientError as exc:
-            candidate.status = "failed"
+            candidate.status = ExecutionStatus.FAILED.value
             candidate.error_message = str(exc)
             candidate.response_payload = exc.payload
             candidate.submitted_at = datetime.now(timezone.utc)
@@ -341,7 +342,7 @@ class OrderExecutionService:
             self._sync_position_from_order(created)
             return created
         except Exception as exc:  # pragma: no cover - defensive catch for broker/client integration
-            candidate.status = "failed"
+            candidate.status = ExecutionStatus.FAILED.value
             candidate.error_message = str(exc)
             candidate.submitted_at = datetime.now(timezone.utc)
             created = self.executions.create(candidate)
@@ -444,11 +445,11 @@ class OrderExecutionService:
                 continue
             leg_type = str(leg.get("type") or leg.get("order_type") or "").strip().lower()
             if leg_type in {"limit", "limit_order"}:
-                return "win"
+                return TradeOutcome.WIN.value
             if leg_type in {"stop", "stop_limit", "stop_order"}:
-                return "loss"
-        if fallback_status == "filled":
-            return "open"
+                return TradeOutcome.LOSS.value
+        if fallback_status == ExecutionStatus.FILLED.value:
+            return BrokerPositionStatus.OPEN.value
         return fallback_status
 
     def _apply_broker_snapshot(
@@ -463,9 +464,9 @@ class OrderExecutionService:
         now = self._now()
         filled_at = self._broker_timestamp(payload, "filled_at", "filledAt") or existing.filled_at
         canceled_at = self._broker_timestamp(payload, "canceled_at", "canceledAt") or existing.canceled_at
-        if status in {"open", "win", "loss"} and filled_at is None:
+        if status in {BrokerPositionStatus.OPEN.value, TradeOutcome.WIN.value, TradeOutcome.LOSS.value} and filled_at is None:
             filled_at = now
-        if status == "canceled" and canceled_at is None:
+        if status == BrokerPositionStatus.CANCELED.value and canceled_at is None:
             canceled_at = now
         return BrokerOrderExecution(
             id=existing.id,
@@ -514,7 +515,7 @@ class OrderExecutionService:
         return self.positions
 
     def _sync_position_from_order(self, order: BrokerOrderExecution) -> BrokerPosition | None:
-        if order.id is None or order.broker_order_id is None or order.status == "skipped":
+        if order.id is None or order.broker_order_id is None or order.status == ExecutionStatus.SKIPPED.value:
             return None
         repository = self._position_repository()
         if repository is None:
@@ -528,7 +529,7 @@ class OrderExecutionService:
         entry_filled_at = self._broker_timestamp(payload, "filled_at", "filledAt") or order.filled_at
         entry_filled_qty = self._payload_float(payload, "filled_qty") or 0.0
         quantity = int(order.quantity or entry_filled_qty or 0)
-        status = "submitted"
+        status = BrokerPositionStatus.SUBMITTED.value
         current_quantity = 0
         exit_order_id: str | None = None
         exit_reason: str | None = None
@@ -552,22 +553,22 @@ class OrderExecutionService:
                 filled_exit_legs.append(("stop_loss", leg))
 
         if len(filled_exit_legs) > 1:
-            status = "needs_review"
+            status = BrokerPositionStatus.NEEDS_REVIEW.value
             error_message = "multiple filled exit legs found"
         elif filled_exit_legs:
             exit_reason, exit_leg = filled_exit_legs[0]
-            status = "win" if exit_reason == "take_profit" else "loss"
+            status = TradeOutcome.WIN.value if exit_reason == "take_profit" else TradeOutcome.LOSS.value
             exit_order_id = str(exit_leg.get("id")) if exit_leg.get("id") is not None else None
             exit_avg_price = self._payload_float(exit_leg, "filled_avg_price")
             exit_filled_at = self._broker_timestamp(exit_leg, "filled_at", "filledAt")
             current_quantity = 0
-        elif entry_filled_at is not None or broker_status == "filled" or entry_filled_qty > 0:
-            status = "open"
+        elif entry_filled_at is not None or broker_status == ExecutionStatus.FILLED.value or entry_filled_qty > 0:
+            status = BrokerPositionStatus.OPEN.value
             current_quantity = quantity
-        elif broker_status == "canceled" or order.status == "canceled":
-            status = "canceled"
-        elif broker_status in {"failed", "rejected", "expired"} or order.status in {"failed", "rejected", "expired"}:
-            status = "error"
+        elif broker_status == ExecutionStatus.CANCELED.value or order.status == ExecutionStatus.CANCELED.value:
+            status = BrokerPositionStatus.CANCELED.value
+        elif broker_status in {ExecutionStatus.FAILED.value, ExecutionStatus.REJECTED.value, ExecutionStatus.EXPIRED.value} or order.status in {ExecutionStatus.FAILED.value, ExecutionStatus.REJECTED.value, ExecutionStatus.EXPIRED.value}:
+            status = BrokerPositionStatus.ERROR.value
             error_message = order.error_message or f"broker order {broker_status or order.status}"
 
         realized_pnl = self._realized_pnl(order=order, quantity=quantity, entry_avg_price=entry_avg_price, exit_avg_price=exit_avg_price)
@@ -657,7 +658,7 @@ class OrderExecutionService:
             entry_price=entry_price,
             stop_loss=stop_loss,
             take_profit=take_profit,
-            status="skipped",
+            status=ExecutionStatus.SKIPPED.value,
             client_order_id=ExecutionCandidateBuilder.client_order_id(plan, run_id=run_id),
             error_message=reason,
             request_payload={"reason": reason},

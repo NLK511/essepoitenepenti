@@ -10,12 +10,13 @@ from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRep
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.preflight import AppPreflightService
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 
 router = APIRouter(tags=["health"])
 
 
 def _create_preflight_service(session: Session) -> AppPreflightService:
-    social_settings = SettingsRepository(session).get_social_settings()
+    social_settings = SettingsDomainService(session).operator_settings().social
     try:
         return AppPreflightService(social_settings)
     except TypeError:

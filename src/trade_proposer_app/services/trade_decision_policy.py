@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 
 
 @dataclass(frozen=True)
@@ -86,12 +87,14 @@ class TradeDecisionPolicyService:
         self.plan_generation = PlanGenerationTuningRepository(session)
 
     def active_policy(self) -> TradeDecisionPolicy:
-        signal_gating = self.settings.get_signal_gating_tuning_config()
-        config_version_id = self.settings.get_plan_generation_active_config_version_id()
+        strategy_settings = SettingsDomainService(repository=self.settings).strategy_settings()
+        signal_gating = strategy_settings.signal_gating
+        raw_config_version_id = strategy_settings.plan_generation_tuning.get("active_config_version_id")
+        config_version_id = raw_config_version_id if isinstance(raw_config_version_id, int) else None
         plan_generation_config = self.settings.get_plan_generation_active_config(self.plan_generation)
         return TradeDecisionPolicy(
             policy_id=f"settings-active:{config_version_id or 'baseline'}",
-            confidence_threshold=self.settings.get_confidence_threshold(),
+            confidence_threshold=strategy_settings.confidence_threshold,
             signal_gating=SignalGatingPolicy(
                 threshold_offset=self._float(signal_gating.get("threshold_offset")),
                 confidence_adjustment=self._float(signal_gating.get("confidence_adjustment")),

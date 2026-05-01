@@ -14,6 +14,7 @@ from trade_proposer_app.services.recommendation_evidence_concentration import Re
 from trade_proposer_app.services.recommendation_plan_baselines import RecommendationPlanBaselineService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_setup_family_reviews import RecommendationSetupFamilyReviewService
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 
 
 class RecommendationQualitySummaryService:
@@ -33,6 +34,7 @@ class RecommendationQualitySummaryService:
         self.effective_outcomes = EffectivePlanOutcomeRepository(session)
         self.plans = RecommendationPlanRepository(session)
         self.settings = SettingsRepository(session)
+        self.settings_domains = SettingsDomainService(repository=self.settings)
         self.performance = PerformanceAssessmentService(session)
         self.tuning = PlanGenerationTuningService(session)
 
@@ -55,7 +57,7 @@ class RecommendationQualitySummaryService:
                 lookback_days=365,
                 validation_days=90,
                 step_days=30,
-                min_validation_resolved=int(self.settings.get_plan_generation_tuning_settings()["min_validation_resolved"]),
+                min_validation_resolved=int(self.settings_domains.strategy_settings().plan_generation_tuning["min_validation_resolved"]),
             ).model_dump(mode="json")
         except Exception as exc:  # pragma: no cover
             walk_forward_error = str(exc)
@@ -116,11 +118,7 @@ class RecommendationQualitySummaryService:
 
         summary.update(
             {
-                "tuning_settings": {
-                    "confidence_threshold": self.settings.get_confidence_threshold(),
-                    "signal_gating": self.settings.get_signal_gating_tuning_config(),
-                    "plan_generation": self.settings.get_plan_generation_tuning_settings(),
-                },
+                "tuning_settings": self.settings_domains.strategy_settings().to_dict(),
                 "walk_forward_promotion_recommended": walk_forward.get("promotion_recommended") if isinstance(walk_forward, dict) else None,
                 "walk_forward_average_win_rate_delta": walk_forward.get("average_win_rate_delta") if isinstance(walk_forward, dict) else None,
                 "walk_forward_average_expected_value_delta": walk_forward.get("average_expected_value_delta") if isinstance(walk_forward, dict) else None,

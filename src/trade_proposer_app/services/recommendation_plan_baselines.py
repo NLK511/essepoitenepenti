@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable
 
+from trade_proposer_app.domain.statuses import OutcomeStatus, TradeOutcome
 from trade_proposer_app.domain.models import (
     RecommendationBaselineComparison,
     RecommendationBaselineSummary,
@@ -55,13 +56,13 @@ class RecommendationPlanBaselineService:
     ) -> RecommendationBaselineComparison:
         selected = [plan for plan in plans if definition.selector(plan)]
         trade_plans = [plan for plan in selected if self._is_trade_plan(plan)]
-        resolved = [plan for plan in trade_plans if plan.latest_outcome is not None and plan.latest_outcome.outcome in {"win", "loss"}]
-        wins = [plan for plan in resolved if plan.latest_outcome is not None and plan.latest_outcome.outcome == "win"]
-        losses = [plan for plan in resolved if plan.latest_outcome is not None and plan.latest_outcome.outcome == "loss"]
+        resolved = [plan for plan in trade_plans if plan.latest_outcome is not None and plan.latest_outcome.outcome in {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}]
+        wins = [plan for plan in resolved if plan.latest_outcome is not None and plan.latest_outcome.outcome == TradeOutcome.WIN.value]
+        losses = [plan for plan in resolved if plan.latest_outcome is not None and plan.latest_outcome.outcome == TradeOutcome.LOSS.value]
         open_trades = [
             plan
             for plan in trade_plans
-            if plan.latest_outcome is None or plan.latest_outcome.status != "resolved"
+            if plan.latest_outcome is None or plan.latest_outcome.status != OutcomeStatus.RESOLVED.value
         ]
         avg_return_5d_values = [
             float(plan.latest_outcome.horizon_return_5d)

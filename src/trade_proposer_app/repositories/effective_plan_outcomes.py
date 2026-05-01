@@ -60,9 +60,9 @@ class EffectivePlanOutcomeRepository:
                 continue
             if setup_family and item.setup_family != setup_family:
                 continue
-            if resolved == "resolved" and item.status != "resolved":
+            if resolved == OutcomeStatus.RESOLVED.value and item.status != OutcomeStatus.RESOLVED.value:
                 continue
-            if resolved == "unresolved" and item.status == "resolved":
+            if resolved == "unresolved" and item.status == OutcomeStatus.RESOLVED.value:
                 continue
             if entry_touched is not None and item.entry_touched is not entry_touched:
                 continue

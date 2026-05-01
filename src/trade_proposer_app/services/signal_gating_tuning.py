@@ -7,12 +7,14 @@ from itertools import product
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import RecommendationDecisionSample, RecommendationPlanOutcome, RecommendationSignalGatingTuningRun
+from trade_proposer_app.domain.statuses import TradeOutcome
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.signal_gating_tuning_runs import RecommendationSignalGatingTuningRunRepository
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 
 
 class RecommendationSignalGatingTuningError(Exception):
@@ -128,6 +130,7 @@ class RecommendationSignalGatingTuningService:
         self.context_snapshots = ContextSnapshotRepository(session)
         self.market_data = HistoricalMarketDataRepository(session)
         self.runs = RecommendationSignalGatingTuningRunRepository(session)
+        self.settings_domains = SettingsDomainService(repository=self.settings)
 
     def run(
         self,
@@ -146,8 +149,9 @@ class RecommendationSignalGatingTuningService:
         apply: bool = False,
     ) -> RecommendationSignalGatingTuningRun:
         started_at = datetime.now(timezone.utc)
-        threshold_before = self.settings.get_confidence_threshold()
-        active_tuning = self.settings.get_signal_gating_tuning_config()
+        strategy_settings = self.settings_domains.strategy_settings()
+        threshold_before = strategy_settings.confidence_threshold
+        active_tuning = strategy_settings.signal_gating
         effective_created_after, sample_window_mode, latest_applied_run = self._effective_created_after(
             created_after=created_after,
             run_id=run_id,
@@ -307,8 +311,8 @@ class RecommendationSignalGatingTuningService:
         latest = self.runs.get_latest_run()
         return {
             "objective_name": self.OBJECTIVE_NAME,
-            "current_confidence_threshold": self.settings.get_confidence_threshold(),
-            "active_tuning": self.settings.get_signal_gating_tuning_config(),
+            "current_confidence_threshold": self.settings_domains.strategy_settings().confidence_threshold,
+            "active_tuning": self.settings_domains.strategy_settings().signal_gating,
             "latest_run": latest,
         }
 
@@ -424,7 +428,7 @@ class RecommendationSignalGatingTuningService:
                 summary["benchmark_target_1d_hit_count"] += 1
             if benchmark.benchmark_target_5d_hit:
                 summary["benchmark_target_5d_hit_count"] += 1
-            if benchmark.outcome == "win":
+            if benchmark.outcome == TradeOutcome.WIN.value:
                 summary["benchmark_hit_count"] += 1
                 summary["missed_opportunity_count"] += 1
             else:
@@ -621,8 +625,8 @@ class RecommendationSignalGatingTuningService:
             effective_score = self._decision_score(sample, config)
             threshold = self._effective_threshold(sample, base_threshold, config)
             selected = effective_score >= threshold
-            is_win = outcome.outcome == "win"
-            is_loss = outcome.outcome == "loss"
+            is_win = outcome.outcome == TradeOutcome.WIN.value
+            is_loss = outcome.outcome == TradeOutcome.LOSS.value
             if outcome.source == "benchmark" and selected:
                 benchmark_selected_count += 1
                 if is_win:

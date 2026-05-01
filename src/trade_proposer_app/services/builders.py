@@ -21,6 +21,7 @@ from trade_proposer_app.services.signals import SignalIngestionService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.context_snapshot_resolver import ContextSnapshotResolver
 from trade_proposer_app.services.social import SocialIngestionService
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.summary import SummaryService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
@@ -40,10 +41,11 @@ def create_proposal_service(session: Session) -> ProposalService:
         max_articles=ticker_limit,
         historical_news=HistoricalNewsRepository(session),
     )
-    social_service = SocialIngestionService.from_settings(repository.get_social_settings())
+    operator_settings = SettingsDomainService(repository=repository).operator_settings()
+    social_service = SocialIngestionService.from_settings(operator_settings.social)
     signal_service = SignalIngestionService(social_service=social_service)
     summary_service = SummaryService(
-        summary_settings=repository.get_summary_settings(),
+        summary_settings=operator_settings.summary,
         provider_credentials=credentials,
     )
     taxonomy_service = TickerTaxonomyService()
@@ -95,7 +97,8 @@ def create_macro_context_refresh_service(session: Session) -> MacroContextRefres
         max_articles=macro_limit,
         historical_news=HistoricalNewsRepository(session),
     )
-    social_service = SocialIngestionService.from_settings(repository.get_social_settings())
+    operator_settings = SettingsDomainService(repository=repository).operator_settings()
+    social_service = SocialIngestionService.from_settings(operator_settings.social)
     return MacroContextRefreshService(social_service=social_service, news_service=news_service)
 
 
@@ -125,7 +128,7 @@ def create_macro_context_service(session: Session) -> MacroContextService:
         historical_news=HistoricalNewsRepository(session),
     )
     summary_service = SummaryService(
-        summary_settings=repository.get_summary_settings(),
+        summary_settings=SettingsDomainService(repository=repository).operator_settings().summary,
         provider_credentials=credentials,
     )
     return MacroContextService(ContextSnapshotRepository(session), news_service=news_service, summary_service=summary_service)
@@ -133,7 +136,7 @@ def create_macro_context_service(session: Session) -> MacroContextService:
 
 def create_industry_context_refresh_service(session: Session) -> IndustryContextRefreshService:
     repository = SettingsRepository(session)
-    social_service = SocialIngestionService.from_settings(repository.get_social_settings())
+    social_service = SocialIngestionService.from_settings(SettingsDomainService(repository=repository).operator_settings().social)
     taxonomy_service = TickerTaxonomyService()
     return IndustryContextRefreshService(
         social_service=social_service,
@@ -152,7 +155,7 @@ def create_industry_context_service(session: Session) -> IndustryContextService:
         historical_news=HistoricalNewsRepository(session),
     )
     summary_service = SummaryService(
-        summary_settings=repository.get_summary_settings(),
+        summary_settings=SettingsDomainService(repository=repository).operator_settings().summary,
         provider_credentials=credentials,
     )
     taxonomy_service = TickerTaxonomyService()

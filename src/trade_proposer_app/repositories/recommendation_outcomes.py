@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import KeyLabelDetail, RecommendationPlanOutcome
+from trade_proposer_app.domain.statuses import OutcomeStatus, TradeOutcome
 from trade_proposer_app.persistence.models import RecommendationOutcomeRecord, RecommendationPlanRecord
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
@@ -49,20 +50,20 @@ class RecommendationOutcomeRepository:
         total = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord)) or 0)
         resolved = int(
             self.session.scalar(
-                select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome.in_(["win", "loss"]))
+                select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome.in_([TradeOutcome.WIN.value, TradeOutcome.LOSS.value]))
             )
             or 0
         )
         open_outcomes = int(
             self.session.scalar(
-                select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.status == "open")
+                select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.status == OutcomeStatus.OPEN.value)
             )
             or 0
         )
-        wins = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == "win")) or 0)
-        losses = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == "loss")) or 0)
-        no_action = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == "no_action")) or 0)
-        watchlist = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == "watchlist")) or 0)
+        wins = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == TradeOutcome.WIN.value)) or 0)
+        losses = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == TradeOutcome.LOSS.value)) or 0)
+        no_action = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == TradeOutcome.NO_ACTION.value)) or 0)
+        watchlist = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.outcome == TradeOutcome.WATCHLIST.value)) or 0)
         return {
             "total_outcomes": total,
             "resolved_outcomes": resolved,
@@ -104,10 +105,10 @@ class RecommendationOutcomeRepository:
             query = query.where(RecommendationOutcomeRecord.run_id == run_id)
         if setup_family:
             query = query.where(RecommendationOutcomeRecord.setup_family == setup_family)
-        if resolved == "resolved":
-            query = query.where(RecommendationOutcomeRecord.status == "resolved")
+        if resolved == OutcomeStatus.RESOLVED.value:
+            query = query.where(RecommendationOutcomeRecord.status == OutcomeStatus.RESOLVED.value)
         elif resolved == "unresolved":
-            query = query.where(RecommendationOutcomeRecord.status != "resolved")
+            query = query.where(RecommendationOutcomeRecord.status != OutcomeStatus.RESOLVED.value)
         if entry_touched is not None:
             query = query.where(RecommendationOutcomeRecord.entry_touched.is_(entry_touched))
         if near_entry_miss is not None:

@@ -6,6 +6,7 @@ import math
 
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.domain.statuses import TradeOutcome
 from trade_proposer_app.domain.models import (
     PlanGenerationTuningCandidate,
     PlanGenerationTuningConfigVersion,
@@ -25,6 +26,7 @@ from trade_proposer_app.services.plan_generation_tuning_logic import family_adju
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
 from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_BY_KEY, normalize_plan_generation_tuning_config, parameter_definitions
 from trade_proposer_app.services.plan_generation_walk_forward import PlanGenerationWalkForwardService
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 
 
 class PlanGenerationTuningError(Exception):
@@ -78,18 +80,19 @@ class PlanGenerationTuningService:
         self.outcomes = EffectivePlanOutcomeRepository(session)
         self.samples = RecommendationDecisionSampleRepository(session)
         self.reliability_features = PlanReliabilityFeatureBuilder()
+        self.settings_domains = SettingsDomainService(repository=self.settings)
 
     def describe(self) -> dict[str, object]:
         baseline = self.ensure_baseline_config_version()
-        active_version_id = self.settings.get_plan_generation_active_config_version_id() or baseline.id
+        active_version_id = self._active_config_version_id() or baseline.id
         active_version = self.repository.get_config_version(active_version_id) if active_version_id is not None else baseline
         latest_run = self.repository.get_latest_run()
         state = PlanGenerationTuningState(
             objective_name=self.OBJECTIVE_NAME,
             active_config_version_id=active_version.id,
             active_config=normalize_plan_generation_tuning_config(active_version.config),
-            auto_enabled=bool(self.settings.get_plan_generation_tuning_settings()["auto_enabled"]),
-            auto_promote_enabled=bool(self.settings.get_plan_generation_tuning_settings()["auto_promote_enabled"]),
+            auto_enabled=bool(self.settings_domains.strategy_settings().plan_generation_tuning["auto_enabled"]),
+            auto_promote_enabled=bool(self.settings_domains.strategy_settings().plan_generation_tuning["auto_promote_enabled"]),
             latest_run=latest_run,
         )
         return {
@@ -137,7 +140,7 @@ class PlanGenerationTuningService:
         baseline_version = self._resolve_active_config_version()
         active_config = normalize_plan_generation_tuning_config(baseline_version.config)
         records = self._eligible_records(ticker=ticker, setup_family=setup_family, limit=limit)
-        settings_payload = self.settings.get_plan_generation_tuning_settings()
+        settings_payload = self.settings_domains.strategy_settings().plan_generation_tuning
         min_actionable_resolved = int(settings_payload["min_actionable_resolved"])
         min_validation_resolved = int(settings_payload["min_validation_resolved"])
         if len(records) < min_actionable_resolved:
@@ -281,7 +284,7 @@ class PlanGenerationTuningService:
 
     def _resolve_active_config_version(self) -> PlanGenerationTuningConfigVersion:
         baseline = self.ensure_baseline_config_version()
-        active_id = self.settings.get_plan_generation_active_config_version_id()
+        active_id = self._active_config_version_id()
         if active_id is None:
             return baseline
         try:
@@ -289,6 +292,10 @@ class PlanGenerationTuningService:
         except ValueError:
             self.settings.set_plan_generation_active_config_version_id(baseline.id)
             return baseline
+
+    def _active_config_version_id(self) -> int | None:
+        value = self.settings_domains.strategy_settings().plan_generation_tuning.get("active_config_version_id")
+        return value if isinstance(value, int) else None
 
     def _eligible_records(self, *, ticker: str | None, setup_family: str | None, limit: int) -> list[EligibleTuningRecord]:
         plans = self.plans.list_plans(ticker=ticker, action=None, limit=limit, offset=0)
@@ -388,7 +395,7 @@ class PlanGenerationTuningService:
                 continue
             candidate_outcome, reward_pct, risk_pct = candidate
             actionable_count += 1
-            if candidate_outcome == "win":
+            if candidate_outcome == TradeOutcome.WIN.value:
                 win_count += 1
                 expected_value += reward_pct
             else:

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import StrategyHorizon
 from trade_proposer_app.domain.models import BrokerOrderExecution, KeyLabelDetail, RecommendationPlan, RecommendationPlanOutcome, RecommendationPlanStats
+from trade_proposer_app.domain.statuses import ExecutionStatus, TradeOutcome
 from trade_proposer_app.persistence.models import RecommendationPlanRecord
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
@@ -339,37 +340,45 @@ class RecommendationPlanRepository:
     @staticmethod
     def _broker_evaluation_source(order: BrokerOrderExecution) -> str:
         status = str(order.status or "").strip().lower()
-        if status in {"new", "submitted", "accepted", "partially_filled", "open", "win", "loss"}:
+        if status in {
+            ExecutionStatus.NEW.value,
+            ExecutionStatus.SUBMITTED.value,
+            ExecutionStatus.ACCEPTED.value,
+            ExecutionStatus.PARTIALLY_FILLED.value,
+            ExecutionStatus.OPEN.value,
+            TradeOutcome.WIN.value,
+            TradeOutcome.LOSS.value,
+        }:
             return "broker"
-        if status in {"canceled", "expired", "rejected", "failed"}:
+        if status in {ExecutionStatus.CANCELED.value, ExecutionStatus.EXPIRED.value, ExecutionStatus.REJECTED.value, ExecutionStatus.FAILED.value}:
             return "simulated"
         return "missing"
 
     @staticmethod
     def _broker_evaluation_label(order: BrokerOrderExecution) -> str:
         status = str(order.status or "").strip().lower()
-        if status in {"new", "submitted", "accepted", "partially_filled"}:
+        if status in {ExecutionStatus.NEW.value, ExecutionStatus.SUBMITTED.value, ExecutionStatus.ACCEPTED.value, ExecutionStatus.PARTIALLY_FILLED.value}:
             return "pending"
-        if status == "open":
+        if status == ExecutionStatus.OPEN.value:
             return "entry"
-        if status == "win":
-            return "win"
-        if status == "loss":
-            return "loss"
+        if status == TradeOutcome.WIN.value:
+            return TradeOutcome.WIN.value
+        if status == TradeOutcome.LOSS.value:
+            return TradeOutcome.LOSS.value
         return "missing"
 
     @staticmethod
     def _broker_evaluation_detail(order: BrokerOrderExecution) -> str:
         status = str(order.status or "").strip().lower() or "unknown"
-        if status == "open":
+        if status == ExecutionStatus.OPEN.value:
             return "broker entry filled; exit still open"
-        if status == "win":
+        if status == TradeOutcome.WIN.value:
             return "broker take-profit filled"
-        if status == "loss":
+        if status == TradeOutcome.LOSS.value:
             return "broker stop-loss filled"
-        if status in {"new", "submitted", "accepted", "partially_filled"}:
+        if status in {ExecutionStatus.NEW.value, ExecutionStatus.SUBMITTED.value, ExecutionStatus.ACCEPTED.value, ExecutionStatus.PARTIALLY_FILLED.value}:
             return f"broker order {status}"
-        if status in {"canceled", "expired", "rejected", "failed"}:
+        if status in {ExecutionStatus.CANCELED.value, ExecutionStatus.EXPIRED.value, ExecutionStatus.REJECTED.value, ExecutionStatus.FAILED.value}:
             return f"broker order {status}"
         return f"broker order {status}"
 
@@ -436,10 +445,10 @@ class RecommendationPlanRepository:
         ]
         open_plans = sum(1 for _, is_resolved in filtered_effective_states if not is_resolved)
         expired_plans = sum(1 for effective_outcome, _ in filtered_effective_states if effective_outcome == "expired")
-        wins = sum(1 for effective_outcome, _ in filtered_effective_states if effective_outcome == "win")
-        losses = sum(1 for effective_outcome, _ in filtered_effective_states if effective_outcome == "loss")
-        no_action = sum(1 for effective_outcome, _ in filtered_effective_states if effective_outcome == "no_action")
-        watchlist = sum(1 for effective_outcome, _ in filtered_effective_states if effective_outcome == "watchlist")
+        wins = sum(1 for effective_outcome, _ in filtered_effective_states if effective_outcome == TradeOutcome.WIN.value)
+        losses = sum(1 for effective_outcome, _ in filtered_effective_states if effective_outcome == TradeOutcome.LOSS.value)
+        no_action = sum(1 for effective_outcome, _ in filtered_effective_states if effective_outcome == TradeOutcome.NO_ACTION.value)
+        watchlist = sum(1 for effective_outcome, _ in filtered_effective_states if effective_outcome == TradeOutcome.WATCHLIST.value)
         scored_outcomes = wins + losses
         return RecommendationPlanStats(
             total_plans=len(filtered_rows),

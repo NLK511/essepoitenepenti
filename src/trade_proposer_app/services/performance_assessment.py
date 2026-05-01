@@ -15,6 +15,7 @@ from trade_proposer_app.services.recommendation_evidence_concentration import Re
 from trade_proposer_app.services.recommendation_plan_baselines import RecommendationPlanBaselineService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_setup_family_reviews import RecommendationSetupFamilyReviewService
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.summary import SummaryService
 from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
 
@@ -84,8 +85,9 @@ class PerformanceAssessmentService:
     def run(self) -> dict[str, object]:
         payload = self._build_payload()
         prompt = self._build_prompt(payload)
+        operator_settings = SettingsDomainService(repository=self.settings).operator_settings()
         summary_service = SummaryService(
-            summary_settings=self.settings.get_summary_settings(),
+            summary_settings=operator_settings.summary,
             provider_credentials=self.settings.get_provider_credential_map(),
         )
         fallback_summary = self._build_fallback_summary(payload)

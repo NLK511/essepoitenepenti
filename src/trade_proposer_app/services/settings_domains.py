@@ -56,8 +56,10 @@ class OperatorSettings:
 class SettingsDomainService:
     """Typed domain views over the legacy key/value settings repository."""
 
-    def __init__(self, session: Session) -> None:
-        self.repository = SettingsRepository(session)
+    def __init__(self, session: Session | None = None, repository: SettingsRepository | None = None) -> None:
+        if repository is None and session is None:
+            raise ValueError("session or repository is required")
+        self.repository = repository or SettingsRepository(session)  # type: ignore[arg-type]
 
     def strategy_settings(self) -> StrategySettings:
         return StrategySettings(

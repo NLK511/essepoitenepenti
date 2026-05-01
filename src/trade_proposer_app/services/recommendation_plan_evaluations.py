@@ -13,11 +13,13 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import StrategyHorizon
 from trade_proposer_app.domain.models import EvaluationRunResult, HistoricalMarketBar, RecommendationPlan, RecommendationPlanOutcome
+from trade_proposer_app.domain.statuses import OutcomeStatus
 from trade_proposer_app.persistence.models import RecommendationPlanRecord
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
@@ -51,6 +53,7 @@ class RecommendationPlanEvaluationService:
         self.outcomes = RecommendationOutcomeRepository(session)
         self.market_data = HistoricalMarketDataRepository(session)
         self.settings = SettingsRepository(session)
+        self.settings_domains = SettingsDomainService(repository=self.settings)
         self.taxonomy = TickerTaxonomyService()
 
     def run_evaluation(
@@ -147,7 +150,7 @@ class RecommendationPlanEvaluationService:
             rows = [
                 row
                 for row in rows
-                if outcome_map.get(row.id or 0) is None or outcome_map[row.id or 0].status != "resolved"
+                if outcome_map.get(row.id or 0) is None or outcome_map[row.id or 0].status != OutcomeStatus.RESOLVED.value
             ]
         return [self.plans._to_model(row) for row in rows]
 
@@ -477,7 +480,7 @@ class RecommendationPlanEvaluationService:
         return None
 
     def _resolve_exit(self, effective_action: str, plan: RecommendationPlan, data: pd.DataFrame) -> tuple[bool, bool, datetime | None]:
-        realism = self.settings.get_evaluation_realism_config()
+        realism = self.settings_domains.execution_settings().evaluation_realism
         stop_buffer = realism["stop_buffer_pct"] / 100.0
         take_buffer = realism["take_profit_buffer_pct"] / 100.0
 
@@ -557,7 +560,7 @@ class RecommendationPlanEvaluationService:
         raw_return = ((close_value - entry_reference) / entry_reference) * 100.0
         
         # Realism Buffer: Use dynamic friction from settings
-        realism = self.settings.get_evaluation_realism_config()
+        realism = self.settings_domains.execution_settings().evaluation_realism
         friction_pct = realism["friction_pct"]
         
         if effective_action == "short":
@@ -879,7 +882,7 @@ class RecommendationPlanEvaluationService:
         *,
         as_of: datetime | None,
     ) -> RecommendationPlanOutcome:
-        if outcome.status == "resolved":
+        if outcome.status == OutcomeStatus.RESOLVED.value:
             return outcome
         if not self._is_past_plan_horizon(plan, as_of=as_of):
             return outcome

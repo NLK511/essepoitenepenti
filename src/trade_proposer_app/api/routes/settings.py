@@ -5,26 +5,29 @@ from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import AppSetting
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 @router.get("")
 async def list_settings(session: Session = Depends(get_db_session)) -> dict[str, object]:
     repository = SettingsRepository(session)
-    signal_gating_tuning = repository.get_signal_gating_tuning_config()
-    evaluation_realism = repository.get_evaluation_realism_config()
+    domain_settings = SettingsDomainService(repository=repository)
+    strategy_settings = domain_settings.strategy_settings()
+    execution_settings = domain_settings.execution_settings()
+    risk_settings = domain_settings.risk_settings()
     return {
         "settings": repository.list_settings(),
         "providers": [
             {"provider": item.provider, "api_key": item.api_key}
             for item in repository.list_provider_credentials_redacted()
         ],
-        "signal_gating_tuning": signal_gating_tuning,
-        "evaluation_realism": evaluation_realism,
-        "order_execution": repository.get_order_execution_config(),
-        "risk_management": repository.get_risk_management_config(),
+        "signal_gating_tuning": strategy_settings.signal_gating,
+        "evaluation_realism": execution_settings.evaluation_realism,
+        "order_execution": execution_settings.broker_order_execution,
+        "risk_management": risk_settings.risk_management,
         "plan_generation_tuning": {
-            "settings": repository.get_plan_generation_tuning_settings(),
+            "settings": strategy_settings.plan_generation_tuning,
             "active_config": repository.get_plan_generation_active_config(PlanGenerationTuningRepository(session)),
         },
     }
@@ -84,7 +87,7 @@ async def set_summary_settings(
             "summary_prompt": prompt.strip() or settings_map["summary_prompt"],
         }
     )
-    return {"settings": repository.get_summary_settings()}
+    return {"settings": SettingsDomainService(repository=repository).operator_settings().summary}
 
 
 @router.post("/news")
@@ -147,7 +150,7 @@ async def set_social_settings(
             "social_enable_duplicate_suppression": enable_duplicate_suppression.strip().lower(),
         }
     )
-    return {"settings": repository.get_social_settings()}
+    return {"settings": SettingsDomainService(repository=repository).operator_settings().social}
 
 
 def _set_signal_gating_tuning_settings(

@@ -4,12 +4,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from trade_proposer_app.domain.models import BrokerPosition, BrokerRiskAssessment
+from trade_proposer_app.domain.statuses import BROKER_RESOLVED_POSITION_STATUSES, BrokerPositionStatus, TradeOutcome
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.risk_halt_events import RiskHaltEventRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 
-OPEN_STATUSES = {"submitted", "open"}
-CLOSED_STATUSES = {"win", "loss"}
+OPEN_STATUSES = {BrokerPositionStatus.SUBMITTED.value, BrokerPositionStatus.OPEN.value}
+CLOSED_STATUSES = BROKER_RESOLVED_POSITION_STATUSES
 
 
 @dataclass(slots=True)
@@ -30,7 +32,7 @@ class BrokerRiskManager:
         self.halt_events = halt_events
 
     def assess(self, candidate: TradeCandidate | None = None, *, now: datetime | None = None) -> BrokerRiskAssessment:
-        config = self.settings.get_risk_management_config()
+        config = SettingsDomainService(repository=self.settings).risk_settings().risk_management
         all_positions = self.positions.list_all(limit=1000)
         metrics = self._metrics(all_positions, now=now or datetime.now(timezone.utc))
         reasons: list[str] = []
@@ -85,7 +87,7 @@ class BrokerRiskManager:
         )
 
     def halt(self, reason: str) -> BrokerRiskAssessment:
-        previous = bool(self.settings.get_risk_management_config()["halt_enabled"])
+        previous = bool(SettingsDomainService(repository=self.settings).risk_settings().risk_management["halt_enabled"])
         self.settings.set_risk_halt(enabled=True, reason=reason or "manual halt")
         if self.halt_events is not None:
             self.halt_events.create(
@@ -97,7 +99,7 @@ class BrokerRiskManager:
         return self.assess()
 
     def resume(self) -> BrokerRiskAssessment:
-        previous = bool(self.settings.get_risk_management_config()["halt_enabled"])
+        previous = bool(SettingsDomainService(repository=self.settings).risk_settings().risk_management["halt_enabled"])
         self.settings.set_risk_halt(enabled=False, reason="")
         if self.halt_events is not None:
             self.halt_events.create(
@@ -132,11 +134,11 @@ class BrokerRiskManager:
                     pass
 
         realized_pnl = sum(float(position.realized_pnl or 0.0) for position in closed_today)
-        wins = sum(1 for position in closed_today if position.status == "win")
-        losses = sum(1 for position in closed_today if position.status == "loss")
+        wins = sum(1 for position in closed_today if position.status == TradeOutcome.WIN.value)
+        losses = sum(1 for position in closed_today if position.status == TradeOutcome.LOSS.value)
         consecutive_losses = 0
         for position in sorted(closed_today, key=lambda item: item.exit_filled_at or item.updated_at, reverse=True):
-            if position.status != "loss":
+            if position.status != TradeOutcome.LOSS.value:
                 break
             consecutive_losses += 1
 

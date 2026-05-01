@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 
+from trade_proposer_app.domain.statuses import OutcomeStatus, TradeOutcome
 from trade_proposer_app.domain.models import (
     RecommendationCalibrationBucket,
     RecommendationPlanOutcome,
@@ -68,15 +69,15 @@ class RecommendationSetupFamilyReviewService:
         family: str,
         items: list[RecommendationPlanOutcome],
     ) -> RecommendationSetupFamilyReview:
-        resolved = [item for item in items if item.outcome in {"win", "loss"}]
+        resolved = [item for item in items if item.outcome in {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}]
         return RecommendationSetupFamilyReview(
             family=family,
             label=self.FAMILY_LABELS.get(family, family.replace("_", " ")),
             total_outcomes=len(items),
             resolved_outcomes=len(resolved),
-            open_outcomes=sum(1 for item in items if item.status == "open"),
-            win_outcomes=sum(1 for item in items if item.outcome == "win"),
-            loss_outcomes=sum(1 for item in items if item.outcome == "loss"),
+            open_outcomes=sum(1 for item in items if item.status == OutcomeStatus.OPEN.value),
+            win_outcomes=sum(1 for item in items if item.outcome == TradeOutcome.WIN.value),
+            loss_outcomes=sum(1 for item in items if item.outcome == TradeOutcome.LOSS.value),
             overall_win_rate_percent=self._win_rate(resolved),
             average_return_1d=self._average([item.horizon_return_1d for item in items]),
             average_return_3d=self._average([item.horizon_return_3d for item in items]),
@@ -111,7 +112,7 @@ class RecommendationSetupFamilyReviewService:
     ) -> list[RecommendationCalibrationBucket]:
         results: list[RecommendationCalibrationBucket] = []
         for key, items in grouped.items():
-            resolved = [item for item in items if item.outcome in {"win", "loss"}]
+            resolved = [item for item in items if item.outcome in {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}]
             resolved_count = len(resolved)
             results.append(
                 RecommendationCalibrationBucket(
@@ -121,11 +122,11 @@ class RecommendationSetupFamilyReviewService:
                     slice_label=self.taxonomy_service.get_analysis_slice_label(group_by),
                     total_count=len(items),
                     resolved_count=resolved_count,
-                    win_count=sum(1 for item in items if item.outcome == "win"),
-                    loss_count=sum(1 for item in items if item.outcome == "loss"),
-                    open_count=sum(1 for item in items if item.status == "open"),
-                    no_action_count=sum(1 for item in items if item.outcome == "no_action"),
-                    watchlist_count=sum(1 for item in items if item.outcome == "watchlist"),
+                    win_count=sum(1 for item in items if item.outcome == TradeOutcome.WIN.value),
+                    loss_count=sum(1 for item in items if item.outcome == TradeOutcome.LOSS.value),
+                    open_count=sum(1 for item in items if item.status == OutcomeStatus.OPEN.value),
+                    no_action_count=sum(1 for item in items if item.outcome == TradeOutcome.NO_ACTION.value),
+                    watchlist_count=sum(1 for item in items if item.outcome == TradeOutcome.WATCHLIST.value),
                     sample_status=RecommendationPlanCalibrationService._sample_status(
                         resolved_count,
                         min_required_resolved_count,
@@ -149,7 +150,7 @@ class RecommendationSetupFamilyReviewService:
     def _win_rate(items: list[RecommendationPlanOutcome]) -> float | None:
         if not items:
             return None
-        wins = sum(1 for item in items if item.outcome == "win")
+        wins = sum(1 for item in items if item.outcome == TradeOutcome.WIN.value)
         return round((wins / len(items)) * 100.0, 1)
 
     @staticmethod

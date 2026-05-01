@@ -119,7 +119,7 @@ class TradingPerformanceMetricsService:
         return EffectiveOutcomeSummary(
             total_outcomes=len(outcomes),
             resolved_outcomes=len(resolved),
-            open_outcomes=sum(1 for item in outcomes if item.status != "resolved"),
+            open_outcomes=sum(1 for item in outcomes if item.status != OutcomeStatus.RESOLVED.value),
             wins=wins,
             losses=losses,
             win_rate_percent=self._percentage(wins, len(resolved)),

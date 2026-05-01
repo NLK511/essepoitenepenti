@@ -31,6 +31,8 @@ class ExecutionStatus(StrEnum):
     NEW = "new"
     SUBMITTED = "submitted"
     ACCEPTED = "accepted"
+    PARTIALLY_FILLED = "partially_filled"
+    FILLED = "filled"
     OPEN = "open"
     WIN = "win"
     LOSS = "loss"

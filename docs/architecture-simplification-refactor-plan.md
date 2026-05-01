@@ -198,6 +198,28 @@ Acceptance criteria:
 - page payloads contain source labels and pre-reconciled metrics
 - frontend typecheck and route tests protect page contracts
 
+## Consumer migration plan
+
+The remaining cleanup is a set of safe consumer migrations, not a single destructive removal pass.
+
+Order of work:
+1. Inventory consumers with repository-wide searches for raw settings getters, raw status comparisons, lower-level API calls, and duplicate performance/outcome math.
+2. Migrate backend services before frontend pages so operator views can rely on reconciled backend contracts.
+3. Prefer domain adapters over direct legacy getters:
+   - strategy consumers use `SettingsDomainService.strategy_settings()` or `TradeDecisionPolicyService`
+   - execution consumers use `SettingsDomainService.execution_settings()`
+   - risk consumers use `SettingsDomainService.risk_settings()` and risk halt audit records
+   - operator/news consumers use `SettingsDomainService.operator_settings()`
+4. Replace analytics and execution status checks with canonical constants/helpers from `domain/statuses.py` when the status belongs to a modeled domain.
+5. Keep focused lower-level API endpoints while internal consumers are migrated; remove only code that has no repository consumers and no intended public/debug value.
+6. After each batch, run targeted tests, the full backend test suite, and frontend typecheck before commit.
+
+Current migration batches:
+- Batch A: settings-domain consumers and broker/risk status constants. Status: implemented for backend service/route consumers that only read domain settings; mutation methods remain in `SettingsRepository`.
+- Batch B: recommendation/outcome analytics status constants. Status: implemented for core outcome repositories, calibration, setup-family review, ticker summary, broker risk, and order execution paths.
+- Batch C: remaining frontend duplicate fetches that have a suitable backend workbench contract. Status: pending; keep lower-level endpoint calls where they still request focused data not included in a workbench contract.
+- Batch D: deprecate/remove only confirmed dead code after a final consumer inventory. Status: pending; no lower-level API endpoint has been removed yet.
+
 ## Regression protocol
 For each phase:
 1. Update or create the spec before behavior changes.
