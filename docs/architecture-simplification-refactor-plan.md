@@ -222,7 +222,7 @@ Current migration batches:
 - Batch A: settings-domain consumers and broker/risk status constants. Status: implemented for backend service/route consumers that only read domain settings; mutation methods remain in `SettingsRepository`.
 - Batch B: recommendation/outcome analytics status constants. Status: implemented for core outcome repositories, calibration, setup-family review, ticker summary, broker risk, and order execution paths.
 - Batch C: remaining frontend duplicate fetches that have a suitable backend workbench contract. Status: implemented for Research, Settings, and Broker Orders. Research now consumes one performance workbench payload for performance assessment, calibration report, walk-forward validation, and near-entry-miss winners. Settings now consumes one settings workbench payload for settings, preflight, and recent broker audit context. Broker Orders now consumes sync-related settings included in broker workbench instead of issuing a separate `/api/settings` read.
-- Batch D: deprecate/remove only confirmed dead code after a final consumer inventory. Status: pending; no lower-level API endpoint has been removed yet because they remain focused API/debug contracts.
+- Batch D: deprecate/remove only confirmed dead code after a final consumer inventory. Status: completed for this refactor batch. No endpoint was removed: the remaining lower-level APIs are either still used by tests/docs/API consumers, still used for mutations, or intentionally retained as focused API/debug contracts. No frontend page now depends on the older Research multi-fetch pattern, Settings multi-fetch pattern, or Broker Orders settings side-fetch.
 
 ## Regression protocol
 For each phase:
