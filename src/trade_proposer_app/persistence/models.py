@@ -342,6 +342,8 @@ class RecommendationPlanRecord(Base, TimestampMixin):
     missing_inputs_json: Mapped[str] = mapped_column(Text, default="")
     evidence_summary_json: Mapped[str] = mapped_column(Text, default="")
     signal_breakdown_json: Mapped[str] = mapped_column(Text, default="")
+    trade_policy_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    trade_policy_snapshot_json: Mapped[str] = mapped_column(Text, default="{}")
     computed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     watchlist_id: Mapped[int | None] = mapped_column(ForeignKey("watchlists.id"), nullable=True, index=True)
     ticker_signal_snapshot_id: Mapped[int | None] = mapped_column(ForeignKey("ticker_signal_snapshots.id"), nullable=True, index=True)

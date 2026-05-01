@@ -199,7 +199,7 @@ class WatchlistOrchestrationService:
                 job_id=job_id,
                 run_id=run_id,
             )
-            stored_plan = self.recommendation_plans.create_plan(plan)
+            stored_plan = self.recommendation_plans.create_plan(self._with_trade_policy_snapshot(plan))
             self._record_decision_sample(
                 stored_plan,
                 candidate,
@@ -608,6 +608,17 @@ class WatchlistOrchestrationService:
             },
             job_id=job_id,
             run_id=run_id,
+        )
+
+    def _with_trade_policy_snapshot(self, plan: RecommendationPlan) -> RecommendationPlan:
+        if self.trade_decision_policy is None:
+            return plan
+        snapshot = self.trade_decision_policy.to_dict()
+        return plan.model_copy(
+            update={
+                "trade_policy_id": self.trade_decision_policy.policy_id,
+                "trade_policy_snapshot": snapshot,
+            }
         )
 
     def _build_plan_from_signal(

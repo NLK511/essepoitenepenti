@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from uuid import uuid4
 
 from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPosition, RecommendationPlan
+from trade_proposer_app.domain.statuses import TERMINAL_EXECUTION_STATUSES
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
@@ -33,7 +34,7 @@ class BrokerOrderSyncOutcome:
 
 
 class OrderExecutionService:
-    TERMINAL_STATUSES = {"win", "loss", "canceled", "rejected", "expired"}
+    TERMINAL_STATUSES = TERMINAL_EXECUTION_STATUSES - {"failed", "skipped"}
     MARKET_TIMEZONE = ZoneInfo("America/New_York")
 
     def __init__(

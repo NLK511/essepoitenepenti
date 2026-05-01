@@ -652,6 +652,8 @@ class RecommendationPlan(BaseModel):
     missing_inputs: list[str] = Field(default_factory=list)
     evidence_summary: RecommendationPlanEvidenceSummary = Field(default_factory=RecommendationPlanEvidenceSummary)
     signal_breakdown: RecommendationPlanSignalBreakdown = Field(default_factory=RecommendationPlanSignalBreakdown)
+    trade_policy_id: str | None = None
+    trade_policy_snapshot: dict[str, object] = Field(default_factory=dict)
     computed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     run_id: int | None = None
     job_id: int | None = None

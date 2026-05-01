@@ -49,3 +49,37 @@ class PlanStatus(StrEnum):
 
 BROKER_RESOLVED_POSITION_STATUSES = {BrokerPositionStatus.WIN.value, BrokerPositionStatus.LOSS.value}
 RESOLVED_TRADE_OUTCOMES = {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}
+TERMINAL_EXECUTION_STATUSES = {
+    ExecutionStatus.WIN.value,
+    ExecutionStatus.LOSS.value,
+    ExecutionStatus.CANCELED.value,
+    ExecutionStatus.REJECTED.value,
+    ExecutionStatus.EXPIRED.value,
+    ExecutionStatus.FAILED.value,
+    ExecutionStatus.SKIPPED.value,
+}
+NONTERMINAL_EXECUTION_STATUSES = {
+    ExecutionStatus.NEW.value,
+    ExecutionStatus.SUBMITTED.value,
+    ExecutionStatus.ACCEPTED.value,
+    ExecutionStatus.OPEN.value,
+}
+
+
+def normalize_status(value: object) -> str:
+    return str(value or "").strip().lower()
+
+
+def is_terminal_execution_status(value: object) -> bool:
+    return normalize_status(value) in TERMINAL_EXECUTION_STATUSES
+
+
+def is_resolved_trade_outcome(value: object) -> bool:
+    return normalize_status(value) in RESOLVED_TRADE_OUTCOMES
+
+
+def broker_position_status_to_outcome(value: object) -> str:
+    normalized = normalize_status(value)
+    if normalized in BROKER_RESOLVED_POSITION_STATUSES:
+        return normalized
+    return TradeOutcome.OPEN.value

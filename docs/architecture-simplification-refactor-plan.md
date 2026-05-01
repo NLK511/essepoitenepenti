@@ -1,7 +1,7 @@
 # Architecture Simplification Refactor Plan
 
 ## Status
-In progress. Phase 1 effective outcomes is implemented. Phase 2 shared performance metrics is implemented. Phase 3 now has the normalized `TradeDecisionPolicy` foundation and live watchlist orchestration is built from the active policy. Phase 4, Phase 5, and Phase 6 now have typed foundations. Phase 7 has the first broker workbench read model. Later consumer migrations must continue incrementally with specs/tests before behavior changes.
+In progress. Phase 1 effective outcomes is implemented. Phase 2 shared performance metrics is implemented. Phase 3 now has the normalized `TradeDecisionPolicy` foundation, live watchlist orchestration is built from the active policy, and generated plans persist policy snapshots. Phase 4, Phase 5, and Phase 6 now have typed foundations. Phase 7 has broker and research workbench read models. Later consumer migrations must continue incrementally with specs/tests before behavior changes.
 
 ## Goal
 Make the app leaner and safer for autonomous trading by replacing overlapping, source-specific abstractions with a few explicit product contracts.
@@ -111,9 +111,11 @@ Implemented:
 - watchlist orchestration honors policy action/setup-family filters when configured
 - tests for confidence threshold normalization, action filters, and setup-family filters
 
+Implemented additionally:
+- generated recommendation plans persist `trade_policy_id` and `trade_policy_snapshot`
+
 Still needed:
-- tuning/search evaluates explicit policy versions
-- generated plans persist policy ID/config snapshot for auditability
+- tuning/search evaluates explicit policy versions beyond the active policy snapshot
 
 Acceptance criteria:
 - every generated plan records the policy version/config used
@@ -146,10 +148,10 @@ Status: foundation implemented; broad migration still planned.
 Implemented:
 - `domain/statuses.py` with domain-specific status enums/constants
 - effective outcome and shared metrics code use canonical outcome/position status constants
+- status helper functions for normalization, terminal execution checks, resolved trade outcomes, and broker-position-to-outcome mapping
+- tests for status helper mappings
 
 Still needed:
-- mapping helpers at API boundaries
-- tests for all terminal/nonterminal status mappings
 - migrate remaining raw status-string comparisons where it reduces ambiguity
 
 Acceptance criteria:

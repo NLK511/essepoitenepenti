@@ -12,6 +12,11 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.config import settings
 from trade_proposer_app.domain.enums import JobType, RecommendationDirection, StrategyHorizon
+from trade_proposer_app.domain.statuses import (
+    broker_position_status_to_outcome,
+    is_resolved_trade_outcome,
+    is_terminal_execution_status,
+)
 from trade_proposer_app.domain.models import (
     EvaluationRunResult,
     IndustryContextRefreshPayload,
@@ -546,6 +551,32 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(plans[0].latest_outcome.context_regime_label, "mixed context")
         self.assertEqual(plans[0].latest_outcome.context_regime_detail["label"], "mixed context")
 
+    def test_recommendation_plan_repository_persists_trade_policy_snapshot(self) -> None:
+        session = create_session()
+        try:
+            plan_repository = RecommendationPlanRepository(session)
+            stored = plan_repository.create_plan(
+                RecommendationPlan(
+                    ticker="AAPL",
+                    horizon=StrategyHorizon.ONE_WEEK,
+                    action="long",
+                    confidence_percent=72.0,
+                    thesis_summary="Policy snapshot test",
+                    trade_policy_id="settings-active:baseline",
+                    trade_policy_snapshot={
+                        "policy_id": "settings-active:baseline",
+                        "confidence_threshold": 60.0,
+                    },
+                )
+            )
+
+            fetched = plan_repository.get_plan(stored.id or 0)
+
+            self.assertEqual(fetched.trade_policy_id, "settings-active:baseline")
+            self.assertEqual(fetched.trade_policy_snapshot["confidence_threshold"], 60.0)
+        finally:
+            session.close()
+
     def test_recommendation_plan_repository_prefers_broker_evaluation_when_available(self) -> None:
         session = create_session()
         plan_repository = RecommendationPlanRepository(session)
@@ -766,6 +797,15 @@ class RepositoryTests(unittest.TestCase):
             self.assertIsNotNone(summary.calibration_report)
         finally:
             session.close()
+
+    def test_status_taxonomy_helpers_map_domain_statuses(self) -> None:
+        self.assertTrue(is_terminal_execution_status("WIN"))
+        self.assertTrue(is_terminal_execution_status(" failed "))
+        self.assertFalse(is_terminal_execution_status("open"))
+        self.assertTrue(is_resolved_trade_outcome("loss"))
+        self.assertFalse(is_resolved_trade_outcome("skipped"))
+        self.assertEqual(broker_position_status_to_outcome("win"), "win")
+        self.assertEqual(broker_position_status_to_outcome("needs_review"), "open")
 
     def test_plan_reliability_feature_builder_extracts_tuning_features(self) -> None:
         plan = RecommendationPlan(
