@@ -34,7 +34,6 @@ class BrokerOrderSyncOutcome:
 
 
 class OrderExecutionService:
-    TERMINAL_STATUSES = TERMINAL_EXECUTION_STATUSES - {"failed", "skipped"}
     MARKET_TIMEZONE = ZoneInfo("America/New_York")
 
     def __init__(
@@ -299,7 +298,7 @@ class OrderExecutionService:
         failed = 0
         warnings: list[str] = []
         for order in orders:
-            if order.broker_order_id is None or order.status in self.TERMINAL_STATUSES | {"skipped"}:
+            if order.broker_order_id is None or order.status in TERMINAL_EXECUTION_STATUSES - {"failed"}:
                 skipped += 1
                 continue
             try:
