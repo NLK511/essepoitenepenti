@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, time, timezone
+from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 from uuid import uuid4
@@ -362,10 +362,6 @@ class OrderExecutionService:
         counter[reason] = counter.get(reason, 0) + 1
 
     @staticmethod
-    def _client_order_id(plan: RecommendationPlan, *, run_id: int | None) -> str:
-        return ExecutionCandidateBuilder.client_order_id(plan, run_id=run_id)
-
-    @staticmethod
     def _build_order_payload(
         *,
         ticker: str,
@@ -662,7 +658,7 @@ class OrderExecutionService:
             stop_loss=stop_loss,
             take_profit=take_profit,
             status="skipped",
-            client_order_id=self._client_order_id(plan, run_id=run_id),
+            client_order_id=ExecutionCandidateBuilder.client_order_id(plan, run_id=run_id),
             error_message=reason,
             request_payload={"reason": reason},
             response_payload={},
