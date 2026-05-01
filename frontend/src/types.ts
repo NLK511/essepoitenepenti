@@ -301,6 +301,27 @@ export interface RecommendationQualityWindowSummary {
   walk_forward_error: string | null;
 }
 
+export interface PlanPolicyEvaluation {
+  policy_id: string;
+  total_outcomes: number;
+  selected_outcomes: number;
+  resolved_selected_outcomes: number;
+  broker_selected_outcomes: number;
+  simulation_selected_outcomes: number;
+  win_count: number;
+  loss_count: number;
+  win_rate_percent: number | null;
+  average_confidence_percent: number | null;
+  calibration_gap_percent: number | null;
+  realized_pnl: number;
+  average_return_percent: number | null;
+  average_r_multiple: number | null;
+  profit_factor: number | null;
+  calibration_penalty: number | null;
+  robustness_label: string;
+  selection_rate_percent: number | null;
+}
+
 export interface RecommendationQualitySummary extends RecommendationQualityWindowSummary {
   tuning_settings: {
     confidence_threshold: number;
@@ -320,6 +341,7 @@ export interface RecommendationQualitySummary extends RecommendationQualityWindo
     };
   };
   latest_assessment: Record<string, unknown>;
+  active_policy_evaluation?: PlanPolicyEvaluation;
 }
 
 export interface RecommendationQualityResponse {

@@ -60,6 +60,7 @@ from trade_proposer_app.services.recommendation_plan_evaluations import Recommen
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
 from trade_proposer_app.services.execution_candidates import ExecutionCandidateBuilder
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
+from trade_proposer_app.services.plan_policy_evaluator import PlanPolicyEvaluator
 from trade_proposer_app.services.plan_reliability_report import PlanReliabilityReportService
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicy, TradeDecisionPolicyService
@@ -853,6 +854,89 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(features.context_bias, "tailwind")
         self.assertEqual(features.risk_percent, 5.0)
         self.assertEqual(features.reward_percent, 10.0)
+
+    def test_plan_policy_evaluator_scores_selected_policy_outcomes(self) -> None:
+        outcomes = [
+            RecommendationPlanOutcome(
+                recommendation_plan_id=1,
+                ticker="AAPL",
+                action="long",
+                outcome="win",
+                status="resolved",
+                confidence_percent=70.0,
+                confidence_bucket="65_to_79",
+                setup_family="continuation",
+                outcome_source="broker",
+                realized_pnl=10.0,
+                realized_return_pct=5.0,
+                realized_r_multiple=2.0,
+            ),
+            RecommendationPlanOutcome(
+                recommendation_plan_id=2,
+                ticker="MSFT",
+                action="long",
+                outcome="loss",
+                status="resolved",
+                confidence_percent=66.0,
+                confidence_bucket="65_to_79",
+                setup_family="continuation",
+                outcome_source="simulation",
+                realized_pnl=-5.0,
+                realized_return_pct=-2.0,
+                realized_r_multiple=-1.0,
+            ),
+            RecommendationPlanOutcome(
+                recommendation_plan_id=3,
+                ticker="TSLA",
+                action="short",
+                outcome="win",
+                status="resolved",
+                confidence_percent=82.0,
+                confidence_bucket="80_plus",
+                setup_family="breakout",
+                outcome_source="broker",
+                realized_pnl=20.0,
+            ),
+            RecommendationPlanOutcome(
+                recommendation_plan_id=4,
+                ticker="NVDA",
+                action="long",
+                outcome="open",
+                status="open",
+                confidence_percent=72.0,
+                confidence_bucket="65_to_79",
+                setup_family="continuation",
+                outcome_source="plan",
+            ),
+        ]
+        policy = TradeDecisionPolicy(
+            policy_id="test-policy",
+            confidence_threshold=65.0,
+            allow_longs=True,
+            allow_shorts=False,
+            allowed_setup_families=("continuation",),
+        )
+
+        evaluation = PlanPolicyEvaluator(StubEffectiveOutcomeRepository(outcomes)).evaluate(policy)
+
+        self.assertEqual(evaluation.policy_id, "test-policy")
+        self.assertEqual(evaluation.total_outcomes, 4)
+        self.assertEqual(evaluation.selected_outcomes, 3)
+        self.assertEqual(evaluation.resolved_selected_outcomes, 2)
+        self.assertEqual(evaluation.broker_selected_outcomes, 1)
+        self.assertEqual(evaluation.simulation_selected_outcomes, 1)
+        self.assertEqual(evaluation.win_count, 1)
+        self.assertEqual(evaluation.loss_count, 1)
+        self.assertEqual(evaluation.win_rate_percent, 50.0)
+        self.assertEqual(evaluation.average_confidence_percent, 68.0)
+        self.assertEqual(evaluation.calibration_gap_percent, 18.0)
+        self.assertEqual(evaluation.calibration_penalty, 18.0)
+        self.assertEqual(evaluation.realized_pnl, 5.0)
+        self.assertEqual(evaluation.average_return_percent, 1.5)
+        self.assertEqual(evaluation.average_r_multiple, 0.5)
+        self.assertEqual(evaluation.profit_factor, 2.0)
+        self.assertEqual(evaluation.robustness_label, "insufficient")
+        self.assertEqual(evaluation.selection_rate_percent, 75.0)
 
     def test_plan_reliability_report_summarizes_canonical_effective_cohorts(self) -> None:
         outcomes = [

@@ -106,6 +106,14 @@ export function RecommendationQualityPage() {
                 <div className="data-point"><span className="data-point-label">plan-gen min validation</span><span className="data-point-value">{data.summary.tuning_settings.plan_generation.min_validation_resolved}</span></div>
                 <div className="data-point"><span className="data-point-label">auto promote</span><span className="data-point-value">{data.summary.tuning_settings.plan_generation.auto_promote_enabled ? "on" : "off"}</span></div>
               </div>
+              {data.summary.active_policy_evaluation ? (
+                <div className="data-points top-gap-medium">
+                  <div className="data-point"><span className="data-point-label">policy sample</span><span className="data-point-value">{data.summary.active_policy_evaluation.resolved_selected_outcomes} resolved</span></div>
+                  <div className="data-point"><span className="data-point-label">policy win rate</span><span className="data-point-value">{data.summary.active_policy_evaluation.win_rate_percent !== null ? `${data.summary.active_policy_evaluation.win_rate_percent.toFixed(1)}%` : "—"}</span></div>
+                  <div className="data-point"><span className="data-point-label">policy P&L</span><span className="data-point-value">${data.summary.active_policy_evaluation.realized_pnl.toFixed(2)}</span></div>
+                  <div className="data-point"><span className="data-point-label">policy robustness</span><span className="data-point-value"><Badge tone={data.summary.active_policy_evaluation.robustness_label === "strong" || data.summary.active_policy_evaluation.robustness_label === "usable" ? "ok" : data.summary.active_policy_evaluation.robustness_label === "limited" ? "warning" : "neutral"}>{data.summary.active_policy_evaluation.robustness_label}</Badge></span></div>
+                </div>
+              ) : null}
             </Card>
           </section>
 

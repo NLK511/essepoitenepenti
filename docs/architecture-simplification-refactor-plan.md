@@ -29,7 +29,9 @@ Status: aggregate summaries are implemented and consumed by dashboard/performanc
 ### 3. Policy/tuning overlap
 Plan-generation tuning, signal-gating tuning, calibration threshold adjustments, and live watchlist orchestration all affect whether a plan is tradable, but there is no single policy object describing the active trade-selection policy.
 
-Canonical target: `TradeDecisionPolicy`.
+Canonical targets:
+- `TradeDecisionPolicy` describes the active/selected trade-selection policy
+- `PlanPolicyEvaluator` scores a policy against broker-preferred historical outcomes with one shared evaluator
 
 This should separate:
 - strategy selection policy: what setups are eligible
@@ -103,10 +105,11 @@ Acceptance criteria:
 - test coverage confirms the shared service counts broker and simulation outcomes correctly
 
 ### Phase 3 — Trade decision policy
-Status: foundation implemented; first live consumer migrated.
+Status: foundation implemented; first live consumer migrated; first additive policy evaluator implemented.
 
 Implemented:
 - `TradeDecisionPolicy`
+- `PlanPolicyEvaluator` and active-policy evaluation in recommendation quality summary
 - `SignalGatingPolicy`
 - `TradeDecisionPolicyService.active_policy()`
 - live watchlist orchestration builder passes the active policy instead of separately wiring confidence, signal-gating, and plan-generation settings
@@ -117,7 +120,7 @@ Implemented additionally:
 - generated recommendation plans persist `trade_policy_id` and `trade_policy_snapshot`
 
 Still needed:
-- tuning/search evaluates explicit policy versions beyond the active policy snapshot
+- tuning/search uses `PlanPolicyEvaluator` or narrower shared evaluators when comparing explicit policy/config versions beyond the active policy snapshot
 
 Acceptance criteria:
 - every generated plan records the policy version/config used
