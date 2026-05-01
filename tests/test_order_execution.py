@@ -18,6 +18,7 @@ from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaOrderSubmissionResult, AlpacaPaperClient, AlpacaPaperClientError
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.order_execution import OrderExecutionService
+from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
 
 
 def create_session() -> Session:
@@ -433,6 +434,62 @@ class OrderExecutionTests(unittest.TestCase):
             self.assertEqual(position.realized_pnl, 100.0)
             self.assertEqual(position.realized_return_pct, 10.0)
             self.assertEqual(position.realized_r_multiple, 2.0)
+        finally:
+            session.close()
+
+    def test_performance_assessment_includes_broker_resolved_outcomes(self) -> None:
+        session = create_session()
+        try:
+            BrokerPositionRepository(session).create(
+                BrokerPosition(
+                    broker_order_execution_id=1,
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=1,
+                    recommendation_plan_ticker="AAPL",
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    quantity=10,
+                    current_quantity=0,
+                    status="win",
+                    entry_avg_price=100.0,
+                    exit_avg_price=110.0,
+                    exit_filled_at=datetime.now(timezone.utc),
+                    realized_pnl=100.0,
+                    realized_return_pct=10.0,
+                )
+            )
+            BrokerPositionRepository(session).create(
+                BrokerPosition(
+                    broker_order_execution_id=2,
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=2,
+                    recommendation_plan_ticker="MSFT",
+                    ticker="MSFT",
+                    action="long",
+                    side="buy",
+                    quantity=10,
+                    current_quantity=0,
+                    status="loss",
+                    entry_avg_price=100.0,
+                    exit_avg_price=95.0,
+                    exit_filled_at=datetime.now(timezone.utc),
+                    realized_pnl=-50.0,
+                    realized_return_pct=-5.0,
+                )
+            )
+
+            windows = PerformanceAssessmentService(session)._windowed_assessments()
+            thirty_day = next(item for item in windows if item["window"] == "30d")
+
+            self.assertEqual(thirty_day["broker_closed_positions"], 2)
+            self.assertEqual(thirty_day["broker_wins"], 1)
+            self.assertEqual(thirty_day["broker_losses"], 1)
+            self.assertEqual(thirty_day["broker_win_rate_percent"], 50.0)
+            self.assertEqual(thirty_day["broker_realized_pnl"], 50.0)
+            self.assertEqual(thirty_day["overall_win_rate_percent"], 50.0)
         finally:
             session.close()
 

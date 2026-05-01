@@ -1144,6 +1144,14 @@ export interface PerformanceWindowAssessment {
   window: string;
   evaluated_after: string;
   resolved_outcomes: number;
+  broker_closed_positions?: number;
+  broker_win_rate_percent?: number | null;
+  broker_wins?: number;
+  broker_losses?: number;
+  broker_realized_pnl?: number;
+  broker_average_return_percent?: number | null;
+  simulated_resolved_outcomes?: number;
+  simulated_overall_win_rate_percent?: number | null;
   overall_win_rate_percent: number | null;
   calibration_brier_score: number | null;
   calibration_ece: number | null;
@@ -1161,6 +1169,7 @@ export interface PerformanceAssessmentResponse {
   latest_run: Run | null;
   latest_assessment: Record<string, unknown>;
   calibration_summary: CalibrationSummary | null;
+  broker_performance?: Record<string, unknown> | null;
   entry_miss_diagnostics?: EntryMissDiagnosticsSummary | null;
   windowed_assessments?: PerformanceWindowAssessment[];
 }

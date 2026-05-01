@@ -22,12 +22,16 @@ async def get_performance_assessment(session: Session = Depends(get_db_session))
     latest_summary = payload.get("latest_summary") if isinstance(payload.get("latest_summary"), dict) else {}
     outcomes = RecommendationOutcomeRepository(session)
     calibration_summary = RecommendationPlanCalibrationService(outcomes).summarize(limit=500)
+    latest_artifact = payload.get("latest_artifact") if isinstance(payload.get("latest_artifact"), dict) else {}
+    artifact_payload = latest_artifact.get("payload") if isinstance(latest_artifact.get("payload"), dict) else {}
+    broker_performance = artifact_payload.get("broker_performance") if isinstance(artifact_payload.get("broker_performance"), dict) else None
     return {
         "job": payload.get("job"),
         "history_count": payload.get("history_count", 0),
         "latest_run": latest_run,
         "latest_assessment": latest_summary,
         "calibration_summary": calibration_summary,
+        "broker_performance": broker_performance,
         "entry_miss_diagnostics": outcomes.summarize_entry_miss_diagnostics(),
         "windowed_assessments": payload.get("windowed_assessments", []),
     }

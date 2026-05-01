@@ -5,6 +5,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from trade_proposer_app.domain.enums import JobType, RunStatus
+from sqlalchemy import select
+
+from trade_proposer_app.persistence.models import BrokerPositionRecord
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
@@ -164,9 +167,20 @@ class PerformanceAssessmentService:
             }
             for item in family_review.families[:5]
         ]
+        broker_summary = self._broker_position_summary(evaluated_after=None, evaluated_before=datetime.now(timezone.utc))
+        broker_win_rate = broker_summary["win_rate_percent"]
         headline_metrics = {
-            "resolved_outcomes": calibration.resolved_outcomes,
-            "overall_win_rate_percent": calibration.overall_win_rate_percent,
+            "resolved_outcomes": broker_summary["closed_positions"] if broker_summary["closed_positions"] else calibration.resolved_outcomes,
+            "resolved_outcome_source": "broker" if broker_summary["closed_positions"] else "simulated",
+            "simulated_resolved_outcomes": calibration.resolved_outcomes,
+            "simulated_overall_win_rate_percent": calibration.overall_win_rate_percent,
+            "broker_closed_positions": broker_summary["closed_positions"],
+            "broker_win_rate_percent": broker_summary["win_rate_percent"],
+            "broker_wins": broker_summary["wins"],
+            "broker_losses": broker_summary["losses"],
+            "broker_realized_pnl": broker_summary["realized_pnl"],
+            "broker_average_return_percent": broker_summary["average_return_percent"],
+            "overall_win_rate_percent": broker_win_rate if broker_win_rate is not None else calibration.overall_win_rate_percent,
             "total_trade_plans_reviewed": baselines.total_trade_plans_reviewed,
             "actual_actionable_win_rate_percent": self._comparison_metric(baselines, "actual_actionable"),
             "actual_actionable_average_return_5d": self._baseline_metric(baselines, "actual_actionable", "average_return_5d"),
@@ -177,6 +191,7 @@ class PerformanceAssessmentService:
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "headline_metrics": headline_metrics,
+            "broker_performance": broker_summary,
             "calibration": calibration.model_dump(mode="json"),
             "baselines": baselines.model_dump(mode="json"),
             "evidence_concentration": evidence.model_dump(mode="json"),
@@ -242,6 +257,25 @@ class PerformanceAssessmentService:
                 return getattr(item, metric, None)
         return None
 
+    def _broker_position_summary(self, *, evaluated_after: datetime | None, evaluated_before: datetime) -> dict[str, object]:
+        query = select(BrokerPositionRecord).where(BrokerPositionRecord.status.in_(["win", "loss"]))
+        if evaluated_after is not None:
+            query = query.where(BrokerPositionRecord.exit_filled_at >= evaluated_after)
+        query = query.where(BrokerPositionRecord.exit_filled_at <= evaluated_before)
+        positions = self.session.scalars(query).all()
+        wins = sum(1 for position in positions if position.status == "win")
+        losses = sum(1 for position in positions if position.status == "loss")
+        closed = wins + losses
+        returns = [float(position.realized_return_pct) for position in positions if position.realized_return_pct is not None]
+        return {
+            "closed_positions": closed,
+            "wins": wins,
+            "losses": losses,
+            "win_rate_percent": self._percentage(wins, closed),
+            "realized_pnl": round(sum(float(position.realized_pnl or 0.0) for position in positions), 4),
+            "average_return_percent": round(sum(returns) / len(returns), 2) if returns else None,
+        }
+
     def _windowed_assessments(self) -> list[dict[str, object]]:
         now = datetime.now(timezone.utc)
         windows = [
@@ -257,12 +291,21 @@ class PerformanceAssessmentService:
             baselines = RecommendationPlanBaselineService(self.plan_repository).summarize(limit=500, computed_after=evaluated_after)
             evidence = RecommendationEvidenceConcentrationService(self.outcome_repository).summarize(limit=500, evaluated_after=evaluated_after)
             family_review = RecommendationSetupFamilyReviewService(self.outcome_repository).summarize(limit=500, evaluated_after=evaluated_after)
+            broker_summary = self._broker_position_summary(evaluated_after=evaluated_after, evaluated_before=now)
             results.append(
                 {
                     "window": label,
                     "evaluated_after": evaluated_after.isoformat(),
                     "resolved_outcomes": calibration.resolved_outcomes,
-                    "overall_win_rate_percent": calibration.overall_win_rate_percent,
+                    "broker_closed_positions": broker_summary["closed_positions"],
+                    "broker_win_rate_percent": broker_summary["win_rate_percent"],
+                    "broker_wins": broker_summary["wins"],
+                    "broker_losses": broker_summary["losses"],
+                    "broker_realized_pnl": broker_summary["realized_pnl"],
+                    "broker_average_return_percent": broker_summary["average_return_percent"],
+                    "overall_win_rate_percent": broker_summary["win_rate_percent"] if broker_summary["win_rate_percent"] is not None else calibration.overall_win_rate_percent,
+                    "simulated_resolved_outcomes": calibration.resolved_outcomes,
+                    "simulated_overall_win_rate_percent": calibration.overall_win_rate_percent,
                     "calibration_brier_score": calibration.calibration_report.brier_score if calibration.calibration_report else None,
                     "calibration_ece": calibration.calibration_report.expected_calibration_error if calibration.calibration_report else None,
                     "actual_actionable_win_rate_percent": self._comparison_metric(baselines, "actual_actionable"),
@@ -276,9 +319,19 @@ class PerformanceAssessmentService:
         return results
 
     @staticmethod
+    def _percentage(part: int, total: int) -> float | None:
+        if total <= 0:
+            return None
+        return round((part / total) * 100.0, 1)
+
+    @staticmethod
     def _build_fallback_summary(payload: dict[str, object]) -> str:
         headline = payload.get("headline_metrics", {}) if isinstance(payload.get("headline_metrics"), dict) else {}
         resolved = headline.get("resolved_outcomes", 0)
+        broker_closed = headline.get("broker_closed_positions", 0)
+        broker_win_rate = headline.get("broker_win_rate_percent")
+        broker_pnl = headline.get("broker_realized_pnl")
+        source = headline.get("resolved_outcome_source", "simulated")
         overall_win_rate = headline.get("overall_win_rate_percent")
         actual_win_rate = headline.get("actual_actionable_win_rate_percent")
         actual_return = headline.get("actual_actionable_average_return_5d")
@@ -287,8 +340,11 @@ class PerformanceAssessmentService:
         ready = headline.get("ready_for_expansion")
         return (
             "Executive summary\n"
-            f"- Resolved outcomes reviewed: {resolved}\n"
-            f"- Overall measured win rate: {overall_win_rate if overall_win_rate is not None else 'n/a'}%\n"
+            f"- Resolved outcomes reviewed: {resolved} ({source})\n"
+            f"- Broker closed positions reviewed: {broker_closed}\n"
+            f"- Broker win rate: {broker_win_rate if broker_win_rate is not None else 'n/a'}%\n"
+            f"- Broker realized P&L: {broker_pnl if broker_pnl is not None else 'n/a'}\n"
+            f"- Overall simulated win rate: {overall_win_rate if overall_win_rate is not None else 'n/a'}%\n"
             f"- Actual actionable baseline win rate: {actual_win_rate if actual_win_rate is not None else 'n/a'}%\n"
             f"- Actual actionable average return 5d: {actual_return if actual_return is not None else 'n/a'}\n"
             f"- High-confidence baseline win rate: {high_confidence if high_confidence is not None else 'n/a'}%\n"
