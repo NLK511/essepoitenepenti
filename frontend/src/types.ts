@@ -147,10 +147,21 @@ export interface BrokerOrderExecution {
   updated_at: string;
 }
 
+export interface RiskHaltEvent {
+  id: number | null;
+  action: string;
+  reason: string;
+  previous_halt_enabled: boolean;
+  new_halt_enabled: boolean;
+  actor: string;
+  created_at: string;
+}
+
 export interface BrokerWorkbench {
   broker_orders: BrokerOrderExecution[];
   broker_positions: BrokerPosition[];
   risk: BrokerRiskAssessment;
+  risk_halt_events: RiskHaltEvent[];
   counts: {
     broker_orders: number;
     broker_positions: number;

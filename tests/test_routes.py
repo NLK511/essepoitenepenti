@@ -1236,6 +1236,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["broker_orders"][0]["client_order_id"], "tp-workbench")
         self.assertEqual(payload["broker_positions"][0]["status"], "open")
         self.assertIn("allowed", payload["risk"])
+        self.assertIn("risk_halt_events", payload)
 
     async def test_broker_order_routes_return_expected_errors(self) -> None:
         run_id = self.seed_run_with_diagnostics()

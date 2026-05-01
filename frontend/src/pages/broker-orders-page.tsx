@@ -4,7 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
-import type { AppSetting, BrokerOrderExecution, BrokerPosition, BrokerRiskAssessment, BrokerWorkbench, SettingsResponse } from "../types";
+import type { AppSetting, BrokerOrderExecution, BrokerPosition, BrokerRiskAssessment, BrokerWorkbench, RiskHaltEvent, SettingsResponse } from "../types";
 import { formatDate } from "../utils";
 
 function orderTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
@@ -60,6 +60,7 @@ export function BrokerOrdersPage() {
   const [settings, setSettings] = useState<AppSetting[] | null>(null);
   const [positions, setPositions] = useState<BrokerPosition[] | null>(null);
   const [risk, setRisk] = useState<BrokerRiskAssessment | null>(null);
+  const [haltEvents, setHaltEvents] = useState<RiskHaltEvent[]>([]);
   const { showToast } = useToast();
   const limit = Math.max(1, Number(searchParams.get("limit") ?? "50") || 50);
   const runId = searchParams.get("run_id");
@@ -82,6 +83,7 @@ export function BrokerOrdersPage() {
         setOrders(loadedOrders);
         setPositions(workbench.broker_positions);
         setRisk(workbench.risk);
+        setHaltEvents(workbench.risk_halt_events ?? []);
         setSettings(loadedSettings.settings);
         if (!selectedOrderId && loadedOrders[0]?.id) {
           const next = new URLSearchParams(searchParams);
@@ -141,6 +143,7 @@ export function BrokerOrdersPage() {
     setOrders(loadedOrders);
     setPositions(workbench.broker_positions);
     setRisk(workbench.risk);
+    setHaltEvents(workbench.risk_halt_events ?? []);
     setSettings(loadedSettings.settings);
     const nextOrderId = nextSelectedOrderId ?? loadedOrders[0]?.id ?? null;
     if (nextOrderId) {
@@ -267,6 +270,22 @@ export function BrokerOrdersPage() {
           {risk.reasons.length ? (
             <div className="alert alert-warning top-gap-small">Blocked by: {risk.reasons.map(reasonLabel).join(", ")}</div>
           ) : <div className="helper-text top-gap-small">No active risk blocks.</div>}
+          {haltEvents.length ? (
+            <div className="top-gap-small">
+              <div className="helper-text">Recent halt/resume audit</div>
+              <div className="data-stack top-gap-small">
+                {haltEvents.slice(0, 3).map((event) => (
+                  <div key={event.id ?? `${event.action}-${event.created_at}`} className="data-card compact">
+                    <div className="data-card-header">
+                      <span>{event.action}</span>
+                      <Badge tone={event.new_halt_enabled ? "danger" : "ok"}>{event.new_halt_enabled ? "halted" : "clear"}</Badge>
+                    </div>
+                    <div className="helper-text">{formatDate(event.created_at)} · {event.reason || "no reason"}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </Card>
       ) : null}
 

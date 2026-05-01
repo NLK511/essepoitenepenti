@@ -185,7 +185,7 @@ Acceptance criteria:
 Status: broker and research read model foundations implemented.
 
 Implemented:
-- `/api/broker-workbench` returns broker orders, broker positions, risk state, and counts in one backend-reconciled payload
+- `/api/broker-workbench` returns broker orders, broker positions, risk state, recent halt audit events, and counts in one backend-reconciled payload
 - Broker Orders frontend page consumes `/api/broker-workbench` instead of separately stitching orders, positions, and risk
 - `/api/research/performance-workbench` returns latest assessment, broker summary, effective outcome summary, calibration summary, entry-miss diagnostics, and windows in one backend-reconciled payload
 - route tests for broker and research workbench payloads
