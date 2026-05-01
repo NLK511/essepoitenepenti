@@ -60,6 +60,7 @@ from trade_proposer_app.services.recommendation_plan_evaluations import Recommen
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
 from trade_proposer_app.services.execution_candidates import ExecutionCandidateBuilder
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
+from trade_proposer_app.services.plan_reliability_report import PlanReliabilityReportService
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicy, TradeDecisionPolicyService
 from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
@@ -70,6 +71,14 @@ def create_session() -> Session:
     engine = create_engine("sqlite:///:memory:", future=True)
     Base.metadata.create_all(bind=engine)
     return Session(bind=engine)
+
+
+class StubEffectiveOutcomeRepository:
+    def __init__(self, outcomes: list[RecommendationPlanOutcome]) -> None:
+        self.outcomes = outcomes
+
+    def list_outcomes(self, **_kwargs):
+        return self.outcomes
 
 
 class StubWatchlistOrchestrationService:
@@ -844,6 +853,68 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(features.context_bias, "tailwind")
         self.assertEqual(features.risk_percent, 5.0)
         self.assertEqual(features.reward_percent, 10.0)
+
+    def test_plan_reliability_report_summarizes_canonical_effective_cohorts(self) -> None:
+        outcomes = [
+            RecommendationPlanOutcome(
+                recommendation_plan_id=1,
+                ticker="AAPL",
+                action="long",
+                outcome="win",
+                status="resolved",
+                confidence_percent=60.0,
+                confidence_bucket="50_to_64",
+                setup_family="continuation",
+                outcome_source="broker",
+                realized_pnl=12.0,
+                realized_return_pct=3.0,
+                realized_r_multiple=1.5,
+            ),
+            RecommendationPlanOutcome(
+                recommendation_plan_id=2,
+                ticker="MSFT",
+                action="long",
+                outcome="loss",
+                status="resolved",
+                confidence_percent=64.0,
+                confidence_bucket="50_to_64",
+                setup_family="continuation",
+                outcome_source="broker",
+                realized_pnl=-4.0,
+                realized_return_pct=-1.0,
+                realized_r_multiple=-1.0,
+            ),
+            RecommendationPlanOutcome(
+                recommendation_plan_id=3,
+                ticker="TSLA",
+                action="short",
+                outcome="open",
+                status="open",
+                confidence_percent=72.0,
+                confidence_bucket="65_to_79",
+                setup_family="breakout",
+                outcome_source="plan",
+            ),
+        ]
+
+        report = PlanReliabilityReportService(StubEffectiveOutcomeRepository(outcomes)).summarize()
+
+        self.assertEqual(report.total_outcomes, 3)
+        self.assertEqual(report.resolved_outcomes, 2)
+        self.assertEqual(report.broker_outcomes, 2)
+        bucket = report.by_confidence_bucket[0]
+        self.assertEqual(bucket.key, "50_to_64")
+        self.assertEqual(bucket.resolved_count, 2)
+        self.assertEqual(bucket.win_count, 1)
+        self.assertEqual(bucket.loss_count, 1)
+        self.assertEqual(bucket.win_rate_percent, 50.0)
+        self.assertEqual(bucket.average_confidence_percent, 62.0)
+        self.assertEqual(bucket.calibration_gap_percent, 12.0)
+        self.assertEqual(bucket.realized_pnl, 8.0)
+        self.assertEqual(bucket.average_r_multiple, 0.25)
+        self.assertEqual(bucket.profit_factor, 3.0)
+        self.assertEqual(bucket.sample_status, "insufficient")
+        self.assertEqual(bucket.broker_outcome_count, 2)
 
     def test_execution_candidate_builder_splits_plan_from_broker_candidate(self) -> None:
         plan = RecommendationPlan(

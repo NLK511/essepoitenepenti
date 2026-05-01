@@ -20,9 +20,11 @@ Status: implemented. Broker positions override simulated outcomes when available
 ### 2. Performance metric duplication
 Dashboard, performance assessment, risk views, and research pages have each calculated broker win rate/P&L in local helper functions. This risks metric drift.
 
-Canonical contract: `TradingPerformanceMetricsService`.
+Canonical contracts:
+- `TradingPerformanceMetricsService` for aggregate broker/effective performance summaries
+- `PlanReliabilityReportService` for confidence/setup/action reliability cohorts used by Research now and by tuning/gating migrations next
 
-Status: implemented in this pass for broker closed-position summaries and effective-outcome summaries. Dashboard and performance assessment use it for broker metrics.
+Status: aggregate summaries are implemented and consumed by dashboard/performance assessment. The first reliability report slice is implemented for the Research workbench.
 
 ### 3. Policy/tuning overlap
 Plan-generation tuning, signal-gating tuning, calibration threshold adjustments, and live watchlist orchestration all affect whether a plan is tradable, but there is no single policy object describing the active trade-selection policy.
@@ -233,5 +235,8 @@ For each phase:
 5. Run full backend tests and frontend typecheck before commit.
 6. Keep raw legacy adapters available until all consumers are migrated.
 
-## Current priority after Phase 2
-Implement Phase 3, because broad plan-generation search needs an explicit policy object. Without it, search risks optimizing accidental settings spread across orchestration, calibration, tuning, and settings code.
+## Current priority after frontend consumer cleanup
+Continue reliability/tuning simplification in small batches:
+1. Use `PlanReliabilityReportService` as the canonical broker/effective reliability report in Research.
+2. Migrate signal-gating review and plan-generation tuning scoring to shared reliability/evaluator contracts where it changes no user-visible semantics without tests.
+3. Keep lower-level endpoints and raw records as focused/debug contracts until explicit deprecation.

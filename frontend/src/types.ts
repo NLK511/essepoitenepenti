@@ -1185,6 +1185,39 @@ export interface PerformanceWindowAssessment {
   ready_for_expansion: boolean;
 }
 
+export interface PlanReliabilityBucket {
+  slice_name: string;
+  key: string;
+  label: string;
+  total_count: number;
+  resolved_count: number;
+  win_count: number;
+  loss_count: number;
+  win_rate_percent: number | null;
+  average_confidence_percent: number | null;
+  calibration_gap_percent: number | null;
+  realized_pnl: number;
+  average_return_percent: number | null;
+  average_r_multiple: number | null;
+  profit_factor: number | null;
+  broker_outcome_count: number;
+  simulation_outcome_count: number;
+  plan_outcome_count: number;
+  sample_status: string;
+  min_required_resolved_count: number;
+}
+
+export interface PlanReliabilityReport {
+  total_outcomes: number;
+  resolved_outcomes: number;
+  broker_outcomes: number;
+  simulation_outcomes: number;
+  plan_outcomes: number;
+  by_confidence_bucket: PlanReliabilityBucket[];
+  by_setup_family: PlanReliabilityBucket[];
+  by_action: PlanReliabilityBucket[];
+}
+
 export interface PerformanceSummary {
   closed_positions?: number;
   total_outcomes?: number;
@@ -1208,6 +1241,7 @@ export interface PerformanceAssessmentResponse {
   latest_assessment: Record<string, unknown>;
   calibration_summary: CalibrationSummary | null;
   calibration_report?: CalibrationReport | null;
+  reliability_report?: PlanReliabilityReport | null;
   walk_forward_validation?: WalkForwardValidationResponse | null;
   near_miss_winners?: RecommendationPlanOutcome[];
   broker_performance?: Record<string, unknown> | null;

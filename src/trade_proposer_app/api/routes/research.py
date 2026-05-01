@@ -11,6 +11,7 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
+from trade_proposer_app.services.plan_reliability_report import PlanReliabilityReportService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_walk_forward_validation import RecommendationWalkForwardValidationService
 from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
@@ -31,6 +32,10 @@ def _performance_workbench_payload(session: Session, *, calibration_evaluated_af
     calibration_summary = RecommendationPlanCalibrationService(effective_outcomes).summarize(
         evaluated_after=calibration_evaluated_after,
         limit=2000 if calibration_evaluated_after is not None else 500,
+    )
+    reliability_report = PlanReliabilityReportService(effective_outcomes).summarize(
+        evaluated_after=calibration_evaluated_after,
+        limit=5000,
     )
     walk_forward = RecommendationWalkForwardValidationService(
         effective_outcomes,
@@ -57,6 +62,7 @@ def _performance_workbench_payload(session: Session, *, calibration_evaluated_af
         "effective_summary": metrics.summarize_effective_outcomes(limit=500).to_dict(),
         "calibration_summary": calibration_summary,
         "calibration_report": calibration_summary.calibration_report,
+        "reliability_report": reliability_report.to_dict(),
         "walk_forward_validation": walk_forward,
         "near_miss_winners": near_miss_winners,
         "entry_miss_diagnostics": outcomes.summarize_entry_miss_diagnostics(),

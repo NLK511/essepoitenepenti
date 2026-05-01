@@ -1186,11 +1186,13 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("effective_summary", payload)
         self.assertIn("calibration_summary", payload)
         self.assertIn("calibration_report", payload)
+        self.assertIn("reliability_report", payload)
         self.assertIn("walk_forward_validation", payload)
         self.assertIn("near_miss_winners", payload)
         self.assertIn("entry_miss_diagnostics", payload)
         self.assertIn("closed_positions", payload["broker_summary"])
         self.assertIn("resolved_outcomes", payload["effective_summary"])
+        self.assertIn("by_confidence_bucket", payload["reliability_report"])
 
     async def test_broker_workbench_returns_orders_positions_and_risk(self) -> None:
         run_id = self.seed_run_with_diagnostics()

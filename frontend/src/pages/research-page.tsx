@@ -123,6 +123,8 @@ export function ResearchPage() {
   const calibrationReport = assessment?.calibration_report ?? calibrationSummary?.calibration_report ?? null;
   const calibrationBins = calibrationReport?.bins ?? [];
   const walkForward = assessment?.walk_forward_validation ?? null;
+  const reliabilityReport = assessment?.reliability_report ?? null;
+  const topReliabilityBuckets = reliabilityReport?.by_confidence_bucket?.slice(0, 4) ?? [];
   const nearMissWinners = assessment?.near_miss_winners ?? [];
   const windowedAssessments = Array.isArray(assessment?.windowed_assessments) ? (assessment.windowed_assessments as PerformanceWindowAssessment[]) : [];
   const selectedAssessmentWindow = windowedAssessments.find((window) => window.window === selectedWindow) ?? windowedAssessments[0] ?? null;
@@ -245,6 +247,48 @@ export function ResearchPage() {
                   <StatCard label="Broker realized P&L" value={assessment.broker_summary?.realized_pnl === undefined ? "—" : `$${assessment.broker_summary.realized_pnl.toFixed(2)}`} helper="Closed broker-position ledger" />
                   <StatCard label="Effective resolved" value={assessment.effective_summary?.resolved_outcomes ?? "—"} helper={`${assessment.effective_summary?.broker_outcomes ?? 0} broker · ${assessment.effective_summary?.simulation_outcomes ?? 0} simulation`} />
                 </section>
+              ) : null}
+              {reliabilityReport ? (
+                <Card className="top-gap-medium">
+                  <SectionTitle kicker="Broker/effective reliability" title="Confidence cohorts" subtitle="Broker-preferred reliability by confidence band. Positive calibration gap means the plan confidence was above realized win rate." />
+                  <div className="data-points top-gap-small">
+                    <div className="data-point"><span className="data-point-label">total outcomes</span><span className="data-point-value">{reliabilityReport.total_outcomes}</span></div>
+                    <div className="data-point"><span className="data-point-label">resolved</span><span className="data-point-value">{reliabilityReport.resolved_outcomes}</span></div>
+                    <div className="data-point"><span className="data-point-label">broker / simulation</span><span className="data-point-value">{reliabilityReport.broker_outcomes} / {reliabilityReport.simulation_outcomes}</span></div>
+                  </div>
+                  {topReliabilityBuckets.length > 0 ? (
+                    <div className="table-wrapper top-gap-small">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>bucket</th>
+                            <th>sample</th>
+                            <th>W/L</th>
+                            <th>win rate</th>
+                            <th>avg conf</th>
+                            <th>gap</th>
+                            <th>P&L</th>
+                            <th>profit factor</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {topReliabilityBuckets.map((bucket) => (
+                            <tr key={bucket.key}>
+                              <td>{bucket.label}</td>
+                              <td><Badge tone={bucket.sample_status === "strong" || bucket.sample_status === "usable" ? "ok" : bucket.sample_status === "limited" ? "warning" : "neutral"}>{bucket.sample_status}</Badge> {bucket.resolved_count}/{bucket.total_count}</td>
+                              <td>{bucket.win_count}/{bucket.loss_count}</td>
+                              <td>{bucket.win_rate_percent !== null ? `${bucket.win_rate_percent.toFixed(1)}%` : "—"}</td>
+                              <td>{bucket.average_confidence_percent !== null ? `${bucket.average_confidence_percent.toFixed(1)}%` : "—"}</td>
+                              <td>{bucket.calibration_gap_percent !== null ? `${bucket.calibration_gap_percent.toFixed(1)}pp` : "—"}</td>
+                              <td>${bucket.realized_pnl.toFixed(2)}</td>
+                              <td>{bucket.profit_factor !== null ? bucket.profit_factor.toFixed(2) : "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : <div className="helper-text top-gap-small">No resolved confidence cohorts yet.</div>}
+                </Card>
               ) : null}
               {assessment?.entry_miss_diagnostics ? (
                 <Card className="top-gap-medium">
