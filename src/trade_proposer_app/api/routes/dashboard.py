@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.persistence.models import BrokerOrderExecutionRecord, BrokerPositionRecord, HistoricalMarketBarRecord, HistoricalNewsRecord, TickerSignalSnapshotRecord
+from trade_proposer_app.persistence.models import BrokerOrderExecutionRecord, HistoricalMarketBarRecord, HistoricalNewsRecord, TickerSignalSnapshotRecord
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
@@ -19,6 +19,7 @@ from trade_proposer_app.services.recommendation_plan_baselines import Recommenda
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_quality_summary import RecommendationQualitySummaryService
 from trade_proposer_app.services.recommendation_setup_family_reviews import RecommendationSetupFamilyReviewService
+from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -82,30 +83,6 @@ def _sum_plan_item_count(plans: list, key: str) -> int:
     return total
 
 
-def _broker_position_summary(session: Session, *, computed_after: datetime | None, computed_before: datetime) -> dict[str, object]:
-    query = select(BrokerPositionRecord).where(BrokerPositionRecord.status.in_(["win", "loss"]))
-    if computed_after is not None:
-        query = query.where(BrokerPositionRecord.exit_filled_at >= computed_after)
-    query = query.where(BrokerPositionRecord.exit_filled_at <= computed_before)
-    positions = session.scalars(query).all()
-    wins = sum(1 for position in positions if position.status == "win")
-    losses = sum(1 for position in positions if position.status == "loss")
-    closed = wins + losses
-    realized_pnl = round(sum(float(position.realized_pnl or 0.0) for position in positions), 4)
-    average_return = None
-    returns = [float(position.realized_return_pct) for position in positions if position.realized_return_pct is not None]
-    if returns:
-        average_return = round(sum(returns) / len(returns), 2)
-    return {
-        "closed_positions": closed,
-        "wins": wins,
-        "losses": losses,
-        "win_rate_percent": _percentage(wins, closed),
-        "realized_pnl": realized_pnl,
-        "average_return_percent": average_return,
-    }
-
-
 def _count_records(session: Session, model, column, computed_after: datetime | None, computed_before: datetime | None = None) -> int:
     query = select(func.count()).select_from(model)
     if computed_after is not None:
@@ -153,7 +130,7 @@ async def get_dashboard(
     news_processed = _count_records(session, HistoricalNewsRecord, HistoricalNewsRecord.published_at, computed_after, now)
     bars_stored = _count_records(session, HistoricalMarketBarRecord, HistoricalMarketBarRecord.bar_time, computed_after, now)
     orders_placed = _count_records(session, BrokerOrderExecutionRecord, BrokerOrderExecutionRecord.created_at, computed_after, now)
-    broker_summary = _broker_position_summary(session, computed_after=computed_after, computed_before=now)
+    broker_summary = TradingPerformanceMetricsService(session).summarize_broker_closed_positions(evaluated_after=computed_after, evaluated_before=now).to_dict()
     tweets_processed = _sum_plan_item_count(technical_plans, "social_item_count")
 
     calibration = RecommendationPlanCalibrationService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)

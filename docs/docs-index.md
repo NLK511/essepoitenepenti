@@ -25,6 +25,7 @@ These define the current product truth.
 - `product-thesis.md` — product goal, decision rules, and priority order
 - `features-and-capabilities.md` — what the app does today and its current limits
 - `roadmap.md` — active priorities only
+- `architecture-simplification-refactor-plan.md` — phased cleanup plan for outcome, metric, policy, settings, and status abstractions
 - `user-journeys.md` — intended operator journeys
 
 ### Setup and operations
@@ -56,6 +57,7 @@ These are useful, but they are not the main current-state entry point.
 - `broker-position-lifecycle-spec.md` — broker-backed position state and realized P&L ledger for app-submitted bracket orders
 - `broker-risk-management-spec.md` — broker-backed pre-trade risk limits and manual kill switch
 - `effective-plan-outcome-spec.md` — canonical broker-first outcome view for reconciling broker positions with simulated recommendation outcomes
+- `architecture-simplification-refactor-plan.md` — active phased implementation plan for simplifying drifted abstractions
 - `nitter-social-relevance-scoring.md` — current Nitter relevance-ranking behavior
 
 ## Redesign reference

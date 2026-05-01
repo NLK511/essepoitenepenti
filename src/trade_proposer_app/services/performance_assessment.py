@@ -16,6 +16,7 @@ from trade_proposer_app.services.recommendation_plan_baselines import Recommenda
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_setup_family_reviews import RecommendationSetupFamilyReviewService
 from trade_proposer_app.services.summary import SummaryService
+from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
 
 
 DEFAULT_PROMPT_TEMPLATE = """# Performance assessment request
@@ -54,6 +55,7 @@ class PerformanceAssessmentService:
         self.plan_repository = RecommendationPlanRepository(session)
         self.outcome_repository = RecommendationOutcomeRepository(session)
         self.effective_outcome_repository = EffectivePlanOutcomeRepository(session)
+        self.performance_metrics = TradingPerformanceMetricsService(session, self.effective_outcome_repository)
 
     def ensure_daily_job(self):
         jobs = self.jobs.list_all()
@@ -166,7 +168,7 @@ class PerformanceAssessmentService:
             }
             for item in family_review.families[:5]
         ]
-        broker_summary = self._broker_position_summary(evaluated_after=None, evaluated_before=datetime.now(timezone.utc))
+        broker_summary = self.performance_metrics.summarize_broker_closed_positions(evaluated_after=None, evaluated_before=datetime.now(timezone.utc)).to_dict()
         broker_win_rate = broker_summary["win_rate_percent"]
         headline_metrics = {
             "resolved_outcomes": broker_summary["closed_positions"] if broker_summary["closed_positions"] else calibration.resolved_outcomes,
@@ -256,27 +258,6 @@ class PerformanceAssessmentService:
                 return getattr(item, metric, None)
         return None
 
-    def _broker_position_summary(self, *, evaluated_after: datetime | None, evaluated_before: datetime) -> dict[str, object]:
-        outcomes = self.effective_outcome_repository.list_outcomes(
-            resolved="resolved",
-            evaluated_after=evaluated_after,
-            evaluated_before=evaluated_before,
-            limit=500_000,
-        )
-        broker_outcomes = [item for item in outcomes if item.outcome_source == "broker" and item.outcome in {"win", "loss"}]
-        wins = sum(1 for item in broker_outcomes if item.outcome == "win")
-        losses = sum(1 for item in broker_outcomes if item.outcome == "loss")
-        closed = wins + losses
-        returns = [float(item.realized_return_pct) for item in broker_outcomes if item.realized_return_pct is not None]
-        return {
-            "closed_positions": closed,
-            "wins": wins,
-            "losses": losses,
-            "win_rate_percent": self._percentage(wins, closed),
-            "realized_pnl": round(sum(float(item.realized_pnl or 0.0) for item in broker_outcomes), 4),
-            "average_return_percent": round(sum(returns) / len(returns), 2) if returns else None,
-        }
-
     def _windowed_assessments(self) -> list[dict[str, object]]:
         now = datetime.now(timezone.utc)
         windows = [
@@ -292,7 +273,7 @@ class PerformanceAssessmentService:
             baselines = RecommendationPlanBaselineService(self.plan_repository).summarize(limit=500, computed_after=evaluated_after)
             evidence = RecommendationEvidenceConcentrationService(self.effective_outcome_repository).summarize(limit=500, evaluated_after=evaluated_after)
             family_review = RecommendationSetupFamilyReviewService(self.effective_outcome_repository).summarize(limit=500, evaluated_after=evaluated_after)
-            broker_summary = self._broker_position_summary(evaluated_after=evaluated_after, evaluated_before=now)
+            broker_summary = self.performance_metrics.summarize_broker_closed_positions(evaluated_after=evaluated_after, evaluated_before=now).to_dict()
             results.append(
                 {
                     "window": label,
@@ -318,12 +299,6 @@ class PerformanceAssessmentService:
                 }
             )
         return results
-
-    @staticmethod
-    def _percentage(part: int, total: int) -> float | None:
-        if total <= 0:
-            return None
-        return round((part / total) * 100.0, 1)
 
     @staticmethod
     def _build_fallback_summary(payload: dict[str, object]) -> str:

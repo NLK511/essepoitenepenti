@@ -53,6 +53,8 @@ from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
+from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicy, TradeDecisionPolicyService
+from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
 from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
 
 
@@ -759,6 +761,124 @@ class RepositoryTests(unittest.TestCase):
             self.assertEqual(summary.loss_outcomes, 1)
             self.assertEqual(summary.overall_win_rate_percent, 50.0)
             self.assertIsNotNone(summary.calibration_report)
+        finally:
+            session.close()
+
+    def test_trade_decision_policy_service_normalizes_active_strategy_policy(self) -> None:
+        session = create_session()
+        try:
+            settings = SettingsRepository(session)
+            settings.set_confidence_threshold(62.0)
+            settings.set_signal_gating_tuning_config(
+                threshold_offset=3.0,
+                confidence_adjustment=-1.5,
+                near_miss_gap_cutoff=0.25,
+                shortlist_aggressiveness=2.0,
+                degraded_penalty=4.0,
+            )
+
+            policy = TradeDecisionPolicyService(session).active_policy()
+
+            self.assertEqual(policy.policy_id, "settings-active:baseline")
+            self.assertEqual(policy.confidence_threshold, 62.0)
+            self.assertEqual(policy.effective_confidence_threshold(), 65.0)
+            self.assertEqual(policy.signal_gating.confidence_adjustment, -1.5)
+            self.assertIn("global.entry_band_risk_fraction", policy.plan_generation_config)
+            self.assertTrue(policy.action_allowed("long"))
+            self.assertTrue(policy.action_allowed("short"))
+            self.assertFalse(policy.action_allowed("no_action"))
+        finally:
+            session.close()
+
+    def test_trade_decision_policy_applies_action_and_setup_family_filters(self) -> None:
+        policy = TradeDecisionPolicy(
+            policy_id="test-policy",
+            confidence_threshold=60.0,
+            allow_longs=True,
+            allow_shorts=False,
+            allowed_setup_families=("breakout", "continuation"),
+            blocked_setup_families=("continuation",),
+        )
+
+        self.assertTrue(policy.action_allowed("long"))
+        self.assertFalse(policy.action_allowed("short"))
+        self.assertTrue(policy.setup_family_allowed("breakout"))
+        self.assertFalse(policy.setup_family_allowed("continuation"))
+        self.assertFalse(policy.setup_family_allowed("mean_reversion"))
+        self.assertEqual(policy.to_dict()["effective_confidence_threshold"], 60.0)
+
+    def test_trading_performance_metrics_summarizes_broker_and_effective_outcomes(self) -> None:
+        session = create_session()
+        try:
+            plan_repository = RecommendationPlanRepository(session)
+            for index, status in enumerate(["win", "loss"], start=1):
+                plan = plan_repository.create_plan(
+                    RecommendationPlan(
+                        ticker=f"MET{index}",
+                        horizon=StrategyHorizon.ONE_WEEK,
+                        action="long",
+                        confidence_percent=70.0,
+                        thesis_summary="Shared metrics",
+                        signal_breakdown={"setup_family": "continuation"},
+                    )
+                )
+                BrokerPositionRepository(session).create(
+                    BrokerPosition(
+                        broker_order_execution_id=index,
+                        broker="alpaca",
+                        account_mode="paper",
+                        recommendation_plan_id=plan.id or 0,
+                        recommendation_plan_ticker=f"MET{index}",
+                        ticker=f"MET{index}",
+                        action="long",
+                        side="buy",
+                        quantity=1,
+                        current_quantity=0,
+                        status=status,
+                        exit_filled_at=datetime.now(timezone.utc),
+                        realized_pnl=12.0 if status == "win" else -4.0,
+                        realized_return_pct=6.0 if status == "win" else -2.0,
+                        realized_r_multiple=1.5 if status == "win" else -1.0,
+                    )
+                )
+            simulation_plan = plan_repository.create_plan(
+                RecommendationPlan(
+                    ticker="SIM1",
+                    horizon=StrategyHorizon.ONE_WEEK,
+                    action="long",
+                    confidence_percent=55.0,
+                    thesis_summary="Simulation metric",
+                    signal_breakdown={"setup_family": "breakout"},
+                )
+            )
+            RecommendationOutcomeRepository(session).upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=simulation_plan.id or 0,
+                    ticker="SIM1",
+                    action="long",
+                    outcome="win",
+                    status="resolved",
+                    confidence_bucket="50_to_64",
+                    setup_family="breakout",
+                )
+            )
+
+            service = TradingPerformanceMetricsService(session)
+            broker = service.summarize_broker_closed_positions()
+            effective = service.summarize_effective_outcomes()
+
+            self.assertEqual(broker.closed_positions, 2)
+            self.assertEqual(broker.wins, 1)
+            self.assertEqual(broker.losses, 1)
+            self.assertEqual(broker.win_rate_percent, 50.0)
+            self.assertEqual(broker.realized_pnl, 8.0)
+            self.assertEqual(broker.average_return_percent, 2.0)
+            self.assertEqual(broker.average_r_multiple, 0.25)
+            self.assertEqual(effective.total_outcomes, 3)
+            self.assertEqual(effective.resolved_outcomes, 3)
+            self.assertEqual(effective.broker_outcomes, 2)
+            self.assertEqual(effective.simulation_outcomes, 1)
+            self.assertEqual(effective.win_rate_percent, 66.7)
         finally:
             session.close()
 
