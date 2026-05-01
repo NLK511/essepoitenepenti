@@ -53,6 +53,7 @@ from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
+from trade_proposer_app.services.execution_candidates import ExecutionCandidateBuilder
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicy, TradeDecisionPolicyService
 from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
@@ -764,6 +765,48 @@ class RepositoryTests(unittest.TestCase):
             self.assertIsNotNone(summary.calibration_report)
         finally:
             session.close()
+
+    def test_execution_candidate_builder_splits_plan_from_broker_candidate(self) -> None:
+        plan = RecommendationPlan(
+            id=42,
+            ticker="AAPL",
+            horizon=StrategyHorizon.ONE_WEEK,
+            action="long",
+            confidence_percent=70.0,
+            entry_price_low=99.0,
+            entry_price_high=101.0,
+            stop_loss=95.0,
+            take_profit=110.0,
+            thesis_summary="Candidate split",
+        )
+
+        result = ExecutionCandidateBuilder().build(plan, notional_per_plan=1000.0, run_id=7)
+
+        self.assertTrue(result.is_candidate)
+        self.assertIsNotNone(result.candidate)
+        assert result.candidate is not None
+        self.assertEqual(result.candidate.entry_price, 100.0)
+        self.assertEqual(result.candidate.quantity, 10)
+        self.assertEqual(result.candidate.client_order_id, "tp-run-7-plan-42-aapl")
+        self.assertEqual(result.candidate.side, "buy")
+
+    def test_execution_candidate_builder_returns_skip_reason_for_invalid_plan(self) -> None:
+        plan = RecommendationPlan(
+            id=43,
+            ticker="AAPL",
+            horizon=StrategyHorizon.ONE_WEEK,
+            action="long",
+            confidence_percent=70.0,
+            entry_price_low=100.0,
+            stop_loss=105.0,
+            take_profit=110.0,
+            thesis_summary="Invalid candidate",
+        )
+
+        result = ExecutionCandidateBuilder().build(plan, notional_per_plan=1000.0, run_id=7)
+
+        self.assertFalse(result.is_candidate)
+        self.assertEqual(result.skip_reason, "invalid_trade_levels")
 
     def test_settings_domain_service_splits_strategy_risk_execution_and_operator_settings(self) -> None:
         session = create_session()

@@ -1,7 +1,7 @@
 # Architecture Simplification Refactor Plan
 
 ## Status
-In progress. Phase 1 effective outcomes is implemented. Phase 2 shared performance metrics is implemented. Phase 3 now has the normalized `TradeDecisionPolicy` foundation and live watchlist orchestration is built from the active policy. Phase 4 and Phase 5 now have typed foundations. Later consumer migrations must continue incrementally with specs/tests before behavior changes.
+In progress. Phase 1 effective outcomes is implemented. Phase 2 shared performance metrics is implemented. Phase 3 now has the normalized `TradeDecisionPolicy` foundation and live watchlist orchestration is built from the active policy. Phase 4, Phase 5, and Phase 6 now have typed foundations. Later consumer migrations must continue incrementally with specs/tests before behavior changes.
 
 ## Goal
 Make the app leaner and safer for autonomous trading by replacing overlapping, source-specific abstractions with a few explicit product contracts.
@@ -157,10 +157,16 @@ Acceptance criteria:
 - order execution, position lifecycle, plan status, outcome status, and job status remain distinct
 
 ### Phase 6 — Plan responsibility split
-Status: planned.
+Status: execution-candidate foundation implemented; consumer migration still planned.
 
-Deliverables:
-- `ExecutionCandidate` service/model extracted from order execution submission logic
+Implemented:
+- `ExecutionCandidate`
+- `ExecutionCandidateResult`
+- `ExecutionCandidateBuilder`
+- tests for valid candidate extraction and invalid-plan skip reason
+
+Still needed:
+- migrate order execution submission logic onto `ExecutionCandidateBuilder` without changing broker-order audit details
 - `PlanReliabilityFeatures` builder for tuning/search/calibration
 - recommendation plans remain stable proposed-plan artifacts
 
