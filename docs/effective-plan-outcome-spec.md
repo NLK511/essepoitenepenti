@@ -1,7 +1,7 @@
 # Effective Plan Outcome Spec
 
 ## Status
-Implemented in progress. The canonical effective outcome layer is the source of truth for performance, calibration, tuning, and research code that needs to ask whether a recommendation plan worked.
+Implemented. The canonical effective outcome layer is the source of truth for performance, calibration, tuning, and research code that needs to ask whether a recommendation plan worked. Legacy recommendation-outcome storage remains only as the raw simulated/replay/manual evidence store.
 
 ## Problem
 The app has several outcome records:
@@ -46,7 +46,11 @@ These systems must use effective outcomes when measuring recommendation quality:
 - ticker/performance summaries where possible
 
 ## Current implementation
-`EffectivePlanOutcomeRepository` builds effective outcomes by joining recommendation plans with broker positions and recommendation outcomes. `RecommendationPlanCalibrationService` now accepts either the legacy recommendation outcome repository or the effective outcome repository, so callers can migrate without changing calibration math.
+`EffectivePlanOutcomeRepository` builds effective outcomes by joining recommendation plans with broker positions and recommendation outcomes. `RecommendationPlanCalibrationService` accepts either the raw recommendation outcome repository or the effective outcome repository, but product analytics must pass the effective repository.
+
+`RecommendationOutcomeRepository` remains the raw simulated/replay/manual persistence adapter. New code must use explicit raw method names such as `list_simulated_outcomes` or `get_simulated_outcomes_by_plan_ids` when it deliberately needs simulation-only evidence.
+
+The API exposes the canonical view at `/api/effective-plan-outcomes`. Existing `/api/recommendation-outcomes` analytics endpoints are kept as compatibility aliases for effective outcomes; raw simulation access should be added explicitly if needed rather than overloading those endpoints again.
 
 ## Regression expectations
 Tests must cover:

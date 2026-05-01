@@ -5,9 +5,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from trade_proposer_app.domain.enums import JobType, RunStatus
-from sqlalchemy import select
-
-from trade_proposer_app.persistence.models import BrokerPositionRecord
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
@@ -260,21 +257,23 @@ class PerformanceAssessmentService:
         return None
 
     def _broker_position_summary(self, *, evaluated_after: datetime | None, evaluated_before: datetime) -> dict[str, object]:
-        query = select(BrokerPositionRecord).where(BrokerPositionRecord.status.in_(["win", "loss"]))
-        if evaluated_after is not None:
-            query = query.where(BrokerPositionRecord.exit_filled_at >= evaluated_after)
-        query = query.where(BrokerPositionRecord.exit_filled_at <= evaluated_before)
-        positions = self.session.scalars(query).all()
-        wins = sum(1 for position in positions if position.status == "win")
-        losses = sum(1 for position in positions if position.status == "loss")
+        outcomes = self.effective_outcome_repository.list_outcomes(
+            resolved="resolved",
+            evaluated_after=evaluated_after,
+            evaluated_before=evaluated_before,
+            limit=500_000,
+        )
+        broker_outcomes = [item for item in outcomes if item.outcome_source == "broker" and item.outcome in {"win", "loss"}]
+        wins = sum(1 for item in broker_outcomes if item.outcome == "win")
+        losses = sum(1 for item in broker_outcomes if item.outcome == "loss")
         closed = wins + losses
-        returns = [float(position.realized_return_pct) for position in positions if position.realized_return_pct is not None]
+        returns = [float(item.realized_return_pct) for item in broker_outcomes if item.realized_return_pct is not None]
         return {
             "closed_positions": closed,
             "wins": wins,
             "losses": losses,
             "win_rate_percent": self._percentage(wins, closed),
-            "realized_pnl": round(sum(float(position.realized_pnl or 0.0) for position in positions), 4),
+            "realized_pnl": round(sum(float(item.realized_pnl or 0.0) for item in broker_outcomes), 4),
             "average_return_percent": round(sum(returns) / len(returns), 2) if returns else None,
         }
 

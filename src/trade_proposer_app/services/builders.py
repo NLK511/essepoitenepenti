@@ -2,8 +2,8 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
+from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
-from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
@@ -89,7 +89,7 @@ def create_watchlist_orchestration_service(
         confidence_threshold=confidence_threshold,
         signal_gating_tuning_config=settings_repository.get_signal_gating_tuning_config(),
         plan_generation_tuning_config=settings_repository.get_plan_generation_active_config(PlanGenerationTuningRepository(session)),
-        calibration_service=RecommendationPlanCalibrationService(RecommendationOutcomeRepository(session)),
+        calibration_service=RecommendationPlanCalibrationService(EffectivePlanOutcomeRepository(session)),
     )
 
 

@@ -143,7 +143,7 @@ class RecommendationPlanEvaluationService:
         rows = list(self.session.scalars(query).all())
         if not recommendation_plan_ids:
             rows = [row for row in rows if row.action in {"long", "short", "no_action", "watchlist"}]
-            outcome_map = self.outcomes.get_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
+            outcome_map = self.outcomes.get_simulated_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
             rows = [
                 row
                 for row in rows

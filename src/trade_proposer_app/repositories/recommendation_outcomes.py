@@ -44,7 +44,7 @@ class RecommendationOutcomeRepository:
             self.session.refresh(record)
             return self._to_model(record)
 
-    def count_outcomes(self) -> dict[str, int]:
+    def count_simulated_outcomes(self) -> dict[str, int]:
         self.session.rollback()
         total = int(self.session.scalar(select(func.count()).select_from(RecommendationOutcomeRecord)) or 0)
         resolved = int(
@@ -73,7 +73,7 @@ class RecommendationOutcomeRepository:
             "watchlist_outcomes": watchlist,
         }
 
-    def list_outcomes(
+    def list_simulated_outcomes(
         self,
         *,
         ticker: str | None = None,
@@ -123,7 +123,7 @@ class RecommendationOutcomeRepository:
         ).all()
         return [self._to_joined_model(outcome_record, plan_record) for outcome_record, plan_record in rows]
 
-    def get_outcomes_by_plan_ids(self, plan_ids: list[int]) -> dict[int, RecommendationPlanOutcome]:
+    def get_simulated_outcomes_by_plan_ids(self, plan_ids: list[int]) -> dict[int, RecommendationPlanOutcome]:
         self.session.rollback()
         normalized = [plan_id for plan_id in plan_ids if isinstance(plan_id, int)]
         if not normalized:
@@ -137,6 +137,15 @@ class RecommendationOutcomeRepository:
             outcome_record.recommendation_plan_id: self._to_joined_model(outcome_record, plan_record)
             for outcome_record, plan_record in rows
         }
+
+    def count_outcomes(self) -> dict[str, int]:
+        return self.count_simulated_outcomes()
+
+    def list_outcomes(self, **kwargs) -> list[RecommendationPlanOutcome]:
+        return self.list_simulated_outcomes(**kwargs)
+
+    def get_outcomes_by_plan_ids(self, plan_ids: list[int]) -> dict[int, RecommendationPlanOutcome]:
+        return self.get_simulated_outcomes_by_plan_ids(plan_ids)
 
     def summarize_entry_miss_diagnostics(
         self,

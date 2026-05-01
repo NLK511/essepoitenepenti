@@ -440,12 +440,15 @@ class OrderExecutionTests(unittest.TestCase):
     def test_performance_assessment_includes_broker_resolved_outcomes(self) -> None:
         session = create_session()
         try:
+            plans = RecommendationPlanRepository(session)
+            first_plan = plans.create_plan(RecommendationPlan(ticker="AAPL", action="long", confidence_percent=70.0, thesis_summary="Broker winner"))
+            second_plan = plans.create_plan(RecommendationPlan(ticker="MSFT", action="long", confidence_percent=60.0, thesis_summary="Broker loser"))
             BrokerPositionRepository(session).create(
                 BrokerPosition(
                     broker_order_execution_id=1,
                     broker="alpaca",
                     account_mode="paper",
-                    recommendation_plan_id=1,
+                    recommendation_plan_id=first_plan.id or 0,
                     recommendation_plan_ticker="AAPL",
                     ticker="AAPL",
                     action="long",
@@ -465,7 +468,7 @@ class OrderExecutionTests(unittest.TestCase):
                     broker_order_execution_id=2,
                     broker="alpaca",
                     account_mode="paper",
-                    recommendation_plan_id=2,
+                    recommendation_plan_id=second_plan.id or 0,
                     recommendation_plan_ticker="MSFT",
                     ticker="MSFT",
                     action="long",

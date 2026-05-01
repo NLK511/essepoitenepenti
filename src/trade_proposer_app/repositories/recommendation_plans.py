@@ -58,7 +58,7 @@ class RecommendationPlanRepository:
         if record is None:
             raise ValueError(f"Recommendation plan {plan_id} not found")
         plan = self._to_model(record)
-        outcome_map = self.outcomes.get_outcomes_by_plan_ids([record.id])
+        outcome_map = self.outcomes.get_simulated_outcomes_by_plan_ids([record.id])
         broker_order_map = self.broker_orders.get_latest_by_plan_ids([record.id])
         self._attach_execution_context(plan, latest_outcome=outcome_map.get(record.id), broker_order=broker_order_map.get(record.id))
         return plan
@@ -124,7 +124,7 @@ class RecommendationPlanRepository:
         if setup_family or resolved or outcome or shortlisted is not None or entry_touched is not None or near_entry_miss is not None or direction_worked_without_entry is not None:
             rows = self.session.scalars(query).all()
             plan_ids = [row.id for row in rows if row.id is not None]
-            outcome_map = self.outcomes.get_outcomes_by_plan_ids(plan_ids)
+            outcome_map = self.outcomes.get_simulated_outcomes_by_plan_ids(plan_ids)
             broker_order_map = self.broker_orders.get_latest_by_plan_ids(plan_ids)
             normalized_setup_family = setup_family.strip().lower() if setup_family else None
             normalized_resolved = (resolved or "").strip().lower() or None
@@ -175,7 +175,7 @@ class RecommendationPlanRepository:
         if normalized_setup_family or normalized_resolved or normalized_outcome or shortlisted is not None or entry_touched is not None or near_entry_miss is not None or direction_worked_without_entry is not None:
             rows = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc())).all()
             plan_ids = [row.id for row in rows if row.id is not None]
-            outcome_map = self.outcomes.get_outcomes_by_plan_ids(plan_ids)
+            outcome_map = self.outcomes.get_simulated_outcomes_by_plan_ids(plan_ids)
             broker_order_map = self.broker_orders.get_latest_by_plan_ids(plan_ids)
             filtered_rows = [
                 row
@@ -200,7 +200,7 @@ class RecommendationPlanRepository:
                 query.order_by(RecommendationPlanRecord.computed_at.desc()).offset(normalized_offset).limit(normalized_limit)
             ).all()
             plans = [self._to_model(row) for row in rows]
-            outcome_map = self.outcomes.get_outcomes_by_plan_ids([plan.id for plan in plans if plan.id is not None])
+            outcome_map = self.outcomes.get_simulated_outcomes_by_plan_ids([plan.id for plan in plans if plan.id is not None])
             broker_order_map = self.broker_orders.get_latest_by_plan_ids([plan.id for plan in plans if plan.id is not None])
         for plan in plans:
             if plan.id is not None:
@@ -404,7 +404,7 @@ class RecommendationPlanRepository:
             ).order_by(RecommendationPlanRecord.computed_at.desc())
         ).all()
         plan_ids = [row.id for row in rows if row.id is not None]
-        outcome_map = self.outcomes.get_outcomes_by_plan_ids(plan_ids)
+        outcome_map = self.outcomes.get_simulated_outcomes_by_plan_ids(plan_ids)
         broker_order_map = self.broker_orders.get_latest_by_plan_ids(plan_ids)
         normalized_setup_family = setup_family.strip().lower() if setup_family else None
         normalized_resolved = (resolved or "").strip().lower() or None

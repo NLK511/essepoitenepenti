@@ -176,7 +176,7 @@ class RecommendationSignalGatingTuningService:
         if not samples:
             raise RecommendationSignalGatingTuningError("no decision samples available for signal gating tuning")
 
-        outcomes = self.outcomes.get_outcomes_by_plan_ids([sample.recommendation_plan_id for sample in samples if sample.recommendation_plan_id is not None])
+        outcomes = self.outcomes.get_simulated_outcomes_by_plan_ids([sample.recommendation_plan_id for sample in samples if sample.recommendation_plan_id is not None])
         plan_scored_samples = self._plan_scored_samples(samples, outcomes)
         benchmark_scored_samples, benchmark_summary = self._benchmark_scored_samples(samples, plan_scored_samples)
         scored_samples = [*plan_scored_samples, *benchmark_scored_samples]

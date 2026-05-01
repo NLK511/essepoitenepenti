@@ -12,7 +12,6 @@ from trade_proposer_app.domain.models import (
     RecommendationWalkForwardSummary,
 )
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
-from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.services.recommendation_evidence_concentration import RecommendationEvidenceConcentrationService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
