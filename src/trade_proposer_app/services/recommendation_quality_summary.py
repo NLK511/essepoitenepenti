@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
@@ -29,6 +30,7 @@ class RecommendationQualitySummaryService:
     def __init__(self, session) -> None:
         self.session = session
         self.outcomes = RecommendationOutcomeRepository(session)
+        self.effective_outcomes = EffectivePlanOutcomeRepository(session)
         self.plans = RecommendationPlanRepository(session)
         self.settings = SettingsRepository(session)
         self.performance = PerformanceAssessmentService(session)
@@ -67,7 +69,7 @@ class RecommendationQualitySummaryService:
         for label, days in self.WINDOW_DEFINITIONS:
             computed_after = now - timedelta(days=days)
             evaluated_after = now - timedelta(days=days)
-            calibration_window = RecommendationPlanCalibrationService(self.outcomes).summarize(
+            calibration_window = RecommendationPlanCalibrationService(self.effective_outcomes).summarize(
                 limit=self.METRIC_SAMPLE_LIMIT,
                 evaluated_after=evaluated_after,
             )
@@ -75,11 +77,11 @@ class RecommendationQualitySummaryService:
                 limit=self.METRIC_SAMPLE_LIMIT,
                 computed_after=computed_after,
             )
-            evidence_window = RecommendationEvidenceConcentrationService(self.outcomes).summarize(
+            evidence_window = RecommendationEvidenceConcentrationService(self.effective_outcomes).summarize(
                 limit=self.METRIC_SAMPLE_LIMIT,
                 evaluated_after=evaluated_after,
             )
-            family_review_window = RecommendationSetupFamilyReviewService(self.outcomes).summarize(
+            family_review_window = RecommendationSetupFamilyReviewService(self.effective_outcomes).summarize(
                 limit=self.METRIC_SAMPLE_LIMIT,
                 evaluated_after=evaluated_after,
             )

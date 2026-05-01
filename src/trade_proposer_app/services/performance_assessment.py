@@ -8,6 +8,7 @@ from trade_proposer_app.domain.enums import JobType, RunStatus
 from sqlalchemy import select
 
 from trade_proposer_app.persistence.models import BrokerPositionRecord
+from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
@@ -55,6 +56,7 @@ class PerformanceAssessmentService:
         self.settings = SettingsRepository(session)
         self.plan_repository = RecommendationPlanRepository(session)
         self.outcome_repository = RecommendationOutcomeRepository(session)
+        self.effective_outcome_repository = EffectivePlanOutcomeRepository(session)
 
     def ensure_daily_job(self):
         jobs = self.jobs.list_all()
@@ -147,10 +149,10 @@ class PerformanceAssessmentService:
         }
 
     def _build_payload(self) -> dict[str, object]:
-        calibration = RecommendationPlanCalibrationService(self.outcome_repository).summarize(limit=500)
+        calibration = RecommendationPlanCalibrationService(self.effective_outcome_repository).summarize(limit=500)
         baselines = RecommendationPlanBaselineService(self.plan_repository).summarize(limit=500)
-        evidence = RecommendationEvidenceConcentrationService(self.outcome_repository).summarize(limit=500)
-        family_review = RecommendationSetupFamilyReviewService(self.outcome_repository).summarize(limit=500)
+        evidence = RecommendationEvidenceConcentrationService(self.effective_outcome_repository).summarize(limit=500)
+        family_review = RecommendationSetupFamilyReviewService(self.effective_outcome_repository).summarize(limit=500)
         latest_runs = self.runs.list_latest_runs(limit=12)
         windowed_assessments = self._windowed_assessments()
         recent_run_status_counts: dict[str, int] = {}
@@ -287,10 +289,10 @@ class PerformanceAssessmentService:
         ]
         results: list[dict[str, object]] = []
         for label, evaluated_after in windows:
-            calibration = RecommendationPlanCalibrationService(self.outcome_repository).summarize(limit=500, evaluated_after=evaluated_after)
+            calibration = RecommendationPlanCalibrationService(self.effective_outcome_repository).summarize(limit=500, evaluated_after=evaluated_after)
             baselines = RecommendationPlanBaselineService(self.plan_repository).summarize(limit=500, computed_after=evaluated_after)
-            evidence = RecommendationEvidenceConcentrationService(self.outcome_repository).summarize(limit=500, evaluated_after=evaluated_after)
-            family_review = RecommendationSetupFamilyReviewService(self.outcome_repository).summarize(limit=500, evaluated_after=evaluated_after)
+            evidence = RecommendationEvidenceConcentrationService(self.effective_outcome_repository).summarize(limit=500, evaluated_after=evaluated_after)
+            family_review = RecommendationSetupFamilyReviewService(self.effective_outcome_repository).summarize(limit=500, evaluated_after=evaluated_after)
             broker_summary = self._broker_position_summary(evaluated_after=evaluated_after, evaluated_before=now)
             results.append(
                 {

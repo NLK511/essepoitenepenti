@@ -11,6 +11,7 @@ from trade_proposer_app.domain.models import (
     RecommendationSetupFamilyReviewSummary,
     RecommendationWalkForwardSummary,
 )
+from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.services.recommendation_evidence_concentration import RecommendationEvidenceConcentrationService
@@ -38,7 +39,7 @@ async def list_recommendation_outcomes(
     session: Session = Depends(get_db_session),
 ) -> list[RecommendationPlanOutcome]:
     normalized_resolved = resolved.strip().lower() if resolved else None
-    return RecommendationOutcomeRepository(session).list_outcomes(
+    return EffectivePlanOutcomeRepository(session).list_outcomes(
         ticker=ticker.strip().upper() if ticker else None,
         outcome=outcome.strip().lower() if outcome else None,
         recommendation_plan_id=recommendation_plan_id,
@@ -67,7 +68,7 @@ async def summarize_recommendation_outcomes(
     session: Session = Depends(get_db_session),
 ) -> RecommendationCalibrationSummary:
     normalized_resolved = resolved.strip().lower() if resolved else None
-    return RecommendationPlanCalibrationService(RecommendationOutcomeRepository(session)).summarize(
+    return RecommendationPlanCalibrationService(EffectivePlanOutcomeRepository(session)).summarize(
         ticker=ticker.strip().upper() if ticker else None,
         run_id=run_id,
         setup_family=setup_family.strip().lower() if setup_family else None,
@@ -92,7 +93,7 @@ async def get_recommendation_calibration_report(
     session: Session = Depends(get_db_session),
 ) -> dict[str, object]:
     normalized_resolved = resolved.strip().lower() if resolved else None
-    summary = RecommendationPlanCalibrationService(RecommendationOutcomeRepository(session)).summarize(
+    summary = RecommendationPlanCalibrationService(EffectivePlanOutcomeRepository(session)).summarize(
         ticker=ticker.strip().upper() if ticker else None,
         run_id=run_id,
         setup_family=setup_family.strip().lower() if setup_family else None,
@@ -121,7 +122,7 @@ async def summarize_setup_family_review(
     session: Session = Depends(get_db_session),
 ) -> RecommendationSetupFamilyReviewSummary:
     normalized_resolved = resolved.strip().lower() if resolved else None
-    return RecommendationSetupFamilyReviewService(RecommendationOutcomeRepository(session)).summarize(
+    return RecommendationSetupFamilyReviewService(EffectivePlanOutcomeRepository(session)).summarize(
         ticker=ticker.strip().upper() if ticker else None,
         run_id=run_id,
         setup_family=setup_family.strip().lower() if setup_family else None,
@@ -146,7 +147,7 @@ async def summarize_evidence_concentration(
     session: Session = Depends(get_db_session),
 ) -> RecommendationEvidenceConcentrationSummary:
     normalized_resolved = resolved.strip().lower() if resolved else None
-    return RecommendationEvidenceConcentrationService(RecommendationOutcomeRepository(session)).summarize(
+    return RecommendationEvidenceConcentrationService(EffectivePlanOutcomeRepository(session)).summarize(
         ticker=ticker.strip().upper() if ticker else None,
         run_id=run_id,
         setup_family=setup_family.strip().lower() if setup_family else None,
@@ -169,7 +170,7 @@ async def summarize_walk_forward_validation(
     session: Session = Depends(get_db_session),
 ) -> RecommendationWalkForwardSummary:
     return RecommendationWalkForwardValidationService(
-        RecommendationOutcomeRepository(session),
+        EffectivePlanOutcomeRepository(session),
         RecommendationPlanRepository(session),
     ).summarize(
         setup_family=setup_family.strip().lower() if setup_family else None,

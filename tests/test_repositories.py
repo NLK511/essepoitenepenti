@@ -20,6 +20,7 @@ from trade_proposer_app.domain.models import (
     MacroContextSnapshot,
     Recommendation,
     RecommendationDecisionSample,
+    BrokerPosition,
     RecommendationPlan,
     RecommendationPlanEvidenceSummary,
     RecommendationPlanOutcome,
@@ -37,9 +38,11 @@ from trade_proposer_app.repositories.historical_market_data import HistoricalMar
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
+from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
@@ -622,6 +625,142 @@ class RepositoryTests(unittest.TestCase):
         stats = plan_repository.summarize_stats(ticker="AAPL")
         self.assertEqual(stats.open_plans, 1)
         self.assertEqual(stats.win_outcomes, 0)
+
+    def test_effective_plan_outcome_repository_prefers_broker_position_over_simulation(self) -> None:
+        session = create_session()
+        try:
+            plan_repository = RecommendationPlanRepository(session)
+            plan = plan_repository.create_plan(
+                RecommendationPlan(
+                    ticker="AAPL",
+                    horizon=StrategyHorizon.ONE_WEEK,
+                    action="long",
+                    confidence_percent=72.0,
+                    thesis_summary="Broker loss should override simulated win",
+                    signal_breakdown={"setup_family": "continuation"},
+                )
+            )
+            RecommendationOutcomeRepository(session).upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=plan.id or 0,
+                    ticker="AAPL",
+                    action="long",
+                    outcome="win",
+                    status="resolved",
+                    confidence_bucket="65_to_79",
+                    setup_family="continuation",
+                )
+            )
+            BrokerPositionRepository(session).create(
+                BrokerPosition(
+                    broker_order_execution_id=1,
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker="AAPL",
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    quantity=10,
+                    current_quantity=0,
+                    status="loss",
+                    entry_avg_price=100.0,
+                    exit_avg_price=95.0,
+                    exit_filled_at=datetime.now(timezone.utc),
+                    realized_pnl=-50.0,
+                    realized_return_pct=-5.0,
+                    realized_r_multiple=-1.0,
+                )
+            )
+
+            outcomes = EffectivePlanOutcomeRepository(session).list_outcomes(ticker="AAPL", limit=10)
+
+            self.assertEqual(len(outcomes), 1)
+            self.assertEqual(outcomes[0].outcome_source, "broker")
+            self.assertEqual(outcomes[0].outcome, "loss")
+            self.assertEqual(outcomes[0].status, "resolved")
+            self.assertEqual(outcomes[0].realized_pnl, -50.0)
+            self.assertEqual(outcomes[0].setup_family, "continuation")
+        finally:
+            session.close()
+
+    def test_effective_plan_outcome_repository_uses_simulation_without_broker_position(self) -> None:
+        session = create_session()
+        try:
+            plan_repository = RecommendationPlanRepository(session)
+            plan = plan_repository.create_plan(
+                RecommendationPlan(
+                    ticker="MSFT",
+                    horizon=StrategyHorizon.ONE_WEEK,
+                    action="long",
+                    confidence_percent=58.0,
+                    thesis_summary="Simulation fallback",
+                    signal_breakdown={"setup_family": "breakout"},
+                )
+            )
+            RecommendationOutcomeRepository(session).upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=plan.id or 0,
+                    ticker="MSFT",
+                    action="long",
+                    outcome="win",
+                    status="resolved",
+                    confidence_bucket="50_to_64",
+                    setup_family="breakout",
+                )
+            )
+
+            outcome = EffectivePlanOutcomeRepository(session).list_outcomes(ticker="MSFT", limit=10)[0]
+
+            self.assertEqual(outcome.outcome_source, "simulation")
+            self.assertEqual(outcome.outcome, "win")
+            self.assertEqual(outcome.setup_family, "breakout")
+        finally:
+            session.close()
+
+    def test_calibration_counts_broker_effective_outcomes(self) -> None:
+        session = create_session()
+        try:
+            plan_repository = RecommendationPlanRepository(session)
+            for index, status in enumerate(["win", "loss"], start=1):
+                plan = plan_repository.create_plan(
+                    RecommendationPlan(
+                        ticker=f"CAL{index}",
+                        horizon=StrategyHorizon.ONE_WEEK,
+                        action="long",
+                        confidence_percent=70.0,
+                        thesis_summary="Broker calibration",
+                        signal_breakdown={"setup_family": "continuation"},
+                    )
+                )
+                BrokerPositionRepository(session).create(
+                    BrokerPosition(
+                        broker_order_execution_id=index,
+                        broker="alpaca",
+                        account_mode="paper",
+                        recommendation_plan_id=plan.id or 0,
+                        recommendation_plan_ticker=f"CAL{index}",
+                        ticker=f"CAL{index}",
+                        action="long",
+                        side="buy",
+                        quantity=1,
+                        current_quantity=0,
+                        status=status,
+                        exit_filled_at=datetime.now(timezone.utc),
+                        realized_pnl=10.0 if status == "win" else -5.0,
+                        realized_return_pct=10.0 if status == "win" else -5.0,
+                    )
+                )
+
+            summary = RecommendationPlanCalibrationService(EffectivePlanOutcomeRepository(session)).summarize(limit=10)
+
+            self.assertEqual(summary.resolved_outcomes, 2)
+            self.assertEqual(summary.win_outcomes, 1)
+            self.assertEqual(summary.loss_outcomes, 1)
+            self.assertEqual(summary.overall_win_rate_percent, 50.0)
+            self.assertIsNotNone(summary.calibration_report)
+        finally:
+            session.close()
 
     def test_recommendation_plan_repository_counts_closed_broker_orders_as_resolved(self) -> None:
         session = create_session()

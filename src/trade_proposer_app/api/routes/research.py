@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
+from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.runs import RunRepository
@@ -21,7 +22,7 @@ async def get_performance_assessment(session: Session = Depends(get_db_session))
     latest_run = payload.get("latest_run")
     latest_summary = payload.get("latest_summary") if isinstance(payload.get("latest_summary"), dict) else {}
     outcomes = RecommendationOutcomeRepository(session)
-    calibration_summary = RecommendationPlanCalibrationService(outcomes).summarize(limit=500)
+    calibration_summary = RecommendationPlanCalibrationService(EffectivePlanOutcomeRepository(session)).summarize(limit=500)
     latest_artifact = payload.get("latest_artifact") if isinstance(payload.get("latest_artifact"), dict) else {}
     artifact_payload = latest_artifact.get("payload") if isinstance(latest_artifact.get("payload"), dict) else {}
     broker_performance = artifact_payload.get("broker_performance") if isinstance(artifact_payload.get("broker_performance"), dict) else None

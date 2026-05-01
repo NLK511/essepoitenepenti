@@ -35,6 +35,7 @@ These define the current product truth.
 ### Recommendation workflow
 - `recommendation-methodology.md` — current scoring and planning pipeline
 - `recommendation-plan-resolution-spec.md` — canonical plan outcome semantics
+- `effective-plan-outcome-spec.md` — broker-preferred effective outcome contract used by calibration, performance, tuning, and research summaries
 - `decision-sample-tuning-guide.md` — how to review and tune decision samples
 - `signal-gating-benchmark-spec.md` — current decision-sample benchmark semantics used by gating review
 - `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow and calibration-related review surfaces
@@ -54,6 +55,7 @@ These are useful, but they are not the main current-state entry point.
 - `alpaca-paper-order-execution-spec.md` — first automated broker-execution spec for Alpaca paper trading, including audit UI and manual resubmit/cancel controls
 - `broker-position-lifecycle-spec.md` — broker-backed position state and realized P&L ledger for app-submitted bracket orders
 - `broker-risk-management-spec.md` — broker-backed pre-trade risk limits and manual kill switch
+- `effective-plan-outcome-spec.md` — canonical broker-first outcome view for reconciling broker positions with simulated recommendation outcomes
 - `nitter-social-relevance-scoring.md` — current Nitter relevance-ranking behavior
 
 ## Redesign reference

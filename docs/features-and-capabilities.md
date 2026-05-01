@@ -38,11 +38,12 @@ It is not yet a proven short-horizon prediction engine.
 - Block new broker submissions through a broker-backed risk manager when the manual kill switch is active or daily loss, open exposure, same-ticker, single-position, or loss-streak limits are breached.
 - Show broker-backed dashboard performance statistics, including closed broker positions, broker win rate, realized P&L, and manual/periodic dashboard refresh, so live paper-trading performance is visible even when simulated outcome calibration is thin.
 - When a plan has live Alpaca execution data, operator-facing plan views treat broker evaluation as the primary status and keep the simulated plan outcome as secondary context.
+- Use a canonical effective outcome layer so confidence calibration, recommendation quality summaries, performance assessment, walk-forward validation, and plan-generation tuning prefer closed broker positions before falling back to simulated outcomes.
 - Inspect broker-order submissions, payloads, statuses, linked position lifecycle state, realized P&L, and re-submit/cancel/refresh controls through the Broker Orders page and the broker-orders panel on run detail.
 - Run detail now includes the broker-order history for that run so operators can audit execution without switching pages.
 - Use decision samples to review near-misses, shortlist behavior, triage priority, and richer filters such as shortlist state, setup family, transmission bias, context regime, and benchmark result.
 - Run signal-gating tuning through its dedicated research workflow to inspect shortlist recall and calibration-related review surfaces.
-- Use the calibration report endpoint and the research-page calibration tab to inspect confidence reliability, Brier score, and expected calibration error.
+- Use the calibration report endpoint and the research-page calibration tab to inspect confidence reliability, Brier score, and expected calibration error using broker-preferred effective outcomes.
 - Use ticker drill-down pages to inspect plan history and latest outcomes for a single name.
 
 ### Shared context and ontology

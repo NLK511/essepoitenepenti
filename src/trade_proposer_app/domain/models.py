@@ -586,6 +586,11 @@ class RecommendationPlanOutcome(BaseModel):
     context_regime_detail: KeyLabelDetail | None = None
     notes: str = ""
     run_id: int | None = None
+    outcome_source: str = "simulation"
+    broker_position_id: int | None = None
+    realized_pnl: float | None = None
+    realized_return_pct: float | None = None
+    realized_r_multiple: float | None = None
 
 
 class RecommendationDecisionSample(BaseModel):

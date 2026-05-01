@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.persistence.models import BrokerOrderExecutionRecord, BrokerPositionRecord, HistoricalMarketBarRecord, HistoricalNewsRecord, TickerSignalSnapshotRecord
+from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
@@ -127,6 +128,7 @@ async def get_dashboard(
     runs = RunRepository(session)
     plan_repository = RecommendationPlanRepository(session)
     outcome_repository = RecommendationOutcomeRepository(session)
+    effective_outcome_repository = EffectivePlanOutcomeRepository(session)
     settings = SettingsRepository(session).get_setting_map()
     try:
         confidence_threshold = float(settings.get("confidence_threshold", "60"))
@@ -154,10 +156,10 @@ async def get_dashboard(
     broker_summary = _broker_position_summary(session, computed_after=computed_after, computed_before=now)
     tweets_processed = _sum_plan_item_count(technical_plans, "social_item_count")
 
-    calibration = RecommendationPlanCalibrationService(outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
+    calibration = RecommendationPlanCalibrationService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
     baselines = RecommendationPlanBaselineService(plan_repository).summarize(computed_after=computed_after, computed_before=now)
-    evidence = RecommendationEvidenceConcentrationService(outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
-    family_review = RecommendationSetupFamilyReviewService(outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
+    evidence = RecommendationEvidenceConcentrationService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
+    family_review = RecommendationSetupFamilyReviewService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
     entry_miss = outcome_repository.summarize_entry_miss_diagnostics(evaluated_after=computed_after, evaluated_before=now)
     selected_quality = quality_service._summary_payload(  # noqa: SLF001 - dashboard needs the selected window summary
         calibration,

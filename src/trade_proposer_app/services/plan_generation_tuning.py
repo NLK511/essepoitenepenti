@@ -18,7 +18,7 @@ from trade_proposer_app.domain.models import (
 )
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
-from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
+from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
@@ -74,7 +74,7 @@ class PlanGenerationTuningService:
         self.settings = SettingsRepository(session)
         self.repository = PlanGenerationTuningRepository(session)
         self.plans = RecommendationPlanRepository(session)
-        self.outcomes = RecommendationOutcomeRepository(session)
+        self.outcomes = EffectivePlanOutcomeRepository(session)
         self.samples = RecommendationDecisionSampleRepository(session)
 
     def describe(self) -> dict[str, object]:
