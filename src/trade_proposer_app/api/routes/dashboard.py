@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.persistence.models import BrokerOrderExecutionRecord, HistoricalMarketBarRecord, HistoricalNewsRecord, TickerSignalSnapshotRecord
+from trade_proposer_app.persistence.models import BrokerOrderExecutionRecord, BrokerPositionRecord, HistoricalMarketBarRecord, HistoricalNewsRecord, TickerSignalSnapshotRecord
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
@@ -81,6 +81,30 @@ def _sum_plan_item_count(plans: list, key: str) -> int:
     return total
 
 
+def _broker_position_summary(session: Session, *, computed_after: datetime | None, computed_before: datetime) -> dict[str, object]:
+    query = select(BrokerPositionRecord).where(BrokerPositionRecord.status.in_(["win", "loss"]))
+    if computed_after is not None:
+        query = query.where(BrokerPositionRecord.exit_filled_at >= computed_after)
+    query = query.where(BrokerPositionRecord.exit_filled_at <= computed_before)
+    positions = session.scalars(query).all()
+    wins = sum(1 for position in positions if position.status == "win")
+    losses = sum(1 for position in positions if position.status == "loss")
+    closed = wins + losses
+    realized_pnl = round(sum(float(position.realized_pnl or 0.0) for position in positions), 4)
+    average_return = None
+    returns = [float(position.realized_return_pct) for position in positions if position.realized_return_pct is not None]
+    if returns:
+        average_return = round(sum(returns) / len(returns), 2)
+    return {
+        "closed_positions": closed,
+        "wins": wins,
+        "losses": losses,
+        "win_rate_percent": _percentage(wins, closed),
+        "realized_pnl": realized_pnl,
+        "average_return_percent": average_return,
+    }
+
+
 def _count_records(session: Session, model, column, computed_after: datetime | None, computed_before: datetime | None = None) -> int:
     query = select(func.count()).select_from(model)
     if computed_after is not None:
@@ -127,6 +151,7 @@ async def get_dashboard(
     news_processed = _count_records(session, HistoricalNewsRecord, HistoricalNewsRecord.published_at, computed_after, now)
     bars_stored = _count_records(session, HistoricalMarketBarRecord, HistoricalMarketBarRecord.bar_time, computed_after, now)
     orders_placed = _count_records(session, BrokerOrderExecutionRecord, BrokerOrderExecutionRecord.created_at, computed_after, now)
+    broker_summary = _broker_position_summary(session, computed_after=computed_after, computed_before=now)
     tweets_processed = _sum_plan_item_count(technical_plans, "social_item_count")
 
     calibration = RecommendationPlanCalibrationService(outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
@@ -209,14 +234,20 @@ async def get_dashboard(
             "shortlist_rate_percent": _percentage(plan_amount, signals_amount),
             "actionable_plans": actionable_plans,
             "actionable_rate_percent": _percentage(actionable_plans, plan_amount),
-            "win_rate_percent": selected_quality.get("overall_win_rate_percent"),
-            "profit_percent": selected_quality.get("actual_actionable_average_return_5d"),
+            "win_rate_percent": broker_summary["win_rate_percent"] if broker_summary["win_rate_percent"] is not None else selected_quality.get("overall_win_rate_percent"),
+            "win_rate_source": "broker" if broker_summary["win_rate_percent"] is not None else "simulated",
+            "profit_percent": broker_summary["average_return_percent"] if broker_summary["average_return_percent"] is not None else selected_quality.get("actual_actionable_average_return_5d"),
+            "profit_source": "broker" if broker_summary["average_return_percent"] is not None else "simulated",
         },
         "technical_summary": {
             "news_processed": news_processed,
             "tweets_processed": tweets_processed,
             "bars_stored": bars_stored,
             "orders_placed": orders_placed,
+            "broker_closed_positions": broker_summary["closed_positions"],
+            "broker_wins": broker_summary["wins"],
+            "broker_losses": broker_summary["losses"],
+            "broker_realized_pnl": broker_summary["realized_pnl"],
         },
         "major_failures": major_failures[:6],
         "distinct_warnings": distinct_warnings,

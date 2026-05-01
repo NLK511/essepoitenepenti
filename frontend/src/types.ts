@@ -320,7 +320,9 @@ export interface DashboardSummary {
   actionable_plans: number;
   actionable_rate_percent: number | null;
   win_rate_percent: number | null;
+  win_rate_source?: string;
   profit_percent: number | null;
+  profit_source?: string;
 }
 
 export interface DashboardTechnicalSummary {
@@ -328,6 +330,10 @@ export interface DashboardTechnicalSummary {
   tweets_processed: number;
   bars_stored: number;
   orders_placed: number;
+  broker_closed_positions?: number;
+  broker_wins?: number;
+  broker_losses?: number;
+  broker_realized_pnl?: number;
 }
 
 export interface DashboardFailure {

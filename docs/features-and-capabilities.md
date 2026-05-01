@@ -36,6 +36,7 @@ It is not yet a proven short-horizon prediction engine.
 - Periodically reconcile open broker orders against Alpaca during market hours so fulfilled or canceled orders show up in the app without waiting for a manual action.
 - Maintain a broker-position lifecycle ledger for app-submitted Alpaca bracket orders, including submitted/open/win/loss states, entry/exit fills, realized P&L, return percentage, and R multiple when the latest broker snapshot contains enough data.
 - Block new broker submissions through a broker-backed risk manager when the manual kill switch is active or daily loss, open exposure, same-ticker, single-position, or loss-streak limits are breached.
+- Show broker-backed dashboard performance statistics, including closed broker positions, broker win rate, realized P&L, and manual/periodic dashboard refresh, so live paper-trading performance is visible even when simulated outcome calibration is thin.
 - When a plan has live Alpaca execution data, operator-facing plan views treat broker evaluation as the primary status and keep the simulated plan outcome as secondary context.
 - Inspect broker-order submissions, payloads, statuses, linked position lifecycle state, realized P&L, and re-submit/cancel/refresh controls through the Broker Orders page and the broker-orders panel on run detail.
 - Run detail now includes the broker-order history for that run so operators can audit execution without switching pages.

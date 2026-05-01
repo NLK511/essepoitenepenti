@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { getJson } from "../api";
+import { getJson, postForm } from "../api";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import type { DashboardResponse } from "../types";
 import { formatDate } from "../utils";
@@ -53,19 +53,27 @@ export function DashboardPage() {
   const selectedWindow = normalizeWindow(searchParams.get("window"));
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
+
+  async function loadDashboard({ clear = false } = {}) {
+    try {
+      setError(null);
+      if (clear) {
+        setData(null);
+      }
+      const query = new URLSearchParams({ window: selectedWindow });
+      setData(await getJson<DashboardResponse>(`/api/dashboard?${query.toString()}`));
+      setLastLoadedAt(new Date());
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
+    }
+  }
 
   useEffect(() => {
-    async function load() {
-      try {
-        setError(null);
-        setData(null);
-        const query = new URLSearchParams({ window: selectedWindow });
-        setData(await getJson<DashboardResponse>(`/api/dashboard?${query.toString()}`));
-      } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
-      }
-    }
-    void load();
+    void loadDashboard({ clear: true });
+    const interval = window.setInterval(() => void loadDashboard(), 60000);
+    return () => window.clearInterval(interval);
   }, [selectedWindow]);
 
   const summary = data?.dashboard_summary ?? null;
@@ -75,6 +83,19 @@ export function DashboardPage() {
   const distinctWarnings = data?.distinct_warnings ?? [];
   const windowLabel = useMemo(() => WINDOW_OPTIONS.find((option) => option.value === selectedWindow)?.label ?? "1M", [selectedWindow]);
 
+  async function refreshBrokerState() {
+    try {
+      setRefreshing(true);
+      setError(null);
+      await postForm("/api/broker-orders/sync", {});
+      await loadDashboard();
+    } catch (refreshError) {
+      setError(refreshError instanceof Error ? refreshError.message : "Failed to refresh dashboard statistics");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -83,6 +104,7 @@ export function DashboardPage() {
         actions={
           <>
             <HelpHint tooltip="Use this board to judge edge and operational risk quickly. Open deeper review screens only after one of the three colors looks concerning." to="/docs?doc=operator-page-field-guide" />
+            <button type="button" className="button-secondary" disabled={refreshing} onClick={() => void refreshBrokerState()}>{refreshing ? "Refreshing…" : "Refresh broker stats"}</button>
             <Link to="/jobs/recommendation-plans" className="button-secondary">Review plans</Link>
             <Link to="/recommendation-quality" className="button">Quality report</Link>
           </>
@@ -121,7 +143,7 @@ export function DashboardPage() {
             <div className="cluster top-gap-small">
               <Badge tone={boardTone(quality?.status)}>{quality?.status ?? "unknown"}</Badge>
               <Badge tone={boardTone(quality?.status)}>{quality?.status === "healthy" ? "green" : quality?.status === "needs_attention" ? "red" : "yellow"}</Badge>
-              <span className="helper-text">Updated {quality?.generated_at ? formatDate(quality.generated_at) : "—"} · resolved outcomes {quality?.resolved_outcomes ?? "—"}</span>
+              <span className="helper-text">Updated {lastLoadedAt ? formatDate(lastLoadedAt.toISOString()) : quality?.generated_at ? formatDate(quality.generated_at) : "—"} · resolved outcomes {quality?.resolved_outcomes ?? "—"}</span>
             </div>
           </Card>
 
@@ -129,8 +151,8 @@ export function DashboardPage() {
             <Card>
               <SectionTitle kicker="Green" title="Edge" subtitle="The only numbers that matter when deciding whether the system is improving." />
               <div className="data-stack top-gap-small">
-                <StatCard label="Win rate" value={formatPercent(summary?.win_rate_percent)} helper="Resolved plan outcomes" />
-                <StatCard label="Profit %" value={formatPercent(summary?.profit_percent)} helper="Avg 5d return on actionable plans" />
+                <StatCard label="Win rate" value={formatPercent(summary?.win_rate_percent)} helper={summary?.win_rate_source === "broker" ? `${technical?.broker_wins ?? 0} broker wins / ${technical?.broker_closed_positions ?? 0} closed positions` : "Resolved simulated plan outcomes"} />
+                <StatCard label="Profit %" value={formatPercent(summary?.profit_percent)} helper={summary?.profit_source === "broker" ? `Broker realized P&L $${technical?.broker_realized_pnl ?? 0}` : "Avg 5d return on actionable plans"} />
                 <StatCard label="Shortlist rate" value={formatPercent(summary?.shortlist_rate_percent)} helper={`${summary?.plan_amount ?? 0} plans / ${summary?.signals_amount ?? 0} signals`} />
                 <StatCard label="Actionable rate" value={formatPercent(summary?.actionable_rate_percent)} helper={`${summary?.actionable_plans ?? 0} actionable / ${summary?.plan_amount ?? 0} plans`} />
               </div>
@@ -201,6 +223,8 @@ export function DashboardPage() {
               <StatCard label="Tweets processed" value={String(technical?.tweets_processed ?? 0)} helper="Social items used by plans" />
               <StatCard label="Bars stored" value={String(technical?.bars_stored ?? 0)} helper="Historical market bars" />
               <StatCard label="Orders placed" value={String(technical?.orders_placed ?? 0)} helper="Broker executions" />
+              <StatCard label="Broker closed" value={String(technical?.broker_closed_positions ?? 0)} helper={`${technical?.broker_wins ?? 0} wins / ${technical?.broker_losses ?? 0} losses`} />
+              <StatCard label="Broker realized P&L" value={`$${technical?.broker_realized_pnl ?? 0}`} helper="Closed broker positions in selected window" />
             </div>
           </Card>
         </div>
