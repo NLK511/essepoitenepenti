@@ -1,6 +1,6 @@
 """add trade policy snapshot to recommendation plans
 
-Revision ID: 0030_recommendation_plan_trade_policy
+Revision ID: 0030_trade_policy
 Revises: 0029_broker_positions
 Create Date: 2026-04-29 00:00:00
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0030_recommendation_plan_trade_policy"
+revision = "0030_trade_policy"
 down_revision = "0029_broker_positions"
 branch_labels = None
 depends_on = None

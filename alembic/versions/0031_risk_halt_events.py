@@ -1,7 +1,7 @@
 """add risk halt event audit table
 
 Revision ID: 0031_risk_halt_events
-Revises: 0030_recommendation_plan_trade_policy
+Revises: 0030_trade_policy
 Create Date: 2026-04-29 00:00:00
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "0031_risk_halt_events"
-down_revision = "0030_recommendation_plan_trade_policy"
+down_revision = "0030_trade_policy"
 branch_labels = None
 depends_on = None
 
