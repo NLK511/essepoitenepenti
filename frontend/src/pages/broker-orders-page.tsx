@@ -4,7 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
-import type { AppSetting, BrokerOrderExecution, BrokerPosition, BrokerRiskAssessment, SettingsResponse } from "../types";
+import type { AppSetting, BrokerOrderExecution, BrokerPosition, BrokerRiskAssessment, BrokerWorkbench, SettingsResponse } from "../types";
 import { formatDate } from "../utils";
 
 function orderTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
@@ -74,15 +74,14 @@ export function BrokerOrdersPage() {
         if (runId) {
           params.set("run_id", runId);
         }
-        const [loadedOrders, loadedPositions, loadedRisk, loadedSettings] = await Promise.all([
-          getJson<BrokerOrderExecution[]>(`/api/broker-orders?${params.toString()}`),
-          getJson<BrokerPosition[]>(`/api/broker-positions?${params.toString()}`),
-          getJson<BrokerRiskAssessment>("/api/risk"),
+        const [workbench, loadedSettings] = await Promise.all([
+          getJson<BrokerWorkbench>(`/api/broker-workbench?${params.toString()}`),
           getJson<SettingsResponse>("/api/settings"),
         ]);
+        const loadedOrders = workbench.broker_orders;
         setOrders(loadedOrders);
-        setPositions(loadedPositions);
-        setRisk(loadedRisk);
+        setPositions(workbench.broker_positions);
+        setRisk(workbench.risk);
         setSettings(loadedSettings.settings);
         if (!selectedOrderId && loadedOrders[0]?.id) {
           const next = new URLSearchParams(searchParams);
@@ -134,15 +133,14 @@ export function BrokerOrdersPage() {
     if (runId) {
       params.set("run_id", runId);
     }
-    const [loadedOrders, loadedPositions, loadedRisk, loadedSettings] = await Promise.all([
-      getJson<BrokerOrderExecution[]>(`/api/broker-orders?${params.toString()}`),
-      getJson<BrokerPosition[]>(`/api/broker-positions?${params.toString()}`),
-      getJson<BrokerRiskAssessment>("/api/risk"),
+    const [workbench, loadedSettings] = await Promise.all([
+      getJson<BrokerWorkbench>(`/api/broker-workbench?${params.toString()}`),
       getJson<SettingsResponse>("/api/settings"),
     ]);
+    const loadedOrders = workbench.broker_orders;
     setOrders(loadedOrders);
-    setPositions(loadedPositions);
-    setRisk(loadedRisk);
+    setPositions(workbench.broker_positions);
+    setRisk(workbench.risk);
     setSettings(loadedSettings.settings);
     const nextOrderId = nextSelectedOrderId ?? loadedOrders[0]?.id ?? null;
     if (nextOrderId) {

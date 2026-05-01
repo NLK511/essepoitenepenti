@@ -97,7 +97,7 @@ export function ResearchPage() {
       setError(null);
       try {
         const [assessmentPayload, calibrationPayload, walkForwardPayload, nearMissPayload] = await Promise.all([
-          getJson<PerformanceAssessmentResponse>("/api/research/performance-assessment"),
+          getJson<PerformanceAssessmentResponse>("/api/research/performance-workbench"),
           getJson<CalibrationReportResponse>(`/api/recommendation-outcomes/calibration-report?evaluated_after=${encodeURIComponent(windowStartIso(selectedWindow))}&limit=2000`),
           getJson<WalkForwardValidationResponse>("/api/recommendation-outcomes/walk-forward?lookback_days=365&validation_days=90&step_days=30&min_resolved_outcomes=20"),
           getJson<RecommendationPlanOutcome[]>("/api/recommendation-outcomes?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&limit=200"),
@@ -197,7 +197,7 @@ export function ResearchPage() {
     try {
       await postForm("/api/research/performance-assessment/run", {});
       const [assessmentPayload, calibrationPayload, walkForwardPayload, nearMissPayload] = await Promise.all([
-        getJson<PerformanceAssessmentResponse>("/api/research/performance-assessment"),
+        getJson<PerformanceAssessmentResponse>("/api/research/performance-workbench"),
         getJson<CalibrationReportResponse>(`/api/recommendation-outcomes/calibration-report?evaluated_after=${encodeURIComponent(windowStartIso(selectedWindow))}&limit=2000`),
         getJson<WalkForwardValidationResponse>("/api/recommendation-outcomes/walk-forward?lookback_days=365&validation_days=90&step_days=30&min_resolved_outcomes=20"),
         getJson<RecommendationPlanOutcome[]>("/api/recommendation-outcomes?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&limit=200"),
@@ -254,6 +254,14 @@ export function ResearchPage() {
                 <div className="data-point"><span className="data-point-label">backend</span><span className="data-point-value">{latestBackend} / {latestMethod}</span></div>
               </div>
               {latestError ? <div className="helper-text top-gap-small">Fallback note: {latestError}</div> : null}
+              {assessment?.broker_summary || assessment?.effective_summary ? (
+                <section className="metrics-grid top-gap-medium">
+                  <StatCard label="Broker closed" value={assessment.broker_summary?.closed_positions ?? "—"} helper="Authoritative broker-position outcomes" />
+                  <StatCard label="Broker win rate" value={assessment.broker_summary?.win_rate_percent === null || assessment.broker_summary?.win_rate_percent === undefined ? "—" : `${assessment.broker_summary.win_rate_percent}%`} helper={`${assessment.broker_summary?.wins ?? 0} wins · ${assessment.broker_summary?.losses ?? 0} losses`} />
+                  <StatCard label="Broker realized P&L" value={assessment.broker_summary?.realized_pnl === undefined ? "—" : `$${assessment.broker_summary.realized_pnl.toFixed(2)}`} helper="Closed broker-position ledger" />
+                  <StatCard label="Effective resolved" value={assessment.effective_summary?.resolved_outcomes ?? "—"} helper={`${assessment.effective_summary?.broker_outcomes ?? 0} broker · ${assessment.effective_summary?.simulation_outcomes ?? 0} simulation`} />
+                </section>
+              ) : null}
               {assessment?.entry_miss_diagnostics ? (
                 <Card className="top-gap-medium">
                   <SectionTitle kicker="Entry quality" title="Almost entered, then moved" subtitle="Use this to spot plans that missed entry by a small amount but still followed the expected direction." />

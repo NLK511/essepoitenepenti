@@ -147,6 +147,16 @@ export interface BrokerOrderExecution {
   updated_at: string;
 }
 
+export interface BrokerWorkbench {
+  broker_orders: BrokerOrderExecution[];
+  broker_positions: BrokerPosition[];
+  risk: BrokerRiskAssessment;
+  counts: {
+    broker_orders: number;
+    broker_positions: number;
+  };
+}
+
 export interface BrokerPosition {
   id: number | null;
   broker_order_execution_id: number;
@@ -1163,6 +1173,22 @@ export interface PerformanceWindowAssessment {
   ready_for_expansion: boolean;
 }
 
+export interface PerformanceSummary {
+  closed_positions?: number;
+  total_outcomes?: number;
+  resolved_outcomes?: number;
+  open_outcomes?: number;
+  wins?: number;
+  losses?: number;
+  win_rate_percent?: number | null;
+  broker_outcomes?: number;
+  simulation_outcomes?: number;
+  plan_outcomes?: number;
+  realized_pnl?: number;
+  average_return_percent?: number | null;
+  average_r_multiple?: number | null;
+}
+
 export interface PerformanceAssessmentResponse {
   job: Job;
   history_count: number;
@@ -1170,6 +1196,8 @@ export interface PerformanceAssessmentResponse {
   latest_assessment: Record<string, unknown>;
   calibration_summary: CalibrationSummary | null;
   broker_performance?: Record<string, unknown> | null;
+  broker_summary?: PerformanceSummary | null;
+  effective_summary?: PerformanceSummary | null;
   entry_miss_diagnostics?: EntryMissDiagnosticsSummary | null;
   windowed_assessments?: PerformanceWindowAssessment[];
 }

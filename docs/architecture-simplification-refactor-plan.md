@@ -175,15 +175,17 @@ Acceptance criteria:
 - broad search consumes normalized features and effective outcomes
 
 ### Phase 7 — Backend read models for complex pages
-Status: first broker workbench read model implemented.
+Status: broker and research read model foundations implemented.
 
 Implemented:
 - `/api/broker-workbench` returns broker orders, broker positions, risk state, and counts in one backend-reconciled payload
-- route test for broker workbench payload
+- Broker Orders frontend page consumes `/api/broker-workbench` instead of separately stitching orders, positions, and risk
+- `/api/research/performance-workbench` returns latest assessment, broker summary, effective outcome summary, calibration summary, entry-miss diagnostics, and windows in one backend-reconciled payload
+- route tests for broker and research workbench payloads
 
 Still needed:
-- research performance workbench read model
-- frontend pages migrate from multiple local fetches to read-model endpoints where useful
+- Research frontend page migrate from multiple local fetches to the research performance workbench endpoint where useful
+- remove legacy endpoints only if no longer useful for API consumers; for now they stay as focused lower-level contracts
 
 Acceptance criteria:
 - page payloads contain source labels and pre-reconciled metrics

@@ -1154,6 +1154,23 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fetched.json()["exit_reason"], "take_profit")
         self.assertEqual(missing.status_code, 404)
 
+    async def test_research_performance_workbench_returns_canonical_summaries(self) -> None:
+        self.seed_run_with_diagnostics()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/api/research/performance-workbench")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("latest_assessment", payload)
+        self.assertIn("broker_summary", payload)
+        self.assertIn("effective_summary", payload)
+        self.assertIn("calibration_summary", payload)
+        self.assertIn("entry_miss_diagnostics", payload)
+        self.assertIn("closed_positions", payload["broker_summary"])
+        self.assertIn("resolved_outcomes", payload["effective_summary"])
+
     async def test_broker_workbench_returns_orders_positions_and_risk(self) -> None:
         run_id = self.seed_run_with_diagnostics()
         session = Session(bind=self.engine)
