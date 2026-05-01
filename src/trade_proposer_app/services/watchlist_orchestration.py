@@ -17,6 +17,7 @@ from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal, CheapScanSignalService
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
+from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ class WatchlistOrchestrationService:
         confidence_threshold: float = 60.0,
         signal_gating_tuning_config: dict[str, float] | None = None,
         plan_generation_tuning_config: dict[str, float] | None = None,
+        trade_decision_policy: TradeDecisionPolicy | None = None,
         calibration_service: RecommendationPlanCalibrationService | None = None,
         taxonomy_service: TickerTaxonomyService | None = None,
     ) -> None:
@@ -53,9 +55,10 @@ class WatchlistOrchestrationService:
         self.decision_samples = decision_samples
         self.cheap_scan_service = cheap_scan_service
         self.deep_analysis_service = deep_analysis_service
-        self.confidence_threshold = confidence_threshold
-        self.signal_gating_tuning_config = self._normalize_signal_gating_tuning_config(signal_gating_tuning_config)
-        self.plan_generation_tuning_config = normalize_plan_generation_tuning_config(plan_generation_tuning_config)
+        self.trade_decision_policy = trade_decision_policy
+        self.confidence_threshold = trade_decision_policy.confidence_threshold if trade_decision_policy is not None else confidence_threshold
+        self.signal_gating_tuning_config = trade_decision_policy.signal_gating.to_dict() if trade_decision_policy is not None else self._normalize_signal_gating_tuning_config(signal_gating_tuning_config)
+        self.plan_generation_tuning_config = dict(trade_decision_policy.plan_generation_config) if trade_decision_policy is not None else normalize_plan_generation_tuning_config(plan_generation_tuning_config)
         self.calibration_service = calibration_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
 
@@ -678,6 +681,14 @@ class WatchlistOrchestrationService:
             warnings.append("watchlist does not allow shorts")
             action = "no_action"
             action_reason = "shorts_disabled"
+        elif intended_action and self.trade_decision_policy is not None and not self.trade_decision_policy.action_allowed(intended_action):
+            warnings.append("active trade decision policy blocks this action")
+            action = "no_action"
+            action_reason = "trade_policy_action_blocked"
+        elif self.trade_decision_policy is not None and not self.trade_decision_policy.setup_family_allowed(setup_family):
+            warnings.append("active trade decision policy blocks this setup family")
+            action = "no_action"
+            action_reason = "trade_policy_setup_family_blocked"
         elif calibrated_confidence < effective_threshold:
             action = "no_action"
             action_reason = "below_calibrated_action_threshold" if effective_threshold > self.confidence_threshold or calibrated_confidence != raw_plan_confidence else "below_action_confidence_threshold"

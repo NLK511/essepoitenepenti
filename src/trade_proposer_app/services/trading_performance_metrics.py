@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.domain.statuses import BROKER_RESOLVED_POSITION_STATUSES, OutcomeStatus, TradeOutcome
 from trade_proposer_app.persistence.models import BrokerPositionRecord
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 
@@ -78,13 +79,13 @@ class TradingPerformanceMetricsService:
         evaluated_before: datetime | None = None,
     ) -> BrokerClosedPositionSummary:
         before = self._normalize_datetime(evaluated_before) if evaluated_before is not None else datetime.now(timezone.utc)
-        query = select(BrokerPositionRecord).where(BrokerPositionRecord.status.in_(["win", "loss"]))
+        query = select(BrokerPositionRecord).where(BrokerPositionRecord.status.in_(BROKER_RESOLVED_POSITION_STATUSES))
         if evaluated_after is not None:
             query = query.where(BrokerPositionRecord.exit_filled_at >= self._normalize_datetime(evaluated_after))
         query = query.where(BrokerPositionRecord.exit_filled_at <= before)
         positions = self.session.scalars(query).all()
-        wins = sum(1 for position in positions if position.status == "win")
-        losses = sum(1 for position in positions if position.status == "loss")
+        wins = sum(1 for position in positions if position.status == TradeOutcome.WIN.value)
+        losses = sum(1 for position in positions if position.status == TradeOutcome.LOSS.value)
         closed = wins + losses
         returns = [float(position.realized_return_pct) for position in positions if position.realized_return_pct is not None]
         r_multiples = [float(position.realized_r_multiple) for position in positions if position.realized_r_multiple is not None]
@@ -110,9 +111,9 @@ class TradingPerformanceMetricsService:
             evaluated_before=evaluated_before,
             limit=limit,
         )
-        resolved = [item for item in outcomes if item.status == "resolved" and item.outcome in {"win", "loss"}]
-        wins = sum(1 for item in resolved if item.outcome == "win")
-        losses = sum(1 for item in resolved if item.outcome == "loss")
+        resolved = [item for item in outcomes if item.status == OutcomeStatus.RESOLVED.value and item.outcome in {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}]
+        wins = sum(1 for item in resolved if item.outcome == TradeOutcome.WIN.value)
+        losses = sum(1 for item in resolved if item.outcome == TradeOutcome.LOSS.value)
         returns = [float(item.realized_return_pct) for item in resolved if item.realized_return_pct is not None]
         r_multiples = [float(item.realized_r_multiple) for item in resolved if item.realized_r_multiple is not None]
         return EffectiveOutcomeSummary(

@@ -1,7 +1,7 @@
 # Architecture Simplification Refactor Plan
 
 ## Status
-In progress. Phase 1 effective outcomes is implemented. Phase 2 shared performance metrics is implemented. Phase 3 now has the normalized `TradeDecisionPolicy` foundation; migrating live generation/search consumers onto that policy remains in progress. Later phases must be implemented incrementally with specs/tests before behavior changes.
+In progress. Phase 1 effective outcomes is implemented. Phase 2 shared performance metrics is implemented. Phase 3 now has the normalized `TradeDecisionPolicy` foundation and live watchlist orchestration is built from the active policy. Phase 4 and Phase 5 now have typed foundations. Later consumer migrations must continue incrementally with specs/tests before behavior changes.
 
 ## Goal
 Make the app leaner and safer for autonomous trading by replacing overlapping, source-specific abstractions with a few explicit product contracts.
@@ -101,16 +101,17 @@ Acceptance criteria:
 - test coverage confirms the shared service counts broker and simulation outcomes correctly
 
 ### Phase 3 — Trade decision policy
-Status: foundation implemented; consumer migration in progress.
+Status: foundation implemented; first live consumer migrated.
 
 Implemented:
 - `TradeDecisionPolicy`
 - `SignalGatingPolicy`
 - `TradeDecisionPolicyService.active_policy()`
+- live watchlist orchestration builder passes the active policy instead of separately wiring confidence, signal-gating, and plan-generation settings
+- watchlist orchestration honors policy action/setup-family filters when configured
 - tests for confidence threshold normalization, action filters, and setup-family filters
 
 Still needed:
-- live orchestration reads the normalized policy directly
 - tuning/search evaluates explicit policy versions
 - generated plans persist policy ID/config snapshot for auditability
 
@@ -120,10 +121,17 @@ Acceptance criteria:
 - risk manager remains separate from alpha/selection policy
 
 ### Phase 4 — Settings domain split
-Status: planned.
+Status: typed domain view foundation implemented; persistence split still planned.
 
-Deliverables:
-- typed settings accessors by domain
+Implemented:
+- `SettingsDomainService`
+- `StrategySettings`
+- `RiskSettings`
+- `ExecutionSettings`
+- `OperatorSettings`
+- tests proving the legacy key/value settings can be read through domain-specific views
+
+Still needed:
 - migration path that keeps existing persisted setting keys compatible
 - kill-switch state separated from durable risk-limit settings, with audit trail
 
@@ -133,12 +141,16 @@ Acceptance criteria:
 - settings UI still works without data loss
 
 ### Phase 5 — Status taxonomy
-Status: planned.
+Status: foundation implemented; broad migration still planned.
 
-Deliverables:
-- domain-specific status enums/constants
+Implemented:
+- `domain/statuses.py` with domain-specific status enums/constants
+- effective outcome and shared metrics code use canonical outcome/position status constants
+
+Still needed:
 - mapping helpers at API boundaries
 - tests for all terminal/nonterminal status mappings
+- migrate remaining raw status-string comparisons where it reduces ambiguity
 
 Acceptance criteria:
 - no analytics code compares unrelated raw status strings directly

@@ -6,7 +6,6 @@ from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePla
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
@@ -25,6 +24,7 @@ from trade_proposer_app.services.social import SocialIngestionService
 from trade_proposer_app.services.summary import SummaryService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
+from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicyService
 from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignalService
 from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
 
@@ -72,13 +72,7 @@ def create_watchlist_orchestration_service(
     session: Session,
     proposal_service: ProposalService | None = None,
 ) -> WatchlistOrchestrationService:
-    settings_repository = SettingsRepository(session)
-    setting_map = settings_repository.get_setting_map()
-    raw_threshold = setting_map.get("confidence_threshold", "60")
-    try:
-        confidence_threshold = float((raw_threshold or "").strip())
-    except (TypeError, ValueError):
-        confidence_threshold = 60.0
+    trade_decision_policy = TradeDecisionPolicyService(session).active_policy()
 
     return WatchlistOrchestrationService(
         context_snapshots=ContextSnapshotRepository(session),
@@ -86,9 +80,7 @@ def create_watchlist_orchestration_service(
         decision_samples=RecommendationDecisionSampleRepository(session),
         cheap_scan_service=CheapScanSignalService(repository=HistoricalMarketDataRepository(session)),
         deep_analysis_service=create_ticker_deep_analysis_service(session, proposal_service=proposal_service),
-        confidence_threshold=confidence_threshold,
-        signal_gating_tuning_config=settings_repository.get_signal_gating_tuning_config(),
-        plan_generation_tuning_config=settings_repository.get_plan_generation_active_config(PlanGenerationTuningRepository(session)),
+        trade_decision_policy=trade_decision_policy,
         calibration_service=RecommendationPlanCalibrationService(EffectivePlanOutcomeRepository(session)),
     )
 

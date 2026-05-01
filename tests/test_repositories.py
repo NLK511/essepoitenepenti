@@ -53,6 +53,7 @@ from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicy, TradeDecisionPolicyService
 from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
 from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
@@ -761,6 +762,25 @@ class RepositoryTests(unittest.TestCase):
             self.assertEqual(summary.loss_outcomes, 1)
             self.assertEqual(summary.overall_win_rate_percent, 50.0)
             self.assertIsNotNone(summary.calibration_report)
+        finally:
+            session.close()
+
+    def test_settings_domain_service_splits_strategy_risk_execution_and_operator_settings(self) -> None:
+        session = create_session()
+        try:
+            domains = SettingsDomainService(session)
+
+            strategy = domains.strategy_settings()
+            risk = domains.risk_settings()
+            execution = domains.execution_settings()
+            operator = domains.operator_settings()
+
+            self.assertIn("confidence_threshold", strategy.to_dict())
+            self.assertIn("enabled", risk.risk_management)
+            self.assertIn("enabled", execution.broker_order_execution)
+            self.assertIn("friction_pct", execution.evaluation_realism)
+            self.assertIn("summary_backend", operator.summary)
+            self.assertIn("social_nitter_enabled", operator.social)
         finally:
             session.close()
 

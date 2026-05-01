@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import KeyLabelDetail, RecommendationPlanOutcome
+from trade_proposer_app.domain.statuses import BROKER_RESOLVED_POSITION_STATUSES, OutcomeStatus, TradeOutcome
 from trade_proposer_app.persistence.models import BrokerPositionRecord, RecommendationOutcomeRecord, RecommendationPlanRecord
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
@@ -14,7 +15,7 @@ from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 class EffectivePlanOutcomeRepository:
     """Canonical broker-preferred outcome view for recommendation plans."""
 
-    BROKER_RESOLVED = {"win", "loss"}
+    BROKER_RESOLVED = BROKER_RESOLVED_POSITION_STATUSES
 
     def __init__(self, session: Session, taxonomy_service: TickerTaxonomyService | None = None) -> None:
         self.session = session
@@ -127,8 +128,8 @@ class EffectivePlanOutcomeRepository:
         return positions[0] if positions else None
 
     def _from_broker(self, plan: RecommendationPlanRecord, broker: BrokerPositionRecord) -> RecommendationPlanOutcome:
-        outcome = broker.status if broker.status in self.BROKER_RESOLVED else "open"
-        model = self._base_model(plan, outcome=outcome, status="resolved" if outcome in self.BROKER_RESOLVED else broker.status, evaluated_at=broker.exit_filled_at or broker.updated_at or plan.computed_at)
+        outcome = broker.status if broker.status in self.BROKER_RESOLVED else TradeOutcome.OPEN.value
+        model = self._base_model(plan, outcome=outcome, status=OutcomeStatus.RESOLVED.value if outcome in self.BROKER_RESOLVED else broker.status, evaluated_at=broker.exit_filled_at or broker.updated_at or plan.computed_at)
         model.outcome_source = "broker"
         model.broker_position_id = broker.id
         model.realized_pnl = broker.realized_pnl
@@ -162,7 +163,7 @@ class EffectivePlanOutcomeRepository:
         return model
 
     def _from_plan(self, plan: RecommendationPlanRecord) -> RecommendationPlanOutcome:
-        model = self._base_model(plan, outcome="open", status="open", evaluated_at=plan.computed_at)
+        model = self._base_model(plan, outcome=TradeOutcome.OPEN.value, status=OutcomeStatus.OPEN.value, evaluated_at=plan.computed_at)
         model.outcome_source = "plan"
         return model
 
