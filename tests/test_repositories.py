@@ -54,6 +54,7 @@ from trade_proposer_app.services.recommendation_plan_calibration import Recommen
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
 from trade_proposer_app.services.execution_candidates import ExecutionCandidateBuilder
+from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicy, TradeDecisionPolicyService
 from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
@@ -765,6 +766,44 @@ class RepositoryTests(unittest.TestCase):
             self.assertIsNotNone(summary.calibration_report)
         finally:
             session.close()
+
+    def test_plan_reliability_feature_builder_extracts_tuning_features(self) -> None:
+        plan = RecommendationPlan(
+            id=101,
+            ticker="AAPL",
+            horizon=StrategyHorizon.ONE_WEEK,
+            action="long",
+            confidence_percent=70.0,
+            entry_price_low=99.0,
+            entry_price_high=101.0,
+            stop_loss=95.0,
+            take_profit=110.0,
+            thesis_summary="Reliable features",
+            signal_breakdown={
+                "setup_family": "Continuation",
+                "transmission_summary": {"context_bias": "Tailwind"},
+            },
+        )
+        outcome = RecommendationPlanOutcome(
+            recommendation_plan_id=101,
+            ticker="AAPL",
+            action="long",
+            outcome="win",
+            stop_loss_hit=False,
+            take_profit_hit=True,
+            max_favorable_excursion=11.0,
+            max_adverse_excursion=-1.0,
+        )
+
+        features = PlanReliabilityFeatureBuilder().build(plan, outcome)
+
+        self.assertIsNotNone(features)
+        assert features is not None
+        self.assertEqual(features.entry_price, 100.0)
+        self.assertEqual(features.setup_family, "continuation")
+        self.assertEqual(features.context_bias, "tailwind")
+        self.assertEqual(features.risk_percent, 5.0)
+        self.assertEqual(features.reward_percent, 10.0)
 
     def test_execution_candidate_builder_splits_plan_from_broker_candidate(self) -> None:
         plan = RecommendationPlan(

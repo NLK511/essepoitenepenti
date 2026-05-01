@@ -22,6 +22,7 @@ from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePla
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
+from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
 from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_BY_KEY, normalize_plan_generation_tuning_config, parameter_definitions
 from trade_proposer_app.services.plan_generation_walk_forward import PlanGenerationWalkForwardService
 
@@ -76,6 +77,7 @@ class PlanGenerationTuningService:
         self.plans = RecommendationPlanRepository(session)
         self.outcomes = EffectivePlanOutcomeRepository(session)
         self.samples = RecommendationDecisionSampleRepository(session)
+        self.reliability_features = PlanReliabilityFeatureBuilder()
 
     def describe(self) -> dict[str, object]:
         baseline = self.ensure_baseline_config_version()
@@ -299,47 +301,24 @@ class PlanGenerationTuningService:
         eligible: list[EligibleTuningRecord] = []
         normalized_setup_family = str(setup_family or "").strip().lower() or None
         for plan in plans:
-            if (plan.action or "") not in {"long", "short", "no_action", "watchlist"} or plan.id is None:
+            if plan.id is None:
                 continue
             outcome = outcome_map.get(plan.id)
             if outcome is None:
                 continue
-            is_direct_trade = plan.action in {"long", "short"}
-            is_phantom_trade = plan.action in {"no_action", "watchlist"}
-            if is_direct_trade and outcome.outcome not in {"win", "loss"}:
+            sample = sample_map.get(plan.id)
+            features = self.reliability_features.build(plan, outcome, sample)
+            if features is None:
                 continue
-            if is_phantom_trade and outcome.outcome not in {"phantom_win", "phantom_loss"}:
-                continue
-            if not is_direct_trade and not is_phantom_trade:
-                continue
-            signal_breakdown = self._plan_signal_breakdown(plan)
-            intended_action = str(signal_breakdown.get("intended_action") or "").strip().lower() or None
-            if is_phantom_trade and intended_action not in {"long", "short"}:
-                continue
-            transmission_summary = signal_breakdown.get("transmission_summary") if isinstance(signal_breakdown.get("transmission_summary"), dict) else {}
-            plan_setup_family = str(signal_breakdown.get("setup_family") or outcome.setup_family or "").strip().lower()
-            if normalized_setup_family and plan_setup_family != normalized_setup_family:
-                continue
-            entry = self._entry_reference(plan)
-            if entry is None or entry <= 0 or plan.stop_loss is None or plan.take_profit is None:
-                continue
-            if outcome.max_favorable_excursion is None or outcome.max_adverse_excursion is None:
-                continue
-            stop_hit = bool(outcome.stop_loss_hit)
-            take_hit = bool(outcome.take_profit_hit)
-            if stop_hit == take_hit:
-                continue
-            risk_pct = abs((entry - float(plan.stop_loss)) / entry) * 100.0
-            reward_pct = abs((float(plan.take_profit) - entry) / entry) * 100.0
-            if risk_pct <= 0 or reward_pct <= 0:
+            if normalized_setup_family and features.setup_family != normalized_setup_family:
                 continue
             eligible.append(
                 EligibleTuningRecord(
                     plan=plan,
                     outcome=outcome,
-                    sample=sample_map.get(plan.id),
-                    setup_family=plan_setup_family,
-                    context_bias=str(transmission_summary.get("context_bias") or "").strip().lower() or None,
+                    sample=sample,
+                    setup_family=features.setup_family,
+                    context_bias=features.context_bias,
                 )
             )
         eligible.sort(key=lambda item: item.plan.computed_at)

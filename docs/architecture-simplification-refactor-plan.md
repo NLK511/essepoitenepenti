@@ -165,9 +165,11 @@ Implemented:
 - `ExecutionCandidateBuilder`
 - order execution submission path uses `ExecutionCandidateBuilder` for candidate validation and quantity/client-order-id derivation
 - tests for valid candidate extraction and invalid-plan skip reason
+- `PlanReliabilityFeatures` and `PlanReliabilityFeatureBuilder`
+- plan-generation tuning eligible-record selection now uses the shared reliability feature builder
 
 Still needed:
-- `PlanReliabilityFeatures` builder for tuning/search/calibration
+- migrate future broad search/calibration consumers onto `PlanReliabilityFeatureBuilder` where they currently duplicate feature derivation
 - recommendation plans remain stable proposed-plan artifacts
 
 Acceptance criteria:
