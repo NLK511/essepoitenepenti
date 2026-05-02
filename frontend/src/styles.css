@@ -2718,6 +2718,7 @@ html[data-theme="light"] .content-topbar {
   display: block;
   width: 100%;
   height: 28px;
+  cursor: help;
 }
 
 .metric-trend path {

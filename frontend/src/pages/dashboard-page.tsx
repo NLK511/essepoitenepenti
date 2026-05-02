@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
-import type { DashboardResponse, DashboardTrendSeries } from "../types";
+import type { DashboardResponse, DashboardTrendSeries, DashboardTrendWindow } from "../types";
 import { dashboardBoardTone, dashboardFailureTone, formatDate } from "../utils";
 
 const WINDOW_OPTIONS = [
@@ -36,7 +36,28 @@ function normalizeWindow(value: string | null): DashboardWindow {
   return (WINDOW_OPTIONS.find((option) => option.value === value)?.value ?? "1m") as DashboardWindow;
 }
 
-function MetricSparkline(props: { label: string; series: DashboardTrendSeries | undefined }) {
+function formatTrendValue(kind: DashboardTrendSeries["kind"], value: number | null): string {
+  if (value === null || Number.isNaN(value)) {
+    return "n/a";
+  }
+  if (kind === "percent") {
+    return `${value.toFixed(1)}%`;
+  }
+  if (kind === "currency") {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value);
+  }
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
+}
+
+function buildTrendTooltip(label: string, series: DashboardTrendSeries | undefined, windows: DashboardTrendWindow[] | undefined): string {
+  if (!series || !windows || windows.length === 0) {
+    return `${label} trendline`;
+  }
+  const lines = windows.map((window, index) => `${window.label}: ${formatTrendValue(series.kind, series.values[index] ?? null)}`);
+  return [label, ...lines].join("\n");
+}
+
+function MetricSparkline(props: { label: string; series: DashboardTrendSeries | undefined; windows: DashboardTrendWindow[] | undefined }) {
   const points = props.series?.values
     .map((value, index) => (typeof value === "number" && Number.isFinite(value) ? { index, value } : null))
     .filter((point): point is { index: number; value: number } => point !== null) ?? [];
@@ -52,14 +73,19 @@ function MetricSparkline(props: { label: string; series: DashboardTrendSeries | 
   const coordinates = points.map((point) => {
     const x = (point.index / maxIndex) * width;
     const y = height - 4 - ((point.value - min) / range) * (height - 8);
-    return { x, y, value: point.value };
+    return { x, y, value: point.value, index: point.index };
   });
   const path = coordinates.map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+  const tooltip = buildTrendTooltip(props.label, props.series, props.windows);
   return (
-    <svg viewBox="0 0 100 28" className="metric-sparkline" role="img" aria-label={`${props.label} trendline`} preserveAspectRatio="none">
-      <title>{props.label} trendline</title>
+    <svg viewBox="0 0 100 28" className="metric-sparkline" role="img" aria-label={tooltip.replace(/\n/g, " · ")} preserveAspectRatio="none">
+      <title>{tooltip}</title>
       <path d={path} />
-      {coordinates.map((point, index) => <circle key={`${props.label}-${index}`} cx={point.x.toFixed(1)} cy={point.y.toFixed(1)} r="1.8" />)}
+      {coordinates.map((point, index) => (
+        <circle key={`${props.label}-${index}`} cx={point.x.toFixed(1)} cy={point.y.toFixed(1)} r="1.8">
+          <title>{`${props.windows?.[point.index]?.label ?? `Window ${point.index + 1}`}: ${formatTrendValue(props.series?.kind ?? "count", point.value)}`}</title>
+        </circle>
+      ))}
     </svg>
   );
 }
@@ -100,6 +126,7 @@ export function DashboardPage() {
   const distinctWarnings = data?.distinct_warnings ?? [];
   const dashboardTrends = data?.dashboard_trends ?? null;
   const trendSeriesMap = useMemo(() => new Map((dashboardTrends?.series ?? []).map((series) => [series.key, series])), [dashboardTrends]);
+  const trendWindows = dashboardTrends?.windows ?? [];
   const windowLabel = useMemo(() => WINDOW_OPTIONS.find((option) => option.value === selectedWindow)?.label ?? "1M", [selectedWindow]);
 
   async function refreshBrokerState() {
@@ -180,35 +207,35 @@ export function DashboardPage() {
                   className={showTrendlines ? "stat-card-compact" : undefined}
                   label="Win rate"
                   value={formatPercent(summary?.win_rate_percent)}
-                  trend={showTrendlines ? <MetricSparkline label="Win rate" series={trendSeriesMap.get("win_rate_percent")} /> : null}
+                  trend={showTrendlines ? <MetricSparkline label="Win rate" series={trendSeriesMap.get("win_rate_percent")} windows={trendWindows} /> : null}
                   helper={showTrendlines ? undefined : (summary?.win_rate_source === "broker" ? `${technical?.broker_wins ?? 0} broker wins / ${technical?.broker_closed_positions ?? 0} closed positions` : "Resolved simulated plan outcomes")}
                 />
                 <StatCard
                   className={showTrendlines ? "stat-card-compact" : undefined}
                   label="Profit %"
                   value={formatPercent(summary?.profit_percent)}
-                  trend={showTrendlines ? <MetricSparkline label="Profit %" series={trendSeriesMap.get("profit_percent")} /> : null}
+                  trend={showTrendlines ? <MetricSparkline label="Profit %" series={trendSeriesMap.get("profit_percent")} windows={trendWindows} /> : null}
                   helper={showTrendlines ? undefined : (summary?.profit_source === "broker" ? `Broker realized P&L $${technical?.broker_realized_pnl ?? 0}` : "Avg 5d return on actionable plans")}
                 />
                 <StatCard
                   className={showTrendlines ? "stat-card-compact" : undefined}
                   label="Shortlist rate"
                   value={formatPercent(summary?.shortlist_rate_percent)}
-                  trend={showTrendlines ? <MetricSparkline label="Shortlist rate" series={trendSeriesMap.get("shortlist_rate_percent")} /> : null}
+                  trend={showTrendlines ? <MetricSparkline label="Shortlist rate" series={trendSeriesMap.get("shortlist_rate_percent")} windows={trendWindows} /> : null}
                   helper={showTrendlines ? undefined : `${summary?.plan_amount ?? 0} plans / ${summary?.signals_amount ?? 0} signals`}
                 />
                 <StatCard
                   className={showTrendlines ? "stat-card-compact" : undefined}
                   label="Actionable rate"
                   value={formatPercent(summary?.actionable_rate_percent)}
-                  trend={showTrendlines ? <MetricSparkline label="Actionable rate" series={trendSeriesMap.get("actionable_rate_percent")} /> : null}
+                  trend={showTrendlines ? <MetricSparkline label="Actionable rate" series={trendSeriesMap.get("actionable_rate_percent")} windows={trendWindows} /> : null}
                   helper={showTrendlines ? undefined : `${summary?.actionable_plans ?? 0} actionable / ${summary?.plan_amount ?? 0} plans`}
                 />
                 <StatCard
                   className={showTrendlines ? "stat-card-compact" : undefined}
                   label="Actionability gap"
                   value={formatSignedPercent(summary?.actionability_gap_percent)}
-                  trend={showTrendlines ? <MetricSparkline label="Actionability gap" series={trendSeriesMap.get("actionability_gap_percent")} /> : null}
+                  trend={showTrendlines ? <MetricSparkline label="Actionability gap" series={trendSeriesMap.get("actionability_gap_percent")} windows={trendWindows} /> : null}
                   helper={showTrendlines ? undefined : `${summary?.phantom_win_outcomes ?? 0} phantom wins / ${summary?.phantom_resolved_outcomes ?? 0} phantom resolved · ${summary?.actionable_win_outcomes ?? 0} actionable wins / ${summary?.actionable_resolved_outcomes ?? 0} actionable resolved · positive means skipped setups are outperforming acted-on setups`}
                 />
               </div>
@@ -279,42 +306,42 @@ export function DashboardPage() {
                 className={showTrendlines ? "stat-card-compact" : undefined}
                 label="News processed"
                 value={String(technical?.news_processed ?? 0)}
-                trend={showTrendlines ? <MetricSparkline label="News processed" series={trendSeriesMap.get("news_processed")} /> : null}
+                trend={showTrendlines ? <MetricSparkline label="News processed" series={trendSeriesMap.get("news_processed")} windows={trendWindows} /> : null}
                 helper={showTrendlines ? undefined : "Historical news items"}
               />
               <StatCard
                 className={showTrendlines ? "stat-card-compact" : undefined}
                 label="Tweets processed"
                 value={String(technical?.tweets_processed ?? 0)}
-                trend={showTrendlines ? <MetricSparkline label="Tweets processed" series={trendSeriesMap.get("tweets_processed")} /> : null}
+                trend={showTrendlines ? <MetricSparkline label="Tweets processed" series={trendSeriesMap.get("tweets_processed")} windows={trendWindows} /> : null}
                 helper={showTrendlines ? undefined : "Social items used by plans"}
               />
               <StatCard
                 className={showTrendlines ? "stat-card-compact" : undefined}
                 label="Bars stored"
                 value={String(technical?.bars_stored ?? 0)}
-                trend={showTrendlines ? <MetricSparkline label="Bars stored" series={trendSeriesMap.get("bars_stored")} /> : null}
+                trend={showTrendlines ? <MetricSparkline label="Bars stored" series={trendSeriesMap.get("bars_stored")} windows={trendWindows} /> : null}
                 helper={showTrendlines ? undefined : "Historical market bars"}
               />
               <StatCard
                 className={showTrendlines ? "stat-card-compact" : undefined}
                 label="Orders placed"
                 value={String(technical?.orders_placed ?? 0)}
-                trend={showTrendlines ? <MetricSparkline label="Orders placed" series={trendSeriesMap.get("orders_placed")} /> : null}
+                trend={showTrendlines ? <MetricSparkline label="Orders placed" series={trendSeriesMap.get("orders_placed")} windows={trendWindows} /> : null}
                 helper={showTrendlines ? undefined : "Broker executions"}
               />
               <StatCard
                 className={showTrendlines ? "stat-card-compact" : undefined}
                 label="Broker closed"
                 value={String(technical?.broker_closed_positions ?? 0)}
-                trend={showTrendlines ? <MetricSparkline label="Broker closed" series={trendSeriesMap.get("broker_closed_positions")} /> : null}
+                trend={showTrendlines ? <MetricSparkline label="Broker closed" series={trendSeriesMap.get("broker_closed_positions")} windows={trendWindows} /> : null}
                 helper={showTrendlines ? undefined : `${technical?.broker_wins ?? 0} wins / ${technical?.broker_losses ?? 0} losses`}
               />
               <StatCard
                 className={showTrendlines ? "stat-card-compact" : undefined}
                 label="Broker realized P&L"
                 value={`$${technical?.broker_realized_pnl ?? 0}`}
-                trend={showTrendlines ? <MetricSparkline label="Broker realized P&L" series={trendSeriesMap.get("broker_realized_pnl")} /> : null}
+                trend={showTrendlines ? <MetricSparkline label="Broker realized P&L" series={trendSeriesMap.get("broker_realized_pnl")} windows={trendWindows} /> : null}
                 helper={showTrendlines ? undefined : "Closed broker positions in selected window"}
               />
             </div>
