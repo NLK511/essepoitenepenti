@@ -25,7 +25,7 @@ The app currently ships a **phase-1 bounded implementation** of plan-generation 
 
 What is live now:
 - dedicated plan-generation tuning routes, persistence, runs, candidates, and config versions
-- a real research page for inspecting runs, candidates, per-campaign results, config promotion, and the ranked exploration campaign plan
+- a real research page for inspecting runs, grouped candidate experiments, per-campaign results, config promotion, and the ranked exploration campaign plan
 - settings for active config selection and stored automation readiness flags
 - bounded parameter-schema-driven candidate generation
 - deterministic candidate ranking centered on win rate, then win count, then expected value
@@ -327,16 +327,17 @@ The initial manual exploration campaign must stay inside the following exact par
 
 | Parameter key | Exploration min | Exploration max |
 | --- | ---: | ---: |
-| `global.entry_band_risk_fraction` | `0.00` | `0.15` |
-| `global.headwind_stop_multiplier` | `0.88` | `0.98` |
-| `setup_family.breakout.stop_distance_multiplier` | `0.75` | `0.95` |
-| `setup_family.breakout.take_profit_distance_multiplier` | `1.05` | `1.25` |
-| `setup_family.mean_reversion.stop_distance_multiplier` | `0.95` | `1.20` |
-| `setup_family.mean_reversion.take_profit_distance_multiplier` | `0.78` | `1.00` |
-| `setup_family.catalyst_follow_through.take_profit_distance_multiplier` | `1.10` | `1.35` |
-| `setup_family.macro_beneficiary_loser.take_profit_distance_multiplier` | `1.02` | `1.20` |
+| `global.entry_band_risk_fraction` | `0.00` | `0.25` |
+| `global.headwind_stop_multiplier` | `0.84` | `1.02` |
+| `setup_family.breakout.stop_distance_multiplier` | `0.65` | `1.05` |
+| `setup_family.breakout.take_profit_distance_multiplier` | `0.95` | `1.45` |
+| `setup_family.mean_reversion.stop_distance_multiplier` | `0.88` | `1.32` |
+| `setup_family.mean_reversion.take_profit_distance_multiplier` | `0.72` | `1.08` |
+| `setup_family.catalyst_follow_through.take_profit_distance_multiplier` | `1.05` | `1.50` |
+| `setup_family.macro_beneficiary_loser.take_profit_distance_multiplier` | `1.00` | `1.30` |
 
 Bounded random mutations and step-based local perturbations in exploration mode must be clamped to this envelope.
+The exploration generator should also broaden its candidate diversity with deeper local steps and additional bounded random mutations, while still staying capped and replayable.
 
 ### Ranked exploration campaign plan
 
@@ -706,7 +707,7 @@ The frontend must provide a dedicated plan-generation tuning workflow under rese
    - filters for status, mode, date range, promotion outcome
 
 3. **Run detail page**
-   - candidate ranking table
+   - candidate ranking table grouped by experiment/knob when the same knob-set produces multiple candidates
    - baseline vs winner comparison
    - eligibility and validation summary
    - guardrail pass/fail reasons

@@ -147,9 +147,11 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
     def test_parameter_schema_exposes_the_first_campaign_exploration_envelope(self) -> None:
         parameters = {item["key"]: item for item in parameter_definitions()}
         self.assertEqual(parameters["global.entry_band_risk_fraction"]["exploration_min"], 0.0)
-        self.assertEqual(parameters["global.entry_band_risk_fraction"]["exploration_max"], 0.15)
-        self.assertEqual(parameters["setup_family.breakout.take_profit_distance_multiplier"]["exploration_min"], 1.05)
-        self.assertEqual(parameters["setup_family.breakout.take_profit_distance_multiplier"]["exploration_max"], 1.25)
+        self.assertEqual(parameters["global.entry_band_risk_fraction"]["exploration_max"], 0.25)
+        self.assertEqual(parameters["global.headwind_stop_multiplier"]["exploration_min"], 0.84)
+        self.assertEqual(parameters["global.headwind_stop_multiplier"]["exploration_max"], 1.02)
+        self.assertEqual(parameters["setup_family.breakout.take_profit_distance_multiplier"]["exploration_min"], 0.95)
+        self.assertEqual(parameters["setup_family.breakout.take_profit_distance_multiplier"]["exploration_max"], 1.45)
 
     def test_exploration_campaign_plan_is_ranked_and_bounded(self) -> None:
         campaigns = exploration_campaigns()

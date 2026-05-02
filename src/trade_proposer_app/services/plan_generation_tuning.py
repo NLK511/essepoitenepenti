@@ -360,7 +360,8 @@ class PlanGenerationTuningService:
         parameter_keys = list(PARAMETER_BY_KEY.keys())
         for key, definition in PARAMETER_BY_KEY.items():
             base_value = active_config.get(key, definition.default)
-            for step_count in (-2, -1, 1, 2):
+            step_counts = (-4, -3, -2, -1, 1, 2, 3, 4) if explore_mode else (-2, -1, 1, 2)
+            for step_count in step_counts:
                 mutated = dict(active_config)
                 candidate = base_value + (definition.step * step_count)
                 mutated[key] = self._campaign_bounded_value(definition, candidate, explore_mode=explore_mode)
@@ -371,8 +372,9 @@ class PlanGenerationTuningService:
             for key_b in parameter_keys[index + 1 :]:
                 definition_b = PARAMETER_BY_KEY[key_b]
                 base_b = active_config.get(key_b, definition_b.default)
-                for step_a in (-1, 1):
-                    for step_b in (-1, 1):
+                pair_steps = (-2, -1, 1, 2) if explore_mode else (-1, 1)
+                for step_a in pair_steps:
+                    for step_b in pair_steps:
                         mutated = dict(active_config)
                         candidate_a = base_a + (definition_a.step * step_a)
                         candidate_b = base_b + (definition_b.step * step_b)
@@ -391,15 +393,15 @@ class PlanGenerationTuningService:
             configs.append(normalized)
         if explore_mode:
             rng = random.Random(seed)
-            max_random_candidates = 24
-            max_random_changes = 3
+            max_random_candidates = 36
+            max_random_changes = 4
             for _ in range(max_random_candidates):
                 mutated = dict(active_config)
                 change_count = rng.randint(1, max_random_changes)
                 for key in rng.sample(parameter_keys, change_count):
                     definition = PARAMETER_BY_KEY[key]
                     base_value = mutated.get(key, definition.default)
-                    step_count = rng.choice([-3, -2, -1, 1, 2, 3])
+                    step_count = rng.choice([-4, -3, -2, -1, 1, 2, 3, 4])
                     candidate = base_value + (definition.step * step_count)
                     mutated[key] = self._campaign_bounded_value(definition, candidate, explore_mode=True)
                 configs.append(mutated)

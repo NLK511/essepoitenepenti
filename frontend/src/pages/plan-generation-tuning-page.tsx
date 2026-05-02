@@ -58,6 +58,19 @@ function candidateMetric(candidate: PlanGenerationTuningRun["candidates"][number
   return numberOrNull((candidate.metric_breakdown as Record<string, unknown>)[key]);
 }
 
+function candidateExperimentSignature(candidate: PlanGenerationTuningRun["candidates"][number]): string {
+  const keys = [...candidate.changed_keys].sort();
+  return keys.length > 0 ? keys.join(" + ") : "baseline";
+}
+
+function candidateConfigValue(candidate: PlanGenerationTuningRun["candidates"][number], key: string): string {
+  const value = candidate.config[key];
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value.toFixed(4);
+  }
+  return value === null || value === undefined ? "—" : String(value);
+}
+
 export function PlanGenerationTuningPage() {
   const [state, setState] = useState<PlanGenerationTuningResponse | null>(null);
   const [runs, setRuns] = useState<PlanGenerationTuningRun[] | null>(null);
@@ -156,6 +169,41 @@ export function PlanGenerationTuningPage() {
       validationWinRateCount: validationRates.size,
       validationExpectedValueCount: validationExpectedValues.size,
     };
+  }, [selectedRun]);
+
+  const selectedRunCandidateGroups = useMemo(() => {
+    if (!selectedRun) return [];
+    const groups = new Map<
+      string,
+      {
+        signature: string;
+        changedKeys: string[];
+        campaigns: Set<string>;
+        candidates: PlanGenerationTuningRun["candidates"];
+        bestRank: number;
+      }
+    >();
+    for (const candidate of selectedRun.candidates) {
+      const signature = candidateExperimentSignature(candidate);
+      const current = groups.get(signature) ?? {
+        signature,
+        changedKeys: [...candidate.changed_keys].sort(),
+        campaigns: new Set<string>(),
+        candidates: [],
+        bestRank: Number.POSITIVE_INFINITY,
+      };
+      current.campaigns.add(candidateCampaign(candidate));
+      current.candidates.push(candidate);
+      current.bestRank = Math.min(current.bestRank, candidate.rank ?? Number.POSITIVE_INFINITY);
+      groups.set(signature, current);
+    }
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        candidates: [...group.candidates].sort((left, right) => (left.rank ?? Number.POSITIVE_INFINITY) - (right.rank ?? Number.POSITIVE_INFINITY)),
+        bestCandidate: [...group.candidates].sort((left, right) => (left.rank ?? Number.POSITIVE_INFINITY) - (right.rank ?? Number.POSITIVE_INFINITY))[0] ?? null,
+      }))
+      .sort((left, right) => left.bestRank - right.bestRank || left.signature.localeCompare(right.signature));
   }, [selectedRun]);
 
   async function runTuning(apply: boolean) {
@@ -363,38 +411,64 @@ export function PlanGenerationTuningPage() {
                     This run is tie-heavy: all candidates share the same search and validation win rates, so ranking is effectively being decided by tie-breakers like expected value, distance from the baseline, and number of changed parameters.
                   </div>
                 ) : null}
-                <div className="table-wrapper top-gap-small">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>rank</th>
-                        <th>campaign</th>
-                        <th>changes</th>
-                        <th>search WR</th>
-                        <th>validation WR</th>
-                        <th>validation EV</th>
-                        <th>actionable</th>
-                        <th>promo</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedRunCandidates.map((candidate) => {
-                        const campaign = humanizeCampaignName(candidateCampaign(candidate));
-                        return (
-                          <tr key={candidate.id ?? `${selectedRun.id}-${candidate.rank}`}>
-                            <td><Badge tone={candidate.rank === 1 ? "ok" : "neutral"}>#{candidate.rank ?? "?"}</Badge></td>
-                            <td>{campaign}</td>
-                            <td className="helper-text">{candidate.changed_keys.join(", ") || "no changes"}</td>
-                            <td>{formatPercent(candidateMetric(candidate, "search_win_rate_percent"))}</td>
-                            <td>{formatPercent(candidateMetric(candidate, "validation_win_rate_percent"))}</td>
-                            <td>{formatNumber(candidateMetric(candidate, "validation_expected_value"))}</td>
-                            <td>{candidateMetric(candidate, "validation_actionable_count") ?? "—"}</td>
-                            <td><Badge tone={candidate.promotion_eligible ? "ok" : "warning"}>{candidate.promotion_eligible ? "eligible" : "blocked"}</Badge></td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <div className="data-stack top-gap-small">
+                  {selectedRunCandidateGroups.map((group) => {
+                    const campaigns = [...group.campaigns].map(humanizeCampaignName).join(" · ");
+                    const sharedChanges = group.changedKeys.length > 0 ? group.changedKeys.join(", ") : "baseline";
+                    return (
+                      <details key={group.signature} className="workflow-details data-card">
+                        <summary>
+                          <div className="data-card-header">
+                            <div className="cluster">
+                              <Badge tone={group.bestRank === 1 ? "ok" : "neutral"}>#{group.bestRank}</Badge>
+                              <Badge>{group.candidates.length} candidates</Badge>
+                              <Badge>{campaigns}</Badge>
+                            </div>
+                            <div className="helper-text">{sharedChanges}</div>
+                          </div>
+                        </summary>
+                        <div className="workflow-details-body top-gap-small">
+                          <div className="helper-text">Best validation WR {formatPercent(candidateMetric(group.bestCandidate, "validation_win_rate_percent"))} · best validation EV {formatNumber(candidateMetric(group.bestCandidate, "validation_expected_value"))} · actionable {candidateMetric(group.bestCandidate, "validation_actionable_count") ?? "—"}</div>
+                          <div className="table-wrapper top-gap-small">
+                            <table className="data-table">
+                              <thead>
+                                <tr>
+                                  <th>rank</th>
+                                  <th>campaign</th>
+                                  <th>changed values</th>
+                                  <th>search WR</th>
+                                  <th>validation WR</th>
+                                  <th>validation EV</th>
+                                  <th>actionable</th>
+                                  <th>promo</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {group.candidates.map((candidate) => {
+                                  const campaign = humanizeCampaignName(candidateCampaign(candidate));
+                                  const changedValues = candidate.changed_keys.length > 0
+                                    ? candidate.changed_keys.map((key) => `${key}=${candidateConfigValue(candidate, key)}`).join(" · ")
+                                    : "baseline";
+                                  return (
+                                    <tr key={candidate.id ?? `${selectedRun.id}-${candidate.rank}`}>
+                                      <td><Badge tone={candidate.rank === 1 ? "ok" : "neutral"}>#{candidate.rank ?? "?"}</Badge></td>
+                                      <td>{campaign}</td>
+                                      <td className="helper-text">{changedValues}</td>
+                                      <td>{formatPercent(candidateMetric(candidate, "search_win_rate_percent"))}</td>
+                                      <td>{formatPercent(candidateMetric(candidate, "validation_win_rate_percent"))}</td>
+                                      <td>{formatNumber(candidateMetric(candidate, "validation_expected_value"))}</td>
+                                      <td>{candidateMetric(candidate, "validation_actionable_count") ?? "—"}</td>
+                                      <td><Badge tone={candidate.promotion_eligible ? "ok" : "warning"}>{candidate.promotion_eligible ? "eligible" : "blocked"}</Badge></td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </details>
+                    );
+                  })}
                 </div>
                 <details className="top-gap-small">
                   <summary className="helper-text">Show raw candidate breakdown JSON</summary>
