@@ -14,7 +14,7 @@ import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionT
 import { ContextEventSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import { RecommendationPlanEvaluationSummary } from "../components/recommendation-plan-evaluation";
 import type { Job, RunDetailResponse, WatchlistEvaluationPolicy } from "../types";
-import { biasTone, brokerExecutionStatusTone, contextProvenanceLabel, detailLabel, extractDisplayLabels, formatDate, formatDuration, isBrokerExecutionResubmittable, isRecord, jobTypeLabel, parseJsonRecord, runTone, yahooFinanceUrl } from "../utils";
+import { biasTone, brokerExecutionStatusTone, calibrationReviewStatusLabel, contextProvenanceLabel, detailLabel, extractDisplayLabels, formatDate, formatDuration, isBrokerExecutionResubmittable, isRecord, jobTypeLabel, parseJsonRecord, runTone, yahooFinanceUrl } from "../utils";
 
 function scoreColor(value: number, min = -1, max = 1) {
   if (!Number.isFinite(value) || max <= min) {
@@ -531,11 +531,7 @@ export function RunDetailPage() {
                             const effectiveThreshold = typeof calibrationReview?.effective_confidence_threshold === "number"
                               ? calibrationReview.effective_confidence_threshold
                               : null;
-                            const calibrationReviewStatus = typeof calibrationReview?.review_status_label === "string" && calibrationReview.review_status_label
-                              ? calibrationReview.review_status_label
-                              : typeof calibrationReview?.review_status === "string"
-                                ? calibrationReview.review_status
-                                : "disabled";
+                            const calibrationReviewStatus = calibrationReviewStatusLabel(calibrationReview);
                             const calibrationReasons = extractDisplayLabels(calibrationReview, "reason_details", "reasons");
                             return (
                               <tr key={plan.id ?? `${plan.ticker}-${plan.computed_at}`}>

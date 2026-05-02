@@ -1,15 +1,16 @@
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
+from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
-from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
+from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
+from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
-from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
-from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClient
+from trade_proposer_app.services.context_snapshot_resolver import ContextSnapshotResolver
 from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
 from trade_proposer_app.services.macro_context import MacroContextService
@@ -17,11 +18,10 @@ from trade_proposer_app.services.macro_context_refresh import MacroContextRefres
 from trade_proposer_app.services.news import NewsIngestionService
 from trade_proposer_app.services.order_execution import OrderExecutionService
 from trade_proposer_app.services.proposals import ProposalService
-from trade_proposer_app.services.signals import SignalIngestionService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
-from trade_proposer_app.services.context_snapshot_resolver import ContextSnapshotResolver
-from trade_proposer_app.services.social import SocialIngestionService
 from trade_proposer_app.services.settings_domains import SettingsDomainService
+from trade_proposer_app.services.signals import SignalIngestionService
+from trade_proposer_app.services.social import SocialIngestionService
 from trade_proposer_app.services.summary import SummaryService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
@@ -30,24 +30,43 @@ from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignalServ
 from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
 
 
-def create_proposal_service(session: Session) -> ProposalService:
-    """Create the app-native proposal service with configured news and social ingestion."""
-    repository = SettingsRepository(session)
+def _settings_repository(session: Session) -> SettingsRepository:
+    return SettingsRepository(session)
+
+
+def _operator_settings(repository: SettingsRepository):
+    return SettingsDomainService(repository=repository).operator_settings()
+
+
+def _summary_service(repository: SettingsRepository) -> SummaryService:
+    operator_settings = _operator_settings(repository)
+    return SummaryService(
+        summary_settings=operator_settings.summary,
+        provider_credentials=repository.get_provider_credential_map(),
+    )
+
+
+def _social_service(repository: SettingsRepository) -> SocialIngestionService:
+    return SocialIngestionService.from_settings(_operator_settings(repository).social)
+
+
+def _news_service(session: Session, repository: SettingsRepository, article_limit_key: str) -> NewsIngestionService:
     settings_map = repository.get_setting_map()
     credentials = repository.get_provider_credential_map()
-    ticker_limit = int(settings_map.get("news_ticker_article_limit", "12"))
-    news_service = NewsIngestionService.from_provider_credentials(
+    return NewsIngestionService.from_provider_credentials(
         credentials,
-        max_articles=ticker_limit,
+        max_articles=int(settings_map.get(article_limit_key, "12")),
         historical_news=HistoricalNewsRepository(session),
     )
-    operator_settings = SettingsDomainService(repository=repository).operator_settings()
-    social_service = SocialIngestionService.from_settings(operator_settings.social)
+
+
+def create_proposal_service(session: Session) -> ProposalService:
+    """Create the app-native proposal service with configured news and social ingestion."""
+    repository = _settings_repository(session)
+    news_service = _news_service(session, repository, "news_ticker_article_limit")
+    social_service = _social_service(repository)
     signal_service = SignalIngestionService(social_service=social_service)
-    summary_service = SummaryService(
-        summary_settings=operator_settings.summary,
-        provider_credentials=credentials,
-    )
+    summary_service = _summary_service(repository)
     taxonomy_service = TickerTaxonomyService()
     snapshot_resolver = ContextSnapshotResolver(
         ContextSnapshotRepository(session),
@@ -88,22 +107,14 @@ def create_watchlist_orchestration_service(
 
 
 def create_macro_context_refresh_service(session: Session) -> MacroContextRefreshService:
-    repository = SettingsRepository(session)
-    settings_map = repository.get_setting_map()
-    credentials = repository.get_provider_credential_map()
-    macro_limit = int(settings_map.get("news_macro_article_limit", "12"))
-    news_service = NewsIngestionService.from_provider_credentials(
-        credentials,
-        max_articles=macro_limit,
-        historical_news=HistoricalNewsRepository(session),
-    )
-    operator_settings = SettingsDomainService(repository=repository).operator_settings()
-    social_service = SocialIngestionService.from_settings(operator_settings.social)
+    repository = _settings_repository(session)
+    news_service = _news_service(session, repository, "news_macro_article_limit")
+    social_service = _social_service(repository)
     return MacroContextRefreshService(social_service=social_service, news_service=news_service)
 
 
 def create_order_execution_service(session: Session) -> OrderExecutionService:
-    repository = SettingsRepository(session)
+    repository = _settings_repository(session)
     credentials = repository.get_provider_credential_map()
     alpaca = credentials.get("alpaca")
     client = None
@@ -118,25 +129,15 @@ def create_order_execution_service(session: Session) -> OrderExecutionService:
 
 
 def create_macro_context_service(session: Session) -> MacroContextService:
-    repository = SettingsRepository(session)
-    settings_map = repository.get_setting_map()
-    credentials = repository.get_provider_credential_map()
-    macro_limit = int(settings_map.get("news_macro_article_limit", "12"))
-    news_service = NewsIngestionService.from_provider_credentials(
-        credentials,
-        max_articles=macro_limit,
-        historical_news=HistoricalNewsRepository(session),
-    )
-    summary_service = SummaryService(
-        summary_settings=SettingsDomainService(repository=repository).operator_settings().summary,
-        provider_credentials=credentials,
-    )
+    repository = _settings_repository(session)
+    news_service = _news_service(session, repository, "news_macro_article_limit")
+    summary_service = _summary_service(repository)
     return MacroContextService(ContextSnapshotRepository(session), news_service=news_service, summary_service=summary_service)
 
 
 def create_industry_context_refresh_service(session: Session) -> IndustryContextRefreshService:
-    repository = SettingsRepository(session)
-    social_service = SocialIngestionService.from_settings(SettingsDomainService(repository=repository).operator_settings().social)
+    repository = _settings_repository(session)
+    social_service = _social_service(repository)
     taxonomy_service = TickerTaxonomyService()
     return IndustryContextRefreshService(
         social_service=social_service,
@@ -145,19 +146,9 @@ def create_industry_context_refresh_service(session: Session) -> IndustryContext
 
 
 def create_industry_context_service(session: Session) -> IndustryContextService:
-    repository = SettingsRepository(session)
-    settings_map = repository.get_setting_map()
-    credentials = repository.get_provider_credential_map()
-    industry_limit = int(settings_map.get("news_industry_article_limit", "12"))
-    news_service = NewsIngestionService.from_provider_credentials(
-        credentials,
-        max_articles=industry_limit,
-        historical_news=HistoricalNewsRepository(session),
-    )
-    summary_service = SummaryService(
-        summary_settings=SettingsDomainService(repository=repository).operator_settings().summary,
-        provider_credentials=credentials,
-    )
+    repository = _settings_repository(session)
+    news_service = _news_service(session, repository, "news_industry_article_limit")
+    summary_service = _summary_service(repository)
     taxonomy_service = TickerTaxonomyService()
     return IndustryContextService(
         ContextSnapshotRepository(session),
@@ -165,4 +156,3 @@ def create_industry_context_service(session: Session) -> IndustryContextService:
         summary_service=summary_service,
         taxonomy_service=taxonomy_service,
     )
-

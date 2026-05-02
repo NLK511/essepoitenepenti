@@ -68,6 +68,27 @@ export function planGenerationTuningConfigTone(status: string): "ok" | "warning"
   return "neutral";
 }
 
+export function cohortSampleStatusTone(status: string): "ok" | "warning" | "neutral" {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "strong" || normalized === "usable") {
+    return "ok";
+  }
+  if (normalized === "limited") {
+    return "warning";
+  }
+  return "neutral";
+}
+
+export function calibrationReviewStatusLabel(review: { review_status_label?: string | null; review_status?: string | null } | null | undefined): string {
+  if (typeof review?.review_status_label === "string" && review.review_status_label) {
+    return review.review_status_label;
+  }
+  if (typeof review?.review_status === "string" && review.review_status) {
+    return review.review_status;
+  }
+  return "disabled";
+}
+
 export function runTone(status: RunStatus | string): "ok" | "warning" | "danger" | "neutral" {
   const normalized = normalizeRunStatus(status);
   if (normalized === "completed") {

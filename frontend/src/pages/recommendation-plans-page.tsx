@@ -18,7 +18,7 @@ import type {
   RecommendationSetupFamilyReviewSummary,
   Run,
 } from "../types";
-import { biasTone, contextProvenanceLabel, contextSummaryError, detailLabel, directionTone, extractDisplayLabels, formatDate, yahooFinanceUrl } from "../utils";
+import { biasTone, calibrationReviewStatusLabel, contextProvenanceLabel, contextSummaryError, detailLabel, directionTone, extractDisplayLabels, formatDate, yahooFinanceUrl } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams, computedAfter?: string | null): string {
   const query = new URLSearchParams(searchParams);
@@ -505,11 +505,7 @@ export function RecommendationPlansPage() {
                   const confidenceAdjustment = typeof calibrationReview?.confidence_adjustment === "number"
                     ? calibrationReview.confidence_adjustment
                     : null;
-                  const calibrationReviewStatus = typeof calibrationReview?.review_status_label === "string" && calibrationReview.review_status_label
-                    ? calibrationReview.review_status_label
-                    : typeof calibrationReview?.review_status === "string"
-                      ? calibrationReview.review_status
-                      : "disabled";
+                  const calibrationReviewStatus = calibrationReviewStatusLabel(calibrationReview);
                   const calibrationReasons = extractDisplayLabels(calibrationReview, "reason_details", "reasons");
                   const macroContext = plan.run_id ? macroContextByRun[plan.run_id] : null;
                   const industryContext = plan.run_id ? industryContextByRun[plan.run_id] : null;

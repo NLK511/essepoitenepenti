@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import { getJson } from "../api";
 import type { RecommendationQualityResponse } from "../types";
-import { formatDate } from "../utils";
+import { cohortSampleStatusTone, formatDate } from "../utils";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 
 const glossaryDoc = (section: string) => `/docs?doc=glossary&section=${section}`;
@@ -130,9 +130,9 @@ export function RecommendationQualityPage() {
                   <div className="data-point"><span className="data-point-label">resolved outcomes</span><span className="data-point-value">{reliabilityReport.resolved_outcomes}</span></div>
                   <div className="data-point"><span className="data-point-label">broker outcomes</span><span className="data-point-value">{reliabilityReport.broker_outcomes}</span></div>
                   <div className="data-point"><span className="data-point-label">simulation outcomes</span><span className="data-point-value">{reliabilityReport.simulation_outcomes}</span></div>
-                  <div className="data-point"><span className="data-point-label">top confidence cohort</span><span className="data-point-value">{confidenceBucket ? <Badge tone={confidenceBucket.sample_status === "strong" || confidenceBucket.sample_status === "usable" ? "ok" : confidenceBucket.sample_status === "limited" ? "warning" : "neutral"}>{confidenceBucket.label}</Badge> : "—"}</span></div>
-                  <div className="data-point"><span className="data-point-label">top setup family</span><span className="data-point-value">{familyBucket ? <Badge tone={familyBucket.sample_status === "strong" || familyBucket.sample_status === "usable" ? "ok" : familyBucket.sample_status === "limited" ? "warning" : "neutral"}>{familyBucket.label}</Badge> : "—"}</span></div>
-                  <div className="data-point"><span className="data-point-label">top action</span><span className="data-point-value">{actionBucket ? <Badge tone={actionBucket.sample_status === "strong" || actionBucket.sample_status === "usable" ? "ok" : actionBucket.sample_status === "limited" ? "warning" : "neutral"}>{actionBucket.label}</Badge> : "—"}</span></div>
+                  <div className="data-point"><span className="data-point-label">top confidence cohort</span><span className="data-point-value">{confidenceBucket ? <Badge tone={cohortSampleStatusTone(confidenceBucket.sample_status)}>{confidenceBucket.label}</Badge> : "—"}</span></div>
+                  <div className="data-point"><span className="data-point-label">top setup family</span><span className="data-point-value">{familyBucket ? <Badge tone={cohortSampleStatusTone(familyBucket.sample_status)}>{familyBucket.label}</Badge> : "—"}</span></div>
+                  <div className="data-point"><span className="data-point-label">top action</span><span className="data-point-value">{actionBucket ? <Badge tone={cohortSampleStatusTone(actionBucket.sample_status)}>{actionBucket.label}</Badge> : "—"}</span></div>
                 </div>
               ) : (
                 <EmptyState message="No reliability report available." />

@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Callable
+from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
+import time
 import yfinance as yf
 from pydantic import BaseModel, Field
-from datetime import datetime, timezone, timedelta
 
 from trade_proposer_app.domain.enums import StrategyHorizon
 from trade_proposer_app.domain.models import HistoricalMarketBar
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
+from trade_proposer_app.services.retry_utils import bounded_backoff_seconds
 
 
 class CheapScanSignal(BaseModel):
@@ -352,9 +353,8 @@ class CheapScanSignalService:
         attempts = 1 if as_of is not None else self.LIVE_REMOTE_FETCH_ATTEMPTS
         errors: list[str] = []
         for attempt in range(attempts):
-            backoff = self.LIVE_REMOTE_FETCH_BACKOFF_SECONDS[min(attempt, len(self.LIVE_REMOTE_FETCH_BACKOFF_SECONDS) - 1)] if as_of is None else 0.0
+            backoff = bounded_backoff_seconds(self.LIVE_REMOTE_FETCH_BACKOFF_SECONDS, attempt, enabled=as_of is None)
             if backoff > 0:
-                import time
                 time.sleep(backoff)
             try:
                 history = self.history_fetcher(ticker, period, as_of)

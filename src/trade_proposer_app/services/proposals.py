@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import time
 from collections import OrderedDict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -14,6 +15,7 @@ import yfinance as yf
 from trade_proposer_app.domain.enums import RecommendationDirection, RecommendationState
 from trade_proposer_app.domain.models import HistoricalMarketBar, NewsArticle, Recommendation, RunDiagnostics, RunOutput, TechnicalSnapshot
 from trade_proposer_app.services.constants import DEFAULT_CONTEXT_FLAGS
+from trade_proposer_app.services.retry_utils import bounded_backoff_seconds
 from trade_proposer_app.services.news import (
     NaiveSentimentAnalyzer,
     NEWS_SUMMARY_ARTICLE_LIMIT,
@@ -563,9 +565,8 @@ class ProposalService:
         remote_history = pd.DataFrame()
         remote_attempts = 1 if is_replay else self.LIVE_REMOTE_FETCH_ATTEMPTS
         for attempt in range(remote_attempts):
-            backoff = self.LIVE_REMOTE_FETCH_BACKOFF_SECONDS[min(attempt, len(self.LIVE_REMOTE_FETCH_BACKOFF_SECONDS) - 1)] if not is_replay else 0.0
+            backoff = bounded_backoff_seconds(self.LIVE_REMOTE_FETCH_BACKOFF_SECONDS, attempt, enabled=not is_replay)
             if backoff > 0:
-                import time
                 time.sleep(backoff)
             self._last_price_history_fetch_diagnostics["remote_attempted"] = True
             self._last_price_history_fetch_diagnostics["remote_attempt_count"] = attempt + 1

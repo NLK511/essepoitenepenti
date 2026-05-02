@@ -1,7 +1,7 @@
 # Architecture Simplification Refactor Plan
 
 ## Status
-In progress. Phase 1 effective outcomes is implemented. Phase 2 shared performance metrics is implemented. Phase 3 now has the normalized `TradeDecisionPolicy` foundation, live watchlist orchestration is built from the active policy, and generated plans persist policy snapshots. Phase 4, Phase 5, and Phase 6 now have typed foundations. Phase 7 has broker and research workbench read models. An additional audit of remaining abstraction drift has been completed to guide the next cleanup batches. Later consumer migrations must continue incrementally with specs/tests before behavior changes.
+In progress. Phase 1 effective outcomes is implemented. Phase 2 shared performance metrics is implemented. Phase 3 now has the normalized `TradeDecisionPolicy` foundation, live watchlist orchestration is built from the active policy, and generated plans persist policy snapshots. Phase 4, Phase 5, and Phase 6 now have typed foundations. Phase 7 has broker and research workbench read models. An additional audit of remaining abstraction drift has been completed to guide the next cleanup batches, and the first builder/settings lookup and shared retry/backoff cleanups have now been applied. Later consumer migrations must continue incrementally with specs/tests before behavior changes.
 
 ## Goal
 Make the app leaner and safer for autonomous trading by replacing overlapping, source-specific abstractions with a few explicit product contracts.
@@ -273,15 +273,17 @@ The audit found the following areas still worth reconciling, from highest to low
 5. **Frontend helper drift**
    - The shared utility module is useful, but it can become a dumping ground if every label/tone formatter gets extracted blindly.
    - Plan: keep only truly identical mappings in shared helpers, and keep domain-specific or single-use label logic local when it communicates meaning better there.
-   - The remaining obvious reuse targets are run-status counters, plan-generation tuning config/run tones, and a few repeated recommendation-quality sample-status labels.
+   - The remaining obvious reuse targets are run-status counters and a few other exact tone/label mappings that appear in more than one page.
 
 6. **Constructor / settings lookup duplication**
    - `services/builders.py` and a few tuning services still assemble the same settings map, credentials, and article-limit logic in slightly different ways.
    - Plan: only extract a helper when the input/output shape is truly identical (for example, building a news ingestion service from a repository and one limit value); avoid a broad settings abstraction that hides domain differences.
+   - The first shared builder helpers now cover repeated operator settings, social ingestion, summary creation, and news ingestion setup.
 
 7. **Retry/backoff logic duplication**
    - News ingestion, price-history fetches, and bars refresh each implement their own bounded retry loops.
    - Plan: extract a tiny retry policy helper only if the backoff/attempt rules are genuinely the same; otherwise keep the policy local to the domain that owns the failure semantics.
+   - The shared bounded-backoff helper now covers the repeated live retry loops that use the same schedule shape.
 
 8. **Duplicate page fetch/summary glue**
    - Some pages still make multiple API calls and merge summary data locally when a backend workbench would be clearer.

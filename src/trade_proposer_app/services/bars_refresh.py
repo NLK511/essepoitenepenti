@@ -10,6 +10,7 @@ from sqlalchemy import func
 from trade_proposer_app.domain.models import HistoricalMarketBar
 from trade_proposer_app.persistence.models import HistoricalMarketBarRecord
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
+from trade_proposer_app.services.retry_utils import bounded_backoff_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +43,7 @@ class BarsRefreshService:
             if not pending:
                 break
 
-            backoff = self.REFRESH_RETRY_BACKOFF_SECONDS[
-                min(attempt_index, len(self.REFRESH_RETRY_BACKOFF_SECONDS) - 1)
-            ]
+            backoff = bounded_backoff_seconds(self.REFRESH_RETRY_BACKOFF_SECONDS, attempt_index)
             if attempt_index > 0 and backoff > 0:
                 time.sleep(backoff)
 

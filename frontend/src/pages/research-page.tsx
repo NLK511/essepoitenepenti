@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import type { CalibrationSummary, PerformanceAssessmentResponse, PerformanceWindowAssessment } from "../types";
-import { formatDate, jobTypeLabel, runTone } from "../utils";
+import { cohortSampleStatusTone, formatDate, jobTypeLabel, runTone } from "../utils";
 import { Badge, Card, HelpHint, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 
 const assessmentWindows = ["7d", "30d", "90d", "180d", "1y"] as const;
@@ -275,7 +275,7 @@ export function ResearchPage() {
                           {topReliabilityBuckets.map((bucket) => (
                             <tr key={bucket.key}>
                               <td>{bucket.label}</td>
-                              <td><Badge tone={bucket.sample_status === "strong" || bucket.sample_status === "usable" ? "ok" : bucket.sample_status === "limited" ? "warning" : "neutral"}>{bucket.sample_status}</Badge> {bucket.resolved_count}/{bucket.total_count}</td>
+                              <td><Badge tone={cohortSampleStatusTone(bucket.sample_status)}>{bucket.sample_status}</Badge> {bucket.resolved_count}/{bucket.total_count}</td>
                               <td>{bucket.win_count}/{bucket.loss_count}</td>
                               <td>{bucket.win_rate_percent !== null ? `${bucket.win_rate_percent.toFixed(1)}%` : "—"}</td>
                               <td>{bucket.average_confidence_percent !== null ? `${bucket.average_confidence_percent.toFixed(1)}%` : "—"}</td>
