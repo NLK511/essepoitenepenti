@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 import httpx
 from sqlalchemy import create_engine
@@ -12,7 +13,7 @@ from trade_proposer_app.app import app
 from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import StrategyHorizon
-from trade_proposer_app.domain.models import RecommendationPlan, RecommendationPlanOutcome
+from trade_proposer_app.domain.models import PlanGenerationWalkForwardSummary, RecommendationPlan, RecommendationPlanOutcome
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
@@ -226,6 +227,71 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
                 self.assertGreaterEqual(value, definition.exploration_min)
                 self.assertLessEqual(value, definition.exploration_max)
 
+    def test_explore_mode_ranks_candidates_with_rolling_walk_forward_validation(self) -> None:
+        for index in range(1, 9):
+            self._seed_record(
+                created_at=datetime(2026, 3, index, tzinfo=timezone.utc),
+                mfe=12.0 if index % 2 else 3.0,
+                mae=3.0 if index % 2 else 11.0,
+                outcome="win" if index % 2 else "loss",
+                stop_loss_hit=index % 2 == 0,
+                take_profit_hit=index % 2 == 1,
+            )
+
+        active_config = normalize_plan_generation_tuning_config(None)
+        improved_config = dict(active_config)
+        improved_config["setup_family.breakout.take_profit_distance_multiplier"] = 1.45
+
+        walk_forward_baseline = PlanGenerationWalkForwardSummary(
+            total_slices=4,
+            lookback_days=30,
+            validation_days=90,
+            step_days=30,
+            min_validation_resolved=2,
+            candidate_label="candidate",
+            baseline_label="baseline",
+            qualified_slices=3,
+            candidate_wins=1,
+            baseline_wins=1,
+            ties=1,
+            average_win_rate_delta=0.0,
+            average_expected_value_delta=0.0,
+            promotion_recommended=False,
+            promotion_rationale="baseline",
+            slices=[],
+        )
+        walk_forward_improved = PlanGenerationWalkForwardSummary(
+            total_slices=4,
+            lookback_days=30,
+            validation_days=90,
+            step_days=30,
+            min_validation_resolved=2,
+            candidate_label="candidate",
+            baseline_label="baseline",
+            qualified_slices=3,
+            candidate_wins=3,
+            baseline_wins=0,
+            ties=0,
+            average_win_rate_delta=8.0,
+            average_expected_value_delta=0.35,
+            promotion_recommended=True,
+            promotion_rationale="improved",
+            slices=[],
+        )
+
+        def summarize_records_side_effect(self, *, records, candidate_config, baseline_config, candidate_label, baseline_label, lookback_days, validation_days, step_days, min_validation_resolved):
+            if candidate_config == baseline_config:
+                return walk_forward_baseline
+            return walk_forward_improved
+
+        with patch.object(PlanGenerationTuningService, "_candidate_configs", return_value=[active_config, improved_config]), patch("trade_proposer_app.services.plan_generation_walk_forward.PlanGenerationWalkForwardService.summarize_records", autospec=True, side_effect=summarize_records_side_effect):
+            explore_run = self.service.run(mode="explore", limit=None)
+
+        self.assertEqual(explore_run.summary.get("validation_mode"), "rolling_walk_forward")
+        self.assertEqual(explore_run.summary.get("validation_slice_count"), 4)
+        self.assertEqual(explore_run.candidates[0].changed_keys, ["setup_family.breakout.take_profit_distance_multiplier"])
+        self.assertGreater(explore_run.candidates[0].metric_breakdown["validation_win_rate_percent"], explore_run.candidates[1].metric_breakdown["validation_win_rate_percent"])
+
     def test_apply_promotes_only_guardrail_eligible_winner_and_updates_active_config(self) -> None:
         self._seed_record(created_at=datetime(2026, 3, 1, tzinfo=timezone.utc), mfe=15.0, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
         self._seed_record(created_at=datetime(2026, 3, 2, tzinfo=timezone.utc), mfe=12.5, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
@@ -419,6 +485,12 @@ class PlanGenerationTuningRouteTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(run_payload["winning_candidate_id"])
             self.assertIsNotNone(run_payload["promoted_config_version_id"])
             self.assertEqual(run_payload["candidates"][0]["id"], run_payload["winning_candidate_id"])
+
+            explore_response = await client.post("/api/plan-generation-tuning/run?mode=explore&apply=false")
+            self.assertEqual(explore_response.status_code, 200)
+            explore_payload = explore_response.json()
+            self.assertEqual(explore_payload["summary"]["validation_mode"], "rolling_walk_forward")
+            self.assertIn("validation_slice_count", explore_payload["summary"])
 
             runs = await client.get("/api/plan-generation-tuning/runs?limit=10")
             self.assertEqual(runs.status_code, 200)

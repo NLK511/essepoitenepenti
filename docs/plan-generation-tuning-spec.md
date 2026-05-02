@@ -315,6 +315,7 @@ Manual research runs should support a broader exploration mode that is determini
 Required exploration behavior:
 - evaluate the largest eligible replay-safe dataset available to the run
 - use rolling walk-forward validation over the eligible history, not just a single train/validation split
+- rank exploration candidates from rolling walk-forward summary metrics instead of a single tail holdout slice
 - persist the exploration seed, candidate list, and full candidate metrics for replayability
 - include at least one baseline candidate, local perturbations, historical configs, and bounded random mutations when the exploration mode is enabled
 - keep the search bounded; exploration must remain auditable and capped
@@ -403,6 +404,8 @@ Ranking must be lexicographic with guardrails.
 4. if tied within tolerance, compare actionable expected value
 5. if still tied, prefer the candidate closer to the current live config
 6. if still tied, prefer the candidate with fewer changed parameters
+
+For exploration-mode runs, the actionable win rate / win count / expected value comparison must be derived from rolling walk-forward validation across the eligible history, not from a single contiguous tail split.
 
 ### Hard validity rules
 

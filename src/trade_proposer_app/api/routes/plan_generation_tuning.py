@@ -48,7 +48,7 @@ async def run_plan_generation_tuning(
 ):
     try:
         return PlanGenerationTuningService(session).run(
-            mode="manual",
+            mode=mode,
             apply=apply,
             ticker=ticker,
             setup_family=setup_family,

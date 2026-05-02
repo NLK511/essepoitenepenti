@@ -405,7 +405,7 @@ export function PlanGenerationTuningPage() {
             {selectedRun ? (
               <div className="stack-page">
                 <div className="helper-text">Promotion mode: {selectedRun.promotion_mode} · Winner candidate: {selectedRun.winning_candidate_id ?? "—"} · Promoted config: {selectedRun.promoted_config_version_id ?? "—"}</div>
-                <div className="helper-text">Search win rate shows the discovery slice; validation win rate is the holdout check. If those disagree, trust the validation number more.</div>
+                <div className="helper-text">Search win rate shows the discovery slice; validation win rate uses {selectedRun.summary.validation_mode === "rolling_walk_forward" ? "rolling walk-forward validation across the eligible history" : "a single holdout slice"}. If those disagree, trust the validation number more.</div>
                 {selectedRunMetricSpread && selectedRunMetricSpread.searchWinRateCount === 1 && selectedRunMetricSpread.validationWinRateCount === 1 ? (
                   <div className="alert alert-warning top-gap-small">
                     This run is tie-heavy: all candidates share the same search and validation win rates, so ranking is effectively being decided by tie-breakers like expected value, distance from the baseline, and number of changed parameters.
@@ -428,7 +428,7 @@ export function PlanGenerationTuningPage() {
                           </div>
                         </summary>
                         <div className="workflow-details-body top-gap-small">
-                          <div className="helper-text">Best validation WR {formatPercent(candidateMetric(group.bestCandidate, "validation_win_rate_percent"))} · best validation EV {formatNumber(candidateMetric(group.bestCandidate, "validation_expected_value"))} · actionable {candidateMetric(group.bestCandidate, "validation_actionable_count") ?? "—"}</div>
+                          <div className="helper-text">Best validation WR {formatPercent(candidateMetric(group.bestCandidate, "validation_win_rate_percent"))} · best validation EV {formatNumber(candidateMetric(group.bestCandidate, "validation_expected_value"))} · {selectedRun.summary.validation_mode === "rolling_walk_forward" ? "qualified slices" : "actionable"} {candidateMetric(group.bestCandidate, "validation_actionable_count") ?? "—"}</div>
                           <div className="table-wrapper top-gap-small">
                             <table className="data-table">
                               <thead>
@@ -439,7 +439,7 @@ export function PlanGenerationTuningPage() {
                                   <th>search WR</th>
                                   <th>validation WR</th>
                                   <th>validation EV</th>
-                                  <th>actionable</th>
+                                  <th>{selectedRun.summary.validation_mode === "rolling_walk_forward" ? "qualified slices" : "actionable"}</th>
                                   <th>promo</th>
                                 </tr>
                               </thead>

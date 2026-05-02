@@ -57,6 +57,11 @@ class CandidateEvaluation:
     validation_win_count: int
     validation_expected_value: float
     validation_ambiguous_count: int
+    validation_slice_count: int = 0
+    validation_baseline_win_count: int = 0
+    validation_ties: int = 0
+    validation_average_win_rate_delta: float | None = None
+    validation_average_expected_value_delta: float | None = None
 
     @property
     def search_win_rate(self) -> float:
@@ -157,23 +162,51 @@ class PlanGenerationTuningService:
         search_records, validation_records = self._split_records(records, min_validation=min_validation_resolved)
         exploration_seed = self._exploration_seed(active_config=active_config, records=records, mode=mode)
         candidates = self._candidate_configs(active_config, mode=mode, seed=exploration_seed)
-        evaluations = [self._evaluate_candidate(config, active_config, search_records, validation_records) for config in candidates]
+        walk_forward_service = PlanGenerationWalkForwardService(self)
+        if explore_mode:
+            evaluations = [
+                self._evaluate_candidate_walk_forward(
+                    config,
+                    active_config,
+                    search_records,
+                    records,
+                    walk_forward_service,
+                    min_validation_resolved=min_validation_resolved,
+                )
+                for config in candidates
+            ]
+        else:
+            evaluations = [self._evaluate_candidate(config, active_config, search_records, validation_records) for config in candidates]
         evaluations.sort(key=self._candidate_sort_key, reverse=True)
         winner = evaluations[0]
         baseline_eval = next(item for item in evaluations if item.changed_keys == [])
         history_span_days = self._history_span_days(records)
-        walk_forward_validation = PlanGenerationWalkForwardService(self).summarize(
-            candidate_config=winner.config,
-            baseline_config=active_config,
-            candidate_label=f"run-{mode}-winner" if mode else "candidate",
-            baseline_label="active-baseline",
-            ticker=ticker,
-            setup_family=setup_family,
-            limit=None if explore_mode else (effective_limit if effective_limit is not None else len(records) or 1),
-            lookback_days=history_span_days,
-            validation_days=90,
-            step_days=30,
-            min_validation_resolved=min_validation_resolved,
+        walk_forward_validation = (
+            walk_forward_service.summarize_records(
+                records=records,
+                candidate_config=winner.config,
+                baseline_config=active_config,
+                candidate_label=f"run-{mode}-winner" if mode else "candidate",
+                baseline_label="active-baseline",
+                lookback_days=history_span_days,
+                validation_days=90,
+                step_days=30,
+                min_validation_resolved=min_validation_resolved,
+            )
+            if explore_mode
+            else walk_forward_service.summarize(
+                candidate_config=winner.config,
+                baseline_config=active_config,
+                candidate_label=f"run-{mode}-winner" if mode else "candidate",
+                baseline_label="active-baseline",
+                ticker=ticker,
+                setup_family=setup_family,
+                limit=None if explore_mode else (effective_limit if effective_limit is not None else len(records) or 1),
+                lookback_days=history_span_days,
+                validation_days=90,
+                step_days=30,
+                min_validation_resolved=min_validation_resolved,
+            )
         )
 
         run = self.repository.create_run(
@@ -196,6 +229,8 @@ class PlanGenerationTuningService:
                     "exploration_campaign_plan": exploration_campaigns(),
                     "search_record_count": len(search_records),
                     "validation_record_count": len(validation_records),
+                    "validation_mode": "rolling_walk_forward" if explore_mode else "single_holdout",
+                    "validation_slice_count": walk_forward_validation.total_slices if explore_mode else len(validation_records),
                     "history_span_days": history_span_days,
                     "walk_forward_validation": walk_forward_validation.model_dump(mode="json"),
                 },
@@ -236,10 +271,16 @@ class PlanGenerationTuningService:
                         "search_ambiguous_count": evaluation.search_ambiguous_count,
                         "validation_actionable_count": evaluation.validation_actionable_count,
                         "validation_ambiguous_count": evaluation.validation_ambiguous_count,
+                        "validation_slice_count": evaluation.validation_slice_count,
                     },
                     validation_summary={
                         "validation_win_rate_percent": round(evaluation.validation_win_rate * 100.0, 2),
                         "validation_actionable_count": evaluation.validation_actionable_count,
+                        "validation_slice_count": evaluation.validation_slice_count,
+                        "validation_baseline_win_count": evaluation.validation_baseline_win_count,
+                        "validation_ties": evaluation.validation_ties,
+                        "validation_average_win_rate_delta": evaluation.validation_average_win_rate_delta,
+                        "validation_average_expected_value_delta": evaluation.validation_average_expected_value_delta,
                     },
                     rejection_reasons=[] if self._promotion_eligible(evaluation, baseline_eval, min_validation_resolved=min_validation_resolved) else self._rejection_reasons(evaluation, baseline_eval, min_validation_resolved=min_validation_resolved),
                 )
@@ -353,6 +394,52 @@ class PlanGenerationTuningService:
         validation_count = max(min_validation, int(math.ceil(len(records) * 0.2)))
         validation_count = min(validation_count, max(1, len(records) - 1))
         return records[:-validation_count], records[-validation_count:]
+
+    def _evaluate_candidate_walk_forward(
+        self,
+        config: dict[str, float],
+        baseline_config: dict[str, float],
+        search_records: list[EligibleTuningRecord],
+        records: list[EligibleTuningRecord],
+        walk_forward_service: PlanGenerationWalkForwardService,
+        *,
+        min_validation_resolved: int,
+    ) -> CandidateEvaluation:
+        search_actionable_count, search_win_count, search_expected_value, search_ambiguous_count = self._score_records(search_records, config)
+        history_span_days = self._history_span_days(records)
+        summary = walk_forward_service.summarize_records(
+            records=records,
+            candidate_config=config,
+            baseline_config=baseline_config,
+            candidate_label="candidate",
+            baseline_label="baseline",
+            lookback_days=history_span_days,
+            validation_days=90,
+            step_days=30,
+            min_validation_resolved=min_validation_resolved,
+        )
+        changed_keys = [key for key, value in config.items() if round(float(value), 4) != round(float(baseline_config.get(key, value)), 4)]
+        validation_actionable_count = int(summary.qualified_slices)
+        validation_win_count = int(summary.candidate_wins)
+        validation_expected_value = float(summary.average_expected_value_delta or 0.0)
+        validation_ambiguous_count = max(0, int(summary.total_slices) - validation_actionable_count)
+        return CandidateEvaluation(
+            config=config,
+            changed_keys=changed_keys,
+            search_actionable_count=search_actionable_count,
+            search_win_count=search_win_count,
+            search_expected_value=search_expected_value,
+            search_ambiguous_count=search_ambiguous_count,
+            validation_actionable_count=validation_actionable_count,
+            validation_win_count=validation_win_count,
+            validation_expected_value=validation_expected_value,
+            validation_ambiguous_count=validation_ambiguous_count,
+            validation_slice_count=int(summary.total_slices),
+            validation_baseline_win_count=int(summary.baseline_wins),
+            validation_ties=int(summary.ties),
+            validation_average_win_rate_delta=summary.average_win_rate_delta,
+            validation_average_expected_value_delta=summary.average_expected_value_delta,
+        )
 
     def _candidate_configs(self, active_config: dict[str, float], *, mode: str, seed: int) -> list[dict[str, float]]:
         explore_mode = mode.strip().lower() in {"explore", "exploration", "research"}
@@ -602,6 +689,11 @@ class PlanGenerationTuningService:
             "validation_win_rate_percent": round(item.validation_win_rate * 100.0, 2),
             "validation_expected_value": round(item.validation_expected_value, 4),
             "validation_ambiguous_count": item.validation_ambiguous_count,
+            "validation_slice_count": item.validation_slice_count,
+            "validation_baseline_win_count": item.validation_baseline_win_count,
+            "validation_ties": item.validation_ties,
+            "validation_average_win_rate_delta": item.validation_average_win_rate_delta,
+            "validation_average_expected_value_delta": item.validation_average_expected_value_delta,
         }
 
     @staticmethod

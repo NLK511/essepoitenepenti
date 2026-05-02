@@ -43,6 +43,31 @@ class PlanGenerationWalkForwardService:
         min_validation_resolved: int = 8,
     ) -> PlanGenerationWalkForwardSummary:
         records = self._eligible_records(ticker=ticker, setup_family=setup_family, limit=limit)
+        return self.summarize_records(
+            records=records,
+            candidate_config=candidate_config,
+            baseline_config=baseline_config,
+            candidate_label=candidate_label,
+            baseline_label=baseline_label,
+            lookback_days=lookback_days,
+            validation_days=validation_days,
+            step_days=step_days,
+            min_validation_resolved=min_validation_resolved,
+        )
+
+    def summarize_records(
+        self,
+        *,
+        records: list,
+        candidate_config: dict[str, float],
+        baseline_config: dict[str, float],
+        candidate_label: str = "candidate",
+        baseline_label: str = "baseline",
+        lookback_days: int = 365,
+        validation_days: int = 90,
+        step_days: int = 30,
+        min_validation_resolved: int = 8,
+    ) -> PlanGenerationWalkForwardSummary:
         if not records:
             raise ValueError("no eligible records available for plan-generation walk-forward validation")
 
@@ -51,6 +76,7 @@ class PlanGenerationWalkForwardService:
         step_days = max(1, int(step_days))
         min_validation_resolved = max(1, int(min_validation_resolved))
 
+        records = list(records)
         records.sort(key=lambda item: item.plan.computed_at)
         end_time = self._normalize_datetime(records[-1].plan.computed_at) or datetime.now(timezone.utc)
         start_time = max(self._normalize_datetime(records[0].plan.computed_at) or end_time, end_time - timedelta(days=lookback_days))
