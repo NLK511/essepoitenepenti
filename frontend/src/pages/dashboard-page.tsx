@@ -32,6 +32,13 @@ function formatSignedPercent(value: number | null | undefined): string {
   return `${prefix}${value.toFixed(1)}%`;
 }
 
+function formatCurrency(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "—";
+  }
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value);
+}
+
 function normalizeWindow(value: string | null): DashboardWindow {
   return (WINDOW_OPTIONS.find((option) => option.value === value)?.value ?? "1m") as DashboardWindow;
 }
@@ -205,17 +212,17 @@ export function DashboardPage() {
               <div className="data-stack top-gap-small">
                 <StatCard
                   className={showTrendlines ? "stat-card-compact" : undefined}
-                  label="Win rate"
-                  value={formatPercent(summary?.win_rate_percent)}
-                  trend={showTrendlines ? <MetricSparkline label="Win rate" series={trendSeriesMap.get("win_rate_percent")} windows={trendWindows} /> : null}
-                  helper={showTrendlines ? undefined : (summary?.win_rate_source === "broker" ? `${technical?.broker_wins ?? 0} broker wins / ${technical?.broker_closed_positions ?? 0} closed positions` : "Resolved simulated plan outcomes")}
+                  label="Overall win rate"
+                  value={formatPercent(summary?.overall_win_rate_percent)}
+                  trend={showTrendlines ? <MetricSparkline label="Overall win rate" series={trendSeriesMap.get("overall_win_rate_percent")} windows={trendWindows} /> : null}
+                  helper={showTrendlines ? undefined : `Broker detail: ${formatPercent(summary?.broker_win_rate_percent)} on ${technical?.broker_closed_positions ?? 0} closed positions`}
                 />
                 <StatCard
                   className={showTrendlines ? "stat-card-compact" : undefined}
-                  label="Profit %"
-                  value={formatPercent(summary?.profit_percent)}
-                  trend={showTrendlines ? <MetricSparkline label="Profit %" series={trendSeriesMap.get("profit_percent")} windows={trendWindows} /> : null}
-                  helper={showTrendlines ? undefined : (summary?.profit_source === "broker" ? `Broker realized P&L $${technical?.broker_realized_pnl ?? 0}` : "Avg 5d return on actionable plans")}
+                  label="Total profit"
+                  value={formatCurrency(summary?.total_profit)}
+                  trend={showTrendlines ? <MetricSparkline label="Total profit" series={trendSeriesMap.get("total_profit")} windows={trendWindows} /> : null}
+                  helper={showTrendlines ? undefined : `Broker detail: ${formatCurrency(summary?.broker_realized_pnl)}`}
                 />
                 <StatCard
                   className={showTrendlines ? "stat-card-compact" : undefined}

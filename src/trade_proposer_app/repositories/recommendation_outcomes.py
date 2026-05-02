@@ -77,6 +77,9 @@ class RecommendationOutcomeRepository:
     def summarize_actionability_diagnostics(
         self,
         *,
+        ticker: str | None = None,
+        run_id: int | None = None,
+        setup_family: str | None = None,
         evaluated_after: datetime | None = None,
         evaluated_before: datetime | None = None,
     ) -> dict[str, float | int | None]:
@@ -90,7 +93,16 @@ class RecommendationOutcomeRepository:
             func.sum(case((RecommendationOutcomeRecord.outcome == "phantom_loss", 1), else_=0)).label("phantom_loss_outcomes"),
             func.sum(case((RecommendationOutcomeRecord.outcome == TradeOutcome.NO_ACTION.value, 1), else_=0)).label("no_action_outcomes"),
             func.sum(case((RecommendationOutcomeRecord.outcome == TradeOutcome.WATCHLIST.value, 1), else_=0)).label("watchlist_outcomes"),
-        ).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.status == OutcomeStatus.RESOLVED.value)
+        ).select_from(RecommendationOutcomeRecord).join(
+            RecommendationPlanRecord,
+            RecommendationOutcomeRecord.recommendation_plan_id == RecommendationPlanRecord.id,
+        ).where(RecommendationOutcomeRecord.status == OutcomeStatus.RESOLVED.value)
+        if ticker:
+            query = query.where(RecommendationPlanRecord.ticker == ticker.upper())
+        if run_id is not None:
+            query = query.where(RecommendationOutcomeRecord.run_id == run_id)
+        if setup_family:
+            query = query.where(RecommendationOutcomeRecord.setup_family == setup_family)
         if evaluated_after is not None:
             query = query.where(RecommendationOutcomeRecord.evaluated_at >= self._normalize_datetime(evaluated_after))
         if evaluated_before is not None:

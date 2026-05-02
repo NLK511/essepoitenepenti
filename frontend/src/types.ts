@@ -279,6 +279,21 @@ export interface EntryMissDiagnosticsSummary {
   average_near_entry_miss_distance_percent: number | null;
 }
 
+export interface RecommendationActionabilityDiagnostics {
+  total_outcomes: number;
+  actionable_resolved_outcomes: number;
+  actionable_win_outcomes: number;
+  actionable_loss_outcomes: number;
+  actionable_win_rate_percent: number | null;
+  phantom_resolved_outcomes: number;
+  phantom_win_outcomes: number;
+  phantom_loss_outcomes: number;
+  phantom_win_rate_percent: number | null;
+  actionability_gap_percent: number | null;
+  no_action_outcomes: number;
+  watchlist_outcomes: number;
+}
+
 export interface RecommendationQualityWindowSummary {
   window_label?: string;
   computed_after?: string;
@@ -377,6 +392,10 @@ export interface DashboardSummary {
   shortlist_rate_percent: number | null;
   actionable_plans: number;
   actionable_rate_percent: number | null;
+  overall_win_rate_percent: number | null;
+  broker_win_rate_percent?: number | null;
+  total_profit: number | null;
+  broker_realized_pnl?: number | null;
   win_rate_percent: number | null;
   win_rate_source?: string;
   profit_percent: number | null;

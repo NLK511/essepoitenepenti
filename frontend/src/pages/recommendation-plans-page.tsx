@@ -12,6 +12,7 @@ import type {
   RecommendationBaselineSummary,
   RecommendationCalibrationSummary,
   RecommendationEvidenceConcentrationSummary,
+  RecommendationActionabilityDiagnostics,
   RecommendationPlan,
   RecommendationPlanListResponse,
   RecommendationPlanStats,
@@ -115,6 +116,7 @@ export function RecommendationPlansPage() {
   const [baselines, setBaselines] = useState<RecommendationBaselineSummary | null>(null);
   const [familyReview, setFamilyReview] = useState<RecommendationSetupFamilyReviewSummary | null>(null);
   const [evidenceConcentration, setEvidenceConcentration] = useState<RecommendationEvidenceConcentrationSummary | null>(null);
+  const [actionability, setActionability] = useState<RecommendationActionabilityDiagnostics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [evaluationMessage, setEvaluationMessage] = useState<string | null>(null);
   const [evaluating, setEvaluating] = useState(false);
@@ -178,6 +180,7 @@ export function RecommendationPlansPage() {
         setBaselines(await getJson<RecommendationBaselineSummary>(`/api/recommendation-plans/baselines?${summaryQuery}`));
         setFamilyReview(await getJson<RecommendationSetupFamilyReviewSummary>(`/api/recommendation-outcomes/setup-family-review?${summaryQuery}`));
         setEvidenceConcentration(await getJson<RecommendationEvidenceConcentrationSummary>(`/api/recommendation-outcomes/evidence-concentration?${summaryQuery}`));
+        setActionability(await getJson<RecommendationActionabilityDiagnostics>(`/api/recommendation-outcomes/actionability-diagnostics?${summaryQuery}`));
 
         const runIds = Array.from(new Set(planResults.items.map((item) => item.run_id).filter((value): value is number => typeof value === "number"))).slice(0, 20);
         if (planId) {
@@ -383,11 +386,14 @@ export function RecommendationPlansPage() {
             </div>
             <div className="data-points">
               <div className="data-point"><span className="data-point-label">resolved outcomes</span><span className="data-point-value">{calibration?.resolved_outcomes ?? "—"}</span></div>
-              <div className="data-point"><span className="data-point-label">overall win rate</span><span className="data-point-value">{calibration?.overall_win_rate_percent ?? "—"}%</span></div>
+              <div className="data-point"><span className="data-point-label">overall effective win rate</span><span className="data-point-value">{calibration?.overall_win_rate_percent !== null && calibration?.overall_win_rate_percent !== undefined ? `${calibration.overall_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
+              <div className="data-point"><span className="data-point-label">real actionable win rate</span><span className="data-point-value">{actionability?.actionable_win_rate_percent !== null && actionability?.actionable_win_rate_percent !== undefined ? `${actionability.actionable_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
+              <div className="data-point"><span className="data-point-label">phantom win rate</span><span className="data-point-value">{actionability?.phantom_win_rate_percent !== null && actionability?.phantom_win_rate_percent !== undefined ? `${actionability.phantom_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
+              <div className="data-point"><span className="data-point-label">actionability gap</span><span className="data-point-value">{actionability?.actionability_gap_percent !== null && actionability?.actionability_gap_percent !== undefined ? `${actionability.actionability_gap_percent > 0 ? "+" : ""}${actionability.actionability_gap_percent.toFixed(1)}%` : "—"}</span></div>
               <div className="data-point"><span className="data-point-label">actual actionable 5d</span><span className="data-point-value">{baselines?.comparisons.find((item) => item.key === "actual_actionable")?.average_return_5d ?? "—"}%</span></div>
               <div className="data-point"><span className="data-point-label">where it works best</span><span className="data-point-value">{evidenceConcentration?.ready_for_expansion ? "some groups stand out" : "nothing clear yet"}</span></div>
             </div>
-            <div className="helper-text top-gap-small">{evidenceConcentration?.focus_message ?? "Use Recommendation Quality and Research for the full view of confidence quality, simple baselines, where results look strongest, and family review."}</div>
+            <div className="helper-text top-gap-small">{actionability ? `Overall = all resolved effective outcomes. Real = actionable resolved outcomes. Phantom = skipped/watchlist resolved outcomes. ${evidenceConcentration?.focus_message ?? "Use Recommendation Quality and Research for the full view of confidence quality, simple baselines, where results look strongest, and family review."}` : (evidenceConcentration?.focus_message ?? "Use Recommendation Quality and Research for the full view of confidence quality, simple baselines, where results look strongest, and family review.")}</div>
           </div>
           <div className="data-card">
             <div className="data-card-header">

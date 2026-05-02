@@ -149,6 +149,7 @@ Typical cards include:
 - recent runs
 - watchlists and jobs counts
 - macro and industry freshness
+- overall effective win rate and total profit, with broker win/P&L shown as detail
 - actionability gap between phantom and actionable outcomes
 - attention items
 
@@ -238,7 +239,7 @@ Most important fields:
 - **Raw confidence / Calibrated confidence / Threshold**
 - **Context bias / Alignment / Expected transmission window**
 - **Latest outcome**
-- **Open plans / expired plans / win rate** stats for the current filter set
+- **Open plans / expired plans / overall win rate / actionable win rate / phantom win rate** stats for the current filter set
 
 Important nuance:
 - non-shortlisted names now usually remain cheap-scan-only decision samples without a full recommendation plan row
@@ -253,8 +254,9 @@ Suggested review order:
 
 Important interpretation note:
 - `expired` means the plan passed its intended horizon without a terminal win/loss outcome
-- default win-rate surfaces exclude `expired`, `phantom_*`, and other non-win/loss outcomes from the denominator
-- phantom outcomes (`phantom_win`, `phantom_loss`) are visible via outcome filters but only used by tuning engines, not headline stats
+- default win-rate surfaces exclude `expired` and other non-win/loss outcomes from the denominator
+- the recommendation-plans analytics pulse now shows overall effective win rate, actionable win rate, and phantom win rate side by side so you can tell real performance from skipped-performance
+- phantom outcomes (`phantom_win`, `phantom_loss`) are visible via outcome filters and remain important for tuning and actionability review
 - resolved/unresolved filters are broader lifecycle filters than the more granular outcome filter
 
 ## 5. Ticker signals

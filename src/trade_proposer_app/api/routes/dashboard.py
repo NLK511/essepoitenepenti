@@ -33,8 +33,8 @@ WINDOW_DEFINITIONS: dict[str, timedelta | None] = {
     "all": None,
 }
 DASHBOARD_TREND_SERIES: list[tuple[str, str, str]] = [
-    ("win_rate_percent", "Win rate", "percent"),
-    ("profit_percent", "Profit %", "percent"),
+    ("overall_win_rate_percent", "Overall win rate", "percent"),
+    ("total_profit", "Total profit", "currency"),
     ("shortlist_rate_percent", "Shortlist rate", "percent"),
     ("actionable_rate_percent", "Actionable rate", "percent"),
     ("actionability_gap_percent", "Actionability gap", "percent"),
@@ -133,25 +133,17 @@ def _dashboard_window_metrics(
     news_processed = _count_records(session, HistoricalNewsRecord, HistoricalNewsRecord.published_at, computed_after, now)
     bars_stored = _count_records(session, HistoricalMarketBarRecord, HistoricalMarketBarRecord.bar_time, computed_after, now)
     orders_placed = _count_records(session, BrokerOrderExecutionRecord, BrokerOrderExecutionRecord.created_at, computed_after, now)
-    broker_summary = TradingPerformanceMetricsService(session).summarize_broker_closed_positions(evaluated_after=computed_after, evaluated_before=now).to_dict()
+    performance = TradingPerformanceMetricsService(session)
+    broker_summary = performance.summarize_broker_closed_positions(evaluated_after=computed_after, evaluated_before=now).to_dict()
+    effective_summary = performance.summarize_effective_outcomes(evaluated_after=computed_after, evaluated_before=now).to_dict()
     tweets_processed = _sum_plan_item_count(technical_plans, "social_item_count")
 
     calibration = RecommendationPlanCalibrationService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
     baselines = RecommendationPlanBaselineService(plan_repository).summarize(computed_after=computed_after, computed_before=now)
     actionability = outcome_repository.summarize_actionability_diagnostics(evaluated_after=computed_after, evaluated_before=now)
 
-    win_rate_percent = broker_summary["win_rate_percent"]
-    if win_rate_percent is None:
-        win_rate_percent = (
-            quality_fallback.get("overall_win_rate_percent") if quality_fallback is not None else calibration.overall_win_rate_percent
-        )
-    profit_percent = broker_summary["average_return_percent"]
-    if profit_percent is None:
-        profit_percent = (
-            quality_fallback.get("actual_actionable_average_return_5d")
-            if quality_fallback is not None
-            else _baseline_metric(baselines, "actual_actionable", "average_return_5d")
-        )
+    overall_win_rate_percent = effective_summary["win_rate_percent"]
+    total_profit = effective_summary["realized_pnl"]
 
     dashboard_summary = {
         "plan_amount": plan_amount,
@@ -160,10 +152,14 @@ def _dashboard_window_metrics(
         "shortlist_rate_percent": _percentage(plan_amount, signals_amount),
         "actionable_plans": actionable_plans,
         "actionable_rate_percent": _percentage(actionable_plans, plan_amount),
-        "win_rate_percent": win_rate_percent,
-        "win_rate_source": "broker" if broker_summary["win_rate_percent"] is not None else ("quality" if quality_fallback is not None else "calibration"),
-        "profit_percent": profit_percent,
-        "profit_source": "broker" if broker_summary["average_return_percent"] is not None else ("quality" if quality_fallback is not None else "baseline"),
+        "overall_win_rate_percent": overall_win_rate_percent,
+        "broker_win_rate_percent": broker_summary["win_rate_percent"],
+        "total_profit": total_profit,
+        "broker_realized_pnl": broker_summary["realized_pnl"],
+        "win_rate_percent": overall_win_rate_percent,
+        "profit_percent": total_profit,
+        "win_rate_source": "effective",
+        "profit_source": "effective",
         "actionability_gap_percent": actionability["actionability_gap_percent"],
         "actionable_win_rate_percent": actionability["actionable_win_rate_percent"],
         "phantom_win_rate_percent": actionability["phantom_win_rate_percent"],

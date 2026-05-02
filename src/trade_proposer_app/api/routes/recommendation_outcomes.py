@@ -12,6 +12,7 @@ from trade_proposer_app.domain.models import (
     RecommendationWalkForwardSummary,
 )
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
+from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.services.recommendation_evidence_concentration import RecommendationEvidenceConcentrationService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
@@ -76,6 +77,24 @@ async def summarize_recommendation_outcomes(
         evaluated_after=evaluated_after,
         evaluated_before=evaluated_before,
         limit=limit,
+    )
+
+
+@router.get("/actionability-diagnostics")
+async def summarize_recommendation_actionability_diagnostics(
+    ticker: str | None = Query(default=None),
+    run_id: int | None = Query(default=None),
+    setup_family: str | None = Query(default=None),
+    evaluated_after: datetime | None = Query(default=None),
+    evaluated_before: datetime | None = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> dict[str, float | int | None]:
+    return RecommendationOutcomeRepository(session).summarize_actionability_diagnostics(
+        ticker=ticker.strip().upper() if ticker else None,
+        run_id=run_id,
+        setup_family=setup_family.strip().lower() if setup_family else None,
+        evaluated_after=evaluated_after,
+        evaluated_before=evaluated_before,
     )
 
 
