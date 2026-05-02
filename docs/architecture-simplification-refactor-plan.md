@@ -273,14 +273,22 @@ The audit found the following areas still worth reconciling, from highest to low
 5. **Frontend helper drift**
    - The shared utility module is useful, but it can become a dumping ground if every label/tone formatter gets extracted blindly.
    - Plan: keep only truly identical mappings in shared helpers, and keep domain-specific or single-use label logic local when it communicates meaning better there.
-   - The remaining obvious reuse targets are run-status counters and plan-generation tuning config/run tones.
+   - The remaining obvious reuse targets are run-status counters, plan-generation tuning config/run tones, and a few repeated recommendation-quality sample-status labels.
 
-6. **Duplicate page fetch/summary glue**
+6. **Constructor / settings lookup duplication**
+   - `services/builders.py` and a few tuning services still assemble the same settings map, credentials, and article-limit logic in slightly different ways.
+   - Plan: only extract a helper when the input/output shape is truly identical (for example, building a news ingestion service from a repository and one limit value); avoid a broad settings abstraction that hides domain differences.
+
+7. **Retry/backoff logic duplication**
+   - News ingestion, price-history fetches, and bars refresh each implement their own bounded retry loops.
+   - Plan: extract a tiny retry policy helper only if the backoff/attempt rules are genuinely the same; otherwise keep the policy local to the domain that owns the failure semantics.
+
+8. **Duplicate page fetch/summary glue**
    - Some pages still make multiple API calls and merge summary data locally when a backend workbench would be clearer.
    - Plan: only add a new backend workbench when the page is stitching together unrelated resources that have a strong read-model shape; otherwise keep the page-local logic.
 
 ### Low priority
-7. **Calibration/tuning helper redundancy**
+9. **Calibration/tuning helper redundancy**
    - Outcome bucket math and similar reliability cohort logic should stay centralized, and any new code should reuse `RecommendationOutcomeCohortBuilder` or the canonical reliability services.
    - Plan: treat any new local bucket math as a bug unless there is a concrete domain difference.
 
@@ -290,6 +298,8 @@ Continue cleanup in small batches, in this order:
 2. Move recommendation-quality and tuning consumers onto `TradePolicyEvaluationService` so the policy/reliability question has one shared contract.
 3. Expand the broker workbench/reconciliation surface only where it removes real stitching logic.
 4. Remove remaining raw status-string comparisons where a canonical status helper already exists.
-5. Keep frontend shared helpers narrowly scoped: share only identical mappings, not every local formatting choice.
-6. Reuse `RecommendationOutcomeCohortBuilder` wherever new calibration-style grouping appears.
-7. After each batch, update the relevant spec, add or adjust tests, migrate one consumer at a time, and only then run the regression suite before commit.
+5. Reconcile repeated constructor/settings lookup code in `services/builders.py` only when the helper stays tiny and domain-specific.
+6. Reconcile retry/backoff loops only when the policy is truly the same across domains.
+7. Keep frontend shared helpers narrowly scoped: share only identical mappings, not every local formatting choice.
+8. Reuse `RecommendationOutcomeCohortBuilder` wherever new calibration-style grouping appears.
+9. After each batch, update the relevant spec, add or adjust tests, migrate one consumer at a time, and only then run the regression suite before commit.
