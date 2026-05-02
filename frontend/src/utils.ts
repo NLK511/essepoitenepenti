@@ -1,6 +1,7 @@
 import type {
   AppSetting,
   JobType,
+  RecommendationDecisionSample,
   RecommendationDirection,
   RecommendationPlan,
   RecommendationState,
@@ -266,6 +267,39 @@ export function recommendationPlanEvaluationTone(value: string | null | undefine
     return "warning";
   }
   return "neutral";
+}
+
+export function recommendationDecisionTone(decisionType: string): "ok" | "warning" | "danger" | "neutral" | "info" {
+  if (decisionType === "actionable") {
+    return "ok";
+  }
+  if (decisionType === "near_miss") {
+    return "warning";
+  }
+  if (decisionType === "degraded") {
+    return "danger";
+  }
+  return "neutral";
+}
+
+export function recommendationReviewPriorityTone(priority: string): "ok" | "warning" | "danger" | "neutral" | "info" {
+  if (priority === "high") {
+    return "danger";
+  }
+  if (priority === "medium") {
+    return "warning";
+  }
+  return "neutral";
+}
+
+export function recommendationBenchmarkTone(sample: RecommendationDecisionSample): "ok" | "warning" | "danger" | "neutral" | "info" {
+  if (sample.benchmark_status !== "evaluated") {
+    return "neutral";
+  }
+  if (sample.benchmark_target_1d_hit || sample.benchmark_target_5d_hit) {
+    return "ok";
+  }
+  return "warning";
 }
 
 export function recommendationPlanEvaluationLabel(plan: RecommendationPlan): string {

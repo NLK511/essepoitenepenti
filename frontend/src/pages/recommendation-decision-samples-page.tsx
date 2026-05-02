@@ -3,41 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
-import type { RecommendationDecisionSample, RecommendationDecisionSampleListResponse } from "../types";
-import { formatDate, yahooFinanceUrl } from "../utils";
-
-function decisionTone(decisionType: string): "ok" | "warning" | "danger" | "neutral" | "info" {
-  if (decisionType === "actionable") {
-    return "ok";
-  }
-  if (decisionType === "near_miss") {
-    return "warning";
-  }
-  if (decisionType === "degraded") {
-    return "danger";
-  }
-  return "neutral";
-}
-
-function priorityTone(priority: string): "ok" | "warning" | "danger" | "neutral" | "info" {
-  if (priority === "high") {
-    return "danger";
-  }
-  if (priority === "medium") {
-    return "warning";
-  }
-  return "neutral";
-}
-
-function benchmarkTone(sample: RecommendationDecisionSample): "ok" | "warning" | "danger" | "neutral" | "info" {
-  if (sample.benchmark_status !== "evaluated") {
-    return "neutral";
-  }
-  if (sample.benchmark_target_1d_hit || sample.benchmark_target_5d_hit) {
-    return "ok";
-  }
-  return "warning";
-}
+import type { RecommendationDecisionSampleListResponse } from "../types";
+import { formatDate, recommendationBenchmarkTone, recommendationDecisionTone, recommendationReviewPriorityTone, yahooFinanceUrl } from "../utils";
 
 function gapLabel(value: number | null): string {
   if (value === null || value === undefined || Number.isNaN(value)) {
@@ -207,8 +174,8 @@ export function RecommendationDecisionSamplesPage() {
                     <div className="data-card-header">
                       <div className="cluster">
                         <a href={yahooFinanceUrl(sample.ticker)} className="badge badge-info badge-link" target="_blank" rel="noreferrer noopener">{sample.ticker}</a>
-                        <Badge tone={decisionTone(sample.decision_type)}>{sample.decision_type}</Badge>
-                        <Badge tone={priorityTone(sample.review_priority)}>{sample.review_priority}</Badge>
+                        <Badge tone={recommendationDecisionTone(sample.decision_type)}>{sample.decision_type}</Badge>
+                        <Badge tone={recommendationReviewPriorityTone(sample.review_priority)}>{sample.review_priority}</Badge>
                       </div>
                       <div className="helper-text">{formatDate(sample.created_at)}</div>
                     </div>
@@ -217,7 +184,7 @@ export function RecommendationDecisionSamplesPage() {
                       <Badge>{sample.horizon}</Badge>
                       <Badge tone={sample.shortlisted ? "ok" : "neutral"}>{sample.shortlisted ? `shortlist #${sample.shortlist_rank ?? "?"}` : "not shortlisted"}</Badge>
                       <Badge tone={sample.confidence_gap_percent !== null && sample.confidence_gap_percent >= 0 ? "ok" : "warning"}>{gapLabel(sample.confidence_gap_percent)}</Badge>
-                      <Badge tone={benchmarkTone(sample)}>{sample.benchmark_status === "evaluated" ? (sample.benchmark_target_1d_hit || sample.benchmark_target_5d_hit ? "benchmark hit" : "benchmark miss") : "benchmark pending"}</Badge>
+                      <Badge tone={recommendationBenchmarkTone(sample)}>{sample.benchmark_status === "evaluated" ? (sample.benchmark_target_1d_hit || sample.benchmark_target_5d_hit ? "benchmark hit" : "benchmark miss") : "benchmark pending"}</Badge>
                     </div>
                     <div className="cluster top-gap-small">
                       <Badge>benchmark dir {sample.benchmark_direction ?? "—"}</Badge>
@@ -284,8 +251,8 @@ export function RecommendationDecisionSamplesPage() {
                     <div className="data-card-header">
                       <div className="cluster">
                         <a href={yahooFinanceUrl(sample.ticker)} className="badge badge-info badge-link" target="_blank" rel="noreferrer noopener">{sample.ticker}</a>
-                        <Badge tone={decisionTone(sample.decision_type)}>{sample.decision_type}</Badge>
-                        <Badge tone={priorityTone(sample.review_priority)}>{sample.review_priority}</Badge>
+                        <Badge tone={recommendationDecisionTone(sample.decision_type)}>{sample.decision_type}</Badge>
+                        <Badge tone={recommendationReviewPriorityTone(sample.review_priority)}>{sample.review_priority}</Badge>
                       </div>
                       <div className="helper-text">{formatDate(sample.created_at)}</div>
                     </div>
@@ -294,7 +261,7 @@ export function RecommendationDecisionSamplesPage() {
                       <Badge>{sample.horizon}</Badge>
                       <Badge tone={sample.shortlisted ? "ok" : "neutral"}>{sample.shortlisted ? `shortlist #${sample.shortlist_rank ?? "?"}` : "not shortlisted"}</Badge>
                       <Badge tone={sample.confidence_gap_percent !== null && sample.confidence_gap_percent >= 0 ? "ok" : "warning"}>{gapLabel(sample.confidence_gap_percent)}</Badge>
-                      <Badge tone={benchmarkTone(sample)}>{sample.benchmark_status === "evaluated" ? (sample.benchmark_target_1d_hit || sample.benchmark_target_5d_hit ? "benchmark hit" : "benchmark miss") : "benchmark pending"}</Badge>
+                      <Badge tone={recommendationBenchmarkTone(sample)}>{sample.benchmark_status === "evaluated" ? (sample.benchmark_target_1d_hit || sample.benchmark_target_5d_hit ? "benchmark hit" : "benchmark miss") : "benchmark pending"}</Badge>
                     </div>
                     <div className="cluster top-gap-small">
                       <Badge>benchmark dir {sample.benchmark_direction ?? "—"}</Badge>
