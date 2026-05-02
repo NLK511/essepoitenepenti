@@ -3,9 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { getJson, postForm } from "../api";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import { planGenerationTuningConfigTone, runTone } from "../utils";
-
-const glossaryDoc = (section: string) => `/docs?doc=glossary&section=${section}`;
-const tuningSpecDoc = "/docs?doc=plan-generation-tuning-spec";
 import type {
   PlanGenerationTuningConfigVersion,
   PlanGenerationTuningConfigsResponse,
@@ -14,6 +11,9 @@ import type {
   PlanGenerationTuningRunsResponse,
   PlanGenerationTuningValidationResponse,
 } from "../types";
+
+const glossaryDoc = (section: string) => `/docs?doc=glossary&section=${section}`;
+const tuningSpecDoc = "/docs?doc=plan-generation-tuning-spec";
 
 export function PlanGenerationTuningPage() {
   const [state, setState] = useState<PlanGenerationTuningResponse | null>(null);

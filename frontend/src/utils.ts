@@ -54,8 +54,8 @@ export function isCompletedWithWarningsRunStatus(status: RunStatus | string): bo
   return normalizeRunStatus(status) === "completed_with_warnings";
 }
 
-export function planGenerationTuningConfigTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
-  const normalized = status.trim().toLowerCase();
+export function planGenerationTuningConfigTone(status: string | null | undefined): "ok" | "warning" | "danger" | "neutral" | "info" {
+  const normalized = typeof status === "string" ? status.trim().toLowerCase() : "";
   if (normalized === "active") {
     return "ok";
   }
@@ -68,8 +68,8 @@ export function planGenerationTuningConfigTone(status: string): "ok" | "warning"
   return "neutral";
 }
 
-export function cohortSampleStatusTone(status: string): "ok" | "warning" | "neutral" {
-  const normalized = status.trim().toLowerCase();
+export function cohortSampleStatusTone(status: string | null | undefined): "ok" | "warning" | "neutral" {
+  const normalized = typeof status === "string" ? status.trim().toLowerCase() : "";
   if (normalized === "strong" || normalized === "usable") {
     return "ok";
   }
