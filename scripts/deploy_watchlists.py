@@ -24,6 +24,7 @@ try:
     from trade_proposer_app.persistence.models import JobRecord, WatchlistRecord
     from trade_proposer_app.repositories.watchlists import WatchlistRepository
     from trade_proposer_app.repositories.jobs import JobRepository
+    from trade_proposer_app.services.default_jobs import ensure_default_recommendation_evaluation_jobs
 except ModuleNotFoundError:  # pragma: no cover - allows importing WATCHLIST_SPECS without optional runtime deps
     select = None
     SessionLocal = None
@@ -341,6 +342,8 @@ def main() -> None:
                 job_type=job_type,
                 tickers=job_tickers,
             )
+
+        ensure_default_recommendation_evaluation_jobs(session)
 
     logging.info("Deployment complete")
 

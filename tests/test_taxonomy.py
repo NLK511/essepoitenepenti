@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from scripts.deploy_watchlists import WATCHLIST_SPECS
+from trade_proposer_app.services.default_jobs import DEFAULT_RECOMMENDATION_EVALUATION_JOB_SPECS
 from trade_proposer_app.services.taxonomy import (
     EVENT_VOCAB_PATH,
     INDUSTRIES_PATH,
@@ -56,6 +57,14 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
 
         self.assertEqual([], missing)
         self.assertEqual(750, len(default_tickers))
+
+    def test_default_watchlists_include_post_close_recommendation_evaluation_jobs(self) -> None:
+        self.assertEqual([spec["name"] for spec in DEFAULT_RECOMMENDATION_EVALUATION_JOB_SPECS], [
+            "Auto: Recommendation Evaluation APAC Close",
+            "Auto: Recommendation Evaluation Europe Close",
+            "Auto: Recommendation Evaluation US Close",
+        ])
+        self.assertEqual([spec["cron"] for spec in DEFAULT_RECOMMENDATION_EVALUATION_JOB_SPECS], ["35 08 * * MON-FRI", "05 17 * * MON-FRI", "35 20 * * MON-FRI"])
 
     def test_split_taxonomy_files_exist_and_are_loaded(self) -> None:
         self.assertTrue(TICKERS_PATH.exists())

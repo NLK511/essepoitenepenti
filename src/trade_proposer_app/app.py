@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from trade_proposer_app.api.router import router as api_router
 from trade_proposer_app.db import SessionLocal
+from trade_proposer_app.services.default_jobs import ensure_default_recommendation_evaluation_jobs
 from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
 from trade_proposer_app.config import settings
 from trade_proposer_app.security.auth import SingleUserAuthMiddleware
@@ -17,6 +18,7 @@ async def lifespan(_: FastAPI):
     session = SessionLocal()
     try:
         PerformanceAssessmentService(session).ensure_daily_job()
+        ensure_default_recommendation_evaluation_jobs(session)
     finally:
         session.close()
     yield

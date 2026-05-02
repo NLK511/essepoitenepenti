@@ -70,6 +70,8 @@ The default deployment also adds three shared-context refresh jobs:
 
 It also adds three regional bars refresh jobs (`Bars-APAC`, `Bars-EU`, `Bars-US`) that resolve their tickers from the current regional watchlists at runtime, so bars recovery stays aligned with the seeded universe.
 
+It additionally adds three recommendation-evaluation jobs that run a few minutes after each regional market close so plan outcomes get refreshed on a predictable post-close cadence.
+
 Regional schedule blocks:
 - **Asia/Pacific:** `00:00` to `00:40` UTC
 - **Europe:** `07:00` to `07:40` UTC
@@ -109,14 +111,23 @@ Shared-context refresh jobs:
 | `Auto: Macro Context Refresh PM` | Macro | `18:00` |
 | `Auto: Industry Context Refresh` | Industry | `10:30` |
 
+Post-close recommendation evaluation jobs:
+
+| Job | Scope | UTC schedule |
+|---|---|---:|
+| `Auto: Recommendation Evaluation APAC Close` | APAC plans | `08:35` |
+| `Auto: Recommendation Evaluation Europe Close` | Europe plans | `17:05` |
+| `Auto: Recommendation Evaluation US Close` | U.S. plans | `20:35` |
+
 ## Coverage summary
 
 The default script seeds:
 - **15 watchlists**
-- **18 scheduled jobs**
+- **21 scheduled jobs**
   - 15 proposal jobs
   - 2 macro refresh jobs
   - 1 industry refresh job
+  - 3 recommendation evaluation jobs
 - **750 unique equities total**
 
 Regional split:
