@@ -21,6 +21,7 @@ from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
+from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
 
 
 class PlanGenerationTuningServiceTests(unittest.TestCase):
@@ -99,6 +100,40 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
                 setup_family=setup_family,
             )
         )
+
+    def test_broker_resolved_records_without_excursions_are_still_eligible_for_tuning(self) -> None:
+        plan = self.plan_repository.create_plan(
+            RecommendationPlan(
+                ticker="EOG",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=72.0,
+                entry_price_low=100.0,
+                entry_price_high=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                signal_breakdown={
+                    "setup_family": "breakout",
+                    "transmission_summary": {"context_bias": "tailwind"},
+                },
+                computed_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            )
+        )
+        features = PlanReliabilityFeatureBuilder().build(
+            self.plan_repository.get_plan(plan.id or 0),
+            RecommendationPlanOutcome(
+                recommendation_plan_id=plan.id or 0,
+                outcome="win",
+                status="resolved",
+                evaluated_at=datetime(2026, 3, 2, tzinfo=timezone.utc),
+                outcome_source="broker",
+                realized_return_pct=12.5,
+                realized_pnl=125.0,
+                setup_family="breakout",
+            ),
+        )
+        self.assertIsNotNone(features)
+        self.assertEqual(features.setup_family if features is not None else None, "breakout")
 
     def test_describe_seeds_baseline_config_and_exposes_parameter_schema(self) -> None:
         payload = self.service.describe()

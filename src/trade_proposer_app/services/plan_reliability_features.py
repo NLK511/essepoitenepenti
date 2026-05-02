@@ -43,6 +43,7 @@ class PlanReliabilityFeatureBuilder:
             return None
         is_direct_trade = plan.action in self.DIRECT_TRADE_ACTIONS
         is_phantom_trade = plan.action in self.PHANTOM_TRADE_ACTIONS
+        is_broker_resolved = outcome.outcome_source == "broker"
         if is_direct_trade and outcome.outcome not in {"win", "loss"}:
             return None
         if is_phantom_trade and outcome.outcome not in {"phantom_win", "phantom_loss"}:
@@ -54,11 +55,24 @@ class PlanReliabilityFeatureBuilder:
         entry = ExecutionCandidateBuilder.entry_reference(plan)
         if entry is None or entry <= 0 or plan.stop_loss is None or plan.take_profit is None:
             return None
-        if outcome.max_favorable_excursion is None or outcome.max_adverse_excursion is None:
-            return None
-        stop_hit = bool(outcome.stop_loss_hit)
-        take_hit = bool(outcome.take_profit_hit)
-        if stop_hit == take_hit:
+        stop_hit = outcome.stop_loss_hit
+        take_hit = outcome.take_profit_hit
+        if stop_hit is None or take_hit is None:
+            if not is_broker_resolved:
+                return None
+            if outcome.realized_return_pct is None:
+                return None
+            realized_return = float(outcome.realized_return_pct)
+            if realized_return == 0:
+                return None
+            stop_hit = realized_return < 0
+            take_hit = realized_return > 0
+            max_favorable_excursion = abs(realized_return) if realized_return > 0 else 0.0
+            max_adverse_excursion = abs(realized_return) if realized_return < 0 else 0.0
+        else:
+            max_favorable_excursion = outcome.max_favorable_excursion
+            max_adverse_excursion = outcome.max_adverse_excursion
+        if bool(stop_hit) == bool(take_hit):
             return None
         stop_loss = float(plan.stop_loss)
         take_profit = float(plan.take_profit)
@@ -81,10 +95,10 @@ class PlanReliabilityFeatureBuilder:
             risk_percent=risk_percent,
             reward_percent=reward_percent,
             outcome=outcome.outcome,
-            stop_loss_hit=stop_hit,
-            take_profit_hit=take_hit,
-            max_favorable_excursion=float(outcome.max_favorable_excursion),
-            max_adverse_excursion=float(outcome.max_adverse_excursion),
+            stop_loss_hit=bool(stop_hit),
+            take_profit_hit=bool(take_hit),
+            max_favorable_excursion=float(max_favorable_excursion or 0.0),
+            max_adverse_excursion=float(max_adverse_excursion or 0.0),
         )
 
     @staticmethod

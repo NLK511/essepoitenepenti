@@ -239,6 +239,7 @@ A candidate evaluation record must have:
 - a known plan-generation timestamp
 - a known directional/actionable interpretation
 - a resolved or otherwise scoreable outcome if it is being used for win/loss or expected-value scoring. This includes real `win`/`loss` outcomes as well as `phantom_win` and `phantom_loss` records from `no_action` or `watchlist` plans with an `intended_action`.
+- broker-resolved positions may also qualify when a broker outcome is present and the outcome can be scored from stored realized-return data even if simulation excursion fields are absent
 
 ### Required exclusions
 
