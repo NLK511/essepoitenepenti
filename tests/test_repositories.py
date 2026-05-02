@@ -1199,6 +1199,7 @@ class RepositoryTests(unittest.TestCase):
             execution = domains.execution_settings()
             operator = domains.operator_settings()
             scheduler = domains.scheduler_settings()
+            broker_sync = domains.broker_sync_state()
 
             self.assertIn("confidence_threshold", strategy.to_dict())
             self.assertIn("enabled", risk.risk_management)
@@ -1207,6 +1208,7 @@ class RepositoryTests(unittest.TestCase):
             self.assertIn("summary_backend", operator.summary)
             self.assertIn("social_nitter_enabled", operator.social)
             self.assertIn("last_poll_at", scheduler.to_dict())
+            self.assertIn("last_at", broker_sync.to_dict())
         finally:
             session.close()
 
@@ -1313,6 +1315,7 @@ class RepositoryTests(unittest.TestCase):
             self.assertIn("broker_orders", workbench)
             self.assertIn("broker_positions", workbench)
             self.assertIn("risk", workbench)
+            self.assertIn("broker_sync_state", workbench)
             self.assertIn("counts", workbench)
             self.assertEqual(workbench["counts"]["broker_orders"], 1)
             self.assertEqual(workbench["counts"]["broker_positions"], 0)

@@ -197,8 +197,8 @@ Acceptance criteria:
 Status: broker and research read model foundations implemented.
 
 Implemented:
-- `/api/broker-workbench` returns broker orders, broker positions, risk state, recent halt audit events, sync-related settings, and counts in one backend-reconciled payload
-- Broker Orders frontend page consumes `/api/broker-workbench` instead of separately stitching orders, positions, and risk
+- `/api/broker-workbench` returns broker orders, broker positions, risk state, recent halt audit events, broker sync state, and counts in one backend-reconciled payload
+- Broker Orders frontend page consumes `/api/broker-workbench` instead of separately stitching orders, positions, risk, and broker sync status from raw settings
 - `/api/research/performance-workbench` returns latest assessment, broker summary, effective outcome summary, calibration summary/report, walk-forward validation, near-entry-miss winners, entry-miss diagnostics, and windows in one backend-reconciled payload
 - route tests for broker and research workbench payloads
 
@@ -233,7 +233,7 @@ Order of work:
 Current migration batches:
 - Batch A: settings-domain consumers and broker/risk status constants. Status: implemented for backend service/route consumers that only read domain settings; mutation methods remain in `SettingsRepository`.
 - Batch B: recommendation/outcome analytics status constants. Status: implemented for core outcome repositories, calibration, setup-family review, ticker summary, broker risk, and order execution paths.
-- Batch C: remaining frontend duplicate fetches that have a suitable backend workbench contract. Status: implemented for Research, Settings, and Broker Orders. Research now consumes one performance workbench payload for performance assessment, calibration report, walk-forward validation, and near-entry-miss winners. Settings now consumes one settings workbench payload for settings, preflight, and recent broker audit context. Broker Orders now consumes sync-related settings included in broker workbench instead of issuing a separate `/api/settings` read.
+- Batch C: remaining frontend duplicate fetches that have a suitable backend workbench contract. Status: implemented for Research, Settings, and Broker Orders. Research now consumes one performance workbench payload for performance assessment, calibration report, walk-forward validation, and near-entry-miss winners. Settings now consumes one settings workbench payload for settings, preflight, and recent broker audit context. Broker Orders now consumes broker sync state included in broker workbench instead of issuing a separate `/api/settings` read.
 - Batch D: deprecate/remove only confirmed dead code after a final consumer inventory. Status: completed for this refactor batch. No endpoint was removed: the remaining lower-level APIs are either still used by tests/docs/API consumers, still used for mutations, or intentionally retained as focused API/debug contracts. No frontend page now depends on the older Research multi-fetch pattern, Settings multi-fetch pattern, or Broker Orders settings side-fetch.
 
 ## Regression protocol
@@ -259,7 +259,7 @@ The audit found the following areas still worth reconciling, from highest to low
    - Plan: keep the lower-level calculators as facets, but move all operator-facing quality/tuning consumers onto `TradePolicyEvaluationService` so fetch/reconciliation logic stays in one place. The active-policy quality summary now flows through `TradePolicyEvaluationService.summarize_active_policy()` instead of stitching policy selection in the caller.
 
 3. **Broker reconciliation and workbench coordination**
-   - Broker orders, positions, risk state, halt events, and sync-related settings are still stitched together across a few backend layers.
+   - Broker orders, positions, risk state, halt events, and broker sync status are still stitched together across a few backend layers.
    - Plan: grow `BrokerReconciliationService` / broker workbench payloads into the canonical read model for operator-facing broker state, while leaving lower-level endpoints available as focused/debug contracts.
 
 4. **Status taxonomy cleanup**

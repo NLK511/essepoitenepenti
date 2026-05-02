@@ -8,6 +8,7 @@ from trade_proposer_app.repositories.risk_halt_events import RiskHaltEventReposi
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.builders import create_order_execution_service
 from trade_proposer_app.services.risk_management import BrokerRiskManager
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 
 
 class BrokerReconciliationService:
@@ -16,6 +17,7 @@ class BrokerReconciliationService:
         self.orders = BrokerOrderExecutionRepository(session)
         self.positions = BrokerPositionRepository(session)
         self.settings = SettingsRepository(session)
+        self.settings_domains = SettingsDomainService(repository=self.settings)
         self.halt_events = RiskHaltEventRepository(session)
 
     def build_workbench(self, *, run_id: int | None = None, limit: int = 50) -> dict[str, object]:
@@ -28,7 +30,7 @@ class BrokerReconciliationService:
             "broker_positions": [position.model_dump(mode="json") for position in listed_positions],
             "risk": risk.model_dump(mode="json"),
             "risk_halt_events": [event.model_dump(mode="json") for event in halt_events],
-            "settings": [setting.model_dump(mode="json") for setting in self.settings.list_settings()],
+            "broker_sync_state": self.settings_domains.broker_sync_state().to_dict(),
             "counts": {
                 "broker_orders": len(listed_orders),
                 "broker_positions": len(listed_positions),

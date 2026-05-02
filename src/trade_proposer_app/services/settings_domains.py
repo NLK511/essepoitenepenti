@@ -69,6 +69,20 @@ class SchedulerSettings:
         }
 
 
+@dataclass(frozen=True)
+class BrokerSyncState:
+    last_at: str | None
+    last_count: int | None
+    last_error: str | None
+
+    def to_dict(self) -> dict[str, str | int | None]:
+        return {
+            "last_at": self.last_at,
+            "last_count": self.last_count,
+            "last_error": self.last_error,
+        }
+
+
 class SettingsDomainService:
     """Typed domain views over the legacy key/value settings repository."""
 
@@ -108,9 +122,29 @@ class SettingsDomainService:
             last_error=self._optional_string(setting_map.get("scheduler_last_error")),
         )
 
+    def broker_sync_state(self) -> BrokerSyncState:
+        setting_map = self.repository.get_setting_map()
+        return BrokerSyncState(
+            last_at=self._optional_string(setting_map.get("broker_order_sync_last_at")),
+            last_count=self._optional_int(setting_map.get("broker_order_sync_last_count")),
+            last_error=self._optional_string(setting_map.get("broker_order_sync_last_error")),
+        )
+
     @staticmethod
     def _optional_string(value: str | None) -> str | None:
         if value is None:
             return None
         cleaned = value.strip()
         return cleaned or None
+
+    @staticmethod
+    def _optional_int(value: str | None) -> int | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return int(cleaned)
+        except ValueError:
+            return None

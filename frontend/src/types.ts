@@ -157,12 +157,18 @@ export interface RiskHaltEvent {
   created_at: string;
 }
 
+export interface BrokerSyncState {
+  last_at: string | null;
+  last_count: number | null;
+  last_error: string | null;
+}
+
 export interface BrokerWorkbench {
   broker_orders: BrokerOrderExecution[];
   broker_positions: BrokerPosition[];
   risk: AccountRiskState;
   risk_halt_events: RiskHaltEvent[];
-  settings: AppSetting[];
+  broker_sync_state: BrokerSyncState;
   counts: {
     broker_orders: number;
     broker_positions: number;

@@ -4,7 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
-import type { AppSetting, AccountRiskState, BrokerOrderExecution, BrokerPosition, BrokerWorkbench, RiskHaltEvent } from "../types";
+import type { AccountRiskState, BrokerOrderExecution, BrokerPosition, BrokerSyncState, BrokerWorkbench, RiskHaltEvent } from "../types";
 import { brokerExecutionStatusTone, formatDate, humanizeKey } from "../utils";
 
 function metricNumber(value: unknown): string {
@@ -26,10 +26,10 @@ export function BrokerOrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [activeActionId, setActiveActionId] = useState<number | null>(null);
-  const [settings, setSettings] = useState<AppSetting[] | null>(null);
   const [positions, setPositions] = useState<BrokerPosition[] | null>(null);
   const [risk, setRisk] = useState<AccountRiskState | null>(null);
   const [haltEvents, setHaltEvents] = useState<RiskHaltEvent[]>([]);
+  const [syncState, setSyncState] = useState<BrokerSyncState | null>(null);
   const { showToast } = useToast();
   const limit = Math.max(1, Number(searchParams.get("limit") ?? "50") || 50);
   const runId = searchParams.get("run_id");
@@ -50,7 +50,7 @@ export function BrokerOrdersPage() {
         setPositions(workbench.broker_positions);
         setRisk(workbench.risk);
         setHaltEvents(workbench.risk_halt_events ?? []);
-        setSettings(workbench.settings ?? []);
+        setSyncState(workbench.broker_sync_state ?? null);
         if (!selectedOrderId && loadedOrders[0]?.id) {
           const next = new URLSearchParams(searchParams);
           next.set("order_id", String(loadedOrders[0].id));
@@ -72,15 +72,6 @@ export function BrokerOrdersPage() {
       skipped: items.filter((order) => order.status === "skipped").length,
     };
   }, [orders]);
-
-  const syncSettings = useMemo(() => {
-    const map = new Map((settings ?? []).map((setting) => [setting.key, setting.value]));
-    return {
-      lastAt: map.get("broker_order_sync_last_at") ?? null,
-      lastCount: map.get("broker_order_sync_last_count") ?? null,
-      lastError: map.get("broker_order_sync_last_error") ?? null,
-    };
-  }, [settings]);
 
   const positionByOrderId = useMemo(() => {
     const map = new Map<number, BrokerPosition>();
@@ -107,7 +98,7 @@ export function BrokerOrdersPage() {
     setPositions(workbench.broker_positions);
     setRisk(workbench.risk);
     setHaltEvents(workbench.risk_halt_events ?? []);
-    setSettings(workbench.settings ?? []);
+    setSyncState(workbench.broker_sync_state ?? null);
     const nextOrderId = nextSelectedOrderId ?? loadedOrders[0]?.id ?? null;
     if (nextOrderId) {
       const next = new URLSearchParams(searchParams);
@@ -195,11 +186,11 @@ export function BrokerOrdersPage() {
         <StatCard label="Skipped" value={stats.skipped} helper="Missing levels or disabled execution" />
         <StatCard
           label="Last broker sync"
-          value={syncSettings.lastAt ? formatDate(syncSettings.lastAt) : "Never"}
+          value={syncState?.last_at ? formatDate(syncState.last_at) : "Never"}
           helper={
-            syncSettings.lastError
-              ? `Last count ${syncSettings.lastCount ?? "—"} · Error ${syncSettings.lastError}`
-              : `Last count ${syncSettings.lastCount ?? "—"} · Auto-refresh runs about every 2 hours during market hours`
+            syncState?.last_error
+              ? `Last count ${syncState.last_count ?? "—"} · Error ${syncState.last_error}`
+              : `Last count ${syncState?.last_count ?? "—"} · Auto-refresh runs about every 2 hours during market hours`
           }
         />
       </section>
