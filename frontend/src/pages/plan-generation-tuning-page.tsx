@@ -15,6 +15,36 @@ import type {
 
 const glossaryDoc = (section: string) => `/docs?doc=glossary&section=${section}`;
 const tuningSpecDoc = "/docs?doc=plan-generation-tuning-spec";
+const CAMPAIGN_PRIORITY: Record<string, number> = {
+  entry_calibration: 1,
+  risk_protection: 2,
+  reward_expansion: 3,
+  historical_reuse: 4,
+  bounded_random_mutation: 5,
+  baseline: 0,
+  historical_reuse_or_random_mutation: 6,
+  unknown: 7,
+};
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function candidateCampaign(candidate: PlanGenerationTuningRun["candidates"][number]): string {
+  const breakdown = candidate.metric_breakdown as Record<string, unknown>;
+  const campaign = breakdown.campaign;
+  if (typeof campaign === "string" && campaign.trim()) {
+    return campaign;
+  }
+  if (candidate.is_baseline) {
+    return "baseline";
+  }
+  return "unknown";
+}
+
+function candidateMetric(candidate: PlanGenerationTuningRun["candidates"][number], key: string): number | null {
+  return numberOrNull((candidate.metric_breakdown as Record<string, unknown>)[key]);
+}
 
 export function PlanGenerationTuningPage() {
   const [state, setState] = useState<PlanGenerationTuningResponse | null>(null);
@@ -52,6 +82,50 @@ export function PlanGenerationTuningPage() {
     if (!runs || runs.length === 0) return null;
     return runs.find((run) => run.id === selectedRunId) ?? runs[0];
   }, [runs, selectedRunId]);
+
+  const selectedRunCampaignSummaries = useMemo(() => {
+    if (!selectedRun) return [];
+    const groups = new Map<
+      string,
+      {
+        campaign: string;
+        candidateCount: number;
+        bestCandidate: PlanGenerationTuningRun["candidates"][number] | null;
+        validationWinRateSum: number;
+        validationExpectedValueSum: number;
+        validationActionableCount: number;
+      }
+    >();
+    for (const candidate of selectedRun.candidates) {
+      const campaign = candidateCampaign(candidate);
+      const current = groups.get(campaign) ?? {
+        campaign,
+        candidateCount: 0,
+        bestCandidate: null,
+        validationWinRateSum: 0,
+        validationExpectedValueSum: 0,
+        validationActionableCount: 0,
+      };
+      current.candidateCount += 1;
+      const validationWinRate = candidateMetric(candidate, "validation_win_rate_percent");
+      const validationExpectedValue = candidateMetric(candidate, "validation_expected_value");
+      const validationActionableCount = candidateMetric(candidate, "validation_actionable_count") ?? 0;
+      current.validationWinRateSum += validationWinRate ?? 0;
+      current.validationExpectedValueSum += validationExpectedValue ?? 0;
+      current.validationActionableCount += validationActionableCount;
+      if (!current.bestCandidate || (candidate.rank ?? Number.POSITIVE_INFINITY) < (current.bestCandidate.rank ?? Number.POSITIVE_INFINITY)) {
+        current.bestCandidate = candidate;
+      }
+      groups.set(campaign, current);
+    }
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        averageValidationWinRate: group.candidateCount > 0 ? group.validationWinRateSum / group.candidateCount : null,
+        averageValidationExpectedValue: group.candidateCount > 0 ? group.validationExpectedValueSum / group.candidateCount : null,
+      }))
+      .sort((left, right) => (CAMPAIGN_PRIORITY[left.campaign] ?? 99) - (CAMPAIGN_PRIORITY[right.campaign] ?? 99));
+  }, [selectedRun]);
 
   async function runTuning(apply: boolean) {
     try {
@@ -165,27 +239,67 @@ export function PlanGenerationTuningPage() {
           </Card>
 
           <Card>
+            <SectionTitle kicker="Campaign results" title="Results by exploration phase" subtitle="Candidates are grouped so the search strategy and outcome of each phase are visible in the UI." actions={<HelpHint tooltip="This view rolls up candidate results by campaign so you can see whether entry, risk, reward, reuse, or random mutation produced the best evidence." to={tuningSpecDoc} />} />
+            {selectedRun ? (
+              selectedRunCampaignSummaries.length > 0 ? (
+                <div className="data-stack top-gap-small">
+                  {selectedRunCampaignSummaries.map((campaign) => (
+                    <article key={campaign.campaign} className="data-card">
+                      <div className="data-card-header">
+                        <div className="cluster">
+                          <Badge tone={campaign.campaign === "entry_calibration" || campaign.campaign === "risk_protection" || campaign.campaign === "reward_expansion" ? "ok" : "info"}>{campaign.campaign}</Badge>
+                          <Badge>{campaign.candidateCount} candidates</Badge>
+                          <Badge>best #{campaign.bestCandidate?.rank ?? "?"}</Badge>
+                        </div>
+                        <div className="helper-text">best candidate: {campaign.bestCandidate?.changed_keys.join(", ") || "no changes"}</div>
+                      </div>
+                      <section className="metrics-grid top-gap-small">
+                        <StatCard label="Avg validation win-rate" value={campaign.averageValidationWinRate !== null ? `${campaign.averageValidationWinRate.toFixed(2)}%` : "—"} helper="Average over candidates in this phase" tooltip="The average validation win rate of all candidates generated by this campaign." tooltipTo={tuningSpecDoc} />
+                        <StatCard label="Avg validation EV" value={campaign.averageValidationExpectedValue !== null ? campaign.averageValidationExpectedValue.toFixed(4) : "—"} helper="Average over candidates in this phase" tooltip="The average validation expected value of all candidates generated by this campaign." tooltipTo={tuningSpecDoc} />
+                        <StatCard label="Actionable evidence" value={campaign.validationActionableCount} helper="Total validation-actionable rows" tooltip="The total number of validation records that each candidate in this campaign could score against." tooltipTo={tuningSpecDoc} />
+                      </section>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState message="No campaign results yet." />
+              )
+            ) : (
+              <EmptyState message="No run selected." />
+            )}
+          </Card>
+
+          <Card>
             <SectionTitle kicker="Selected run" title="Candidate ranking" subtitle="The backend ranks candidates lexicographically by win rate, then win count, then expected value." actions={<HelpHint tooltip="Candidate ordering is deterministic: valid evidence first, then actionable win rate, then win count, then expected value." to="/docs?doc=plan-generation-tuning-spec" />} />
             {selectedRun ? (
               <div className="stack-page">
                 <div className="helper-text">Promotion mode: {selectedRun.promotion_mode} · Winner candidate: {selectedRun.winning_candidate_id ?? "—"} · Promoted config: {selectedRun.promoted_config_version_id ?? "—"}</div>
                 <div className="data-stack top-gap-small">
-                  {selectedRun.candidates.map((candidate) => (
-                    <article key={candidate.id ?? `${selectedRun.id}-${candidate.rank}`} className="data-card">
-                      <div className="data-card-header">
-                        <div className="cluster">
-                          <Badge tone={candidate.rank === 1 ? "ok" : "neutral"}>#{candidate.rank ?? "?"}</Badge>
-                          <Badge>{candidate.is_baseline ? "baseline" : "candidate"}</Badge>
-                          <Badge tone={candidate.promotion_eligible ? "ok" : "warning"}>{candidate.promotion_eligible ? "eligible" : "blocked"}</Badge>
+                  {selectedRun.candidates.map((candidate) => {
+                    const campaign = candidateCampaign(candidate);
+                    return (
+                      <article key={candidate.id ?? `${selectedRun.id}-${candidate.rank}`} className="data-card">
+                        <div className="data-card-header">
+                          <div className="cluster">
+                            <Badge tone={candidate.rank === 1 ? "ok" : "neutral"}>#{candidate.rank ?? "?"}</Badge>
+                            <Badge>{candidate.is_baseline ? "baseline" : "candidate"}</Badge>
+                            <Badge>{campaign}</Badge>
+                            <Badge tone={candidate.promotion_eligible ? "ok" : "warning"}>{candidate.promotion_eligible ? "eligible" : "blocked"}</Badge>
+                          </div>
+                          <div className="helper-text">{candidate.changed_keys.join(", ") || "no changes"}</div>
                         </div>
-                        <div className="helper-text">{candidate.changed_keys.join(", ") || "no changes"}</div>
-                      </div>
-                      <details className="top-gap-small">
-                        <summary className="helper-text">Show candidate metric breakdown</summary>
-                        <pre className="code-block top-gap-small">{JSON.stringify(candidate.metric_breakdown, null, 2)}</pre>
-                      </details>
-                    </article>
-                  ))}
+                        <section className="metrics-grid top-gap-small">
+                          <StatCard label="Validation win-rate" value={candidateMetric(candidate, "validation_win_rate_percent") !== null ? `${candidateMetric(candidate, "validation_win_rate_percent")?.toFixed(2)}%` : "—"} helper="Candidate validation result" tooltip="Validation win rate for this candidate." tooltipTo={tuningSpecDoc} />
+                          <StatCard label="Validation EV" value={candidateMetric(candidate, "validation_expected_value") !== null ? candidateMetric(candidate, "validation_expected_value")?.toFixed(4) : "—"} helper="Candidate validation result" tooltip="Validation expected value for this candidate." tooltipTo={tuningSpecDoc} />
+                          <StatCard label="Search win-rate" value={candidateMetric(candidate, "search_win_rate_percent") !== null ? `${candidateMetric(candidate, "search_win_rate_percent")?.toFixed(2)}%` : "—"} helper="Search-slice result" tooltip="Search-side win rate for this candidate." tooltipTo={tuningSpecDoc} />
+                        </section>
+                        <details className="top-gap-small">
+                          <summary className="helper-text">Show candidate metric breakdown</summary>
+                          <pre className="code-block top-gap-small">{JSON.stringify(candidate.metric_breakdown, null, 2)}</pre>
+                        </details>
+                      </article>
+                    );
+                  })}
                 </div>
               </div>
             ) : (

@@ -25,7 +25,7 @@ The app currently ships a **phase-1 bounded implementation** of plan-generation 
 
 What is live now:
 - dedicated plan-generation tuning routes, persistence, runs, candidates, and config versions
-- a real research page for inspecting runs, candidates, config promotion, and the ranked exploration campaign plan
+- a real research page for inspecting runs, candidates, per-campaign results, config promotion, and the ranked exploration campaign plan
 - settings for active config selection and stored automation readiness flags
 - bounded parameter-schema-driven candidate generation
 - deterministic candidate ranking centered on win rate, then win count, then expected value
