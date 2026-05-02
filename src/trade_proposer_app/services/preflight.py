@@ -7,6 +7,7 @@ from pathlib import Path
 import httpx
 
 from trade_proposer_app.domain.models import AppPreflightReport, PreflightCheck
+from trade_proposer_app.domain.statuses import is_failed_preflight_status, is_warning_preflight_status
 from trade_proposer_app.services.taxonomy import TAXONOMY_DIR, TAXONOMY_PATH, TICKERS_PATH
 
 WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "data" / "weights.json"
@@ -60,9 +61,9 @@ class AppPreflightService:
         )
         checks.append(self._check_nitter())
         status = "ok"
-        if any(check.status == "failed" for check in checks):
+        if any(is_failed_preflight_status(check.status) for check in checks):
             status = "failed"
-        elif any(check.status == "warning" for check in checks):
+        elif any(is_warning_preflight_status(check.status) for check in checks):
             status = "warning"
         return AppPreflightReport(
             status=status,

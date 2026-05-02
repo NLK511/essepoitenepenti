@@ -6,7 +6,7 @@ import { WorkflowRunResults } from "../components/workflow-run-results";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import { useToast } from "../components/toast";
 import type { Run, RunDetailResponse } from "../types";
-import { extractRunWarnings, formatDate, formatDuration, jobTypeLabel, runTone } from "../utils";
+import { extractRunWarnings, formatDate, formatDuration, isFailedRunStatus, jobTypeLabel, runTone } from "../utils";
 
 export function DebuggerPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -55,7 +55,7 @@ export function DebuggerPage() {
     const items = runs ?? [];
     return {
       total: items.length,
-      failed: items.filter((run) => run.status === "failed").length,
+      failed: items.filter((run) => isFailedRunStatus(run.status)).length,
       warnings: items.filter((run) => run.status === "completed_with_warnings").length,
       active: items.filter((run) => run.status === "queued" || run.status === "running").length,
     };

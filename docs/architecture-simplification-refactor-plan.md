@@ -163,11 +163,13 @@ Status: foundation implemented; broad migration still planned.
 Implemented:
 - `domain/statuses.py` with domain-specific status enums/constants
 - effective outcome and shared metrics code use canonical outcome/position status constants
-- status helper functions for normalization, terminal execution checks, resolved trade outcomes, and broker-position-to-outcome mapping
+- status helper functions for normalization, terminal execution checks, resolved trade outcomes, preflight status checks, and broker-position-to-outcome mapping
 - tests for status helper mappings
+- health/preflight/dashboard and broker-orders consumers use canonical helpers for their remaining obvious status checks
 
 Still needed:
 - migrate remaining raw status-string comparisons where it reduces ambiguity
+- keep front-end and backend consumers aligned as new status domains are added
 
 Acceptance criteria:
 - no analytics code compares unrelated raw status strings directly

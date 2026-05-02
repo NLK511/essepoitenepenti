@@ -14,8 +14,11 @@ from trade_proposer_app.config import settings
 from trade_proposer_app.domain.enums import JobType, RecommendationDirection, StrategyHorizon
 from trade_proposer_app.domain.statuses import (
     broker_position_status_to_outcome,
+    is_failed_preflight_status,
+    is_failed_run_status,
     is_resolved_trade_outcome,
     is_terminal_execution_status,
+    is_warning_preflight_status,
 )
 from trade_proposer_app.domain.models import (
     EvaluationRunResult,
@@ -822,6 +825,9 @@ class RepositoryTests(unittest.TestCase):
         self.assertFalse(is_terminal_execution_status("open"))
         self.assertTrue(is_resolved_trade_outcome("loss"))
         self.assertFalse(is_resolved_trade_outcome("skipped"))
+        self.assertTrue(is_failed_run_status(" failed "))
+        self.assertTrue(is_failed_preflight_status("failed"))
+        self.assertTrue(is_warning_preflight_status(" warning "))
         self.assertEqual(broker_position_status_to_outcome("win"), "win")
         self.assertEqual(broker_position_status_to_outcome("needs_review"), "open")
 

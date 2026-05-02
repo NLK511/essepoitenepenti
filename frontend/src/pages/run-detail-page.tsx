@@ -14,7 +14,7 @@ import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionT
 import { ContextEventSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import { RecommendationPlanEvaluationSummary } from "../components/recommendation-plan-evaluation";
 import type { Job, RunDetailResponse, WatchlistEvaluationPolicy } from "../types";
-import { biasTone, brokerExecutionStatusTone, contextProvenanceLabel, detailLabel, extractDisplayLabels, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, runTone, yahooFinanceUrl } from "../utils";
+import { biasTone, brokerExecutionStatusTone, contextProvenanceLabel, detailLabel, extractDisplayLabels, formatDate, formatDuration, isBrokerExecutionResubmittable, isRecord, jobTypeLabel, parseJsonRecord, runTone, yahooFinanceUrl } from "../utils";
 
 function scoreColor(value: number, min = -1, max = 1) {
   if (!Number.isFinite(value) || max <= min) {
@@ -628,7 +628,7 @@ export function RunDetailPage() {
                           </div>
                           <div className="helper-text top-gap-small">qty {order.quantity} · entry {order.entry_price ?? "—"} · stop {order.stop_loss ?? "—"} · take profit {order.take_profit ?? "—"}</div>
                           <div className="cluster top-gap-small">
-                            {order.status === "failed" || order.status === "canceled" ? (
+                            {isBrokerExecutionResubmittable(order.status) ? (
                               <button type="button" className="button-secondary" disabled={activeOrderActionId === order.id} onClick={() => order.id && void handleOrderAction(order.id, "resubmit")}>Resubmit</button>
                             ) : null}
                             {!["canceled", "filled", "win", "loss"].includes(order.status) && order.broker_order_id ? (

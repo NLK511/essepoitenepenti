@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import AppPreflightReport, PreflightCheck
+from trade_proposer_app.domain.statuses import is_failed_preflight_status, is_warning_preflight_status
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.preflight import AppPreflightService
@@ -95,9 +96,9 @@ def _augment_report_with_snapshot_checks(report: AppPreflightReport, session: Se
 
     merged_checks = [*report.checks, *extra_checks]
     status = "ok"
-    if any(check.status == "failed" for check in merged_checks):
+    if any(is_failed_preflight_status(check.status) for check in merged_checks):
         status = "failed"
-    elif any(check.status == "warning" for check in merged_checks):
+    elif any(is_warning_preflight_status(check.status) for check in merged_checks):
         status = "warning"
     return AppPreflightReport(
         status=status,

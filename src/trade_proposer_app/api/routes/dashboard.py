@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.persistence.models import BrokerOrderExecutionRecord, HistoricalMarketBarRecord, HistoricalNewsRecord, TickerSignalSnapshotRecord
+from trade_proposer_app.domain.enums import RunStatus
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
@@ -151,7 +152,7 @@ async def get_dashboard(
 
     major_failures: list[dict[str, object]] = []
     for run in recent_runs:
-        if run.status != "failed":
+        if run.status != RunStatus.FAILED.value:
             continue
         major_failures.append(
             {

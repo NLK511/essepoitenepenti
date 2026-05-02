@@ -37,14 +37,19 @@ export function formatDuration(value: number | string | null | undefined): strin
   return `${numericValue.toFixed(2)}s`;
 }
 
+export function isFailedRunStatus(status: string): boolean {
+  return status.trim().toLowerCase() === "failed";
+}
+
 export function runTone(status: RunStatus | string): "ok" | "warning" | "danger" | "neutral" {
-  if (status === "completed") {
+  const normalized = typeof status === "string" ? status.trim().toLowerCase() : status;
+  if (normalized === "completed") {
     return "ok";
   }
-  if (status === "completed_with_warnings") {
+  if (normalized === "completed_with_warnings") {
     return "warning";
   }
-  if (status === "failed") {
+  if (normalized === "failed") {
     return "danger";
   }
   return "neutral";
@@ -228,29 +233,59 @@ export function tradeOutcomeTone(status: string): "ok" | "danger" | "warning" | 
   return "neutral";
 }
 
+const BROKER_EXECUTION_SUBMITTED_LIKE_STATUSES = new Set(["submitted", "accepted", "filled", "partially_filled"]);
+const BROKER_EXECUTION_FAILURE_STATUSES = new Set(["failed", "rejected"]);
+const BROKER_EXECUTION_CANCELABLE_STATUSES = new Set(["new", "submitted", "accepted", "partially_filled", "open"]);
+
+function normalizeStatus(status: string): string {
+  return status.trim().toLowerCase();
+}
+
+export function isBrokerExecutionSubmittedLike(status: string): boolean {
+  return BROKER_EXECUTION_SUBMITTED_LIKE_STATUSES.has(normalizeStatus(status));
+}
+
+export function isBrokerExecutionFailed(status: string): boolean {
+  return BROKER_EXECUTION_FAILURE_STATUSES.has(normalizeStatus(status));
+}
+
+export function isBrokerExecutionSkipped(status: string): boolean {
+  return normalizeStatus(status) === "skipped";
+}
+
+export function isBrokerExecutionResubmittable(status: string): boolean {
+  const normalized = normalizeStatus(status);
+  return normalized === "failed" || normalized === "canceled";
+}
+
+export function isBrokerExecutionCancelable(status: string): boolean {
+  return BROKER_EXECUTION_CANCELABLE_STATUSES.has(normalizeStatus(status));
+}
+
 export function brokerExecutionStatusTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
-  if (status === "win") {
+  const normalized = normalizeStatus(status);
+  if (normalized === "win") {
     return "ok";
   }
-  if (status === "loss" || status === "error") {
+  if (normalized === "loss" || normalized === "error") {
     return "danger";
   }
-  if (status === "open") {
+  if (normalized === "open") {
     return "info";
   }
-  if (status === "needs_review") {
+  if (normalized === "needs_review") {
     return "warning";
   }
-  if (status === "submitted" || status === "accepted" || status === "filled" || status === "partially_filled") {
+  if (BROKER_EXECUTION_SUBMITTED_LIKE_STATUSES.has(normalized)) {
     return "ok";
   }
-  if (status === "canceled" || status === "expired") {
+  if (normalized === "canceled" || normalized === "expired") {
     return "warning";
   }
-  if (status === "failed" || status === "rejected") {
+  if (BROKER_EXECUTION_FAILURE_STATUSES.has(normalized)) {
     return "danger";
   }
-  if (status === "skipped") {
+  if (normalized === "skipped") {
     return "warning";
   }
   return "neutral";

@@ -5,7 +5,7 @@ import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { AccountRiskState, BrokerOrderExecution, BrokerPosition, BrokerSyncState, BrokerWorkbench, RiskHaltEvent } from "../types";
-import { brokerExecutionStatusTone, formatDate, humanizeKey } from "../utils";
+import { brokerExecutionStatusTone, formatDate, humanizeKey, isBrokerExecutionCancelable, isBrokerExecutionFailed, isBrokerExecutionResubmittable, isBrokerExecutionSkipped, isBrokerExecutionSubmittedLike } from "../utils";
 
 function metricNumber(value: unknown): string {
   return typeof value === "number" ? value.toFixed(2).replace(/\.00$/, "") : "—";
@@ -67,9 +67,9 @@ export function BrokerOrdersPage() {
     const items = orders ?? [];
     return {
       total: items.length,
-      submitted: items.filter((order) => order.status === "submitted" || order.status === "accepted" || order.status === "filled").length,
-      failed: items.filter((order) => order.status === "failed").length,
-      skipped: items.filter((order) => order.status === "skipped").length,
+      submitted: items.filter((order) => isBrokerExecutionSubmittedLike(order.status)).length,
+      failed: items.filter((order) => isBrokerExecutionFailed(order.status)).length,
+      skipped: items.filter((order) => isBrokerExecutionSkipped(order.status)).length,
     };
   }, [orders]);
 
@@ -326,10 +326,10 @@ export function BrokerOrdersPage() {
               ) : null}
               <div className="cluster top-gap-small">
                 {selectedOrder.id ? <button type="button" className="button-secondary" disabled={activeActionId === selectedOrder.id} onClick={() => void handleAction(selectedOrder.id as number, "refresh")}>Refresh status</button> : null}
-                {selectedOrder.status === "failed" || selectedOrder.status === "canceled" ? (
+                {isBrokerExecutionResubmittable(selectedOrder.status) ? (
                   <button type="button" className="button-secondary" disabled={activeActionId === selectedOrder.id} onClick={() => selectedOrder.id && void handleAction(selectedOrder.id, "resubmit")}>Resubmit</button>
                 ) : null}
-                {!["canceled", "filled", "win", "loss"].includes(selectedOrder.status) && selectedOrder.broker_order_id ? (
+                {isBrokerExecutionCancelable(selectedOrder.status) && selectedOrder.broker_order_id ? (
                   <button type="button" className="button button-danger" disabled={activeActionId === selectedOrder.id} onClick={() => selectedOrder.id && void handleAction(selectedOrder.id, "cancel")}>Cancel</button>
                 ) : null}
               </div>

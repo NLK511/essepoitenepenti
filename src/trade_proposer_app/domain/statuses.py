@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from enum import StrEnum
 
+from trade_proposer_app.domain.enums import RunStatus
+
 
 class OutcomeStatus(StrEnum):
     OPEN = "open"
@@ -78,6 +80,18 @@ def is_terminal_execution_status(value: object) -> bool:
 
 def is_resolved_trade_outcome(value: object) -> bool:
     return normalize_status(value) in RESOLVED_TRADE_OUTCOMES
+
+
+def is_failed_run_status(value: object) -> bool:
+    return normalize_status(value) == RunStatus.FAILED.value
+
+
+def is_failed_preflight_status(value: object) -> bool:
+    return normalize_status(value) == "failed"
+
+
+def is_warning_preflight_status(value: object) -> bool:
+    return normalize_status(value) == "warning"
 
 
 def broker_position_status_to_outcome(value: object) -> str:
