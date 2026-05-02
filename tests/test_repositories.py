@@ -56,6 +56,7 @@ from trade_proposer_app.services.evaluation_execution import EvaluationExecution
 from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.macro_context import MacroContextService
+from trade_proposer_app.services.recommendation_outcome_cohorts import RecommendationOutcomeCohortBuilder
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
 from trade_proposer_app.services.risk_management import BrokerRiskManager
@@ -1047,6 +1048,69 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(bucket.profit_factor, 3.0)
         self.assertEqual(bucket.sample_status, "insufficient")
         self.assertEqual(bucket.broker_outcome_count, 2)
+
+    def test_recommendation_outcome_cohort_builder_reuses_shared_bucket_math(self) -> None:
+        outcomes = [
+            RecommendationPlanOutcome(
+                recommendation_plan_id=10,
+                ticker="AAPL",
+                action="long",
+                outcome="win",
+                status="resolved",
+                setup_family="continuation",
+                horizon="1w",
+                confidence_percent=62.0,
+                outcome_source="broker",
+                max_favorable_excursion=4.0,
+                max_adverse_excursion=-1.0,
+            ),
+            RecommendationPlanOutcome(
+                recommendation_plan_id=11,
+                ticker="MSFT",
+                action="long",
+                outcome="loss",
+                status="resolved",
+                setup_family="continuation",
+                horizon="1w",
+                confidence_percent=58.0,
+                outcome_source="broker",
+                max_favorable_excursion=1.0,
+                max_adverse_excursion=-3.0,
+            ),
+            RecommendationPlanOutcome(
+                recommendation_plan_id=12,
+                ticker="TSLA",
+                action="long",
+                outcome="open",
+                status="open",
+                setup_family="continuation",
+                horizon="1w",
+                confidence_percent=55.0,
+                outcome_source="plan",
+                max_favorable_excursion=0.5,
+                max_adverse_excursion=-0.5,
+            ),
+        ]
+
+        builder = RecommendationOutcomeCohortBuilder()
+        family_buckets = builder.grouped_summary(outcomes, group_by="setup_family", default_key="uncategorized", min_required_resolved_count=2)
+        horizon_family_buckets = builder.combined_summary(
+            outcomes,
+            "horizon",
+            "setup_family",
+            default_left="unknown_horizon",
+            default_right="uncategorized",
+            slice_name="horizon_setup_family",
+            min_required_resolved_count=2,
+        )
+
+        self.assertEqual(family_buckets[0].key, "continuation")
+        self.assertEqual(family_buckets[0].resolved_count, 2)
+        self.assertEqual(family_buckets[0].sample_status, "usable")
+        self.assertEqual(family_buckets[0].win_rate_percent, 50.0)
+        self.assertEqual(family_buckets[0].average_return_5d, None)
+        self.assertEqual(horizon_family_buckets[0].slice_name, "horizon_setup_family")
+        self.assertEqual(horizon_family_buckets[0].resolved_count, 2)
 
     def test_execution_candidate_builder_splits_plan_from_broker_candidate(self) -> None:
         plan = RecommendationPlan(

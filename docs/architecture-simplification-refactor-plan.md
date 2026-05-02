@@ -74,6 +74,11 @@ Complex pages fetch multiple APIs and reconcile locally.
 
 Canonical target: backend page/workbench read models for complex pages, especially broker execution and research performance.
 
+### 8. Outcome cohort duplication
+Calibration, setup-family review, and some tuning/reporting paths still rebuild the same outcome buckets and sample-status math locally.
+
+Canonical target: `RecommendationOutcomeCohortBuilder` for shared outcome cohort grouping and sample-status math.
+
 ## Phased implementation plan
 
 ### Phase 1 — Effective outcome layer
@@ -249,3 +254,4 @@ Continue reliability/tuning simplification in small batches:
 5. Continue collapsing duplicated frontend status/tone mappings into shared helpers when the mapping is the same across pages and the helper does not hide domain differences.
 6. Move remaining typed settings writes behind `SettingsMutationService` instead of route-local parsing so writes stay consistent with `SettingsDomainService`.
 7. Grow `BrokerReconciliationService` into the broker workbench and sync coordination layer as more broker-state reconciliation logic is discovered.
+8. Reuse `RecommendationOutcomeCohortBuilder` anywhere a service is rebuilding calibration-style outcome buckets instead of duplicating bucket math locally.

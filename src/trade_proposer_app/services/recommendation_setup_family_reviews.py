@@ -11,7 +11,7 @@ from trade_proposer_app.domain.models import (
     RecommendationSetupFamilyReviewSummary,
 )
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
-from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
+from trade_proposer_app.services.recommendation_outcome_cohorts import MIN_RESOLVED_COUNTS as OUTCOME_COHORT_MIN_RESOLVED_COUNTS, RecommendationOutcomeCohortBuilder
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
@@ -28,6 +28,7 @@ class RecommendationSetupFamilyReviewService:
     def __init__(self, outcomes: RecommendationOutcomeRepository, taxonomy_service: TickerTaxonomyService | None = None) -> None:
         self.outcomes = outcomes
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
+        self.cohorts = RecommendationOutcomeCohortBuilder(self.taxonomy_service)
 
     def summarize(
         self,
@@ -96,55 +97,13 @@ class RecommendationSetupFamilyReviewService:
         group_by: str,
         default_key: str,
     ) -> list[RecommendationCalibrationBucket]:
-        grouped: dict[str, list[RecommendationPlanOutcome]] = defaultdict(list)
-        for item in items:
-            key = str(getattr(item, group_by, None) or default_key).strip() or default_key
-            grouped[key].append(item)
-        min_required = RecommendationPlanCalibrationService.MIN_RESOLVED_COUNTS.get(group_by, 0)
-        return self._build_bucket_list(grouped, min_required_resolved_count=min_required, group_by=group_by)
+        return self.cohorts.grouped_summary(
+            items,
+            group_by=group_by,
+            default_key=default_key,
+            min_required_resolved_count=OUTCOME_COHORT_MIN_RESOLVED_COUNTS.get(group_by, 0),
+        )
 
-    def _build_bucket_list(
-        self,
-        grouped: dict[str, list[RecommendationPlanOutcome]],
-        *,
-        min_required_resolved_count: int,
-        group_by: str,
-    ) -> list[RecommendationCalibrationBucket]:
-        results: list[RecommendationCalibrationBucket] = []
-        for key, items in grouped.items():
-            resolved = [item for item in items if item.outcome in {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}]
-            resolved_count = len(resolved)
-            results.append(
-                RecommendationCalibrationBucket(
-                    key=key,
-                    label=self._bucket_label(key, group_by=group_by),
-                    slice_name=group_by,
-                    slice_label=self.taxonomy_service.get_analysis_slice_label(group_by),
-                    total_count=len(items),
-                    resolved_count=resolved_count,
-                    win_count=sum(1 for item in items if item.outcome == TradeOutcome.WIN.value),
-                    loss_count=sum(1 for item in items if item.outcome == TradeOutcome.LOSS.value),
-                    open_count=sum(1 for item in items if item.status == OutcomeStatus.OPEN.value),
-                    no_action_count=sum(1 for item in items if item.outcome == TradeOutcome.NO_ACTION.value),
-                    watchlist_count=sum(1 for item in items if item.outcome == TradeOutcome.WATCHLIST.value),
-                    sample_status=RecommendationPlanCalibrationService._sample_status(
-                        resolved_count,
-                        min_required_resolved_count,
-                    ),
-                    min_required_resolved_count=min_required_resolved_count,
-                    win_rate_percent=self._win_rate(resolved),
-                    average_return_1d=self._average([item.horizon_return_1d for item in items]),
-                    average_return_3d=self._average([item.horizon_return_3d for item in items]),
-                    average_return_5d=self._average([item.horizon_return_5d for item in items]),
-                    average_mfe=self._average([item.max_favorable_excursion for item in items]),
-                    average_mae=self._average([item.max_adverse_excursion for item in items]),
-                )
-            )
-        results.sort(key=lambda item: (item.resolved_count, item.total_count, item.win_count), reverse=True)
-        return results
-
-    def _bucket_label(self, key: str, group_by: str = "") -> str:
-        return self.taxonomy_service.get_analysis_bucket_label(group_by, key)
 
     @staticmethod
     def _win_rate(items: list[RecommendationPlanOutcome]) -> float | None:
