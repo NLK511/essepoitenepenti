@@ -30,6 +30,18 @@ function numberOrNull(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function formatPercent(value: number | null, digits = 2): string {
+  return value === null ? "—" : `${value.toFixed(digits)}%`;
+}
+
+function formatNumber(value: number | null, digits = 4): string {
+  return value === null ? "—" : value.toFixed(digits);
+}
+
+function humanizeCampaignName(name: string): string {
+  return name.split("_").join(" ");
+}
+
 function candidateCampaign(candidate: PlanGenerationTuningRun["candidates"][number]): string {
   const breakdown = candidate.metric_breakdown as Record<string, unknown>;
   const campaign = breakdown.campaign;
@@ -83,6 +95,8 @@ export function PlanGenerationTuningPage() {
     return runs.find((run) => run.id === selectedRunId) ?? runs[0];
   }, [runs, selectedRunId]);
 
+  const selectedRunCandidates = selectedRun?.candidates ?? [];
+
   const selectedRunCampaignSummaries = useMemo(() => {
     if (!selectedRun) return [];
     const groups = new Map<
@@ -107,12 +121,9 @@ export function PlanGenerationTuningPage() {
         validationActionableCount: 0,
       };
       current.candidateCount += 1;
-      const validationWinRate = candidateMetric(candidate, "validation_win_rate_percent");
-      const validationExpectedValue = candidateMetric(candidate, "validation_expected_value");
-      const validationActionableCount = candidateMetric(candidate, "validation_actionable_count") ?? 0;
-      current.validationWinRateSum += validationWinRate ?? 0;
-      current.validationExpectedValueSum += validationExpectedValue ?? 0;
-      current.validationActionableCount += validationActionableCount;
+      current.validationWinRateSum += candidateMetric(candidate, "validation_win_rate_percent") ?? 0;
+      current.validationExpectedValueSum += candidateMetric(candidate, "validation_expected_value") ?? 0;
+      current.validationActionableCount += candidateMetric(candidate, "validation_actionable_count") ?? 0;
       if (!current.bestCandidate || (candidate.rank ?? Number.POSITIVE_INFINITY) < (current.bestCandidate.rank ?? Number.POSITIVE_INFINITY)) {
         current.bestCandidate = candidate;
       }
@@ -159,7 +170,8 @@ export function PlanGenerationTuningPage() {
       <PageHeader
         kicker="Research"
         title="Plan generation tuning"
-        actions={<HelpHint tooltip="This page shows the dedicated plan-generation tuning workflow: live config, ranked candidates, and guarded promotions." to="/docs?doc=plan-generation-tuning-spec" />}
+        subtitle="Inspect the exploration plan, campaign outcomes, and candidate rankings without having to read raw JSON first."
+        actions={<HelpHint tooltip="This page shows the dedicated plan-generation tuning workflow: live config, ranked candidates, campaign results, and guarded promotions." to={tuningSpecDoc} />}
       />
       {error ? <ErrorState message={error} /> : null}
       {!state || !runs || !configs ? <LoadingState message="Loading plan generation tuning…" /> : null}
@@ -172,35 +184,71 @@ export function PlanGenerationTuningPage() {
             <StatCard label="Latest run" value={String(state.state.latest_run?.id ?? "—")} helper="Most recent tuning execution" tooltip="The most recent stored tuning run, including its ranked candidates and any promotion outcome." tooltipTo={tuningSpecDoc} />
           </section>
 
-          <Card>
-            <SectionTitle kicker="Controls" title="Run plan generation tuning" subtitle="Launch a dry run or guarded promotion using the immutable backend rules and historical replay." actions={<HelpHint tooltip="Dry runs rank candidates without changing the live config. Apply mode promotes only if the winner passes backend guardrails." to="/docs?doc=plan-generation-tuning-spec" />} />
-            <div className="cluster top-gap-small">
-              <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(false)}>{saving === "run" ? "Running…" : "Run dry"}</button>
-              <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(true)}>{saving === "apply" ? "Running & applying…" : "Run and promote if eligible"}</button>
-            </div>
-            <details className="top-gap-small">
-              <summary className="helper-text">Show active config JSON</summary>
-              <pre className="code-block top-gap-small">{JSON.stringify(state.state.active_config, null, 2)}</pre>
-            </details>
-          </Card>
+          <section className="card-grid">
+            <Card>
+              <SectionTitle kicker="How it works" title="Process overview" subtitle="A short, readable explanation of the tuning flow before you inspect the raw results." actions={<HelpHint tooltip="This explains the order of operations so the results below are easier to interpret." to={tuningSpecDoc} />} />
+              <div className="data-stack top-gap-small">
+                <article className="data-card">
+                  <div className="data-card-header">
+                    <div className="cluster"><Badge tone="info">1</Badge><Badge>Split the data</Badge></div>
+                  </div>
+                  <div className="helper-text top-gap-small">Eligible historical records are split into a search slice and a holdout validation slice. Search helps discover candidates; validation checks whether they still hold up.</div>
+                </article>
+                <article className="data-card">
+                  <div className="data-card-header">
+                    <div className="cluster"><Badge tone="info">2</Badge><Badge>Try campaign phases</Badge></div>
+                  </div>
+                  <div className="helper-text top-gap-small">The tuner spends candidate budget in ordered campaigns: entry calibration, risk protection, reward expansion, historical reuse, then bounded random mutation.</div>
+                </article>
+                <article className="data-card">
+                  <div className="data-card-header">
+                    <div className="cluster"><Badge tone="info">3</Badge><Badge>Rank by validation</Badge></div>
+                  </div>
+                  <div className="helper-text top-gap-small">Candidates are ranked lexicographically by validation win rate, then validation win count, then validation expected value. Search metrics are shown to help explain why a candidate looked promising.</div>
+                </article>
+              </div>
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Controls" title="Run plan generation tuning" subtitle="Launch a dry run or guarded promotion using the immutable backend rules and historical replay." actions={<HelpHint tooltip="Dry runs rank candidates without changing the live config. Apply mode promotes only if the winner passes backend guardrails." to={tuningSpecDoc} />} />
+              <div className="cluster top-gap-small">
+                <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(false)}>{saving === "run" ? "Running…" : "Run dry"}</button>
+                <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(true)}>{saving === "apply" ? "Running & applying…" : "Run and promote if eligible"}</button>
+              </div>
+              <details className="top-gap-small">
+                <summary className="helper-text">Show active config JSON</summary>
+                <pre className="code-block top-gap-small">{JSON.stringify(state.state.active_config, null, 2)}</pre>
+              </details>
+            </Card>
+          </section>
 
           <Card>
-            <SectionTitle kicker="Exploration" title="Ranked campaign plan" subtitle="The backend now exposes the exploration phases used to allocate candidate budgets." actions={<HelpHint tooltip="This plan keeps exploration ordered: entry first, then risk, then reward, then historical reuse, then random mutation." to={tuningSpecDoc} />} />
-            <div className="data-stack top-gap-small">
-              {state.exploration_campaigns.map((campaign: PlanGenerationTuningExplorationCampaign) => (
-                <article key={campaign.name} className="data-card">
-                  <div className="data-card-header">
-                    <div className="cluster">
-                      <Badge tone={campaign.priority <= 3 ? "ok" : "info"}>#{campaign.priority}</Badge>
-                      <Badge>{campaign.name}</Badge>
-                      <Badge>{campaign.candidate_budget} candidates</Badge>
-                    </div>
-                    <div className="helper-text">{campaign.parameter_keys.join(", ")}</div>
-                  </div>
-                  <div className="helper-text top-gap-small">{campaign.description}</div>
-                </article>
-              ))}
+            <SectionTitle kicker="Exploration" title="Ranked campaign plan" subtitle="The backend exposes the exploration phases and their budgets so you can see where the search effort went." actions={<HelpHint tooltip="This plan keeps exploration ordered: entry first, then risk, then reward, then historical reuse, then random mutation." to={tuningSpecDoc} />} />
+            <div className="table-wrapper top-gap-small">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>priority</th>
+                    <th>campaign</th>
+                    <th>budget</th>
+                    <th>primary knobs</th>
+                    <th>why it exists</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.exploration_campaigns.map((campaign: PlanGenerationTuningExplorationCampaign) => (
+                    <tr key={campaign.name}>
+                      <td><Badge tone={campaign.priority <= 3 ? "ok" : "info"}>#{campaign.priority}</Badge></td>
+                      <td>{humanizeCampaignName(campaign.name)}</td>
+                      <td>{campaign.candidate_budget}</td>
+                      <td>{campaign.parameter_keys.join(", ")}</td>
+                      <td className="helper-text">{campaign.description}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+            <div className="helper-text top-gap-small">Default exploration budget before deduplication: 144 candidates.</div>
           </Card>
 
           {validation ? (
@@ -217,7 +265,53 @@ export function PlanGenerationTuningPage() {
           ) : null}
 
           <Card>
-            <SectionTitle kicker="Runs" title="Recent tuning runs" subtitle="Select a run to inspect ranked candidates and promotion outcomes." actions={<HelpHint tooltip="Each run stores the candidate ranking, winner, validation counts, and whether promotion happened or was blocked." to="/docs?doc=plan-generation-tuning-spec" />} />
+            <SectionTitle kicker="Campaign results" title="Results by exploration phase" subtitle="This is the compact summary of what each campaign produced." actions={<HelpHint tooltip="This view rolls up candidate results by campaign so you can see whether entry, risk, reward, reuse, or random mutation produced the best evidence." to={tuningSpecDoc} />} />
+            {selectedRun ? (
+              selectedRunCampaignSummaries.length > 0 ? (
+                <div className="table-wrapper top-gap-small">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>campaign</th>
+                        <th>candidates</th>
+                        <th>best rank</th>
+                        <th>avg search WR</th>
+                        <th>avg validation WR</th>
+                        <th>avg validation EV</th>
+                        <th>actionable rows</th>
+                        <th>best changes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedRunCampaignSummaries.map((campaign) => (
+                        <tr key={campaign.campaign}>
+                          <td>
+                            <Badge tone={campaign.campaign === "entry_calibration" || campaign.campaign === "risk_protection" || campaign.campaign === "reward_expansion" ? "ok" : "info"} title={campaign.campaign}>
+                              {humanizeCampaignName(campaign.campaign)}
+                            </Badge>
+                          </td>
+                          <td>{campaign.candidateCount}</td>
+                          <td>{campaign.bestCandidate?.rank ?? "—"}</td>
+                          <td>{formatPercent(campaign.bestCandidate ? candidateMetric(campaign.bestCandidate, "search_win_rate_percent") : null)}</td>
+                          <td>{formatPercent(campaign.averageValidationWinRate)}</td>
+                          <td>{formatNumber(campaign.averageValidationExpectedValue)}</td>
+                          <td>{campaign.validationActionableCount}</td>
+                          <td className="helper-text">{campaign.bestCandidate?.changed_keys.join(", ") || "no changes"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState message="No campaign results yet." />
+              )
+            ) : (
+              <EmptyState message="No run selected." />
+            )}
+          </Card>
+
+          <Card>
+            <SectionTitle kicker="Runs" title="Recent tuning runs" subtitle="Select a run to inspect ranked candidates and promotion outcomes." actions={<HelpHint tooltip="Each run stores the candidate ranking, winner, validation counts, and whether promotion happened or was blocked." to={tuningSpecDoc} />} />
             {runs.length === 0 ? (
               <EmptyState message="No plan generation tuning runs recorded yet." />
             ) : (
@@ -239,68 +333,48 @@ export function PlanGenerationTuningPage() {
           </Card>
 
           <Card>
-            <SectionTitle kicker="Campaign results" title="Results by exploration phase" subtitle="Candidates are grouped so the search strategy and outcome of each phase are visible in the UI." actions={<HelpHint tooltip="This view rolls up candidate results by campaign so you can see whether entry, risk, reward, reuse, or random mutation produced the best evidence." to={tuningSpecDoc} />} />
-            {selectedRun ? (
-              selectedRunCampaignSummaries.length > 0 ? (
-                <div className="data-stack top-gap-small">
-                  {selectedRunCampaignSummaries.map((campaign) => (
-                    <article key={campaign.campaign} className="data-card">
-                      <div className="data-card-header">
-                        <div className="cluster">
-                          <Badge tone={campaign.campaign === "entry_calibration" || campaign.campaign === "risk_protection" || campaign.campaign === "reward_expansion" ? "ok" : "info"}>{campaign.campaign}</Badge>
-                          <Badge>{campaign.candidateCount} candidates</Badge>
-                          <Badge>best #{campaign.bestCandidate?.rank ?? "?"}</Badge>
-                        </div>
-                        <div className="helper-text">best candidate: {campaign.bestCandidate?.changed_keys.join(", ") || "no changes"}</div>
-                      </div>
-                      <section className="metrics-grid top-gap-small">
-                        <StatCard label="Avg validation win-rate" value={campaign.averageValidationWinRate !== null ? `${campaign.averageValidationWinRate.toFixed(2)}%` : "—"} helper="Average over candidates in this phase" tooltip="The average validation win rate of all candidates generated by this campaign." tooltipTo={tuningSpecDoc} />
-                        <StatCard label="Avg validation EV" value={campaign.averageValidationExpectedValue !== null ? campaign.averageValidationExpectedValue.toFixed(4) : "—"} helper="Average over candidates in this phase" tooltip="The average validation expected value of all candidates generated by this campaign." tooltipTo={tuningSpecDoc} />
-                        <StatCard label="Actionable evidence" value={campaign.validationActionableCount} helper="Total validation-actionable rows" tooltip="The total number of validation records that each candidate in this campaign could score against." tooltipTo={tuningSpecDoc} />
-                      </section>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState message="No campaign results yet." />
-              )
-            ) : (
-              <EmptyState message="No run selected." />
-            )}
-          </Card>
-
-          <Card>
-            <SectionTitle kicker="Selected run" title="Candidate ranking" subtitle="The backend ranks candidates lexicographically by win rate, then win count, then expected value." actions={<HelpHint tooltip="Candidate ordering is deterministic: valid evidence first, then actionable win rate, then win count, then expected value." to="/docs?doc=plan-generation-tuning-spec" />} />
+            <SectionTitle kicker="Selected run" title="Candidate ranking" subtitle="The backend ranks candidates lexicographically by validation win rate, then win count, then expected value." actions={<HelpHint tooltip="Candidate ordering is deterministic: valid evidence first, then validation win rate, then validation win count, then validation expected value." to={tuningSpecDoc} />} />
             {selectedRun ? (
               <div className="stack-page">
                 <div className="helper-text">Promotion mode: {selectedRun.promotion_mode} · Winner candidate: {selectedRun.winning_candidate_id ?? "—"} · Promoted config: {selectedRun.promoted_config_version_id ?? "—"}</div>
-                <div className="data-stack top-gap-small">
-                  {selectedRun.candidates.map((candidate) => {
-                    const campaign = candidateCampaign(candidate);
-                    return (
-                      <article key={candidate.id ?? `${selectedRun.id}-${candidate.rank}`} className="data-card">
-                        <div className="data-card-header">
-                          <div className="cluster">
-                            <Badge tone={candidate.rank === 1 ? "ok" : "neutral"}>#{candidate.rank ?? "?"}</Badge>
-                            <Badge>{candidate.is_baseline ? "baseline" : "candidate"}</Badge>
-                            <Badge>{campaign}</Badge>
-                            <Badge tone={candidate.promotion_eligible ? "ok" : "warning"}>{candidate.promotion_eligible ? "eligible" : "blocked"}</Badge>
-                          </div>
-                          <div className="helper-text">{candidate.changed_keys.join(", ") || "no changes"}</div>
-                        </div>
-                        <section className="metrics-grid top-gap-small">
-                          <StatCard label="Validation win-rate" value={candidateMetric(candidate, "validation_win_rate_percent") !== null ? `${candidateMetric(candidate, "validation_win_rate_percent")?.toFixed(2)}%` : "—"} helper="Candidate validation result" tooltip="Validation win rate for this candidate." tooltipTo={tuningSpecDoc} />
-                          <StatCard label="Validation EV" value={candidateMetric(candidate, "validation_expected_value") !== null ? candidateMetric(candidate, "validation_expected_value")?.toFixed(4) : "—"} helper="Candidate validation result" tooltip="Validation expected value for this candidate." tooltipTo={tuningSpecDoc} />
-                          <StatCard label="Search win-rate" value={candidateMetric(candidate, "search_win_rate_percent") !== null ? `${candidateMetric(candidate, "search_win_rate_percent")?.toFixed(2)}%` : "—"} helper="Search-slice result" tooltip="Search-side win rate for this candidate." tooltipTo={tuningSpecDoc} />
-                        </section>
-                        <details className="top-gap-small">
-                          <summary className="helper-text">Show candidate metric breakdown</summary>
-                          <pre className="code-block top-gap-small">{JSON.stringify(candidate.metric_breakdown, null, 2)}</pre>
-                        </details>
-                      </article>
-                    );
-                  })}
+                <div className="helper-text">Search win rate shows the discovery slice; validation win rate is the holdout check. If those disagree, trust the validation number more.</div>
+                <div className="table-wrapper top-gap-small">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>rank</th>
+                        <th>campaign</th>
+                        <th>changes</th>
+                        <th>search WR</th>
+                        <th>validation WR</th>
+                        <th>validation EV</th>
+                        <th>actionable</th>
+                        <th>promo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedRunCandidates.map((candidate) => {
+                        const campaign = humanizeCampaignName(candidateCampaign(candidate));
+                        return (
+                          <tr key={candidate.id ?? `${selectedRun.id}-${candidate.rank}`}>
+                            <td><Badge tone={candidate.rank === 1 ? "ok" : "neutral"}>#{candidate.rank ?? "?"}</Badge></td>
+                            <td>{campaign}</td>
+                            <td className="helper-text">{candidate.changed_keys.join(", ") || "no changes"}</td>
+                            <td>{formatPercent(candidateMetric(candidate, "search_win_rate_percent"))}</td>
+                            <td>{formatPercent(candidateMetric(candidate, "validation_win_rate_percent"))}</td>
+                            <td>{formatNumber(candidateMetric(candidate, "validation_expected_value"))}</td>
+                            <td>{candidateMetric(candidate, "validation_actionable_count") ?? "—"}</td>
+                            <td><Badge tone={candidate.promotion_eligible ? "ok" : "warning"}>{candidate.promotion_eligible ? "eligible" : "blocked"}</Badge></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
+                <details className="top-gap-small">
+                  <summary className="helper-text">Show raw candidate breakdown JSON</summary>
+                  <pre className="code-block top-gap-small">{JSON.stringify(selectedRun.candidates, null, 2)}</pre>
+                </details>
               </div>
             ) : (
               <EmptyState message="No run selected." />
@@ -308,7 +382,7 @@ export function PlanGenerationTuningPage() {
           </Card>
 
           <Card>
-            <SectionTitle kicker="Configs" title="Config versions" subtitle="Promote a stored version to become the live plan-generation configuration." actions={<HelpHint tooltip="Config versions capture baseline and promoted parameter sets so live plan construction stays auditable." to="/docs?doc=plan-generation-tuning-spec" />} />
+            <SectionTitle kicker="Configs" title="Config versions" subtitle="Promote a stored version to become the live plan-generation configuration." actions={<HelpHint tooltip="Config versions capture baseline and promoted parameter sets so live plan construction stays auditable." to={tuningSpecDoc} />} />
             {configs.length === 0 ? (
               <EmptyState message="No config versions available yet." />
             ) : (
