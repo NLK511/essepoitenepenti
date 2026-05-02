@@ -5,7 +5,7 @@ import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
 import { ContextEventSummary, ContextScoreSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import type { IndustryContextSnapshot, MacroContextSnapshot } from "../types";
-import { contextInterpretationTone, contextSnapshotTone, extractDisplayLabels, formatDate } from "../utils";
+import { contextInterpretationTone, contextSnapshotTone, contextSummaryBackend, contextSummaryError, contextSummaryMethod, contextSummaryModel, extractDisplayLabels, formatDate } from "../utils";
 
 type ContextScope = "macro" | "industry";
 
@@ -113,10 +113,6 @@ export function ContextSnapshotDetailPage() {
       : `Macro context #${snapshot.id}`
     : "Context detail";
 
-  const summaryMethod = typeof snapshot?.metadata?.context_summary_method === "string" ? snapshot.metadata.context_summary_method : "—";
-  const summaryBackend = typeof snapshot?.metadata?.context_summary_backend === "string" ? snapshot.metadata.context_summary_backend : "—";
-  const summaryModel = typeof snapshot?.metadata?.context_summary_model === "string" ? snapshot.metadata.context_summary_model : "—";
-  const summaryError = typeof snapshot?.metadata?.context_summary_error === "string" ? snapshot.metadata.context_summary_error : null;
   const summaryDuration = typeof snapshot?.metadata?.context_summary_duration_seconds === "number"
     ? snapshot.metadata.context_summary_duration_seconds
     : null;
@@ -218,7 +214,7 @@ export function ContextSnapshotDetailPage() {
           <section className="card-grid">
             <Card>
               <SectionTitle kicker="Summary provenance" title="How the summary was generated" />
-              <ProvenanceStrip method={summaryMethod} backend={summaryBackend} model={summaryModel} error={summaryError} />
+              <ProvenanceStrip method={contextSummaryMethod(snapshot.metadata)} backend={contextSummaryBackend(snapshot.metadata)} model={contextSummaryModel(snapshot.metadata)} error={contextSummaryError(snapshot.metadata)} />
               <div className="helper-text top-gap-small">Duration {summaryDuration !== null ? `${summaryDuration.toFixed(2)}s` : "—"}</div>
               <details className="top-gap-small">
                 <summary className="helper-text">Show summary metadata</summary>
