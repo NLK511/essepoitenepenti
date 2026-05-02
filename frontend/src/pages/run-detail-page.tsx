@@ -14,7 +14,7 @@ import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionT
 import { ContextEventSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import { RecommendationPlanEvaluationSummary } from "../components/recommendation-plan-evaluation";
 import type { Job, RunDetailResponse, WatchlistEvaluationPolicy } from "../types";
-import { detailLabel, extractDisplayLabels, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, runTone, yahooFinanceUrl } from "../utils";
+import { brokerExecutionStatusTone, detailLabel, extractDisplayLabels, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, runTone, yahooFinanceUrl } from "../utils";
 
 function scoreColor(value: number, min = -1, max = 1) {
   if (!Number.isFinite(value) || max <= min) {
@@ -658,7 +658,7 @@ export function RunDetailPage() {
                               <div className="data-card-title">{order.ticker} · {order.action}</div>
                               <div className="helper-text">order #{order.id ?? "—"} · plan #{order.recommendation_plan_id} · run {order.run_id ?? "—"}</div>
                             </div>
-                            <Badge tone={order.status === "loss" || order.status === "failed" ? "danger" : order.status === "canceled" ? "warning" : order.status === "win" ? "ok" : "ok"}>{order.status}</Badge>
+                            <Badge tone={brokerExecutionStatusTone(order.status)}>{order.status}</Badge>
                           </div>
                           <div className="helper-text top-gap-small">qty {order.quantity} · entry {order.entry_price ?? "—"} · stop {order.stop_loss ?? "—"} · take profit {order.take_profit ?? "—"}</div>
                           <div className="cluster top-gap-small">

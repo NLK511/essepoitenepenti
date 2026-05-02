@@ -5,35 +5,7 @@ import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { AppSetting, BrokerOrderExecution, BrokerPosition, BrokerRiskAssessment, BrokerWorkbench, RiskHaltEvent } from "../types";
-import { formatDate } from "../utils";
-
-function orderTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
-  if (status === "win") {
-    return "ok";
-  }
-  if (status === "loss" || status === "error") {
-    return "danger";
-  }
-  if (status === "open") {
-    return "info";
-  }
-  if (status === "needs_review") {
-    return "warning";
-  }
-  if (status === "submitted" || status === "accepted" || status === "filled" || status === "partially_filled") {
-    return "ok";
-  }
-  if (status === "canceled" || status === "expired") {
-    return "warning";
-  }
-  if (status === "failed" || status === "rejected") {
-    return "danger";
-  }
-  if (status === "skipped") {
-    return "warning";
-  }
-  return "neutral";
-}
+import { formatDate, brokerExecutionStatusTone } from "../utils";
 
 function metricNumber(value: unknown): string {
   return typeof value === "number" ? value.toFixed(2).replace(/\.00$/, "") : "—";
@@ -314,7 +286,7 @@ export function BrokerOrdersPage() {
                         plan #{order.recommendation_plan_id} · run {order.run_id ?? "—"} · qty {order.quantity}
                       </div>
                     </div>
-                    <Badge tone={orderTone(order.status)}>{order.status}</Badge>
+                    <Badge tone={brokerExecutionStatusTone(order.status)}>{order.status}</Badge>
                   </div>
                   <div className="helper-text top-gap-small">
                     {order.side.toUpperCase()} · {order.order_type} · {order.account_mode}
@@ -337,7 +309,7 @@ export function BrokerOrdersPage() {
               <div className="data-points">
                 <div className="data-point"><span className="data-point-label">broker</span><span className="data-point-value">{selectedOrder.broker}</span></div>
                 <div className="data-point"><span className="data-point-label">mode</span><span className="data-point-value">{selectedOrder.account_mode}</span></div>
-                <div className="data-point"><span className="data-point-label">side</span><span className="data-point-value"><Badge tone={orderTone(selectedOrder.status)}>{selectedOrder.side}</Badge></span></div>
+                <div className="data-point"><span className="data-point-label">side</span><span className="data-point-value"><Badge tone={brokerExecutionStatusTone(selectedOrder.status)}>{selectedOrder.side}</Badge></span></div>
                 <div className="data-point"><span className="data-point-label">qty</span><span className="data-point-value">{selectedOrder.quantity}</span></div>
                 <div className="data-point"><span className="data-point-label">entry</span><span className="data-point-value">{selectedOrder.entry_price ?? "—"}</span></div>
                 <div className="data-point"><span className="data-point-label">stop</span><span className="data-point-value">{selectedOrder.stop_loss ?? "—"}</span></div>
@@ -351,7 +323,7 @@ export function BrokerOrdersPage() {
                 <Card>
                   <SectionTitle kicker="Position lifecycle" title="Broker-backed position" subtitle="Derived from the latest Alpaca bracket snapshot." />
                   <div className="data-points top-gap-small">
-                    <div className="data-point"><span className="data-point-label">position status</span><span className="data-point-value"><Badge tone={orderTone(selectedPosition.status)}>{selectedPosition.status}</Badge></span></div>
+                    <div className="data-point"><span className="data-point-label">position status</span><span className="data-point-value"><Badge tone={brokerExecutionStatusTone(selectedPosition.status)}>{selectedPosition.status}</Badge></span></div>
                     <div className="data-point"><span className="data-point-label">current qty</span><span className="data-point-value">{selectedPosition.current_quantity}</span></div>
                     <div className="data-point"><span className="data-point-label">entry avg</span><span className="data-point-value">{selectedPosition.entry_avg_price ?? "—"}</span></div>
                     <div className="data-point"><span className="data-point-label">exit avg</span><span className="data-point-value">{selectedPosition.exit_avg_price ?? "—"}</span></div>

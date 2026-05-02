@@ -111,6 +111,34 @@ export function tradeOutcomeTone(status: string): "ok" | "danger" | "warning" | 
   return "neutral";
 }
 
+export function brokerExecutionStatusTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
+  if (status === "win") {
+    return "ok";
+  }
+  if (status === "loss" || status === "error") {
+    return "danger";
+  }
+  if (status === "open") {
+    return "info";
+  }
+  if (status === "needs_review") {
+    return "warning";
+  }
+  if (status === "submitted" || status === "accepted" || status === "filled" || status === "partially_filled") {
+    return "ok";
+  }
+  if (status === "canceled" || status === "expired") {
+    return "warning";
+  }
+  if (status === "failed" || status === "rejected") {
+    return "danger";
+  }
+  if (status === "skipped") {
+    return "warning";
+  }
+  return "neutral";
+}
+
 export function recommendationPlanEvaluationTone(value: string | null | undefined): "ok" | "warning" | "danger" | "neutral" {
   if (value === "win" || value === "entry") {
     return "ok";
