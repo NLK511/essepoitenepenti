@@ -1,7 +1,7 @@
 # Account Risk State Spec
 
 ## Status
-Planned in the current simplification batch.
+Implemented in the current simplification batch.
 
 ## Goal
 Provide one canonical account-risk read model for answering:

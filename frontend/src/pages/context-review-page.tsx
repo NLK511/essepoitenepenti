@@ -6,7 +6,7 @@ import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
 import { ContextEventSummary, ContextScoreSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import type { ContextEventRow, IndustryContextSnapshot, MacroContextSnapshot, Run } from "../types";
-import { contextInterpretationTone, contextSnapshotTone, extractDisplayLabels, formatDate } from "../utils";
+import { contextInterpretationTone, contextProvenanceLabel, contextSummaryBackend, contextSummaryError, contextSummaryMethod, contextSummaryModel, contextSnapshotTone, extractDisplayLabels, formatDate } from "../utils";
 
 function topMacroTheme(snapshot: MacroContextSnapshot): ContextEventRow | null {
   return snapshot.active_themes[0] ?? null;
@@ -32,30 +32,6 @@ function detailLabel(detail: unknown, fallback: unknown, empty = "—"): string 
 
 function stringList(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
-}
-
-function summaryMethod(snapshot: { metadata?: Record<string, unknown> }): string {
-  return typeof snapshot.metadata?.context_summary_method === "string" ? snapshot.metadata.context_summary_method : "unknown";
-}
-
-function summaryBackend(snapshot: { metadata?: Record<string, unknown> }): string {
-  return typeof snapshot.metadata?.context_summary_backend === "string" ? snapshot.metadata.context_summary_backend : "—";
-}
-
-function summaryModel(snapshot: { metadata?: Record<string, unknown> }): string {
-  return typeof snapshot.metadata?.context_summary_model === "string" ? snapshot.metadata.context_summary_model : "—";
-}
-
-function summaryError(snapshot: { metadata?: Record<string, unknown> }): string | null {
-  return typeof snapshot.metadata?.context_summary_error === "string" ? snapshot.metadata.context_summary_error : null;
-}
-
-function provenanceLabel(snapshot: { metadata?: Record<string, unknown> }): string {
-  const method = summaryMethod(snapshot);
-  if (method === "llm_summary") {
-    return `LLM · ${summaryBackend(snapshot)}${summaryModel(snapshot) !== "—" ? ` · ${summaryModel(snapshot)}` : ""}`;
-  }
-  return `fallback · ${summaryBackend(snapshot)}`;
 }
 
 function contradictoryMacroThemes(snapshot: MacroContextSnapshot): string[] {
@@ -193,8 +169,8 @@ export function ContextReviewPage() {
         },
         {
           label: "Summary provenance",
-          value: latestMacroContext ? provenanceLabel(latestMacroContext) : "—",
-          helper: latestMacroContext && summaryError(latestMacroContext) ? "fallback reason stored" : "Narrative source for this snapshot",
+          value: latestMacroContext ? contextProvenanceLabel(latestMacroContext.metadata) : "—",
+          helper: latestMacroContext && contextSummaryError(latestMacroContext.metadata) ? "fallback reason stored" : "Narrative source for this snapshot",
         },
         {
           label: "Snapshot status",
@@ -218,8 +194,8 @@ export function ContextReviewPage() {
       },
       {
         label: "Summary provenance",
-        value: latestIndustryContext ? provenanceLabel(latestIndustryContext) : "—",
-        helper: latestIndustryContext && summaryError(latestIndustryContext) ? "fallback reason stored" : "Narrative source for this snapshot",
+        value: latestIndustryContext ? contextProvenanceLabel(latestIndustryContext.metadata) : "—",
+        helper: latestIndustryContext && contextSummaryError(latestIndustryContext.metadata) ? "fallback reason stored" : "Narrative source for this snapshot",
       },
       {
         label: "Snapshot status",
@@ -408,7 +384,7 @@ function IndustryContextList({ snapshots }: { snapshots: IndustryContextSnapshot
                 ) : null}
                 {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
                 <WarningSummary warnings={snapshot.warnings} />
-                {summaryError(snapshot) ? <div className="helper-text top-gap-small">{summaryError(snapshot)}</div> : null}
+                {contextSummaryError(snapshot.metadata) ? <div className="helper-text top-gap-small">{contextSummaryError(snapshot.metadata)}</div> : null}
               </div>
               <div className="cluster">
                 {snapshot.id ? <Link to={`/context/industry/${snapshot.id}`} className="button-subtle">Open detail</Link> : null}
@@ -455,7 +431,7 @@ function MacroContextList({ snapshots }: { snapshots: MacroContextSnapshot[] }) 
                 ) : null}
                 {snapshot.summary_text ? <div className="helper-text top-gap-small">{snapshot.summary_text}</div> : null}
                 <WarningSummary warnings={snapshot.warnings} />
-                {summaryError(snapshot) ? <div className="helper-text top-gap-small">{summaryError(snapshot)}</div> : null}
+                {contextSummaryError(snapshot.metadata) ? <div className="helper-text top-gap-small">{contextSummaryError(snapshot.metadata)}</div> : null}
               </div>
               <div className="cluster">
                 {snapshot.id ? <Link to={`/context/macro/${snapshot.id}`} className="button-subtle">Open detail</Link> : null}
@@ -494,7 +470,7 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
         </div>
       </div>
       <div className="top-gap-small">
-        <ProvenanceStrip method={summaryMethod(snapshot)} backend={summaryBackend(snapshot)} model={summaryModel(snapshot)} error={summaryError(snapshot)} />
+        <ProvenanceStrip method={contextSummaryMethod(snapshot.metadata)} backend={contextSummaryBackend(snapshot.metadata)} model={contextSummaryModel(snapshot.metadata)} error={contextSummaryError(snapshot.metadata)} />
       </div>
 
       {snapshot.summary_text ? (
@@ -570,7 +546,7 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
               <ul className="list-reset">{snapshot.missing_inputs.map((item) => <li key={item} className="list-item compact-item">{item}</li>)}</ul>
             </div>
           ) : null}
-          {summaryError(snapshot) ? <div className="helper-text top-gap-small">Summary fallback reason: {summaryError(snapshot)}</div> : null}
+          {contextSummaryError(snapshot.metadata) ? <div className="helper-text top-gap-small">Summary fallback reason: {contextSummaryError(snapshot.metadata)}</div> : null}
         </div>
       </div>
     </div>
@@ -603,7 +579,7 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
         </div>
       </div>
       <div className="top-gap-small">
-        <ProvenanceStrip method={summaryMethod(snapshot)} backend={summaryBackend(snapshot)} model={summaryModel(snapshot)} error={summaryError(snapshot)} />
+        <ProvenanceStrip method={contextSummaryMethod(snapshot.metadata)} backend={contextSummaryBackend(snapshot.metadata)} model={contextSummaryModel(snapshot.metadata)} error={contextSummaryError(snapshot.metadata)} />
       </div>
 
       {snapshot.summary_text ? (
@@ -687,7 +663,7 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
               <ul className="list-reset">{snapshot.missing_inputs.map((item) => <li key={item} className="list-item compact-item">{item}</li>)}</ul>
             </div>
           ) : null}
-          {summaryError(snapshot) ? <div className="helper-text top-gap-small">Summary fallback reason: {summaryError(snapshot)}</div> : null}
+          {contextSummaryError(snapshot.metadata) ? <div className="helper-text top-gap-small">Summary fallback reason: {contextSummaryError(snapshot.metadata)}</div> : null}
         </div>
       </div>
     </div>

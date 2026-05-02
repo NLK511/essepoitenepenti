@@ -145,14 +145,60 @@ export function jobTypeLabel(jobType: JobType | string): string {
   return jobType;
 }
 
-export function directionTone(direction: RecommendationDirection | string): "ok" | "danger" | "neutral" {
-  if (direction === "LONG") {
+export function directionTone(direction: RecommendationDirection | string): "ok" | "warning" | "neutral" {
+  const normalized = typeof direction === "string" ? direction.trim().toUpperCase() : direction;
+  if (normalized === "LONG") {
     return "ok";
   }
-  if (direction === "SHORT") {
-    return "danger";
+  if (normalized === "SHORT") {
+    return "warning";
   }
   return "neutral";
+}
+
+export function biasTone(value: string): "ok" | "warning" | "neutral" {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "tailwind") {
+    return "ok";
+  }
+  if (normalized === "headwind") {
+    return "warning";
+  }
+  return "neutral";
+}
+
+export function contextSummaryMethod(metadata: unknown): string {
+  return isRecord(metadata) && typeof metadata.context_summary_method === "string" ? metadata.context_summary_method : "unknown";
+}
+
+export function contextSummaryBackend(metadata: unknown): string {
+  return isRecord(metadata) && typeof metadata.context_summary_backend === "string" ? metadata.context_summary_backend : "—";
+}
+
+export function contextSummaryModel(metadata: unknown): string {
+  return isRecord(metadata) && typeof metadata.context_summary_model === "string" ? metadata.context_summary_model : "—";
+}
+
+export function contextSummaryError(metadata: unknown): string | null {
+  return isRecord(metadata) && typeof metadata.context_summary_error === "string" ? metadata.context_summary_error : null;
+}
+
+export function contextProvenanceTone(metadata: unknown): "ok" | "warning" | "neutral" {
+  if (contextSummaryError(metadata)) {
+    return "warning";
+  }
+  if (contextSummaryMethod(metadata) === "llm_summary") {
+    return "ok";
+  }
+  return "neutral";
+}
+
+export function contextProvenanceLabel(metadata: unknown): string {
+  if (contextSummaryMethod(metadata) === "llm_summary") {
+    const model = contextSummaryModel(metadata);
+    return `LLM · ${contextSummaryBackend(metadata)}${model !== "—" ? ` · ${model}` : ""}`;
+  }
+  return `fallback · ${contextSummaryBackend(metadata)}`;
 }
 
 export function recommendationStateTone(state: RecommendationState | string): "ok" | "danger" | "warning" | "neutral" {

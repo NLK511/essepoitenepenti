@@ -1196,6 +1196,10 @@ class RepositoryTests(unittest.TestCase):
             self.assertEqual(app_setting.key, "custom_key")
             self.assertEqual(app_setting.value, "custom value")
 
+            confidence_threshold = service.set_confidence_threshold("72.5")
+            self.assertEqual(confidence_threshold.key, "confidence_threshold")
+            self.assertEqual(confidence_threshold.value, "72.5")
+
             evaluation = service.set_evaluation_realism_settings(stop_buffer_pct="0.2", take_profit_buffer_pct="", friction_pct="0.3")
             self.assertEqual(evaluation["stop_buffer_pct"], 0.2)
             self.assertEqual(evaluation["take_profit_buffer_pct"], 0.05)
@@ -1216,6 +1220,10 @@ class RepositoryTests(unittest.TestCase):
             risk = service.set_risk_management_settings(enabled="false", max_daily_realized_loss_usd="12.5", max_open_positions="4", max_open_notional_usd="4000", max_position_notional_usd="1200", max_same_ticker_open_positions="2", max_consecutive_losses="5")
             self.assertFalse(risk["risk_management"]["enabled"])
             self.assertEqual(risk["risk_management"]["max_open_positions"], 4)
+
+            halt = service.set_risk_halt(enabled=True, reason="manual halt")
+            self.assertTrue(halt["halt_enabled"])
+            self.assertEqual(halt["halt_reason"], "manual halt")
 
             execution = service.set_order_execution_settings(enabled="true", broker="alpaca", account_mode="paper", notional_per_plan="1500")
             self.assertTrue(execution["order_execution"]["enabled"])

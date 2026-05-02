@@ -15,6 +15,7 @@ from trade_proposer_app.repositories.recommendation_outcomes import Recommendati
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.signal_gating_tuning_runs import RecommendationSignalGatingTuningRunRepository
 from trade_proposer_app.services.settings_domains import SettingsDomainService
+from trade_proposer_app.services.settings_mutations import SettingsMutationService
 
 
 class RecommendationSignalGatingTuningError(Exception):
@@ -125,6 +126,7 @@ class RecommendationSignalGatingTuningService:
     def __init__(self, session: Session) -> None:
         self.session = session
         self.settings = SettingsRepository(session)
+        self.settings_mutations = SettingsMutationService(repository=self.settings)
         self.samples = RecommendationDecisionSampleRepository(session)
         self.outcomes = RecommendationOutcomeRepository(session)
         self.context_snapshots = ContextSnapshotRepository(session)
@@ -214,14 +216,14 @@ class RecommendationSignalGatingTuningService:
         applied_config = None
         if apply:
             applied_threshold = round(winner.threshold, 2)
-            applied_config = self.settings.set_signal_gating_tuning_config(
-                threshold_offset=winner.config.threshold_offset,
-                confidence_adjustment=winner.config.confidence_adjustment,
-                near_miss_gap_cutoff=winner.config.near_miss_gap_cutoff,
-                shortlist_aggressiveness=winner.config.shortlist_aggressiveness,
-                degraded_penalty=winner.config.degraded_penalty,
-            )
-            self.settings.set_confidence_threshold(applied_threshold)
+            applied_config = self.settings_mutations.set_signal_gating_tuning_settings(
+                threshold_offset=str(winner.config.threshold_offset),
+                confidence_adjustment=str(winner.config.confidence_adjustment),
+                near_miss_gap_cutoff=str(winner.config.near_miss_gap_cutoff),
+                shortlist_aggressiveness=str(winner.config.shortlist_aggressiveness),
+                degraded_penalty=str(winner.config.degraded_penalty),
+            )["signal_gating_tuning"]
+            self.settings_mutations.set_confidence_threshold(str(applied_threshold))
 
         completed_at = datetime.now(timezone.utc)
         winner_dict = winner.to_dict()

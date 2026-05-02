@@ -14,7 +14,7 @@ import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionT
 import { ContextEventSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import { RecommendationPlanEvaluationSummary } from "../components/recommendation-plan-evaluation";
 import type { Job, RunDetailResponse, WatchlistEvaluationPolicy } from "../types";
-import { brokerExecutionStatusTone, detailLabel, extractDisplayLabels, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, runTone, yahooFinanceUrl } from "../utils";
+import { biasTone, brokerExecutionStatusTone, contextProvenanceLabel, detailLabel, extractDisplayLabels, formatDate, formatDuration, isRecord, jobTypeLabel, parseJsonRecord, runTone, yahooFinanceUrl } from "../utils";
 
 function scoreColor(value: number, min = -1, max = 1) {
   if (!Number.isFinite(value) || max <= min) {
@@ -24,16 +24,6 @@ function scoreColor(value: number, min = -1, max = 1) {
   const ratio = (clamped - min) / (max - min);
   const hue = ratio * 120;
   return `hsl(${hue}, 75%, 45%)`;
-}
-
-function biasTone(value: string): "ok" | "warning" | "neutral" {
-  if (value === "tailwind") {
-    return "ok";
-  }
-  if (value === "headwind") {
-    return "warning";
-  }
-  return "neutral";
 }
 
 function calibrationSliceSummary(value: unknown, label: string): string {
@@ -46,30 +36,6 @@ function calibrationSliceSummary(value: unknown, label: string): string {
   const resolvedCount = typeof item.resolved_count === "number" ? item.resolved_count : 0;
   const winRate = typeof item.win_rate_percent === "number" ? `${item.win_rate_percent}%` : "—";
   return `${label} ${key} · ${sampleStatus} · n=${resolvedCount} · win ${winRate}`;
-}
-
-function contextSummaryMethod(metadata: unknown): string {
-  return isRecord(metadata) && typeof metadata.context_summary_method === "string" ? metadata.context_summary_method : "unknown";
-}
-
-function contextSummaryBackend(metadata: unknown): string {
-  return isRecord(metadata) && typeof metadata.context_summary_backend === "string" ? metadata.context_summary_backend : "—";
-}
-
-function contextSummaryModel(metadata: unknown): string {
-  return isRecord(metadata) && typeof metadata.context_summary_model === "string" ? metadata.context_summary_model : "—";
-}
-
-function contextSummaryError(metadata: unknown): string | null {
-  return isRecord(metadata) && typeof metadata.context_summary_error === "string" ? metadata.context_summary_error : null;
-}
-
-function contextProvenanceLabel(metadata: unknown): string {
-  if (contextSummaryMethod(metadata) === "llm_summary") {
-    const model = contextSummaryModel(metadata);
-    return `LLM · ${contextSummaryBackend(metadata)}${model !== "—" ? ` · ${model}` : ""}`;
-  }
-  return `fallback · ${contextSummaryBackend(metadata)}`;
 }
 
 function lifecycleSummary(lifecycle: Record<string, unknown> | null, contradictory: string[]): string {

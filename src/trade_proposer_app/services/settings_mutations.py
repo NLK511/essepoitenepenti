@@ -18,6 +18,9 @@ class SettingsMutationService:
     def set_app_setting(self, *, key: str, value: str) -> AppSetting:
         return self.repository.set_setting(key=key.strip(), value=value.strip())
 
+    def set_confidence_threshold(self, value: str) -> AppSetting:
+        return self.repository.set_confidence_threshold(self._float(value, 60.0))
+
     def set_evaluation_realism_settings(
         self,
         *,
@@ -214,6 +217,9 @@ class SettingsMutationService:
         except ValueError as exc:
             raise ValueError(f"invalid provider credential: {exc}") from exc
         return {"provider": credential.provider, "api_key": credential.api_key}
+
+    def set_risk_halt(self, *, enabled: bool, reason: str = "") -> dict[str, object]:
+        return self.repository.set_risk_halt(enabled=enabled, reason=reason.strip())
 
     @staticmethod
     def _bool(value: str) -> bool:

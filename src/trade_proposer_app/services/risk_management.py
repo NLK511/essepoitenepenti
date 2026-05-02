@@ -9,6 +9,7 @@ from trade_proposer_app.repositories.broker_positions import BrokerPositionRepos
 from trade_proposer_app.repositories.risk_halt_events import RiskHaltEventRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.settings_domains import SettingsDomainService
+from trade_proposer_app.services.settings_mutations import SettingsMutationService
 
 OPEN_STATUSES = {BrokerPositionStatus.SUBMITTED.value, BrokerPositionStatus.OPEN.value}
 CLOSED_STATUSES = BROKER_RESOLVED_POSITION_STATUSES
@@ -28,6 +29,7 @@ class BrokerRiskManager:
         halt_events: RiskHaltEventRepository | None = None,
     ) -> None:
         self.settings = settings
+        self.settings_mutations = SettingsMutationService(repository=settings)
         self.positions = positions
         self.halt_events = halt_events
 
@@ -88,7 +90,7 @@ class BrokerRiskManager:
 
     def halt(self, reason: str) -> AccountRiskState:
         previous = bool(SettingsDomainService(repository=self.settings).risk_settings().risk_management["halt_enabled"])
-        self.settings.set_risk_halt(enabled=True, reason=reason or "manual halt")
+        self.settings_mutations.set_risk_halt(enabled=True, reason=reason or "manual halt")
         if self.halt_events is not None:
             self.halt_events.create(
                 action="halt",
@@ -100,7 +102,7 @@ class BrokerRiskManager:
 
     def resume(self) -> AccountRiskState:
         previous = bool(SettingsDomainService(repository=self.settings).risk_settings().risk_management["halt_enabled"])
-        self.settings.set_risk_halt(enabled=False, reason="")
+        self.settings_mutations.set_risk_halt(enabled=False, reason="")
         if self.halt_events is not None:
             self.halt_events.create(
                 action="resume",

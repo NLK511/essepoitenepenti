@@ -18,7 +18,7 @@ import type {
   RecommendationSetupFamilyReviewSummary,
   Run,
 } from "../types";
-import { detailLabel, extractDisplayLabels, formatDate, yahooFinanceUrl } from "../utils";
+import { biasTone, contextProvenanceLabel, contextSummaryError, detailLabel, directionTone, extractDisplayLabels, formatDate, yahooFinanceUrl } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams, computedAfter?: string | null): string {
   const query = new URLSearchParams(searchParams);
@@ -33,26 +33,6 @@ function buildQuery(searchParams: URLSearchParams, computedAfter?: string | null
   }
   const queryString = query.toString();
   return queryString ? `/api/recommendation-plans?${queryString}` : "/api/recommendation-plans";
-}
-
-function actionTone(action: string): "ok" | "warning" | "neutral" {
-  if (action === "long") {
-    return "ok";
-  }
-  if (action === "short") {
-    return "warning";
-  }
-  return "neutral";
-}
-
-function biasTone(value: string): "ok" | "warning" | "neutral" {
-  if (value === "tailwind") {
-    return "ok";
-  }
-  if (value === "headwind") {
-    return "warning";
-  }
-  return "neutral";
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -92,40 +72,6 @@ function truncateText(value: string, maxLength: number): string {
     return value;
   }
   return `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
-}
-
-function contextSummaryMethod(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null | undefined): string {
-  return snapshot && typeof snapshot.metadata?.context_summary_method === "string" ? snapshot.metadata.context_summary_method : "unknown";
-}
-
-function contextSummaryBackend(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null | undefined): string {
-  return snapshot && typeof snapshot.metadata?.context_summary_backend === "string" ? snapshot.metadata.context_summary_backend : "—";
-}
-
-function contextSummaryModel(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null | undefined): string {
-  return snapshot && typeof snapshot.metadata?.context_summary_model === "string" ? snapshot.metadata.context_summary_model : "—";
-}
-
-function contextSummaryError(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null | undefined): string | null {
-  return snapshot && typeof snapshot.metadata?.context_summary_error === "string" ? snapshot.metadata.context_summary_error : null;
-}
-
-function contextProvenanceTone(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null | undefined): "ok" | "warning" | "neutral" {
-  if (contextSummaryError(snapshot)) {
-    return "warning";
-  }
-  if (contextSummaryMethod(snapshot) === "llm_summary") {
-    return "ok";
-  }
-  return "neutral";
-}
-
-function contextProvenanceLabel(snapshot: MacroContextSnapshot | IndustryContextSnapshot | null | undefined): string {
-  if (contextSummaryMethod(snapshot) === "llm_summary") {
-    const model = contextSummaryModel(snapshot);
-    return `LLM · ${contextSummaryBackend(snapshot)}${model !== "—" ? ` · ${model}` : ""}`;
-  }
-  return `fallback · ${contextSummaryBackend(snapshot)}`;
 }
 
 function docsLink(doc: string, section?: string): string {
@@ -588,7 +534,7 @@ export function RecommendationPlansPage() {
                           <div className="helper-text top-gap-small">horizon {plan.horizon} · setup {setupFamily}</div>
                         </td>
                         <td>
-                          <Badge tone={actionTone(plan.action)}>{plan.action}</Badge>
+                          <Badge tone={directionTone(plan.action)}>{plan.action}</Badge>
                           <div className="helper-text top-gap-small">{actionReason}</div>
                         </td>
                         <td>
