@@ -5,31 +5,11 @@ import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import { ScoreBadge, WarningSummary } from "../components/decision-surface";
 import type { TickerSignalSnapshot } from "../types";
-import { detailLabel, extractDisplayLabels, formatDate, yahooFinanceUrl } from "../utils";
+import { biasTone, directionTone, detailLabel, extractDisplayLabels, formatDate, yahooFinanceUrl } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams): string {
   const query = searchParams.toString();
   return query ? `/api/context/ticker-signals?${query}` : "/api/context/ticker-signals";
-}
-
-function directionTone(direction: string): "ok" | "warning" | "neutral" {
-  if (direction === "long") {
-    return "ok";
-  }
-  if (direction === "short") {
-    return "warning";
-  }
-  return "neutral";
-}
-
-function biasTone(value: string): "ok" | "warning" | "neutral" {
-  if (value === "tailwind") {
-    return "ok";
-  }
-  if (value === "headwind") {
-    return "warning";
-  }
-  return "neutral";
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
