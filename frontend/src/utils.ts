@@ -41,8 +41,35 @@ export function isFailedRunStatus(status: string): boolean {
   return status.trim().toLowerCase() === "failed";
 }
 
+function normalizeRunStatus(status: RunStatus | string): string {
+  return typeof status === "string" ? status.trim().toLowerCase() : status;
+}
+
+export function isQueuedOrRunningRunStatus(status: RunStatus | string): boolean {
+  const normalized = normalizeRunStatus(status);
+  return normalized === "queued" || normalized === "running";
+}
+
+export function isCompletedWithWarningsRunStatus(status: RunStatus | string): boolean {
+  return normalizeRunStatus(status) === "completed_with_warnings";
+}
+
+export function planGenerationTuningConfigTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "active") {
+    return "ok";
+  }
+  if (normalized === "failed") {
+    return "danger";
+  }
+  if (normalized === "running") {
+    return "info";
+  }
+  return "neutral";
+}
+
 export function runTone(status: RunStatus | string): "ok" | "warning" | "danger" | "neutral" {
-  const normalized = typeof status === "string" ? status.trim().toLowerCase() : status;
+  const normalized = normalizeRunStatus(status);
   if (normalized === "completed") {
     return "ok";
   }

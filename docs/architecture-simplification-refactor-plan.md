@@ -166,7 +166,7 @@ Implemented:
 - effective outcome and shared metrics code use canonical outcome/position status constants
 - status helper functions for normalization, terminal execution checks, resolved trade outcomes, preflight status checks, and broker-position-to-outcome mapping
 - tests for status helper mappings
-- health/preflight/dashboard and broker-orders consumers use canonical helpers for their remaining obvious status checks
+- health/preflight/dashboard, broker-orders, debugger, and plan-generation-tuning consumers use canonical helpers for their remaining obvious status checks
 
 Still needed:
 - migrate remaining raw status-string comparisons where it reduces ambiguity
@@ -273,6 +273,7 @@ The audit found the following areas still worth reconciling, from highest to low
 5. **Frontend helper drift**
    - The shared utility module is useful, but it can become a dumping ground if every label/tone formatter gets extracted blindly.
    - Plan: keep only truly identical mappings in shared helpers, and keep domain-specific or single-use label logic local when it communicates meaning better there.
+   - The remaining obvious reuse targets are run-status counters and plan-generation tuning config/run tones.
 
 6. **Duplicate page fetch/summary glue**
    - Some pages still make multiple API calls and merge summary data locally when a backend workbench would be clearer.

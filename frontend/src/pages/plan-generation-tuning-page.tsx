@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { getJson, postForm } from "../api";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { planGenerationTuningConfigTone, runTone } from "../utils";
 
 const glossaryDoc = (section: string) => `/docs?doc=glossary&section=${section}`;
 const tuningSpecDoc = "/docs?doc=plan-generation-tuning-spec";
@@ -13,13 +14,6 @@ import type {
   PlanGenerationTuningRunsResponse,
   PlanGenerationTuningValidationResponse,
 } from "../types";
-
-function tone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
-  if (status === "completed" || status === "active") return "ok";
-  if (status === "failed") return "danger";
-  if (status === "running") return "info";
-  return "neutral";
-}
 
 export function PlanGenerationTuningPage() {
   const [state, setState] = useState<PlanGenerationTuningResponse | null>(null);
@@ -138,7 +132,7 @@ export function PlanGenerationTuningPage() {
                   <button key={run.id ?? run.created_at} type="button" className={`data-card data-card-button ${selectedRunId === run.id ? "data-card-selected" : ""}`} onClick={() => setSelectedRunId(run.id ?? null)}>
                     <div className="data-card-header">
                       <div className="cluster">
-                        <Badge tone={tone(run.status)}>{run.status}</Badge>
+                        <Badge tone={runTone(run.status)}>{run.status}</Badge>
                         <Badge>{run.mode}</Badge>
                         <Badge>#{run.id ?? "?"}</Badge>
                       </div>
@@ -189,7 +183,7 @@ export function PlanGenerationTuningPage() {
                   <article key={config.id ?? config.version_label} className="data-card">
                     <div className="data-card-header">
                       <div className="cluster">
-                        <Badge tone={tone(config.status)}>{config.status}</Badge>
+                        <Badge tone={planGenerationTuningConfigTone(config.status)}>{config.status}</Badge>
                         <Badge>{config.version_label}</Badge>
                         <Badge>{config.source}</Badge>
                       </div>
