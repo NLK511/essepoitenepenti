@@ -214,13 +214,25 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
 
         manual_run = self.service.run(mode="manual", limit=50)
         explore_run = self.service.run(mode="explore", limit=None)
+        wide_run = self.service.run(mode="wide", limit=None)
 
         self.assertGreater(explore_run.candidate_count, manual_run.candidate_count)
+        self.assertGreaterEqual(wide_run.candidate_count, explore_run.candidate_count)
         self.assertTrue(bool(explore_run.summary.get("exploration_mode")))
+        self.assertTrue(bool(wide_run.summary.get("wide_research_mode")))
         self.assertIsInstance(explore_run.summary.get("exploration_seed"), int)
+        self.assertIsInstance(wide_run.summary.get("exploration_seed"), int)
         self.assertGreaterEqual(explore_run.summary.get("history_span_days", 0), 30)
         self.assertEqual(explore_run.summary.get("exploration_campaign_plan")[0]["name"], "entry_calibration")
+        self.assertEqual(wide_run.summary.get("validation_mode"), "rolling_walk_forward")
+        self.assertGreaterEqual(wide_run.summary.get("validation_slice_count", 0), explore_run.summary.get("validation_slice_count", 0))
         for candidate in explore_run.candidates:
+            self.assertIn("campaign", candidate.metric_breakdown)
+            for key, value in candidate.config.items():
+                definition = PARAMETER_BY_KEY[key]
+                self.assertGreaterEqual(value, definition.exploration_min)
+                self.assertLessEqual(value, definition.exploration_max)
+        for candidate in wide_run.candidates:
             self.assertIn("campaign", candidate.metric_breakdown)
             for key, value in candidate.config.items():
                 definition = PARAMETER_BY_KEY[key]
@@ -491,6 +503,12 @@ class PlanGenerationTuningRouteTests(unittest.IsolatedAsyncioTestCase):
             explore_payload = explore_response.json()
             self.assertEqual(explore_payload["summary"]["validation_mode"], "rolling_walk_forward")
             self.assertIn("validation_slice_count", explore_payload["summary"])
+
+            wide_response = await client.post("/api/plan-generation-tuning/run?mode=wide&apply=false")
+            self.assertEqual(wide_response.status_code, 200)
+            wide_payload = wide_response.json()
+            self.assertEqual(wide_payload["summary"]["validation_mode"], "rolling_walk_forward")
+            self.assertTrue(wide_payload["summary"]["wide_research_mode"])
 
             runs = await client.get("/api/plan-generation-tuning/runs?limit=10")
             self.assertEqual(runs.status_code, 200)

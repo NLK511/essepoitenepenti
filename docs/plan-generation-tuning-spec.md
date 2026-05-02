@@ -25,7 +25,7 @@ The app currently ships a **phase-1 bounded implementation** of plan-generation 
 
 What is live now:
 - dedicated plan-generation tuning routes, persistence, runs, candidates, and config versions
-- a real research page for inspecting runs, grouped candidate experiments, per-campaign results, config promotion, and the ranked exploration campaign plan
+- a real research page for inspecting runs, grouped candidate experiments, per-campaign results, config promotion, the ranked exploration campaign plan, and run controls for manual, explore, and wide research
 - settings for active config selection and stored automation readiness flags
 - bounded parameter-schema-driven candidate generation
 - deterministic candidate ranking centered on win rate, then win count, then expected value
@@ -368,8 +368,10 @@ This yields a default exploration budget of `144` candidates per run before dedu
 Unless explicitly overridden by config:
 - max candidates per scheduled automatic run: `50`
 - max candidates per manual research run: `200`
+- max candidates per wide research run: `500`
 - max changed parameters per candidate in automatic mode: `5`
 - max absolute step distance from live baseline in automatic mode: parameter-specific, but default `2 steps`
+- wide research may use deeper step sizes and more random mutations, but it must remain deterministic, capped, and replayable
 
 ## Candidate scoring outputs
 
@@ -561,7 +563,7 @@ One row per tuning execution.
 Must include at least:
 - `id`
 - `status`
-- `mode` (`manual`, `scheduled`)
+- `mode` (`manual`, `scheduled`, `explore`, `wide`)
 - `objective_name`
 - `promotion_mode` (`dry_run`, `manual_promote`, `auto_promote`, `rollback_only`)
 - `started_at`

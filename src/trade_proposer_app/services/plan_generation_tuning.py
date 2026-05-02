@@ -149,7 +149,9 @@ class PlanGenerationTuningService:
         started_at = datetime.now(timezone.utc)
         baseline_version = self._resolve_active_config_version()
         active_config = normalize_plan_generation_tuning_config(baseline_version.config)
-        explore_mode = mode.strip().lower() in {"explore", "exploration", "research"}
+        mode_profile = self._mode_profile(mode)
+        explore_mode = mode_profile["explore_like"]
+        wide_mode = mode_profile["wide"]
         effective_limit = None if explore_mode else limit
         records = self._eligible_records(ticker=ticker, setup_family=setup_family, limit=effective_limit)
         settings_payload = self.settings_domains.strategy_settings().plan_generation_tuning
@@ -181,6 +183,8 @@ class PlanGenerationTuningService:
         winner = evaluations[0]
         baseline_eval = next(item for item in evaluations if item.changed_keys == [])
         history_span_days = self._history_span_days(records)
+        validation_days = 120 if wide_mode else 90
+        step_days = 14 if wide_mode else 30
         walk_forward_validation = (
             walk_forward_service.summarize_records(
                 records=records,
@@ -189,8 +193,8 @@ class PlanGenerationTuningService:
                 candidate_label=f"run-{mode}-winner" if mode else "candidate",
                 baseline_label="active-baseline",
                 lookback_days=history_span_days,
-                validation_days=90,
-                step_days=30,
+                validation_days=validation_days,
+                step_days=step_days,
                 min_validation_resolved=min_validation_resolved,
             )
             if explore_mode
@@ -203,8 +207,8 @@ class PlanGenerationTuningService:
                 setup_family=setup_family,
                 limit=None if explore_mode else (effective_limit if effective_limit is not None else len(records) or 1),
                 lookback_days=history_span_days,
-                validation_days=90,
-                step_days=30,
+                validation_days=validation_days,
+                step_days=step_days,
                 min_validation_resolved=min_validation_resolved,
             )
         )
@@ -225,6 +229,7 @@ class PlanGenerationTuningService:
                     "baseline": self._candidate_payload(baseline_eval),
                     "promotion_requested": apply,
                     "exploration_mode": explore_mode,
+                    "wide_research_mode": wide_mode,
                     "exploration_seed": exploration_seed,
                     "exploration_campaign_plan": exploration_campaigns(),
                     "search_record_count": len(search_records),
@@ -240,6 +245,7 @@ class PlanGenerationTuningService:
                     "limit": limit,
                     "mode": mode,
                     "explore_mode": explore_mode,
+                    "wide_mode": wide_mode,
                 },
                 started_at=started_at,
                 completed_at=datetime.now(timezone.utc),
@@ -442,12 +448,15 @@ class PlanGenerationTuningService:
         )
 
     def _candidate_configs(self, active_config: dict[str, float], *, mode: str, seed: int) -> list[dict[str, float]]:
-        explore_mode = mode.strip().lower() in {"explore", "exploration", "research"}
+        mode_profile = self._mode_profile(mode)
+        explore_mode = mode_profile["explore_like"]
+        wide_mode = mode_profile["wide"]
         configs: list[dict[str, float]] = [dict(active_config)]
         parameter_keys = list(PARAMETER_BY_KEY.keys())
+        step_counts = mode_profile["step_counts"]
+        pair_steps = mode_profile["pair_steps"]
         for key, definition in PARAMETER_BY_KEY.items():
             base_value = active_config.get(key, definition.default)
-            step_counts = (-4, -3, -2, -1, 1, 2, 3, 4) if explore_mode else (-2, -1, 1, 2)
             for step_count in step_counts:
                 mutated = dict(active_config)
                 candidate = base_value + (definition.step * step_count)
@@ -459,7 +468,6 @@ class PlanGenerationTuningService:
             for key_b in parameter_keys[index + 1 :]:
                 definition_b = PARAMETER_BY_KEY[key_b]
                 base_b = active_config.get(key_b, definition_b.default)
-                pair_steps = (-2, -1, 1, 2) if explore_mode else (-1, 1)
                 for step_a in pair_steps:
                     for step_b in pair_steps:
                         mutated = dict(active_config)
@@ -468,7 +476,8 @@ class PlanGenerationTuningService:
                         mutated[key_a] = self._campaign_bounded_value(definition_a, candidate_a, explore_mode=explore_mode)
                         mutated[key_b] = self._campaign_bounded_value(definition_b, candidate_b, explore_mode=explore_mode)
                         configs.append(mutated)
-        for version in self.repository.list_config_versions(limit=100):
+        historical_limit = mode_profile["historical_limit"]
+        for version in self.repository.list_config_versions(limit=historical_limit):
             if not version.config:
                 continue
             normalized = normalize_plan_generation_tuning_config(version.config)
@@ -480,21 +489,22 @@ class PlanGenerationTuningService:
             configs.append(normalized)
         if explore_mode:
             rng = random.Random(seed)
-            max_random_candidates = 36
-            max_random_changes = 4
+            max_random_candidates = mode_profile["max_random_candidates"]
+            max_random_changes = mode_profile["max_random_changes"]
+            random_steps = mode_profile["random_steps"]
             for _ in range(max_random_candidates):
                 mutated = dict(active_config)
                 change_count = rng.randint(1, max_random_changes)
                 for key in rng.sample(parameter_keys, change_count):
                     definition = PARAMETER_BY_KEY[key]
                     base_value = mutated.get(key, definition.default)
-                    step_count = rng.choice([-4, -3, -2, -1, 1, 2, 3, 4])
+                    step_count = rng.choice(random_steps)
                     candidate = base_value + (definition.step * step_count)
                     mutated[key] = self._campaign_bounded_value(definition, candidate, explore_mode=True)
                 configs.append(mutated)
         deduped: list[dict[str, float]] = []
         fingerprints: set[tuple[tuple[str, float], ...]] = set()
-        max_candidates = 200 if explore_mode else 50
+        max_candidates = mode_profile["max_candidates"]
         for config in configs:
             normalized = normalize_plan_generation_tuning_config(config)
             if explore_mode:
@@ -528,6 +538,48 @@ class PlanGenerationTuningService:
         lower = definition.exploration_min if explore_mode else definition.minimum
         upper = definition.exploration_max if explore_mode else definition.maximum
         return round(max(lower, min(upper, value)), 4)
+
+    @staticmethod
+    def _mode_profile(mode: str) -> dict[str, object]:
+        normalized = mode.strip().lower()
+        if normalized in {"wide", "expensive", "deep", "deep_research"}:
+            return {
+                "name": "wide",
+                "explore_like": True,
+                "wide": True,
+                "step_counts": (-6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6),
+                "pair_steps": (-3, -2, -1, 1, 2, 3),
+                "historical_limit": 250,
+                "max_random_candidates": 96,
+                "max_random_changes": 6,
+                "random_steps": (-6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6),
+                "max_candidates": 500,
+            }
+        if normalized in {"explore", "exploration", "research"}:
+            return {
+                "name": "explore",
+                "explore_like": True,
+                "wide": False,
+                "step_counts": (-4, -3, -2, -1, 1, 2, 3, 4),
+                "pair_steps": (-2, -1, 1, 2),
+                "historical_limit": 100,
+                "max_random_candidates": 36,
+                "max_random_changes": 4,
+                "random_steps": (-4, -3, -2, -1, 1, 2, 3, 4),
+                "max_candidates": 200,
+            }
+        return {
+            "name": "manual",
+            "explore_like": False,
+            "wide": False,
+            "step_counts": (-2, -1, 1, 2),
+            "pair_steps": (-1, 1),
+            "historical_limit": 100,
+            "max_random_candidates": 0,
+            "max_random_changes": 0,
+            "random_steps": (-1, 1),
+            "max_candidates": 50,
+        }
 
     @staticmethod
     def _history_span_days(records: list[EligibleTuningRecord]) -> int:
