@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
+from trade_proposer_app.domain.models import PlanGenerationWalkForwardSummary
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningError, PlanGenerationTuningService
 from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
 from trade_proposer_app.services.plan_generation_walk_forward import PlanGenerationWalkForwardService
@@ -147,19 +148,39 @@ async def validate_plan_generation_tuning(
         baseline_version = current_active_version
     candidate_config = normalize_plan_generation_tuning_config(candidate_version.config)
     baseline_config = normalize_plan_generation_tuning_config(baseline_version.config)
-    summary = PlanGenerationWalkForwardService(service).summarize(
-        candidate_config=candidate_config,
-        baseline_config=baseline_config,
-        candidate_label=candidate_version.version_label,
-        baseline_label=baseline_version.version_label,
-        ticker=ticker,
-        setup_family=setup_family,
-        limit=limit,
-        lookback_days=lookback_days,
-        validation_days=validation_days,
-        step_days=step_days,
-        min_validation_resolved=min_validation_resolved,
-    )
+    try:
+        summary = PlanGenerationWalkForwardService(service).summarize(
+            candidate_config=candidate_config,
+            baseline_config=baseline_config,
+            candidate_label=candidate_version.version_label,
+            baseline_label=baseline_version.version_label,
+            ticker=ticker,
+            setup_family=setup_family,
+            limit=limit,
+            lookback_days=lookback_days,
+            validation_days=validation_days,
+            step_days=step_days,
+            min_validation_resolved=min_validation_resolved,
+        ).model_dump(mode="json")
+    except ValueError as exc:
+        summary = PlanGenerationWalkForwardSummary(
+            total_slices=0,
+            lookback_days=lookback_days,
+            validation_days=validation_days,
+            step_days=step_days,
+            min_validation_resolved=min_validation_resolved,
+            candidate_label=candidate_version.version_label,
+            baseline_label=baseline_version.version_label,
+            qualified_slices=0,
+            candidate_wins=0,
+            baseline_wins=0,
+            ties=0,
+            average_win_rate_delta=None,
+            average_expected_value_delta=None,
+            promotion_recommended=False,
+            promotion_rationale=str(exc),
+            slices=[],
+        ).model_dump(mode="json")
     return {
         "summary": summary,
         "candidate_version": candidate_version,

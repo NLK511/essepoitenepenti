@@ -351,3 +351,41 @@ class PlanGenerationTuningRouteTests(unittest.IsolatedAsyncioTestCase):
             detail_payload = promoted_detail.json()
             self.assertEqual(detail_payload["config"]["id"], promoted_config_id)
             self.assertTrue(any(event["event_type"] in {"config_promoted", "config_promoted_manual"} for event in detail_payload["events"]))
+
+
+class PlanGenerationTuningValidationFallbackTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self._previous_single_user_auth_enabled = settings.single_user_auth_enabled
+        settings.single_user_auth_enabled = False
+        self.engine = create_engine(
+            "sqlite://",
+            future=True,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+            pool_reset_on_return=None,
+        )
+        Base.metadata.create_all(bind=self.engine)
+
+        def override_db_session():
+            session = Session(bind=self.engine)
+            try:
+                yield session
+            finally:
+                session.close()
+
+        app.dependency_overrides[get_db_session] = override_db_session
+
+    async def asyncTearDown(self) -> None:
+        settings.single_user_auth_enabled = self._previous_single_user_auth_enabled
+        app.dependency_overrides.clear()
+        self.engine.dispose()
+
+    async def test_validation_returns_fallback_summary_when_no_records_exist(self) -> None:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/api/plan-generation-tuning/validation")
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+            self.assertEqual(payload["summary"]["qualified_slices"], 0)
+            self.assertFalse(payload["summary"]["promotion_recommended"])
+            self.assertIn("no eligible records", payload["summary"]["promotion_rationale"].lower())
