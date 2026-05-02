@@ -6,7 +6,7 @@ from datetime import datetime
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.services.plan_policy_evaluator import PlanPolicyEvaluation, PlanPolicyEvaluator
 from trade_proposer_app.services.plan_reliability_report import PlanReliabilityReport, PlanReliabilityReportService
-from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicy
+from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicy, TradeDecisionPolicyService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
@@ -29,9 +29,11 @@ class TradePolicyEvaluationService:
         self,
         outcomes: EffectivePlanOutcomeRepository,
         taxonomy_service: TickerTaxonomyService | None = None,
+        policy_service: TradeDecisionPolicyService | None = None,
     ) -> None:
         self.outcomes = outcomes
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
+        self.policy_service = policy_service
 
     def summarize(
         self,
@@ -54,4 +56,20 @@ class TradePolicyEvaluationService:
         return TradePolicyEvaluationSummary(
             policy_evaluation=policy_evaluator.evaluate_outcomes(policy, outcomes),
             reliability_report=reliability_report_service.summarize_outcomes(outcomes),
+        )
+
+    def summarize_active_policy(
+        self,
+        *,
+        evaluated_after: datetime | None = None,
+        evaluated_before: datetime | None = None,
+        limit: int = 500_000,
+    ) -> TradePolicyEvaluationSummary:
+        if self.policy_service is None:
+            raise ValueError("policy_service is required to summarize the active policy")
+        return self.summarize(
+            self.policy_service.active_policy(),
+            evaluated_after=evaluated_after,
+            evaluated_before=evaluated_before,
+            limit=limit,
         )

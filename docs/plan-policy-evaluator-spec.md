@@ -72,6 +72,8 @@ These labels are conservative and should gate autonomous promotion in future mig
 ## Shared policy/reliability evaluation
 `TradePolicyEvaluationService` combines the policy evaluation with the canonical reliability report so operator-facing summaries do not have to stitch those contracts together separately.
 
+When an operator-facing consumer needs the current active policy, it should ask the shared combined service via `TradePolicyEvaluationService.summarize_active_policy()` rather than reloading policy settings and then calling the lower-level evaluators itself.
+
 ## Future migrations
 Future batches should migrate:
 - plan-generation tuning candidate scoring

@@ -39,8 +39,7 @@ class RecommendationQualitySummaryService:
         self.settings_domains = SettingsDomainService(repository=self.settings)
         self.performance = PerformanceAssessmentService(session)
         self.tuning = PlanGenerationTuningService(session)
-        self.trade_policy = TradeDecisionPolicyService(session)
-        self.policy_evaluation = TradePolicyEvaluationService(self.effective_outcomes)
+        self.policy_evaluation = TradePolicyEvaluationService(self.effective_outcomes, policy_service=TradeDecisionPolicyService(session))
 
     def summarize(self) -> dict[str, object]:
         now = datetime.now(timezone.utc)
@@ -49,8 +48,7 @@ class RecommendationQualitySummaryService:
         baseline_version = self.tuning.ensure_baseline_config_version()
         current_config = normalize_plan_generation_tuning_config(current_version.config)
         baseline_config = normalize_plan_generation_tuning_config(baseline_version.config)
-        active_policy = self.trade_policy.active_policy()
-        policy_review = self.policy_evaluation.summarize(active_policy, limit=self.METRIC_SAMPLE_LIMIT)
+        policy_review = self.policy_evaluation.summarize_active_policy(limit=self.METRIC_SAMPLE_LIMIT)
         walk_forward: dict[str, object] | None = None
         walk_forward_error: str | None = None
         try:

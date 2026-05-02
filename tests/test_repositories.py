@@ -991,6 +991,37 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(summary.reliability_report.resolved_outcomes, 2)
         self.assertEqual(summary.reliability_report.by_confidence_bucket[0].key, "50_to_64")
 
+    def test_trade_policy_evaluation_service_can_summarize_the_active_policy(self) -> None:
+        outcomes = [
+            RecommendationPlanOutcome(
+                recommendation_plan_id=1,
+                ticker="AAPL",
+                action="long",
+                outcome="win",
+                status="resolved",
+                confidence_percent=60.0,
+                confidence_bucket="50_to_64",
+                setup_family="continuation",
+                outcome_source="broker",
+                realized_pnl=12.0,
+            ),
+        ]
+
+        class StubPolicyService:
+            def active_policy(self) -> TradeDecisionPolicy:
+                return TradeDecisionPolicy(
+                    policy_id="active-policy",
+                    confidence_threshold=50.0,
+                    allow_longs=True,
+                    allow_shorts=True,
+                    allowed_setup_families=("continuation",),
+                )
+
+        summary = TradePolicyEvaluationService(StubEffectiveOutcomeRepository(outcomes), policy_service=StubPolicyService()).summarize_active_policy()
+
+        self.assertEqual(summary.policy_evaluation.policy_id, "active-policy")
+        self.assertEqual(summary.reliability_report.total_outcomes, 1)
+
     def test_plan_reliability_report_summarizes_canonical_effective_cohorts(self) -> None:
         outcomes = [
             RecommendationPlanOutcome(

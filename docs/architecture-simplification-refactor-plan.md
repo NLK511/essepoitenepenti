@@ -256,7 +256,7 @@ The audit found the following areas still worth reconciling, from highest to low
 
 2. **Policy/reliability contract overlap**
    - `TradePolicyEvaluationService`, `PlanPolicyEvaluator`, and `PlanReliabilityReportService` are separate, but they represent one operator question: "is the active selection policy healthy against broker-preferred outcomes?"
-   - Plan: keep the lower-level calculators as facets, but move all operator-facing quality/tuning consumers onto `TradePolicyEvaluationService` so fetch/reconciliation logic stays in one place.
+   - Plan: keep the lower-level calculators as facets, but move all operator-facing quality/tuning consumers onto `TradePolicyEvaluationService` so fetch/reconciliation logic stays in one place. The active-policy quality summary now flows through `TradePolicyEvaluationService.summarize_active_policy()` instead of stitching policy selection in the caller.
 
 3. **Broker reconciliation and workbench coordination**
    - Broker orders, positions, risk state, halt events, and sync-related settings are still stitched together across a few backend layers.
