@@ -47,6 +47,7 @@ export function RecommendationQualityPage() {
   const confidenceBucket = reliabilityReport?.by_confidence_bucket[0] ?? null;
   const familyBucket = reliabilityReport?.by_setup_family[0] ?? null;
   const actionBucket = reliabilityReport?.by_action[0] ?? null;
+  const planGenerationSettings = data?.summary.tuning_settings.plan_generation_tuning ?? data?.summary.tuning_settings.plan_generation ?? null;
 
   return (
     <>
@@ -107,9 +108,9 @@ export function RecommendationQualityPage() {
                 <div className="data-point"><span className="data-point-label">confidence threshold</span><span className="data-point-value">{data.summary.tuning_settings.confidence_threshold.toFixed(1)}</span></div>
                 <div className="data-point"><span className="data-point-label">shortlist aggressiveness</span><span className="data-point-value">{data.summary.tuning_settings.signal_gating.shortlist_aggressiveness.toFixed(2)}</span></div>
                 <div className="data-point"><span className="data-point-label">degraded penalty</span><span className="data-point-value">{data.summary.tuning_settings.signal_gating.degraded_penalty.toFixed(2)}</span></div>
-                <div className="data-point"><span className="data-point-label">plan-gen min actionable</span><span className="data-point-value">{data.summary.tuning_settings.plan_generation.min_actionable_resolved}</span></div>
-                <div className="data-point"><span className="data-point-label">plan-gen min validation</span><span className="data-point-value">{data.summary.tuning_settings.plan_generation.min_validation_resolved}</span></div>
-                <div className="data-point"><span className="data-point-label">auto promote</span><span className="data-point-value">{data.summary.tuning_settings.plan_generation.auto_promote_enabled ? "on" : "off"}</span></div>
+                <div className="data-point"><span className="data-point-label">plan-gen min actionable</span><span className="data-point-value">{planGenerationSettings?.min_actionable_resolved ?? "—"}</span></div>
+                <div className="data-point"><span className="data-point-label">plan-gen min validation</span><span className="data-point-value">{planGenerationSettings?.min_validation_resolved ?? "—"}</span></div>
+                <div className="data-point"><span className="data-point-label">auto promote</span><span className="data-point-value">{planGenerationSettings?.auto_promote_enabled ? "on" : "off"}</span></div>
               </div>
               {data.summary.active_policy_evaluation ? (
                 <div className="data-points top-gap-medium">

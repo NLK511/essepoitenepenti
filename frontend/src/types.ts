@@ -338,7 +338,14 @@ export interface RecommendationQualitySummary extends RecommendationQualityWindo
       shortlist_aggressiveness: number;
       degraded_penalty: number;
     };
-    plan_generation: {
+    plan_generation_tuning: {
+      active_config_version_id: number | null;
+      auto_enabled: boolean;
+      auto_promote_enabled: boolean;
+      min_actionable_resolved: number;
+      min_validation_resolved: number;
+    };
+    plan_generation?: {
       active_config_version_id: number | null;
       auto_enabled: boolean;
       auto_promote_enabled: boolean;
