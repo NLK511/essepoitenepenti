@@ -36,7 +36,7 @@ class PlanGenerationWalkForwardService:
         baseline_label: str = "baseline",
         ticker: str | None = None,
         setup_family: str | None = None,
-        limit: int = 500,
+        limit: int | None = 500,
         lookback_days: int = 365,
         validation_days: int = 90,
         step_days: int = 30,
@@ -157,7 +157,7 @@ class PlanGenerationWalkForwardService:
             slices=slices,
         )
 
-    def _eligible_records(self, *, ticker: str | None, setup_family: str | None, limit: int):
+    def _eligible_records(self, *, ticker: str | None, setup_family: str | None, limit: int | None):
         return self.tuning_service._eligible_records(ticker=ticker, setup_family=setup_family, limit=limit)
 
     @staticmethod

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import hashlib
 import math
+import random
 
 from sqlalchemy.orm import Session
 
@@ -136,12 +138,14 @@ class PlanGenerationTuningService:
         auto: bool | None = None,
         ticker: str | None = None,
         setup_family: str | None = None,
-        limit: int = 500,
+        limit: int | None = 500,
     ) -> PlanGenerationTuningRun:
         started_at = datetime.now(timezone.utc)
         baseline_version = self._resolve_active_config_version()
         active_config = normalize_plan_generation_tuning_config(baseline_version.config)
-        records = self._eligible_records(ticker=ticker, setup_family=setup_family, limit=limit)
+        explore_mode = mode.strip().lower() in {"explore", "exploration", "research"}
+        effective_limit = None if explore_mode else limit
+        records = self._eligible_records(ticker=ticker, setup_family=setup_family, limit=effective_limit)
         settings_payload = self.settings_domains.strategy_settings().plan_generation_tuning
         min_actionable_resolved = int(settings_payload["min_actionable_resolved"])
         min_validation_resolved = int(settings_payload["min_validation_resolved"])
@@ -150,11 +154,13 @@ class PlanGenerationTuningService:
                 f"insufficient eligible records for plan generation tuning: {len(records)} available, minimum is {min_actionable_resolved}"
             )
         search_records, validation_records = self._split_records(records, min_validation=min_validation_resolved)
-        candidates = self._candidate_configs(active_config)
+        exploration_seed = self._exploration_seed(active_config=active_config, records=records, mode=mode)
+        candidates = self._candidate_configs(active_config, mode=mode, seed=exploration_seed)
         evaluations = [self._evaluate_candidate(config, active_config, search_records, validation_records) for config in candidates]
         evaluations.sort(key=self._candidate_sort_key, reverse=True)
         winner = evaluations[0]
         baseline_eval = next(item for item in evaluations if item.changed_keys == [])
+        history_span_days = self._history_span_days(records)
         walk_forward_validation = PlanGenerationWalkForwardService(self).summarize(
             candidate_config=winner.config,
             baseline_config=active_config,
@@ -162,8 +168,8 @@ class PlanGenerationTuningService:
             baseline_label="active-baseline",
             ticker=ticker,
             setup_family=setup_family,
-            limit=limit,
-            lookback_days=365,
+            limit=None if explore_mode else (effective_limit if effective_limit is not None else len(records) or 1),
+            lookback_days=history_span_days,
             validation_days=90,
             step_days=30,
             min_validation_resolved=min_validation_resolved,
@@ -184,14 +190,19 @@ class PlanGenerationTuningService:
                     "winner": self._candidate_payload(winner),
                     "baseline": self._candidate_payload(baseline_eval),
                     "promotion_requested": apply,
+                    "exploration_mode": explore_mode,
+                    "exploration_seed": exploration_seed,
                     "search_record_count": len(search_records),
                     "validation_record_count": len(validation_records),
+                    "history_span_days": history_span_days,
                     "walk_forward_validation": walk_forward_validation.model_dump(mode="json"),
                 },
                 filters={
                     "ticker": ticker.upper() if ticker else None,
                     "setup_family": setup_family,
                     "limit": limit,
+                    "mode": mode,
+                    "explore_mode": explore_mode,
                 },
                 started_at=started_at,
                 completed_at=datetime.now(timezone.utc),
@@ -341,18 +352,55 @@ class PlanGenerationTuningService:
         validation_count = min(validation_count, max(1, len(records) - 1))
         return records[:-validation_count], records[-validation_count:]
 
-    def _candidate_configs(self, active_config: dict[str, float]) -> list[dict[str, float]]:
-        configs = [dict(active_config)]
+    def _candidate_configs(self, active_config: dict[str, float], *, mode: str, seed: int) -> list[dict[str, float]]:
+        explore_mode = mode.strip().lower() in {"explore", "exploration", "research"}
+        configs: list[dict[str, float]] = [dict(active_config)]
+        parameter_keys = list(PARAMETER_BY_KEY.keys())
         for key, definition in PARAMETER_BY_KEY.items():
             base_value = active_config.get(key, definition.default)
-            for direction in (-1, 1):
+            for step_count in (-2, -1, 1, 2):
                 mutated = dict(active_config)
-                candidate = base_value + (definition.step * direction)
+                candidate = base_value + (definition.step * step_count)
                 candidate = max(definition.minimum, min(definition.maximum, candidate))
                 mutated[key] = round(candidate, 4)
                 configs.append(mutated)
+        for index, key_a in enumerate(parameter_keys):
+            definition_a = PARAMETER_BY_KEY[key_a]
+            base_a = active_config.get(key_a, definition_a.default)
+            for key_b in parameter_keys[index + 1 :]:
+                definition_b = PARAMETER_BY_KEY[key_b]
+                base_b = active_config.get(key_b, definition_b.default)
+                for step_a in (-1, 1):
+                    for step_b in (-1, 1):
+                        mutated = dict(active_config)
+                        candidate_a = max(definition_a.minimum, min(definition_a.maximum, base_a + (definition_a.step * step_a)))
+                        candidate_b = max(definition_b.minimum, min(definition_b.maximum, base_b + (definition_b.step * step_b)))
+                        mutated[key_a] = round(candidate_a, 4)
+                        mutated[key_b] = round(candidate_b, 4)
+                        configs.append(mutated)
+        for version in self.repository.list_config_versions(limit=100):
+            if not version.config:
+                continue
+            normalized = normalize_plan_generation_tuning_config(version.config)
+            configs.append(normalized)
+        if explore_mode:
+            rng = random.Random(seed)
+            max_random_candidates = 24
+            max_random_changes = 3
+            for _ in range(max_random_candidates):
+                mutated = dict(active_config)
+                change_count = rng.randint(1, max_random_changes)
+                for key in rng.sample(parameter_keys, change_count):
+                    definition = PARAMETER_BY_KEY[key]
+                    base_value = mutated.get(key, definition.default)
+                    step_count = rng.choice([-3, -2, -1, 1, 2, 3])
+                    candidate = base_value + (definition.step * step_count)
+                    candidate = max(definition.minimum, min(definition.maximum, candidate))
+                    mutated[key] = round(candidate, 4)
+                configs.append(mutated)
         deduped: list[dict[str, float]] = []
         fingerprints: set[tuple[tuple[str, float], ...]] = set()
+        max_candidates = 200 if explore_mode else 50
         for config in configs:
             normalized = normalize_plan_generation_tuning_config(config)
             fingerprint = tuple(sorted(normalized.items()))
@@ -360,7 +408,32 @@ class PlanGenerationTuningService:
                 continue
             fingerprints.add(fingerprint)
             deduped.append(normalized)
-        return deduped[:50]
+            if len(deduped) >= max_candidates:
+                break
+        return deduped
+
+    def _exploration_seed(self, *, active_config: dict[str, float], records: list[EligibleTuningRecord], mode: str) -> int:
+        fingerprint_source = {
+            "mode": mode,
+            "active_config": active_config,
+            "eligible_count": len(records),
+            "first_computed_at": records[0].plan.computed_at.isoformat() if records and records[0].plan.computed_at else None,
+            "last_computed_at": records[-1].plan.computed_at.isoformat() if records and records[-1].plan.computed_at else None,
+        }
+        payload = repr(sorted(fingerprint_source.items())).encode("utf-8")
+        digest = hashlib.sha256(payload).hexdigest()
+        return int(digest[:16], 16)
+
+    @staticmethod
+    def _history_span_days(records: list[EligibleTuningRecord]) -> int:
+        if len(records) < 2:
+            return 30
+        start = records[0].plan.computed_at
+        end = records[-1].plan.computed_at
+        if start is None or end is None:
+            return 365
+        span = abs((end - start).days)
+        return max(30, span or 30)
 
     def _evaluate_candidate(
         self,

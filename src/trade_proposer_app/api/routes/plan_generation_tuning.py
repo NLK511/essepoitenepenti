@@ -42,6 +42,7 @@ async def run_plan_generation_tuning(
     ticker: str | None = Query(default=None),
     setup_family: str | None = Query(default=None),
     limit: int = Query(default=500, ge=1, le=5000),
+    mode: str = Query(default="manual"),
     apply: bool = Query(default=False),
     session: Session = Depends(get_db_session),
 ):

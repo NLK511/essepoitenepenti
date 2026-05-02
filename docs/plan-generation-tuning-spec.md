@@ -308,6 +308,19 @@ The first implementation must generate candidates from:
 - top historical non-promoted but high-scoring configs
 - optional bounded mutations within parameter limits
 
+### Exploration and backtest workflow
+
+Manual research runs should support a broader exploration mode that is deterministic and replayable.
+
+Required exploration behavior:
+- evaluate the largest eligible replay-safe dataset available to the run
+- use rolling walk-forward validation over the eligible history, not just a single train/validation split
+- persist the exploration seed, candidate list, and full candidate metrics for replayability
+- include at least one baseline candidate, local perturbations, historical configs, and bounded random mutations when the exploration mode is enabled
+- keep the search bounded; exploration must remain auditable and capped
+- prefer the oldest eligible records for search/fit summaries only when a time split is required; validation must remain holdout-based
+- include broker-resolved records and phantom scoreable records in the eligible exploration set when they satisfy the replay rules above
+
 ### Candidate generation constraints
 
 - candidate count per run must be explicitly capped

@@ -155,7 +155,7 @@ class RecommendationPlanRepository:
         self,
         ticker: str | None = None,
         action: str | None = None,
-        limit: int = 50,
+        limit: int | None = 50,
         offset: int = 0,
         run_id: int | None = None,
         setup_family: str | None = None,
@@ -169,7 +169,7 @@ class RecommendationPlanRepository:
         computed_after: datetime | None = None,
         computed_before: datetime | None = None,
     ) -> list[RecommendationPlan]:
-        normalized_limit = max(1, limit)
+        normalized_limit = max(1, limit) if limit is not None else None
         normalized_offset = max(0, offset)
         query = self._base_plan_query(ticker=ticker, action=action, run_id=run_id, plan_id=plan_id, computed_after=computed_after, computed_before=computed_before)
         normalized_setup_family = setup_family.strip().lower() if setup_family else None

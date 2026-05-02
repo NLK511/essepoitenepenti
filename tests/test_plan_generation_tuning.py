@@ -178,6 +178,25 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self.assertEqual(stored.winning_candidate_id, winner.id)
         self.assertEqual(len(stored.candidates), len(run.candidates))
 
+    def test_explore_mode_uses_broader_candidate_search_and_persists_seed(self) -> None:
+        for index in range(1, 9):
+            self._seed_record(
+                created_at=datetime(2026, 3, index, tzinfo=timezone.utc),
+                mfe=12.0 if index % 2 else 3.0,
+                mae=3.0 if index % 2 else 11.0,
+                outcome="win" if index % 2 else "loss",
+                stop_loss_hit=index % 2 == 0,
+                take_profit_hit=index % 2 == 1,
+            )
+
+        manual_run = self.service.run(mode="manual", limit=50)
+        explore_run = self.service.run(mode="explore", limit=None)
+
+        self.assertGreater(explore_run.candidate_count, manual_run.candidate_count)
+        self.assertTrue(bool(explore_run.summary.get("exploration_mode")))
+        self.assertIsInstance(explore_run.summary.get("exploration_seed"), int)
+        self.assertGreaterEqual(explore_run.summary.get("history_span_days", 0), 30)
+
     def test_apply_promotes_only_guardrail_eligible_winner_and_updates_active_config(self) -> None:
         self._seed_record(created_at=datetime(2026, 3, 1, tzinfo=timezone.utc), mfe=15.0, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
         self._seed_record(created_at=datetime(2026, 3, 2, tzinfo=timezone.utc), mfe=12.5, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
