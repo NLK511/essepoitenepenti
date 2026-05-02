@@ -461,7 +461,7 @@ export function extractRunWarnings(detail: RunDetailResponse | null): string[] {
   return warnings;
 }
 
-function humanizeKey(value: string): string {
+export function humanizeKey(value: string): string {
   return value.replace(/_/g, " ");
 }
 

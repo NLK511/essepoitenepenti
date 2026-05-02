@@ -1,4 +1,5 @@
 import { Badge, Card, SectionTitle } from "./ui";
+import { humanizeKey } from "../utils";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -12,7 +13,7 @@ export function relationshipLabel(item: Record<string, unknown>): string {
   const relationType = typeof item.type_label === "string"
     ? item.type_label
     : typeof item.type === "string"
-      ? item.type.split("_").join(" ")
+      ? humanizeKey(item.type)
       : "relationship";
   const target = typeof item.target_label === "string"
     ? item.target_label
@@ -22,7 +23,7 @@ export function relationshipLabel(item: Record<string, unknown>): string {
   const channel = typeof item.channel_label === "string"
     ? item.channel_label
     : typeof item.channel === "string"
-      ? item.channel.split("_").join(" ")
+      ? humanizeKey(item.channel)
       : null;
   return channel ? `${relationType} · ${target} · ${channel}` : `${relationType} · ${target}`;
 }

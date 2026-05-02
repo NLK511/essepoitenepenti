@@ -5,15 +5,12 @@ import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { AppSetting, AccountRiskState, BrokerOrderExecution, BrokerPosition, BrokerWorkbench, RiskHaltEvent } from "../types";
-import { formatDate, brokerExecutionStatusTone } from "../utils";
+import { brokerExecutionStatusTone, formatDate, humanizeKey } from "../utils";
 
 function metricNumber(value: unknown): string {
   return typeof value === "number" ? value.toFixed(2).replace(/\.00$/, "") : "—";
 }
 
-function reasonLabel(reason: string): string {
-  return reason.split("_").join(" ");
-}
 
 function prettyPayload(payload: Record<string, unknown>): string {
   try {
@@ -188,7 +185,7 @@ export function BrokerOrdersPage() {
       {actionError ? <ErrorState message={actionError} /> : null}
 
       <section className="metrics-grid top-gap">
-        <StatCard label="Risk state" value={risk ? (risk.allowed ? "allowed" : "blocked") : "—"} helper={risk?.reasons.length ? risk.reasons.map(reasonLabel).join(", ") : "No active risk blocks"} />
+        <StatCard label="Risk state" value={risk ? (risk.allowed ? "allowed" : "blocked") : "—"} helper={risk?.reasons.length ? risk.reasons.map(humanizeKey).join(", ") : "No active risk blocks"} />
         <StatCard label="Kill switch" value={risk?.halt_enabled ? "halted" : "clear"} helper={risk?.halt_reason || "Manual halt is not active"} />
         <StatCard label="Today's broker P&L" value={risk ? `$${metricNumber(risk.metrics.today_realized_pnl_usd)}` : "—"} helper={risk ? `${risk.metrics.today_win_count ?? 0} wins · ${risk.metrics.today_loss_count ?? 0} losses` : "Broker-backed realized P&L"} />
         <StatCard label="Open exposure" value={risk ? `$${metricNumber(risk.metrics.open_notional_usd)}` : "—"} helper={risk ? `${risk.metrics.open_position_count ?? 0} open/submitted positions` : "Broker lifecycle ledger"} />
@@ -234,7 +231,7 @@ export function BrokerOrdersPage() {
             <div className="data-point"><span className="data-point-label">single position limit</span><span className="data-point-value">${risk.config.max_position_notional_usd}</span></div>
           </div>
           {risk.reasons.length ? (
-            <div className="alert alert-warning top-gap-small">Blocked by: {risk.reasons.map(reasonLabel).join(", ")}</div>
+            <div className="alert alert-warning top-gap-small">Blocked by: {risk.reasons.map(humanizeKey).join(", ")}</div>
           ) : <div className="helper-text top-gap-small">No active risk blocks.</div>}
           {haltEvents.length ? (
             <div className="top-gap-small">
