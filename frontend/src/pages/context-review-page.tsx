@@ -6,17 +6,7 @@ import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
 import { ContextEventSummary, ContextScoreSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import type { ContextEventRow, IndustryContextSnapshot, MacroContextSnapshot, Run } from "../types";
-import { extractDisplayLabels, formatDate } from "../utils";
-
-function contextTone(snapshot: { status: string; warnings: string[] }): "ok" | "warning" | "danger" | "neutral" {
-  if (snapshot.status === "failed") {
-    return "danger";
-  }
-  if (snapshot.warnings.length > 0 || snapshot.status === "warning") {
-    return "warning";
-  }
-  return "ok";
-}
+import { contextInterpretationTone, contextSnapshotTone, extractDisplayLabels, formatDate } from "../utils";
 
 function topMacroTheme(snapshot: MacroContextSnapshot): ContextEventRow | null {
   return snapshot.active_themes[0] ?? null;
@@ -74,20 +64,6 @@ function contradictoryMacroThemes(snapshot: MacroContextSnapshot): string[] {
 
 function actionLabel(scope: "macro" | "industry"): string {
   return scope === "macro" ? "Macro" : "Industry";
-}
-
-function stateTone(value: unknown): "ok" | "warning" | "danger" | "neutral" {
-  const normalized = themeString(value, "").toLowerCase();
-  if (normalized === "easing" || normalized === "stabilizing" || normalized === "relief" || normalized === "growth_supportive") {
-    return "ok";
-  }
-  if (normalized === "escalating" || normalized === "fear" || normalized === "inflationary") {
-    return "danger";
-  }
-  if (normalized === "mixed" || normalized === "unknown") {
-    return "warning";
-  }
-  return "neutral";
 }
 
 function docsLink(doc: string, section?: string): string {
@@ -413,11 +389,11 @@ function IndustryContextList({ snapshots }: { snapshots: IndustryContextSnapshot
                   saliency={snapshot.saliency_score}
                   coverage={snapshot.active_drivers.length}
                   freshness={formatDate(snapshot.computed_at)}
-                  tone={contextTone(snapshot)}
+                  tone={contextSnapshotTone(snapshot)}
                 />
                 <div className="top-gap-small">
                   <div className="cluster">
-                    <Badge tone={contextTone(snapshot)}>status {snapshot.status}</Badge>
+                    <Badge tone={contextSnapshotTone(snapshot)}>status {snapshot.status}</Badge>
                     <Badge tone="neutral">industry {snapshot.industry_label || snapshot.industry_key}</Badge>
                     {topDriver ? <Badge tone="neutral">driver {themeString(topDriver.label)}</Badge> : null}
                   </div>
@@ -425,8 +401,8 @@ function IndustryContextList({ snapshots }: { snapshots: IndustryContextSnapshot
                 <div className="helper-text context-inline-metrics"><span className="context-inline-metric"><strong>Direction:</strong> {snapshot.direction}</span><span className="context-inline-metric"><strong>Computed:</strong> {formatDate(snapshot.computed_at)}</span></div>
                 {topDriver ? (
                   <div className="cluster top-gap-small">
-                    <Badge tone={stateTone(topDriver.state_transition)}>state {themeString(topDriver.state_transition)}</Badge>
-                    <Badge tone={stateTone(topDriver.market_interpretation)}>read {themeString(topDriver.market_interpretation)}</Badge>
+                    <Badge tone={contextInterpretationTone(topDriver.state_transition)}>state {themeString(topDriver.state_transition)}</Badge>
+                    <Badge tone={contextInterpretationTone(topDriver.market_interpretation)}>read {themeString(topDriver.market_interpretation)}</Badge>
                     {themeString(topDriver.trigger_actor) !== "—" ? <Badge tone="neutral">actor {themeString(topDriver.trigger_actor)}</Badge> : null}
                   </div>
                 ) : null}
@@ -462,18 +438,18 @@ function MacroContextList({ snapshots }: { snapshots: MacroContextSnapshot[] }) 
                   coverageLabel="Themes"
                   coverageTooltip="Number of active macro themes selected for the snapshot."
                   freshness={formatDate(snapshot.computed_at)}
-                  tone={contextTone(snapshot)}
+                  tone={contextSnapshotTone(snapshot)}
                 />
                 <div className="top-gap-small">
                   <div className="cluster">
-                    <Badge tone={contextTone(snapshot)}>status {snapshot.status}</Badge>
+                    <Badge tone={contextSnapshotTone(snapshot)}>status {snapshot.status}</Badge>
                     {topTheme ? <Badge tone="neutral">theme {themeString(topTheme.label)}</Badge> : null}
                   </div>
                 </div>
                 {topTheme ? (
                   <div className="cluster top-gap-small">
-                    <Badge tone={stateTone(topTheme.state_transition)}>state {themeString(topTheme.state_transition)}</Badge>
-                    <Badge tone={stateTone(topTheme.market_interpretation)}>read {themeString(topTheme.market_interpretation)}</Badge>
+                    <Badge tone={contextInterpretationTone(topTheme.state_transition)}>state {themeString(topTheme.state_transition)}</Badge>
+                    <Badge tone={contextInterpretationTone(topTheme.market_interpretation)}>read {themeString(topTheme.market_interpretation)}</Badge>
                     {themeString(topTheme.trigger_actor) !== "—" ? <Badge tone="neutral">actor {themeString(topTheme.trigger_actor)}</Badge> : null}
                   </div>
                 ) : null}
@@ -506,11 +482,11 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
         saliency={snapshot.saliency_score}
         coverage={snapshot.active_drivers.length}
         freshness={formatDate(snapshot.computed_at)}
-        tone={contextTone(snapshot)}
+        tone={contextSnapshotTone(snapshot)}
       />
       <div className="top-gap-small">
         <div className="cluster">
-          <Badge tone={contextTone(snapshot)}>status {snapshot.status}</Badge>
+          <Badge tone={contextSnapshotTone(snapshot)}>status {snapshot.status}</Badge>
           <Badge tone="neutral">industry {snapshot.industry_label || snapshot.industry_key}</Badge>
           <Badge tone="neutral">direction {snapshot.direction || "—"}</Badge>
           {snapshot.warnings.length > 0 ? <Badge tone="warning">warnings {snapshot.warnings.length}</Badge> : null}
@@ -616,11 +592,11 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
         coverageLabel="Themes"
         coverageTooltip="Number of active macro themes selected for the snapshot."
         freshness={formatDate(snapshot.computed_at)}
-        tone={contextTone(snapshot)}
+        tone={contextSnapshotTone(snapshot)}
       />
       <div className="top-gap-small">
         <div className="cluster">
-          <Badge tone={contextTone(snapshot)}>status {snapshot.status}</Badge>
+          <Badge tone={contextSnapshotTone(snapshot)}>status {snapshot.status}</Badge>
           {topTheme ? <Badge tone="neutral">theme {themeString(topTheme.label)}</Badge> : null}
           {snapshot.warnings.length > 0 ? <Badge tone="warning">warnings {snapshot.warnings.length}</Badge> : null}
           {snapshot.missing_inputs.length > 0 ? <Badge tone="warning">missing {snapshot.missing_inputs.length}</Badge> : null}

@@ -49,6 +49,30 @@ export function runTone(status: RunStatus | string): "ok" | "warning" | "danger"
   return "neutral";
 }
 
+export function contextSnapshotTone(snapshot: { status: string; warnings: string[] }): "ok" | "warning" | "danger" | "neutral" {
+  if (snapshot.status === "failed") {
+    return "danger";
+  }
+  if (snapshot.warnings.length > 0 || snapshot.status === "warning") {
+    return "warning";
+  }
+  return "ok";
+}
+
+export function contextInterpretationTone(value: unknown): "ok" | "warning" | "danger" | "neutral" {
+  const normalized = typeof value === "string" && value.trim() ? value.trim().toLowerCase() : "";
+  if (normalized === "easing" || normalized === "stabilizing" || normalized === "relief" || normalized === "growth_supportive") {
+    return "ok";
+  }
+  if (normalized === "escalating" || normalized === "fear" || normalized === "inflationary") {
+    return "danger";
+  }
+  if (normalized === "mixed" || normalized === "unknown") {
+    return "warning";
+  }
+  return "neutral";
+}
+
 export function workerStatusTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
   if (status === "running") {
     return "ok";

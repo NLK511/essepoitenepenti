@@ -251,7 +251,7 @@ Continue reliability/tuning simplification in small batches:
 2. Migrate recommendation-quality summaries and future tuning/scoring paths onto `TradePolicyEvaluationService` so policy evaluation and reliability reporting stay in one shared contract.
 3. Canonicalize the account-risk read model as `AccountRiskState` while preserving the existing API shape.
 4. Keep lower-level endpoints and raw records as focused/debug contracts until explicit deprecation.
-5. Continue collapsing duplicated frontend status/tone mappings into shared helpers when the mapping is the same across pages and the helper does not hide domain differences.
+5. Continue collapsing duplicated frontend status/tone mappings into shared helpers when the mapping is the same across pages and the helper does not hide domain differences, including shared context snapshot/event tones.
 6. Move remaining typed settings writes behind `SettingsMutationService` instead of route-local parsing so writes stay consistent with `SettingsDomainService`.
 7. Grow `BrokerReconciliationService` into the broker workbench and sync coordination layer as more broker-state reconciliation logic is discovered.
 8. Reuse `RecommendationOutcomeCohortBuilder` anywhere a service is rebuilding calibration-style outcome buckets instead of duplicating bucket math locally.

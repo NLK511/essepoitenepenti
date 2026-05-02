@@ -5,7 +5,7 @@ import { getJson } from "../api";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
 import { ContextEventSummary, ContextScoreSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import type { IndustryContextSnapshot, MacroContextSnapshot } from "../types";
-import { extractDisplayLabels, formatDate } from "../utils";
+import { contextInterpretationTone, contextSnapshotTone, extractDisplayLabels, formatDate } from "../utils";
 
 type ContextScope = "macro" | "industry";
 
@@ -13,16 +13,6 @@ type ContextSnapshot = MacroContextSnapshot | IndustryContextSnapshot;
 
 function isIndustrySnapshot(snapshot: ContextSnapshot): snapshot is IndustryContextSnapshot {
   return "industry_key" in snapshot;
-}
-
-function contextTone(snapshot: ContextSnapshot): "ok" | "warning" | "danger" | "neutral" {
-  if (snapshot.status === "failed") {
-    return "danger";
-  }
-  if (snapshot.warnings.length > 0 || snapshot.status === "warning") {
-    return "warning";
-  }
-  return "ok";
 }
 
 function formatWindow(value: unknown): string {
@@ -49,20 +39,6 @@ function stringList(value: unknown): string[] {
 
 function eventLabel(value: unknown): string {
   return typeof value === "string" && value.trim() ? value : "—";
-}
-
-function eventTone(value: unknown): "ok" | "warning" | "danger" | "neutral" {
-  const normalized = eventLabel(value).toLowerCase();
-  if (normalized === "easing" || normalized === "stabilizing" || normalized === "relief" || normalized === "growth_supportive") {
-    return "ok";
-  }
-  if (normalized === "escalating" || normalized === "fear" || normalized === "inflationary") {
-    return "danger";
-  }
-  if (normalized === "mixed" || normalized === "unknown") {
-    return "warning";
-  }
-  return "neutral";
 }
 
 function contextEventTitle(row: Record<string, unknown>, index: number, fallbackPrefix: string): string {
@@ -224,11 +200,11 @@ export function ContextSnapshotDetailPage() {
               coverageLabel={isIndustrySnapshot(snapshot) ? undefined : "Themes"}
               coverageTooltip={isIndustrySnapshot(snapshot) ? undefined : "Number of active macro themes selected for the snapshot."}
               freshness={formatDate(snapshot.computed_at)}
-              tone={contextTone(snapshot)}
+              tone={contextSnapshotTone(snapshot)}
             />
             <div className="cluster top-gap-small">
               <Badge tone="info">{scope}</Badge>
-              <Badge tone={contextTone(snapshot)}>{snapshot.status}</Badge>
+              <Badge tone={contextSnapshotTone(snapshot)}>{snapshot.status}</Badge>
               <Badge>#{snapshot.id}</Badge>
               {isIndustrySnapshot(snapshot) ? <Badge>{snapshot.industry_label || snapshot.industry_key}</Badge> : null}
             </div>
@@ -308,8 +284,8 @@ export function ContextSnapshotDetailPage() {
                         channels={channels}
                       />
                       <div className="cluster top-gap-small context-event-badges">
-                        <Badge tone={eventTone(row.state_transition)}>state {eventLabel(row.state_transition)}</Badge>
-                        <Badge tone={eventTone(row.market_interpretation)}>read {eventLabel(row.market_interpretation)}</Badge>
+                        <Badge tone={contextInterpretationTone(row.state_transition)}>state {eventLabel(row.state_transition)}</Badge>
+                        <Badge tone={contextInterpretationTone(row.market_interpretation)}>read {eventLabel(row.market_interpretation)}</Badge>
                         <Badge tone="neutral">catalyst {eventLabel(row.catalyst_type)}</Badge>
                         {eventLabel(row.trigger_actor) !== "—" ? <Badge tone="neutral">actor {eventLabel(row.trigger_actor)}</Badge> : null}
                       </div>
