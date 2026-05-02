@@ -7,6 +7,7 @@ from trade_proposer_app.db import get_db_session
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningError, PlanGenerationTuningService
 from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
 from trade_proposer_app.services.plan_generation_walk_forward import PlanGenerationWalkForwardService
+from trade_proposer_app.services.settings_mutations import SettingsMutationService
 
 router = APIRouter(prefix="/plan-generation-tuning", tags=["plan-generation-tuning"])
 
@@ -96,13 +97,12 @@ async def set_plan_generation_tuning_settings(
     min_validation_resolved: str = Form(default="8"),
     session: Session = Depends(get_db_session),
 ) -> dict[str, object]:
-    repository = PlanGenerationTuningService(session).settings
     try:
-        settings_payload = repository.set_plan_generation_tuning_settings(
-            auto_enabled=auto_enabled.strip().lower() in {"1", "true", "yes", "on"},
-            auto_promote_enabled=auto_promote_enabled.strip().lower() in {"1", "true", "yes", "on"},
-            min_actionable_resolved=int(min_actionable_resolved.strip() or "20"),
-            min_validation_resolved=int(min_validation_resolved.strip() or "8"),
+        settings_payload = SettingsMutationService(session).set_plan_generation_tuning_settings(
+            auto_enabled=auto_enabled,
+            auto_promote_enabled=auto_promote_enabled,
+            min_actionable_resolved=min_actionable_resolved,
+            min_validation_resolved=min_validation_resolved,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"invalid plan generation tuning settings: {exc}") from exc

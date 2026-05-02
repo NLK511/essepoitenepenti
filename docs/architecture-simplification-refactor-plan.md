@@ -255,3 +255,4 @@ Continue reliability/tuning simplification in small batches:
 6. Move remaining typed settings writes behind `SettingsMutationService` instead of route-local parsing so writes stay consistent with `SettingsDomainService`.
 7. Grow `BrokerReconciliationService` into the broker workbench and sync coordination layer as more broker-state reconciliation logic is discovered.
 8. Reuse `RecommendationOutcomeCohortBuilder` anywhere a service is rebuilding calibration-style outcome buckets instead of duplicating bucket math locally.
+9. Move remaining typed settings writes behind `SettingsMutationService` instead of route-local parsing so writes stay consistent with `SettingsDomainService`.
