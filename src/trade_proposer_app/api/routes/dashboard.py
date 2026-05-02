@@ -32,6 +32,19 @@ WINDOW_DEFINITIONS: dict[str, timedelta | None] = {
     "6m": timedelta(days=180),
     "all": None,
 }
+DASHBOARD_TREND_SERIES: list[tuple[str, str, str]] = [
+    ("win_rate_percent", "Win rate", "percent"),
+    ("profit_percent", "Profit %", "percent"),
+    ("shortlist_rate_percent", "Shortlist rate", "percent"),
+    ("actionable_rate_percent", "Actionable rate", "percent"),
+    ("actionability_gap_percent", "Actionability gap", "percent"),
+    ("news_processed", "News processed", "count"),
+    ("tweets_processed", "Tweets processed", "count"),
+    ("bars_stored", "Bars stored", "count"),
+    ("orders_placed", "Orders placed", "count"),
+    ("broker_closed_positions", "Broker closed", "count"),
+    ("broker_realized_pnl", "Broker realized P&L", "currency"),
+]
 
 
 def _normalize_window(window: str | None) -> str:
@@ -93,6 +106,115 @@ def _count_records(session: Session, model, column, computed_after: datetime | N
     return int(session.scalar(query) or 0)
 
 
+def _baseline_metric(summary, key: str, metric: str) -> float | None:
+    for item in summary.comparisons:
+        if item.key == key:
+            return getattr(item, metric, None)
+    return None
+
+
+def _dashboard_window_metrics(
+    session: Session,
+    *,
+    now: datetime,
+    window_key: str,
+    quality_fallback: dict[str, object] | None = None,
+) -> dict[str, dict[str, object]]:
+    computed_after = _window_start(window_key, now)
+    plan_repository = RecommendationPlanRepository(session)
+    outcome_repository = RecommendationOutcomeRepository(session)
+    effective_outcome_repository = EffectivePlanOutcomeRepository(session)
+    signals_amount = _count_ticker_signals(session, computed_after=computed_after, computed_before=now)
+    plan_amount = plan_repository.count_plans(computed_after=computed_after, computed_before=now)
+    shortlisted_plans = plan_repository.count_plans(shortlisted=True, computed_after=computed_after, computed_before=now)
+    actionable_plans = plan_repository.count_plans(action="long", computed_after=computed_after, computed_before=now) + plan_repository.count_plans(action="short", computed_after=computed_after, computed_before=now)
+    technical_plans = plan_repository.list_plans(limit=5000, computed_after=computed_after, computed_before=now)
+
+    news_processed = _count_records(session, HistoricalNewsRecord, HistoricalNewsRecord.published_at, computed_after, now)
+    bars_stored = _count_records(session, HistoricalMarketBarRecord, HistoricalMarketBarRecord.bar_time, computed_after, now)
+    orders_placed = _count_records(session, BrokerOrderExecutionRecord, BrokerOrderExecutionRecord.created_at, computed_after, now)
+    broker_summary = TradingPerformanceMetricsService(session).summarize_broker_closed_positions(evaluated_after=computed_after, evaluated_before=now).to_dict()
+    tweets_processed = _sum_plan_item_count(technical_plans, "social_item_count")
+
+    calibration = RecommendationPlanCalibrationService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
+    baselines = RecommendationPlanBaselineService(plan_repository).summarize(computed_after=computed_after, computed_before=now)
+    actionability = outcome_repository.summarize_actionability_diagnostics(evaluated_after=computed_after, evaluated_before=now)
+
+    win_rate_percent = broker_summary["win_rate_percent"]
+    if win_rate_percent is None:
+        win_rate_percent = (
+            quality_fallback.get("overall_win_rate_percent") if quality_fallback is not None else calibration.overall_win_rate_percent
+        )
+    profit_percent = broker_summary["average_return_percent"]
+    if profit_percent is None:
+        profit_percent = (
+            quality_fallback.get("actual_actionable_average_return_5d")
+            if quality_fallback is not None
+            else _baseline_metric(baselines, "actual_actionable", "average_return_5d")
+        )
+
+    dashboard_summary = {
+        "plan_amount": plan_amount,
+        "signals_amount": signals_amount,
+        "shortlisted_plans": shortlisted_plans,
+        "shortlist_rate_percent": _percentage(plan_amount, signals_amount),
+        "actionable_plans": actionable_plans,
+        "actionable_rate_percent": _percentage(actionable_plans, plan_amount),
+        "win_rate_percent": win_rate_percent,
+        "win_rate_source": "broker" if broker_summary["win_rate_percent"] is not None else ("quality" if quality_fallback is not None else "calibration"),
+        "profit_percent": profit_percent,
+        "profit_source": "broker" if broker_summary["average_return_percent"] is not None else ("quality" if quality_fallback is not None else "baseline"),
+        "actionability_gap_percent": actionability["actionability_gap_percent"],
+        "actionable_win_rate_percent": actionability["actionable_win_rate_percent"],
+        "phantom_win_rate_percent": actionability["phantom_win_rate_percent"],
+        "actionable_resolved_outcomes": actionability["actionable_resolved_outcomes"],
+        "phantom_resolved_outcomes": actionability["phantom_resolved_outcomes"],
+        "actionable_win_outcomes": actionability["actionable_win_outcomes"],
+        "actionable_loss_outcomes": actionability["actionable_loss_outcomes"],
+        "phantom_win_outcomes": actionability["phantom_win_outcomes"],
+        "phantom_loss_outcomes": actionability["phantom_loss_outcomes"],
+        "no_action_outcomes": actionability["no_action_outcomes"],
+        "watchlist_outcomes": actionability["watchlist_outcomes"],
+    }
+    technical_summary = {
+        "news_processed": news_processed,
+        "tweets_processed": tweets_processed,
+        "bars_stored": bars_stored,
+        "orders_placed": orders_placed,
+        "broker_closed_positions": broker_summary["closed_positions"],
+        "broker_wins": broker_summary["wins"],
+        "broker_losses": broker_summary["losses"],
+        "broker_realized_pnl": broker_summary["realized_pnl"],
+    }
+    return {
+        "window_key": window_key,
+        "dashboard_summary": dashboard_summary,
+        "technical_summary": technical_summary,
+    }
+
+
+def _build_dashboard_trends(session: Session, *, now: datetime) -> dict[str, object]:
+    snapshots = [
+        _dashboard_window_metrics(session, now=now, window_key=window_key)
+        for window_key in WINDOW_DEFINITIONS
+    ]
+    return {
+        "windows": [
+            {"key": snapshot["window_key"], "label": snapshot["window_key"].upper() if snapshot["window_key"] != "all" else "ALL"}
+            for snapshot in snapshots
+        ],
+        "series": [
+            {
+                "key": key,
+                "label": label,
+                "kind": kind,
+                "values": [snapshot["dashboard_summary"].get(key) if key in snapshot["dashboard_summary"] else snapshot["technical_summary"].get(key) for snapshot in snapshots],
+            }
+            for key, label, kind in DASHBOARD_TREND_SERIES
+        ],
+    }
+
+
 @router.get("")
 async def get_dashboard(
     session: Session = Depends(get_db_session),
@@ -150,6 +272,8 @@ async def get_dashboard(
         evaluated_after=computed_after or (now - timedelta(days=3650)),
         evaluated_before=now,
     )
+    selected_window_metrics = _dashboard_window_metrics(session, now=now, window_key=window_key, quality_fallback=selected_quality)
+    dashboard_trends = _build_dashboard_trends(session, now=now)
 
     major_failures: list[dict[str, object]] = []
     for run in recent_runs:
@@ -204,39 +328,9 @@ async def get_dashboard(
         "recent_runs": recent_runs,
         "recommendation_plans": recommendation_plans,
         "recommendation_quality": {"summary": selected_quality},
-        "dashboard_summary": {
-            "plan_amount": plan_amount,
-            "signals_amount": signals_amount,
-            "shortlisted_plans": shortlisted_plans,
-            "shortlist_rate_percent": _percentage(plan_amount, signals_amount),
-            "actionable_plans": actionable_plans,
-            "actionable_rate_percent": _percentage(actionable_plans, plan_amount),
-            "win_rate_percent": broker_summary["win_rate_percent"] if broker_summary["win_rate_percent"] is not None else selected_quality.get("overall_win_rate_percent"),
-            "win_rate_source": "broker" if broker_summary["win_rate_percent"] is not None else "simulated",
-            "profit_percent": broker_summary["average_return_percent"] if broker_summary["average_return_percent"] is not None else selected_quality.get("actual_actionable_average_return_5d"),
-            "profit_source": "broker" if broker_summary["average_return_percent"] is not None else "simulated",
-            "actionability_gap_percent": actionability["actionability_gap_percent"],
-            "actionable_win_rate_percent": actionability["actionable_win_rate_percent"],
-            "phantom_win_rate_percent": actionability["phantom_win_rate_percent"],
-            "actionable_resolved_outcomes": actionability["actionable_resolved_outcomes"],
-            "phantom_resolved_outcomes": actionability["phantom_resolved_outcomes"],
-            "actionable_win_outcomes": actionability["actionable_win_outcomes"],
-            "actionable_loss_outcomes": actionability["actionable_loss_outcomes"],
-            "phantom_win_outcomes": actionability["phantom_win_outcomes"],
-            "phantom_loss_outcomes": actionability["phantom_loss_outcomes"],
-            "no_action_outcomes": actionability["no_action_outcomes"],
-            "watchlist_outcomes": actionability["watchlist_outcomes"],
-        },
-        "technical_summary": {
-            "news_processed": news_processed,
-            "tweets_processed": tweets_processed,
-            "bars_stored": bars_stored,
-            "orders_placed": orders_placed,
-            "broker_closed_positions": broker_summary["closed_positions"],
-            "broker_wins": broker_summary["wins"],
-            "broker_losses": broker_summary["losses"],
-            "broker_realized_pnl": broker_summary["realized_pnl"],
-        },
+        "dashboard_summary": selected_window_metrics["dashboard_summary"],
+        "technical_summary": selected_window_metrics["technical_summary"],
+        "dashboard_trends": dashboard_trends,
         "major_failures": major_failures[:6],
         "distinct_warnings": distinct_warnings,
     }

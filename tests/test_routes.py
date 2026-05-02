@@ -1000,6 +1000,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                 1,
             ),
         )
+        self.assertIn("dashboard_trends", one_day_payload)
+        self.assertEqual(len(one_day_payload["dashboard_trends"]["windows"]), 6)
+        self.assertTrue(any(series["key"] == "actionability_gap_percent" for series in one_day_payload["dashboard_trends"]["series"]))
         self.assertTrue(all(item["status"] == "failed" for item in one_day_payload["major_failures"]))
         self.assertFalse(any(item["status"] == "completed_with_warnings" for item in all_payload["major_failures"]))
         self.assertTrue(any(item["label"] == "summary timeout" for item in one_day_payload["distinct_warnings"]))

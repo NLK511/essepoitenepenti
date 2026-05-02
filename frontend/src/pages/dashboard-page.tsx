@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
-import type { DashboardResponse } from "../types";
+import type { DashboardResponse, DashboardTrendSeries } from "../types";
 import { dashboardBoardTone, dashboardFailureTone, formatDate } from "../utils";
 
 const WINDOW_OPTIONS = [
@@ -36,6 +36,34 @@ function normalizeWindow(value: string | null): DashboardWindow {
   return (WINDOW_OPTIONS.find((option) => option.value === value)?.value ?? "1m") as DashboardWindow;
 }
 
+function MetricSparkline(props: { label: string; series: DashboardTrendSeries | undefined }) {
+  const points = props.series?.values
+    .map((value, index) => (typeof value === "number" && Number.isFinite(value) ? { index, value } : null))
+    .filter((point): point is { index: number; value: number } => point !== null) ?? [];
+  if (points.length < 2) {
+    return <span className="helper-text">Trend data unavailable</span>;
+  }
+  const min = Math.min(...points.map((point) => point.value));
+  const max = Math.max(...points.map((point) => point.value));
+  const range = max - min || 1;
+  const width = 100;
+  const height = 28;
+  const maxIndex = Math.max((props.series?.values.length ?? 1) - 1, 1);
+  const coordinates = points.map((point) => {
+    const x = (point.index / maxIndex) * width;
+    const y = height - 4 - ((point.value - min) / range) * (height - 8);
+    return { x, y, value: point.value };
+  });
+  const path = coordinates.map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+  return (
+    <svg viewBox="0 0 100 28" className="metric-sparkline" role="img" aria-label={`${props.label} trendline`} preserveAspectRatio="none">
+      <title>{props.label} trendline</title>
+      <path d={path} />
+      {coordinates.map((point, index) => <circle key={`${props.label}-${index}`} cx={point.x.toFixed(1)} cy={point.y.toFixed(1)} r="1.8" />)}
+    </svg>
+  );
+}
+
 export function DashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams({ window: "1m" });
   const selectedWindow = normalizeWindow(searchParams.get("window"));
@@ -43,6 +71,7 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
+  const [showTrendlines, setShowTrendlines] = useState(false);
 
   async function loadDashboard({ clear = false } = {}) {
     try {
@@ -69,6 +98,8 @@ export function DashboardPage() {
   const quality = data?.recommendation_quality?.summary ?? null;
   const majorFailures = data?.major_failures ?? [];
   const distinctWarnings = data?.distinct_warnings ?? [];
+  const dashboardTrends = data?.dashboard_trends ?? null;
+  const trendSeriesMap = useMemo(() => new Map((dashboardTrends?.series ?? []).map((series) => [series.key, series])), [dashboardTrends]);
   const windowLabel = useMemo(() => WINDOW_OPTIONS.find((option) => option.value === selectedWindow)?.label ?? "1M", [selectedWindow]);
 
   async function refreshBrokerState() {
@@ -108,6 +139,11 @@ export function DashboardPage() {
             <SectionTitle
               kicker="Time window"
               title={`Showing ${windowLabel}`}
+              actions={
+                <button type="button" className="button-subtle" onClick={() => setShowTrendlines((current) => !current)}>
+                  {showTrendlines ? "Hide trendlines" : "Show trendlines"}
+                </button>
+              }
             />
             <div className="top-gap-small">
               <SegmentedTabs
@@ -120,6 +156,7 @@ export function DashboardPage() {
                 options={[...WINDOW_OPTIONS]}
               />
             </div>
+            {showTrendlines ? <div className="helper-text top-gap-small">Trendlines sweep the dashboard windows from 1D through ALL so each metric can be compared without opening another page.</div> : null}
           </Card>
 
           <Card>
@@ -139,11 +176,41 @@ export function DashboardPage() {
             <Card>
               <SectionTitle kicker="Green" title="Edge" subtitle="The only numbers that matter when deciding whether the system is improving." />
               <div className="data-stack top-gap-small">
-                <StatCard label="Win rate" value={formatPercent(summary?.win_rate_percent)} helper={summary?.win_rate_source === "broker" ? `${technical?.broker_wins ?? 0} broker wins / ${technical?.broker_closed_positions ?? 0} closed positions` : "Resolved simulated plan outcomes"} />
-                <StatCard label="Profit %" value={formatPercent(summary?.profit_percent)} helper={summary?.profit_source === "broker" ? `Broker realized P&L $${technical?.broker_realized_pnl ?? 0}` : "Avg 5d return on actionable plans"} />
-                <StatCard label="Shortlist rate" value={formatPercent(summary?.shortlist_rate_percent)} helper={`${summary?.plan_amount ?? 0} plans / ${summary?.signals_amount ?? 0} signals`} />
-                <StatCard label="Actionable rate" value={formatPercent(summary?.actionable_rate_percent)} helper={`${summary?.actionable_plans ?? 0} actionable / ${summary?.plan_amount ?? 0} plans`} />
-                <StatCard label="Actionability gap" value={formatSignedPercent(summary?.actionability_gap_percent)} helper={`${summary?.phantom_win_outcomes ?? 0} phantom wins / ${summary?.phantom_resolved_outcomes ?? 0} phantom resolved · ${summary?.actionable_win_outcomes ?? 0} actionable wins / ${summary?.actionable_resolved_outcomes ?? 0} actionable resolved · positive means skipped setups are outperforming acted-on setups`} />
+                <StatCard
+                  className={showTrendlines ? "stat-card-compact" : undefined}
+                  label="Win rate"
+                  value={formatPercent(summary?.win_rate_percent)}
+                  trend={showTrendlines ? <MetricSparkline label="Win rate" series={trendSeriesMap.get("win_rate_percent")} /> : null}
+                  helper={showTrendlines ? undefined : (summary?.win_rate_source === "broker" ? `${technical?.broker_wins ?? 0} broker wins / ${technical?.broker_closed_positions ?? 0} closed positions` : "Resolved simulated plan outcomes")}
+                />
+                <StatCard
+                  className={showTrendlines ? "stat-card-compact" : undefined}
+                  label="Profit %"
+                  value={formatPercent(summary?.profit_percent)}
+                  trend={showTrendlines ? <MetricSparkline label="Profit %" series={trendSeriesMap.get("profit_percent")} /> : null}
+                  helper={showTrendlines ? undefined : (summary?.profit_source === "broker" ? `Broker realized P&L $${technical?.broker_realized_pnl ?? 0}` : "Avg 5d return on actionable plans")}
+                />
+                <StatCard
+                  className={showTrendlines ? "stat-card-compact" : undefined}
+                  label="Shortlist rate"
+                  value={formatPercent(summary?.shortlist_rate_percent)}
+                  trend={showTrendlines ? <MetricSparkline label="Shortlist rate" series={trendSeriesMap.get("shortlist_rate_percent")} /> : null}
+                  helper={showTrendlines ? undefined : `${summary?.plan_amount ?? 0} plans / ${summary?.signals_amount ?? 0} signals`}
+                />
+                <StatCard
+                  className={showTrendlines ? "stat-card-compact" : undefined}
+                  label="Actionable rate"
+                  value={formatPercent(summary?.actionable_rate_percent)}
+                  trend={showTrendlines ? <MetricSparkline label="Actionable rate" series={trendSeriesMap.get("actionable_rate_percent")} /> : null}
+                  helper={showTrendlines ? undefined : `${summary?.actionable_plans ?? 0} actionable / ${summary?.plan_amount ?? 0} plans`}
+                />
+                <StatCard
+                  className={showTrendlines ? "stat-card-compact" : undefined}
+                  label="Actionability gap"
+                  value={formatSignedPercent(summary?.actionability_gap_percent)}
+                  trend={showTrendlines ? <MetricSparkline label="Actionability gap" series={trendSeriesMap.get("actionability_gap_percent")} /> : null}
+                  helper={showTrendlines ? undefined : `${summary?.phantom_win_outcomes ?? 0} phantom wins / ${summary?.phantom_resolved_outcomes ?? 0} phantom resolved · ${summary?.actionable_win_outcomes ?? 0} actionable wins / ${summary?.actionable_resolved_outcomes ?? 0} actionable resolved · positive means skipped setups are outperforming acted-on setups`}
+                />
               </div>
             </Card>
 
@@ -208,12 +275,48 @@ export function DashboardPage() {
           <Card>
             <SectionTitle kicker="Technical" title="Pipeline volume" subtitle="Selected-window volume of the main data feeds and execution layer." />
             <div className="data-stack top-gap-small">
-              <StatCard label="News processed" value={String(technical?.news_processed ?? 0)} helper="Historical news items" />
-              <StatCard label="Tweets processed" value={String(technical?.tweets_processed ?? 0)} helper="Social items used by plans" />
-              <StatCard label="Bars stored" value={String(technical?.bars_stored ?? 0)} helper="Historical market bars" />
-              <StatCard label="Orders placed" value={String(technical?.orders_placed ?? 0)} helper="Broker executions" />
-              <StatCard label="Broker closed" value={String(technical?.broker_closed_positions ?? 0)} helper={`${technical?.broker_wins ?? 0} wins / ${technical?.broker_losses ?? 0} losses`} />
-              <StatCard label="Broker realized P&L" value={`$${technical?.broker_realized_pnl ?? 0}`} helper="Closed broker positions in selected window" />
+              <StatCard
+                className={showTrendlines ? "stat-card-compact" : undefined}
+                label="News processed"
+                value={String(technical?.news_processed ?? 0)}
+                trend={showTrendlines ? <MetricSparkline label="News processed" series={trendSeriesMap.get("news_processed")} /> : null}
+                helper={showTrendlines ? undefined : "Historical news items"}
+              />
+              <StatCard
+                className={showTrendlines ? "stat-card-compact" : undefined}
+                label="Tweets processed"
+                value={String(technical?.tweets_processed ?? 0)}
+                trend={showTrendlines ? <MetricSparkline label="Tweets processed" series={trendSeriesMap.get("tweets_processed")} /> : null}
+                helper={showTrendlines ? undefined : "Social items used by plans"}
+              />
+              <StatCard
+                className={showTrendlines ? "stat-card-compact" : undefined}
+                label="Bars stored"
+                value={String(technical?.bars_stored ?? 0)}
+                trend={showTrendlines ? <MetricSparkline label="Bars stored" series={trendSeriesMap.get("bars_stored")} /> : null}
+                helper={showTrendlines ? undefined : "Historical market bars"}
+              />
+              <StatCard
+                className={showTrendlines ? "stat-card-compact" : undefined}
+                label="Orders placed"
+                value={String(technical?.orders_placed ?? 0)}
+                trend={showTrendlines ? <MetricSparkline label="Orders placed" series={trendSeriesMap.get("orders_placed")} /> : null}
+                helper={showTrendlines ? undefined : "Broker executions"}
+              />
+              <StatCard
+                className={showTrendlines ? "stat-card-compact" : undefined}
+                label="Broker closed"
+                value={String(technical?.broker_closed_positions ?? 0)}
+                trend={showTrendlines ? <MetricSparkline label="Broker closed" series={trendSeriesMap.get("broker_closed_positions")} /> : null}
+                helper={showTrendlines ? undefined : `${technical?.broker_wins ?? 0} wins / ${technical?.broker_losses ?? 0} losses`}
+              />
+              <StatCard
+                className={showTrendlines ? "stat-card-compact" : undefined}
+                label="Broker realized P&L"
+                value={`$${technical?.broker_realized_pnl ?? 0}`}
+                trend={showTrendlines ? <MetricSparkline label="Broker realized P&L" series={trendSeriesMap.get("broker_realized_pnl")} /> : null}
+                helper={showTrendlines ? undefined : "Closed broker positions in selected window"}
+              />
             </div>
           </Card>
         </div>

@@ -152,6 +152,8 @@ Typical cards include:
 - actionability gap between phantom and actionable outcomes
 - attention items
 
+Use the trendlines toggle when you want to compare the dashboard metrics across the standard window sweep without keeping the long helper text visible.
+
 Go here first. If freshness looks degraded, go to **Context review**. If recent runs look bad, go to **Run debugger**.
 
 ## 2. Jobs

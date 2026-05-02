@@ -405,6 +405,23 @@ export interface DashboardTechnicalSummary {
   broker_realized_pnl?: number;
 }
 
+export interface DashboardTrendWindow {
+  key: string;
+  label: string;
+}
+
+export interface DashboardTrendSeries {
+  key: string;
+  label: string;
+  kind: "percent" | "count" | "currency";
+  values: Array<number | null>;
+}
+
+export interface DashboardTrends {
+  windows: DashboardTrendWindow[];
+  series: DashboardTrendSeries[];
+}
+
 export interface DashboardFailure {
   source: string;
   label: string;
@@ -430,6 +447,7 @@ export interface DashboardResponse {
   recommendation_quality?: RecommendationQualityResponse;
   dashboard_summary: DashboardSummary;
   technical_summary: DashboardTechnicalSummary;
+  dashboard_trends?: DashboardTrends;
   major_failures: DashboardFailure[];
   distinct_warnings: DashboardWarningSummary[];
 }

@@ -63,6 +63,7 @@ export function StatCard(props: {
   value: ReactNode;
   helper?: string;
   className?: string;
+  trend?: ReactNode;
   tooltip?: string;
   tooltipTo?: string;
 }) {
@@ -73,6 +74,7 @@ export function StatCard(props: {
         {props.tooltip && props.tooltipTo ? <HelpHint tooltip={props.tooltip} to={props.tooltipTo} ariaLabel={`${props.label}. ${props.tooltip}. Open documentation.`} /> : null}
       </div>
       <div className="metric-value">{props.value}</div>
+      {props.trend ? <div className="metric-trend">{props.trend}</div> : null}
       {props.helper ? <div className="helper-text">{props.helper}</div> : null}
     </Card>
   );
