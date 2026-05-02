@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from trade_proposer_app.domain.models import BrokerPosition, BrokerRiskAssessment
+from trade_proposer_app.domain.models import AccountRiskState, BrokerPosition
 from trade_proposer_app.domain.statuses import BROKER_RESOLVED_POSITION_STATUSES, BrokerPositionStatus, TradeOutcome
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.risk_halt_events import RiskHaltEventRepository
@@ -31,7 +31,7 @@ class BrokerRiskManager:
         self.positions = positions
         self.halt_events = halt_events
 
-    def assess(self, candidate: TradeCandidate | None = None, *, now: datetime | None = None) -> BrokerRiskAssessment:
+    def assess(self, candidate: TradeCandidate | None = None, *, now: datetime | None = None) -> AccountRiskState:
         config = SettingsDomainService(repository=self.settings).risk_settings().risk_management
         all_positions = self.positions.list_all(limit=1000)
         metrics = self._metrics(all_positions, now=now or datetime.now(timezone.utc))
@@ -76,7 +76,7 @@ class BrokerRiskManager:
             metrics["projected_open_position_count"] = metrics["open_position_count"]
             metrics["projected_open_notional_usd"] = metrics["open_notional_usd"]
 
-        return BrokerRiskAssessment(
+        return AccountRiskState(
             allowed=not reasons,
             enabled=enabled,
             halt_enabled=halt_enabled,
@@ -86,7 +86,7 @@ class BrokerRiskManager:
             config=config,
         )
 
-    def halt(self, reason: str) -> BrokerRiskAssessment:
+    def halt(self, reason: str) -> AccountRiskState:
         previous = bool(SettingsDomainService(repository=self.settings).risk_settings().risk_management["halt_enabled"])
         self.settings.set_risk_halt(enabled=True, reason=reason or "manual halt")
         if self.halt_events is not None:
@@ -98,7 +98,7 @@ class BrokerRiskManager:
             )
         return self.assess()
 
-    def resume(self) -> BrokerRiskAssessment:
+    def resume(self) -> AccountRiskState:
         previous = bool(SettingsDomainService(repository=self.settings).risk_settings().risk_management["halt_enabled"])
         self.settings.set_risk_halt(enabled=False, reason="")
         if self.halt_events is not None:

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.domain.models import BrokerRiskAssessment, RiskHaltEvent
+from trade_proposer_app.domain.models import AccountRiskState, RiskHaltEvent
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.risk_halt_events import RiskHaltEventRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
@@ -19,8 +19,8 @@ def _manager(session: Session) -> BrokerRiskManager:
     )
 
 
-@router.get("", response_model=BrokerRiskAssessment)
-async def get_risk_assessment(session: Session = Depends(get_db_session)) -> BrokerRiskAssessment:
+@router.get("", response_model=AccountRiskState)
+async def get_risk_assessment(session: Session = Depends(get_db_session)) -> AccountRiskState:
     return _manager(session).assess()
 
 
@@ -32,11 +32,11 @@ async def list_halt_events(
     return RiskHaltEventRepository(session).list_latest(limit=limit)
 
 
-@router.post("/halt", response_model=BrokerRiskAssessment)
-async def halt_trading(reason: str = Form(default="manual halt"), session: Session = Depends(get_db_session)) -> BrokerRiskAssessment:
+@router.post("/halt", response_model=AccountRiskState)
+async def halt_trading(reason: str = Form(default="manual halt"), session: Session = Depends(get_db_session)) -> AccountRiskState:
     return _manager(session).halt(reason.strip() or "manual halt")
 
 
-@router.post("/resume", response_model=BrokerRiskAssessment)
-async def resume_trading(session: Session = Depends(get_db_session)) -> BrokerRiskAssessment:
+@router.post("/resume", response_model=AccountRiskState)
+async def resume_trading(session: Session = Depends(get_db_session)) -> AccountRiskState:
     return _manager(session).resume()

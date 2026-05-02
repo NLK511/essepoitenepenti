@@ -160,7 +160,7 @@ export interface RiskHaltEvent {
 export interface BrokerWorkbench {
   broker_orders: BrokerOrderExecution[];
   broker_positions: BrokerPosition[];
-  risk: BrokerRiskAssessment;
+  risk: AccountRiskState;
   risk_halt_events: RiskHaltEvent[];
   settings: AppSetting[];
   counts: {
@@ -352,6 +352,7 @@ export interface RecommendationQualityResponse {
   baselines: RecommendationBaselineSummary;
   evidence_concentration: RecommendationEvidenceConcentrationSummary;
   setup_family_review: Record<string, unknown>;
+  reliability_report: PlanReliabilityReport;
   walk_forward_validation: Record<string, unknown> | null;
   next_actions: string[];
 }
@@ -1328,7 +1329,7 @@ export interface RiskManagementSettingsState {
   max_consecutive_losses: number;
 }
 
-export interface BrokerRiskAssessment {
+export interface AccountRiskState {
   allowed: boolean;
   enabled: boolean;
   halt_enabled: boolean;
@@ -1337,6 +1338,8 @@ export interface BrokerRiskAssessment {
   metrics: Record<string, unknown>;
   config: RiskManagementSettingsState;
 }
+
+export type BrokerRiskAssessment = AccountRiskState;
 
 export interface SettingsResponse {
   settings: AppSetting[];

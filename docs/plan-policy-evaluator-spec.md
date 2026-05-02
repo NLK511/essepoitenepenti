@@ -69,6 +69,9 @@ These labels are conservative and should gate autonomous promotion in future mig
 ## Initial consumer
 `RecommendationQualitySummaryService` includes an active-policy evaluation in the quality summary payload. This is a low-risk read-only migration; it does not change trading decisions or tuning promotion behavior.
 
+## Shared policy/reliability evaluation
+`TradePolicyEvaluationService` combines the policy evaluation with the canonical reliability report so operator-facing summaries do not have to stitch those contracts together separately.
+
 ## Future migrations
 Future batches should migrate:
 - plan-generation tuning candidate scoring

@@ -43,6 +43,11 @@ export function RecommendationQualityPage() {
     return data.windowed_summaries.find((item) => item.window_label === selectedWindow) ?? data.summary;
   }, [data, selectedWindow]);
 
+  const reliabilityReport = data?.reliability_report ?? null;
+  const confidenceBucket = reliabilityReport?.by_confidence_bucket[0] ?? null;
+  const familyBucket = reliabilityReport?.by_setup_family[0] ?? null;
+  const actionBucket = reliabilityReport?.by_action[0] ?? null;
+
   return (
     <>
       <PageHeader
@@ -119,8 +124,19 @@ export function RecommendationQualityPage() {
 
           <section className="card-grid">
             <Card>
-              <SectionTitle kicker="Next actions" title="What to do next" subtitle="Recommended follow-ups based on the current summary." actions={<Link to="/research" className="button-secondary">Open research</Link>} />
-              {data.next_actions.length === 0 ? <EmptyState message="No next actions generated." /> : <ul className="list-reset top-gap-small">{data.next_actions.map((item) => <li key={item} className="list-item compact-item">{item}</li>)}</ul>}
+              <SectionTitle kicker="Reliability" title="Shared broker/effective cohorts" subtitle="One canonical reliability report now feeds recommendation-quality review." actions={<HelpHint tooltip="The reliability report groups broker-preferred outcomes by confidence band, setup family, and action so policy reviews do not re-implement cohort logic locally." to={recommendationQualityDoc} />} />
+              {reliabilityReport ? (
+                <div className="data-points top-gap-small">
+                  <div className="data-point"><span className="data-point-label">resolved outcomes</span><span className="data-point-value">{reliabilityReport.resolved_outcomes}</span></div>
+                  <div className="data-point"><span className="data-point-label">broker outcomes</span><span className="data-point-value">{reliabilityReport.broker_outcomes}</span></div>
+                  <div className="data-point"><span className="data-point-label">simulation outcomes</span><span className="data-point-value">{reliabilityReport.simulation_outcomes}</span></div>
+                  <div className="data-point"><span className="data-point-label">top confidence cohort</span><span className="data-point-value">{confidenceBucket ? <Badge tone={confidenceBucket.sample_status === "strong" || confidenceBucket.sample_status === "usable" ? "ok" : confidenceBucket.sample_status === "limited" ? "warning" : "neutral"}>{confidenceBucket.label}</Badge> : "—"}</span></div>
+                  <div className="data-point"><span className="data-point-label">top setup family</span><span className="data-point-value">{familyBucket ? <Badge tone={familyBucket.sample_status === "strong" || familyBucket.sample_status === "usable" ? "ok" : familyBucket.sample_status === "limited" ? "warning" : "neutral"}>{familyBucket.label}</Badge> : "—"}</span></div>
+                  <div className="data-point"><span className="data-point-label">top action</span><span className="data-point-value">{actionBucket ? <Badge tone={actionBucket.sample_status === "strong" || actionBucket.sample_status === "usable" ? "ok" : actionBucket.sample_status === "limited" ? "warning" : "neutral"}>{actionBucket.label}</Badge> : "—"}</span></div>
+                </div>
+              ) : (
+                <EmptyState message="No reliability report available." />
+              )}
             </Card>
 
             <Card>
@@ -141,6 +157,13 @@ export function RecommendationQualityPage() {
                 <div className="data-point"><span className="data-point-label">high-confidence win rate</span><span className="data-point-value">{selectedSummary.high_confidence_win_rate_percent !== null ? `${selectedSummary.high_confidence_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
                 <div className="data-point"><span className="data-point-label">high-confidence 5d return</span><span className="data-point-value">{selectedSummary.high_confidence_average_return_5d !== null ? selectedSummary.high_confidence_average_return_5d.toFixed(3) : "—"}</span></div>
               </div>
+            </Card>
+          </section>
+
+          <section className="card-grid">
+            <Card>
+              <SectionTitle kicker="Next actions" title="What to do next" subtitle="Recommended follow-ups based on the current summary." actions={<Link to="/research" className="button-secondary">Open research</Link>} />
+              {data.next_actions.length === 0 ? <EmptyState message="No next actions generated." /> : <ul className="list-reset top-gap-small">{data.next_actions.map((item) => <li key={item} className="list-item compact-item">{item}</li>)}</ul>}
             </Card>
           </section>
 

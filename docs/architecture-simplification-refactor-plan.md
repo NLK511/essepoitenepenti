@@ -32,6 +32,7 @@ Plan-generation tuning, signal-gating tuning, calibration threshold adjustments,
 Canonical targets:
 - `TradeDecisionPolicy` describes the active/selected trade-selection policy
 - `PlanPolicyEvaluator` scores a policy against broker-preferred historical outcomes with one shared evaluator
+- `TradePolicyEvaluationService` composes policy evaluation with the canonical reliability report for operator-facing quality summaries
 
 This should separate:
 - strategy selection policy: what setups are eligible
@@ -47,6 +48,7 @@ Canonical target:
 - `ExecutionSettings`
 - `OperatorSettings`
 - `RuntimeState` / halt audit records
+- `AccountRiskState` for the live account-risk read model
 
 ### 5. Status string ambiguity
 Raw strings such as `open`, `failed`, `skipped`, `win`, `loss`, `ok`, and `partial` are used across different domains.
@@ -241,8 +243,9 @@ For each phase:
 ## Current priority after frontend consumer cleanup
 Continue reliability/tuning simplification in small batches:
 1. Use `PlanReliabilityReportService` as the canonical broker/effective reliability report in Research.
-2. Migrate signal-gating review and plan-generation tuning scoring to shared reliability/evaluator contracts where it changes no user-visible semantics without tests.
-3. Keep lower-level endpoints and raw records as focused/debug contracts until explicit deprecation.
-4. Continue collapsing duplicated frontend status/tone mappings into shared helpers when the mapping is the same across pages and the helper does not hide domain differences.
-5. Move remaining typed settings writes behind `SettingsMutationService` instead of route-local parsing so writes stay consistent with `SettingsDomainService`.
-6. Grow `BrokerReconciliationService` into the broker workbench and sync coordination layer as more broker-state reconciliation logic is discovered.
+2. Migrate recommendation-quality summaries and future tuning/scoring paths onto `TradePolicyEvaluationService` so policy evaluation and reliability reporting stay in one shared contract.
+3. Canonicalize the account-risk read model as `AccountRiskState` while preserving the existing API shape.
+4. Keep lower-level endpoints and raw records as focused/debug contracts until explicit deprecation.
+5. Continue collapsing duplicated frontend status/tone mappings into shared helpers when the mapping is the same across pages and the helper does not hide domain differences.
+6. Move remaining typed settings writes behind `SettingsMutationService` instead of route-local parsing so writes stay consistent with `SettingsDomainService`.
+7. Grow `BrokerReconciliationService` into the broker workbench and sync coordination layer as more broker-state reconciliation logic is discovered.

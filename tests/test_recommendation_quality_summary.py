@@ -194,10 +194,12 @@ class RecommendationQualitySummaryIntegrationTests(unittest.TestCase):
             self.assertIn("windowed_summaries", payload)
             self.assertIn("calibration", payload)
             self.assertIn("entry_miss_diagnostics", payload)
+            self.assertIn("reliability_report", payload)
             self.assertIn("next_actions", payload)
             self.assertIn("entry_miss_diagnostics", payload["summary"])
             self.assertIn("active_policy_evaluation", payload["summary"])
             self.assertIn("resolved_selected_outcomes", payload["summary"]["active_policy_evaluation"])
+            self.assertIn("by_confidence_bucket", payload["reliability_report"])
             
             # Verify windowed summary count matches definitions
             self.assertEqual(len(payload["windowed_summaries"]), len(RecommendationQualitySummaryService.WINDOW_DEFINITIONS))
@@ -217,6 +219,7 @@ class RecommendationQualitySummaryIntegrationTests(unittest.TestCase):
                 self.assertIn("summary", payload)
                 self.assertIn("windowed_summaries", payload)
                 self.assertIn("entry_miss_diagnostics", payload)
+                self.assertIn("reliability_report", payload)
                 self.assertIn("active_policy_evaluation", payload["summary"])
 
         import asyncio

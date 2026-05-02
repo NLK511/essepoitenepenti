@@ -285,7 +285,7 @@ class RiskHaltEvent(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class BrokerRiskAssessment(BaseModel):
+class AccountRiskState(BaseModel):
     allowed: bool = True
     enabled: bool = True
     halt_enabled: bool = False
@@ -293,6 +293,9 @@ class BrokerRiskAssessment(BaseModel):
     reasons: list[str] = Field(default_factory=list)
     metrics: dict[str, object] = Field(default_factory=dict)
     config: dict[str, object] = Field(default_factory=dict)
+
+
+BrokerRiskAssessment = AccountRiskState
 
 
 class BrokerPosition(BaseModel):

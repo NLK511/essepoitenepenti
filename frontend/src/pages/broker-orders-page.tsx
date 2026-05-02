@@ -4,7 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
-import type { AppSetting, BrokerOrderExecution, BrokerPosition, BrokerRiskAssessment, BrokerWorkbench, RiskHaltEvent } from "../types";
+import type { AppSetting, AccountRiskState, BrokerOrderExecution, BrokerPosition, BrokerWorkbench, RiskHaltEvent } from "../types";
 import { formatDate, brokerExecutionStatusTone } from "../utils";
 
 function metricNumber(value: unknown): string {
@@ -31,7 +31,7 @@ export function BrokerOrdersPage() {
   const [activeActionId, setActiveActionId] = useState<number | null>(null);
   const [settings, setSettings] = useState<AppSetting[] | null>(null);
   const [positions, setPositions] = useState<BrokerPosition[] | null>(null);
-  const [risk, setRisk] = useState<BrokerRiskAssessment | null>(null);
+  const [risk, setRisk] = useState<AccountRiskState | null>(null);
   const [haltEvents, setHaltEvents] = useState<RiskHaltEvent[]>([]);
   const { showToast } = useToast();
   const limit = Math.max(1, Number(searchParams.get("limit") ?? "50") || 50);
@@ -137,7 +137,7 @@ export function BrokerOrdersPage() {
     const reason = window.prompt("Reason for halting broker execution", "manual operator halt") ?? "manual operator halt";
     setActionError(null);
     try {
-      const updated = await postForm<BrokerRiskAssessment>("/api/risk/halt", { reason });
+      const updated = await postForm<AccountRiskState>("/api/risk/halt", { reason });
       setRisk(updated);
       showToast({ message: "Broker execution halted", tone: "success" });
       await reloadOrders(selectedOrder?.id ?? undefined);
@@ -149,7 +149,7 @@ export function BrokerOrdersPage() {
   async function resumeTrading() {
     setActionError(null);
     try {
-      const updated = await postForm<BrokerRiskAssessment>("/api/risk/resume", {});
+      const updated = await postForm<AccountRiskState>("/api/risk/resume", {});
       setRisk(updated);
       showToast({ message: "Broker execution resumed", tone: "success" });
       await reloadOrders(selectedOrder?.id ?? undefined);

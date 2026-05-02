@@ -39,6 +39,7 @@ These define the current product truth.
 - `effective-plan-outcome-spec.md` — broker-preferred effective outcome contract used by calibration, performance, tuning, and research summaries
 - `plan-reliability-report-spec.md` — canonical broker/effective reliability report for confidence, setup-family, and action cohorts
 - `plan-policy-evaluator-spec.md` — canonical evaluator for scoring trade-selection policies against broker-preferred historical outcomes
+- `account-risk-state-spec.md` — canonical account-risk read model for broker safety checks and kill-switch state
 - `decision-sample-tuning-guide.md` — how to review and tune decision samples
 - `signal-gating-benchmark-spec.md` — current decision-sample benchmark semantics used by gating review
 - `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow and calibration-related review surfaces
@@ -61,6 +62,7 @@ These are useful, but they are not the main current-state entry point.
 - `effective-plan-outcome-spec.md` — canonical broker-first outcome view for reconciling broker positions with simulated recommendation outcomes
 - `plan-reliability-report-spec.md` — canonical broker/effective reliability report for confidence, setup-family, and action cohorts
 - `plan-policy-evaluator-spec.md` — canonical evaluator for scoring trade-selection policies against broker-preferred historical outcomes
+- `account-risk-state-spec.md` — canonical account-risk read model for broker safety checks and kill-switch state
 - `architecture-simplification-refactor-plan.md` — active phased implementation plan for simplifying drifted abstractions
 - `nitter-social-relevance-scoring.md` — current Nitter relevance-ranking behavior
 

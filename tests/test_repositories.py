@@ -30,6 +30,7 @@ from trade_proposer_app.domain.models import (
     RecommendationPlanEvidenceSummary,
     RecommendationPlanOutcome,
     RecommendationPlanSignalBreakdown,
+    AccountRiskState,
     BrokerOrderExecution,
     RecommendationTransmissionSummary,
     RunDiagnostics,
@@ -57,11 +58,13 @@ from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
+from trade_proposer_app.services.risk_management import BrokerRiskManager
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
 from trade_proposer_app.services.execution_candidates import ExecutionCandidateBuilder
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
 from trade_proposer_app.services.plan_policy_evaluator import PlanPolicyEvaluator
 from trade_proposer_app.services.plan_reliability_report import PlanReliabilityReportService
+from trade_proposer_app.services.trade_policy_evaluation import TradePolicyEvaluationService
 from trade_proposer_app.services.broker_reconciliation import BrokerReconciliationService
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.settings_mutations import SettingsMutationService
@@ -940,6 +943,49 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(evaluation.robustness_label, "insufficient")
         self.assertEqual(evaluation.selection_rate_percent, 75.0)
 
+    def test_trade_policy_evaluation_service_combines_policy_and_reliability_reports(self) -> None:
+        outcomes = [
+            RecommendationPlanOutcome(
+                recommendation_plan_id=1,
+                ticker="AAPL",
+                action="long",
+                outcome="win",
+                status="resolved",
+                confidence_percent=60.0,
+                confidence_bucket="50_to_64",
+                setup_family="continuation",
+                outcome_source="broker",
+                realized_pnl=12.0,
+            ),
+            RecommendationPlanOutcome(
+                recommendation_plan_id=2,
+                ticker="MSFT",
+                action="long",
+                outcome="loss",
+                status="resolved",
+                confidence_percent=64.0,
+                confidence_bucket="50_to_64",
+                setup_family="continuation",
+                outcome_source="broker",
+                realized_pnl=-4.0,
+            ),
+        ]
+        policy = TradeDecisionPolicy(
+            policy_id="combined-policy",
+            confidence_threshold=50.0,
+            allow_longs=True,
+            allow_shorts=True,
+            allowed_setup_families=("continuation",),
+        )
+
+        summary = TradePolicyEvaluationService(StubEffectiveOutcomeRepository(outcomes)).summarize(policy)
+
+        self.assertEqual(summary.policy_evaluation.policy_id, "combined-policy")
+        self.assertEqual(summary.policy_evaluation.resolved_selected_outcomes, 2)
+        self.assertEqual(summary.reliability_report.total_outcomes, 2)
+        self.assertEqual(summary.reliability_report.resolved_outcomes, 2)
+        self.assertEqual(summary.reliability_report.by_confidence_bucket[0].key, "50_to_64")
+
     def test_plan_reliability_report_summarizes_canonical_effective_cohorts(self) -> None:
         outcomes = [
             RecommendationPlanOutcome(
@@ -1060,6 +1106,16 @@ class RepositoryTests(unittest.TestCase):
             self.assertIn("friction_pct", execution.evaluation_realism)
             self.assertIn("summary_backend", operator.summary)
             self.assertIn("social_nitter_enabled", operator.social)
+        finally:
+            session.close()
+
+    def test_risk_manager_returns_canonical_account_risk_state(self) -> None:
+        session = create_session()
+        try:
+            assessment = BrokerRiskManager(SettingsRepository(session), BrokerPositionRepository(session)).assess()
+            self.assertIsInstance(assessment, AccountRiskState)
+            self.assertTrue(assessment.enabled)
+            self.assertIn("enabled", assessment.config)
         finally:
             session.close()
 

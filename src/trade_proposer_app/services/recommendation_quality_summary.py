@@ -9,7 +9,6 @@ from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
-from trade_proposer_app.services.plan_policy_evaluator import PlanPolicyEvaluator
 from trade_proposer_app.services.plan_generation_walk_forward import PlanGenerationWalkForwardService
 from trade_proposer_app.services.recommendation_evidence_concentration import RecommendationEvidenceConcentrationService
 from trade_proposer_app.services.recommendation_plan_baselines import RecommendationPlanBaselineService
@@ -17,6 +16,7 @@ from trade_proposer_app.services.recommendation_plan_calibration import Recommen
 from trade_proposer_app.services.recommendation_setup_family_reviews import RecommendationSetupFamilyReviewService
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicyService
+from trade_proposer_app.services.trade_policy_evaluation import TradePolicyEvaluationService
 
 
 class RecommendationQualitySummaryService:
@@ -40,6 +40,7 @@ class RecommendationQualitySummaryService:
         self.performance = PerformanceAssessmentService(session)
         self.tuning = PlanGenerationTuningService(session)
         self.trade_policy = TradeDecisionPolicyService(session)
+        self.policy_evaluation = TradePolicyEvaluationService(self.effective_outcomes)
 
     def summarize(self) -> dict[str, object]:
         now = datetime.now(timezone.utc)
@@ -49,7 +50,7 @@ class RecommendationQualitySummaryService:
         current_config = normalize_plan_generation_tuning_config(current_version.config)
         baseline_config = normalize_plan_generation_tuning_config(baseline_version.config)
         active_policy = self.trade_policy.active_policy()
-        policy_evaluation = PlanPolicyEvaluator(self.effective_outcomes).evaluate(active_policy).to_dict()
+        policy_review = self.policy_evaluation.summarize(active_policy, limit=self.METRIC_SAMPLE_LIMIT)
         walk_forward: dict[str, object] | None = None
         walk_forward_error: str | None = None
         try:
@@ -129,7 +130,7 @@ class RecommendationQualitySummaryService:
                 "walk_forward_average_expected_value_delta": walk_forward.get("average_expected_value_delta") if isinstance(walk_forward, dict) else None,
                 "walk_forward_error": walk_forward_error,
                 "latest_assessment": latest_assessment.get("latest_summary", {}),
-                "active_policy_evaluation": policy_evaluation,
+                "active_policy_evaluation": policy_review.policy_evaluation.to_dict(),
             }
         )
         next_actions = self._next_actions(summary)
@@ -144,6 +145,7 @@ class RecommendationQualitySummaryService:
             "baselines": baselines.model_dump(mode="json"),
             "evidence_concentration": evidence.model_dump(mode="json"),
             "setup_family_review": family_review.model_dump(mode="json"),
+            "reliability_report": policy_review.reliability_report.to_dict(),
             "walk_forward_validation": walk_forward,
             "next_actions": next_actions,
         }
