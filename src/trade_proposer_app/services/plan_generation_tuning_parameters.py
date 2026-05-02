@@ -31,6 +31,24 @@ class PlanGenerationTuningParameterDefinition:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class PlanGenerationExplorationCampaign:
+    name: str
+    priority: int
+    candidate_budget: int
+    parameter_keys: tuple[str, ...]
+    description: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "priority": self.priority,
+            "candidate_budget": self.candidate_budget,
+            "parameter_keys": list(self.parameter_keys),
+            "description": self.description,
+        }
+
+
 PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
     PlanGenerationTuningParameterDefinition(
         key="global.entry_band_risk_fraction",
@@ -133,9 +151,60 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
 PARAMETER_DEFAULTS: dict[str, float] = {item.key: item.default for item in PARAMETER_DEFINITIONS}
 PARAMETER_BY_KEY: dict[str, PlanGenerationTuningParameterDefinition] = {item.key: item for item in PARAMETER_DEFINITIONS}
 
+EXPLORATION_CAMPAIGNS: tuple[PlanGenerationExplorationCampaign, ...] = (
+    PlanGenerationExplorationCampaign(
+        name="entry_calibration",
+        priority=1,
+        candidate_budget=16,
+        parameter_keys=("global.entry_band_risk_fraction",),
+        description="Try the entry band first because it changes actionable eligibility before the rest of the price framing.",
+    ),
+    PlanGenerationExplorationCampaign(
+        name="risk_protection",
+        priority=2,
+        candidate_budget=32,
+        parameter_keys=(
+            "global.headwind_stop_multiplier",
+            "setup_family.breakout.stop_distance_multiplier",
+            "setup_family.mean_reversion.stop_distance_multiplier",
+        ),
+        description="Try the downside-protection knobs second because they preserve the best entries while tightening loss behavior.",
+    ),
+    PlanGenerationExplorationCampaign(
+        name="reward_expansion",
+        priority=3,
+        candidate_budget=48,
+        parameter_keys=(
+            "setup_family.breakout.take_profit_distance_multiplier",
+            "setup_family.mean_reversion.take_profit_distance_multiplier",
+            "setup_family.catalyst_follow_through.take_profit_distance_multiplier",
+            "setup_family.macro_beneficiary_loser.take_profit_distance_multiplier",
+        ),
+        description="Try the reward-side multipliers third because they shape the payoff distribution after the entry and stop remain stable.",
+    ),
+    PlanGenerationExplorationCampaign(
+        name="historical_reuse",
+        priority=4,
+        candidate_budget=24,
+        parameter_keys=tuple(item.key for item in PARAMETER_DEFINITIONS),
+        description="Re-test historical promoted and high-scoring configurations after the focused knob passes.",
+    ),
+    PlanGenerationExplorationCampaign(
+        name="bounded_random_mutation",
+        priority=5,
+        candidate_budget=24,
+        parameter_keys=tuple(item.key for item in PARAMETER_DEFINITIONS),
+        description="Fill the remaining budget with bounded random local mutations to discover small non-obvious combinations.",
+    ),
+)
+
 
 def parameter_definitions() -> list[dict[str, object]]:
     return [item.to_dict() for item in PARAMETER_DEFINITIONS]
+
+
+def exploration_campaigns() -> list[dict[str, object]]:
+    return [item.to_dict() for item in EXPLORATION_CAMPAIGNS]
 
 
 def normalize_plan_generation_tuning_config(config: dict[str, object] | None) -> dict[str, float]:

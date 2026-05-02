@@ -20,7 +20,7 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
-from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_BY_KEY, normalize_plan_generation_tuning_config, parameter_definitions
+from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_BY_KEY, exploration_campaigns, normalize_plan_generation_tuning_config, parameter_definitions
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
 
 
@@ -151,6 +151,19 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self.assertEqual(parameters["setup_family.breakout.take_profit_distance_multiplier"]["exploration_min"], 1.05)
         self.assertEqual(parameters["setup_family.breakout.take_profit_distance_multiplier"]["exploration_max"], 1.25)
 
+    def test_exploration_campaign_plan_is_ranked_and_bounded(self) -> None:
+        campaigns = exploration_campaigns()
+        self.assertEqual([item["name"] for item in campaigns[:3]], ["entry_calibration", "risk_protection", "reward_expansion"])
+        self.assertEqual(campaigns[0]["candidate_budget"], 16)
+        self.assertEqual(campaigns[1]["candidate_budget"], 32)
+        self.assertEqual(campaigns[2]["candidate_budget"], 48)
+        self.assertEqual(sum(item["candidate_budget"] for item in campaigns), 144)
+
+    def test_describe_includes_the_ranked_exploration_campaign_plan(self) -> None:
+        payload = self.service.describe()
+        self.assertIn("exploration_campaigns", payload)
+        self.assertEqual([item["name"] for item in payload["exploration_campaigns"][:3]], ["entry_calibration", "risk_protection", "reward_expansion"])
+
     def test_run_ranks_candidates_lexicographically_and_persists_candidate_history(self) -> None:
         # Search slice
         self._seed_record(created_at=datetime(2026, 3, 1, tzinfo=timezone.utc), mfe=15.0, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
@@ -203,7 +216,9 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self.assertTrue(bool(explore_run.summary.get("exploration_mode")))
         self.assertIsInstance(explore_run.summary.get("exploration_seed"), int)
         self.assertGreaterEqual(explore_run.summary.get("history_span_days", 0), 30)
+        self.assertEqual(explore_run.summary.get("exploration_campaign_plan")[0]["name"], "entry_calibration")
         for candidate in explore_run.candidates:
+            self.assertIn("campaign", candidate.metric_breakdown)
             for key, value in candidate.config.items():
                 definition = PARAMETER_BY_KEY[key]
                 self.assertGreaterEqual(value, definition.exploration_min)

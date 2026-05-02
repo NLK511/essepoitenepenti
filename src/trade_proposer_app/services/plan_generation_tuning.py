@@ -26,7 +26,7 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
-from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_BY_KEY, normalize_plan_generation_tuning_config, parameter_definitions
+from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_BY_KEY, exploration_campaigns, normalize_plan_generation_tuning_config, parameter_definitions
 from trade_proposer_app.services.plan_generation_walk_forward import PlanGenerationWalkForwardService
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.settings_mutations import SettingsMutationService
@@ -103,6 +103,7 @@ class PlanGenerationTuningService:
             "objective_name": self.OBJECTIVE_NAME,
             "parameter_schema_version": self.SCHEMA_VERSION,
             "parameters": parameter_definitions(),
+            "exploration_campaigns": exploration_campaigns(),
             "state": state,
         }
 
@@ -192,6 +193,7 @@ class PlanGenerationTuningService:
                     "promotion_requested": apply,
                     "exploration_mode": explore_mode,
                     "exploration_seed": exploration_seed,
+                    "exploration_campaign_plan": exploration_campaigns(),
                     "search_record_count": len(search_records),
                     "validation_record_count": len(validation_records),
                     "history_span_days": history_span_days,
@@ -570,10 +572,24 @@ class PlanGenerationTuningService:
         )
 
     @staticmethod
+    def _candidate_campaign_name(changed_keys: list[str]) -> str:
+        changed = set(changed_keys)
+        if not changed:
+            return "baseline"
+        if changed.issubset({"global.entry_band_risk_fraction"}):
+            return "entry_calibration"
+        if changed.issubset({"global.headwind_stop_multiplier", "setup_family.breakout.stop_distance_multiplier", "setup_family.mean_reversion.stop_distance_multiplier"}):
+            return "risk_protection"
+        if changed.issubset({"setup_family.breakout.take_profit_distance_multiplier", "setup_family.mean_reversion.take_profit_distance_multiplier", "setup_family.catalyst_follow_through.take_profit_distance_multiplier", "setup_family.macro_beneficiary_loser.take_profit_distance_multiplier"}):
+            return "reward_expansion"
+        return "historical_reuse_or_random_mutation"
+
+    @staticmethod
     def _candidate_payload(item: CandidateEvaluation) -> dict[str, object]:
         return {
             "config": item.config,
             "changed_keys": item.changed_keys,
+            "campaign": PlanGenerationTuningService._candidate_campaign_name(item.changed_keys),
             "search_actionable_count": item.search_actionable_count,
             "search_win_count": item.search_win_count,
             "search_win_rate_percent": round(item.search_win_rate * 100.0, 2),

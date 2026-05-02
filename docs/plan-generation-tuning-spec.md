@@ -338,6 +338,20 @@ The initial manual exploration campaign must stay inside the following exact par
 
 Bounded random mutations and step-based local perturbations in exploration mode must be clamped to this envelope.
 
+### Ranked exploration campaign plan
+
+The first exploration campaign should allocate effort in this order:
+
+| Priority | Campaign | Primary knobs | Candidate budget |
+| --- | --- | --- | ---: |
+| 1 | Entry calibration | `global.entry_band_risk_fraction` | `16` |
+| 2 | Risk protection | `global.headwind_stop_multiplier`, `setup_family.breakout.stop_distance_multiplier`, `setup_family.mean_reversion.stop_distance_multiplier` | `32` |
+| 3 | Reward expansion | `setup_family.breakout.take_profit_distance_multiplier`, `setup_family.mean_reversion.take_profit_distance_multiplier`, `setup_family.catalyst_follow_through.take_profit_distance_multiplier`, `setup_family.macro_beneficiary_loser.take_profit_distance_multiplier` | `48` |
+| 4 | Historical reuse | Re-test promoted and high-scoring historical configs | `24` |
+| 5 | Bounded random mutation | Deterministic local mutations across the full schema | `24` |
+
+This yields a default exploration budget of `144` candidates per run before deduplication.
+
 ### Candidate generation constraints
 
 ### Candidate generation constraints
