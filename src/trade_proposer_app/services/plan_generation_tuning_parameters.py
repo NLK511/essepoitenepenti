@@ -10,6 +10,8 @@ class PlanGenerationTuningParameterDefinition:
     default: float
     minimum: float
     maximum: float
+    exploration_min: float
+    exploration_max: float
     step: float
     category: str
     description: str
@@ -21,6 +23,8 @@ class PlanGenerationTuningParameterDefinition:
             "default": self.default,
             "minimum": self.minimum,
             "maximum": self.maximum,
+            "exploration_min": self.exploration_min,
+            "exploration_max": self.exploration_max,
             "step": self.step,
             "category": self.category,
             "description": self.description,
@@ -34,6 +38,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         default=0.0,
         minimum=0.0,
         maximum=0.5,
+        exploration_min=0.0,
+        exploration_max=0.15,
         step=0.05,
         category="entry",
         description="Expands entry into a bounded range around the baseline entry using the baseline risk distance.",
@@ -44,6 +50,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         default=0.92,
         minimum=0.75,
         maximum=1.1,
+        exploration_min=0.88,
+        exploration_max=0.98,
         step=0.02,
         category="risk",
         description="Multiplies the stop distance when transmission context_bias is headwind.",
@@ -54,6 +62,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         default=0.85,
         minimum=0.6,
         maximum=1.3,
+        exploration_min=0.75,
+        exploration_max=0.95,
         step=0.05,
         category="risk",
         description="Scales breakout/breakdown stop distance relative to baseline recommendation risk.",
@@ -64,6 +74,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         default=1.12,
         minimum=0.7,
         maximum=1.6,
+        exploration_min=1.05,
+        exploration_max=1.25,
         step=0.05,
         category="reward",
         description="Scales breakout/breakdown take-profit distance relative to baseline recommendation reward.",
@@ -74,6 +86,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         default=1.1,
         minimum=0.7,
         maximum=1.5,
+        exploration_min=0.95,
+        exploration_max=1.2,
         step=0.05,
         category="risk",
         description="Scales mean-reversion stop distance relative to baseline recommendation risk.",
@@ -84,6 +98,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         default=0.88,
         minimum=0.6,
         maximum=1.4,
+        exploration_min=0.78,
+        exploration_max=1.0,
         step=0.05,
         category="reward",
         description="Scales mean-reversion take-profit distance relative to baseline recommendation reward.",
@@ -94,6 +110,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         default=1.18,
         minimum=0.8,
         maximum=1.8,
+        exploration_min=1.1,
+        exploration_max=1.35,
         step=0.05,
         category="reward",
         description="Scales catalyst follow-through take-profit distance relative to baseline recommendation reward.",
@@ -104,6 +122,8 @@ PARAMETER_DEFINITIONS: tuple[PlanGenerationTuningParameterDefinition, ...] = (
         default=1.08,
         minimum=0.8,
         maximum=1.5,
+        exploration_min=1.02,
+        exploration_max=1.2,
         step=0.05,
         category="reward",
         description="Scales macro beneficiary/loser take-profit distance relative to baseline recommendation reward.",

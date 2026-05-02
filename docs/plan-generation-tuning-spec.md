@@ -321,6 +321,25 @@ Required exploration behavior:
 - prefer the oldest eligible records for search/fit summaries only when a time split is required; validation must remain holdout-based
 - include broker-resolved records and phantom scoreable records in the eligible exploration set when they satisfy the replay rules above
 
+### First campaign exploration envelope
+
+The initial manual exploration campaign must stay inside the following exact parameter ranges. These ranges are narrower than the full schema limits and are meant to focus the search near plausible profit/risk trade-offs before widening the search space.
+
+| Parameter key | Exploration min | Exploration max |
+| --- | ---: | ---: |
+| `global.entry_band_risk_fraction` | `0.00` | `0.15` |
+| `global.headwind_stop_multiplier` | `0.88` | `0.98` |
+| `setup_family.breakout.stop_distance_multiplier` | `0.75` | `0.95` |
+| `setup_family.breakout.take_profit_distance_multiplier` | `1.05` | `1.25` |
+| `setup_family.mean_reversion.stop_distance_multiplier` | `0.95` | `1.20` |
+| `setup_family.mean_reversion.take_profit_distance_multiplier` | `0.78` | `1.00` |
+| `setup_family.catalyst_follow_through.take_profit_distance_multiplier` | `1.10` | `1.35` |
+| `setup_family.macro_beneficiary_loser.take_profit_distance_multiplier` | `1.02` | `1.20` |
+
+Bounded random mutations and step-based local perturbations in exploration mode must be clamped to this envelope.
+
+### Candidate generation constraints
+
 ### Candidate generation constraints
 
 - candidate count per run must be explicitly capped

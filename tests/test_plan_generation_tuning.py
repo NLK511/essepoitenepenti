@@ -20,7 +20,7 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
-from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
+from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_BY_KEY, normalize_plan_generation_tuning_config, parameter_definitions
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
 
 
@@ -144,6 +144,13 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self.assertIsNotNone(payload["state"].active_config_version_id)
         self.assertEqual(payload["state"].active_config["setup_family.breakout.take_profit_distance_multiplier"], 1.12)
 
+    def test_parameter_schema_exposes_the_first_campaign_exploration_envelope(self) -> None:
+        parameters = {item["key"]: item for item in parameter_definitions()}
+        self.assertEqual(parameters["global.entry_band_risk_fraction"]["exploration_min"], 0.0)
+        self.assertEqual(parameters["global.entry_band_risk_fraction"]["exploration_max"], 0.15)
+        self.assertEqual(parameters["setup_family.breakout.take_profit_distance_multiplier"]["exploration_min"], 1.05)
+        self.assertEqual(parameters["setup_family.breakout.take_profit_distance_multiplier"]["exploration_max"], 1.25)
+
     def test_run_ranks_candidates_lexicographically_and_persists_candidate_history(self) -> None:
         # Search slice
         self._seed_record(created_at=datetime(2026, 3, 1, tzinfo=timezone.utc), mfe=15.0, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
@@ -196,6 +203,11 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self.assertTrue(bool(explore_run.summary.get("exploration_mode")))
         self.assertIsInstance(explore_run.summary.get("exploration_seed"), int)
         self.assertGreaterEqual(explore_run.summary.get("history_span_days", 0), 30)
+        for candidate in explore_run.candidates:
+            for key, value in candidate.config.items():
+                definition = PARAMETER_BY_KEY[key]
+                self.assertGreaterEqual(value, definition.exploration_min)
+                self.assertLessEqual(value, definition.exploration_max)
 
     def test_apply_promotes_only_guardrail_eligible_winner_and_updates_active_config(self) -> None:
         self._seed_record(created_at=datetime(2026, 3, 1, tzinfo=timezone.utc), mfe=15.0, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)

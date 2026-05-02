@@ -361,8 +361,7 @@ class PlanGenerationTuningService:
             for step_count in (-2, -1, 1, 2):
                 mutated = dict(active_config)
                 candidate = base_value + (definition.step * step_count)
-                candidate = max(definition.minimum, min(definition.maximum, candidate))
-                mutated[key] = round(candidate, 4)
+                mutated[key] = self._campaign_bounded_value(definition, candidate, explore_mode=explore_mode)
                 configs.append(mutated)
         for index, key_a in enumerate(parameter_keys):
             definition_a = PARAMETER_BY_KEY[key_a]
@@ -373,15 +372,20 @@ class PlanGenerationTuningService:
                 for step_a in (-1, 1):
                     for step_b in (-1, 1):
                         mutated = dict(active_config)
-                        candidate_a = max(definition_a.minimum, min(definition_a.maximum, base_a + (definition_a.step * step_a)))
-                        candidate_b = max(definition_b.minimum, min(definition_b.maximum, base_b + (definition_b.step * step_b)))
-                        mutated[key_a] = round(candidate_a, 4)
-                        mutated[key_b] = round(candidate_b, 4)
+                        candidate_a = base_a + (definition_a.step * step_a)
+                        candidate_b = base_b + (definition_b.step * step_b)
+                        mutated[key_a] = self._campaign_bounded_value(definition_a, candidate_a, explore_mode=explore_mode)
+                        mutated[key_b] = self._campaign_bounded_value(definition_b, candidate_b, explore_mode=explore_mode)
                         configs.append(mutated)
         for version in self.repository.list_config_versions(limit=100):
             if not version.config:
                 continue
             normalized = normalize_plan_generation_tuning_config(version.config)
+            if explore_mode:
+                normalized = {
+                    key: self._campaign_bounded_value(PARAMETER_BY_KEY[key], value, explore_mode=True)
+                    for key, value in normalized.items()
+                }
             configs.append(normalized)
         if explore_mode:
             rng = random.Random(seed)
@@ -395,14 +399,18 @@ class PlanGenerationTuningService:
                     base_value = mutated.get(key, definition.default)
                     step_count = rng.choice([-3, -2, -1, 1, 2, 3])
                     candidate = base_value + (definition.step * step_count)
-                    candidate = max(definition.minimum, min(definition.maximum, candidate))
-                    mutated[key] = round(candidate, 4)
+                    mutated[key] = self._campaign_bounded_value(definition, candidate, explore_mode=True)
                 configs.append(mutated)
         deduped: list[dict[str, float]] = []
         fingerprints: set[tuple[tuple[str, float], ...]] = set()
         max_candidates = 200 if explore_mode else 50
         for config in configs:
             normalized = normalize_plan_generation_tuning_config(config)
+            if explore_mode:
+                normalized = {
+                    key: self._campaign_bounded_value(PARAMETER_BY_KEY[key], value, explore_mode=True)
+                    for key, value in normalized.items()
+                }
             fingerprint = tuple(sorted(normalized.items()))
             if fingerprint in fingerprints:
                 continue
@@ -423,6 +431,12 @@ class PlanGenerationTuningService:
         payload = repr(sorted(fingerprint_source.items())).encode("utf-8")
         digest = hashlib.sha256(payload).hexdigest()
         return int(digest[:16], 16)
+
+    @staticmethod
+    def _campaign_bounded_value(definition, value: float, *, explore_mode: bool) -> float:
+        lower = definition.exploration_min if explore_mode else definition.minimum
+        upper = definition.exploration_max if explore_mode else definition.maximum
+        return round(max(lower, min(upper, value)), 4)
 
     @staticmethod
     def _history_span_days(records: list[EligibleTuningRecord]) -> int:
