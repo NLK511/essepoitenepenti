@@ -406,8 +406,10 @@ class PlanGenerationTuningRouteTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(state.status_code, 200)
             state_payload = state.json()
             self.assertIn("parameters", state_payload)
+            self.assertIn("exploration_campaigns", state_payload)
             self.assertIn("state", state_payload)
             self.assertIsNotNone(state_payload["state"]["active_config_version_id"])
+            self.assertEqual(state_payload["exploration_campaigns"][0]["name"], "entry_calibration")
 
             run_response = await client.post("/api/plan-generation-tuning/run?apply=true")
             self.assertEqual(run_response.status_code, 200)

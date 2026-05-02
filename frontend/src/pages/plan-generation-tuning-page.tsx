@@ -6,6 +6,7 @@ import { planGenerationTuningConfigTone, runTone } from "../utils";
 import type {
   PlanGenerationTuningConfigVersion,
   PlanGenerationTuningConfigsResponse,
+  PlanGenerationTuningExplorationCampaign,
   PlanGenerationTuningResponse,
   PlanGenerationTuningRun,
   PlanGenerationTuningRunsResponse,
@@ -107,6 +108,25 @@ export function PlanGenerationTuningPage() {
               <summary className="helper-text">Show active config JSON</summary>
               <pre className="code-block top-gap-small">{JSON.stringify(state.state.active_config, null, 2)}</pre>
             </details>
+          </Card>
+
+          <Card>
+            <SectionTitle kicker="Exploration" title="Ranked campaign plan" subtitle="The backend now exposes the exploration phases used to allocate candidate budgets." actions={<HelpHint tooltip="This plan keeps exploration ordered: entry first, then risk, then reward, then historical reuse, then random mutation." to={tuningSpecDoc} />} />
+            <div className="data-stack top-gap-small">
+              {state.exploration_campaigns.map((campaign: PlanGenerationTuningExplorationCampaign) => (
+                <article key={campaign.name} className="data-card">
+                  <div className="data-card-header">
+                    <div className="cluster">
+                      <Badge tone={campaign.priority <= 3 ? "ok" : "info"}>#{campaign.priority}</Badge>
+                      <Badge>{campaign.name}</Badge>
+                      <Badge>{campaign.candidate_budget} candidates</Badge>
+                    </div>
+                    <div className="helper-text">{campaign.parameter_keys.join(", ")}</div>
+                  </div>
+                  <div className="helper-text top-gap-small">{campaign.description}</div>
+                </article>
+              ))}
+            </div>
           </Card>
 
           {validation ? (

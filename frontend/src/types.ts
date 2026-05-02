@@ -1044,10 +1044,19 @@ export interface PlanGenerationTuningState {
   latest_run: PlanGenerationTuningRun | null;
 }
 
+export interface PlanGenerationTuningExplorationCampaign {
+  name: string;
+  priority: number;
+  candidate_budget: number;
+  parameter_keys: string[];
+  description: string;
+}
+
 export interface PlanGenerationTuningResponse {
   objective_name: string;
   parameter_schema_version: string;
   parameters: Array<Record<string, unknown>>;
+  exploration_campaigns: PlanGenerationTuningExplorationCampaign[];
   state: PlanGenerationTuningState;
 }
 
