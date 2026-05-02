@@ -89,6 +89,9 @@ class PlanReliabilityReportService:
             evaluated_before=evaluated_before,
             limit=limit,
         )
+        return self.summarize_outcomes(outcomes)
+
+    def summarize_outcomes(self, outcomes: list[RecommendationPlanOutcome]) -> PlanReliabilityReport:
         resolved = self._resolved(outcomes)
         return PlanReliabilityReport(
             total_outcomes=len(outcomes),

@@ -83,8 +83,10 @@ def create_session() -> Session:
 class StubEffectiveOutcomeRepository:
     def __init__(self, outcomes: list[RecommendationPlanOutcome]) -> None:
         self.outcomes = outcomes
+        self.list_outcomes_calls = 0
 
     def list_outcomes(self, **_kwargs):
+        self.list_outcomes_calls += 1
         return self.outcomes
 
 
@@ -979,8 +981,10 @@ class RepositoryTests(unittest.TestCase):
             allowed_setup_families=("continuation",),
         )
 
-        summary = TradePolicyEvaluationService(StubEffectiveOutcomeRepository(outcomes)).summarize(policy)
+        repository = StubEffectiveOutcomeRepository(outcomes)
+        summary = TradePolicyEvaluationService(repository).summarize(policy)
 
+        self.assertEqual(repository.list_outcomes_calls, 1)
         self.assertEqual(summary.policy_evaluation.policy_id, "combined-policy")
         self.assertEqual(summary.policy_evaluation.resolved_selected_outcomes, 2)
         self.assertEqual(summary.reliability_report.total_outcomes, 2)

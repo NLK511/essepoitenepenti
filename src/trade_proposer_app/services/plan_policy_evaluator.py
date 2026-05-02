@@ -53,6 +53,13 @@ class PlanPolicyEvaluator:
             evaluated_before=evaluated_before,
             limit=limit,
         )
+        return self.evaluate_outcomes(policy, outcomes)
+
+    def evaluate_outcomes(
+        self,
+        policy: TradeDecisionPolicy,
+        outcomes: list[RecommendationPlanOutcome],
+    ) -> PlanPolicyEvaluation:
         selected = [item for item in outcomes if self._selected_by_policy(item, policy)]
         resolved = self._resolved(selected)
         wins = [item for item in resolved if item.outcome == TradeOutcome.WIN.value]

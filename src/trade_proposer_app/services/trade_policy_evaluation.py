@@ -41,19 +41,17 @@ class TradePolicyEvaluationService:
         evaluated_before: datetime | None = None,
         limit: int = 500_000,
     ) -> TradePolicyEvaluationSummary:
+        outcomes = self.outcomes.list_outcomes(
+            evaluated_after=evaluated_after,
+            evaluated_before=evaluated_before,
+            limit=limit,
+        )
+        policy_evaluator = PlanPolicyEvaluator(self.outcomes)
+        reliability_report_service = PlanReliabilityReportService(
+            self.outcomes,
+            taxonomy_service=self.taxonomy_service,
+        )
         return TradePolicyEvaluationSummary(
-            policy_evaluation=PlanPolicyEvaluator(self.outcomes).evaluate(
-                policy,
-                evaluated_after=evaluated_after,
-                evaluated_before=evaluated_before,
-                limit=limit,
-            ),
-            reliability_report=PlanReliabilityReportService(
-                self.outcomes,
-                taxonomy_service=self.taxonomy_service,
-            ).summarize(
-                evaluated_after=evaluated_after,
-                evaluated_before=evaluated_before,
-                limit=limit,
-            ),
+            policy_evaluation=policy_evaluator.evaluate_outcomes(policy, outcomes),
+            reliability_report=reliability_report_service.summarize_outcomes(outcomes),
         )
