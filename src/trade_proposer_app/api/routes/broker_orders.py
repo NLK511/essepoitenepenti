@@ -5,6 +5,7 @@ from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import BrokerOrderExecution
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClientError
+from trade_proposer_app.services.broker_reconciliation import BrokerReconciliationService
 from trade_proposer_app.services.builders import create_order_execution_service
 
 router = APIRouter(prefix="/broker-orders", tags=["broker-orders"])
@@ -24,9 +25,9 @@ async def list_broker_orders(
 
 @router.post("/sync")
 async def sync_broker_orders(session: Session = Depends(get_db_session)) -> dict[str, object]:
-    service = create_order_execution_service(session)
+    service = BrokerReconciliationService(session)
     try:
-        outcome = service.sync_open_executions()
+        outcome = service.sync_open_orders()
         return outcome.summary
     except AlpacaPaperClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

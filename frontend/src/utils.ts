@@ -36,13 +36,59 @@ export function formatDuration(value: number | string | null | undefined): strin
   return `${numericValue.toFixed(2)}s`;
 }
 
-export function runTone(status: RunStatus): "ok" | "warning" | "danger" | "neutral" {
+export function runTone(status: RunStatus | string): "ok" | "warning" | "danger" | "neutral" {
   if (status === "completed") {
     return "ok";
   }
   if (status === "completed_with_warnings") {
     return "warning";
   }
+  if (status === "failed") {
+    return "danger";
+  }
+  return "neutral";
+}
+
+export function workerStatusTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
+  if (status === "running") {
+    return "ok";
+  }
+  if (status === "idle") {
+    return "danger";
+  }
+  if (status === "stale") {
+    return "danger";
+  }
+  return "neutral";
+}
+
+export function workerStreamTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
+  if (status === "running") {
+    return "ok";
+  }
+  if (status === "idle") {
+    return "info";
+  }
+  if (status === "stale") {
+    return "warning";
+  }
+  return "neutral";
+}
+
+export function dashboardBoardTone(status: string | null | undefined): "ok" | "warning" | "danger" | "neutral" {
+  if (status === "healthy") {
+    return "ok";
+  }
+  if (status === "watch" || status === "thin") {
+    return "warning";
+  }
+  if (status === "needs_attention") {
+    return "danger";
+  }
+  return "neutral";
+}
+
+export function dashboardFailureTone(status: string): "ok" | "warning" | "danger" | "neutral" {
   if (status === "failed") {
     return "danger";
   }

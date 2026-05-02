@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { getJson } from "../api";
 import { Badge, Card, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
 import type { ActiveWorkersResponse, WorkerHeartbeat, WorkerLogsResponse } from "../types";
-import { formatDate } from "../utils";
+import { formatDate, workerStreamTone } from "../utils";
 
 type LogLevelFilter = "all" | "debug" | "info" | "warning" | "error";
 
@@ -13,19 +13,6 @@ function formatWorkerLabel(worker: WorkerHeartbeat | null): string {
     return "Unknown worker";
   }
   return `${worker.worker_id} · ${worker.hostname} · pid ${worker.pid}`;
-}
-
-function statusTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
-  if (status === "running") {
-    return "ok";
-  }
-  if (status === "idle") {
-    return "info";
-  }
-  if (status === "stale") {
-    return "warning";
-  }
-  return "neutral";
 }
 
 function matchesLogLevel(line: string, filter: LogLevelFilter): boolean {
@@ -112,7 +99,7 @@ export function WorkerLogsPage() {
     return logs.lines.filter((line) => matchesLogLevel(line, logLevel));
   }, [logs, logLevel]);
 
-  const workerBadgeTone = selectedWorker ? statusTone(selectedWorker.status) : logs ? "info" : "neutral";
+  const workerBadgeTone = selectedWorker ? workerStreamTone(selectedWorker.status) : logs ? "info" : "neutral";
   const workerBadgeLabel = selectedWorker
     ? selectedWorker.active_run_id !== null && selectedWorker.active_run_id !== undefined
       ? `run ${selectedWorker.active_run_id}`

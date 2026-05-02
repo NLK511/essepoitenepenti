@@ -244,3 +244,5 @@ Continue reliability/tuning simplification in small batches:
 2. Migrate signal-gating review and plan-generation tuning scoring to shared reliability/evaluator contracts where it changes no user-visible semantics without tests.
 3. Keep lower-level endpoints and raw records as focused/debug contracts until explicit deprecation.
 4. Continue collapsing duplicated frontend status/tone mappings into shared helpers when the mapping is the same across pages and the helper does not hide domain differences.
+5. Move remaining typed settings writes behind `SettingsMutationService` instead of route-local parsing so writes stay consistent with `SettingsDomainService`.
+6. Grow `BrokerReconciliationService` into the broker workbench and sync coordination layer as more broker-state reconciliation logic is discovered.

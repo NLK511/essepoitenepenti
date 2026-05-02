@@ -62,7 +62,9 @@ from trade_proposer_app.services.execution_candidates import ExecutionCandidateB
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
 from trade_proposer_app.services.plan_policy_evaluator import PlanPolicyEvaluator
 from trade_proposer_app.services.plan_reliability_report import PlanReliabilityReportService
+from trade_proposer_app.services.broker_reconciliation import BrokerReconciliationService
 from trade_proposer_app.services.settings_domains import SettingsDomainService
+from trade_proposer_app.services.settings_mutations import SettingsMutationService
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicy, TradeDecisionPolicyService
 from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
 from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService
@@ -1058,6 +1060,97 @@ class RepositoryTests(unittest.TestCase):
             self.assertIn("friction_pct", execution.evaluation_realism)
             self.assertIn("summary_backend", operator.summary)
             self.assertIn("social_nitter_enabled", operator.social)
+        finally:
+            session.close()
+
+    def test_settings_mutation_service_updates_typed_settings(self) -> None:
+        session = create_session()
+        try:
+            service = SettingsMutationService(session)
+
+            app_setting = service.set_app_setting(key=" custom_key ", value=" custom value ")
+            self.assertEqual(app_setting.key, "custom_key")
+            self.assertEqual(app_setting.value, "custom value")
+
+            evaluation = service.set_evaluation_realism_settings(stop_buffer_pct="0.2", take_profit_buffer_pct="", friction_pct="0.3")
+            self.assertEqual(evaluation["stop_buffer_pct"], 0.2)
+            self.assertEqual(evaluation["take_profit_buffer_pct"], 0.05)
+            self.assertEqual(evaluation["friction_pct"], 0.3)
+
+            summary = service.set_summary_settings(backend="pi_agent", model="gpt-4o", timeout_seconds="70", max_tokens="250", pi_command="pi", pi_agent_dir="", pi_cli_args="", prompt="")
+            self.assertIn("settings", summary)
+            self.assertIn("summary_backend", summary["settings"])
+
+            social = service.set_social_settings(sentiment_enabled="true", nitter_enabled="false")
+            self.assertIn("settings", social)
+            self.assertIn("social_sentiment_enabled", social["settings"])
+
+            signal = service.set_signal_gating_tuning_settings(threshold_offset="1.5", confidence_adjustment="-0.5", near_miss_gap_cutoff="0.25", shortlist_aggressiveness="2.0", degraded_penalty="4.0")
+            self.assertEqual(signal["signal_gating_tuning"]["threshold_offset"], 1.5)
+            self.assertEqual(signal["signal_gating_tuning"]["confidence_adjustment"], -0.5)
+
+            risk = service.set_risk_management_settings(enabled="false", max_daily_realized_loss_usd="12.5", max_open_positions="4", max_open_notional_usd="4000", max_position_notional_usd="1200", max_same_ticker_open_positions="2", max_consecutive_losses="5")
+            self.assertFalse(risk["risk_management"]["enabled"])
+            self.assertEqual(risk["risk_management"]["max_open_positions"], 4)
+
+            execution = service.set_order_execution_settings(enabled="true", broker="alpaca", account_mode="paper", notional_per_plan="1500")
+            self.assertTrue(execution["order_execution"]["enabled"])
+            self.assertEqual(execution["order_execution"]["notional_per_plan"], 1500.0)
+
+            provider = service.set_provider_credential(provider="alpaca", api_key="key", api_secret="secret")
+            self.assertEqual(provider["provider"], "alpaca")
+            self.assertEqual(provider["api_key"], "key")
+        finally:
+            session.close()
+
+    def test_broker_reconciliation_service_builds_workbench_read_model(self) -> None:
+        session = create_session()
+        try:
+            plan_repository = RecommendationPlanRepository(session)
+            plan = plan_repository.create_plan(
+                RecommendationPlan(
+                    ticker="AAPL",
+                    horizon=StrategyHorizon.ONE_WEEK,
+                    action="long",
+                    confidence_percent=68.0,
+                    entry_price_low=100.0,
+                    entry_price_high=101.0,
+                    stop_loss=96.0,
+                    take_profit=110.0,
+                    thesis_summary="Broker workbench",
+                )
+            )
+            BrokerOrderExecutionRepository(session).create(
+                BrokerOrderExecution(
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker="AAPL",
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    quantity=10,
+                    notional_amount=1000.0,
+                    entry_price=100.0,
+                    stop_loss=96.0,
+                    take_profit=110.0,
+                    status="open",
+                    broker_order_id="alpaca-order-1",
+                    client_order_id="tp-run-1-plan-1-aapl-live",
+                    request_payload={"symbol": "AAPL"},
+                    response_payload={"id": "alpaca-order-1", "status": "filled"},
+                )
+            )
+
+            workbench = BrokerReconciliationService(session).build_workbench(limit=10)
+
+            self.assertIn("broker_orders", workbench)
+            self.assertIn("broker_positions", workbench)
+            self.assertIn("risk", workbench)
+            self.assertIn("counts", workbench)
+            self.assertEqual(workbench["counts"]["broker_orders"], 1)
+            self.assertEqual(workbench["counts"]["broker_positions"], 0)
         finally:
             session.close()
 

@@ -44,6 +44,7 @@ from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClientError
+from trade_proposer_app.services.broker_reconciliation import BrokerReconciliationService
 
 
 class StubAppPreflightService:
@@ -1325,7 +1326,10 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             resubmit_error = await client.post(f"/api/broker-orders/{submitted_order.id}/resubmit")
             cancel_error = await client.post(f"/api/broker-orders/{missing_broker_id.id}/cancel")
 
-        with patch("trade_proposer_app.api.routes.broker_orders.create_order_execution_service", return_value=StubOrderActionService()):
+        with patch("trade_proposer_app.api.routes.broker_orders.create_order_execution_service", return_value=StubOrderActionService()), patch(
+            "trade_proposer_app.api.routes.broker_orders.BrokerReconciliationService.sync_open_orders",
+            return_value=type("SyncOutcome", (), {"summary": {"requested_count": 1, "synced_count": 1, "skipped_count": 0, "failed_count": 0, "warnings_found": False, "warnings": [], "orders": []}})(),
+        ):
             async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
                 cancel_gateway_error = await client.post(f"/api/broker-orders/{submitted_order.id}/cancel")
                 refresh_result = await client.post(f"/api/broker-orders/{submitted_order.id}/refresh")

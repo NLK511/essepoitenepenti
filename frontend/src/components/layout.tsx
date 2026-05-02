@@ -6,6 +6,7 @@ import { getJson } from "../api";
 import { BrandLogo, BrandMark } from "../components/brand";
 import { Badge } from "../components/ui";
 import { ActiveWorkersResponse, AppHealthResponse, WorkerHeartbeat } from "../types";
+import { workerStatusTone } from "../utils";
 
 const THEME_KEY = "trade-proposer-theme";
 
@@ -232,19 +233,6 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
     title: "The Atrium",
     description: "Navigate the recommendation workflow, supporting context, and system settings.",
   };
-}
-
-function workerStatusTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
-  if (status === "running") {
-    return "ok";
-  }
-  if (status === "idle") {
-    return "danger";
-  }
-  if (status === "stale") {
-    return "danger";
-  }
-  return "neutral";
 }
 
 function workerStatusLabel(worker: WorkerHeartbeat): string {

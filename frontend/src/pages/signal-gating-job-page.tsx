@@ -4,14 +4,7 @@ import { Link } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { SignalGatingTuningResponse, SignalGatingTuningRun, SignalGatingTuningRunsResponse, SignalGatingTuningState } from "../types";
-
-function statusTone(status: string): "ok" | "warning" | "danger" | "neutral" | "info" {
-  if (status === "completed") return "ok";
-  if (status === "completed_with_warnings") return "warning";
-  if (status === "failed") return "danger";
-  if (status === "running") return "info";
-  return "neutral";
-}
+import { runTone } from "../utils";
 
 function formatValue(value: number | null | undefined, digits = 2): string {
   if (value === null || value === undefined || Number.isNaN(value)) {
@@ -191,7 +184,7 @@ export function SignalGatingJobPage() {
                             <Badge>threshold {String(candidate.threshold ?? "—")}</Badge>
                             <Badge>score {String(candidate.score ?? "—")}</Badge>
                           </div>
-                          <Badge tone={statusTone(selectedRun.status)}>run {selectedRun.id}</Badge>
+                          <Badge tone={runTone(selectedRun.status)}>run {selectedRun.id}</Badge>
                         </div>
                         <div className="cluster top-gap-small">
                           <Badge tone={candidate.selected_count > 0 ? "ok" : "neutral"}>selected {String(candidate.selected_count ?? 0)}</Badge>
@@ -237,7 +230,7 @@ export function SignalGatingJobPage() {
                   >
                     <div className="data-card-header">
                       <div className="cluster">
-                        <Badge tone={statusTone(run.status)}>{run.status}</Badge>
+                        <Badge tone={runTone(run.status)}>{run.status}</Badge>
                         <Badge>{run.applied ? "applied" : "dry run"}</Badge>
                         <Badge>#{run.id ?? "?"}</Badge>
                       </div>

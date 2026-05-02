@@ -4,7 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import type { DashboardResponse } from "../types";
-import { formatDate } from "../utils";
+import { dashboardBoardTone, dashboardFailureTone, formatDate } from "../utils";
 
 const WINDOW_OPTIONS = [
   { value: "1d", label: "1D" },
@@ -22,26 +22,6 @@ function formatPercent(value: number | null | undefined): string {
     return "—";
   }
   return `${value.toFixed(1)}%`;
-}
-
-function boardTone(status: string | null | undefined): "ok" | "warning" | "danger" | "neutral" {
-  if (status === "healthy") {
-    return "ok";
-  }
-  if (status === "watch" || status === "thin") {
-    return "warning";
-  }
-  if (status === "needs_attention") {
-    return "danger";
-  }
-  return "neutral";
-}
-
-function failureTone(status: string): "ok" | "warning" | "danger" | "neutral" {
-  if (status === "failed") {
-    return "danger";
-  }
-  return "neutral";
 }
 
 function normalizeWindow(value: string | null): DashboardWindow {
@@ -141,8 +121,8 @@ export function DashboardPage() {
               subtitle={quality?.status_reason || "No quality summary available yet."}
             />
             <div className="cluster top-gap-small">
-              <Badge tone={boardTone(quality?.status)}>{quality?.status ?? "unknown"}</Badge>
-              <Badge tone={boardTone(quality?.status)}>{quality?.status === "healthy" ? "green" : quality?.status === "needs_attention" ? "red" : "yellow"}</Badge>
+              <Badge tone={dashboardBoardTone(quality?.status)}>{quality?.status ?? "unknown"}</Badge>
+              <Badge tone={dashboardBoardTone(quality?.status)}>{quality?.status === "healthy" ? "green" : quality?.status === "needs_attention" ? "red" : "yellow"}</Badge>
               <span className="helper-text">Updated {lastLoadedAt ? formatDate(lastLoadedAt.toISOString()) : quality?.generated_at ? formatDate(quality.generated_at) : "—"} · resolved outcomes {quality?.resolved_outcomes ?? "—"}</span>
             </div>
           </Card>
@@ -191,7 +171,7 @@ export function DashboardPage() {
                       <div className="data-card-header">
                         <div>
                           <div className="cluster">
-                            <Badge tone={failureTone(failure.status)}>{failure.status.replace(/_/g, " ")}</Badge>
+                            <Badge tone={dashboardFailureTone(failure.status)}>{failure.status.replace(/_/g, " ")}</Badge>
                             <Badge>{failure.source}</Badge>
                           </div>
                           <div className="data-card-title top-gap-small">{failure.label}</div>
