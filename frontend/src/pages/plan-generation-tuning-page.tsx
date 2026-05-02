@@ -138,6 +138,26 @@ export function PlanGenerationTuningPage() {
       .sort((left, right) => (CAMPAIGN_PRIORITY[left.campaign] ?? 99) - (CAMPAIGN_PRIORITY[right.campaign] ?? 99));
   }, [selectedRun]);
 
+  const selectedRunMetricSpread = useMemo(() => {
+    if (!selectedRun) return null;
+    const searchRates = new Set<string>();
+    const validationRates = new Set<string>();
+    const validationExpectedValues = new Set<string>();
+    for (const candidate of selectedRun.candidates) {
+      const searchRate = candidateMetric(candidate, "search_win_rate_percent");
+      const validationRate = candidateMetric(candidate, "validation_win_rate_percent");
+      const validationExpectedValue = candidateMetric(candidate, "validation_expected_value");
+      if (searchRate !== null) searchRates.add(searchRate.toFixed(2));
+      if (validationRate !== null) validationRates.add(validationRate.toFixed(2));
+      if (validationExpectedValue !== null) validationExpectedValues.add(validationExpectedValue.toFixed(4));
+    }
+    return {
+      searchWinRateCount: searchRates.size,
+      validationWinRateCount: validationRates.size,
+      validationExpectedValueCount: validationExpectedValues.size,
+    };
+  }, [selectedRun]);
+
   async function runTuning(apply: boolean) {
     try {
       setSaving(apply ? "apply" : "run");
@@ -338,6 +358,11 @@ export function PlanGenerationTuningPage() {
               <div className="stack-page">
                 <div className="helper-text">Promotion mode: {selectedRun.promotion_mode} · Winner candidate: {selectedRun.winning_candidate_id ?? "—"} · Promoted config: {selectedRun.promoted_config_version_id ?? "—"}</div>
                 <div className="helper-text">Search win rate shows the discovery slice; validation win rate is the holdout check. If those disagree, trust the validation number more.</div>
+                {selectedRunMetricSpread && selectedRunMetricSpread.searchWinRateCount === 1 && selectedRunMetricSpread.validationWinRateCount === 1 ? (
+                  <div className="alert alert-warning top-gap-small">
+                    This run is tie-heavy: all candidates share the same search and validation win rates, so ranking is effectively being decided by tie-breakers like expected value, distance from the baseline, and number of changed parameters.
+                  </div>
+                ) : null}
                 <div className="table-wrapper top-gap-small">
                   <table className="data-table">
                     <thead>
