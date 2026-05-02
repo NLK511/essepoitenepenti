@@ -149,6 +149,7 @@ Typical cards include:
 - recent runs
 - watchlists and jobs counts
 - macro and industry freshness
+- actionability gap between phantom and actionable outcomes
 - attention items
 
 Go here first. If freshness looks degraded, go to **Context review**. If recent runs look bad, go to **Run debugger**.

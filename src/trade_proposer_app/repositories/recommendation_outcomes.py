@@ -74,6 +74,64 @@ class RecommendationOutcomeRepository:
             "watchlist_outcomes": watchlist,
         }
 
+    def summarize_actionability_diagnostics(
+        self,
+        *,
+        evaluated_after: datetime | None = None,
+        evaluated_before: datetime | None = None,
+    ) -> dict[str, float | int | None]:
+        self.session.rollback()
+        query = select(
+            func.count().label("total_outcomes"),
+            func.sum(case((RecommendationOutcomeRecord.outcome == TradeOutcome.WIN.value, 1), else_=0)).label("actionable_win_outcomes"),
+            func.sum(case((RecommendationOutcomeRecord.outcome == TradeOutcome.LOSS.value, 1), else_=0)).label("actionable_loss_outcomes"),
+            func.sum(case((RecommendationOutcomeRecord.outcome.in_(["phantom_win", "phantom_loss"]), 1), else_=0)).label("phantom_resolved_outcomes"),
+            func.sum(case((RecommendationOutcomeRecord.outcome == "phantom_win", 1), else_=0)).label("phantom_win_outcomes"),
+            func.sum(case((RecommendationOutcomeRecord.outcome == "phantom_loss", 1), else_=0)).label("phantom_loss_outcomes"),
+            func.sum(case((RecommendationOutcomeRecord.outcome == TradeOutcome.NO_ACTION.value, 1), else_=0)).label("no_action_outcomes"),
+            func.sum(case((RecommendationOutcomeRecord.outcome == TradeOutcome.WATCHLIST.value, 1), else_=0)).label("watchlist_outcomes"),
+        ).select_from(RecommendationOutcomeRecord).where(RecommendationOutcomeRecord.status == OutcomeStatus.RESOLVED.value)
+        if evaluated_after is not None:
+            query = query.where(RecommendationOutcomeRecord.evaluated_at >= self._normalize_datetime(evaluated_after))
+        if evaluated_before is not None:
+            query = query.where(RecommendationOutcomeRecord.evaluated_at <= self._normalize_datetime(evaluated_before))
+        row = self.session.execute(query).one()
+        actionable_win_outcomes = int(row.actionable_win_outcomes or 0)
+        actionable_loss_outcomes = int(row.actionable_loss_outcomes or 0)
+        phantom_resolved_outcomes = int(row.phantom_resolved_outcomes or 0)
+        phantom_win_outcomes = int(row.phantom_win_outcomes or 0)
+        phantom_loss_outcomes = int(row.phantom_loss_outcomes or 0)
+        actionable_resolved_outcomes = actionable_win_outcomes + actionable_loss_outcomes
+        actionable_win_rate_percent = (
+            round((actionable_win_outcomes / actionable_resolved_outcomes) * 100.0, 1)
+            if actionable_resolved_outcomes
+            else None
+        )
+        phantom_win_rate_percent = (
+            round((phantom_win_outcomes / phantom_resolved_outcomes) * 100.0, 1)
+            if phantom_resolved_outcomes
+            else None
+        )
+        actionability_gap_percent = (
+            round(float(phantom_win_rate_percent) - float(actionable_win_rate_percent), 1)
+            if phantom_win_rate_percent is not None and actionable_win_rate_percent is not None
+            else None
+        )
+        return {
+            "total_outcomes": int(row.total_outcomes or 0),
+            "actionable_resolved_outcomes": actionable_resolved_outcomes,
+            "actionable_win_outcomes": actionable_win_outcomes,
+            "actionable_loss_outcomes": actionable_loss_outcomes,
+            "actionable_win_rate_percent": actionable_win_rate_percent,
+            "phantom_resolved_outcomes": phantom_resolved_outcomes,
+            "phantom_win_outcomes": phantom_win_outcomes,
+            "phantom_loss_outcomes": phantom_loss_outcomes,
+            "phantom_win_rate_percent": phantom_win_rate_percent,
+            "actionability_gap_percent": actionability_gap_percent,
+            "no_action_outcomes": int(row.no_action_outcomes or 0),
+            "watchlist_outcomes": int(row.watchlist_outcomes or 0),
+        }
+
     def list_simulated_outcomes(
         self,
         *,

@@ -907,6 +907,44 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     response_payload={},
                 )
             )
+            actionability_plan_repository = RecommendationPlanRepository(session)
+            actionability_outcome_repository = RecommendationOutcomeRepository(session)
+            for ticker, action, outcome in [
+                ("AAPL", "long", "win"),
+                ("MSFT", "short", "loss"),
+                ("NVDA", "no_action", "phantom_win"),
+                ("TSLA", "watchlist", "phantom_loss"),
+            ]:
+                plan = actionability_plan_repository.create_plan(
+                    RecommendationPlan(
+                        ticker=ticker,
+                        horizon="1w",
+                        action=action,
+                        confidence_percent=68.0,
+                        entry_price_low=100.0,
+                        entry_price_high=101.0,
+                        stop_loss=95.0,
+                        take_profit=110.0,
+                        holding_period_days=5,
+                        risk_reward_ratio=1.7,
+                        thesis_summary="Dashboard actionability test",
+                        rationale_summary="Dashboard actionability test",
+                        signal_breakdown={"setup_family": "continuation"},
+                        computed_at=now,
+                    )
+                )
+                actionability_outcome_repository.upsert_outcome(
+                    RecommendationPlanOutcome(
+                        recommendation_plan_id=plan.id or 0,
+                        ticker=ticker,
+                        action=action,
+                        outcome=outcome,
+                        status="resolved",
+                        evaluated_at=now,
+                        confidence_bucket="65_to_79",
+                        setup_family="continuation",
+                    )
+                )
             session.execute(
                 update(RunRecord)
                 .where(RunRecord.id == old_run.id)
@@ -952,6 +990,16 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(one_day_payload["technical_summary"]["tweets_processed"], 4)
         self.assertEqual(one_day_payload["technical_summary"]["bars_stored"], 3)
         self.assertEqual(one_day_payload["technical_summary"]["orders_placed"], 1)
+        self.assertIsNotNone(one_day_payload["dashboard_summary"]["actionability_gap_percent"])
+        self.assertIsNotNone(one_day_payload["dashboard_summary"]["actionable_win_rate_percent"])
+        self.assertIsNotNone(one_day_payload["dashboard_summary"]["phantom_win_rate_percent"])
+        self.assertEqual(
+            one_day_payload["dashboard_summary"]["actionability_gap_percent"],
+            round(
+                one_day_payload["dashboard_summary"]["phantom_win_rate_percent"] - one_day_payload["dashboard_summary"]["actionable_win_rate_percent"],
+                1,
+            ),
+        )
         self.assertTrue(all(item["status"] == "failed" for item in one_day_payload["major_failures"]))
         self.assertFalse(any(item["status"] == "completed_with_warnings" for item in all_payload["major_failures"]))
         self.assertTrue(any(item["label"] == "summary timeout" for item in one_day_payload["distinct_warnings"]))

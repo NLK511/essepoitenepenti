@@ -381,6 +381,17 @@ export interface DashboardSummary {
   win_rate_source?: string;
   profit_percent: number | null;
   profit_source?: string;
+  actionability_gap_percent?: number | null;
+  actionable_win_rate_percent?: number | null;
+  phantom_win_rate_percent?: number | null;
+  actionable_resolved_outcomes?: number;
+  phantom_resolved_outcomes?: number;
+  actionable_win_outcomes?: number;
+  actionable_loss_outcomes?: number;
+  phantom_win_outcomes?: number;
+  phantom_loss_outcomes?: number;
+  no_action_outcomes?: number;
+  watchlist_outcomes?: number;
 }
 
 export interface DashboardTechnicalSummary {

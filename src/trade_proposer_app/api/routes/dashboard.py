@@ -135,6 +135,7 @@ async def get_dashboard(
     evidence = RecommendationEvidenceConcentrationService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
     family_review = RecommendationSetupFamilyReviewService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
     entry_miss = outcome_repository.summarize_entry_miss_diagnostics(evaluated_after=computed_after, evaluated_before=now)
+    actionability = outcome_repository.summarize_actionability_diagnostics(evaluated_after=computed_after, evaluated_before=now)
     selected_quality = quality_service._summary_payload(  # noqa: SLF001 - dashboard needs the selected window summary
         calibration,
         baselines,
@@ -214,6 +215,17 @@ async def get_dashboard(
             "win_rate_source": "broker" if broker_summary["win_rate_percent"] is not None else "simulated",
             "profit_percent": broker_summary["average_return_percent"] if broker_summary["average_return_percent"] is not None else selected_quality.get("actual_actionable_average_return_5d"),
             "profit_source": "broker" if broker_summary["average_return_percent"] is not None else "simulated",
+            "actionability_gap_percent": actionability["actionability_gap_percent"],
+            "actionable_win_rate_percent": actionability["actionable_win_rate_percent"],
+            "phantom_win_rate_percent": actionability["phantom_win_rate_percent"],
+            "actionable_resolved_outcomes": actionability["actionable_resolved_outcomes"],
+            "phantom_resolved_outcomes": actionability["phantom_resolved_outcomes"],
+            "actionable_win_outcomes": actionability["actionable_win_outcomes"],
+            "actionable_loss_outcomes": actionability["actionable_loss_outcomes"],
+            "phantom_win_outcomes": actionability["phantom_win_outcomes"],
+            "phantom_loss_outcomes": actionability["phantom_loss_outcomes"],
+            "no_action_outcomes": actionability["no_action_outcomes"],
+            "watchlist_outcomes": actionability["watchlist_outcomes"],
         },
         "technical_summary": {
             "news_processed": news_processed,

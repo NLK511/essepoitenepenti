@@ -1749,6 +1749,54 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(summary["near_entry_and_worked_rate_percent"], 100.0)
         self.assertEqual(summary["average_entry_miss_distance_percent"], 0.12)
 
+    def test_recommendation_outcome_repository_summarizes_actionability_diagnostics(self) -> None:
+        session = create_session()
+        plan_repository = RecommendationPlanRepository(session)
+        outcome_repository = RecommendationOutcomeRepository(session)
+        created_at = datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc)
+        plan_specs = [
+            ("AAPL", "long", "win"),
+            ("MSFT", "short", "loss"),
+            ("NVDA", "no_action", "phantom_win"),
+            ("TSLA", "watchlist", "phantom_loss"),
+        ]
+        for ticker, action, outcome in plan_specs:
+            plan = plan_repository.create_plan(
+                RecommendationPlan(
+                    ticker=ticker,
+                    horizon=StrategyHorizon.ONE_WEEK,
+                    action=action,
+                    confidence_percent=67.95,
+                    entry_price_low=151.8925,
+                    entry_price_high=151.8925,
+                    stop_loss=149.0889,
+                    take_profit=156.2066,
+                    signal_breakdown={"setup_family": "catalyst_follow_through"},
+                    computed_at=created_at,
+                )
+            )
+            outcome_repository.upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=plan.id or 0,
+                    ticker=ticker,
+                    action=action,
+                    outcome=outcome,
+                    status="resolved",
+                    evaluated_at=created_at,
+                    confidence_bucket="65_to_79",
+                    setup_family="catalyst_follow_through",
+                )
+            )
+
+        summary = outcome_repository.summarize_actionability_diagnostics()
+        self.assertEqual(summary["actionable_resolved_outcomes"], 2)
+        self.assertEqual(summary["phantom_resolved_outcomes"], 2)
+        self.assertEqual(summary["actionable_win_rate_percent"], 50.0)
+        self.assertEqual(summary["phantom_win_rate_percent"], 50.0)
+        self.assertEqual(summary["actionability_gap_percent"], 0.0)
+        self.assertEqual(summary["phantom_win_outcomes"], 1)
+        self.assertEqual(summary["phantom_loss_outcomes"], 1)
+
     def test_historical_market_data_list_bars_handles_missing_available_at_column(self) -> None:
         engine = create_engine("sqlite:///:memory:", future=True)
         with engine.begin() as connection:

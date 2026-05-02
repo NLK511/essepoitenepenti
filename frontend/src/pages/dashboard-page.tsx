@@ -24,6 +24,14 @@ function formatPercent(value: number | null | undefined): string {
   return `${value.toFixed(1)}%`;
 }
 
+function formatSignedPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "—";
+  }
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${value.toFixed(1)}%`;
+}
+
 function normalizeWindow(value: string | null): DashboardWindow {
   return (WINDOW_OPTIONS.find((option) => option.value === value)?.value ?? "1m") as DashboardWindow;
 }
@@ -135,6 +143,7 @@ export function DashboardPage() {
                 <StatCard label="Profit %" value={formatPercent(summary?.profit_percent)} helper={summary?.profit_source === "broker" ? `Broker realized P&L $${technical?.broker_realized_pnl ?? 0}` : "Avg 5d return on actionable plans"} />
                 <StatCard label="Shortlist rate" value={formatPercent(summary?.shortlist_rate_percent)} helper={`${summary?.plan_amount ?? 0} plans / ${summary?.signals_amount ?? 0} signals`} />
                 <StatCard label="Actionable rate" value={formatPercent(summary?.actionable_rate_percent)} helper={`${summary?.actionable_plans ?? 0} actionable / ${summary?.plan_amount ?? 0} plans`} />
+                <StatCard label="Actionability gap" value={formatSignedPercent(summary?.actionability_gap_percent)} helper={`${summary?.phantom_win_outcomes ?? 0} phantom wins / ${summary?.phantom_resolved_outcomes ?? 0} phantom resolved · ${summary?.actionable_win_outcomes ?? 0} actionable wins / ${summary?.actionable_resolved_outcomes ?? 0} actionable resolved · positive means skipped setups are outperforming acted-on setups`} />
               </div>
             </Card>
 
