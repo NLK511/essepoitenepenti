@@ -27,6 +27,7 @@ from trade_proposer_app.services.plan_reliability_features import PlanReliabilit
 from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_BY_KEY, normalize_plan_generation_tuning_config, parameter_definitions
 from trade_proposer_app.services.plan_generation_walk_forward import PlanGenerationWalkForwardService
 from trade_proposer_app.services.settings_domains import SettingsDomainService
+from trade_proposer_app.services.settings_mutations import SettingsMutationService
 
 
 class PlanGenerationTuningError(Exception):
@@ -81,6 +82,7 @@ class PlanGenerationTuningService:
         self.samples = RecommendationDecisionSampleRepository(session)
         self.reliability_features = PlanReliabilityFeatureBuilder()
         self.settings_domains = SettingsDomainService(repository=self.settings)
+        self.settings_mutations = SettingsMutationService(repository=self.settings)
 
     def describe(self) -> dict[str, object]:
         baseline = self.ensure_baseline_config_version()
@@ -116,7 +118,7 @@ class PlanGenerationTuningService:
                 parameter_schema_version=self.SCHEMA_VERSION,
             )
         )
-        self.settings.set_plan_generation_active_config_version_id(version.id)
+        self.settings_mutations.set_plan_generation_active_config_version_id(version.id)
         self.repository.create_event(
             PlanGenerationTuningEvent(
                 event_type="baseline_seeded",
@@ -250,7 +252,7 @@ class PlanGenerationTuningService:
                     parameter_schema_version=self.SCHEMA_VERSION,
                 )
             )
-            self.settings.set_plan_generation_active_config_version_id(promoted.id)
+            self.settings_mutations.set_plan_generation_active_config_version_id(promoted.id)
             promoted_config_version_id = promoted.id
             self.repository.create_event(
                 PlanGenerationTuningEvent(
@@ -272,7 +274,7 @@ class PlanGenerationTuningService:
 
     def promote_config_version(self, config_version_id: int) -> PlanGenerationTuningConfigVersion:
         version = self.repository.get_config_version(config_version_id)
-        self.settings.set_plan_generation_active_config_version_id(version.id)
+        self.settings_mutations.set_plan_generation_active_config_version_id(version.id)
         self.repository.create_event(
             PlanGenerationTuningEvent(
                 event_type="config_promoted_manual",
@@ -290,7 +292,7 @@ class PlanGenerationTuningService:
         try:
             return self.repository.get_config_version(active_id)
         except ValueError:
-            self.settings.set_plan_generation_active_config_version_id(baseline.id)
+            self.settings_mutations.set_plan_generation_active_config_version_id(baseline.id)
             return baseline
 
     def _active_config_version_id(self) -> int | None:

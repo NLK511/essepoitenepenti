@@ -1241,6 +1241,10 @@ class RepositoryTests(unittest.TestCase):
             self.assertEqual(confidence_threshold.key, "confidence_threshold")
             self.assertEqual(confidence_threshold.value, "72.5")
 
+            active_config = service.set_plan_generation_active_config_version_id(17)
+            self.assertEqual(active_config.key, "plan_generation_active_config_version_id")
+            self.assertEqual(active_config.value, "17")
+
             evaluation = service.set_evaluation_realism_settings(stop_buffer_pct="0.2", take_profit_buffer_pct="", friction_pct="0.3")
             self.assertEqual(evaluation["stop_buffer_pct"], 0.2)
             self.assertEqual(evaluation["take_profit_buffer_pct"], 0.05)

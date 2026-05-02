@@ -163,6 +163,9 @@ class SettingsMutationService:
             raise ValueError(f"invalid plan generation tuning settings: {exc}") from exc
         return {"plan_generation_tuning": config}
 
+    def set_plan_generation_active_config_version_id(self, config_version_id: int | None) -> AppSetting:
+        return self.repository.set_plan_generation_active_config_version_id(config_version_id)
+
     def set_risk_management_settings(
         self,
         *,
