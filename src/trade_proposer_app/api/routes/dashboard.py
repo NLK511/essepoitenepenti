@@ -12,13 +12,13 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
-from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.recommendation_evidence_concentration import RecommendationEvidenceConcentrationService
 from trade_proposer_app.services.recommendation_plan_baselines import RecommendationPlanBaselineService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_quality_summary import RecommendationQualitySummaryService
 from trade_proposer_app.services.recommendation_setup_family_reviews import RecommendationSetupFamilyReviewService
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -106,11 +106,7 @@ async def get_dashboard(
     plan_repository = RecommendationPlanRepository(session)
     outcome_repository = RecommendationOutcomeRepository(session)
     effective_outcome_repository = EffectivePlanOutcomeRepository(session)
-    settings = SettingsRepository(session).get_setting_map()
-    try:
-        confidence_threshold = float(settings.get("confidence_threshold", "60"))
-    except ValueError:
-        confidence_threshold = 60.0
+    confidence_threshold = SettingsDomainService(session).strategy_settings().confidence_threshold
 
     latest_runs = _recent_items_within_window(
         runs.list_latest_runs_above_confidence_threshold(confidence_threshold=confidence_threshold, limit=20),

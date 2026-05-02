@@ -8,7 +8,6 @@ from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.models import AppPreflightReport, PreflightCheck
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.runs import RunRepository
-from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.preflight import AppPreflightService
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 
@@ -114,8 +113,7 @@ async def health(session: Session = Depends(get_db_session)) -> dict[str, object
     status = "ok" if report.status == "ok" else "degraded"
     context_checks = {check.name: check for check in report.checks if check.name.startswith("context_snapshot:")}
     runs = RunRepository(session)
-    settings_repository = SettingsRepository(session)
-    settings_map = settings_repository.get_setting_map()
+    scheduler_settings = SettingsDomainService(session).scheduler_settings()
     active_workers = runs.list_active_workers(stale_seconds=settings.worker_heartbeat_interval_seconds * 2)
     latest_macro_context = ContextSnapshotRepository(session).get_latest_macro_context_snapshot()
     latest_industry_context = next(iter(ContextSnapshotRepository(session).list_industry_context_snapshots(limit=1)), None)
@@ -127,8 +125,8 @@ async def health(session: Session = Depends(get_db_session)) -> dict[str, object
             return None
         return max(0.0, (reference_now - normalized).total_seconds())
 
-    scheduler_last_poll = settings_map.get("scheduler_last_poll_at") or None
-    scheduler_last_success = settings_map.get("scheduler_last_success_at") or None
+    scheduler_last_poll = scheduler_settings.last_poll_at
+    scheduler_last_success = scheduler_settings.last_success_at
     worker_details = [
         {
             "worker_id": worker.worker_id,
@@ -182,8 +180,8 @@ async def health(session: Session = Depends(get_db_session)) -> dict[str, object
         "scheduler_health": {
             "last_poll_at": scheduler_last_poll,
             "last_success_at": scheduler_last_success,
-            "last_enqueue_count": settings_map.get("scheduler_last_enqueue_count", ""),
-            "last_error": settings_map.get("scheduler_last_error", ""),
+            "last_enqueue_count": scheduler_settings.last_enqueue_count or "",
+            "last_error": scheduler_settings.last_error or "",
             "last_poll_age_seconds": _age_seconds(datetime.fromisoformat(scheduler_last_poll) if scheduler_last_poll else None),
             "last_success_age_seconds": _age_seconds(datetime.fromisoformat(scheduler_last_success) if scheduler_last_success else None),
         },

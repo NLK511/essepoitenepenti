@@ -53,6 +53,22 @@ class OperatorSettings:
         }
 
 
+@dataclass(frozen=True)
+class SchedulerSettings:
+    last_poll_at: str | None
+    last_success_at: str | None
+    last_enqueue_count: str | None
+    last_error: str | None
+
+    def to_dict(self) -> dict[str, str | None]:
+        return {
+            "last_poll_at": self.last_poll_at,
+            "last_success_at": self.last_success_at,
+            "last_enqueue_count": self.last_enqueue_count,
+            "last_error": self.last_error,
+        }
+
+
 class SettingsDomainService:
     """Typed domain views over the legacy key/value settings repository."""
 
@@ -82,3 +98,19 @@ class SettingsDomainService:
             summary=self.repository.get_summary_settings(),
             social=self.repository.get_social_settings(),
         )
+
+    def scheduler_settings(self) -> SchedulerSettings:
+        setting_map = self.repository.get_setting_map()
+        return SchedulerSettings(
+            last_poll_at=self._optional_string(setting_map.get("scheduler_last_poll_at")),
+            last_success_at=self._optional_string(setting_map.get("scheduler_last_success_at")),
+            last_enqueue_count=self._optional_string(setting_map.get("scheduler_last_enqueue_count")),
+            last_error=self._optional_string(setting_map.get("scheduler_last_error")),
+        )
+
+    @staticmethod
+    def _optional_string(value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None

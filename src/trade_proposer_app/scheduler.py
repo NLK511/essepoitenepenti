@@ -5,6 +5,7 @@ from time import sleep
 
 from trade_proposer_app.db import SessionLocal
 from trade_proposer_app.repositories.settings import SettingsRepository
+from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.builders import create_order_execution_service
 from trade_proposer_app.services.order_execution import OrderExecutionService
 from trade_proposer_app.services.runs import enqueue_enabled_jobs
@@ -25,9 +26,10 @@ def _write_scheduler_heartbeat(now: datetime | None = None, *, last_successful_e
     try:
         repository = SettingsRepository(session)
         timestamp = (now or datetime.now(timezone.utc)).isoformat()
+        scheduler_settings = SettingsDomainService(repository=repository).scheduler_settings()
         repository.set_settings({
             "scheduler_last_poll_at": timestamp,
-            "scheduler_last_success_at": timestamp if last_error is None else repository.get_setting_map().get("scheduler_last_success_at", ""),
+            "scheduler_last_success_at": timestamp if last_error is None else (scheduler_settings.last_success_at or ""),
             "scheduler_last_enqueue_count": "" if last_successful_enqueue_count is None else str(int(last_successful_enqueue_count)),
             "scheduler_last_error": last_error or "",
         })

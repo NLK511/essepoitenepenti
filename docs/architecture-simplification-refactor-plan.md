@@ -252,7 +252,7 @@ The audit found the following areas still worth reconciling, from highest to low
 1. **Settings boundary drift**
    - Read paths are still split across `SettingsRepository`, `SettingsDomainService`, and ad hoc route/service access.
    - Mutation paths are better, but legacy route aliases still make the settings surface look larger than it really is.
-   - Plan: keep `SettingsRepository` as the persistence/compatibility layer, make `SettingsDomainService` the only typed read façade for new consumers, and keep `SettingsMutationService` as the only typed write façade.
+   - Plan: keep `SettingsRepository` as the persistence/compatibility layer, make `SettingsDomainService` the only typed read façade for new consumers, and keep `SettingsMutationService` as the only typed write façade. The typed read façade should cover strategy, risk, execution, operator, and lightweight scheduler/runtime state.
 
 2. **Policy/reliability contract overlap**
    - `TradePolicyEvaluationService`, `PlanPolicyEvaluator`, and `PlanReliabilityReportService` are separate, but they represent one operator question: "is the active selection policy healthy against broker-preferred outcomes?"

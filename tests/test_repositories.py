@@ -1167,6 +1167,7 @@ class RepositoryTests(unittest.TestCase):
             risk = domains.risk_settings()
             execution = domains.execution_settings()
             operator = domains.operator_settings()
+            scheduler = domains.scheduler_settings()
 
             self.assertIn("confidence_threshold", strategy.to_dict())
             self.assertIn("enabled", risk.risk_management)
@@ -1174,6 +1175,7 @@ class RepositoryTests(unittest.TestCase):
             self.assertIn("friction_pct", execution.evaluation_realism)
             self.assertIn("summary_backend", operator.summary)
             self.assertIn("social_nitter_enabled", operator.social)
+            self.assertIn("last_poll_at", scheduler.to_dict())
         finally:
             session.close()
 
