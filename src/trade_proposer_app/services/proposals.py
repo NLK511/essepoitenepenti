@@ -28,7 +28,7 @@ from trade_proposer_app.services.news import (
 from trade_proposer_app.services.signals import SignalIngestionService
 from trade_proposer_app.services.context_snapshot_resolver import ContextSnapshotResolver
 from trade_proposer_app.services.social import SocialIngestionService
-from trade_proposer_app.services.summary import SummaryRequest, SummaryService
+from trade_proposer_app.services.summary import SummaryRequest, SummaryService, summary_fallback_warning
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 
 
@@ -1247,6 +1247,10 @@ class ProposalService:
                     "macro_context_summary": macro_snapshot.get("context_summary"),
                     "macro_context_saliency_score": float(macro_snapshot.get("context_saliency_score", 0.0) or 0.0),
                     "macro_context_confidence_percent": float(macro_snapshot.get("context_confidence_percent", 0.0) or 0.0),
+                    "macro_context_quality_score": float(macro_snapshot.get("context_quality_score", 0.0) or 0.0),
+                    "macro_context_quality_status": macro_snapshot.get("context_quality_status"),
+                    "macro_context_quality_flags": macro_snapshot.get("context_quality_flags", {}),
+                    "macro_context_quality_notes": macro_snapshot.get("context_quality_notes", []),
                     "macro_context_events": macro_snapshot.get("context_active_events", []),
                     "macro_context_active_themes": macro_snapshot.get("context_active_themes", []),
                     "macro_context_regime_tags": macro_snapshot.get("context_regime_tags", []),
@@ -1282,6 +1286,10 @@ class ProposalService:
                     "industry_context_summary": industry_snapshot.get("context_summary"),
                     "industry_context_saliency_score": float(industry_snapshot.get("context_saliency_score", 0.0) or 0.0),
                     "industry_context_confidence_percent": float(industry_snapshot.get("context_confidence_percent", 0.0) or 0.0),
+                    "industry_context_quality_score": float(industry_snapshot.get("context_quality_score", 0.0) or 0.0),
+                    "industry_context_quality_status": industry_snapshot.get("context_quality_status"),
+                    "industry_context_quality_flags": industry_snapshot.get("context_quality_flags", {}),
+                    "industry_context_quality_notes": industry_snapshot.get("context_quality_notes", []),
                     "industry_context_events": industry_snapshot.get("context_active_events", []),
                     "industry_context_active_drivers": industry_snapshot.get("context_active_drivers", []),
                     "industry_context_regime_tags": industry_snapshot.get("context_regime_tags", []),
@@ -1338,6 +1346,7 @@ class ProposalService:
                 "summary_runtime_seconds": summary_result.duration_seconds,
                 "summary_metadata": summary_result.metadata,
                 "summary_error": summary_result.llm_error,
+                "summary_warning": summary_fallback_warning("plan context", summary_result.llm_error) if summary_result.llm_error else None,
                 "llm_error": summary_result.llm_error,
                 "enhanced_sentiment_score": enhanced["score"],
                 "enhanced_sentiment_label": enhanced["label"],
@@ -1358,6 +1367,7 @@ class ProposalService:
         summary_problem = summary_result.llm_error
         if summary_problem:
             merged_problems.append(summary_problem)
+            merged_problems.append(summary_fallback_warning("plan context", summary_problem))
         context["problems"] = list(dict.fromkeys(merged_problems))
         return context
 

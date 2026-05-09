@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
-import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { AccountRiskState, BrokerOrderExecution, BrokerPosition, BrokerSyncState, BrokerWorkbench, RiskHaltEvent } from "../types";
 import { brokerExecutionStatusTone, formatDate, humanizeKey, isBrokerExecutionCancelable, isBrokerExecutionFailed, isBrokerExecutionResubmittable, isBrokerExecutionSkipped, isBrokerExecutionSubmittedLike } from "../utils";
 
@@ -196,23 +196,24 @@ export function BrokerOrdersPage() {
       </section>
 
       {risk ? (
-        <Card className="top-gap">
-          <SectionTitle
-            kicker="Execution safety"
-            title="Broker risk manager"
-            subtitle="Pre-trade guardrails used before Alpaca paper submissions and manual resubmits. Limits are edited in Settings."
-            actions={
-              <div className="cluster">
-                <button type="button" className="button-secondary" onClick={() => void reloadOrders(selectedOrder?.id ?? undefined)}>Refresh risk</button>
-                {risk.halt_enabled ? (
-                  <button type="button" className="button-secondary" onClick={() => void resumeTrading()}>Resume trading</button>
-                ) : (
-                  <button type="button" className="button button-danger" onClick={() => void haltTrading()}>Halt trading</button>
-                )}
-                <HelpHint tooltip="The risk manager blocks new broker submissions when halt, loss, exposure, or concentration limits are breached." to="/docs?doc=broker-risk-management-spec" />
-              </div>
-            }
-          />
+        <DisclosureCard
+          kicker="Execution safety"
+          title="Broker risk manager"
+          subtitle="Pre-trade guardrails used before Alpaca paper submissions and manual resubmits. Limits are edited in Settings."
+          className="top-gap"
+          defaultOpen
+          actions={
+            <div className="cluster">
+              <button type="button" className="button-secondary" onClick={() => void reloadOrders(selectedOrder?.id ?? undefined)}>Refresh risk</button>
+              {risk.halt_enabled ? (
+                <button type="button" className="button-secondary" onClick={() => void resumeTrading()}>Resume trading</button>
+              ) : (
+                <button type="button" className="button button-danger" onClick={() => void haltTrading()}>Halt trading</button>
+              )}
+              <HelpHint tooltip="The risk manager blocks new broker submissions when halt, loss, exposure, or concentration limits are breached." to="/docs?doc=broker-risk-management-spec" />
+            </div>
+          }
+        >
           <div className="data-points top-gap-small">
             <div className="data-point"><span className="data-point-label">decision</span><span className="data-point-value"><Badge tone={risk.allowed ? "ok" : "danger"}>{risk.allowed ? "allowed" : "blocked"}</Badge></span></div>
             <div className="data-point"><span className="data-point-label">loss streak</span><span className="data-point-value">{String(risk.metrics.today_consecutive_losses ?? 0)} / {risk.config.max_consecutive_losses}</span></div>
@@ -240,16 +241,11 @@ export function BrokerOrdersPage() {
               </div>
             </div>
           ) : null}
-        </Card>
+        </DisclosureCard>
       ) : null}
 
       <section className="two-column top-gap">
-        <Card className="sticky-toolbar">
-          <SectionTitle
-            kicker="Order list"
-            title="Recent submissions"
-            actions={<HelpHint tooltip="If execution is enabled, actionable plans produce a row here after proposal generation finishes." to="/docs?doc=alpaca-paper-order-execution-spec" />}
-          />
+        <DisclosureCard className="sticky-toolbar" kicker="Order list" title="Recent submissions" subtitle="If execution is enabled, actionable plans produce a row here after proposal generation finishes." defaultOpen actions={<HelpHint tooltip="If execution is enabled, actionable plans produce a row here after proposal generation finishes." to="/docs?doc=alpaca-paper-order-execution-spec" />}>
           {!orders && !error ? <LoadingState message="Loading broker orders…" /> : null}
           {orders && orders.length === 0 ? <EmptyState message="No broker orders recorded yet." /> : null}
           {orders ? (
@@ -283,14 +279,9 @@ export function BrokerOrdersPage() {
               ))}
             </div>
           ) : null}
-        </Card>
+        </DisclosureCard>
 
-        <Card>
-          <SectionTitle
-            kicker="Order detail"
-            title={selectedOrder ? `Order #${selectedOrder.id}` : "Select an order"}
-            actions={selectedOrder?.run_id ? <Link className="button-secondary" to={`/runs/${selectedOrder.run_id}`}>Open run</Link> : undefined}
-          />
+        <DisclosureCard title={selectedOrder ? `Order #${selectedOrder.id}` : "Select an order"} subtitle="Inspect the payload and broker response only when you need the full audit trail." defaultOpen={Boolean(selectedOrder)} actions={selectedOrder?.run_id ? <Link className="button-secondary" to={`/runs/${selectedOrder.run_id}`}>Open run</Link> : undefined}>
           {!selectedOrder && !error ? <EmptyState message="Choose an order from the left panel to inspect its payload and broker response." /> : null}
           {selectedOrder ? (
             <div className="stack-page top-gap-small">
@@ -344,7 +335,7 @@ export function BrokerOrdersPage() {
               </Card>
             </div>
           ) : null}
-        </Card>
+        </DisclosureCard>
       </section>
     </>
   );

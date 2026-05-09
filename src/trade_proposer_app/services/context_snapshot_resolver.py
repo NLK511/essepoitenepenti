@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
@@ -31,9 +32,15 @@ class ContextSnapshotResolver:
                 "coverage": {},
                 "source_breakdown": {},
                 "drivers": [],
+                "context_quality_score": 0.0,
+                "context_quality_status": "blocked",
+                "context_quality_flags": {"hard_missing": True},
+                "context_quality_notes": ["macro context snapshot unavailable; using neutral fallback"],
                 "diagnostics": {"warnings": ["macro context snapshot unavailable; using neutral fallback"]},
             }
         source_breakdown = snapshot.source_breakdown if isinstance(snapshot.source_breakdown, dict) else {}
+        metadata = self._metadata(snapshot)
+        context_quality = self._context_quality(source_breakdown, metadata)
         support_label = str(source_breakdown.get("support_label") or "NEUTRAL")
         support_score = float(source_breakdown.get("support_score", 0.0) or 0.0)
         return {
@@ -54,10 +61,14 @@ class ContextSnapshotResolver:
             "context_active_events": snapshot.active_themes,
             "context_active_themes": snapshot.active_themes,
             "context_regime_tags": snapshot.regime_tags,
-            "context_lifecycle": self._metadata(snapshot).get("event_lifecycle_summary", {}),
-            "context_contradictory_event_labels": self._metadata(snapshot).get("contradictory_event_labels", []),
+            "context_lifecycle": metadata.get("event_lifecycle_summary", {}),
+            "context_contradictory_event_labels": metadata.get("contradictory_event_labels", []),
             "context_source_breakdown": source_breakdown,
-            "context_metadata": self._metadata(snapshot),
+            "context_metadata": metadata,
+            "context_quality_score": context_quality["score"],
+            "context_quality_status": context_quality["status"],
+            "context_quality_flags": context_quality["flags"],
+            "context_quality_notes": context_quality["notes"],
             "diagnostics": {"warnings": list(snapshot.warnings)},
         }
 
@@ -82,9 +93,15 @@ class ContextSnapshotResolver:
                 "source_breakdown": {},
                 "drivers": [],
                 "context_metadata": taxonomy_metadata,
+                "context_quality_score": 0.0,
+                "context_quality_status": "blocked",
+                "context_quality_flags": {"hard_missing": True},
+                "context_quality_notes": [f"industry context snapshot unavailable for {subject_label}; using neutral fallback"],
                 "diagnostics": {"warnings": [f"industry context snapshot unavailable for {subject_label}; using neutral fallback"]},
             }
         source_breakdown = snapshot.source_breakdown if isinstance(snapshot.source_breakdown, dict) else {}
+        metadata = self._metadata(snapshot)
+        context_quality = self._context_quality(source_breakdown, metadata)
         support_label = str(source_breakdown.get("support_label") or self._label_from_direction(snapshot.direction))
         support_score = float(source_breakdown.get("support_score", 0.0) or 0.0)
         return {
@@ -105,14 +122,28 @@ class ContextSnapshotResolver:
             "context_active_events": snapshot.active_drivers,
             "context_active_drivers": snapshot.active_drivers,
             "context_regime_tags": snapshot.linked_macro_themes,
-            "context_lifecycle": self._metadata(snapshot).get("event_lifecycle_summary", {}),
-            "context_contradictory_event_labels": self._metadata(snapshot).get("contradictory_event_labels", []),
+            "context_lifecycle": metadata.get("event_lifecycle_summary", {}),
+            "context_contradictory_event_labels": metadata.get("contradictory_event_labels", []),
             "context_source_breakdown": source_breakdown,
             "context_metadata": {
                 **taxonomy_metadata,
-                **self._metadata(snapshot),
+                **metadata,
             },
+            "context_quality_score": context_quality["score"],
+            "context_quality_status": context_quality["status"],
+            "context_quality_flags": context_quality["flags"],
+            "context_quality_notes": context_quality["notes"],
             "diagnostics": {"warnings": list(snapshot.warnings)},
+        }
+
+    @staticmethod
+    def _context_quality(source_breakdown: dict[str, Any], metadata: dict[str, Any]) -> dict[str, Any]:
+        metadata_quality = metadata.get("context_quality") if isinstance(metadata.get("context_quality"), dict) else {}
+        return {
+            "score": float(source_breakdown.get("context_quality_score") or metadata_quality.get("score") or 0.0),
+            "status": str(source_breakdown.get("context_quality_status") or metadata_quality.get("status") or "blocked"),
+            "flags": dict(source_breakdown.get("context_quality_flags") or metadata_quality.get("flags") or {}),
+            "notes": list(source_breakdown.get("context_quality_notes") or metadata_quality.get("notes") or []),
         }
 
     def _industry_taxonomy_metadata(self, industry_profile: dict[str, Any]) -> dict[str, Any]:

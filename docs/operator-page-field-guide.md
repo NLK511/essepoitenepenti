@@ -10,10 +10,11 @@ Use it when you want quick answers to questions like:
 - what do confidence, transmission, shortlist, and outcome fields mean?
 
 If you are new to the app, use this reading order:
-1. this guide for page orientation
-2. `glossary.md` for shared terms such as cohort, slice, and calibration
-3. `recommendation-methodology.md` for the live recommendation path
-4. `raw-details-reference.md` only when you need payload detail
+1. `redesign/ui-decluttering-plan.md` for the current UI/UX direction and mobile rules
+2. this guide for page orientation
+3. `glossary.md` for shared terms such as cohort, slice, and calibration
+4. `recommendation-methodology.md` for the live recommendation path
+5. `raw-details-reference.md` only when you need payload detail
 
 For payload-level storage details, see `raw-details-reference.md`.
 
@@ -85,6 +86,24 @@ Context confidence bands:
 - `65.0–84.9` = strong
 - `85.0+` = dominant
 
+Context quality status:
+- `usable` = evidence is good enough to trust normally
+- `degraded` = keep it visible, but treat it cautiously
+- `blocked` = required evidence is missing
+
+### Time windows
+Several review pages share the same window toggle:
+- `1D`
+- `7D`
+- `1M`
+- `3M`
+- `6M`
+- `1Y`
+- `ALL`
+
+The pages default to `1D`.
+`1D` starts from midnight in the current local day.
+
 ### Attention score
 Attention is a triage score used mainly on ticker signals.
 
@@ -153,7 +172,7 @@ Typical cards include:
 - actionability gap between phantom and actionable outcomes
 - attention items
 
-Use the trendlines toggle when you want to compare the dashboard metrics across the standard window sweep without keeping the long helper text visible.
+Use the trendlines toggle when you want to compare the dashboard metrics across the last 7 daily snapshots without keeping the long helper text visible. Trendlines are backed by persisted daily aggregates so the dashboard can open faster when you only need the headline view.
 
 Go here first. If freshness looks degraded, go to **Context review**. If recent runs look bad, go to **Run debugger**.
 
@@ -240,6 +259,9 @@ Most important fields:
 - **Context bias / Alignment / Expected transmission window**
 - **Latest outcome**
 - **Open plans / expired plans / overall win rate / actionable win rate / phantom win rate** stats for the current filter set
+- clicking a plan row should open the ticker drill-down page for that symbol
+
+Click the ticker to open the ticker drill-down page for that symbol.
 
 Important nuance:
 - non-shortlisted names now usually remain cheap-scan-only decision samples without a full recommendation plan row
@@ -424,12 +446,18 @@ Go here early when startup or run quality looks off.
 
 **Use it for:** reviewing one ticker over time.
 
+Open it by clicking a ticker from a plan row or by using `/tickers/{ticker}`.
+
 Important fields:
+- top summary: WR, total profit, plan count, order count, bar count
 - stored plans
 - actionable plans
 - wins / losses / open plans
 - average confidence
-- plan history with action, setup family, horizon, run link, and latest outcome
+- plan history with action, setup family, horizon, run link, latest outcome, and real/simulated resolution source
+- price chart from stored 1m bars with entry / stop / take-profit / resolution overlays
+- plan selection toggles so you can hide or show overlays on the chart
+- standard time-window toggle (`1d` / `7d` / `1m` / `3m` / `6m` / `1y` / `all`)
 
 Use it to decide whether a ticker deserves repeated operator attention.
 

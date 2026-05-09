@@ -4,6 +4,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 from trade_proposer_app.domain.models import IndustryContextRefreshPayload, IndustryContextSnapshot, MacroContextRefreshPayload, MacroContextSnapshot, NewsArticle, NewsBundle
+from trade_proposer_app.services.event_extraction import EventDefinition, extract_ranked_events
 from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.summary import SummaryResult
@@ -93,7 +94,7 @@ class ContextServiceTests(unittest.TestCase):
             },
         )
         snapshot = MacroContextRefreshPayload(
-                        subject_key="global_macro",
+            subject_key="global_macro",
             subject_label="Global Macro",
             score=0.1,
             label="NEUTRAL",
@@ -115,7 +116,11 @@ class ContextServiceTests(unittest.TestCase):
         self.assertEqual(context.active_themes[0]["persistence_state_detail"]["label"], "new")
         self.assertTrue(any(item["key"] in {"euro_rates", "rates", "valuation_duration"} for item in context.active_themes[0]["transmission_channel_details"]))
         self.assertEqual(context.source_breakdown["primary_news_coverage_quality"], "high")
+        self.assertEqual(context.source_breakdown["context_quality_status"], "usable")
+        self.assertGreaterEqual(context.source_breakdown["context_quality_score"], 90.0)
+        self.assertFalse(context.source_breakdown["context_quality_flags"]["hard_missing"])
         self.assertIn("official:1", context.source_breakdown["primary_news_source_priorities"])
+        self.assertEqual(context.metadata["context_quality"]["status"], "usable")
         self.assertIn("NewsAPI", context.source_breakdown["primary_news_providers"])
         self.assertGreaterEqual(context.metadata["event_lifecycle_summary"]["new_event_count"], 1)
         self.assertIn("Top macro event:", context.summary_text)
@@ -126,7 +131,38 @@ class ContextServiceTests(unittest.TestCase):
         self.assertEqual(news_service.fetch_topics_calls[0]["request_mode"], "live")
         self.assertTrue(news_service.fetch_topics_calls[0]["primary_only"])
 
-    def test_macro_context_tracks_lifecycle_and_contradictions(self) -> None:
+    def test_macro_context_uses_broader_macro_query_set(self) -> None:
+        repository = MagicMock()
+        repository.get_latest_macro_context_snapshot.return_value = None
+        repository.create_macro_context_snapshot.side_effect = lambda context: context
+        news_service = StubNewsService(
+            NewsBundle(ticker="Global Macro", articles=[], feeds_used=[]),
+            {"news_items": [], "coverage_insights": []},
+        )
+        snapshot = MacroContextRefreshPayload(
+            subject_key="global_macro",
+            subject_label="Global Macro",
+            score=0.0,
+            label="NEUTRAL",
+            signals={"social_items": []},
+            diagnostics={"providers": ["nitter"]},
+            source_breakdown={},
+        )
+
+        MacroContextService(repository, news_service=news_service).create_from_refresh_payload(snapshot)
+
+        self.assertTrue(news_service.fetch_topics_calls)
+        queries = news_service.fetch_topics_calls[0]["queries"]
+        self.assertGreaterEqual(len(queries), 8)
+        self.assertTrue(any("payrolls" in query or "unemployment" in query or "wages" in query for query in queries))
+        self.assertTrue(any("DXY" in query or "dollar" in query or "VIX" in query for query in queries))
+        self.assertTrue(any("credit spreads" in query or "financial conditions" in query or "repo" in query for query in queries))
+        self.assertTrue(any("PMI" in query or "ISM" in query or "industrial production" in query for query in queries))
+        self.assertTrue(any("housing" in query or "mortgage rates" in query for query in queries))
+        self.assertTrue(any("tariffs" in query or "trade tensions" in query for query in queries))
+        self.assertTrue(any("ECB" in query or "BoE" in query or "BoJ" in query or "PBoC" in query for query in queries))
+
+    def test_macro_context_tracks_lifecycle_and_no_false_contradictions(self) -> None:
         repository = MagicMock()
         snapshot_obj = MacroContextSnapshot(
             summary_text="Older macro state",
@@ -153,13 +189,13 @@ class ContextServiceTests(unittest.TestCase):
             {
                 "news_items": [
                     {
-                        "title": "Oil spikes as conflict risk escalates",
-                        "summary": "Brent rises on geopolitical conflict and sanctions pressure",
+                        "title": "Oil de-escalates as ceasefire hopes build",
+                        "summary": "Crude relief follows talks that reduce supply risk",
                         "publisher": "Reuters",
                     },
                     {
-                        "title": "Oil falls as traders expect de-escalation",
-                        "summary": "Crude retreats as de-escalation hopes improve",
+                        "title": "Oil escalates as conflict risk rises",
+                        "summary": "Sanctions pressure and conflict keep supply risk elevated",
                         "publisher": "Reuters",
                     },
                 ],
@@ -179,17 +215,95 @@ class ContextServiceTests(unittest.TestCase):
         context = MacroContextService(repository, news_service=news_service).create_from_refresh_payload(snapshot)
 
         energy = next(theme for theme in context.active_themes if theme["key"] == "oil_supply_risk")
-        self.assertTrue(energy["contradiction_flag"])
+        self.assertFalse(energy["contradiction_flag"])
+        self.assertFalse(energy["contradiction_debug"]["enabled"])
         self.assertEqual(energy["persistence_state"], "new")
         self.assertEqual(energy["persistence_state_detail"]["label"], "new")
-        contradiction_reason_map = {item["key"]: item for item in energy["contradiction_reason_details"]}
-        self.assertTrue(set(contradiction_reason_map).issubset({"mixed_directional_evidence", "ambiguous_evidence_text", "direction_changed_vs_previous_snapshot"}))
-        self.assertGreaterEqual(len(contradiction_reason_map), 1)
+        self.assertEqual(energy["contradiction_reason_details"], [])
         self.assertTrue(any(item["key"] == "commodity_input_costs" for item in energy["transmission_channel_details"]))
-        self.assertIn("Oil supply risk", context.metadata["event_lifecycle_summary"]["contradictory_event_labels"])
-        self.assertTrue(any("contradictory evidence" in warning for warning in context.warnings))
+        self.assertNotIn("Oil supply risk", context.metadata["event_lifecycle_summary"]["contradictory_event_labels"])
+        self.assertNotIn("supporting_social_evidence", context.missing_inputs)
+        self.assertNotIn("contradictory evidence", " ".join(context.warnings))
+        self.assertIn(context.source_breakdown["context_quality_status"], {"usable", "degraded"})
         self.assertEqual(news_service.fetch_topics_calls[0]["request_mode"], "live")
         self.assertTrue(news_service.fetch_topics_calls[0]["primary_only"])
+        self.assertEqual(context.metadata["event_lifecycle_summary"]["contradiction_count"], 0)
+
+    def test_macro_context_ignores_social_only_direction_noise_for_contradictions(self) -> None:
+        repository = MagicMock()
+        repository.get_latest_macro_context_snapshot.return_value = None
+        repository.get_latest_macro_context_snapshot_before.return_value = None
+        repository.create_macro_context_snapshot.side_effect = lambda context: context
+        news_bundle = NewsBundle(
+            ticker="Global Macro",
+            articles=[
+                NewsArticle(
+                    title="Treasury yields edge higher as auctions stay steady",
+                    summary="Reuters coverage shows stable issuance and a mild rate-rise bias",
+                    publisher="Reuters",
+                    link="https://example.com/treasury",
+                )
+            ],
+            feeds_used=["NewsAPI"],
+        )
+        news_service = StubNewsService(
+            news_bundle,
+            {
+                "news_items": [
+                    {
+                        "title": "Treasury yields edge higher as auctions stay steady",
+                        "summary": "Reuters coverage shows stable issuance and a mild rate-rise bias",
+                        "publisher": "Reuters",
+                    }
+                ],
+                "coverage_insights": [],
+            },
+        )
+        snapshot = MacroContextRefreshPayload(
+            subject_key="global_macro",
+            subject_label="Global Macro",
+            score=0.0,
+            label="NEUTRAL",
+            signals={"social_items": [
+                {"title": "Yields fall sharply on dovish hopes", "body": "rates easing everywhere"},
+                {"title": "Yields rise on inflation fear", "body": "sticky inflation keeps pressure on bonds"},
+            ]},
+            diagnostics={"providers": ["nitter"]},
+            source_breakdown={},
+        )
+
+        context = MacroContextService(repository, news_service=news_service).create_from_refresh_payload(snapshot)
+
+        bond_event = next(theme for theme in context.active_themes if theme["key"] == "bond_yield_spike")
+        self.assertFalse(bond_event["contradiction_flag"])
+        self.assertFalse(bond_event["contradiction_debug"]["enabled"])
+        self.assertEqual(context.metadata["event_lifecycle_summary"]["contradiction_count"], 0)
+        self.assertNotIn("contradictory evidence", " ".join(context.warnings))
+
+    def test_extract_ranked_events_requires_primary_disagreement_for_contradictions(self) -> None:
+        definition = EventDefinition(
+            key="macro_policy_shift",
+            label="Macro policy shift",
+            phrases=("easing", "escalates"),
+            category="macro",
+            window_hint="1d",
+        )
+        events = extract_ranked_events(
+            [
+                {"title": "Rates easing on recovery hopes", "summary": "market conditions look constructive again", "publisher": "Reuters"},
+                {"title": "Rates escalates as pressure builds", "summary": "sanctions pressure and supply disruption", "publisher": "Reuters"},
+            ],
+            [],
+            [definition],
+        )
+
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertTrue(event["contradiction_flag"])
+        self.assertTrue(event["contradiction_debug"]["enabled"])
+        self.assertEqual(event["contradiction_debug"]["primary"]["match_count"], 2)
+        self.assertEqual(event["contradiction_debug"]["primary"]["direction_counts"].get("positive"), 1)
+        self.assertEqual(event["contradiction_debug"]["primary"]["direction_counts"].get("negative"), 1)
 
     def test_macro_context_uses_llm_summary_when_available(self) -> None:
         repository = MagicMock()
@@ -252,6 +366,7 @@ class ContextServiceTests(unittest.TestCase):
         self.assertEqual(context.summary_text, summary_service.summarize_prompt.return_value.summary)
         self.assertEqual(context.metadata["context_summary_method"], "llm_summary")
         self.assertEqual(context.metadata["context_summary_backend"], "pi_agent")
+        self.assertIsNone(context.metadata["context_summary_warning"])
         summary_service.summarize_prompt.assert_called_once()
         prompt = summary_service.summarize_prompt.call_args.args[0]
         self.assertIn("Previous snapshot context:", prompt)
@@ -313,7 +428,11 @@ class ContextServiceTests(unittest.TestCase):
         self.assertTrue(any(driver.get("transmission_channel_details") for driver in context.active_drivers))
         self.assertTrue(any(item["key"] in {"supply_chain", "product_cycle"} for driver in context.active_drivers for item in driver.get("transmission_channel_details", [])))
         self.assertEqual(context.source_breakdown["primary_news_coverage_quality"], "high")
+        self.assertEqual(context.source_breakdown["context_quality_status"], "usable")
+        self.assertGreaterEqual(context.source_breakdown["context_quality_score"], 85.0)
+        self.assertNotIn("supporting_social_evidence", context.missing_inputs)
         self.assertIn("trade:1", context.source_breakdown["primary_news_source_priorities"])
+        self.assertEqual(context.metadata["context_quality"]["status"], "usable")
         self.assertGreaterEqual(context.metadata["event_lifecycle_summary"]["new_event_count"], 1)
         self.assertEqual(context.metadata["context_summary_method"], "news_digest")
         self.assertEqual(context.metadata["triaged_primary_evidence"][0]["publisher"], "DigiTimes")
@@ -394,6 +513,7 @@ class ContextServiceTests(unittest.TestCase):
         self.assertEqual(context.metadata["context_summary_method"], "llm_summary")
         self.assertEqual(context.metadata["context_summary_backend"], "pi_agent")
         self.assertEqual(context.metadata["context_summary_model"], "test-model")
+        self.assertIsNone(context.metadata["context_summary_warning"])
         self.assertTrue(context.metadata["triaged_primary_evidence"])
         summary_service.summarize_prompt.assert_called_once()
         prompt = summary_service.summarize_prompt.call_args.args[0]
@@ -406,6 +526,90 @@ class ContextServiceTests(unittest.TestCase):
         self.assertIn("Matched ontology relationships:", prompt)
         self.assertIn("sector: Information Technology", prompt)
         self.assertTrue(context.metadata["matched_ontology_relationships"])
+        self.assertEqual(context.metadata["context_quality"]["status"], "usable")
+
+    def test_macro_context_records_major_warning_when_summary_falls_back(self) -> None:
+        repository = MagicMock()
+        repository.get_latest_macro_context_snapshot.return_value = None
+        repository.get_latest_macro_context_snapshot_before.return_value = None
+        repository.create_macro_context_snapshot.side_effect = lambda context: context
+        news_bundle = NewsBundle(ticker="Global Macro", articles=[], feeds_used=["NewsAPI"])
+        news_service = StubNewsService(
+            news_bundle,
+            {
+                "news_items": [
+                    {"title": "Treasury yields jump as oil rises", "summary": "Rates and energy pressure", "publisher": "Reuters"},
+                ],
+                "coverage_insights": [],
+            },
+        )
+        summary_service = MagicMock()
+        summary_service.summarize_prompt.return_value = SummaryResult(
+            summary="Digest summary",
+            method="news_digest",
+            backend="pi_agent",
+            model="test-model",
+            llm_error="pi_agent CLI timed out after 5s",
+            metadata={"fallback_used": True},
+            duration_seconds=5.0,
+        )
+        snapshot = MacroContextRefreshPayload(
+            subject_key="global_macro",
+            subject_label="Global Macro",
+            score=0.0,
+            label="NEUTRAL",
+            signals={"social_items": []},
+            diagnostics={"providers": ["nitter"]},
+            source_breakdown={},
+        )
+
+        context = MacroContextService(repository, news_service=news_service, summary_service=summary_service).create_from_refresh_payload(snapshot)
+
+        self.assertEqual(context.metadata["context_summary_method"], "news_digest")
+        self.assertEqual(context.metadata["context_summary_warning"], "macro context summary fell back to digest/static summary because pi_agent CLI timed out after 5s")
+        self.assertTrue(any("summary fell back" in warning for warning in context.warnings))
+
+    def test_industry_context_records_major_warning_when_summary_falls_back(self) -> None:
+        repository = MagicMock()
+        repository.get_latest_industry_context_snapshot.return_value = None
+        repository.get_latest_industry_context_snapshot_before.return_value = None
+        repository.create_industry_context_snapshot.side_effect = lambda context: context
+        news_bundle = NewsBundle(ticker="NVDA, AMD", articles=[], feeds_used=["NewsAPI"])
+        news_service = StubNewsService(
+            news_bundle,
+            {
+                "news_items": [
+                    {"title": "Chip demand stays strong", "summary": "AI demand remains elevated", "publisher": "Reuters"},
+                ],
+                "coverage_insights": [],
+            },
+        )
+        summary_service = MagicMock()
+        summary_service.summarize_prompt.return_value = SummaryResult(
+            summary="Digest summary",
+            method="news_digest",
+            backend="pi_agent",
+            model="test-model",
+            llm_error="pi_agent CLI timed out after 5s",
+            metadata={"fallback_used": True},
+            duration_seconds=5.0,
+        )
+        snapshot = IndustryContextRefreshPayload(
+            subject_key="semiconductors",
+            subject_label="Semiconductors",
+            score=0.2,
+            label="POSITIVE",
+            coverage={"tracked_tickers": ["NVDA", "AMD"]},
+            signals={"social_items": []},
+            diagnostics={"queries": ["semiconductor", "chip demand"], "providers": ["nitter"]},
+            source_breakdown={},
+        )
+
+        context = IndustryContextService(repository, news_service=news_service, summary_service=summary_service).create_from_refresh_payload(snapshot)
+
+        self.assertEqual(context.metadata["context_summary_method"], "news_digest")
+        self.assertEqual(context.metadata["context_summary_warning"], "industry context for Semiconductors summary fell back to digest/static summary because pi_agent CLI timed out after 5s")
+        self.assertTrue(any("summary fell back" in warning for warning in context.warnings))
 
 
 if __name__ == "__main__":

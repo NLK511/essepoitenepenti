@@ -31,7 +31,9 @@ These define the current product truth.
 ### Setup and operations
 - `getting-started.md` — local setup, scripts, auth, validation, first-run checks
 - `operational-scripts-reference.md` — reference for maintenance, hydration, and compare tools
+- `observability-spec.md` — run correlation ids, health/debugger diagnostics, and cross-process log requirements
 - `default-watchlists.md` — seeded watchlist pack and rationale
+- `data-quality-audit-spec.md` — audit endpoint for repeated no-bars, no-news, stale-coverage, and broker-reject ticker issues
 
 ### Recommendation workflow
 - `recommendation-methodology.md` — current scoring and planning pipeline
@@ -72,6 +74,7 @@ These remain active technical reference docs:
 - `redesign/README.md` — redesign doc map
 - `redesign/principles.md` — redesign rules
 - `redesign/target-architecture.md` — high-level redesign shape
+- `redesign/ui-decluttering-plan.md` — UI/UX redesign goals, mobile rules, and phased implementation plan
 - `redesign/transmission-modeling-spec.md` — context-to-ticker transmission rules
 - `redesign/calibration-governance-spec.md` — outcome-aware calibration rules
 - `redesign/setup-family-playbook.md` — setup-family expectations

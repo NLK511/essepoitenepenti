@@ -7,6 +7,7 @@ from typing import Any
 
 from trade_proposer_app.domain.models import MacroContextRefreshPayload, MacroContextSnapshot
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.services.context_quality import assess_context_quality
 from trade_proposer_app.services.event_extraction import (
     EventDefinition,
     count_events_above_saliency,
@@ -21,7 +22,7 @@ from trade_proposer_app.services.event_extraction import (
     top_event_labels,
 )
 from trade_proposer_app.services.news import NewsIngestionService
-from trade_proposer_app.services.summary import SummaryResult, SummaryService
+from trade_proposer_app.services.summary import SummaryResult, SummaryService, summary_fallback_warning
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 MACRO_THEME_DEFINITIONS = [
@@ -160,12 +161,14 @@ MACRO_THEME_DEFINITIONS = [
 ]
 
 DEFAULT_MACRO_NEWS_QUERIES = [
-    "Federal Reserve OR FOMC OR Powell OR rate cut OR rate hike",
-    "inflation OR CPI OR PPI OR disinflation OR cooling prices",
-    "Treasury yields OR bond market OR higher yields OR lower yields",
-    "ECB OR eurozone rates OR Lagarde",
-    "war OR sanctions OR geopolitical tensions OR missile OR retaliation OR ceasefire OR truce OR diplomatic progress",
-    "oil OR crude OR OPEC OR supply disruption OR output increase OR energy prices",
+    "Federal Reserve OR FOMC OR Powell OR monetary policy OR rate cut OR rate hike OR ECB OR BoE OR BoJ OR PBoC",
+    "CPI OR PCE OR inflation OR disinflation OR payrolls OR unemployment OR jobs report OR wages",
+    "Treasury yields OR 10-year yield OR real yields OR dollar OR DXY OR VIX OR risk off OR Treasury auctions",
+    "credit spreads OR financial conditions OR lending standards OR defaults OR repo OR funding stress OR QT OR balance sheet OR reserves",
+    "PMI OR ISM OR retail sales OR industrial production OR growth OR recession",
+    "housing OR mortgage rates OR home sales OR housing starts OR affordability",
+    "oil OR crude OR OPEC OR energy prices OR copper OR natural gas OR industrial metals OR supply disruption OR geopolitical tensions",
+    "tariffs OR trade tensions OR China OR Europe OR sanctions OR de-escalation",
 ]
 
 
@@ -230,9 +233,6 @@ class MacroContextService:
             warnings.append("macro context primary-news ingestion reported provider issues")
         if contradiction_labels:
             warnings.append("macro context contains contradictory evidence across active events")
-        if not supporting_social_items:
-            missing_inputs.append("supporting_social_evidence")
-
         support_score = float(getattr(payload, "score", 0.0) or 0.0)
         support_label = str(getattr(payload, "label", "NEUTRAL") or "NEUTRAL")
         regime_tags = self._regime_tags(active_themes, support_score, support_label)
@@ -257,9 +257,22 @@ class MacroContextService:
             warnings=warnings,
             fallback_summary=fallback_summary,
         )
+        summary_warning = None
+        if summary_result.llm_error:
+            summary_warning = summary_fallback_warning("macro context", summary_result.llm_error)
+            warnings.append(summary_warning)
         summary_text = summary_result.summary or fallback_summary
-        status = "warning" if warnings else "ok"
         triaged_evidence = self._triaged_news_items(news_items, active_themes)
+        quality = assess_context_quality(
+            primary_evidence_present=bool(news_items),
+            primary_coverage_quality=primary_coverage_quality,
+            primary_item_count=len(news_items),
+            source_priority_counts=primary_source_counts,
+            feed_errors=feed_errors,
+            contradiction_count=int(lifecycle_summary.get("contradiction_count", 0) or 0),
+            summary_error=summary_result.llm_error,
+        )
+        status = "warning" if warnings or quality.status != "usable" else "ok"
 
         context = MacroContextSnapshot(
             computed_at=effective_now,
@@ -283,6 +296,10 @@ class MacroContextService:
                 "primary_news_source_priorities": summarize_source_priorities(news_items, source_type="news"),
                 "primary_news_publishers": publisher_summary(news_items),
                 "primary_news_coverage_quality": primary_coverage_quality,
+                "context_quality_score": quality.score,
+                "context_quality_status": quality.status,
+                "context_quality_flags": quality.flags,
+                "context_quality_notes": quality.notes,
                 "upstream": source_breakdown if isinstance(source_breakdown, dict) else {},
             },
             metadata={
@@ -305,8 +322,15 @@ class MacroContextService:
                 "context_summary_backend": summary_result.backend,
                 "context_summary_model": summary_result.model,
                 "context_summary_error": summary_result.llm_error,
+                "context_summary_warning": summary_warning,
                 "context_summary_duration_seconds": summary_result.duration_seconds,
                 "context_summary_metadata": summary_result.metadata,
+                "context_quality": {
+                    "score": quality.score,
+                    "status": quality.status,
+                    "flags": quality.flags,
+                    "notes": quality.notes,
+                },
             },
             run_id=run_id,
             job_id=job_id,

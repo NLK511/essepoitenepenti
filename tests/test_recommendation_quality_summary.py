@@ -3,7 +3,7 @@ Comprehensive test suite for RecommendationQualitySummaryService.
 
 Design principles:
   - Test static quality status gates (thin, healthy, needs_attention, watch) and reasons.
-  - Test the integration of windowed summaries (7d, 30d, 90d, 180d, 1y).
+  - Test the integration of windowed summaries (1D, 7D, 1M, 3M, 6M, 1Y, ALL).
   - Test generating next actions based on summary data.
   - Test the final API response shape.
 """
@@ -204,8 +204,8 @@ class RecommendationQualitySummaryIntegrationTests(unittest.TestCase):
             # Verify windowed summary count matches definitions
             self.assertEqual(len(payload["windowed_summaries"]), len(RecommendationQualitySummaryService.WINDOW_DEFINITIONS))
             
-            # Default window should be 30d
-            self.assertEqual(payload["summary"]["window_label"], "30d")
+            # Default window should be 1D
+            self.assertEqual(payload["summary"]["window_label"], "1D")
         finally:
             session.close()
 
@@ -240,9 +240,9 @@ class QualitySummaryWindowIntegrityTests(unittest.TestCase):
         
         windows = {w["window_label"]: w for w in payload["windowed_summaries"]}
         
-        # 7d window should have later start than 1y window
-        self.assertGreater(windows["7d"]["computed_after"], windows["1y"]["computed_after"])
-        self.assertGreater(windows["30d"]["computed_after"], windows["180d"]["computed_after"])
+        # 7D window should have later start than 1Y window
+        self.assertGreater(windows["7D"]["computed_after"], windows["1Y"]["computed_after"])
+        self.assertGreater(windows["1M"]["computed_after"], windows["6M"]["computed_after"])
 
 class QualitySummaryErrorHandlingTests(unittest.TestCase):
     """Verifies robustness when sub-services fail."""

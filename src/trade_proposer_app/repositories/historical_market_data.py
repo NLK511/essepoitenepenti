@@ -1,6 +1,6 @@
 from datetime import datetime, time, timedelta, timezone
 
-from sqlalchemy import inspect, insert, select, update
+from sqlalchemy import func, inspect, insert, select, update
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import HistoricalMarketBar
@@ -140,6 +140,25 @@ class HistoricalMarketDataRepository:
             self._select_bar_rows(ticker, timeframe, start_at, end_at, available_at, limit=limit)
         ).mappings().all()
         return [self._to_model_from_row(row) for row in reversed(rows)]
+
+    def count_bars(
+        self,
+        *,
+        ticker: str,
+        timeframe: str = "1d",
+        start_at: datetime | None = None,
+        end_at: datetime | None = None,
+        available_at: datetime | None = None,
+    ) -> int:
+        table = HistoricalMarketBarRecord.__table__
+        query = select(func.count()).select_from(table).where(table.c.ticker == ticker).where(table.c.timeframe == timeframe)
+        if start_at is not None:
+            query = query.where(table.c.bar_time >= self._normalize(start_at))
+        if end_at is not None:
+            query = query.where(table.c.bar_time <= self._normalize(end_at))
+        if available_at is not None and self._has_available_at_column():
+            query = query.where(table.c.available_at <= self._normalize(available_at))
+        return int(self.session.scalar(query) or 0)
 
     def _select_bar_rows(
         self,

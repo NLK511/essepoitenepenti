@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from trade_proposer_app.api.routes.auth import router as auth_router
 from trade_proposer_app.api.routes.context import router as context_router
 from trade_proposer_app.api.routes.dashboard import router as dashboard_router
+from trade_proposer_app.api.routes.data_quality import router as data_quality_router
 from trade_proposer_app.api.routes.docs import router as docs_router
 from trade_proposer_app.api.routes.effective_plan_outcomes import router as effective_plan_outcomes_router
 from trade_proposer_app.api.routes.health import router as health_router
@@ -29,6 +30,7 @@ router = APIRouter(prefix="/api")
 router.include_router(health_router)
 router.include_router(auth_router)
 router.include_router(dashboard_router)
+router.include_router(data_quality_router)
 router.include_router(docs_router)
 router.include_router(effective_plan_outcomes_router)
 router.include_router(context_router)

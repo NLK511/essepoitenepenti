@@ -82,17 +82,17 @@ class RecommendationPlanCalibrationServiceTests(unittest.TestCase):
         self.assertEqual(report.sample_count, 10)
         self.assertAlmostEqual(report.expected_calibration_error, 0.4, places=4)
 
-    def test_smoothing_strength_pulls_predictions_toward_global_average(self) -> None:
+    def test_smoothing_strength_pulls_empirical_win_rates_toward_global_average(self) -> None:
         """
-        Formula: smoothed_predicted = ((avg_predicted * n) + (overall_prob * strength)) / (n + strength)
+        Formula: smoothed_predicted = ((bin_win_rate * n) + (overall_prob * strength)) / (n + strength)
 
-        Bin 90_100: 5 items @ 90% (all wins → avg_actual = 1.0).
-        Bin 0_20: 5 items @ 10% (all losses → avg_actual = 0.0).
+        Bin 90_100: 5 items, all wins → bin win rate = 1.0.
+        Bin 0_20: 5 items, all losses → bin win rate = 0.0.
         Global win rate = 5 / 10 = 0.5.
 
         With strength = 5.0:
-          Bin 90_100: ((0.9 * 5) + (0.5 * 5)) / (5 + 5) = (4.5 + 2.5) / 10 = 0.7
-          Bin 0_20: ((0.1 * 5) + (0.5 * 5)) / (5 + 5) = (0.5 + 2.5) / 10 = 0.3
+          Bin 90_100: ((1.0 * 5) + (0.5 * 5)) / (5 + 5) = 0.75
+          Bin 0_20: ((0.0 * 5) + (0.5 * 5)) / (5 + 5) = 0.25
         """
         outcomes = []
         for _ in range(5):
@@ -100,16 +100,16 @@ class RecommendationPlanCalibrationServiceTests(unittest.TestCase):
         for _ in range(5):
             outcomes.append(RecommendationPlanOutcome(recommendation_plan_id=2, outcome="loss", confidence_percent=10.0))
 
-        report = self.service._build_calibration_report(
+        report = self.service._build_smoothed_calibration_report(
             outcomes, method="test", version_label="v1", smoothing_strength=5.0
         )
-        
+
         self.assertIsNotNone(report)
         bin_90 = next(b for b in report.bins if b.bin_key == "90_100")
         bin_0 = next(b for b in report.bins if b.bin_key == "0_20")
-        
-        self.assertAlmostEqual(bin_90.predicted_probability, 0.7, places=4)
-        self.assertAlmostEqual(bin_0.predicted_probability, 0.3, places=4)
+
+        self.assertAlmostEqual(bin_90.predicted_probability, 0.75, places=4)
+        self.assertAlmostEqual(bin_0.predicted_probability, 0.25, places=4)
 
     # ─── Grouping and Bucketization ───────────────────────────────────────────
 
@@ -199,6 +199,29 @@ class RecommendationPlanCalibrationServiceTests(unittest.TestCase):
         self.assertEqual(summary.total_outcomes, 0)
         self.assertIsNone(summary.calibration_report)
         self.assertEqual(len(summary.by_action), 0)
+
+    def test_summarize_builds_recent_calibration_reports_from_latest_resolved_outcomes(self) -> None:
+        outcomes = [
+            RecommendationPlanOutcome(recommendation_plan_id=index + 1, outcome="loss", confidence_percent=80.0)
+            for index in range(30)
+        ] + [
+            RecommendationPlanOutcome(recommendation_plan_id=index + 31, outcome="win", confidence_percent=80.0)
+            for index in range(20)
+        ]
+        self.outcomes_repo.list_outcomes.return_value = outcomes
+
+        summary = self.service.summarize()
+
+        self.assertIsNotNone(summary.recent_calibration_report)
+        self.assertIsNotNone(summary.recent_smoothed_calibration_report)
+        assert summary.recent_calibration_report is not None
+        assert summary.recent_smoothed_calibration_report is not None
+        assert summary.smoothed_calibration_report is not None
+        recent_bin = summary.recent_smoothed_calibration_report.bins[0]
+        full_bin = summary.smoothed_calibration_report.bins[0]
+        self.assertEqual(summary.recent_smoothed_calibration_report.sample_count, 30)
+        self.assertEqual(summary.recent_calibration_report.sample_count, 30)
+        self.assertLess(recent_bin.predicted_probability, full_bin.predicted_probability)
 
     def test_calibration_report_skips_outcomes_with_missing_confidence(self) -> None:
         outcomes = [

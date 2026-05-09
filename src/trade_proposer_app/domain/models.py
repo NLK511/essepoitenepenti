@@ -163,9 +163,60 @@ class TickerPerformanceSummary(BaseModel):
     average_confidence: float | None = None
 
 
+class TickerAnalysisSummary(BaseModel):
+    ticker: str
+    window: str = "1d"
+    plan_count: int = 0
+    actionable_plan_count: int = 0
+    broker_order_count: int = 0
+    bar_count: int = 0
+    resolved_plan_count: int = 0
+    open_plan_count: int = 0
+    win_rate_percent: float | None = None
+    total_profit: float | None = None
+    real_resolved_plan_count: int = 0
+    simulated_resolved_plan_count: int = 0
+    real_win_rate_percent: float | None = None
+    simulated_win_rate_percent: float | None = None
+    real_profit: float | None = None
+    simulated_profit: float | None = None
+
+
+class TickerChartPoint(BaseModel):
+    kind: str
+    x: datetime
+    y: float
+    label: str = ""
+    color: str = ""
+
+
+class TickerPlanChartOverlay(BaseModel):
+    plan_id: int
+    ticker: str
+    action: str
+    label: str = ""
+    selected: bool = True
+    color: str = ""
+    resolution_source: str = "missing"
+    state: str = "pending"
+    points: list[TickerChartPoint] = Field(default_factory=list)
+
+
+class TickerChartSeries(BaseModel):
+    ticker: str = ""
+    timeframe: str = "1m"
+    bars: list["HistoricalMarketBar"] = Field(default_factory=list)
+    overlays: list[TickerPlanChartOverlay] = Field(default_factory=list)
+    selected_plan_ids: list[int] = Field(default_factory=list)
+
+
 class TickerAnalysisPage(BaseModel):
     ticker: str
+    window: str = "1d"
+    summary: TickerAnalysisSummary | None = None
     performance: TickerPerformanceSummary
+    chart: TickerChartSeries = Field(default_factory=TickerChartSeries)
+    broker_orders: list["BrokerOrderExecution"] = Field(default_factory=list)
     recommendation_plans: list["RecommendationPlan"] = Field(default_factory=list)
 
 
@@ -240,6 +291,7 @@ class Run(BaseModel):
     completed_at: datetime | None = None
     duration_seconds: float | None = None
     worker_id: str | None = None
+    correlation_id: str | None = None
     lease_expires_at: datetime | None = None
     timing_json: str | None = None
 
@@ -648,6 +700,7 @@ class RecommendationDecisionSample(BaseModel):
 class RecommendationPlan(BaseModel):
     id: int | None = None
     ticker: str
+    ticker_page_url: str = ""
     horizon: StrategyHorizon = StrategyHorizon.ONE_WEEK
     action: str
     status: str = "ok"
@@ -751,6 +804,8 @@ class RecommendationCalibrationSummary(BaseModel):
     overall_win_rate_percent: float | None = None
     calibration_report: RecommendationCalibrationReport | None = None
     smoothed_calibration_report: RecommendationCalibrationReport | None = None
+    recent_calibration_report: RecommendationCalibrationReport | None = None
+    recent_smoothed_calibration_report: RecommendationCalibrationReport | None = None
     by_confidence_bucket: list[RecommendationCalibrationBucket] = Field(default_factory=list)
     by_setup_family: list[RecommendationCalibrationBucket] = Field(default_factory=list)
     by_action: list[RecommendationCalibrationBucket] = Field(default_factory=list)

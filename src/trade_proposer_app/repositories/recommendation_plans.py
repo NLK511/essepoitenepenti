@@ -487,6 +487,7 @@ class RecommendationPlanRepository:
         return RecommendationPlan(
             id=record.id,
             ticker=record.ticker,
+            ticker_page_url=f"/tickers/{record.ticker}",
             horizon=horizon,
             action=record.action,
             status=record.status,

@@ -19,6 +19,7 @@ import { SignalGatingJobPage } from "./pages/signal-gating-job-page";
 import { PlanGenerationTuningPage } from "./pages/plan-generation-tuning-page";
 import { RunDetailPage } from "./pages/run-detail-page";
 import { ContextReviewPage } from "./pages/context-review-page";
+import { DataQualityPage } from "./pages/data-quality-page";
 import { SettingsPage } from "./pages/settings-page";
 import { TickerPage } from "./pages/ticker-page";
 import { TickerSignalsPage } from "./pages/ticker-signals-page";
@@ -81,6 +82,7 @@ export default function App() {
           <Route path="research/signal-gating/gating-job" element={<SignalGatingJobPage />} />
           <Route path="research/plan-generation-tuning" element={<PlanGenerationTuningPage />} />
           <Route path="research/backtesting" element={<Navigate to="/research" replace />} />
+          <Route path="data-quality" element={<DataQualityPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="docs" element={<DocsPage />} />
           <Route path="runs/:runId" element={<RunDetailPage />} />

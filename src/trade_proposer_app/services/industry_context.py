@@ -7,6 +7,7 @@ from typing import Any
 
 from trade_proposer_app.domain.models import IndustryContextRefreshPayload, IndustryContextSnapshot
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.services.context_quality import assess_context_quality
 from trade_proposer_app.services.event_extraction import (
     EventDefinition,
     count_events_above_saliency,
@@ -21,7 +22,7 @@ from trade_proposer_app.services.event_extraction import (
     top_event_labels,
 )
 from trade_proposer_app.services.news import NewsIngestionService
-from trade_proposer_app.services.summary import SummaryResult, SummaryService
+from trade_proposer_app.services.summary import SummaryResult, SummaryService, summary_fallback_warning
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 MACRO_LINK_DEFINITIONS = [
@@ -153,9 +154,6 @@ class IndustryContextService:
             warnings.append(f"industry context for {industry_label} encountered provider issues while gathering primary-news evidence")
         if contradiction_labels:
             warnings.append(f"industry context for {industry_label} includes contradictory driver evidence")
-        if not supporting_social_items:
-            missing_inputs.append("supporting_social_evidence")
-
         saliency_score = self._saliency_score(active_drivers, len(news_items), len(supporting_social_items), len(linked_macro_themes), primary_source_counts)
         confidence_percent = self._confidence_percent(
             active_drivers,
@@ -192,13 +190,26 @@ class IndustryContextService:
             matched_ontology_relationships=matched_ontology_relationships,
             fallback_summary=fallback_summary,
         )
+        summary_warning = None
+        if summary_result.llm_error:
+            summary_warning = summary_fallback_warning(f"industry context for {industry_label}", summary_result.llm_error)
+            warnings.append(summary_warning)
         summary_text = summary_result.summary or fallback_summary
+        quality = assess_context_quality(
+            primary_evidence_present=bool(news_items),
+            primary_coverage_quality=primary_coverage_quality,
+            primary_item_count=len(news_items),
+            source_priority_counts=primary_source_counts,
+            feed_errors=feed_errors,
+            contradiction_count=int(lifecycle_summary.get("contradiction_count", 0) or 0),
+            summary_error=summary_result.llm_error,
+        )
         context = IndustryContextSnapshot(
             industry_key=industry_key,
             industry_label=industry_label,
             computed_at=effective_now,
             expires_at=getattr(payload, "expires_at", None),
-            status="warning" if warnings else "ok",
+            status="warning" if warnings or quality.status != "usable" else "ok",
             summary_text=summary_text,
             direction=self._direction_from_label(str(getattr(payload, "label", "NEUTRAL") or "NEUTRAL")),
             saliency_score=saliency_score,
@@ -221,6 +232,10 @@ class IndustryContextService:
                 "primary_news_source_priorities": summarize_source_priorities(news_items, source_type="news"),
                 "primary_news_publishers": publisher_summary(news_items),
                 "primary_news_coverage_quality": primary_coverage_quality,
+                "context_quality_score": quality.score,
+                "context_quality_status": quality.status,
+                "context_quality_flags": quality.flags,
+                "context_quality_notes": quality.notes,
                 "ontology_relationship_count": len(ontology_relationships),
                 "matched_ontology_relationship_count": len(matched_ontology_relationships),
                 "upstream": source_breakdown if isinstance(source_breakdown, dict) else {},
@@ -250,8 +265,15 @@ class IndustryContextService:
                 "context_summary_backend": summary_result.backend,
                 "context_summary_model": summary_result.model,
                 "context_summary_error": summary_result.llm_error,
+                "context_summary_warning": summary_warning,
                 "context_summary_duration_seconds": summary_result.duration_seconds,
                 "context_summary_metadata": summary_result.metadata,
+                "context_quality": {
+                    "score": quality.score,
+                    "status": quality.status,
+                    "flags": quality.flags,
+                    "notes": quality.notes,
+                },
             },
             run_id=run_id,
             job_id=job_id,

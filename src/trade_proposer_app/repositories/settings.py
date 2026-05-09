@@ -40,7 +40,7 @@ DEFAULT_APP_SETTINGS = {
     "risk_max_consecutive_losses": "3",
     "summary_backend": "pi_agent",
     "summary_model": "",
-    "summary_timeout_seconds": "60",
+    "summary_timeout_seconds": "600",
     "summary_max_tokens": "220",
     "summary_pi_command": "pi",
     "summary_pi_agent_dir": "",

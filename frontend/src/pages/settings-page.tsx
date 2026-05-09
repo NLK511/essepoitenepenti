@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { getJson, postForm } from "../api";
-import { Card, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { Card, DisclosureCard, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { AppSetting, AppPreflightReport, BrokerOrderExecution, EvaluationRealismState, ProviderCredential, SettingsResponse, SettingsWorkbench } from "../types";
 import { toSettingMap } from "../utils";
 
@@ -259,8 +259,7 @@ export function SettingsPage() {
           </section>
 
           <section className="card-grid">
-            <Card>
-              <SectionTitle kicker="Summarization" title="Summary engine" subtitle="System and providers: choose the backend and local Pi CLI settings used for summaries before touching advanced controls." actions={<HelpHint tooltip="Summarization controls which backend and prompt shape context summaries." to="/docs?doc=operator-page-field-guide" />} />
+            <DisclosureCard kicker="Summarization" title="Summary engine" subtitle="System and providers: choose the backend and local Pi CLI settings used for summaries before touching advanced controls." defaultOpen actions={<HelpHint tooltip="Summarization controls which backend and prompt shape context summaries." to="/docs?doc=operator-page-field-guide" />}>
               <form className="stack-form" onSubmit={(event) => void saveSummarySettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span>Backend</span><select name="backend" defaultValue={settingMap.summary_backend ?? "news_digest"}><option value="news_digest">news_digest</option><option value="openai_api">openai_api</option><option value="pi_agent">pi_agent</option></select></label>
@@ -274,23 +273,21 @@ export function SettingsPage() {
                 <label className="form-field"><span>Summary prompt</span><textarea name="prompt" rows={6} defaultValue={settingMap.summary_prompt ?? ""} /></label>
                 <div className="cluster"><button className="button" type="submit" disabled={saving === "summary"}>{saving === "summary" ? "Saving…" : "Save summarization settings"}</button></div>
               </form>
-            </Card>
+            </DisclosureCard>
 
             {data.providers.map((provider) => (
-              <Card key={provider.provider}>
-                <SectionTitle kicker="Provider credential" title={provider.provider} subtitle="API secrets are write-only. The UI never rehydrates them." />
+              <DisclosureCard key={provider.provider} kicker="Provider credential" title={provider.provider} subtitle="API secrets are write-only. The UI never rehydrates them.">
                 <form className="stack-form" onSubmit={(event) => void saveProvider(event, provider.provider)}>
                   <label className="form-field"><span>API key</span><input name="api_key" defaultValue={provider.api_key} /></label>
                   <label className="form-field"><span>API secret</span><input name="api_secret" type="password" autoComplete="new-password" placeholder="Enter a new secret to create or rotate the credential" defaultValue="" /></label>
                   <div className="cluster"><button className="button" type="submit" disabled={saving === provider.provider}>{saving === provider.provider ? "Saving…" : `Save ${provider.provider}`}</button></div>
                 </form>
-              </Card>
+              </DisclosureCard>
             ))}
           </section>
 
           <section className="card-grid">
-            <Card>
-              <SectionTitle kicker="Execution" title="Alpaca paper order execution" subtitle="Toggle automated paper trading and control the fixed per-plan notional cap." actions={<HelpHint tooltip="When enabled, actionable plans are converted into Alpaca paper bracket orders with the plan entry, stop loss, and take profit levels." to="/docs?doc=alpaca-paper-order-execution-spec" />} />
+            <DisclosureCard kicker="Execution" title="Alpaca paper order execution" subtitle="Toggle automated paper trading and control the fixed per-plan notional cap." defaultOpen actions={<HelpHint tooltip="When enabled, actionable plans are converted into Alpaca paper bracket orders with the plan entry, stop loss, and take profit levels." to="/docs?doc=alpaca-paper-order-execution-spec" />}>
               <form className="stack-form" onSubmit={(event) => void saveOrderExecutionSettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span><input type="checkbox" name="enabled" defaultChecked={data.orderExecution.enabled} /> Order execution enabled</span></label>
@@ -301,10 +298,9 @@ export function SettingsPage() {
                 <div className="helper-text">Actionable long/short plans are submitted as Alpaca paper bracket orders when this toggle is enabled.</div>
                 <div className="cluster"><button className="button" type="submit" disabled={saving === "order-execution"}>{saving === "order-execution" ? "Saving…" : "Save order execution settings"}</button></div>
               </form>
-            </Card>
+            </DisclosureCard>
 
-            <Card>
-              <SectionTitle kicker="Risk management" title="Broker kill switch limits" subtitle="Pre-trade guardrails used before automated Alpaca paper submissions and manual resubmits." actions={<HelpHint tooltip="The risk manager blocks new broker submissions when halt, loss, exposure, or concentration limits are breached." to="/docs?doc=broker-risk-management-spec" />} />
+            <DisclosureCard kicker="Risk management" title="Broker kill switch limits" subtitle="Pre-trade guardrails used before automated Alpaca paper submissions and manual resubmits." actions={<HelpHint tooltip="The risk manager blocks new broker submissions when halt, loss, exposure, or concentration limits are breached." to="/docs?doc=broker-risk-management-spec" />}>
               <form className="stack-form" onSubmit={(event) => void saveRiskManagementSettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span><input type="checkbox" name="enabled" defaultChecked={data.riskManagement.enabled} /> Risk management enabled</span></label>
@@ -318,10 +314,9 @@ export function SettingsPage() {
                 <div className="helper-text">Manual halt state: {data.riskManagement.halt_enabled ? `halted · ${data.riskManagement.halt_reason || "no reason"}` : "clear"}. Use the Risk Manager page to halt or resume trading.</div>
                 <div className="cluster"><button className="button" type="submit" disabled={saving === "risk-management"}>{saving === "risk-management" ? "Saving…" : "Save risk settings"}</button></div>
               </form>
-            </Card>
+            </DisclosureCard>
 
-            <Card>
-              <SectionTitle kicker="Execution audit" title="Recent broker orders" subtitle="Inspect the latest broker submissions, statuses, and per-order quantities." />
+            <DisclosureCard kicker="Execution audit" title="Recent broker orders" subtitle="Inspect the latest broker submissions, statuses, and per-order quantities." >
               {data.brokerOrders.length === 0 ? (
                 <div className="helper-text top-gap-small">No broker orders recorded yet.</div>
               ) : (
@@ -350,12 +345,11 @@ export function SettingsPage() {
                   </table>
                 </div>
               )}
-            </Card>
+            </DisclosureCard>
           </section>
 
           <section className="card-grid">
-            <Card>
-              <SectionTitle kicker="News ingestion" title="News fetch limits" subtitle="Data ingestion: adjust article limits for macro, industry, and ticker summarization paths before review pages render summaries." actions={<HelpHint tooltip="Article limits cap how much raw source material feeds each summarization path." to="/docs?doc=operator-page-field-guide" />} />
+            <DisclosureCard kicker="News ingestion" title="News fetch limits" subtitle="Data ingestion: adjust article limits for macro, industry, and ticker summarization paths before review pages render summaries." defaultOpen actions={<HelpHint tooltip="Article limits cap how much raw source material feeds each summarization path." to="/docs?doc=operator-page-field-guide" />}>
               <form className="stack-form" onSubmit={(event) => void saveNewsSettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span>Macro article limit</span><input name="macro_article_limit" defaultValue={settingMap.news_macro_article_limit ?? "12"} /></label>
@@ -364,10 +358,9 @@ export function SettingsPage() {
                 </div>
                 <div className="cluster"><button className="button" type="submit" disabled={saving === "news"}>{saving === "news" ? "Saving…" : "Save news settings"}</button></div>
               </form>
-            </Card>
+            </DisclosureCard>
 
-            <Card>
-              <SectionTitle kicker="Social ingestion" title="Social and Nitter settings" subtitle="Control whether social input participates in the signal layer and how aggressively it is queried." actions={<HelpHint tooltip="Social settings govern whether Nitter-backed social input participates in the signal layer." to="/docs?doc=operator-page-field-guide" />} />
+            <DisclosureCard kicker="Social ingestion" title="Social and Nitter settings" subtitle="Control whether social input participates in the signal layer and how aggressively it is queried." actions={<HelpHint tooltip="Social settings govern whether Nitter-backed social input participates in the signal layer." to="/docs?doc=operator-page-field-guide" />}>
               <form className="stack-form" onSubmit={(event) => void saveSocialSettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span><input type="checkbox" name="sentiment_enabled" defaultChecked={(settingMap.social_sentiment_enabled ?? "false") === "true"} /> Sentiment enabled</span></label>
@@ -381,12 +374,11 @@ export function SettingsPage() {
                 </div>
                 <div className="cluster"><button className="button" type="submit" disabled={saving === "social"}>{saving === "social" ? "Saving…" : "Save social settings"}</button></div>
               </form>
-            </Card>
+            </DisclosureCard>
           </section>
 
           <section className="card-grid">
-            <Card>
-              <SectionTitle kicker="Evaluation realism" title="Slippage and friction" subtitle="Control the buffer and fees subtracted during trade evaluation to simulate real-world conditions." actions={<HelpHint tooltip="Realism buffers subtract slippage and fees to produce conservative, trustable backtest results." to="/docs?doc=operator-page-field-guide" />} />
+            <DisclosureCard kicker="Evaluation realism" title="Slippage and friction" subtitle="Control the buffer and fees subtracted during trade evaluation to simulate real-world conditions." defaultOpen actions={<HelpHint tooltip="Realism buffers subtract slippage and fees to produce conservative, trustable backtest results." to="/docs?doc=operator-page-field-guide" />}>
               <form className="stack-form" onSubmit={(event) => void saveEvaluationRealismSettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span>Stop loss buffer %</span><input name="stop_buffer_pct" type="number" step="0.001" defaultValue={String(data.evaluationRealism.stop_buffer_pct)} /></label>
@@ -395,10 +387,9 @@ export function SettingsPage() {
                 </div>
                 <div className="cluster"><button className="button" type="submit" disabled={saving === "evaluation-realism"}>{saving === "evaluation-realism" ? "Saving…" : "Save realism settings"}</button></div>
               </form>
-            </Card>
+            </DisclosureCard>
 
-            <Card>
-              <SectionTitle kicker="Advanced research controls" title="Plan generation tuning" subtitle="These controls are for research and tuning workflows, not daily operator review." actions={<HelpHint tooltip="These settings store automation readiness and minimum evidence thresholds for plan-generation tuning." to="/docs?doc=plan-generation-tuning-spec" />} />
+            <DisclosureCard kicker="Advanced research controls" title="Plan generation tuning" subtitle="These controls are for research and tuning workflows, not daily operator review." actions={<HelpHint tooltip="These settings store automation readiness and minimum evidence thresholds for plan-generation tuning." to="/docs?doc=plan-generation-tuning-spec" />}>
               <form className="stack-form" onSubmit={(event) => void savePlanGenerationTuningSettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span><input type="checkbox" name="auto_enabled" defaultChecked={data.planGenerationTuning.settings.auto_enabled} /> Advanced tuning automation enabled</span></label>
@@ -413,7 +404,7 @@ export function SettingsPage() {
                 <summary className="helper-text">Show current live tuning profile</summary>
                 <pre className="code-block top-gap-small">{JSON.stringify(data.planGenerationTuning.active_config, null, 2)}</pre>
               </details>
-            </Card>
+            </DisclosureCard>
           </section>
         </div>
       ) : null}

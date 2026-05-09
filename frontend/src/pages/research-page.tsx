@@ -3,16 +3,10 @@ import { Link } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import type { CalibrationSummary, PerformanceAssessmentResponse, PerformanceWindowAssessment } from "../types";
-import { cohortSampleStatusTone, formatDate, jobTypeLabel, runTone } from "../utils";
-import { Badge, Card, HelpHint, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
+import { cohortSampleStatusTone, formatDate, jobTypeLabel, normalizeReviewWindow, reviewWindowLabel, reviewWindowStartIso, REVIEW_WINDOW_OPTIONS, runTone } from "../utils";
+import { Badge, Card, DisclosureCard, HelpHint, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 
-const assessmentWindows = ["7d", "30d", "90d", "180d", "1y"] as const;
-
-function windowStartIso(window: (typeof assessmentWindows)[number]): string {
-  const now = Date.now();
-  const days = window === "7d" ? 7 : window === "30d" ? 30 : window === "90d" ? 90 : window === "180d" ? 180 : 365;
-  return new Date(now - days * 24 * 60 * 60 * 1000).toISOString();
-}
+const assessmentWindows = REVIEW_WINDOW_OPTIONS;
 
 function renderAssessment(content: string) {
   const lines = content.split(/\r?\n/);
@@ -83,7 +77,7 @@ export function ResearchPage() {
   const [assessment, setAssessment] = useState<PerformanceAssessmentResponse | null>(null);
 
   const [activeTab, setActiveTab] = useState<"overview" | "calibration" | "validation" | "tuning">("overview");
-  const [selectedWindow, setSelectedWindow] = useState<(typeof assessmentWindows)[number]>("30d");
+  const [selectedWindow, setSelectedWindow] = useState<(typeof REVIEW_WINDOW_OPTIONS)[number]["value"]>("1d");
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +88,8 @@ export function ResearchPage() {
       setLoading(true);
       setError(null);
       try {
-        const assessmentPayload = await getJson<PerformanceAssessmentResponse>(`/api/research/performance-workbench?calibration_evaluated_after=${encodeURIComponent(windowStartIso(selectedWindow))}`);
+        const windowStart = reviewWindowStartIso(selectedWindow);
+        const assessmentPayload = await getJson<PerformanceAssessmentResponse>(windowStart ? `/api/research/performance-workbench?calibration_evaluated_after=${encodeURIComponent(windowStart)}` : "/api/research/performance-workbench");
         if (!cancelled) {
           setAssessment(assessmentPayload);
         }
@@ -127,7 +122,7 @@ export function ResearchPage() {
   const topReliabilityBuckets = reliabilityReport?.by_confidence_bucket?.slice(0, 4) ?? [];
   const nearMissWinners = assessment?.near_miss_winners ?? [];
   const windowedAssessments = Array.isArray(assessment?.windowed_assessments) ? (assessment.windowed_assessments as PerformanceWindowAssessment[]) : [];
-  const selectedAssessmentWindow = windowedAssessments.find((window) => window.window === selectedWindow) ?? windowedAssessments[0] ?? null;
+  const selectedAssessmentWindow = windowedAssessments.find((window) => normalizeReviewWindow(window.window, "1d") === selectedWindow) ?? windowedAssessments[0] ?? null;
   const nearMissFamilies = Object.entries(
     (assessment?.near_miss_winners ?? []).reduce<Record<string, { count: number; workedCount: number; missDistances: number[] }>>((acc, item) => {
       const key = (item.setup_family || "uncategorized").trim() || "uncategorized";
@@ -190,7 +185,8 @@ export function ResearchPage() {
     setError(null);
     try {
       await postForm("/api/research/performance-assessment/run", {});
-      const assessmentPayload = await getJson<PerformanceAssessmentResponse>(`/api/research/performance-workbench?calibration_evaluated_after=${encodeURIComponent(windowStartIso(selectedWindow))}`);
+      const windowStart = reviewWindowStartIso(selectedWindow);
+      const assessmentPayload = await getJson<PerformanceAssessmentResponse>(windowStart ? `/api/research/performance-workbench?calibration_evaluated_after=${encodeURIComponent(windowStart)}` : "/api/research/performance-workbench");
       setAssessment(assessmentPayload);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -308,8 +304,8 @@ export function ResearchPage() {
                   <div className="top-gap-small">
                     <SegmentedTabs
                       value={selectedWindow}
-                      options={assessmentWindows.filter((window) => windowedAssessments.some((item) => item.window === window)).map((window) => ({ value: window, label: window.toUpperCase() }))}
-                      onChange={(value) => setSelectedWindow(value as (typeof assessmentWindows)[number])}
+                      options={assessmentWindows.filter((window) => windowedAssessments.some((item) => normalizeReviewWindow(item.window, "1d") === window.value))}
+                      onChange={(value) => setSelectedWindow(normalizeReviewWindow(value, "1d"))}
                     />
                   </div>
                   {selectedAssessmentWindow ? (
@@ -335,9 +331,13 @@ export function ResearchPage() {
                   ) : null}
                 </Card>
               ) : null}
-              <div className="top-gap-medium">
+              <DisclosureCard
+                kicker="Assessment narrative"
+                title="Latest performance assessment"
+                subtitle="Collapsed by default so the hub stays easier to scan on mobile."
+              >
                 {latestContent ? renderAssessment(latestContent) : <div className="helper-text">No assessment has been generated yet.</div>}
-              </div>
+              </DisclosureCard>
             </>
           ) : null}
         </Card>
@@ -488,15 +488,15 @@ export function ResearchPage() {
               <div className="top-gap-small">
                 <SegmentedTabs
                   value={selectedWindow}
-                  options={assessmentWindows.map((window) => ({ value: window, label: window.toUpperCase() }))}
-                  onChange={(value) => setSelectedWindow(value as (typeof assessmentWindows)[number])}
+                  options={assessmentWindows}
+                  onChange={(value) => setSelectedWindow(normalizeReviewWindow(value, "1d"))}
                 />
               </div>
             </Card>
 
             {calibrationSummary ? (
               <section className="card-grid top-gap">
-                <StatCard label="Calibration method" value={calibrationReport?.method ?? "—"} helper={`${selectedWindow.toUpperCase()} cohort`} tooltip="The current calibration report method used for this reviewed cohort or filtered comparison group." tooltipTo="/docs?doc=glossary&section=calibration" />
+                <StatCard label="Calibration method" value={calibrationReport?.method ?? "—"} helper={`${reviewWindowLabel(selectedWindow)} cohort`} tooltip="The current calibration report method used for this reviewed cohort or filtered comparison group." tooltipTo="/docs?doc=glossary&section=calibration" />
                 <StatCard label="Brier score" value={calibrationReport?.brier_score !== null && calibrationReport?.brier_score !== undefined ? calibrationReport.brier_score.toFixed(4) : "—"} helper="Lower is better" tooltip="A proper scoring measure of confidence quality. Lower generally means predicted confidence matched realized outcomes more closely." tooltipTo="/docs?doc=glossary&section=calibration" />
                 <StatCard label="ECE" value={calibrationReport?.expected_calibration_error !== null && calibrationReport?.expected_calibration_error !== undefined ? calibrationReport.expected_calibration_error.toFixed(4) : "—"} helper="Average confidence gap" tooltip="Expected calibration error: the average gap between displayed confidence and realized win rate across confidence buckets." tooltipTo="/docs?doc=glossary&section=confidence-bucket" />
                 <StatCard label="Resolved outcomes" value={calibrationReport?.resolved_count ?? calibrationSummary.resolved_outcomes} helper="Win/loss cases used for reliability" tooltip="The number of resolved win/loss outcomes contributing to the current calibration view. Thin samples should be read cautiously." tooltipTo="/docs?doc=glossary&section=outcome-evaluation" />

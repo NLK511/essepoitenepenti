@@ -117,6 +117,7 @@ Status: foundation implemented; first live consumer migrated; first additive pol
 Implemented:
 - `TradeDecisionPolicy`
 - `PlanPolicyEvaluator` and active-policy evaluation in recommendation quality summary
+- Research performance workbench uses `TradePolicyEvaluationService` for active-policy evaluation plus canonical reliability reporting
 - `SignalGatingPolicy`
 - `TradeDecisionPolicyService.active_policy()`
 - live watchlist orchestration builder passes the active policy instead of separately wiring confidence, signal-gating, and plan-generation settings

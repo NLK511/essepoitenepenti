@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from trade_proposer_app.domain.models import AccountRiskState, BrokerPosition
@@ -21,6 +21,14 @@ class TradeCandidate:
     notional_amount: float
 
 
+@dataclass(slots=True)
+class LiveBrokerSnapshot:
+    account: dict[str, object] | None = None
+    open_orders: list[dict[str, object]] = field(default_factory=list)
+    open_positions: list[dict[str, object]] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
 class BrokerRiskManager:
     def __init__(
         self,
@@ -33,10 +41,10 @@ class BrokerRiskManager:
         self.positions = positions
         self.halt_events = halt_events
 
-    def assess(self, candidate: TradeCandidate | None = None, *, now: datetime | None = None) -> AccountRiskState:
+    def assess(self, candidate: TradeCandidate | None = None, *, now: datetime | None = None, live_broker_snapshot: LiveBrokerSnapshot | None = None) -> AccountRiskState:
         config = SettingsDomainService(repository=self.settings).risk_settings().risk_management
         all_positions = self.positions.list_all(limit=1000)
-        metrics = self._metrics(all_positions, now=now or datetime.now(timezone.utc))
+        metrics = self._metrics(all_positions, now=now or datetime.now(timezone.utc), live_broker_snapshot=live_broker_snapshot)
         reasons: list[str] = []
 
         enabled = bool(config["enabled"])
@@ -55,6 +63,9 @@ class BrokerRiskManager:
                 max_position_notional = float(config["max_position_notional_usd"])
                 if max_position_notional > 0 and float(candidate.notional_amount) > max_position_notional:
                     reasons.append("position_notional_limit_exceeded")
+                broker_buying_power = metrics.get("broker_buying_power_usd")
+                if broker_buying_power is not None and float(candidate.notional_amount) > float(broker_buying_power):
+                    reasons.append("broker_buying_power_insufficient")
 
             max_open_positions = int(config["max_open_positions"])
             max_open_notional = float(config["max_open_notional_usd"])
@@ -112,7 +123,7 @@ class BrokerRiskManager:
             )
         return self.assess()
 
-    def _metrics(self, positions: list[BrokerPosition], *, now: datetime) -> dict[str, object]:
+    def _metrics(self, positions: list[BrokerPosition], *, now: datetime, live_broker_snapshot: LiveBrokerSnapshot | None = None) -> dict[str, object]:
         today = now.astimezone(timezone.utc).date()
         open_positions = [position for position in positions if position.status in OPEN_STATUSES]
         closed_today = [
@@ -144,12 +155,77 @@ class BrokerRiskManager:
                 break
             consecutive_losses += 1
 
-        return {
-            "open_position_count": len(open_positions),
-            "open_notional_usd": round(open_notional, 4),
+        broker_metrics = self._live_broker_metrics(live_broker_snapshot)
+        broker_open_position_count = int(broker_metrics.get("broker_open_position_count", 0))
+        broker_open_order_count = int(broker_metrics.get("broker_open_order_count", 0))
+        broker_open_notional = float(broker_metrics.get("broker_open_notional_usd", 0.0))
+        broker_ticker_counts = broker_metrics.get("broker_open_ticker_counts", {})
+        if isinstance(broker_ticker_counts, dict):
+            for ticker, count in broker_ticker_counts.items():
+                open_ticker_counts[str(ticker).upper()] = open_ticker_counts.get(str(ticker).upper(), 0) + int(count)
+
+        metrics: dict[str, object] = {
+            "open_position_count": len(open_positions) + broker_open_position_count + broker_open_order_count,
+            "app_open_position_count": len(open_positions),
+            "broker_open_position_count": broker_open_position_count,
+            "broker_open_order_count": broker_open_order_count,
+            "open_notional_usd": round(open_notional + broker_open_notional, 4),
+            "app_open_notional_usd": round(open_notional, 4),
+            "broker_open_notional_usd": round(broker_open_notional, 4),
             "open_ticker_counts": open_ticker_counts,
             "today_realized_pnl_usd": round(realized_pnl, 4),
             "today_win_count": wins,
             "today_loss_count": losses,
             "today_consecutive_losses": consecutive_losses,
         }
+        metrics.update(broker_metrics)
+        return metrics
+
+    @classmethod
+    def _live_broker_metrics(cls, snapshot: LiveBrokerSnapshot | None) -> dict[str, object]:
+        if snapshot is None:
+            return {
+                "broker_snapshot_available": False,
+                "broker_snapshot_warnings": [],
+            }
+        open_ticker_counts: dict[str, int] = {}
+        open_notional = 0.0
+        for position in snapshot.open_positions:
+            ticker = str(position.get("symbol") or position.get("ticker") or "").strip().upper()
+            if ticker:
+                open_ticker_counts[ticker] = open_ticker_counts.get(ticker, 0) + 1
+            open_notional += cls._broker_notional(position, quantity_keys=("qty", "quantity"), price_keys=("market_value", "avg_entry_price", "current_price"))
+        for order in snapshot.open_orders:
+            ticker = str(order.get("symbol") or order.get("ticker") or "").strip().upper()
+            if ticker:
+                open_ticker_counts[ticker] = open_ticker_counts.get(ticker, 0) + 1
+            open_notional += cls._broker_notional(order, quantity_keys=("qty", "quantity"), price_keys=("notional", "limit_price", "stop_price"))
+        buying_power = cls._optional_float((snapshot.account or {}).get("buying_power"))
+        return {
+            "broker_snapshot_available": True,
+            "broker_snapshot_warnings": list(snapshot.warnings),
+            "broker_buying_power_usd": buying_power,
+            "broker_open_position_count": len(snapshot.open_positions),
+            "broker_open_order_count": len(snapshot.open_orders),
+            "broker_open_ticker_counts": open_ticker_counts,
+            "broker_open_notional_usd": round(open_notional, 4),
+        }
+
+    @classmethod
+    def _broker_notional(cls, payload: dict[str, object], *, quantity_keys: tuple[str, ...], price_keys: tuple[str, ...]) -> float:
+        for key in price_keys:
+            value = cls._optional_float(payload.get(key))
+            if value is None:
+                continue
+            if key in {"market_value", "notional"}:
+                return abs(value)
+            quantity = next((cls._optional_float(payload.get(quantity_key)) for quantity_key in quantity_keys if cls._optional_float(payload.get(quantity_key)) is not None), None)
+            return abs(value * quantity) if quantity is not None else 0.0
+        return 0.0
+
+    @staticmethod
+    def _optional_float(value: object) -> float | None:
+        try:
+            return float(value) if value is not None and str(value).strip() != "" else None
+        except (TypeError, ValueError):
+            return None

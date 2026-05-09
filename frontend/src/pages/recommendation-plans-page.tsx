@@ -1,5 +1,5 @@
 import { Fragment, FormEvent, useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { relationshipSummary } from "../components/ticker-relationship-readthrough";
@@ -19,7 +19,7 @@ import type {
   RecommendationSetupFamilyReviewSummary,
   Run,
 } from "../types";
-import { biasTone, calibrationReviewStatusLabel, contextProvenanceLabel, contextSummaryError, detailLabel, directionTone, extractDisplayLabels, formatDate, yahooFinanceUrl } from "../utils";
+import { biasTone, calibrationReviewStatusLabel, contextProvenanceLabel, contextSummaryError, detailLabel, directionTone, extractDisplayLabels, formatDate, normalizeReviewWindow, reviewWindowStartIso, REVIEW_WINDOW_OPTIONS, reviewWindowLabel, yahooFinanceUrl } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams, computedAfter?: string | null): string {
   const query = new URLSearchParams(searchParams);
@@ -85,15 +85,6 @@ function docsLink(doc: string, section?: string): string {
 
 const recommendationPlansDoc = (section?: string) => docsLink("operator-page-field-guide", section);
 const glossaryDoc = (section?: string) => docsLink("glossary", section);
-const analyticsWindows = ["all", "7d", "30d", "90d", "180d", "1y"] as const;
-
-function analyticsWindowStartIso(window: (typeof analyticsWindows)[number]): string | null {
-  if (window === "all") {
-    return null;
-  }
-  const days = window === "7d" ? 7 : window === "30d" ? 30 : window === "90d" ? 90 : window === "180d" ? 180 : 365;
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-}
 
 function HelpLabel({ label, tooltip, to }: { label: string; tooltip: string; to: string }) {
   return (
@@ -105,11 +96,12 @@ function HelpLabel({ label, tooltip, to }: { label: string; tooltip: string; to:
 }
 
 export function RecommendationPlansPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams({ limit: "100", page: "1" });
   const focusedPlanId = searchParams.get("plan_id");
   const [plansResponse, setPlansResponse] = useState<RecommendationPlanListResponse | null>(null);
   const [planStats, setPlanStats] = useState<RecommendationPlanStats | null>(null);
-  const [analyticsWindow, setAnalyticsWindow] = useState<(typeof analyticsWindows)[number]>("30d");
+  const [analyticsWindow, setAnalyticsWindow] = useState<(typeof REVIEW_WINDOW_OPTIONS)[number]["value"]>("1d");
   const [macroContextByRun, setMacroContextByRun] = useState<Record<number, MacroContextSnapshot | null>>({});
   const [industryContextByRun, setIndustryContextByRun] = useState<Record<number, IndustryContextSnapshot | null>>({});
   const [calibration, setCalibration] = useState<RecommendationCalibrationSummary | null>(null);
@@ -144,7 +136,7 @@ export function RecommendationPlansPage() {
         const planId = searchParams.get("plan_id");
         const resolved = searchParams.get("resolved");
         const outcome = searchParams.get("outcome");
-        const computedAfter = analyticsWindowStartIso(analyticsWindow);
+        const computedAfter = reviewWindowStartIso(analyticsWindow);
         if (runId) {
           summaryParams.set("run_id", runId);
         }
@@ -244,7 +236,7 @@ export function RecommendationPlansPage() {
           ? `Queued recommendation-plan evaluation run #${run.id} for plan #${planId}.`
           : `Queued recommendation-plan evaluation run #${run.id}.`,
       );
-      setPlansResponse(await getJson<RecommendationPlanListResponse>(buildQuery(searchParams, analyticsWindowStartIso(analyticsWindow))));
+      setPlansResponse(await getJson<RecommendationPlanListResponse>(buildQuery(searchParams, reviewWindowStartIso(analyticsWindow))));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to queue recommendation-plan evaluation");
     } finally {
@@ -312,15 +304,15 @@ export function RecommendationPlansPage() {
         <div className="top-gap-small">
           <SegmentedTabs
             value={analyticsWindow}
-            onChange={(value) => setAnalyticsWindow(value as (typeof analyticsWindows)[number])}
-            options={analyticsWindows.map((window) => ({ value: window, label: window === "all" ? "All" : window.toUpperCase() }))}
+            onChange={(value) => setAnalyticsWindow(normalizeReviewWindow(value, "1d"))}
+            options={REVIEW_WINDOW_OPTIONS}
           />
         </div>
         <section className="metrics-grid top-gap-small">
-          <StatCard label="Total plans" value={planStats?.total_plans ?? "—"} helper={`Broad posture check · ${analyticsWindow === "all" ? "all time" : analyticsWindow.toUpperCase()}`} tooltip="The total number of stored recommendation plans in the selected broad review window, regardless of the current table filters." tooltipTo={recommendationPlansDoc("recommendation-plans")} />
+          <StatCard label="Total plans" value={planStats?.total_plans ?? "—"} helper={`Broad posture check · ${reviewWindowLabel(analyticsWindow)}`} tooltip="The total number of stored recommendation plans in the selected broad review window, regardless of the current table filters." tooltipTo={recommendationPlansDoc("recommendation-plans")} />
           <StatCard label="Open plans" value={planStats?.open_plans ?? "—"} helper="Unresolved plans across all recommendations" tooltip="Plans whose latest outcome is not yet resolved in the selected stats window. Closed outcomes, including expired, are excluded from this count." tooltipTo={recommendationPlansDoc("outcome-fields")} />
           <StatCard label="Expired plans" value={planStats?.expired_plans ?? "—"} helper="Terminal expired outcomes across all recommendations" tooltip="Plans whose evaluation horizon elapsed without a terminal win or loss. Expired is operator-visible, but it is excluded from default win/loss scoring." tooltipTo={glossaryDoc("expired-plan")} />
-          <StatCard label="Win rate" value={planStats?.win_rate_percent !== null && planStats?.win_rate_percent !== undefined ? `${planStats.win_rate_percent}%` : "—"} helper={`Broad posture check · ${analyticsWindow === "all" ? "all time" : analyticsWindow.toUpperCase()}`} tooltip="Overall win/loss rate in the selected broad review window. Treat this as a quick pulse, not as the full trust verdict." tooltipTo={recommendationPlansDoc("recommendation-plans")} />
+          <StatCard label="Win rate" value={planStats?.win_rate_percent !== null && planStats?.win_rate_percent !== undefined ? `${planStats.win_rate_percent}%` : "—"} helper={`Broad posture check · ${reviewWindowLabel(analyticsWindow)}`} tooltip="Overall win/loss rate in the selected broad review window. Treat this as a quick pulse, not as the full trust verdict." tooltipTo={recommendationPlansDoc("recommendation-plans")} />
           <StatCard label="Where results look strongest" value={evidenceConcentration ? (evidenceConcentration.ready_for_expansion ? "some groups stand out" : "nothing clear yet") : "—"} helper="A plain-language read on the current filtered cohort" tooltip="This asks whether a few groups inside the current filtered cohort clearly look better than the rest. If they do, review can focus there first. If they do not, stay selective and cautious." tooltipTo={glossaryDoc("evidence-concentration")} />
         </section>
       </Card>
@@ -373,7 +365,7 @@ export function RecommendationPlansPage() {
         <SectionTitle
           kicker="Filtered cohort pulse"
           title="Use this only as a lightweight queue-side pulse"
-          subtitle={`This page now keeps only a compact pulse for the ${analyticsWindow === "all" ? "all-time" : analyticsWindow.toUpperCase()} filtered cohort. Use Recommendation Quality and Research for the fuller trust view: confidence quality, simple baselines, where results look strongest, family review, and validation.`}
+          subtitle={`This page now keeps only a compact pulse for the ${reviewWindowLabel(analyticsWindow)} filtered cohort. Use Recommendation Quality and Research for the fuller trust view: confidence quality, simple baselines, where results look strongest, family review, and validation.`}
           actions={<HelpHint tooltip="Recommendation Plans is now a lighter operator review surface. Use Recommendation Quality and Research for the canonical trust and validation views." to={recommendationPlansDoc("review-workspace-tabs")} />}
         />
         <div className="insight-grid top-gap-small">
@@ -382,7 +374,7 @@ export function RecommendationPlansPage() {
               <div>
                 <h3 className="data-card-title"><HelpLabel label="Filtered cohort pulse" tooltip="A lightweight summary of the currently filtered review cohort so you can keep context while reviewing the queue. It is not the full research surface." to={recommendationPlansDoc("recommendation-plans")} /></h3>
               </div>
-              <Badge tone={evidenceConcentration?.ready_for_expansion ? "ok" : "warning"}>{analyticsWindow === "all" ? "all time" : analyticsWindow.toUpperCase()}</Badge>
+              <Badge tone={evidenceConcentration?.ready_for_expansion ? "ok" : "warning"}>{reviewWindowLabel(analyticsWindow)}</Badge>
             </div>
             <div className="data-points">
               <div className="data-point"><span className="data-point-label">resolved outcomes</span><span className="data-point-value">{calibration?.resolved_outcomes ?? "—"}</span></div>
@@ -520,11 +512,32 @@ export function RecommendationPlansPage() {
                   const entryRange = formatPriceRange(plan.entry_price_low, plan.entry_price_high);
                   const stopLabel = plan.stop_loss !== null && plan.stop_loss !== undefined ? String(plan.stop_loss) : "—";
                   const takeLabel = plan.take_profit !== null && plan.take_profit !== undefined ? String(plan.take_profit) : "—";
+                  const openTickerPage = () => {
+                    if (plan.ticker_page_url) {
+                      navigate(plan.ticker_page_url);
+                    }
+                  };
                   return (
                     <Fragment key={planKey}>
                       <tr
                         id={plan.id !== null && plan.id !== undefined ? `recommendation-plan-row-${plan.id}` : undefined}
-                        className={`recommendation-plan-row${isExpanded ? " is-expanded" : ""}${focusedPlanId && plan.id !== null && String(plan.id) === focusedPlanId ? " is-highlighted" : ""}`}
+                        className={`recommendation-plan-row${isExpanded ? " is-expanded" : ""}${focusedPlanId && plan.id !== null && String(plan.id) === focusedPlanId ? " is-highlighted" : ""} recommendation-plan-row-clickable`}
+                        onClick={(event) => {
+                          const target = event.target as HTMLElement | null;
+                          if (target?.closest("button,a,input,textarea,select,label")) {
+                            return;
+                          }
+                          openTickerPage();
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            openTickerPage();
+                          }
+                        }}
+                        role="link"
+                        tabIndex={0}
+                        aria-label={`Open ticker page for ${plan.ticker}`}
                       >
                         <td>{formatDate(plan.computed_at)}</td>
                         <td>

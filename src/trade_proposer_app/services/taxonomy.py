@@ -48,6 +48,8 @@ SECTOR_ALIASES = {
 
 
 class TickerTaxonomyService:
+    _shared_payload_cache: dict[Path, dict[str, Any]] = {}
+
     def __init__(
         self,
         taxonomy_path: Path | None = None,
@@ -57,7 +59,7 @@ class TickerTaxonomyService:
         self.taxonomy_path = taxonomy_path or TICKERS_PATH
         self._metadata_provider = metadata_provider
         self._external_profile_cache: dict[str, dict[str, Any]] = {}
-        payload = self._load_payload()
+        payload = self._load_shared_payload(self.taxonomy_path) if metadata_provider is None else self._load_payload()
         self._taxonomy: dict[str, dict[str, Any]] = payload["tickers"]
         self._industries: dict[str, dict[str, Any]] = payload["industries"]
         self._sectors: dict[str, dict[str, Any]] = payload["sectors"]
@@ -106,6 +108,19 @@ class TickerTaxonomyService:
         self._event_window_hint_alias_map: dict[str, str] = self._build_alias_map(self._event_window_hints)
         self._event_recency_bucket_alias_map: dict[str, str] = self._build_alias_map(self._event_recency_buckets)
         self._source_mode: str = payload["source_mode"]
+
+    @classmethod
+    def _load_shared_payload(cls, taxonomy_path: Path) -> dict[str, Any]:
+        cached = cls._shared_payload_cache.get(taxonomy_path)
+        if cached is not None:
+            return cached
+        loader = cls.__new__(cls)
+        loader.taxonomy_path = taxonomy_path
+        loader._metadata_provider = None
+        loader._external_profile_cache = {}
+        payload = loader._load_payload()
+        cls._shared_payload_cache[taxonomy_path] = payload
+        return payload
 
     def _load_payload(self) -> dict[str, Any]:
         split_payload = self._load_split_payload()

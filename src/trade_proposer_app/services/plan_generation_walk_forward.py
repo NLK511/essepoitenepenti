@@ -80,6 +80,12 @@ class PlanGenerationWalkForwardService:
         records.sort(key=lambda item: item.plan.computed_at)
         end_time = self._normalize_datetime(records[-1].plan.computed_at) or datetime.now(timezone.utc)
         start_time = max(self._normalize_datetime(records[0].plan.computed_at) or end_time, end_time - timedelta(days=lookback_days))
+        validation_days, step_days = self._adapt_window_sizes(
+            start_time=start_time,
+            end_time=end_time,
+            validation_days=validation_days,
+            step_days=step_days,
+        )
 
         slices: list[PlanGenerationWalkForwardSlice] = []
         candidate_wins = 0
@@ -185,6 +191,13 @@ class PlanGenerationWalkForwardService:
 
     def _eligible_records(self, *, ticker: str | None, setup_family: str | None, limit: int | None):
         return self.tuning_service._eligible_records(ticker=ticker, setup_family=setup_family, limit=limit)
+
+    @staticmethod
+    def _adapt_window_sizes(*, start_time: datetime, end_time: datetime, validation_days: int, step_days: int) -> tuple[int, int]:
+        available_days = max(1, int((end_time - start_time).total_seconds() // 86400))
+        effective_validation_days = max(1, min(int(validation_days), max(1, available_days // 3)))
+        effective_step_days = max(1, min(int(step_days), max(1, effective_validation_days // 3)))
+        return effective_validation_days, effective_step_days
 
     @staticmethod
     def _normalize_datetime(value: datetime | None) -> datetime | None:

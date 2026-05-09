@@ -57,6 +57,7 @@ class WatchlistOrchestrationService:
         self.deep_analysis_service = deep_analysis_service
         self.trade_decision_policy = trade_decision_policy
         self.confidence_threshold = trade_decision_policy.confidence_threshold if trade_decision_policy is not None else confidence_threshold
+        self.action_confidence_threshold = trade_decision_policy.action_confidence_threshold() if trade_decision_policy is not None else confidence_threshold
         self.signal_gating_tuning_config = trade_decision_policy.signal_gating.to_dict() if trade_decision_policy is not None else self._normalize_signal_gating_tuning_config(signal_gating_tuning_config)
         self.plan_generation_tuning_config = dict(trade_decision_policy.plan_generation_config) if trade_decision_policy is not None else normalize_plan_generation_tuning_config(plan_generation_tuning_config)
         self.calibration_service = calibration_service
@@ -321,8 +322,8 @@ class WatchlistOrchestrationService:
         limit = self._shortlist_limit(watchlist.default_horizon, ticker_count)
         minimum_confidence = self._minimum_shortlist_confidence(watchlist.default_horizon, ticker_count)
         minimum_attention = self._minimum_shortlist_attention(watchlist.default_horizon, ticker_count)
-        catalyst_lane_limit = 1 if limit >= 2 else 0
-        core_limit = max(0, limit - catalyst_lane_limit)
+        catalyst_lane_limit = ticker_count
+        core_limit = ticker_count
         ranked = sorted(
             candidates,
             key=lambda item: (
@@ -425,7 +426,7 @@ class WatchlistOrchestrationService:
                 "allow_shorts": watchlist.allow_shorts,
                 "limit": limit,
                 "core_limit": core_limit,
-                "catalyst_lane_limit": 1 if limit >= 2 else 0,
+                "catalyst_lane_limit": ticker_count,
                 "minimum_confidence_percent": minimum_confidence,
                 "minimum_attention_score": minimum_attention,
                 "minimum_catalyst_proxy_score": catalyst_threshold,
@@ -676,6 +677,7 @@ class WatchlistOrchestrationService:
         intended_action = direction if direction in {"long", "short"} else None
         action_reason = "actionable_setup"
         effective_threshold = float(calibration_review.get("effective_confidence_threshold", self.confidence_threshold))
+        effective_threshold = min(effective_threshold, float(self.action_confidence_threshold))
         calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", raw_plan_confidence) or raw_plan_confidence)
         
         entry_price_low, entry_price_high, stop_loss, take_profit, risk_reward_ratio = None, None, None, None, None
@@ -688,39 +690,47 @@ class WatchlistOrchestrationService:
             )
             risk_reward_ratio = self._risk_reward_ratio(recommendation)
 
-        if direction == "short" and not watchlist.allow_shorts:
-            warnings.append("watchlist does not allow shorts")
+        context_quality_status = self._trade_context_quality_status(transmission_summary)
+        if context_quality_status == "blocked":
+            warnings.append("context quality is blocked; the setup is not tradeable")
             action = "no_action"
-            action_reason = "shorts_disabled"
-        elif intended_action and self.trade_decision_policy is not None and not self.trade_decision_policy.action_allowed(intended_action):
-            warnings.append("active trade decision policy blocks this action")
-            action = "no_action"
-            action_reason = "trade_policy_action_blocked"
-        elif self.trade_decision_policy is not None and not self.trade_decision_policy.setup_family_allowed(setup_family):
-            warnings.append("active trade decision policy blocks this setup family")
-            action = "no_action"
-            action_reason = "trade_policy_setup_family_blocked"
-        elif calibrated_confidence < effective_threshold:
-            action = "no_action"
-            action_reason = "below_calibrated_action_threshold" if effective_threshold > self.confidence_threshold or calibrated_confidence != raw_plan_confidence else "below_action_confidence_threshold"
-        elif direction not in {"long", "short"}:
-            action = "no_action"
-            action_reason = "direction_not_actionable"
-        elif self._should_block_for_transmission_contradiction(transmission_summary, calibrated_confidence, effective_threshold):
-            action = "no_action"
-            action_reason = "context_transmission_contradiction"
-        elif transmission_summary.get("context_bias") == "headwind" and calibrated_confidence < min(95.0, effective_threshold + 5.0):
-            action = "no_action"
-            action_reason = "context_transmission_headwind"
+            action_reason = "context_quality_blocked"
         else:
-            action = direction
+            if context_quality_status == "degraded":
+                warnings.append("context quality is degraded; trade with caution")
+            if direction == "short" and not watchlist.allow_shorts:
+                warnings.append("watchlist does not allow shorts")
+                action = "no_action"
+                action_reason = "shorts_disabled"
+            elif intended_action and self.trade_decision_policy is not None and not self.trade_decision_policy.action_allowed(intended_action):
+                warnings.append("active trade decision policy blocks this action")
+                action = "no_action"
+                action_reason = "trade_policy_action_blocked"
+            elif self.trade_decision_policy is not None and not self.trade_decision_policy.setup_family_allowed(setup_family):
+                warnings.append("active trade decision policy blocks this setup family")
+                action = "no_action"
+                action_reason = "trade_policy_setup_family_blocked"
+            elif calibrated_confidence < effective_threshold:
+                action = "no_action"
+                action_reason = "below_calibrated_action_threshold" if effective_threshold > self.confidence_threshold or calibrated_confidence != raw_plan_confidence else "below_action_confidence_threshold"
+            elif direction not in {"long", "short"}:
+                action = "no_action"
+                action_reason = "direction_not_actionable"
+            elif self._should_block_for_transmission_contradiction(transmission_summary, calibrated_confidence, effective_threshold):
+                action = "no_action"
+                action_reason = "context_transmission_contradiction"
+            elif transmission_summary.get("context_bias") == "headwind" and calibrated_confidence < min(95.0, effective_threshold + 5.0):
+                action = "no_action"
+                action_reason = "context_transmission_headwind"
+            else:
+                action = direction
 
         if action == "no_action":
             return RecommendationPlan(
                 ticker=candidate.ticker,
                 horizon=watchlist.default_horizon,
                 action=action,
-                status="ok" if not warnings else "partial",
+                status="degraded" if action_reason == "context_quality_blocked" else ("ok" if not warnings else "partial"),
                 confidence_percent=calibrated_confidence,
                 entry_price_low=entry_price_low,
                 entry_price_high=entry_price_high,
@@ -1262,6 +1272,23 @@ class WatchlistOrchestrationService:
             return False
         return calibrated_confidence < min(95.0, effective_threshold + 4.0)
 
+    @staticmethod
+    def _trade_context_quality_status(transmission_summary: dict[str, object]) -> str:
+        overall_status = str(transmission_summary.get("context_quality_status", "")).strip().lower()
+        macro_status = str(transmission_summary.get("macro_context_quality_status", "")).strip().lower()
+        industry_status = str(transmission_summary.get("industry_context_quality_status", "")).strip().lower()
+        component_statuses = [status for status in (macro_status, industry_status) if status]
+
+        if macro_status == "blocked" and industry_status == "blocked":
+            return "blocked"
+        if overall_status == "blocked" and component_statuses:
+            return "degraded"
+        if overall_status == "degraded" or "degraded" in component_statuses:
+            return "degraded"
+        if overall_status == "usable" or "usable" in component_statuses:
+            return "usable"
+        return overall_status or "unknown"
+
     def _plan_setup_family(
         self,
         signal: TickerSignalSnapshot,
@@ -1322,6 +1349,16 @@ class WatchlistOrchestrationService:
                 "context_strength_percent": round(float(explicit.get("context_strength_percent", 0.0)), 2) if self._is_number(explicit.get("context_strength_percent")) else 0.0,
                 "context_event_relevance_percent": round(float(explicit.get("context_event_relevance_percent", 0.0)), 2) if self._is_number(explicit.get("context_event_relevance_percent")) else 0.0,
                 "contradiction_count": int(float(explicit.get("contradiction_count", 0.0))) if self._is_number(explicit.get("contradiction_count")) else 0,
+                "context_quality_status": str(explicit.get("context_quality_status") or "unknown"),
+                "trade_context_quality_status": self._trade_context_quality_status({
+                    "context_quality_status": explicit.get("context_quality_status"),
+                    "macro_context_quality_status": explicit.get("macro_context_quality_status"),
+                    "industry_context_quality_status": explicit.get("industry_context_quality_status"),
+                }),
+                "macro_context_quality_status": explicit.get("macro_context_quality_status"),
+                "industry_context_quality_status": explicit.get("industry_context_quality_status"),
+                "macro_context_quality_score": explicit.get("macro_context_quality_score"),
+                "industry_context_quality_score": explicit.get("industry_context_quality_score"),
                 "transmission_tags": transmission_tags,
                 "transmission_tag_details": transmission_tag_details or self._detail_fallback(transmission_tags),
                 "primary_drivers": primary_drivers,
@@ -1354,6 +1391,13 @@ class WatchlistOrchestrationService:
             "transmission_bias": bias,
             "transmission_bias_detail": self._transmission_bias_detail(bias),
             "catalyst_intensity_percent": signal.catalyst_score,
+            "trade_context_quality_status": self._trade_context_quality_status({
+                "context_quality_status": signal.diagnostics.get("context_quality_status"),
+                "macro_context_quality_status": signal.diagnostics.get("macro_context_quality_status"),
+                "industry_context_quality_status": signal.diagnostics.get("industry_context_quality_status"),
+            }),
+            "macro_context_quality_status": signal.diagnostics.get("macro_context_quality_status"),
+            "industry_context_quality_status": signal.diagnostics.get("industry_context_quality_status"),
             "context_strength_percent": round((signal.macro_exposure_score * 0.45) + (signal.industry_alignment_score * 0.55), 2),
             "context_event_relevance_percent": round((signal.macro_exposure_score * 0.35) + (signal.industry_alignment_score * 0.35) + (signal.catalyst_score * 0.3), 2),
             "contradiction_count": 1 if "context_contradiction" in self._fallback_conflict_flags(signal, candidate, bias) else 0,
@@ -1717,6 +1761,8 @@ class WatchlistOrchestrationService:
         if action_reason == "context_transmission_contradiction":
             driver = self._primary_driver_label(transmission_summary)
             return f"Detected a {setup_label} structure, but active context evidence was internally contradictory{f' around {driver}' if driver else ''}, so the trade case was not clean enough to promote.{relationship_suffix}"
+        if action_reason == "context_quality_blocked":
+            return f"Detected a {setup_label} structure, but context quality was blocked and the setup was not tradeable.{relationship_suffix}"
         return f"Signal quality was insufficient for an actionable trade plan.{relationship_suffix}".strip()
 
     def _actionable_thesis(
@@ -1840,6 +1886,8 @@ class WatchlistOrchestrationService:
             return f"Broader context remained a headwind to the setup{f' via {driver}' if driver else ''}.{relationship_suffix}"
         if action_reason == "context_transmission_contradiction":
             return f"Broader context evidence remained too contradictory to trust the setup cleanly{f' around {driver}' if driver else ''}.{relationship_suffix}"
+        if action_reason == "context_quality_blocked":
+            return f"Context quality was blocked, so the {family_label} setup was not tradeable.{relationship_suffix}"
         return f"The {family_label} setup was reviewed but did not earn promotion.{relationship_suffix}"
 
     def _invalidation_summary(
@@ -1958,6 +2006,10 @@ class WatchlistOrchestrationService:
                     risks.append("price structure and broader context are not fully aligned")
                 if "macro_industry_conflict" in conflict_flags or "industry_ticker_conflict" in conflict_flags:
                     risks.append("cross-layer context conflicts can weaken follow-through")
+                if "context_quality_blocked" in conflict_flags:
+                    risks.append("context quality is blocked; this setup should not be traded")
+                if "context_quality_degraded" in conflict_flags:
+                    risks.append("context quality is degraded; follow-through may be noisier")
             decay_state = transmission_summary.get("decay_state")
             if decay_state == "fading":
                 risks.append("context support may already be fading for this horizon")
@@ -2037,6 +2089,11 @@ class WatchlistOrchestrationService:
         threshold_adjustment = 0.0
         confidence_adjustment = 0.0
         reasons: list[str] = []
+        calibration_curve = self._calibration_curve_snapshot(calibration_summary, confidence_percent)
+        if calibration_curve is not None:
+            confidence_adjustment += float(calibration_curve.get("confidence_adjustment", 0.0) or 0.0)
+            if calibration_curve.get("confidence_adjustment") not in (None, 0, 0.0):
+                reasons.append("calibration_curve_adjusted")
         reviewed_buckets = (
             ("setup_family", setup_bucket, 10.0, 5.0, -2.0, 1.6, 0.9, -0.6),
             ("confidence_bucket", confidence_bucket, 10.0, 5.0, -2.0, 1.2, 0.75, -0.5),
@@ -2093,6 +2150,7 @@ class WatchlistOrchestrationService:
             "enabled": True,
             "review_status": review_status,
             "raw_confidence_percent": round(confidence_percent, 2),
+            "calibration_curve": calibration_curve,
             "calibrated_confidence_percent": round(calibrated_confidence, 2),
             "confidence_adjustment": round(confidence_adjustment, 2),
             "base_confidence_threshold": round(base_threshold, 2),
@@ -2187,6 +2245,69 @@ class WatchlistOrchestrationService:
             "average_return_5d": round(float(getattr(bucket, "average_return_5d", 0.0) or 0.0), 3) if bucket is not None and getattr(bucket, "average_return_5d", None) is not None else None,
         }
 
+    def _calibration_curve_snapshot(self, calibration_summary: object | None, confidence_percent: float) -> dict[str, object] | None:
+        if calibration_summary is None:
+            return None
+        report_candidates = [
+            ("recent_smoothed", getattr(calibration_summary, "recent_smoothed_calibration_report", None)),
+            ("recent", getattr(calibration_summary, "recent_calibration_report", None)),
+            ("smoothed", getattr(calibration_summary, "smoothed_calibration_report", None)),
+            ("raw", getattr(calibration_summary, "calibration_report", None)),
+        ]
+        for report_scope, report in report_candidates:
+            bins = getattr(report, "bins", None)
+            if report is None or not isinstance(bins, list) or not bins:
+                continue
+            for bin_item in bins:
+                bounds = self._confidence_bin_bounds(str(getattr(bin_item, "bin_key", "") or ""))
+                if bounds is None:
+                    continue
+                lower, upper = bounds
+                if not self.__class__._confidence_in_bin(confidence_percent, lower, upper):
+                    continue
+                try:
+                    predicted_probability = float(getattr(bin_item, "predicted_probability", None))
+                except (TypeError, ValueError):
+                    predicted_probability = None
+                realized_win_rate_percent = self._safe_rate(getattr(bin_item, "realized_win_rate_percent", None))
+                resolved_count = int(getattr(bin_item, "resolved_count", 0) or 0)
+                if predicted_probability is None or resolved_count < RecommendationPlanCalibrationService.RECENT_WINDOW_MIN_RESOLVED_FOR_CURVE:
+                    continue
+                target_confidence = round(predicted_probability * 100.0, 2) if predicted_probability <= 1.0 else round(predicted_probability, 2)
+                raw_adjustment = target_confidence - confidence_percent
+                cap = 6.0 if resolved_count >= 40 else 4.0 if resolved_count >= 20 else 2.0
+                adjustment = round(max(-cap, min(cap, raw_adjustment)), 2)
+                if adjustment == 0.0:
+                    return None
+                return {
+                    "report_version": str(getattr(report, "version_label", "") or ""),
+                    "report_scope": report_scope,
+                    "bin_key": str(getattr(bin_item, "bin_key", "") or ""),
+                    "bin_label": str(getattr(bin_item, "bin_label", "") or ""),
+                    "resolved_count": resolved_count,
+                    "predicted_probability_percent": round(target_confidence, 2),
+                    "realized_win_rate_percent": realized_win_rate_percent,
+                    "raw_confidence_percent": round(confidence_percent, 2),
+                    "confidence_adjustment": adjustment,
+                }
+        return None
+
+    @staticmethod
+    def _confidence_bin_bounds(bin_key: str) -> tuple[int, int] | None:
+        parts = bin_key.split("_", 1)
+        if len(parts) != 2:
+            return None
+        try:
+            return int(parts[0]), int(parts[1])
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _confidence_in_bin(confidence: float, lower: int, upper: int) -> bool:
+        if upper >= 100:
+            return lower <= confidence <= upper
+        return lower <= confidence < upper
+
     @staticmethod
     def _calibration_review_status(usable_bucket_count: int, strong_bucket_count: int) -> str:
         if usable_bucket_count == 0:
@@ -2246,25 +2367,7 @@ class WatchlistOrchestrationService:
         return 5
 
     def _shortlist_limit(self, horizon: StrategyHorizon, ticker_count: int) -> int:
-        if ticker_count <= 0:
-            return 0
-        if horizon == StrategyHorizon.ONE_DAY:
-            if ticker_count <= 5:
-                return min(ticker_count, 3)
-            if ticker_count <= 12:
-                return min(ticker_count, 4)
-            return min(ticker_count, 5)
-        if horizon == StrategyHorizon.ONE_MONTH:
-            if ticker_count <= 8:
-                return min(ticker_count, 2)
-            if ticker_count <= 20:
-                return min(ticker_count, 3)
-            return min(ticker_count, 4)
-        if ticker_count <= 6:
-            return min(ticker_count, 2)
-        if ticker_count <= 15:
-            return min(ticker_count, 3)
-        return min(ticker_count, 4)
+        return max(0, ticker_count)
 
     def _minimum_shortlist_confidence(self, horizon: StrategyHorizon, ticker_count: int) -> float:
         base = {

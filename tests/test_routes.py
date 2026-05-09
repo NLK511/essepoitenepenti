@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import httpx
-from sqlalchemy import create_engine, update
+from sqlalchemy import create_engine, func, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -30,7 +30,7 @@ from trade_proposer_app.domain.models import (
     TickerSignalSnapshot,
     WorkerHeartbeat,
 )
-from trade_proposer_app.persistence.models import Base, RecommendationPlanRecord, RunRecord, TickerSignalSnapshotRecord
+from trade_proposer_app.persistence.models import Base, DashboardTrendSnapshotRecord, RecommendationPlanRecord, RunRecord, TickerSignalSnapshotRecord
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
@@ -529,6 +529,32 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(runs.json()), 1)
         self.assertEqual(runs.json()[0]["status"], "queued")
 
+    async def test_runs_endpoint_defaults_to_ten_and_supports_job_type_filter(self) -> None:
+        session = Session(bind=self.engine)
+        try:
+            jobs = JobRepository(session)
+            runs = RunRepository(session)
+            for index in range(12):
+                job_type = JobType.PLAN_GENERATION_TUNING if index % 3 == 0 else JobType.PROPOSAL_GENERATION
+                if job_type == JobType.PROPOSAL_GENERATION:
+                    job = jobs.create(f"Job {index}", ["AAPL"], None, job_type=job_type)
+                else:
+                    job = jobs.create(f"Job {index}", [], None, job_type=job_type)
+                runs.create(job.id or 0, "completed", job_type=job_type)
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            default_runs = await client.get("/api/runs")
+            tuning_runs = await client.get("/api/runs", params={"job_type": JobType.PLAN_GENERATION_TUNING.value})
+
+        self.assertEqual(default_runs.status_code, 200)
+        self.assertEqual(len(default_runs.json()), 10)
+        self.assertTrue(all("job_type" in item for item in default_runs.json()))
+        self.assertEqual(tuning_runs.status_code, 200)
+        self.assertTrue(all(item["job_type"] == JobType.PLAN_GENERATION_TUNING.value for item in tuning_runs.json()))
+
     async def test_create_job_with_empty_watchlist_value_is_valid(self) -> None:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
@@ -820,6 +846,45 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail_payload["broker_order_executions"], [])
         self.assertEqual(len(detail_payload["recommendation_plans"]), 1)
 
+    async def test_dashboard_can_skip_trends_until_they_are_requested(self) -> None:
+        self.seed_run_with_diagnostics()
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            dashboard = await client.get("/api/dashboard", params={"include_trends": "false"})
+            trends = await client.get("/api/dashboard/trends")
+
+        self.assertEqual(dashboard.status_code, 200)
+        dashboard_payload = dashboard.json()
+        self.assertIsNone(dashboard_payload["dashboard_trends"])
+        self.assertEqual(trends.status_code, 200)
+        trends_payload = trends.json()
+        self.assertEqual(len(trends_payload["dashboard_trends"]["windows"]), 7)
+        self.assertTrue(all("-" in window["label"] for window in trends_payload["dashboard_trends"]["windows"]))
+        self.assertTrue(any(series["key"] == "overall_win_rate_percent" for series in trends_payload["dashboard_trends"]["series"]))
+
+    async def test_dashboard_trends_are_daily_and_persisted(self) -> None:
+        self.seed_run_with_diagnostics()
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            first = await client.get("/api/dashboard/trends")
+            second = await client.get("/api/dashboard/trends")
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        first_payload = first.json()
+        second_payload = second.json()
+        self.assertEqual(len(first_payload["dashboard_trends"]["windows"]), 7)
+        self.assertEqual(first_payload["dashboard_trends"]["windows"], second_payload["dashboard_trends"]["windows"])
+        self.assertTrue(all("-" in window["label"] for window in first_payload["dashboard_trends"]["windows"]))
+
+        session = Session(bind=self.engine)
+        try:
+            snapshot_count = session.scalar(select(func.count()).select_from(DashboardTrendSnapshotRecord))
+        finally:
+            session.close()
+
+        self.assertEqual(snapshot_count, 7)
+
     async def test_dashboard_filters_by_window_and_keeps_only_proper_failures(self) -> None:
         winning_run_id = self.seed_run_with_diagnostics()
         recent_failed_run_id = self.seed_failed_run()
@@ -1005,7 +1070,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             ),
         )
         self.assertIn("dashboard_trends", one_day_payload)
-        self.assertEqual(len(one_day_payload["dashboard_trends"]["windows"]), 6)
+        self.assertEqual(len(one_day_payload["dashboard_trends"]["windows"]), 7)
         self.assertTrue(any(series["key"] == "overall_win_rate_percent" for series in one_day_payload["dashboard_trends"]["series"]))
         self.assertTrue(any(series["key"] == "total_profit" for series in one_day_payload["dashboard_trends"]["series"]))
         self.assertTrue(any(series["key"] == "actionability_gap_percent" for series in one_day_payload["dashboard_trends"]["series"]))
@@ -1244,12 +1309,14 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("effective_summary", payload)
         self.assertIn("calibration_summary", payload)
         self.assertIn("calibration_report", payload)
+        self.assertIn("active_policy_evaluation", payload)
         self.assertIn("reliability_report", payload)
         self.assertIn("walk_forward_validation", payload)
         self.assertIn("near_miss_winners", payload)
         self.assertIn("entry_miss_diagnostics", payload)
         self.assertIn("closed_positions", payload["broker_summary"])
         self.assertIn("resolved_outcomes", payload["effective_summary"])
+        self.assertIn("resolved_selected_outcomes", payload["active_policy_evaluation"])
         self.assertIn("by_confidence_bucket", payload["reliability_report"])
 
     async def test_broker_workbench_returns_orders_positions_and_risk(self) -> None:
@@ -1565,18 +1632,42 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
     async def test_ticker_api_aggregates_recommendation_plan_history(self) -> None:
         self.seed_run_with_diagnostics()
         self.seed_context_and_recommendation_plan_data()
+        now = datetime.now(timezone.utc)
+        session = Session(bind=self.engine)
+        try:
+            HistoricalMarketDataRepository(session).upsert_bars(
+                [
+                    HistoricalMarketBar(ticker="AAPL", timeframe="1m", bar_time=now - timedelta(minutes=2), open_price=200.0, high_price=200.8, low_price=199.8, close_price=200.4, volume=1200, source="test", source_tier="tier_a"),
+                    HistoricalMarketBar(ticker="AAPL", timeframe="1m", bar_time=now - timedelta(minutes=1), open_price=200.4, high_price=201.1, low_price=200.2, close_price=200.9, volume=1100, source="test", source_tier="tier_a"),
+                ]
+            )
+            plan_ids = [plan.id for plan in RecommendationPlanRepository(session).list_plans(ticker="AAPL", limit=10) if plan.id is not None]
+        finally:
+            session.close()
+
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            response = await client.get("/api/tickers/AAPL")
+            response = await client.get("/api/tickers/AAPL", params={"window": "7d", "selected_plan_ids": plan_ids[:1]})
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["ticker"], "AAPL")
+        self.assertEqual(payload["window"], "7d")
+        self.assertEqual(payload["summary"]["plan_count"], 2)
+        self.assertEqual(payload["summary"]["broker_order_count"], 0)
+        self.assertEqual(payload["summary"]["bar_count"], 2)
+        self.assertGreaterEqual(payload["summary"]["win_rate_percent"], 0)
         self.assertEqual(payload["performance"]["app_plan_count"], 2)
         self.assertEqual(payload["performance"]["actionable_plan_count"], 2)
         self.assertEqual(payload["performance"]["win_plan_count"], 1)
         self.assertEqual(payload["performance"]["open_plan_count"], 1)
         self.assertEqual(len(payload["recommendation_plans"]), 2)
+        self.assertEqual(len(payload["chart"]["bars"]), 2)
+        self.assertEqual(len(payload["chart"]["overlays"]), 2)
+        self.assertTrue(any(overlay["selected"] for overlay in payload["chart"]["overlays"]))
+        self.assertTrue(any(not overlay["selected"] for overlay in payload["chart"]["overlays"]))
+        first_overlay = payload["chart"]["overlays"][0]
+        self.assertGreaterEqual(len(first_overlay["points"]), 1)
         self.assertEqual(payload["recommendation_plans"][0]["latest_outcome"]["outcome"], "win")
         self.assertNotIn("prototype_trades", payload)
         self.assertNotIn("legacy_trades", payload)
@@ -1758,6 +1849,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(industry_detail.json()["industry_key"], "consumer_electronics")
         self.assertEqual(ticker_signals.json()[0]["diagnostics"]["mode"], "deep_analysis")
         self.assertEqual(plans.json()["items"][0]["action"], "long")
+        self.assertEqual(plans.json()["items"][0]["ticker_page_url"], "/tickers/AAPL")
         self.assertEqual(plans.json()["items"][0]["signal_breakdown"]["technical_setup"], 0.77)
         self.assertEqual(plans.json()["items"][0]["latest_outcome"]["outcome"], "win")
         self.assertEqual(plans.json()["items"][0]["latest_outcome"]["setup_family"], "continuation")
@@ -1784,6 +1876,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(detail_payload["recommendation_plans"]), 2)
         self.assertEqual(detail_payload["ticker_signal_snapshots"][0]["diagnostics"]["mode"], "deep_analysis")
         self.assertEqual(detail_payload["recommendation_plans"][0]["action"], "long")
+        self.assertEqual(detail_payload["recommendation_plans"][0]["ticker_page_url"], "/tickers/AAPL")
         self.assertEqual(detail_payload["recommendation_plans"][0]["latest_outcome"]["outcome"], "win")
         self.assertEqual(detail_payload["recommendation_plans"][0]["latest_outcome"]["transmission_bias_detail"]["label"], "tailwind")
         self.assertEqual(detail_payload["recommendation_plans"][0]["latest_outcome"]["context_regime_label"], "context + catalyst")

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from trade_proposer_app.domain.enums import RecommendationDirection, StrategyHorizon
@@ -41,19 +42,35 @@ class WatchlistOrchestrationPolicyTests(unittest.TestCase):
     def test_shortlist_ranks_by_attention_then_confidence(self) -> None:
         """ranking = (attention, confidence) descending."""
         watchlist = Watchlist(name="test", default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)
-        # ticker_count=8 -> limit = 8 // 4 = 2.
         candidates = [
-            _CheapScanCandidate("A", "long", 70.0, 80.0, [], ""), # Rank 3 (80, 70)
+            _CheapScanCandidate("A", "long", 40.0, 80.0, [], ""), # Ineligible on confidence
             _CheapScanCandidate("B", "long", 85.0, 90.0, [], ""), # Rank 1 (90, 85)
             _CheapScanCandidate("C", "long", 90.0, 80.0, [], ""), # Rank 2 (80, 90)
         ]
-        # Padding to ensure limit=2
+        # Padding to keep the ranking set visible while staying ineligible.
         for i in range(5):
             candidates.append(_CheapScanCandidate(f"P{i}", "long", 10.0, 10.0, [], ""))
-        
+
         result = self.service._evaluate_shortlist(watchlist, candidates)
-        # B: (90, 85), C: (80, 90)
         self.assertEqual(result["shortlist"], ["B", "C"])
+
+    def test_shortlist_has_no_hard_cap_for_eligible_candidates(self) -> None:
+        watchlist = Watchlist(name="test", default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)
+        candidates = [
+            _CheapScanCandidate("A", "long", 70.0, 90.0, [], ""),
+            _CheapScanCandidate("B", "long", 71.0, 89.0, [], ""),
+            _CheapScanCandidate("C", "long", 72.0, 88.0, [], ""),
+            _CheapScanCandidate("D", "long", 73.0, 87.0, [], ""),
+            _CheapScanCandidate("E", "long", 74.0, 86.0, [], ""),
+            _CheapScanCandidate("F", "long", 75.0, 85.0, [], ""),
+        ]
+
+        result = self.service._evaluate_shortlist(watchlist, candidates)
+
+        self.assertEqual(len(result["shortlist"]), 6)
+        self.assertEqual(result["rules"]["limit"], 6)
+        self.assertEqual(result["rules"]["core_limit"], 6)
+        self.assertEqual(result["rules"]["catalyst_lane_limit"], 6)
 
     def test_catalyst_lane_selection_with_relaxed_floors(self) -> None:
         """
@@ -151,6 +168,66 @@ class WatchlistOrchestrationPolicyTests(unittest.TestCase):
         }
         adj = self.service._transmission_confidence_adjustment(analysis, transmission_bias="headwind", alignment_score=40.0)
         self.assertEqual(adj, -2.4)
+
+    def test_calibration_curve_snapshot_adjusts_confidence_from_smoothed_bin(self) -> None:
+        calibration_summary = SimpleNamespace(
+            smoothed_calibration_report=SimpleNamespace(
+                version_label="confidence-reliability-v2-smoothed",
+                bins=[
+                    SimpleNamespace(
+                        bin_key="70_80",
+                        bin_label="70-80",
+                        predicted_probability=0.65,
+                        realized_win_rate_percent=60.0,
+                        resolved_count=30,
+                    )
+                ],
+            )
+        )
+
+        curve = self.service._calibration_curve_snapshot(calibration_summary, 75.0)
+
+        self.assertIsNotNone(curve)
+        assert curve is not None
+        self.assertEqual(curve["bin_key"], "70_80")
+        self.assertEqual(curve["predicted_probability_percent"], 65.0)
+        self.assertEqual(curve["confidence_adjustment"], -4.0)
+
+    def test_calibration_curve_snapshot_prefers_recent_reports_when_available(self) -> None:
+        calibration_summary = SimpleNamespace(
+            recent_smoothed_calibration_report=SimpleNamespace(
+                version_label="confidence-reliability-v2-smoothed-recent",
+                bins=[
+                    SimpleNamespace(
+                        bin_key="70_80",
+                        bin_label="70-80",
+                        predicted_probability=0.25,
+                        realized_win_rate_percent=25.0,
+                        resolved_count=30,
+                    )
+                ],
+            ),
+            smoothed_calibration_report=SimpleNamespace(
+                version_label="confidence-reliability-v2-smoothed",
+                bins=[
+                    SimpleNamespace(
+                        bin_key="70_80",
+                        bin_label="70-80",
+                        predicted_probability=0.75,
+                        realized_win_rate_percent=75.0,
+                        resolved_count=30,
+                    )
+                ],
+            ),
+        )
+
+        curve = self.service._calibration_curve_snapshot(calibration_summary, 75.0)
+
+        self.assertIsNotNone(curve)
+        assert curve is not None
+        self.assertEqual(curve["report_scope"], "recent_smoothed")
+        self.assertEqual(curve["predicted_probability_percent"], 25.0)
+        self.assertEqual(curve["confidence_adjustment"], -4.0)
 
     # ─── Plan Confidence Source ───────────────────────────────────────────────
 
@@ -348,6 +425,124 @@ class WatchlistOrchestrationPolicyTests(unittest.TestCase):
         self.assertEqual(plan.signal_breakdown["cheap_scan_confidence_percent"], 42.0)
         self.assertIsNone(plan.signal_breakdown["deep_analysis_confidence_percent"])
         self.assertEqual(plan.signal_breakdown["raw_plan_confidence_percent"], 42.0)
+
+    def test_build_plan_allows_when_macro_is_blocked_but_industry_is_only_degraded(self) -> None:
+        watchlist = Watchlist(name="test", default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)
+        candidate = _CheapScanCandidate("AAPL", "long", 42.0, 85.0, [], "")
+        signal = TickerSignalSnapshot(
+            ticker="AAPL",
+            direction="long",
+            confidence_percent=42.0,
+            attention_score=85.0,
+            diagnostics={"shortlisted": True, "mode": "deep_analysis"},
+        )
+        deep_output = RunOutput(
+            recommendation=Recommendation(
+                ticker="AAPL",
+                direction=RecommendationDirection.LONG,
+                confidence=62.0,
+                entry_price=100.0,
+                stop_loss=95.0,
+                take_profit=112.0,
+            ),
+            diagnostics=RunDiagnostics(
+                analysis_json=json.dumps(
+                    {
+                        "summary": {"text": "Macro is blocked but industry is only degraded"},
+                        "ticker_deep_analysis": {
+                            "setup_family": "continuation",
+                            "confidence_components": {"directional_confidence": 62.0},
+                            "context_quality_status": "blocked",
+                            "context_quality": {"status": "blocked"},
+                            "transmission_analysis": {
+                                "alignment_percent": 68.0,
+                                "contradiction_count": 0,
+                                "context_quality_status": "blocked",
+                                "trade_context_quality_status": "degraded",
+                                "macro_context_quality_status": "blocked",
+                                "industry_context_quality_status": "degraded",
+                                "conflict_flags": ["context_quality_blocked"],
+                            },
+                        },
+                    }
+                )
+            ),
+        )
+
+        plan = self.service._build_plan_from_signal(
+            watchlist,
+            candidate,
+            signal,
+            deep_output=deep_output,
+            deep_error=None,
+            calibration_summary=None,
+            job_id=None,
+            run_id=None,
+        )
+
+        self.assertEqual(plan.action, "long")
+        self.assertEqual(plan.status, "partial")
+        self.assertNotEqual(plan.evidence_summary["action_reason"], "context_quality_blocked")
+        self.assertIn("context quality is degraded", " ".join(plan.warnings))
+
+    def test_build_plan_blocks_when_both_macro_and_industry_context_are_blocked(self) -> None:
+        watchlist = Watchlist(name="test", default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)
+        candidate = _CheapScanCandidate("AAPL", "long", 42.0, 85.0, [], "")
+        signal = TickerSignalSnapshot(
+            ticker="AAPL",
+            direction="long",
+            confidence_percent=42.0,
+            attention_score=85.0,
+            diagnostics={"shortlisted": True, "mode": "deep_analysis"},
+        )
+        deep_output = RunOutput(
+            recommendation=Recommendation(
+                ticker="AAPL",
+                direction=RecommendationDirection.LONG,
+                confidence=62.0,
+                entry_price=100.0,
+                stop_loss=95.0,
+                take_profit=112.0,
+            ),
+            diagnostics=RunDiagnostics(
+                analysis_json=json.dumps(
+                    {
+                        "summary": {"text": "Blocked by context quality"},
+                        "ticker_deep_analysis": {
+                            "setup_family": "continuation",
+                            "confidence_components": {"directional_confidence": 62.0},
+                            "context_quality_status": "blocked",
+                            "context_quality": {"status": "blocked"},
+                            "transmission_analysis": {
+                                "alignment_percent": 68.0,
+                                "contradiction_count": 0,
+                                "context_quality_status": "blocked",
+                                "trade_context_quality_status": "blocked",
+                                "macro_context_quality_status": "blocked",
+                                "industry_context_quality_status": "blocked",
+                                "conflict_flags": ["context_quality_blocked"],
+                            },
+                        },
+                    }
+                )
+            ),
+        )
+
+        plan = self.service._build_plan_from_signal(
+            watchlist,
+            candidate,
+            signal,
+            deep_output=deep_output,
+            deep_error=None,
+            calibration_summary=None,
+            job_id=None,
+            run_id=None,
+        )
+
+        self.assertEqual(plan.action, "no_action")
+        self.assertEqual(plan.status, "degraded")
+        self.assertEqual(plan.evidence_summary["action_reason"], "context_quality_blocked")
+        self.assertIn("context quality is blocked", " ".join(plan.warnings))
 
 if __name__ == "__main__":
     unittest.main()

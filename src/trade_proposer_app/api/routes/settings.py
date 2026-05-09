@@ -84,7 +84,7 @@ async def set_app_setting(
 async def set_summary_settings(
     backend: str = Form(...),
     model: str = Form(default=""),
-    timeout_seconds: str = Form(default="60"),
+    timeout_seconds: str = Form(default="600"),
     max_tokens: str = Form(default="220"),
     pi_command: str = Form(default="pi"),
     pi_agent_dir: str = Form(default=""),

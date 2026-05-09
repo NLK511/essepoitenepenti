@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { getJson } from "../api";
-import { Badge, Card, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
+import { Badge, Card, DisclosureCard, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
 import type { ActiveWorkersResponse, WorkerHeartbeat, WorkerLogsResponse } from "../types";
 import { formatDate, workerStreamTone } from "../utils";
 
@@ -153,35 +153,37 @@ export function WorkerLogsPage() {
         </Card>
       </section>
 
-      <Card className="top-gap">
-        <SectionTitle
-          kicker="Live stream"
-          title="Worker log output"
-          actions={
-            <div className="worker-log-toolbar">
-              <label className="worker-log-toggle">
-                <input
-                  type="checkbox"
-                  checked={followTail}
-                  onChange={(event) => setFollowTail(event.target.checked)}
-                />
-                Follow tail
-              </label>
-              <SegmentedTabs
-                value={logLevel}
-                onChange={setLogLevel}
-                options={[
-                  { value: "all", label: "All" },
-                  { value: "debug", label: "Debug" },
-                  { value: "info", label: "Info" },
-                  { value: "warning", label: "Warn" },
-                  { value: "error", label: "Error" },
-                ]}
+      <DisclosureCard
+        className="top-gap"
+        kicker="Live stream"
+        title="Worker log output"
+        subtitle={followTail ? "Auto-scrolling to the newest line." : "Auto-scroll is paused while you inspect earlier output."}
+        defaultOpen
+        actions={
+          <div className="worker-log-toolbar">
+            <label className="worker-log-toggle">
+              <input
+                type="checkbox"
+                checked={followTail}
+                onChange={(event) => setFollowTail(event.target.checked)}
               />
-              {logs ? <Badge tone={logs.truncated ? "warning" : "neutral"}>{logs.truncated ? "truncated" : "complete"}</Badge> : null}
-            </div>
-          }
-        />
+              Follow tail
+            </label>
+            <SegmentedTabs
+              value={logLevel}
+              onChange={setLogLevel}
+              options={[
+                { value: "all", label: "All" },
+                { value: "debug", label: "Debug" },
+                { value: "info", label: "Info" },
+                { value: "warning", label: "Warn" },
+                { value: "error", label: "Error" },
+              ]}
+            />
+            {logs ? <Badge tone={logs.truncated ? "warning" : "neutral"}>{logs.truncated ? "truncated" : "complete"}</Badge> : null}
+          </div>
+        }
+      >
         <div className="worker-log-summary">
           {followTail ? "Auto-scrolling to the newest line." : "Auto-scroll is paused while you inspect earlier output."}
         </div>
@@ -191,7 +193,7 @@ export function WorkerLogsPage() {
             {visibleLines.join("\n") || "No log lines match the current filter."}
           </pre>
         ) : null}
-      </Card>
+      </DisclosureCard>
     </>
   );
 }

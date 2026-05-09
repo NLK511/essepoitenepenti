@@ -41,9 +41,19 @@ class TradeDecisionPolicy:
     signal_gating: SignalGatingPolicy = field(default_factory=SignalGatingPolicy)
     plan_generation_config: dict[str, float] = field(default_factory=dict)
     plan_generation_config_version_id: int | None = None
+    order_execution_account_mode: str = "paper"
 
     def effective_confidence_threshold(self) -> float:
         return max(0.0, min(100.0, self.confidence_threshold + self.signal_gating.threshold_offset))
+
+    def action_confidence_threshold(self) -> float:
+        if self.is_paper_exploration_mode:
+            return 0.0
+        return self.effective_confidence_threshold()
+
+    @property
+    def is_paper_exploration_mode(self) -> bool:
+        return str(self.order_execution_account_mode or "").strip().lower() == "paper"
 
     def setup_family_allowed(self, setup_family: str | None) -> bool:
         normalized = str(setup_family or "uncategorized").strip().lower() or "uncategorized"
@@ -71,6 +81,8 @@ class TradeDecisionPolicy:
             "signal_gating": self.signal_gating.to_dict(),
             "plan_generation_config": dict(self.plan_generation_config),
             "plan_generation_config_version_id": self.plan_generation_config_version_id,
+            "order_execution_account_mode": self.order_execution_account_mode,
+            "is_paper_exploration_mode": self.is_paper_exploration_mode,
         }
 
 
@@ -87,7 +99,9 @@ class TradeDecisionPolicyService:
         self.plan_generation = PlanGenerationTuningRepository(session)
 
     def active_policy(self) -> TradeDecisionPolicy:
-        strategy_settings = SettingsDomainService(repository=self.settings).strategy_settings()
+        domain = SettingsDomainService(repository=self.settings)
+        strategy_settings = domain.strategy_settings()
+        execution_settings = domain.execution_settings()
         signal_gating = strategy_settings.signal_gating
         raw_config_version_id = strategy_settings.plan_generation_tuning.get("active_config_version_id")
         config_version_id = raw_config_version_id if isinstance(raw_config_version_id, int) else None
@@ -104,6 +118,7 @@ class TradeDecisionPolicyService:
             ),
             plan_generation_config=normalize_plan_generation_tuning_config(plan_generation_config),
             plan_generation_config_version_id=config_version_id,
+            order_execution_account_mode=str(execution_settings.broker_order_execution.get("account_mode", "paper") or "paper").strip().lower(),
         )
 
     @staticmethod

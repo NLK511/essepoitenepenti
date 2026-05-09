@@ -682,9 +682,11 @@ class TickerDeepAnalysisService:
             + min(1.0, abs(float(context.get("momentum_short", 0.0) or 0.0)) * 8.0) * 0.38
             + volume_confirmation * 0.12
         )
+        context_quality_multiplier = self._context_quality_multiplier(context)
         data_quality_cap = self._scale_unsigned(
-            1.0
-            - min(0.7, (len(context.get("problems", []) or []) * 0.12) + (len(context.get("news_feed_errors", []) or []) * 0.1))
+            (1.0
+            - min(0.7, (len(context.get("problems", []) or []) * 0.12) + (len(context.get("news_feed_errors", []) or []) * 0.1)))
+            * context_quality_multiplier
         )
         return {
             "context_confidence": round(context_confidence, 2),
@@ -844,6 +846,11 @@ class TickerDeepAnalysisService:
             "expected_transmission_window_detail": self.taxonomy_service.get_transmission_window_definition(
                 TickerDeepAnalysisService._expected_transmission_window(catalyst_intensity, macro_score, industry_score, macro_events, industry_events)
             ),
+            "context_quality_status": TickerDeepAnalysisService._context_quality_status(context),
+            "macro_context_quality_status": context.get("macro_context_quality_status"),
+            "industry_context_quality_status": context.get("industry_context_quality_status"),
+            "macro_context_quality_score": context.get("macro_context_quality_score"),
+            "industry_context_quality_score": context.get("industry_context_quality_score"),
             "conflict_flags": conflict_flags,
             "conflict_flag_details": self._conflict_flag_details(conflict_flags),
             "decay_state": decay_state,
@@ -1225,6 +1232,11 @@ class TickerDeepAnalysisService:
             flags.append("directional_conflict")
         if direction == RecommendationDirection.LONG and ticker_score < -0.2:
             flags.append("directional_conflict")
+        quality_status = TickerDeepAnalysisService._context_quality_status(context)
+        if quality_status == "blocked":
+            flags.append("context_quality_blocked")
+        elif quality_status == "degraded":
+            flags.append("context_quality_degraded")
         if str(context.get("macro_context_status", "")) == "warning" or str(context.get("industry_context_status", "")) == "warning":
             flags.append("context_quality_conflict")
         return list(dict.fromkeys(flags))
@@ -1298,6 +1310,33 @@ class TickerDeepAnalysisService:
         return str(context.get("industry_context_label", context.get("industry_sentiment_label", "NEUTRAL")) or "NEUTRAL")
 
     @staticmethod
+    def _context_quality_status(context: dict[str, Any]) -> str:
+        statuses = [
+            str(context.get("macro_context_quality_status", "")).strip().lower(),
+            str(context.get("industry_context_quality_status", "")).strip().lower(),
+        ]
+        if "blocked" in statuses:
+            return "blocked"
+        if "degraded" in statuses:
+            return "degraded"
+        if "usable" in statuses:
+            return "usable"
+        return "unknown"
+
+    @staticmethod
+    def _context_quality_multiplier(context: dict[str, Any]) -> float:
+        multiplier = 1.0
+        for status in (
+            str(context.get("macro_context_quality_status", "")).strip().lower(),
+            str(context.get("industry_context_quality_status", "")).strip().lower(),
+        ):
+            if status == "blocked":
+                multiplier *= 0.65
+            elif status == "degraded":
+                multiplier *= 0.9
+        return multiplier
+
+    @staticmethod
     def _build_indicator_summary(context: dict[str, Any], setup_family: str) -> str:
         parts = [f"setup {setup_family.replace('_', ' ')}"]
         sentiment_label = context.get("ticker_sentiment_label") or context.get("sentiment_label")
@@ -1359,11 +1398,19 @@ class TickerDeepAnalysisService:
                     "score": TickerDeepAnalysisService._macro_context_score(context),
                     "label": TickerDeepAnalysisService._macro_context_label(context),
                     "coverage_insights": context.get("macro_coverage_insights", []),
+                    "context_quality_score": context.get("macro_context_quality_score"),
+                    "context_quality_status": context.get("macro_context_quality_status"),
+                    "context_quality_flags": context.get("macro_context_quality_flags", {}),
+                    "context_quality_notes": context.get("macro_context_quality_notes", []),
                 },
                 "industry": {
                     "score": TickerDeepAnalysisService._industry_context_score(context),
                     "label": TickerDeepAnalysisService._industry_context_label(context),
                     "coverage_insights": context.get("industry_coverage_insights", []),
+                    "context_quality_score": context.get("industry_context_quality_score"),
+                    "context_quality_status": context.get("industry_context_quality_status"),
+                    "context_quality_flags": context.get("industry_context_quality_flags", {}),
+                    "context_quality_notes": context.get("industry_context_quality_notes", []),
                 },
                 "ticker": {
                     "score": context.get("ticker_sentiment_score", context.get("sentiment_score", 0.0)),
@@ -1411,6 +1458,21 @@ class TickerDeepAnalysisService:
                 "setup_family": setup_family,
                 "confidence_components": confidence_components,
                 "transmission_analysis": transmission_analysis,
+                "context_quality": {
+                    "status": TickerDeepAnalysisService._context_quality_status(context),
+                    "macro": {
+                        "score": context.get("macro_context_quality_score"),
+                        "status": context.get("macro_context_quality_status"),
+                        "flags": context.get("macro_context_quality_flags", {}),
+                        "notes": context.get("macro_context_quality_notes", []),
+                    },
+                    "industry": {
+                        "score": context.get("industry_context_quality_score"),
+                        "status": context.get("industry_context_quality_status"),
+                        "flags": context.get("industry_context_quality_flags", {}),
+                        "notes": context.get("industry_context_quality_notes", []),
+                    },
+                },
                 "price_history": context.get("price_history_diagnostics", {}),
             },
         }

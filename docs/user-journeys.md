@@ -26,6 +26,8 @@ Steps:
 
 **Persona:** active user checking the system each day.
 
+This journey should be possible from the dashboard without forcing a long page hunt.
+
 Steps:
 1. open the dashboard
 2. check what needs attention now
@@ -53,6 +55,8 @@ Steps:
 ## 4. Reviewing historical quality
 
 **Persona:** user wants to inspect quality and outcome behavior over time.
+
+The research pages should lead with summary and only reveal deeper diagnostics on demand.
 
 Steps:
 1. open recommendation plans

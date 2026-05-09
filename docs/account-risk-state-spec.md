@@ -15,6 +15,7 @@ The account-risk state is derived from:
 - `SettingsDomainService.risk_settings()` for configured limits and halt state
 - `BrokerPositionRepository` for open/closed broker-backed positions and realized P&L
 - `RiskHaltEventRepository` for manual halt/resume audit history
+- optional live broker account/order/position snapshots when the execution service can fetch them before submission
 
 ## Canonical model
 The canonical read model is `AccountRiskState`.
@@ -37,6 +38,9 @@ The canonical model keeps the current risk-assessment contract:
 - `reasons` explains why a trade is blocked or why the account is constrained.
 - `metrics` carries the broker-backed exposure and realized-loss counters used by the gate.
 - `config` carries the effective risk settings that produced the state.
+- If a candidate is provided and a live broker account snapshot includes buying power, risk blocks submission when candidate notional exceeds buying power.
+- If live broker positions or open orders are available, they are added to the app-owned exposure counters so risk does not undercount broker-side exposure.
+- Live broker snapshot failures are surfaced as metrics warnings; they do not silently look equivalent to healthy broker reconciliation.
 
 ## Compatibility
 The public `/api/risk` and broker workbench contracts continue to expose the same JSON shape.

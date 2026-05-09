@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
-import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
+import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
 import { ContextEventSummary, ContextScoreSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import type { ContextEventRow, IndustryContextSnapshot, MacroContextSnapshot, Run } from "../types";
 import { contextInterpretationTone, contextProvenanceLabel, contextSummaryBackend, contextSummaryError, contextSummaryMethod, contextSummaryModel, contextSnapshotTone, extractDisplayLabels, formatDate } from "../utils";
@@ -489,12 +489,7 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
       </div>
 
       <div className="context-review-main-grid">
-        <div className="data-card">
-          <div className="data-card-header">
-            <div>
-              <h3 className="data-card-title">Active drivers</h3>
-            </div>
-          </div>
+        <DisclosureCard title="Active drivers" subtitle="Driver detail stays available without dominating the summary." defaultOpen>
           {drivers.length > 0 ? (
             <div className="data-stack">
               {drivers.map((driver, index) => {
@@ -519,14 +514,9 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
           ) : (
             <EmptyState message="No active drivers stored for this industry snapshot." />
           )}
-        </div>
+        </DisclosureCard>
 
-        <div className="data-card">
-          <div className="data-card-header">
-            <div>
-              <h3 className="data-card-title">Theme links and caveats</h3>
-            </div>
-          </div>
+        <DisclosureCard title="Theme links and caveats" subtitle="Secondary links are collapsed until needed.">
           {linkedMacroThemes.length > 0 ? (
             <div>
               <div className="section-heading"><strong>Linked macro themes</strong></div>
@@ -547,7 +537,7 @@ function IndustryContextSummary({ snapshot }: { snapshot: IndustryContextSnapsho
             </div>
           ) : null}
           {contextSummaryError(snapshot.metadata) ? <div className="helper-text top-gap-small">Summary fallback reason: {contextSummaryError(snapshot.metadata)}</div> : null}
-        </div>
+        </DisclosureCard>
       </div>
     </div>
   );
@@ -599,12 +589,7 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
       </div>
 
       <div className="context-review-main-grid">
-        <div className="data-card">
-          <div className="data-card-header">
-            <div>
-              <h3 className="data-card-title">Active themes</h3>
-            </div>
-          </div>
+        <DisclosureCard title="Active themes" subtitle="Theme detail stays collapsible to reduce list fatigue on mobile." defaultOpen>
           {themes.length > 0 ? (
             <div className="data-stack">
               {themes.map((theme, index) => {
@@ -630,14 +615,9 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
           ) : (
             <EmptyState message="No active macro themes stored yet." />
           )}
-        </div>
+        </DisclosureCard>
 
-        <div className="data-card">
-          <div className="data-card-header">
-            <div>
-              <h3 className="data-card-title">Transmission and caveats</h3>
-            </div>
-          </div>
+        <DisclosureCard title="Transmission and caveats" subtitle="Secondary transmission notes remain available without filling the first screen.">
           {topChannels.length > 0 ? (
             <div>
               <div className="section-heading"><strong>Main transmission channels</strong></div>
@@ -664,7 +644,7 @@ function MacroContextSummary({ snapshot }: { snapshot: MacroContextSnapshot }) {
             </div>
           ) : null}
           {contextSummaryError(snapshot.metadata) ? <div className="helper-text top-gap-small">Summary fallback reason: {contextSummaryError(snapshot.metadata)}</div> : null}
-        </div>
+        </DisclosureCard>
       </div>
     </div>
   );

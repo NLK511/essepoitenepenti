@@ -485,14 +485,14 @@ class OrderExecutionTests(unittest.TestCase):
             )
 
             windows = PerformanceAssessmentService(session)._windowed_assessments()
-            thirty_day = next(item for item in windows if item["window"] == "30d")
+            one_month = next(item for item in windows if item["window"] == "1M")
 
-            self.assertEqual(thirty_day["broker_closed_positions"], 2)
-            self.assertEqual(thirty_day["broker_wins"], 1)
-            self.assertEqual(thirty_day["broker_losses"], 1)
-            self.assertEqual(thirty_day["broker_win_rate_percent"], 50.0)
-            self.assertEqual(thirty_day["broker_realized_pnl"], 50.0)
-            self.assertEqual(thirty_day["overall_win_rate_percent"], 50.0)
+            self.assertEqual(one_month["broker_closed_positions"], 2)
+            self.assertEqual(one_month["broker_wins"], 1)
+            self.assertEqual(one_month["broker_losses"], 1)
+            self.assertEqual(one_month["broker_win_rate_percent"], 50.0)
+            self.assertEqual(one_month["broker_realized_pnl"], 50.0)
+            self.assertEqual(one_month["overall_win_rate_percent"], 50.0)
         finally:
             session.close()
 

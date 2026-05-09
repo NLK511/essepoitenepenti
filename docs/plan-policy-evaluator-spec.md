@@ -66,8 +66,10 @@ The first slice uses intentionally simple labels:
 
 These labels are conservative and should gate autonomous promotion in future migrations.
 
-## Initial consumer
+## Current consumers
 `RecommendationQualitySummaryService` includes an active-policy evaluation in the quality summary payload. This is a low-risk read-only migration; it does not change trading decisions or tuning promotion behavior.
+
+The Research performance workbench also uses the combined service for active-policy evaluation and reliability reporting instead of stitching lower-level policy and reliability contracts locally.
 
 ## Shared policy/reliability evaluation
 `TradePolicyEvaluationService` combines the policy evaluation with the canonical reliability report so operator-facing summaries do not have to stitch those contracts together separately.
@@ -78,6 +80,6 @@ When an operator-facing consumer needs the current active policy, it should ask 
 Future batches should migrate:
 - plan-generation tuning candidate scoring
 - signal-gating tuning candidate scoring
-- Research/quality policy comparison views
+- Research/quality policy comparison views beyond the active-policy workbench summary
 
 to use this evaluator or narrower evaluators built from the same selected-outcome scoring semantics.

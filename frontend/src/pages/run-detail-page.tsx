@@ -10,7 +10,7 @@ import {
 } from "../components/ticker-relationship-readthrough";
 import { WorkflowRunResults } from "../components/workflow-run-results";
 import { useToast } from "../components/toast";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
+import { Badge, Card, DisclosureCard, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import { ContextEventSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import { RecommendationPlanEvaluationSummary } from "../components/recommendation-plan-evaluation";
 import type { Job, RunDetailResponse, WatchlistEvaluationPolicy } from "../types";
@@ -258,10 +258,7 @@ export function RunDetailPage() {
               />
               <div className="stack-page top-gap-small">
                 {reviewSection === "overview" && (orchestrationSourceKind || orchestrationExecutionPath || orchestrationEffectiveHorizon || manualJobDefaults) ? (
-                  <section>
-                    <div className="section-heading">
-                      <strong>Execution source</strong>
-                    </div>
+                  <DisclosureCard title="Execution source" subtitle="Collapsed by default so the selected run stays readable on mobile." defaultOpen>
                     <div className="cluster top-gap-small">
                       {orchestrationSourceKind ? (
                         <Badge tone={orchestrationSourceKind === "manual_tickers" ? "warning" : "info"}>
@@ -290,14 +287,11 @@ export function RunDetailPage() {
                     {typeof manualJobDefaults?.job_name === "string" ? (
                       <div className="helper-text top-gap-small">Synthetic wrapper job name: {manualJobDefaults.job_name}</div>
                     ) : null}
-                  </section>
+                  </DisclosureCard>
                 ) : null}
 
                 {reviewSection === "overview" && watchlistPolicy ? (
-                  <section>
-                    <div className="section-heading">
-                      <strong>Watchlist policy</strong>
-                    </div>
+                  <DisclosureCard title="Watchlist policy" subtitle="Collapsed by default so policy metadata does not crowd the main run summary.">
                     <div className="cluster top-gap-small">
                       <Badge tone="info">source: {watchlistPolicy.schedule_source}</Badge>
                       <Badge tone="info">timezone: {watchlistPolicy.schedule_timezone || "—"}</Badge>
@@ -312,14 +306,11 @@ export function RunDetailPage() {
                       <div className="helper-text">Secondary window: {watchlistPolicy.secondary_window_label}</div>
                     ) : null}
                     <WarningSummary warnings={watchlistPolicy.warnings} />
-                  </section>
+                  </DisclosureCard>
                 ) : null}
 
                 {reviewSection === "shortlist" && (shortlistRules || shortlistDecisions.length > 0) ? (
-                  <section>
-                    <div className="section-heading">
-                      <strong>Shortlist reasoning</strong>
-                    </div>
+                  <DisclosureCard title="Shortlist reasoning" subtitle="Rules and rejection detail stay available without dominating the run summary." defaultOpen>
                     {shortlistRules ? (
                       <div className="cluster top-gap-small">
                         <Badge tone="info">limit {typeof shortlistRules.limit === "number" ? shortlistRules.limit : "—"}</Badge>
@@ -376,14 +367,11 @@ export function RunDetailPage() {
                         </table>
                       </div>
                     ) : null}
-                  </section>
+                  </DisclosureCard>
                 ) : null}
 
                 {reviewSection === "signals" && detail.ticker_signal_snapshots.length > 0 ? (
-                  <section>
-                    <div className="section-heading">
-                      <strong>Ticker signal snapshots</strong>
-                    </div>
+                  <DisclosureCard title="Ticker signal snapshots" subtitle="Detailed ticker signals stay available but don't overwhelm the section selector." defaultOpen>
                     <div className="table-wrap">
                       <table>
                         <thead>
@@ -471,7 +459,7 @@ export function RunDetailPage() {
                         </tbody>
                       </table>
                     </div>
-                  </section>
+                  </DisclosureCard>
                 ) : null}
 
                 {reviewSection === "plans" && detail.recommendation_plans.length > 0 ? (

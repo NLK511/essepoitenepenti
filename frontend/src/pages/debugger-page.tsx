@@ -3,13 +3,25 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { deleteJson, getJson } from "../api";
 import { WorkflowRunResults } from "../components/workflow-run-results";
-import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import { useToast } from "../components/toast";
 import type { Run, RunDetailResponse } from "../types";
 import { extractRunWarnings, formatDate, formatDuration, isCompletedWithWarningsRunStatus, isFailedRunStatus, isQueuedOrRunningRunStatus, jobTypeLabel, runTone } from "../utils";
 
+const JOB_TYPE_FILTER_OPTIONS = [
+  { value: "all", label: "All runs" },
+  { value: "proposal_generation", label: "Proposal generation" },
+  { value: "recommendation_evaluation", label: "Recommendation evaluation" },
+  { value: "plan_generation_tuning", label: "Plan generation tuning" },
+  { value: "performance_assessment", label: "Performance assessment" },
+  { value: "macro_context_refresh", label: "Macro context refresh" },
+  { value: "industry_context_refresh", label: "Industry context refresh" },
+  { value: "historical_replay", label: "Historical replay" },
+  { value: "bars_data_refresh", label: "Bars data refresh" },
+];
+
 export function DebuggerPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams({ limit: "10" });
   const [runs, setRuns] = useState<Run[] | null>(null);
   const [detail, setDetail] = useState<RunDetailResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -17,22 +29,36 @@ export function DebuggerPage() {
   const [isDeletingRun, setIsDeletingRun] = useState(false);
   const { showToast } = useToast();
 
+  const selectedJobType = searchParams.get("job_type") || "all";
+  const selectedLimit = Number.parseInt(searchParams.get("limit") || "10", 10) || 10;
+
   useEffect(() => {
     async function loadRuns() {
       try {
         setError(null);
-        const loadedRuns = await getJson<Run[]>("/api/runs");
+        const query = new URLSearchParams();
+        query.set("limit", String(selectedLimit));
+        if (selectedJobType !== "all") {
+          query.set("job_type", selectedJobType);
+        }
+        const loadedRuns = await getJson<Run[]>(`/api/runs?${query.toString()}`);
         setRuns(loadedRuns);
         const selectedId = searchParams.get("run_id");
-        if (!selectedId && loadedRuns[0]?.id) {
-          setSearchParams({ run_id: String(loadedRuns[0].id) }, { replace: true });
+        const matchingRun = selectedId ? loadedRuns.find((run) => String(run.id) === selectedId) : null;
+        if (matchingRun?.id) {
+          return;
+        }
+        if (loadedRuns[0]?.id) {
+          setSearchParams({ run_id: String(loadedRuns[0].id), job_type: selectedJobType, limit: String(selectedLimit) }, { replace: true });
+        } else {
+          setSearchParams({ job_type: selectedJobType, limit: String(selectedLimit) }, { replace: true });
         }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load runs");
       }
     }
     void loadRuns();
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, selectedJobType, selectedLimit]);
 
   useEffect(() => {
     async function loadDetail() {
@@ -111,6 +137,34 @@ export function DebuggerPage() {
         <StatCard className="stat-card-compact" label="Warnings" value={runStats.warnings} />
         <StatCard className="stat-card-compact" label="Active" value={runStats.active} />
       </section>
+
+      <Card className="top-gap">
+        <SectionTitle kicker="Filters" title="Run list filter" subtitle="Narrow the debugger to a specific workflow type." />
+        <div className="cluster wrap">
+          <label className="form-field">
+            <span>Job type</span>
+            <select
+              value={selectedJobType}
+              onChange={(event) => setSearchParams({ job_type: event.target.value, limit: String(selectedLimit) })}
+            >
+              {JOB_TYPE_FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="form-field">
+            <span>Limit</span>
+            <select
+              value={String(selectedLimit)}
+              onChange={(event) => setSearchParams({ job_type: selectedJobType, limit: event.target.value })}
+            >
+              {[10, 20, 50, 100].map((option) => (
+                <option key={option} value={String(option)}>{option}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </Card>
 
       <section className="two-column debugger-layout top-gap">
         <Card className="sticky-toolbar debugger-sidebar-panel">
@@ -209,13 +263,12 @@ export function DebuggerPage() {
                 ) : null}
               </Card>
 
-              <Card>
-                <SectionTitle
-                  kicker="Run output"
-                  title={detail.run.job_type === "proposal_generation" ? "Proposal-run triage" : "Workflow metadata"}
-                  subtitle={detail.run.job_type === "proposal_generation" ? "Debugger mode is best for quick triage. Use the full run page when you need the complete proposal, signal, and context walkthrough." : "Non-proposal runs store their useful output as run-level summary and artifact metadata."}
-                />
-
+              <DisclosureCard
+                kicker="Run output"
+                title={detail.run.job_type === "proposal_generation" ? "Proposal-run triage" : "Workflow metadata"}
+                subtitle={detail.run.job_type === "proposal_generation" ? "Debugger mode is best for quick triage. Use the full run page when you need the complete proposal, signal, and context walkthrough." : "Non-proposal runs store their useful output as run-level summary and artifact metadata."}
+                defaultOpen
+              >
                 {detail.run.job_type === "proposal_generation" ? (
                   <div className="insight-grid top-gap">
                     <div className="data-card">
@@ -242,7 +295,7 @@ export function DebuggerPage() {
                     />
                   </div>
                 )}
-              </Card>
+              </DisclosureCard>
             </>
           ) : null}
         </div>

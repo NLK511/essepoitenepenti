@@ -276,7 +276,8 @@ def extract_ranked_events(
         previous = previous_map.get(definition.key)
         latest_published_at = _latest_timestamp(all_matches)
         evidence_direction = _event_direction(all_matches)
-        contradiction_reasons = _contradiction_reasons(all_matches, previous)
+        contradiction_reasons = _contradiction_reasons(primary_matches, supporting_matches, previous)
+        contradiction_debug = _contradiction_debug(primary_matches, supporting_matches, previous, contradiction_reasons)
         state_transition = _state_transition(all_matches, previous)
         catalyst_type = _catalyst_type(all_matches)
         trigger_actor, trigger_actor_role, trigger_source_type = _trigger_actor(all_matches)
@@ -326,6 +327,7 @@ def extract_ranked_events(
                 "contradiction_count": len(contradiction_reasons),
                 "contradiction_reasons": contradiction_reasons,
                 "contradiction_reason_details": _contradiction_reason_details(contradiction_reasons),
+                "contradiction_debug": contradiction_debug,
                 "evidence_samples": evidence_samples,
                 "match_signatures": [str(item.get("signature", "")).strip() for item in all_matches if str(item.get("signature", "")).strip()],
                 "definition_phrase_count": len(definition.phrases),
@@ -465,6 +467,7 @@ def summarize_event_lifecycle(
         "fading": [],
     }
     contradiction_labels: list[str] = []
+    contradiction_details: list[dict[str, object]] = []
     current_keys: list[str] = []
     current_key_set: set[str] = set()
     windows: list[str] = []
@@ -480,6 +483,14 @@ def summarize_event_lifecycle(
             labels_by_state[state].append(label)
         if bool(event.get("contradiction_flag")) and label:
             contradiction_labels.append(label)
+            contradiction_details.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "reasons": list(event.get("contradiction_reasons", [])),
+                    "debug": event.get("contradiction_debug", {}),
+                }
+            )
         if window and window not in windows:
             windows.append(window)
     dropped_event_keys: list[str] = []
@@ -499,6 +510,7 @@ def summarize_event_lifecycle(
         "persistent_event_labels": labels_by_state["persistent"],
         "fading_event_labels": labels_by_state["fading"],
         "contradictory_event_labels": contradiction_labels,
+        "contradictory_event_details": contradiction_details,
         "dropped_event_labels": dropped_event_labels,
         "dropped_event_keys": dropped_event_keys,
         "current_event_keys": current_keys,
@@ -507,7 +519,7 @@ def summarize_event_lifecycle(
         "escalating_event_count": len(labels_by_state["escalating"]),
         "persistent_event_count": len(labels_by_state["persistent"]),
         "fading_event_count": len(labels_by_state["fading"]),
-        "contradiction_count": len(contradiction_labels),
+        "contradiction_count": len(contradiction_details),
         "dropped_event_count": len(dropped_event_labels),
     }
 
@@ -537,6 +549,7 @@ def _match_items(items: list[object], phrases: tuple[str, ...], *, source_type: 
                 "published_at": published_at,
                 "signature": _item_signature(raw_item),
                 "direction": _text_direction(text),
+                "source_type": source_type,
                 "text": text,
             }
         )
@@ -801,18 +814,90 @@ def _event_direction(matches: list[dict[str, object]]) -> str:
     return "neutral"
 
 
-def _contradiction_reasons(matches: list[dict[str, object]], previous: dict[str, object] | None) -> list[str]:
+def _contradiction_reasons(
+    primary_matches: list[dict[str, object]],
+    supporting_matches: list[dict[str, object]],
+    previous: dict[str, object] | None,
+) -> list[str]:
+    if not primary_matches:
+        return []
+
     reasons: list[str] = []
-    current_direction = _event_direction(matches)
-    directions = {str(item.get("direction", "neutral")) for item in matches}
-    if "positive" in directions and "negative" in directions:
+    directions = [str(item.get("direction", "neutral")) for item in primary_matches]
+    pure_directions = {direction for direction in directions if direction in {"positive", "negative"}}
+    mixed_count = sum(1 for direction in directions if direction == "mixed")
+    distinct_primary_signatures = {str(item.get("signature", "")).strip() for item in primary_matches if str(item.get("signature", "")).strip()}
+    distinct_primary_sources = {str(item.get("publisher", "")).strip() for item in primary_matches if str(item.get("publisher", "")).strip()}
+
+    enough_primary_evidence = len(primary_matches) >= 2 and len(distinct_primary_signatures) >= 2
+    if enough_primary_evidence and "positive" in pure_directions and "negative" in pure_directions:
         reasons.append("mixed_directional_evidence")
-    if "mixed" in directions:
+
+    if (
+        enough_primary_evidence
+        and mixed_count > 0
+        and len(primary_matches) >= 3
+        and len(distinct_primary_sources) >= 2
+    ):
         reasons.append("ambiguous_evidence_text")
+
+    current_direction = _primary_direction(primary_matches)
     previous_direction = str(previous.get("evidence_direction", "neutral")) if isinstance(previous, dict) else "neutral"
     if previous_direction in {"positive", "negative"} and current_direction in {"positive", "negative"} and previous_direction != current_direction:
         reasons.append("direction_changed_vs_previous_snapshot")
     return list(dict.fromkeys(reasons))
+
+
+def _contradiction_debug(
+    primary_matches: list[dict[str, object]],
+    supporting_matches: list[dict[str, object]],
+    previous: dict[str, object] | None,
+    reasons: list[str],
+) -> dict[str, object]:
+    return {
+        "enabled": bool(reasons),
+        "reason_count": len(reasons),
+        "previous_direction": str(previous.get("evidence_direction", "neutral")) if isinstance(previous, dict) else "neutral",
+        "primary": _contradiction_match_debug(primary_matches),
+        "supporting": _contradiction_match_debug(supporting_matches),
+    }
+
+
+def _contradiction_match_debug(matches: list[dict[str, object]], *, limit: int = 3) -> dict[str, object]:
+    directions = {"positive": 0, "negative": 0, "mixed": 0, "neutral": 0}
+    for item in matches:
+        direction = str(item.get("direction", "neutral"))
+        if direction not in directions:
+            direction = "neutral"
+        directions[direction] += 1
+    top_matches = []
+    for item in sorted(matches, key=lambda match: (float(match.get("event_weight", 0.0) or 0.0), int(match.get("match_count", 0) or 0)), reverse=True)[:limit]:
+        top_matches.append(
+            {
+                "source_type": item.get("source_type"),
+                "source_priority": item.get("source_priority"),
+                "publisher": item.get("publisher"),
+                "direction": item.get("direction"),
+                "event_weight": item.get("event_weight"),
+                "sample": item.get("sample"),
+            }
+        )
+    return {
+        "match_count": len(matches),
+        "direction_counts": {key: value for key, value in directions.items() if value > 0},
+        "top_matches": top_matches,
+    }
+
+
+def _primary_direction(matches: list[dict[str, object]]) -> str:
+    directions = {str(item.get("direction", "neutral")) for item in matches}
+    if "positive" in directions and "negative" in directions:
+        return "mixed"
+    if "positive" in directions:
+        return "positive"
+    if "negative" in directions:
+        return "negative"
+    return "neutral"
 
 
 def _contradiction_reason_details(reasons: list[str]) -> list[dict[str, str]]:

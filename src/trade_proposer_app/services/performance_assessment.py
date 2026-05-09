@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from trade_proposer_app.domain.enums import JobType, RunStatus
@@ -16,7 +16,8 @@ from trade_proposer_app.services.recommendation_plan_baselines import Recommenda
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_setup_family_reviews import RecommendationSetupFamilyReviewService
 from trade_proposer_app.services.settings_domains import SettingsDomainService
-from trade_proposer_app.services.summary import SummaryService
+from trade_proposer_app.services.summary import SummaryService, summary_fallback_warning
+from trade_proposer_app.services.time_windows import review_window_label, review_window_start
 from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
 
 
@@ -99,6 +100,7 @@ class PerformanceAssessmentService:
                 "generated_at": datetime.now(timezone.utc).isoformat(),
             },
         )
+        summary_warning = summary_fallback_warning("performance assessment", summary_result.llm_error) if summary_result.llm_error else None
         generated_at = datetime.now(timezone.utc).isoformat()
         return {
             "summary": {
@@ -109,6 +111,7 @@ class PerformanceAssessmentService:
                 "method": summary_result.method,
                 "model": summary_result.model,
                 "llm_error": summary_result.llm_error,
+                "warning": summary_warning,
                 "duration_seconds": summary_result.duration_seconds,
                 "metrics": payload.get("headline_metrics", {}),
             },
@@ -122,10 +125,12 @@ class PerformanceAssessmentService:
                 "method": summary_result.method,
                 "model": summary_result.model,
                 "llm_error": summary_result.llm_error,
+                "warning": summary_warning,
                 "duration_seconds": summary_result.duration_seconds,
                 "metadata": summary_result.metadata,
             },
             "warnings_found": bool(summary_result.llm_error),
+            "warnings": [summary_warning] if summary_warning else [],
         }
 
     def latest_assessment(self) -> dict[str, object]:
@@ -262,15 +267,10 @@ class PerformanceAssessmentService:
 
     def _windowed_assessments(self) -> list[dict[str, object]]:
         now = datetime.now(timezone.utc)
-        windows = [
-            ("7d", now - timedelta(days=7)),
-            ("30d", now - timedelta(days=30)),
-            ("90d", now - timedelta(days=90)),
-            ("180d", now - timedelta(days=180)),
-            ("1y", now - timedelta(days=365)),
-        ]
+        windows = ["1d", "7d", "1m", "3m", "6m", "1y", "all"]
         results: list[dict[str, object]] = []
-        for label, evaluated_after in windows:
+        for label in windows:
+            evaluated_after = review_window_start(label, now)
             calibration = RecommendationPlanCalibrationService(self.effective_outcome_repository).summarize(limit=500, evaluated_after=evaluated_after)
             baselines = RecommendationPlanBaselineService(self.plan_repository).summarize(limit=500, computed_after=evaluated_after)
             evidence = RecommendationEvidenceConcentrationService(self.effective_outcome_repository).summarize(limit=500, evaluated_after=evaluated_after)
@@ -278,8 +278,8 @@ class PerformanceAssessmentService:
             broker_summary = self.performance_metrics.summarize_broker_closed_positions(evaluated_after=evaluated_after, evaluated_before=now).to_dict()
             results.append(
                 {
-                    "window": label,
-                    "evaluated_after": evaluated_after.isoformat(),
+                    "window": review_window_label(label),
+                    "evaluated_after": evaluated_after.isoformat() if evaluated_after is not None else None,
                     "resolved_outcomes": calibration.resolved_outcomes,
                     "broker_closed_positions": broker_summary["closed_positions"],
                     "broker_win_rate_percent": broker_summary["win_rate_percent"],

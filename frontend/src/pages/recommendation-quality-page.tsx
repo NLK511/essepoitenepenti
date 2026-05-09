@@ -3,17 +3,16 @@ import { Link } from "react-router-dom";
 
 import { getJson } from "../api";
 import type { RecommendationQualityResponse } from "../types";
-import { cohortSampleStatusTone, formatDate } from "../utils";
-import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
+import { cohortSampleStatusTone, formatDate, normalizeReviewWindow, REVIEW_WINDOW_OPTIONS } from "../utils";
+import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 
 const glossaryDoc = (section: string) => `/docs?doc=glossary&section=${section}`;
 const recommendationQualityDoc = "/docs?doc=recommendation-quality-improvement-plan";
-const qualityWindows = ["7d", "30d", "90d", "180d", "1y"] as const;
 
 export function RecommendationQualityPage() {
   const [data, setData] = useState<RecommendationQualityResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedWindow, setSelectedWindow] = useState<(typeof qualityWindows)[number]>("30d");
+  const [selectedWindow, setSelectedWindow] = useState<(typeof REVIEW_WINDOW_OPTIONS)[number]["value"]>("1d");
 
   useEffect(() => {
     let cancelled = false;
@@ -40,7 +39,7 @@ export function RecommendationQualityPage() {
     if (!data) {
       return null;
     }
-    return data.windowed_summaries.find((item) => item.window_label === selectedWindow) ?? data.summary;
+    return data.windowed_summaries.find((item) => normalizeReviewWindow(item.window_label ?? null, "1d") === selectedWindow) ?? data.summary;
   }, [data, selectedWindow]);
 
   const reliabilityReport = data?.reliability_report ?? null;
@@ -78,8 +77,8 @@ export function RecommendationQualityPage() {
                   <div className="top-gap-small">
                     <SegmentedTabs
                       value={selectedWindow}
-                      onChange={(value) => setSelectedWindow(value as (typeof qualityWindows)[number])}
-                      options={qualityWindows.map((window) => ({ value: window, label: window.toUpperCase() }))}
+                      onChange={(value) => setSelectedWindow(normalizeReviewWindow(value, "1d"))}
+                      options={REVIEW_WINDOW_OPTIONS}
                     />
                   </div>
                   <article className="data-card top-gap-small">
@@ -200,10 +199,9 @@ export function RecommendationQualityPage() {
               </div>
             </Card>
 
-            <Card>
-              <SectionTitle kicker="Assessment" title="Latest performance assessment" actions={<HelpHint tooltip="This is the latest narrative assessment snapshot for recent recommendation behavior. Use it as a summary aid, not as a substitute for the underlying metrics." to={recommendationQualityDoc} />} />
+            <DisclosureCard kicker="Assessment" title="Latest performance assessment" subtitle="Collapsed by default so the summary page can stay focused on the actual metrics." actions={<HelpHint tooltip="This is the latest narrative assessment snapshot for recent recommendation behavior. Use it as a summary aid, not as a substitute for the underlying metrics." to={recommendationQualityDoc} />}>
               <div className="helper-text">{typeof data.summary.latest_assessment?.content === "string" ? data.summary.latest_assessment.content.slice(0, 400) : "No assessment text available."}</div>
-            </Card>
+            </DisclosureCard>
           </section>
 
           <section className="card-grid">

@@ -461,6 +461,9 @@ class NewsIngestionServiceTests(unittest.TestCase):
         self.assertEqual([article.title for article in bundle.articles], ["Inflation headline"])
         self.assertEqual(bundle.feeds_used, ["GoogleNews"])
         self.assertEqual(bundle.feed_errors, [])
+        self.assertEqual(bundle.query_diagnostics["query_type"], "topic")
+        self.assertEqual(bundle.query_diagnostics["successful_providers"], ["GoogleNews"])
+        self.assertEqual(bundle.query_diagnostics["provider_results"][0]["status"], "success")
         google_fetch.assert_called_once()
 
     def test_replay_windowed_topic_fetch_explains_provider_exclusions(self) -> None:
@@ -481,6 +484,10 @@ class NewsIngestionServiceTests(unittest.TestCase):
         self.assertTrue(any("mode=replay" in error for error in bundle.feed_errors))
         self.assertTrue(any("Finnhub(topic unsupported)" in error for error in bundle.feed_errors))
         self.assertTrue(any("GoogleNews(replay window unsupported)" in error for error in bundle.feed_errors))
+        self.assertEqual(bundle.query_diagnostics["query_type"], "topic")
+        self.assertTrue(bundle.query_diagnostics["provider_fetch_skipped"])
+        self.assertEqual(bundle.query_diagnostics["provider_fetch_skip_reason"], "no eligible providers")
+        self.assertTrue(any("no providers eligible" in error for error in bundle.query_diagnostics["provider_selection_errors"]))
 
     def test_replay_fetch_uses_sparse_historical_database_articles(self) -> None:
         class FakeHistoricalNews:

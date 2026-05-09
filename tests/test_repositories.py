@@ -62,7 +62,7 @@ from trade_proposer_app.services.macro_context import MacroContextService
 from trade_proposer_app.services.recommendation_outcome_cohorts import RecommendationOutcomeCohortBuilder
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_plan_evaluations import RecommendationPlanEvaluationService
-from trade_proposer_app.services.risk_management import BrokerRiskManager
+from trade_proposer_app.services.risk_management import BrokerRiskManager, LiveBrokerSnapshot, TradeCandidate
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
 from trade_proposer_app.services.execution_candidates import ExecutionCandidateBuilder
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
@@ -472,6 +472,8 @@ class RepositoryTests(unittest.TestCase):
 
         stored_run = runs.get_run(run.id or 0)
         self.assertEqual(stored_run.job_type, JobType.RECOMMENDATION_EVALUATION)
+        self.assertIsNotNone(stored_run.correlation_id)
+        self.assertTrue((stored_run.correlation_id or "").startswith(f"job-{job.id}-run-"))
         self.assertIn('"synced_recommendation_plan_outcomes": 3', stored_run.summary_json or "")
         self.assertIn('"weights_path": "/tmp/weights.json"', stored_run.artifact_json or "")
 
@@ -1228,6 +1230,28 @@ class RepositoryTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_risk_manager_includes_live_broker_snapshot_and_buying_power(self) -> None:
+        session = create_session()
+        try:
+            snapshot = LiveBrokerSnapshot(
+                account={"buying_power": "50"},
+                open_orders=[{"symbol": "AAPL", "qty": "2", "limit_price": "100"}],
+                open_positions=[{"symbol": "MSFT", "market_value": "300"}],
+            )
+            assessment = BrokerRiskManager(SettingsRepository(session), BrokerPositionRepository(session)).assess(
+                TradeCandidate(ticker="AAPL", notional_amount=75.0),
+                live_broker_snapshot=snapshot,
+            )
+            self.assertFalse(assessment.allowed)
+            self.assertIn("broker_buying_power_insufficient", assessment.reasons)
+            self.assertEqual(assessment.metrics["broker_buying_power_usd"], 50.0)
+            self.assertEqual(assessment.metrics["broker_open_order_count"], 1)
+            self.assertEqual(assessment.metrics["broker_open_position_count"], 1)
+            self.assertEqual(assessment.metrics["open_ticker_counts"]["AAPL"], 1)
+            self.assertEqual(assessment.metrics["open_ticker_counts"]["MSFT"], 1)
+        finally:
+            session.close()
+
     def test_settings_mutation_service_updates_typed_settings(self) -> None:
         session = create_session()
         try:
@@ -1344,17 +1368,43 @@ class RepositoryTests(unittest.TestCase):
                 shortlist_aggressiveness=2.0,
                 degraded_penalty=4.0,
             )
+            settings.set_order_execution_config(enabled=False, broker="alpaca", account_mode="live", notional_per_plan=1000.0)
 
             policy = TradeDecisionPolicyService(session).active_policy()
 
             self.assertEqual(policy.policy_id, "settings-active:baseline")
             self.assertEqual(policy.confidence_threshold, 62.0)
             self.assertEqual(policy.effective_confidence_threshold(), 65.0)
+            self.assertEqual(policy.action_confidence_threshold(), 65.0)
+            self.assertEqual(policy.order_execution_account_mode, "live")
+            self.assertFalse(policy.is_paper_exploration_mode)
             self.assertEqual(policy.signal_gating.confidence_adjustment, -1.5)
             self.assertIn("global.entry_band_risk_fraction", policy.plan_generation_config)
             self.assertTrue(policy.action_allowed("long"))
             self.assertTrue(policy.action_allowed("short"))
             self.assertFalse(policy.action_allowed("no_action"))
+        finally:
+            session.close()
+
+    def test_trade_decision_policy_defaults_to_paper_exploration_action_floor(self) -> None:
+        session = create_session()
+        try:
+            settings = SettingsRepository(session)
+            settings.set_confidence_threshold(62.0)
+            settings.set_signal_gating_tuning_config(
+                threshold_offset=3.0,
+                confidence_adjustment=-1.5,
+                near_miss_gap_cutoff=0.25,
+                shortlist_aggressiveness=2.0,
+                degraded_penalty=4.0,
+            )
+
+            policy = TradeDecisionPolicyService(session).active_policy()
+
+            self.assertTrue(policy.is_paper_exploration_mode)
+            self.assertEqual(policy.order_execution_account_mode, "paper")
+            self.assertEqual(policy.effective_confidence_threshold(), 65.0)
+            self.assertEqual(policy.action_confidence_threshold(), 0.0)
         finally:
             session.close()
 
@@ -2086,9 +2136,9 @@ class RepositoryTests(unittest.TestCase):
             confidence_threshold=60.0,
         )
 
-        self.assertEqual(orchestration._shortlist_limit(StrategyHorizon.ONE_DAY, 4), 3)
-        self.assertEqual(orchestration._shortlist_limit(StrategyHorizon.ONE_WEEK, 12), 3)
-        self.assertEqual(orchestration._shortlist_limit(StrategyHorizon.ONE_MONTH, 24), 4)
+        self.assertEqual(orchestration._shortlist_limit(StrategyHorizon.ONE_DAY, 4), 4)
+        self.assertEqual(orchestration._shortlist_limit(StrategyHorizon.ONE_WEEK, 12), 12)
+        self.assertEqual(orchestration._shortlist_limit(StrategyHorizon.ONE_MONTH, 24), 24)
         self.assertEqual(orchestration._minimum_shortlist_confidence(StrategyHorizon.ONE_DAY, 4), 52.0)
         self.assertEqual(orchestration._minimum_shortlist_confidence(StrategyHorizon.ONE_WEEK, 12), 53.0)
         self.assertEqual(orchestration._minimum_shortlist_attention(StrategyHorizon.ONE_MONTH, 24), 52.0)
@@ -2150,7 +2200,7 @@ class RepositoryTests(unittest.TestCase):
 
         result = orchestration.execute(watchlist, watchlist.tickers, run_id=1)
 
-        self.assertEqual(result["summary"]["shortlist_count"], 2)
+        self.assertEqual(result["summary"]["shortlist_count"], 3)
         decisions = {item["ticker"]: item for item in result["artifact"]["shortlist_decisions"]}
         self.assertEqual(decisions["AAPL"]["selection_lane"], "technical")
         self.assertEqual(decisions["AAPL"]["selection_lane_label"], "technical")
@@ -2868,7 +2918,7 @@ class RepositoryTests(unittest.TestCase):
         summary_settings = repository.get_summary_settings()
         self.assertEqual(summary_settings["summary_backend"], "pi_agent")
         self.assertEqual(summary_settings["summary_pi_command"], "pi")
-        self.assertEqual(summary_settings["summary_timeout_seconds"], "60")
+        self.assertEqual(summary_settings["summary_timeout_seconds"], "600")
         self.assertEqual(repository.get_plan_generation_tuning_settings()["min_actionable_resolved"], 20)
         self.assertEqual(repository.get_plan_generation_tuning_settings()["min_validation_resolved"], 8)
         self.assertIn("price fluctuation", summary_settings["summary_prompt"])

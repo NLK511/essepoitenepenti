@@ -46,7 +46,16 @@ class AlpacaPaperClient:
     def cancel_order(self, order_id: str) -> AlpacaOrderSubmissionResult:
         return self._request("delete", f"/v2/orders/{order_id}")
 
-    def _request(self, method: str, path: str, *, payload: dict[str, Any] | None = None) -> AlpacaOrderSubmissionResult:
+    def get_account(self) -> AlpacaOrderSubmissionResult:
+        return self._request("get", "/v2/account")
+
+    def list_open_orders(self) -> AlpacaOrderSubmissionResult:
+        return self._request("get", "/v2/orders?status=open&nested=true", allow_list_response=True)
+
+    def list_open_positions(self) -> AlpacaOrderSubmissionResult:
+        return self._request("get", "/v2/positions", allow_list_response=True)
+
+    def _request(self, method: str, path: str, *, payload: dict[str, Any] | None = None, allow_list_response: bool = False) -> AlpacaOrderSubmissionResult:
         if not self.api_key or not self.api_secret:
             raise AlpacaPaperClientError("alpaca api credentials are missing")
 
@@ -76,6 +85,8 @@ class AlpacaPaperClient:
             )
 
         if not isinstance(response_payload, dict):
+            if allow_list_response and isinstance(response_payload, list):
+                return AlpacaOrderSubmissionResult(status_code=response.status_code, payload={"items": response_payload})
             raise AlpacaPaperClientError(
                 "alpaca request returned a non-object payload",
                 status_code=response.status_code,

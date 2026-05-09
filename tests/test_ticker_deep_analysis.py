@@ -133,6 +133,17 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         comps = self.service._build_confidence_components(context, RecommendationDirection.LONG)
         self.assertEqual(comps["data_quality_cap"], 66.0)
 
+    def test_build_confidence_components_penalizes_context_quality_status(self) -> None:
+        context = {
+            "macro_context_quality_status": "blocked",
+            "industry_context_quality_status": "degraded",
+            "problems": [],
+            "news_feed_errors": [],
+        }
+        comps = self.service._build_confidence_components(context, RecommendationDirection.LONG)
+        self.assertLess(comps["data_quality_cap"], 100.0)
+        self.assertEqual(self.service._context_quality_status(context), "blocked")
+
     def test_build_confidence_components_reward_relative_strength_and_volume_confirmation(self) -> None:
         base = self.service._build_confidence_components(
             {"momentum_medium": 0.06, "momentum_short": 0.03, "rsi": 56, "price_above_sma50": 1, "price_above_sma200": 1},
@@ -353,6 +364,8 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         self.assertIn("rel_return_5d_vs_spy", analysis["technical"])
         self.assertIn("volume_ratio_20", analysis["technical"])
         self.assertEqual(analysis["technical"]["reference_features"]["sector_etf_symbol"], "XLK")
+        self.assertIn("context_quality", analysis["ticker_deep_analysis"])
+        self.assertEqual(analysis["ticker_deep_analysis"]["context_quality"]["status"], "unknown")
 
     def test_analyze_resolves_direction_from_aggregated_score(self) -> None:
         dates = pd.date_range("2026-01-01", periods=250, freq="B")

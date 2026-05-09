@@ -58,6 +58,22 @@ export function SectionTitle(props: { kicker?: string; title: string; subtitle?:
   );
 }
 
+export function DisclosureCard(props: PropsWithChildren<{ kicker?: string; title: string; subtitle?: string; actions?: ReactNode; defaultOpen?: boolean; className?: string }>) {
+  return (
+    <details className={`data-card disclosure-card ${props.className ?? ""}`.trim()} open={props.defaultOpen}>
+      <summary className="data-card-header disclosure-card-summary">
+        <div>
+          {props.kicker ? <div className="kicker">{props.kicker}</div> : null}
+          <div className="data-card-title">{props.title}</div>
+          {props.subtitle ? <div className="helper-text">{props.subtitle}</div> : null}
+        </div>
+        {props.actions ? <div className="cluster">{props.actions}</div> : null}
+      </summary>
+      <div className="disclosure-card-body">{props.children}</div>
+    </details>
+  );
+}
+
 export function StatCard(props: {
   label: string;
   value: ReactNode;

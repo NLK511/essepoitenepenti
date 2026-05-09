@@ -51,9 +51,10 @@ Already in place:
 - `/api/health` separation between service health, dependency health, worker health, scheduler health, run health, and context freshness
 - lease-age, stale-running-run, worker-heartbeat-age, and scheduler-heartbeat diagnostics in `/api/health`
 - worker and scheduler daemon logging
+- persisted run correlation ids included in run models and dispatch logs
 
 Still needed:
-- richer structured logs and stronger cross-process run correlation
+- richer structured logs beyond the current run correlation id
 - easier diagnosis of provider failures across processes
 - continued polish of health signal presentation and operator-facing diagnostics
 

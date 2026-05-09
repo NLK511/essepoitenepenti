@@ -15,20 +15,15 @@ from trade_proposer_app.services.recommendation_plan_baselines import Recommenda
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_setup_family_reviews import RecommendationSetupFamilyReviewService
 from trade_proposer_app.services.settings_domains import SettingsDomainService
+from trade_proposer_app.services.time_windows import review_window_label, review_window_start
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicyService
 from trade_proposer_app.services.trade_policy_evaluation import TradePolicyEvaluationService
 
 
 class RecommendationQualitySummaryService:
-    WINDOW_DEFINITIONS: list[tuple[str, int]] = [
-        ("7d", 7),
-        ("30d", 30),
-        ("90d", 90),
-        ("180d", 180),
-        ("1y", 365),
-    ]
+    WINDOW_DEFINITIONS: list[str] = ["1d", "7d", "1m", "3m", "6m", "1y", "all"]
     METRIC_SAMPLE_LIMIT = 500_000
-    DEFAULT_SUMMARY_WINDOW = "30d"
+    DEFAULT_SUMMARY_WINDOW = "1d"
 
     def __init__(self, session) -> None:
         self.session = session
@@ -72,9 +67,9 @@ class RecommendationQualitySummaryService:
         baselines = None
         evidence = None
         family_review = None
-        for label, days in self.WINDOW_DEFINITIONS:
-            computed_after = now - timedelta(days=days)
-            evaluated_after = now - timedelta(days=days)
+        for label in self.WINDOW_DEFINITIONS:
+            computed_after = review_window_start(label, now)
+            evaluated_after = computed_after
             calibration_window = RecommendationPlanCalibrationService(self.effective_outcomes).summarize(
                 limit=self.METRIC_SAMPLE_LIMIT,
                 evaluated_after=evaluated_after,
@@ -103,10 +98,10 @@ class RecommendationQualitySummaryService:
                 entry_miss_window,
                 walk_forward=None,
                 walk_forward_error=None,
-                window_label=label,
-                computed_after=computed_after,
+                window_label=review_window_label(label),
+                computed_after=computed_after or (now - timedelta(days=3650)),
                 computed_before=now,
-                evaluated_after=evaluated_after,
+                evaluated_after=evaluated_after or (now - timedelta(days=3650)),
                 evaluated_before=now,
             )
             windowed_summaries.append(window_summary)

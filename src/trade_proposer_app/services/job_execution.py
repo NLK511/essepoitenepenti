@@ -89,11 +89,12 @@ class JobExecutionService:
     def execute_run(self, run_id: int, worker_id: str | None = None) -> tuple[list[Recommendation], dict[str, object]]:
         run = self.runs.get_run(run_id)
         logger.info(
-            "job execution dispatch started: run_id=%s job_id=%s job_type=%s worker_id=%s",
+            "job execution dispatch started: run_id=%s job_id=%s job_type=%s worker_id=%s correlation_id=%s",
             run.id,
             run.job_id,
             run.job_type.value,
             worker_id,
+            run.correlation_id,
         )
         logger.debug(
             "job execution dispatch payload: run_id=%s scheduled_for=%s started_at=%s artifact=%s",
@@ -132,10 +133,11 @@ class JobExecutionService:
 
     def _execute_proposal_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
         logger.info(
-            "job execution proposal started: run_id=%s job_id=%s worker=%s",
+            "job execution proposal started: run_id=%s job_id=%s worker=%s correlation_id=%s",
             run.id,
             run.job_id,
             socket.gethostname(),
+            run.correlation_id,
         )
         logger.debug(
             "job execution proposal run payload: run_id=%s scheduled_for=%s started_at=%s artifact=%s",

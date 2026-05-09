@@ -977,13 +977,30 @@ class NewsIngestionService:
         feeds_used: list[str],
         article_count: int,
     ) -> dict[str, object]:
+        return NewsIngestionService._build_query_diagnostics(
+            query_type="ticker",
+            request_mode=request_mode,
+            provider_results=provider_results,
+            feeds_used=feeds_used,
+            article_count=article_count,
+        )
+
+    @staticmethod
+    def _build_query_diagnostics(
+        *,
+        query_type: NewsQueryType,
+        request_mode: NewsRequestMode,
+        provider_results: list[dict[str, object]],
+        feeds_used: list[str],
+        article_count: int,
+    ) -> dict[str, object]:
         successful_providers = [str(item.get("provider")) for item in provider_results if item.get("status") == "success"]
         failed_providers = [str(item.get("provider")) for item in provider_results if item.get("status") == "error"]
         unsupported_providers = [str(item.get("provider")) for item in provider_results if item.get("status") == "unsupported_market"]
         fallback_used = bool(failed_providers)
         fallback_succeeded = bool(failed_providers and successful_providers and article_count > 0)
         return {
-            "query_type": "ticker",
+            "query_type": query_type,
             "request_mode": request_mode,
             "provider_results": provider_results,
             "successful_providers": successful_providers,
@@ -1035,6 +1052,7 @@ class NewsIngestionService:
 
         bundle = NewsBundle(ticker=topic)
         seen_links: set[str] = set()
+        provider_results: list[dict[str, object]] = []
 
         if self.historical_news and (start_at or end_at):
             local_articles = self.historical_news.list_news(
@@ -1046,7 +1064,26 @@ class NewsIngestionService:
             if local_articles:
                 self._merge_articles(bundle, local_articles, seen_links)
                 bundle.feeds_used.append("database")
+                provider_results.append(
+                    {
+                        "provider": "database",
+                        "status": "success",
+                        "article_count": len(local_articles),
+                        "attempt_count": 1,
+                        "error": None,
+                    }
+                )
             if len(local_articles) >= 2:
+                bundle.query_diagnostics = self._build_query_diagnostics(
+                    query_type="topic",
+                    request_mode=request_mode,
+                    provider_results=provider_results,
+                    feeds_used=bundle.feeds_used,
+                    article_count=len(bundle.articles),
+                )
+                bundle.query_diagnostics["database_article_count"] = len(local_articles)
+                bundle.query_diagnostics["provider_fetch_skipped"] = True
+                bundle.query_diagnostics["provider_fetch_skip_reason"] = "database coverage satisfied minimum"
                 if cache_key is not None:
                     self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
                 return bundle
@@ -1060,6 +1097,17 @@ class NewsIngestionService:
         )
         if not providers:
             bundle.feed_errors.extend(selection_errors)
+            bundle.query_diagnostics = self._build_query_diagnostics(
+                query_type="topic",
+                request_mode=request_mode,
+                provider_results=provider_results,
+                feeds_used=bundle.feeds_used,
+                article_count=len(bundle.articles),
+            )
+            bundle.query_diagnostics["provider_fetch_skipped"] = True
+            bundle.query_diagnostics["provider_fetch_skip_reason"] = "no eligible providers"
+            if selection_errors:
+                bundle.query_diagnostics["provider_selection_errors"] = selection_errors
             if cache_key is not None:
                 self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
             return bundle
@@ -1068,6 +1116,15 @@ class NewsIngestionService:
                 articles = provider.fetch_topic(topic, fetch_limit, start_at=start_at, end_at=end_at)
             except Exception as exc:  # noqa: BLE001
                 bundle.feed_errors.append(f"{provider.name}: {exc}")
+                provider_results.append(
+                    {
+                        "provider": provider.name,
+                        "status": "error",
+                        "article_count": 0,
+                        "attempt_count": self._provider_attempt_count(provider, exc),
+                        "error": str(exc),
+                    }
+                )
                 continue
             filtered_articles = self._filter_articles_for_window(articles, start_at=start_at, end_at=end_at)
 
@@ -1078,10 +1135,26 @@ class NewsIngestionService:
                     pass
 
             self._merge_articles(bundle, filtered_articles, seen_links)
+            provider_results.append(
+                {
+                    "provider": provider.name,
+                    "status": "success" if filtered_articles else "empty",
+                    "article_count": len(filtered_articles),
+                    "attempt_count": 1,
+                    "error": None,
+                }
+            )
             if filtered_articles:
                 bundle.feeds_used.append(provider.name)
         bundle.articles = bundle.articles[:fetch_limit]
         bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
+        bundle.query_diagnostics = self._build_query_diagnostics(
+            query_type="topic",
+            request_mode=request_mode,
+            provider_results=provider_results,
+            feeds_used=bundle.feeds_used,
+            article_count=len(bundle.articles),
+        )
         if cache_key is not None:
             self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
         return bundle
@@ -1117,7 +1190,7 @@ class NewsIngestionService:
             normalized_queries.append(normalized)
         if not normalized_queries:
             normalized_queries = [subject]
-        for query in normalized_queries[:5]:
+        for query in normalized_queries[:8]:
             query_bundle = self.fetch_topic(
                 query,
                 limit=per_query_limit,

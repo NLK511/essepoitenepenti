@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { getJson } from "../api";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
+import { Badge, Card, DisclosureCard, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, SegmentedTabs } from "../components/ui";
 import { ContextEventSummary, ContextScoreSummary, ProvenanceStrip, WarningSummary } from "../components/decision-surface";
 import type { IndustryContextSnapshot, MacroContextSnapshot } from "../types";
 import { contextInterpretationTone, contextSnapshotTone, contextSummaryBackend, contextSummaryError, contextSummaryMethod, contextSummaryModel, extractDisplayLabels, formatDate } from "../utils";
@@ -212,17 +212,15 @@ export function ContextSnapshotDetailPage() {
           </Card>
 
           <section className="card-grid">
-            <Card>
-              <SectionTitle kicker="Summary provenance" title="How the summary was generated" />
+            <DisclosureCard kicker="Summary provenance" title="How the summary was generated" defaultOpen>
               <ProvenanceStrip method={contextSummaryMethod(snapshot.metadata)} backend={contextSummaryBackend(snapshot.metadata)} model={contextSummaryModel(snapshot.metadata)} error={contextSummaryError(snapshot.metadata)} />
               <div className="helper-text top-gap-small">Duration {summaryDuration !== null ? `${summaryDuration.toFixed(2)}s` : "—"}</div>
               <details className="top-gap-small">
                 <summary className="helper-text">Show summary metadata</summary>
                 <pre className="markdown-code-block top-gap-small">{JSON.stringify(snapshot.metadata?.context_summary_metadata ?? {}, null, 2)}</pre>
               </details>
-            </Card>
-            <Card>
-              <SectionTitle kicker="Lifecycle" title="Event lifecycle and contradiction state" />
+            </DisclosureCard>
+            <DisclosureCard kicker="Lifecycle" title="Event lifecycle and contradiction state">
               {lifecycle ? (
                 <div className="summary-grid">
                   <div className="summary-item"><span className="summary-label">Lifecycle counts</span><span className="summary-value">{String(lifecycle.new_event_count ?? 0)} / {String(lifecycle.escalating_event_count ?? 0)} / {String(lifecycle.persistent_event_count ?? 0)} / {String(lifecycle.fading_event_count ?? 0)}</span></div>
@@ -230,11 +228,10 @@ export function ContextSnapshotDetailPage() {
                 </div>
               ) : <EmptyState message="No lifecycle summary stored on this snapshot." />}
               {contradictions.length > 0 ? <div className="helper-text top-gap-small">Contradictory labels: {contradictions.join(", ")}</div> : null}
-            </Card>
+            </DisclosureCard>
           </section>
 
-          <Card>
-            <SectionTitle kicker="Top events" title={isIndustrySnapshot(snapshot) ? "Stored industry drivers" : "Stored macro events"} />
+          <DisclosureCard title="Top events" subtitle={isIndustrySnapshot(snapshot) ? "Stored industry drivers" : "Stored macro events"} defaultOpen>
             {eventRows.length === 0 ? <EmptyState message="No stored events on this snapshot." /> : (
               <ul className="list-reset">
                 {eventRows.map((event, index) => {
@@ -297,11 +294,10 @@ export function ContextSnapshotDetailPage() {
                 })}
               </ul>
             )}
-          </Card>
+          </DisclosureCard>
 
           <section className="card-grid">
-            <Card>
-              <SectionTitle kicker="Evidence" title="Triaged primary evidence" />
+            <DisclosureCard title="Triaged primary evidence" subtitle="Primary evidence remains accessible without forcing it into the first view.">
               {triagedEvidence.length === 0 ? <EmptyState message="No triaged primary evidence was stored on this snapshot." /> : (
                 <ul className="list-reset">
                   {triagedEvidence.map((item, index) => (
@@ -316,21 +312,19 @@ export function ContextSnapshotDetailPage() {
                   ))}
                 </ul>
               )}
-            </Card>
-            <Card>
-              <SectionTitle kicker="Warnings" title="Warnings and missing inputs" />
+            </DisclosureCard>
+            <DisclosureCard title="Warnings" subtitle="Warnings and missing inputs stay available but out of the way.">
               {snapshot.warnings.length === 0 && snapshot.missing_inputs.length === 0 ? <EmptyState message="No warnings or missing inputs recorded." /> : (
                 <>
                   <WarningSummary warnings={snapshot.warnings} />
                   {snapshot.missing_inputs.length > 0 ? <div className="helper-text top-gap-small">Missing inputs: {snapshot.missing_inputs.join(", ")}</div> : null}
                 </>
               )}
-            </Card>
+            </DisclosureCard>
           </section>
 
           <section className="card-grid">
-            <Card>
-              <SectionTitle kicker="Source breakdown" title="Stored source mix" />
+            <DisclosureCard title="Source breakdown" subtitle="Stored source mix and linked macro themes." defaultOpen>
               <div className="summary-grid">
                 <div className="summary-item"><span className="summary-label">Primary news items</span><span className="summary-value">{String(snapshot.source_breakdown?.primary_news_item_count ?? 0)}</span></div>
                 <div className="summary-item"><span className="summary-label">Supporting social items</span><span className="summary-value">{String(snapshot.source_breakdown?.supporting_social_item_count ?? 0)}</span></div>
@@ -340,10 +334,9 @@ export function ContextSnapshotDetailPage() {
               <div className="helper-text top-gap-small">Publishers: {stringList(snapshot.source_breakdown?.primary_news_publishers).join(", ") || "—"}</div>
               <div className="helper-text top-gap-small">Source priorities: {stringList(snapshot.source_breakdown?.primary_news_source_priorities).join(", ") || "—"}</div>
               {isIndustrySnapshot(snapshot) ? <div className="helper-text top-gap-small">Linked macro themes: {linkedMacroLabels.join(", ") || "—"}</div> : null}
-            </Card>
+            </DisclosureCard>
             {isIndustrySnapshot(snapshot) ? (
-              <Card>
-                <SectionTitle kicker="Advanced detail" title="Stored industry ontology context" />
+              <DisclosureCard title="Advanced detail" subtitle="Stored industry ontology context and raw JSON." >
                 <div className="summary-grid">
                   <div className="summary-item"><span className="summary-label">Sector</span><span className="summary-value">{eventLabel(sectorDefinition?.label ?? ontologyProfile?.sector)}</span></div>
                   <div className="summary-item"><span className="summary-label">Peer industries</span><span className="summary-value">{stringList(ontologyProfile?.peer_industries).join(", ") || "—"}</span></div>
@@ -361,26 +354,20 @@ export function ContextSnapshotDetailPage() {
                     ))}
                   </ul>
                 ) : null}
-              </Card>
+                <details className="top-gap-small">
+                  <summary className="helper-text">Show raw JSON</summary>
+                  <pre className="markdown-code-block top-gap-small">{JSON.stringify({ source_breakdown: snapshot.source_breakdown, metadata: snapshot.metadata }, null, 2)}</pre>
+                </details>
+              </DisclosureCard>
             ) : (
-              <Card>
-                <SectionTitle kicker="Advanced detail" title="Stored JSON detail" />
+              <DisclosureCard title="Advanced detail" subtitle="Stored JSON detail." >
                 <details>
                   <summary className="helper-text">Show raw JSON</summary>
                   <pre className="markdown-code-block top-gap-small">{JSON.stringify({ source_breakdown: snapshot.source_breakdown, metadata: snapshot.metadata }, null, 2)}</pre>
                 </details>
-              </Card>
+              </DisclosureCard>
             )}
           </section>
-          {isIndustrySnapshot(snapshot) ? (
-            <Card>
-              <SectionTitle kicker="Advanced detail" title="Stored JSON detail" />
-              <details>
-                <summary className="helper-text">Show raw JSON</summary>
-                <pre className="markdown-code-block top-gap-small">{JSON.stringify({ source_breakdown: snapshot.source_breakdown, metadata: snapshot.metadata }, null, 2)}</pre>
-              </details>
-            </Card>
-          ) : null}
         </div>
       ) : null}
     </>

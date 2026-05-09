@@ -261,6 +261,47 @@ class ProposalServiceTests(unittest.TestCase):
         self.assertEqual(context["news_items"], sentiment_payload["news_items"])
         self.assertEqual(context["news_point_count"], 1)
 
+    def test_apply_news_context_exposes_context_quality(self) -> None:
+        bundle = NewsBundle(ticker="", articles=[], feeds_used=["NewsAPI"])
+        resolver = Mock()
+        resolver.resolve_macro_snapshot.return_value = {
+            "score": 0.1,
+            "label": "NEUTRAL",
+            "context_quality_score": 61.5,
+            "context_quality_status": "degraded",
+            "context_quality_flags": {"partial_coverage": True},
+            "context_quality_notes": ["macro coverage is thin"],
+        }
+        resolver.resolve_industry_snapshot.return_value = {
+            "score": 0.2,
+            "label": "POSITIVE",
+            "context_quality_score": 88.0,
+            "context_quality_status": "usable",
+            "context_quality_flags": {"hard_missing": False},
+            "context_quality_notes": [],
+        }
+        service = ProposalService(news_service=_FakeNewsService(bundle), snapshot_resolver=resolver)
+        service.sentiment_analyzer.analyze = MagicMock(
+            return_value={
+                "score": 0.0,
+                "label": "NEUTRAL",
+                "contexts": [],
+                "context_flags": {},
+                "sentiment_volatility": 0.0,
+                "polarity_trend": 0.0,
+                "sources": ["NewsAPI"],
+                "news_items": [{"title": "News Title", "link": "https://example.com", "compound": 0.5}],
+                "problems": [],
+            }
+        )
+
+        context = service._apply_news_context({}, "AAPL")
+
+        self.assertEqual(context["macro_context_quality_status"], "degraded")
+        self.assertEqual(context["industry_context_quality_status"], "usable")
+        self.assertEqual(context["macro_context_quality_score"], 61.5)
+        self.assertEqual(context["industry_context_quality_score"], 88.0)
+
     def test_apply_news_context_uses_replay_mode_for_historical_as_of(self) -> None:
         bundle = NewsBundle(ticker="", articles=[], feeds_used=["database"])
         news_service = _FakeNewsService(bundle)

@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -64,9 +64,20 @@ class RunRecord(Base, TimestampMixin):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     worker_id: Mapped[str | None] = mapped_column(String(120), ForeignKey("worker_heartbeats.worker_id"), nullable=True, index=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     timing_json: Mapped[str] = mapped_column(Text, default="")
     job: Mapped[JobRecord] = relationship(back_populates="runs")
+
+
+class DashboardTrendSnapshotRecord(Base, TimestampMixin):
+    __tablename__ = "dashboard_trend_snapshots"
+    __table_args__ = (UniqueConstraint("snapshot_date", name="uq_dashboard_trend_snapshots_snapshot_date"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    computed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    snapshot_json: Mapped[str] = mapped_column(Text, default="{}")
 
 
 class BrokerOrderExecutionRecord(Base, TimestampMixin):

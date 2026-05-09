@@ -58,6 +58,22 @@ class BrokerPositionRepository:
         rows = self.session.scalars(query.order_by(BrokerPositionRecord.created_at.desc()).limit(max(1, limit))).all()
         return [self._to_model(row) for row in rows]
 
+    def list_by_ticker(
+        self,
+        ticker: str,
+        *,
+        limit: int = 200,
+        exit_after: datetime | None = None,
+        exit_before: datetime | None = None,
+    ) -> list[BrokerPosition]:
+        query = select(BrokerPositionRecord).where(BrokerPositionRecord.ticker == ticker.upper())
+        if exit_after is not None:
+            query = query.where(BrokerPositionRecord.exit_filled_at >= self._normalize_datetime(exit_after))
+        if exit_before is not None:
+            query = query.where(BrokerPositionRecord.exit_filled_at <= self._normalize_datetime(exit_before))
+        rows = self.session.scalars(query.order_by(BrokerPositionRecord.created_at.desc()).limit(max(1, limit))).all()
+        return [self._to_model(row) for row in rows]
+
     def _apply(self, record: BrokerPositionRecord, position: BrokerPosition) -> None:
         record.broker_order_execution_id = position.broker_order_execution_id
         record.broker = position.broker

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
+from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.domain.models import Run
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
@@ -13,8 +14,16 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 
 
 @router.get("")
-async def list_runs(session: Session = Depends(get_db_session)) -> list[Run]:
-    return RunRepository(session).list_latest_runs(limit=50)
+async def list_runs(job_type: str | None = None, limit: int = 10, session: Session = Depends(get_db_session)) -> list[Run]:
+    repository = RunRepository(session)
+    normalized_limit = max(1, min(int(limit), 100))
+    if job_type is None or not str(job_type).strip():
+        return repository.list_latest_runs(limit=normalized_limit)
+    try:
+        parsed_job_type = JobType.parse(job_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid job_type: use a known job type value") from exc
+    return repository.list_runs_for_job_type(parsed_job_type, limit=normalized_limit)
 
 
 @router.get("/{run_id}")

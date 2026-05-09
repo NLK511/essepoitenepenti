@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import BrokerOrderExecution
@@ -117,6 +117,30 @@ class BrokerOrderExecutionRepository:
             .limit(max(1, limit))
         ).all()
         return [self._to_model(row) for row in rows]
+
+    def list_by_ticker(
+        self,
+        ticker: str,
+        *,
+        limit: int = 200,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+    ) -> list[BrokerOrderExecution]:
+        query = select(BrokerOrderExecutionRecord).where(BrokerOrderExecutionRecord.ticker == ticker.upper())
+        if created_after is not None:
+            query = query.where(BrokerOrderExecutionRecord.created_at >= self._normalize_datetime(created_after))
+        if created_before is not None:
+            query = query.where(BrokerOrderExecutionRecord.created_at <= self._normalize_datetime(created_before))
+        rows = self.session.scalars(query.order_by(BrokerOrderExecutionRecord.created_at.desc()).limit(max(1, limit))).all()
+        return [self._to_model(row) for row in rows]
+
+    def count_by_ticker(self, ticker: str, *, created_after: datetime | None = None, created_before: datetime | None = None) -> int:
+        query = select(BrokerOrderExecutionRecord).where(BrokerOrderExecutionRecord.ticker == ticker.upper())
+        if created_after is not None:
+            query = query.where(BrokerOrderExecutionRecord.created_at >= self._normalize_datetime(created_after))
+        if created_before is not None:
+            query = query.where(BrokerOrderExecutionRecord.created_at <= self._normalize_datetime(created_before))
+        return int(self.session.scalar(select(func.count()).select_from(query.subquery())) or 0)
 
     def get_latest_by_plan_ids(self, plan_ids: list[int]) -> dict[int, BrokerOrderExecution]:
         normalized = [plan_id for plan_id in plan_ids if isinstance(plan_id, int)]

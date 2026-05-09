@@ -2,10 +2,10 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson } from "../api";
-import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 import { ScoreBadge, WarningSummary } from "../components/decision-surface";
 import type { TickerSignalSnapshot } from "../types";
-import { biasTone, directionTone, detailLabel, extractDisplayLabels, formatDate, yahooFinanceUrl } from "../utils";
+import { biasTone, directionTone, detailLabel, extractDisplayLabels, formatDate, normalizeReviewWindow, reviewWindowLabel, reviewWindowStartIso, REVIEW_WINDOW_OPTIONS, yahooFinanceUrl } from "../utils";
 
 function buildQuery(searchParams: URLSearchParams): string {
   const query = searchParams.toString();
@@ -21,21 +21,29 @@ function joinSummary(items: string[], empty = "none"): string {
 }
 
 export function TickerSignalsPage() {
-  const [searchParams, setSearchParams] = useSearchParams({ limit: "100" });
+  const [searchParams, setSearchParams] = useSearchParams({ limit: "100", window: "1d" });
   const [signals, setSignals] = useState<TickerSignalSnapshot[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const selectedWindow = normalizeReviewWindow(searchParams.get("window"), "1d");
 
   useEffect(() => {
     async function load() {
       try {
         setError(null);
-        setSignals(await getJson<TickerSignalSnapshot[]>(buildQuery(searchParams)));
+        const computedAfter = reviewWindowStartIso(selectedWindow);
+        const query = new URLSearchParams(searchParams);
+        if (computedAfter) {
+          query.set("computed_after", computedAfter);
+        } else {
+          query.delete("computed_after");
+        }
+        setSignals(await getJson<TickerSignalSnapshot[]>(buildQuery(query)));
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load ticker signals");
       }
     }
     void load();
-  }, [searchParams]);
+  }, [searchParams, selectedWindow]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,6 +58,7 @@ export function TickerSignalsPage() {
     if (!next.has("limit")) {
       next.set("limit", "100");
     }
+    next.set("window", selectedWindow);
     setSearchParams(next);
   }
 
@@ -70,6 +79,24 @@ export function TickerSignalsPage() {
       />
       {error ? <ErrorState message={error} /> : null}
 
+      <DisclosureCard
+        kicker="Time window"
+        title={`Showing ${reviewWindowLabel(selectedWindow)}`}
+        subtitle="Signals default to today’s local day boundary so the 1D view starts at midnight in your timezone."
+        defaultOpen
+        actions={
+          <SegmentedTabs
+            value={selectedWindow}
+            onChange={(value) => {
+              const next = new URLSearchParams(searchParams);
+              next.set("window", normalizeReviewWindow(value, "1d"));
+              setSearchParams(next, { replace: true });
+            }}
+            options={REVIEW_WINDOW_OPTIONS}
+          />
+        }
+      />
+
       <section className="metrics-grid top-gap">
         <StatCard label="Signals loaded" value={signals?.length ?? "—"} helper="Current result set under the active filters" />
         <StatCard label="Shortlisted" value={summary.shortlisted} helper="Names promoted into deeper review lanes" />
@@ -77,15 +104,14 @@ export function TickerSignalsPage() {
         <StatCard label="Tailwind context" value={summary.tailwind} helper="Signals currently tagged with context tailwinds" />
       </section>
 
-      <Card className="sticky-toolbar">
-        <SectionTitle kicker="Filters" title="Find candidate signals" subtitle="Filter by ticker or run, then scan what was shortlisted, blocked, or sent into deeper analysis." />
+      <DisclosureCard className="sticky-toolbar" kicker="Filters" title="Find candidate signals" subtitle="Filter by ticker or run, then scan what was shortlisted, blocked, or sent into deeper analysis." defaultOpen>
         <form className="form-grid" onSubmit={handleSubmit}>
           <label className="form-field"><span>Ticker</span><input name="ticker" defaultValue={searchParams.get("ticker") ?? ""} placeholder="AAPL" /></label>
           <label className="form-field"><span>Run id</span><input name="run_id" defaultValue={searchParams.get("run_id") ?? ""} placeholder="145" /></label>
           <label className="form-field"><span>Limit</span><select name="limit" defaultValue={searchParams.get("limit") ?? "100"}><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option></select></label>
           <div className="form-actions"><button className="button" type="submit">Apply</button></div>
         </form>
-      </Card>
+      </DisclosureCard>
 
       <Card className="top-gap">
         <SectionTitle title="Candidate review" subtitle={signals ? `${signals.length} ticker signal snapshot(s)` : undefined} />
@@ -147,12 +173,11 @@ export function TickerSignalsPage() {
 
                   <div className="helper-text top-gap-small">shortlist {joinSummary(shortlistReasons, "eligible")} · drivers {joinSummary(primaryDrivers)}</div>
                   <WarningSummary warnings={signal.warnings} />
-                  <details className="top-gap-small">
-                    <summary className="helper-text">Show advanced signal diagnostics</summary>
+                  <DisclosureCard title="Advanced signal diagnostics" subtitle="Low-priority signal diagnostics stay out of the main scroll path." >
                     <div className="helper-text top-gap-small">industry channels {joinSummary(industryExposureChannels)} · ticker channels {joinSummary(tickerExposureChannels)}</div>
                     <div className="helper-text">flags {joinSummary(conflictFlags)} · tags {joinSummary(transmissionTags)}</div>
                     <div className="helper-text">cheap scan trend {typeof components?.trend_score === "number" ? components.trend_score.toFixed(0) : "—"} / momentum {typeof components?.momentum_score === "number" ? components.momentum_score.toFixed(0) : "—"} / breakout {typeof components?.breakout_score === "number" ? components.breakout_score.toFixed(0) : "—"}</div>
-                  </details>
+                  </DisclosureCard>
                 </article>
               );
             })}

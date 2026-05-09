@@ -1,5 +1,6 @@
 from collections import Counter
 from datetime import datetime, timedelta, timezone
+import json
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
@@ -14,49 +15,26 @@ from trade_proposer_app.repositories.recommendation_outcomes import Recommendati
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
+from trade_proposer_app.services.dashboard_trends import DashboardTrendService
 from trade_proposer_app.services.recommendation_evidence_concentration import RecommendationEvidenceConcentrationService
 from trade_proposer_app.services.recommendation_plan_baselines import RecommendationPlanBaselineService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_quality_summary import RecommendationQualitySummaryService
 from trade_proposer_app.services.recommendation_setup_family_reviews import RecommendationSetupFamilyReviewService
 from trade_proposer_app.services.settings_domains import SettingsDomainService
+from trade_proposer_app.services.time_windows import normalize_review_window, review_window_start
 from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-WINDOW_DEFINITIONS: dict[str, timedelta | None] = {
-    "1d": timedelta(days=1),
-    "7d": timedelta(days=7),
-    "1m": timedelta(days=30),
-    "3m": timedelta(days=90),
-    "6m": timedelta(days=180),
-    "all": None,
-}
-DASHBOARD_TREND_SERIES: list[tuple[str, str, str]] = [
-    ("overall_win_rate_percent", "Overall win rate", "percent"),
-    ("total_profit", "Total profit", "currency"),
-    ("shortlist_rate_percent", "Shortlist rate", "percent"),
-    ("actionable_rate_percent", "Actionable rate", "percent"),
-    ("actionability_gap_percent", "Actionability gap", "percent"),
-    ("news_processed", "News processed", "count"),
-    ("tweets_processed", "Tweets processed", "count"),
-    ("bars_stored", "Bars stored", "count"),
-    ("orders_placed", "Orders placed", "count"),
-    ("broker_closed_positions", "Broker closed", "count"),
-    ("broker_realized_pnl", "Broker realized P&L", "currency"),
-]
 
 
 def _normalize_window(window: str | None) -> str:
-    normalized = str(window or "1m").strip().lower()
-    return normalized if normalized in WINDOW_DEFINITIONS else "1m"
+    return normalize_review_window(window, default="1d")
 
 
 def _window_start(window: str, now: datetime) -> datetime | None:
-    delta = WINDOW_DEFINITIONS[window]
-    if delta is None:
-        return None
-    return now - delta
+    return review_window_start(window, now)
 
 
 def _percentage(part: int, total: int) -> float | None:
@@ -95,6 +73,32 @@ def _sum_plan_item_count(plans: list, key: str) -> int:
             except (TypeError, ValueError):
                 continue
     return total
+
+
+def _extract_warning_messages(payload_text: str | None) -> list[str]:
+    if not payload_text:
+        return []
+    try:
+        payload = json.loads(payload_text)
+    except json.JSONDecodeError:
+        return []
+    warnings: list[str] = []
+    if isinstance(payload, dict):
+        for key in ("warnings", "warning", "summary_warning", "context_summary_warning"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                warnings.append(value.strip())
+            elif isinstance(value, list):
+                warnings.extend(str(item).strip() for item in value if str(item).strip())
+        artifact = payload.get("artifact") if isinstance(payload.get("artifact"), dict) else None
+        if isinstance(artifact, dict):
+            for key in ("warnings", "warning"):
+                value = artifact.get(key)
+                if isinstance(value, str) and value.strip():
+                    warnings.append(value.strip())
+                elif isinstance(value, list):
+                    warnings.extend(str(item).strip() for item in value if str(item).strip())
+    return list(dict.fromkeys(warnings))
 
 
 def _count_records(session: Session, model, column, computed_after: datetime | None, computed_before: datetime | None = None) -> int:
@@ -190,31 +194,20 @@ def _dashboard_window_metrics(
 
 
 def _build_dashboard_trends(session: Session, *, now: datetime) -> dict[str, object]:
-    snapshots = [
-        _dashboard_window_metrics(session, now=now, window_key=window_key)
-        for window_key in WINDOW_DEFINITIONS
-    ]
-    return {
-        "windows": [
-            {"key": snapshot["window_key"], "label": snapshot["window_key"].upper() if snapshot["window_key"] != "all" else "ALL"}
-            for snapshot in snapshots
-        ],
-        "series": [
-            {
-                "key": key,
-                "label": label,
-                "kind": kind,
-                "values": [snapshot["dashboard_summary"].get(key) if key in snapshot["dashboard_summary"] else snapshot["technical_summary"].get(key) for snapshot in snapshots],
-            }
-            for key, label, kind in DASHBOARD_TREND_SERIES
-        ],
-    }
+    return DashboardTrendService(session).build_trends(now=now, days=7)
+
+
+@router.get("/trends")
+async def get_dashboard_trends(session: Session = Depends(get_db_session)) -> dict[str, object]:
+    now = datetime.now(timezone.utc)
+    return {"dashboard_trends": _build_dashboard_trends(session, now=now)}
 
 
 @router.get("")
 async def get_dashboard(
     session: Session = Depends(get_db_session),
-    window: str = Query("1m", description="Dashboard time window"),
+    window: str = Query("1d", description="Dashboard time window"),
+    include_trends: bool = Query(True, description="Include dashboard trend sweep data"),
 ) -> dict[str, object]:
     now = datetime.now(timezone.utc)
     window_key = _normalize_window(window)
@@ -269,7 +262,7 @@ async def get_dashboard(
         evaluated_before=now,
     )
     selected_window_metrics = _dashboard_window_metrics(session, now=now, window_key=window_key, quality_fallback=selected_quality)
-    dashboard_trends = _build_dashboard_trends(session, now=now)
+    dashboard_trends = _build_dashboard_trends(session, now=now) if include_trends else None
 
     major_failures: list[dict[str, object]] = []
     for run in recent_runs:
@@ -299,6 +292,10 @@ async def get_dashboard(
     for run in recent_runs:
         if run.error_message:
             add_warning(run.error_message, f"run:{run.id or 'unknown'}")
+        for warning in _extract_warning_messages(getattr(run, "summary_json", None)):
+            add_warning(warning, f"run:{run.id or 'unknown'}")
+        if getattr(run, "status", None) == RunStatus.COMPLETED_WITH_WARNINGS.value:
+            add_warning(f"run {run.id or 'unknown'} completed with warnings", f"run:{run.id or 'unknown'}")
     for plan in recent_plans:
         for warning in plan.warnings:
             add_warning(warning, f"plan:{plan.id or 'unknown'}")

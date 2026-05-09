@@ -21,11 +21,12 @@ The system should:
 
 This spec covers:
 - `NewsIngestionService.fetch` ticker-news flows
+- `NewsIngestionService.fetch_topic` topic-news diagnostics
 - Finnhub ticker-news retry behavior
-- ticker-news diagnostics stored in `NewsBundle` and downstream detail payloads
+- news diagnostics stored in `NewsBundle` and downstream detail payloads
 
 This spec does not cover:
-- topic-query retry behavior
+- full provider-specific topic-query retry/backoff parity
 - social-provider retry behavior
 - summary-model retry behavior
 
@@ -70,9 +71,9 @@ Non-retriable statuses may fail immediately.
 
 ## Bundle diagnostics
 
-`NewsBundle` must include `query_diagnostics` for ticker-news fetches.
+`NewsBundle` must include `query_diagnostics` for ticker-news fetches and windowed/topic fetches where provider eligibility can affect evidence quality.
 
-At minimum, ticker-news diagnostics must make visible:
+At minimum, news diagnostics must make visible:
 - which providers were selected
 - per-provider outcome summaries
 - which providers succeeded
@@ -122,5 +123,5 @@ The automated tests must cover at least:
 ## Current limitations
 
 - Retry classification is still heuristic and based on status codes rather than richer provider semantics.
-- Topic-query providers do not yet use the same retry policy.
+- Topic-query diagnostics are explicit, but topic-query providers do not yet have full provider-specific retry/backoff parity.
 - UI rendering may still compress diagnostics, so some details are most visible in raw payloads.

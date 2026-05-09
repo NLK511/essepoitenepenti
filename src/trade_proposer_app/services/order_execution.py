@@ -13,7 +13,7 @@ from trade_proposer_app.repositories.broker_positions import BrokerPositionRepos
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClient, AlpacaPaperClientError
 from trade_proposer_app.services.execution_candidates import ExecutionCandidateBuilder
-from trade_proposer_app.services.risk_management import BrokerRiskManager, TradeCandidate
+from trade_proposer_app.services.risk_management import BrokerRiskManager, LiveBrokerSnapshot, TradeCandidate
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 
 
@@ -139,7 +139,10 @@ class OrderExecutionService:
                 client_order_id=client_order_id,
             )
             notional_amount = round(quantity * entry_price, 4)
-            risk_assessment = self._risk_manager().assess(TradeCandidate(ticker=plan.ticker, notional_amount=notional_amount))
+            risk_assessment = self._risk_manager().assess(
+                TradeCandidate(ticker=plan.ticker, notional_amount=notional_amount),
+                live_broker_snapshot=self._live_broker_snapshot(),
+            )
             if not risk_assessment.allowed:
                 risk_reason = "risk_" + "_".join(risk_assessment.reasons or ["blocked"])
                 warnings.append(f"{plan.ticker} broker execution blocked by risk manager: {', '.join(risk_assessment.reasons)}")
@@ -211,7 +214,10 @@ class OrderExecutionService:
             quantity=existing.quantity,
             client_order_id=client_order_id,
         )
-        risk_assessment = self._risk_manager().assess(TradeCandidate(ticker=existing.ticker, notional_amount=existing.notional_amount))
+        risk_assessment = self._risk_manager().assess(
+            TradeCandidate(ticker=existing.ticker, notional_amount=existing.notional_amount),
+            live_broker_snapshot=self._live_broker_snapshot(),
+        )
         if not risk_assessment.allowed:
             raise ValueError(f"broker order resubmit blocked by risk manager: {', '.join(risk_assessment.reasons)}")
 
@@ -504,6 +510,31 @@ class OrderExecutionService:
         if repository is None:
             raise ValueError("broker position repository is required for risk management")
         return BrokerRiskManager(self.settings, repository)
+
+    def _live_broker_snapshot(self) -> LiveBrokerSnapshot | None:
+        if self.client is None:
+            return None
+        warnings: list[str] = []
+        account: dict[str, object] | None = None
+        open_orders: list[dict[str, object]] = []
+        open_positions: list[dict[str, object]] = []
+        try:
+            account = self.client.get_account().payload
+        except Exception as exc:  # pragma: no cover - defensive broker integration guard
+            warnings.append(f"alpaca account snapshot failed: {exc}")
+        try:
+            payload = self.client.list_open_orders().payload
+            items = payload.get("items") if isinstance(payload, dict) else None
+            open_orders = [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+        except Exception as exc:  # pragma: no cover - defensive broker integration guard
+            warnings.append(f"alpaca open-order snapshot failed: {exc}")
+        try:
+            payload = self.client.list_open_positions().payload
+            items = payload.get("items") if isinstance(payload, dict) else None
+            open_positions = [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+        except Exception as exc:  # pragma: no cover - defensive broker integration guard
+            warnings.append(f"alpaca open-position snapshot failed: {exc}")
+        return LiveBrokerSnapshot(account=account, open_orders=open_orders, open_positions=open_positions, warnings=warnings)
 
     def _position_repository(self) -> BrokerPositionRepository | None:
         if self.positions is not None:

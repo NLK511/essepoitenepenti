@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
@@ -47,6 +48,7 @@ class RunRepository:
             status=status,
             error_message=error_message or "",
             scheduled_for=self._normalize_optional_datetime(scheduled_for),
+            correlation_id=self._new_correlation_id(job_id),
         )
         self.session.add(record)
         self.session.commit()
@@ -424,6 +426,7 @@ class RunRepository:
             completed_at=self._normalize_optional_datetime(record.completed_at),
             duration_seconds=record.duration_seconds,
             worker_id=record.worker_id,
+            correlation_id=record.correlation_id or None,
             lease_expires_at=self._normalize_optional_datetime(record.lease_expires_at),
             timing_json=record.timing_json or None,
         )
@@ -442,6 +445,10 @@ class RunRepository:
             created_at=self._normalize_datetime(record.created_at),
             updated_at=self._normalize_datetime(record.updated_at),
         )
+
+    @staticmethod
+    def _new_correlation_id(job_id: int) -> str:
+        return f"job-{job_id}-run-{uuid4().hex[:12]}"
 
     def _resolve_job_type(self, job_id: int, job_type: JobType | None) -> JobType:
         if job_type is not None:

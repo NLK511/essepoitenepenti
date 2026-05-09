@@ -17,9 +17,9 @@ This feature extends, but does not replace:
 
 ## Source of truth
 
-For v1, risk is calculated from app-owned broker position lifecycle records plus the next order candidate being considered.
+Risk is calculated from app-owned broker position lifecycle records plus the next order candidate being considered.
 
-The broker position lifecycle ledger is the current source of truth for realized broker outcomes. Alpaca account-level reconciliation is intentionally left for a later version because it requires a broader broker-account snapshot and fill/activity model.
+When the execution service has an Alpaca client, pre-submit risk can also include live broker account, open-order, and open-position snapshots. Those snapshots improve exposure and buying-power checks, but the broker position lifecycle ledger remains the persisted source of truth for realized broker outcomes.
 
 ## Risk manager responsibilities
 
@@ -87,11 +87,11 @@ The Broker Orders page must include the risk dashboard directly because risk sta
 
 The Settings response also includes risk settings so operators can see and edit the active limits alongside execution settings.
 
-## v1 limitations
+## Current limitations
 
-- v1 does not yet query Alpaca account positions, open orders, buying power, or account activities directly.
-- v1 does not yet calculate unrealized P&L from market prices.
-- v1 does not yet liquidate/cancel existing broker exposure automatically when a halt is triggered.
-- v1 does not yet store a historical audit trail of halt/resume events beyond the current settings values.
+- Live Alpaca snapshots are currently used as pre-submit inputs, not as a persisted full broker-account reconciliation ledger.
+- The app does not yet calculate unrealized P&L from market prices.
+- The app does not yet liquidate/cancel existing broker exposure automatically when a halt is triggered.
+- Account activities/fills beyond the app-submitted order lifecycle are not fully reconciled.
 
 These are deliberate follow-up items after the app has a working kill switch and pre-trade risk gate.

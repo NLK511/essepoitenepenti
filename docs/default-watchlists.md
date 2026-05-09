@@ -26,6 +26,7 @@ Selection principles:
 - include equities only, not ETFs
 - avoid duplicate assignments across watchlists
 - use local-market tickers where practical for Europe and Asia/Pacific
+- when a regional sector has weak bar coverage, swap in liquid same-region names across sectors instead of leaving dead slots in the default pack
 
 The goal is practical default coverage, not index replication.
 

@@ -48,6 +48,7 @@ const navSections: NavSection[] = [
       { to: "/jobs/recommendation-plans", label: "Recommendation plans", shortLabel: "Plans", icon: "↗" },
       { to: "/jobs/debugger", label: "Run debugger", shortLabel: "Debug", icon: "⌘" },
       { to: "/broker-orders", label: "Broker orders", shortLabel: "Orders", icon: "⟐" },
+      { to: "/data-quality", label: "Data quality", shortLabel: "Data", icon: "◇" },
       { to: "/context", label: "Context review", shortLabel: "Context", icon: "◔" },
     ],
   },
@@ -106,6 +107,12 @@ function isItemActive(item: NavItem, pathname: string): boolean {
     return pathname === item.to;
   }
   return pathname === item.to || pathname.startsWith(`${item.to}/`);
+}
+
+function isSectionActive(section: NavSection, pathname: string): boolean {
+  return section.items.some((item) => isItemActive(item, pathname))
+    || section.subsections?.some((subsection) => subsection.items.some((item) => isItemActive(item, pathname)))
+    || false;
 }
 
 function routeMeta(pathname: string): { eyebrow: string; title: string; description: string } {
@@ -184,6 +191,13 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
       eyebrow: "Execution audit",
       title: "The Tribute Ledger",
       description: "Inspect Alpaca paper submissions, risk state, payloads, and statuses for plan-driven trades.",
+    };
+  }
+  if (pathname.startsWith("/data-quality")) {
+    return {
+      eyebrow: "Diagnostics",
+      title: "The Supply Lines",
+      description: "Audit no-bars, no-news, stale coverage, and broker-reject tickers before they distort calibration.",
     };
   }
   if (pathname.startsWith("/runs/")) {
@@ -515,40 +529,50 @@ export function AppLayout() {
 
         <div className={`mobile-nav-panel${mobileNavOpen ? " is-open" : ""}`} aria-hidden={!mobileNavOpen}>
           <nav aria-label="Mobile navigation">
-            {navSections.map((section) => (
-              <div key={section.label} className="mobile-nav-group">
-                <div className="mobile-nav-group-title">{section.label}</div>
-                {section.items.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.end}
-                    className={() => `nav-link mobile-nav-link${isItemActive(item, location.pathname) ? " is-active" : ""}`}
-                    onClick={() => setMobileNavOpen(false)}
-                  >
-                    <span aria-hidden="true">{item.icon}</span>
-                    <span>{item.label}</span>
-                  </NavLink>
-                ))}
-                {section.subsections ? section.subsections.map((subsection) => (
-                  <div key={subsection.label} className="mobile-nav-subgroup">
-                    <div className="mobile-nav-subgroup-title">{subsection.label}</div>
-                    {subsection.items.map((item) => (
+            {navSections.map((section) => {
+              const sectionActive = isSectionActive(section, location.pathname);
+              return (
+                <details key={section.label} className="mobile-nav-group" open={sectionActive}>
+                  <summary className="mobile-nav-group-title">{section.label}</summary>
+                  <div className="mobile-nav-group-body">
+                    {section.items.map((item) => (
                       <NavLink
                         key={item.to}
                         to={item.to}
                         end={item.end}
-                        className={() => `nav-link mobile-nav-link mobile-nav-link-sub${isItemActive(item, location.pathname) ? " is-active" : ""}`}
+                        className={() => `nav-link mobile-nav-link${isItemActive(item, location.pathname) ? " is-active" : ""}`}
                         onClick={() => setMobileNavOpen(false)}
                       >
                         <span aria-hidden="true">{item.icon}</span>
                         <span>{item.label}</span>
                       </NavLink>
                     ))}
+                    {section.subsections ? section.subsections.map((subsection) => {
+                      const subsectionActive = subsection.items.some((item) => isItemActive(item, location.pathname));
+                      return (
+                        <details key={subsection.label} className="mobile-nav-subgroup" open={subsectionActive}>
+                          <summary className="mobile-nav-subgroup-title">{subsection.label}</summary>
+                          <div className="mobile-nav-subgroup-body">
+                            {subsection.items.map((item) => (
+                              <NavLink
+                                key={item.to}
+                                to={item.to}
+                                end={item.end}
+                                className={() => `nav-link mobile-nav-link mobile-nav-link-sub${isItemActive(item, location.pathname) ? " is-active" : ""}`}
+                                onClick={() => setMobileNavOpen(false)}
+                              >
+                                <span aria-hidden="true">{item.icon}</span>
+                                <span>{item.label}</span>
+                              </NavLink>
+                            ))}
+                          </div>
+                        </details>
+                      );
+                    }) : null}
                   </div>
-                )) : null}
-              </div>
-            ))}
+                </details>
+              );
+            })}
           </nav>
         </div>
         {mobileNavOpen && (

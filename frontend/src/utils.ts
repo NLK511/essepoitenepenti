@@ -15,6 +15,54 @@ export interface KeyLabelDetail {
   label: string;
 }
 
+export type ReviewWindow = "1d" | "7d" | "1m" | "3m" | "6m" | "1y" | "all";
+
+export const REVIEW_WINDOW_OPTIONS: Array<{ value: ReviewWindow; label: string }> = [
+  { value: "1d", label: "1D" },
+  { value: "7d", label: "7D" },
+  { value: "1m", label: "1M" },
+  { value: "3m", label: "3M" },
+  { value: "6m", label: "6M" },
+  { value: "1y", label: "1Y" },
+  { value: "all", label: "ALL" },
+];
+
+const REVIEW_WINDOW_ALIASES: Record<string, ReviewWindow> = {
+  "30d": "1m",
+  "90d": "3m",
+  "180d": "6m",
+  "365d": "1y",
+};
+
+export function normalizeReviewWindow(value: string | null | undefined, fallback: ReviewWindow = "1d"): ReviewWindow {
+  const normalized = String(value || fallback).trim().toLowerCase();
+  const alias = REVIEW_WINDOW_ALIASES[normalized];
+  if (alias) {
+    return alias;
+  }
+  return REVIEW_WINDOW_OPTIONS.some((option) => option.value === normalized) ? (normalized as ReviewWindow) : fallback;
+}
+
+export function reviewWindowLabel(window: ReviewWindow | string): string {
+  const normalized = normalizeReviewWindow(window, "1d");
+  return REVIEW_WINDOW_OPTIONS.find((option) => option.value === normalized)?.label ?? normalized.toUpperCase();
+}
+
+export function reviewWindowStartIso(window: ReviewWindow | string, now: Date = new Date()): string | null {
+  const normalized = normalizeReviewWindow(window, "1d");
+  if (normalized === "all") {
+    return null;
+  }
+  const start = new Date(now);
+  if (normalized === "1d") {
+    start.setHours(0, 0, 0, 0);
+    return start.toISOString();
+  }
+  const days = normalized === "7d" ? 7 : normalized === "1m" ? 30 : normalized === "3m" ? 90 : normalized === "6m" ? 180 : 365;
+  start.setTime(start.getTime() - days * 24 * 60 * 60 * 1000);
+  return start.toISOString();
+}
+
 export function formatDate(value: string | null): string {
   if (!value) {
     return "—";

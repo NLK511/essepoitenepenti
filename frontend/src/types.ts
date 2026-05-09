@@ -82,6 +82,9 @@ export interface Run {
   started_at: string | null;
   completed_at: string | null;
   duration_seconds: number | null;
+  worker_id?: string | null;
+  correlation_id?: string | null;
+  lease_expires_at?: string | null;
   timing_json: string | null;
 }
 
@@ -100,9 +103,80 @@ export interface TickerPerformanceSummary {
   average_confidence: number | null;
 }
 
+export interface HistoricalMarketBar {
+  id: number | null;
+  ticker: string;
+  timeframe: string;
+  bar_time: string;
+  available_at: string | null;
+  open_price: number;
+  high_price: number;
+  low_price: number;
+  close_price: number;
+  volume: number;
+  adjusted_close: number | null;
+  source: string;
+  source_tier: string;
+  point_in_time_confidence: number;
+  metadata_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TickerChartPoint {
+  kind: string;
+  x: string;
+  y: number;
+  label: string;
+  color: string;
+}
+
+export interface TickerPlanChartOverlay {
+  plan_id: number;
+  ticker: string;
+  action: string;
+  label: string;
+  selected: boolean;
+  color: string;
+  resolution_source: string;
+  state: string;
+  points: TickerChartPoint[];
+}
+
+export interface TickerChartSeries {
+  ticker: string;
+  timeframe: string;
+  bars: HistoricalMarketBar[];
+  overlays: TickerPlanChartOverlay[];
+  selected_plan_ids: number[];
+}
+
+export interface TickerAnalysisSummary {
+  ticker: string;
+  window: string;
+  plan_count: number;
+  actionable_plan_count: number;
+  broker_order_count: number;
+  bar_count: number;
+  resolved_plan_count: number;
+  open_plan_count: number;
+  win_rate_percent: number | null;
+  total_profit: number | null;
+  real_resolved_plan_count: number;
+  simulated_resolved_plan_count: number;
+  real_win_rate_percent: number | null;
+  simulated_win_rate_percent: number | null;
+  real_profit: number | null;
+  simulated_profit: number | null;
+}
+
 export interface TickerAnalysisPage {
   ticker: string;
+  window: string;
+  summary: TickerAnalysisSummary;
   performance: TickerPerformanceSummary;
+  chart: TickerChartSeries;
+  broker_orders: BrokerOrderExecution[];
   recommendation_plans: RecommendationPlan[];
 }
 
@@ -770,6 +844,7 @@ export interface RecommendationDecisionSampleListResponse {
 export interface RecommendationPlan {
   id: number | null;
   ticker: string;
+  ticker_page_url: string;
   horizon: StrategyHorizon;
   action: string;
   status: string;

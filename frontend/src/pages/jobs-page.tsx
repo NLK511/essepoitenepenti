@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { useToast } from "../components/toast";
-import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { Job, JobType, Run, Watchlist } from "../types";
 import { jobTypeLabel, tickerTone } from "../utils";
 
@@ -244,8 +244,7 @@ export function JobsPage() {
         <StatCard label="Maintenance workflows" value={data?.jobs.filter((job) => jobCategory(job.job_type) === "maintenance").length ?? "—"} helper="Context refresh" />
       </section>
       <section className="two-column top-gap">
-        <Card className="sticky-toolbar">
-          <SectionTitle kicker="Create" title="New workflow" subtitle="Choose the workflow goal first. Only proposal generation needs a watchlist or manual tickers." actions={<HelpHint tooltip="Proposal generation uses watchlists or tickers. Evaluation, tuning, and refresh workflows use stored data instead." to={jobsDoc} />} />
+        <DisclosureCard className="sticky-toolbar" kicker="Create" title="New workflow" subtitle="Choose the workflow goal first. Only proposal generation needs a watchlist or manual tickers." defaultOpen actions={<HelpHint tooltip="Proposal generation uses watchlists or tickers. Evaluation, tuning, and refresh workflows use stored data instead." to={jobsDoc} />}>
           <form className="stack-form" onSubmit={handleCreateJob}>
             <div className="form-grid">
               <label className="form-field">
@@ -301,9 +300,8 @@ export function JobsPage() {
               {submitting ? "Creating…" : "Create workflow"}
             </button>
           </form>
-        </Card>
-        <Card>
-          <SectionTitle kicker="Saved workflows" title="Run, edit, and delete" subtitle="Core workflows should dominate daily use. Research and maintenance flows stay grouped below." actions={<HelpHint tooltip="Each saved workflow shows its category, source scope, schedule, and enabled state." to={jobsDoc} />} />
+        </DisclosureCard>
+        <DisclosureCard title="Saved workflows" subtitle="Core workflows should dominate daily use. Research and maintenance flows stay grouped below." actions={<HelpHint tooltip="Each saved workflow shows its category, source scope, schedule, and enabled state." to={jobsDoc} />}>
           {!data && !error ? <LoadingState message="Loading workflows…" /> : null}
           {data && data.jobs.length === 0 ? <EmptyState message="No workflows created yet." /> : null}
           {data ? (
@@ -480,7 +478,7 @@ export function JobsPage() {
               ))}
             </div>
           ) : null}
-        </Card>
+        </DisclosureCard>
       </section>
     </>
   );

@@ -17,6 +17,7 @@ If you only need the main redesign reading path, use:
 
 - `principles.md` — observability, trust, explicit degraded states, and no hidden fallbacks
 - `target-architecture.md` — context, exposure, ticker setup, and trade-plan construction
+- `ui-decluttering-plan.md` — current UI/UX redesign goals, mobile rules, and phased implementation plan
 - `data-model-and-persistence.md` — persistence direction and entity framing
 - `transmission-modeling-spec.md` — context-to-ticker transmission rules
 - `calibration-governance-spec.md` — sample-aware confidence and action-gating rules

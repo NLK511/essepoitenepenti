@@ -21,7 +21,7 @@ try:
     from sqlalchemy import select
     from trade_proposer_app.db import SessionLocal
     from trade_proposer_app.domain.enums import JobType
-    from trade_proposer_app.persistence.models import JobRecord, WatchlistRecord
+    from trade_proposer_app.persistence.models import JobRecord, RunRecord, WatchlistRecord
     from trade_proposer_app.repositories.watchlists import WatchlistRepository
     from trade_proposer_app.repositories.jobs import JobRepository
     from trade_proposer_app.services.default_jobs import ensure_default_recommendation_evaluation_jobs
@@ -30,6 +30,7 @@ except ModuleNotFoundError:  # pragma: no cover - allows importing WATCHLIST_SPE
     SessionLocal = None
     JobType = None
     JobRecord = None
+    RunRecord = None
     WatchlistRecord = None
     WatchlistRepository = None
     JobRepository = None
@@ -114,10 +115,10 @@ WATCHLIST_SPECS = [
         "schedule_rationale": "Starts at the European cash open so the list catches open-driven repricing in semis, enterprise software, and payment-sensitive names while preserving the 10-minute cadence.",
         "tickers": [
             "ASML.AS", "SAP.DE", "ADYEN.AS", "PRX.AS", "IFX.DE", "NOKIA.HE", "ERIC-B.ST", "STMPA.PA", "BEI.DE", "LOGN.SW",
-            "TEMN.SW", "ASM.AS", "WKL.AS", "S92.DE", "DHER.DE", "DSY.PA", "WLN.PA", "TELIA.ST", "KPN.AS", "AMS.MC",
-            "CAP.PA", "ATO.PA", "SOI.PA", "OVH.PA", "NEXI.MI", "INW.MI", "SINCH.ST", "EVO.ST", "UMG.AS", "WISE.L",
-            "MONY.L", "RMV.L", "ASC.L", "PAY.L", "OCDO.L", "SGE.L", "AUTO.L", "BT-A.L", "VOD.L", "UBI.PA",
-            "PROX.BR", "DTE.DE", "TEF.MC", "ELUX-B.ST", "GETI-B.ST", "TEL2-B.ST", "VIV.PA", "NDA-FI.HE", "GFT.DE", "SBB-B.ST"
+            "FAES.MC", "ASM.AS", "WKL.AS", "BAE.L", "DHER.DE", "DSY.PA", "WLN.PA", "TELIA.ST", "KPN.AS", "AMS.MC",
+            "CAP.PA", "RYR.I", "SOI.PA", "IDP.MC", "NEXI.MI", "INW.MI", "SINCH.ST", "EVO.ST", "UMG.AS", "WISE.L",
+            "MONY.L", "RMV.L", "BME.MC", "VONTO.SW", "OCDO.L", "SGE.L", "AUTO.L", "BT-A.L", "VOD.L", "UBI.PA",
+            "LUN.CO", "DTE.DE", "TEF.MC", "ELUX-B.ST", "GETI-B.ST", "TEL2-B.ST", "VAR1.DE", "NDA-FI.HE", "HELN.SW", "SBB-B.ST"
         ],
     },
     {
@@ -130,8 +131,8 @@ WATCHLIST_SPECS = [
             "HSBA.L", "SAN.MC", "BNP.PA", "ALV.DE", "UBSG.SW", "ISP.MI", "BBVA.MC", "INGA.AS", "ACA.PA", "BARC.L",
             "DBK.DE", "KBC.BR", "NWG.L", "CABK.MC", "UCG.MI", "MUV2.DE", "ZURN.SW", "LGEN.L", "PRU.L", "EXPN.L",
             "GLE.PA", "CS.PA", "CBK.DE", "STAN.L", "LLOY.L", "AV.L", "ADEN.SW", "BAER.SW", "SLHN.SW", "SREN.SW",
-            "HELN.SW", "VONTO.SW", "SAB.MC", "BKT.MC", "MAP.MC", "SAMPO.HE", "DNB.OL", "SEB-A.ST", "SHB-A.ST", "SWED-A.ST",
-            "INVE-B.ST", "KINV-B.ST", "LUND-B.ST", "AZN.ST", "DB1.DE", "LSEG.L", "ENX.PA", "BME.MC", "MBK.WA", "PKO.WA"
+            "GFT.DE", "PAY.L", "SAB.MC", "BKT.MC", "MAP.MC", "SAMPO.HE", "DNB.OL", "SEB-A.ST", "SHB-A.ST", "SWED-A.ST",
+            "INVE-B.ST", "KINV-B.ST", "LUND-B.ST", "AZN.ST", "DB1.DE", "LSEG.L", "ENX.PA", "ASC.L", "MBK.WA", "PKO.WA"
         ],
     },
     {
@@ -142,9 +143,9 @@ WATCHLIST_SPECS = [
         "schedule_rationale": "Healthcare is staggered after tech and banks because it is usually more useful to score once the market has revealed whether it wants defense, growth, or policy-sensitive rotation.",
         "tickers": [
             "NOVO-B.CO", "RO.SW", "NOVN.SW", "AZN.L", "GSK.L", "SAN.PA", "BAYN.DE", "ALC.SW", "UCB.BR", "FRE.DE",
-            "SHL.DE", "QIA.DE", "GN.CO", "DEMANT.CO", "GMAB.CO", "SRT3.DE", "PHIA.AS", "FAES.MC", "ORNBV.HE", "LUN.CO",
-            "AMBU-B.CO", "ZEAL.CO", "VAR1.DE", "EVT.DE", "FME.DE", "EMEIS.PA", "IPN.PA", "ERF.PA", "VLA.PA", "BVI.PA",
-            "DBV.PA", "HIK.L", "SN.L", "BOL.PA", "OXIG.L", "IDP.MC", "GRI.MC", "ROVI.MC", "PHM.MC", "SKAN.SW",
+            "SHL.DE", "QIA.DE", "GN.CO", "DEMANT.CO", "GMAB.CO", "SRT3.DE", "PHIA.AS", "TEMN.SW", "ORNBV.HE", "PROX.BR",
+            "AMBU-B.CO", "ZEAL.CO", "VIV.PA", "EVT.DE", "FME.DE", "EMEIS.PA", "IPN.PA", "ERF.PA", "VLA.PA", "BVI.PA",
+            "DBV.PA", "HIK.L", "SN.L", "BOL.PA", "OXIG.L", "OVH.PA", "GRI.MC", "ROVI.MC", "PHM.MC", "SKAN.SW",
             "EKTA-B.ST", "VITR.ST", "REJL-B.ST", "SGL.DE", "VIRP.PA", "MRX.DE", "NEWA-B.ST", "DIM.PA", "BICO.ST", "GNS.L"
         ],
     },
@@ -158,7 +159,7 @@ WATCHLIST_SPECS = [
             "MC.PA", "OR.PA", "NESN.SW", "ABI.BR", "DGE.L", "ULVR.L", "RI.PA", "KER.PA", "ADS.DE", "HEN3.DE",
             "RKT.L", "CCH.L", "HEIA.AS", "BN.PA", "FERG.L", "BATS.L", "IMB.L", "ZAL.DE", "AG1.DE", "JDW.L",
             "RMS.PA", "CDA.PA", "RNO.PA", "AC.PA", "ELIOR.PA", "PUM.DE", "HFG.DE", "PAH3.DE", "HM-B.ST", "AXFO.ST",
-            "INDU-C.ST", "PNDORA.CO", "CARL-B.CO", "ITX.MC", "AENA.MC", "IAG.L", "EZJ.L", "RYR.I", "ABF.L", "NXT.L",
+            "INDU-C.ST", "PNDORA.CO", "CARL-B.CO", "ITX.MC", "AENA.MC", "IAG.L", "EZJ.L", "ATO.PA", "ABF.L", "NXT.L",
             "JD.L", "PHNX.L", "CPG.L", "BME.L", "FRAS.L", "VGP.BR", "COFB.BR", "WDP.BR", "SOLB.BR", "SW.PA"
         ],
     },
@@ -173,7 +174,7 @@ WATCHLIST_SPECS = [
             "HEI.DE", "SY1.DE", "BAS.DE", "SIKA.SW", "AKZA.AS", "VOW3.DE", "MBG.DE", "BMW.DE", "AIR.PA", "SU.PA",
             "REP.MC", "ENG.MC", "ELE.MC", "IBE.MC", "FER.MC", "ACS.MC", "GALP.LS", "EDP.LS", "NHY.OL", "AKRBP.OL",
             "YAR.OL", "MOWI.OL", "ORK.OL", "SKA-B.ST", "VOLV-B.ST", "SAND.ST", "SKF-B.ST", "EPI-B.ST", "BOL.ST", "SSAB-A.ST",
-            "MAERSK-B.CO", "VWS.CO", "ORSTED.CO", "FRO.OL", "SUBC.OL", "ANTO.L", "BAE.L", "RHM.DE", "RWE.DE", "EOAN.DE"
+            "MAERSK-B.CO", "VWS.CO", "ORSTED.CO", "FRO.OL", "SUBC.OL", "ANTO.L", "S92.DE", "RHM.DE", "RWE.DE", "EOAN.DE"
         ],
     },
     {
@@ -303,8 +304,12 @@ def main() -> None:
         watchlist_repo = WatchlistRepository(session)
         job_repo = JobRepository(session)
 
-        # 1. First, delete all OLD jobs with the "Auto: " prefix to clean up
-        _delete_old_jobs(session)
+        # 1. Best-effort cleanup of old seeded jobs/watchlists; skip if the DB has extra run history that blocks deletion.
+        try:
+            _delete_old_jobs(session)
+        except Exception as exc:
+            session.rollback()
+            logging.warning("Skipping old job cleanup: %s", exc)
 
         for spec in WATCHLIST_SPECS:
             normalized = _normalize_tickers(spec["tickers"])
@@ -349,18 +354,23 @@ def main() -> None:
 
 
 def _delete_old_jobs(session) -> None:
-    # Delete jobs that have "Auto: " prefix
+    # Delete runs first so job cleanup does not violate the non-null job_id constraint.
     old_jobs = session.scalars(select(JobRecord).where(JobRecord.name.like("Auto: %"))).all()
+    old_job_ids = [job.id for job in old_jobs]
+    if old_job_ids:
+        old_runs = session.scalars(select(RunRecord).where(RunRecord.job_id.in_(old_job_ids))).all()
+        for run in old_runs:
+            session.delete(run)
     for job in old_jobs:
         logging.info("Deleting old job: %s", job.name)
         session.delete(job)
-    
+
     # Also delete old "System: " watchlists
     old_ws = session.scalars(select(WatchlistRecord).where(WatchlistRecord.name.like("System: %"))).all()
     for ws in old_ws:
         logging.info("Deleting old watchlist: %s", ws.name)
         session.delete(ws)
-    
+
     session.commit()
 
 

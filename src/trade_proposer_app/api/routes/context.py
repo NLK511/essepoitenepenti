@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -89,6 +90,7 @@ async def list_ticker_signal_snapshots(
     limit: int = Query(default=50, ge=1, le=200),
     run_id: int | None = Query(default=None),
     snapshot_id: int | None = Query(default=None),
+    computed_after: datetime | None = Query(default=None),
     session: Session = Depends(get_db_session),
 ) -> list[TickerSignalSnapshot]:
     normalized_ticker = ticker.strip().upper() if ticker else None
@@ -97,6 +99,7 @@ async def list_ticker_signal_snapshots(
         limit=limit,
         run_id=run_id,
         snapshot_id=snapshot_id,
+        computed_after=computed_after,
     )
 
 

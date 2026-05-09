@@ -126,9 +126,10 @@ Macro and industry context now use context snapshots as the canonical shared-art
 
 If macro or industry artifacts are missing or stale, the methodology falls back to neutral values and explicit warnings.
 
-Macro and industry context snapshots also carry two operator-facing heuristic scores:
+Macro and industry context snapshots also carry operator-facing heuristic scores:
 - **saliency**: how prominent the active events or drivers look relative to the rest of the current evidence set
 - **confidence**: how trustworthy the context read looks given evidence volume, source quality, contradictions, and degradation
+- **context quality**: whether the snapshot is usable, degraded, or blocked after separating required evidence from optional fallback evidence
 
 These are bounded review aids, not prediction probabilities.
 
@@ -214,7 +215,7 @@ Confidence is a weighted aggregation of normalized components:
 - **technical clarity**
 - **execution clarity**
 
-For watchlist proposal generation, cheap-scan confidence is a shortlist/triage score. Once `TickerDeepAnalysisService` completes, the final recommendation-plan action gate must use the deep-analysis recommendation confidence as the raw plan confidence. If deep analysis is unavailable, the gate falls back to the cheap-scan signal confidence and records the degraded state. Plan diagnostics should preserve both cheap-scan and deep-analysis confidence so operators can inspect disagreements.
+For watchlist proposal generation, cheap-scan confidence is a shortlist/triage score. Once `TickerDeepAnalysisService` completes, the final recommendation-plan action gate must use the deep-analysis recommendation confidence as the raw plan confidence. If deep analysis is unavailable, the gate falls back to the cheap-scan signal confidence and records the degraded state. In paper-account exploration mode, the action-confidence gate is intentionally relaxed so the app can collect more paper-trade outcomes for later calibration, while still recording the raw calibrated confidence for review. Plan diagnostics should preserve both cheap-scan and deep-analysis confidence so operators can inspect disagreements.
 
 Light feature wiring is now in place:
 - aligned relative strength versus `SPY` and sector can modestly lift directional confidence
@@ -253,6 +254,10 @@ In broad terms it considers:
 - whether an edge is explicit, derived, or only a weak structural fallback
 
 Contradictions are not all hard vetoes. Timing conflicts, context-quality conflicts, or broad mixed-context contradictions should remain visible in diagnostics, but they should not automatically block an otherwise threshold-clearing plan. The hard contradiction gate is reserved for severe conflicts, such as explicit directional conflict or technical/context conflict, where the trade direction itself is challenged. Headwind context remains governed by the separate headwind gate.
+
+For macro/industry context, contradiction detection should prefer primary-news disagreement over social noise. Social-only polarity noise should not by itself raise a contradiction flag; the debugger should show the primary-match breakdown and the specific triggering evidence when a contradiction is raised.
+
+Context quality gating is intentionally tiered: a single weak backdrop layer should usually degrade the plan, not veto it. A hard block is reserved for cases where the backdrop is broadly broken (for example, macro and industry context are both blocked) or the dominant layer is missing critical evidence.
 
 The app stores intermediate vectors, aggregations, and weights so operators can inspect what influenced the result.
 

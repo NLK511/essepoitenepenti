@@ -6,6 +6,8 @@ import json
 import os
 import shlex
 import subprocess
+import threading
+import time
 from typing import Sequence
 
 from trade_proposer_app.domain.models import ProviderCredential, TechnicalSnapshot
@@ -15,6 +17,10 @@ from trade_proposer_app.services.news import NEWS_SUMMARY_ARTICLE_LIMIT
 
 DEFAULT_SUMMARY_BACKEND = "news_digest"
 """Default backend used when no explicit summary engine is configured."""
+
+
+def summary_fallback_warning(scope_label: str, llm_error: str) -> str:
+    return f"{scope_label} summary fell back to digest/static summary because {llm_error}"
 
 
 @dataclass
@@ -46,7 +52,7 @@ class SummaryService:
         self._credentials = provider_credentials or {}
         self.backend = (self._settings.get("summary_backend") or DEFAULT_SUMMARY_BACKEND).strip().lower()
         self.model = (self._settings.get("summary_model") or "").strip() or None
-        self.timeout = self._parse_float(self._settings.get("summary_timeout_seconds"), 60.0)
+        self.timeout = self._parse_float(self._settings.get("summary_timeout_seconds"), 600.0)
         self.max_tokens = self._parse_int(self._settings.get("summary_max_tokens"), 220)
         self.prompt = self._settings.get("summary_prompt") or DEFAULT_SUMMARY_PROMPT
         self.pi_command = self._settings.get("summary_pi_command") or "pi"
@@ -69,7 +75,10 @@ class SummaryService:
         return self.summarize_prompt(
             prompt,
             fallback_summary=fallback_summary,
-            fallback_metadata={"news_item_count": len(request.news_items)},
+            fallback_metadata={
+                "news_item_count": len(request.news_items),
+                **self._prompt_diagnostics(prompt),
+            },
         )
 
     def summarize_prompt(
@@ -79,7 +88,10 @@ class SummaryService:
         fallback_summary: str,
         fallback_metadata: dict[str, object] | None = None,
     ) -> SummaryResult:
-        metadata = dict(fallback_metadata or {})
+        metadata = {
+            **(fallback_metadata or {}),
+            **self._prompt_diagnostics(prompt),
+        }
         if self.backend == "openai_api":
             return self._summarize_with_openai_prompt(prompt, fallback_summary=fallback_summary, fallback_metadata=metadata)
         if self.backend == "pi_agent":
@@ -87,10 +99,14 @@ class SummaryService:
         return self._fallback_result(fallback_summary, metadata=metadata)
 
     def _summarize_with_openai(self, request: SummaryRequest) -> SummaryResult:
+        prompt = self._build_prompt(request)
         return self._summarize_with_openai_prompt(
-            self._build_prompt(request),
+            prompt,
             fallback_summary=self._headline_digest(request.news_items),
-            fallback_metadata={"news_item_count": len(request.news_items)},
+            fallback_metadata={
+                "news_item_count": len(request.news_items),
+                **self._prompt_diagnostics(prompt),
+            },
         )
 
     def _summarize_with_openai_prompt(
@@ -165,10 +181,14 @@ class SummaryService:
         )
 
     def _summarize_with_pi_agent(self, request: SummaryRequest) -> SummaryResult:
+        prompt = self._build_prompt(request)
         return self._summarize_with_pi_prompt(
-            self._build_prompt(request),
+            prompt,
             fallback_summary=self._headline_digest(request.news_items),
-            fallback_metadata={"news_item_count": len(request.news_items)},
+            fallback_metadata={
+                "news_item_count": len(request.news_items),
+                **self._prompt_diagnostics(prompt),
+            },
         )
 
     def _summarize_with_pi_prompt(
@@ -188,35 +208,85 @@ class SummaryService:
                     llm_error=f"invalid pi CLI args: {exc}",
                     metadata=fallback_metadata,
                 )
-        cmd.extend(["-p", prompt, "--mode", "json", "--no-session"])
+        cmd.extend([
+            "-p",
+            prompt,
+            "--mode",
+            "json",
+            "--no-session",
+            "--no-context-files",
+            "--no-tools",
+            "--no-extensions",
+            "--no-skills",
+            "--no-prompt-templates",
+            "--no-themes",
+        ])
+        prompt_diagnostics = self._prompt_diagnostics(prompt)
+        run_metadata = {
+            **fallback_metadata,
+            **prompt_diagnostics,
+            "pi_command": self.pi_command,
+            "pi_cli_args": self.pi_cli_args,
+            "pi_timeout_seconds": self.timeout,
+            "pi_working_directory": self.pi_agent_dir or None,
+        }
         env = os.environ.copy()
         if self.pi_agent_dir:
             env["PI_CODING_AGENT_DIR"] = self.pi_agent_dir
         start = perf_counter()
+        stdout_chunks: list[str] = []
+        stderr_chunks: list[str] = []
+        final_message_seen = threading.Event()
+        process: subprocess.Popen[str] | None = None
+
+        def read_stream(stream, chunks: list[str], *, detect_final_message: bool = False) -> None:
+            try:
+                for line in iter(stream.readline, ""):
+                    chunks.append(line)
+                    if detect_final_message and self._is_final_pi_message_line(line):
+                        final_message_seen.set()
+            finally:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
+
+        def stop_process(force: bool = False) -> None:
+            if process is None:
+                return
+            if process.poll() is not None:
+                return
+            try:
+                process.terminate()
+            except Exception:
+                return
+            deadline = perf_counter() + (0.5 if force else 2.0)
+            while perf_counter() < deadline:
+                if process.poll() is not None:
+                    return
+                time.sleep(0.05)
+            try:
+                process.kill()
+            except Exception:
+                return
+
         try:
-            completed = subprocess.run(
+            process = subprocess.Popen(
                 cmd,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                timeout=max(self.timeout, 1.0),
+                bufsize=1,
                 env=env,
                 cwd=self.pi_agent_dir or None,
-            )
-        except subprocess.TimeoutExpired:
-            duration = round(perf_counter() - start, 4)
-            return self._fallback_result(
-                fallback_summary,
-                llm_error=f"pi_agent CLI timed out after {self.timeout}s",
-                metadata=fallback_metadata,
-                duration_seconds=duration,
             )
         except FileNotFoundError as exc:
             duration = round(perf_counter() - start, 4)
             return self._fallback_result(
                 fallback_summary,
                 llm_error=f"pi_agent CLI command not found: {exc}",
-                metadata=fallback_metadata,
+                metadata=run_metadata,
                 duration_seconds=duration,
             )
         except OSError as exc:  # pragma: no cover - best effort
@@ -224,32 +294,85 @@ class SummaryService:
             return self._fallback_result(
                 fallback_summary,
                 llm_error=f"pi_agent CLI failed to start: {exc}",
-                metadata=fallback_metadata,
+                metadata=run_metadata,
                 duration_seconds=duration,
             )
+
+        stdout_thread = threading.Thread(
+            target=read_stream,
+            args=(process.stdout, stdout_chunks),
+            kwargs={"detect_final_message": True},
+            daemon=True,
+        )
+        stderr_thread = threading.Thread(target=read_stream, args=(process.stderr, stderr_chunks), daemon=True)
+        stdout_thread.start()
+        stderr_thread.start()
+
+        terminated_after_final_message = False
+        timed_out = False
+        while True:
+            if process.poll() is not None:
+                break
+            if final_message_seen.is_set():
+                terminated_after_final_message = True
+                stop_process(force=False)
+                break
+            if perf_counter() - start >= max(self.timeout, 1.0):
+                timed_out = True
+                stop_process(force=True)
+                break
+            time.sleep(0.05)
+
+        stdout_thread.join(timeout=1.0)
+        stderr_thread.join(timeout=1.0)
         duration = round(perf_counter() - start, 4)
-        if completed.returncode != 0:
-            error_message = completed.stderr.strip() or f"return code {completed.returncode}"
+        completed_stdout = "".join(stdout_chunks)
+        completed_stderr = "".join(stderr_chunks)
+        if timed_out:
+            timeout_metadata = {
+                **run_metadata,
+                "pi_timeout_seconds": self.timeout,
+                "pi_partial_stdout_chars": len(completed_stdout),
+                "pi_partial_stderr_chars": len(completed_stderr),
+                "pi_terminated_after_final_message": terminated_after_final_message,
+            }
+            return self._fallback_result(
+                fallback_summary,
+                llm_error=f"pi_agent CLI timed out after {self.timeout}s",
+                metadata=timeout_metadata,
+                duration_seconds=duration,
+            )
+        if process.returncode not in (0, None) and not terminated_after_final_message:
+            error_message = completed_stderr.strip() or f"return code {process.returncode}"
             return self._fallback_result(
                 fallback_summary,
                 llm_error=f"pi_agent CLI failed: {error_message}",
-                metadata=fallback_metadata,
+                metadata={
+                    **run_metadata,
+                    "pi_terminated_after_final_message": terminated_after_final_message,
+                },
                 duration_seconds=duration,
             )
         try:
-            summary_text, metadata = self._parse_pi_output(completed.stdout)
+            summary_text, metadata = self._parse_pi_output(completed_stdout)
         except json.JSONDecodeError as exc:
             return self._fallback_result(
                 fallback_summary,
                 llm_error=f"pi_agent output parse failed: {exc}",
-                metadata=fallback_metadata,
+                metadata={
+                    **run_metadata,
+                    "pi_terminated_after_final_message": terminated_after_final_message,
+                },
                 duration_seconds=duration,
             )
         if not summary_text:
             return self._fallback_result(
                 fallback_summary,
                 llm_error="pi_agent response did not include text",
-                metadata=fallback_metadata,
+                metadata={
+                    **run_metadata,
+                    "pi_terminated_after_final_message": terminated_after_final_message,
+                },
                 duration_seconds=duration,
             )
         return SummaryResult(
@@ -259,11 +382,24 @@ class SummaryService:
             model=metadata.get("model"),
             llm_error=None,
             metadata={
-                **fallback_metadata,
+                **run_metadata,
+                "pi_terminated_after_final_message": terminated_after_final_message,
                 **metadata,
             },
             duration_seconds=duration,
         )
+
+    def _is_final_pi_message_line(self, line: str) -> bool:
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            return False
+        if payload.get("type") != "message_end":
+            return False
+        message = payload.get("message")
+        if not isinstance(message, dict) or message.get("role") != "assistant":
+            return False
+        return bool(self._extract_message_text(message.get("content")))
 
     def _parse_pi_output(self, output: str) -> tuple[str, dict[str, object]]:
         last_message: dict[str, object] | None = None
@@ -332,6 +468,8 @@ class SummaryService:
     ) -> SummaryResult:
         payload = dict(metadata or {})
         payload["reason"] = llm_error or "fallback"
+        payload["fallback_used"] = bool(llm_error)
+        payload["fallback_mode"] = "digest" if llm_error else "configured_fallback"
         return SummaryResult(
             summary=fallback_summary,
             method="news_digest",
@@ -376,6 +514,15 @@ class SummaryService:
             "Summary:",
         ]
         return "\n".join(part for part in prompt_parts if part)
+
+    @staticmethod
+    def _prompt_diagnostics(prompt: str) -> dict[str, object]:
+        lines = prompt.splitlines()
+        return {
+            "prompt_char_count": len(prompt),
+            "prompt_line_count": len(lines),
+            "prompt_nonempty_line_count": sum(1 for line in lines if line.strip()),
+        }
 
     @staticmethod
     def _parse_float(value: str | None, fallback: float) -> float:

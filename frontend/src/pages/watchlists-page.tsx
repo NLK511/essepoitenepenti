@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import { getJson, postForm, deleteJson } from "../api";
-import { Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, Badge, StatCard } from "../components/ui";
+import { DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, Badge, StatCard } from "../components/ui";
 import type { Watchlist, WatchlistEvaluationPolicy } from "../types";
 import { tickerTone } from "../utils";
 
@@ -92,8 +92,7 @@ export function WatchlistsPage() {
         <StatCard label="Timing optimized" value={watchlists ? watchlists.filter((item) => item.optimize_evaluation_timing).length : "—"} helper="Watchlists using evaluation-timing optimization" />
       </section>
       <section className="two-column top-gap">
-        <Card className="sticky-toolbar">
-          <SectionTitle kicker="Create" title="New watchlist" subtitle="Keep the metadata practical: only enter region, exchange, and timezone details that actually improve scheduling or review quality." actions={<HelpHint tooltip="A watchlist should capture only the metadata that improves scheduling, evaluation timing, or operator interpretation later." to="/docs?doc=default-watchlists" />} />
+        <DisclosureCard className="sticky-toolbar" kicker="Create" title="New watchlist" subtitle="Keep the metadata practical: only enter region, exchange, and timezone details that actually improve scheduling or review quality." defaultOpen actions={<HelpHint tooltip="A watchlist should capture only the metadata that improves scheduling, evaluation timing, or operator interpretation later." to="/docs?doc=default-watchlists" />}>
           <form className="stack-form" onSubmit={handleSubmit}>
             <label className="form-field">
               <span>Name</span>
@@ -143,9 +142,8 @@ export function WatchlistsPage() {
               {submitting ? "Creating…" : "Create watchlist"}
             </button>
           </form>
-        </Card>
-        <Card>
-          <SectionTitle kicker="Review" title="Saved watchlists" subtitle="Scan market metadata, policy assumptions, and ticker membership without leaving the page." actions={<HelpHint tooltip="Saved watchlists show the market metadata and evaluation policy that each proposal job will inherit." to="/docs?doc=default-watchlists" />} />
+        </DisclosureCard>
+        <DisclosureCard title="Saved watchlists" subtitle="Scan market metadata, policy assumptions, and ticker membership without leaving the page." actions={<HelpHint tooltip="Saved watchlists show the market metadata and evaluation policy that each proposal job will inherit." to="/docs?doc=default-watchlists" />}>
           {!watchlists && !error ? <LoadingState message="Loading watchlists…" /> : null}
           {watchlists && watchlists.length === 0 ? <EmptyState message="No watchlists created yet." /> : null}
           {watchlists ? (
@@ -211,7 +209,7 @@ export function WatchlistsPage() {
               })}
             </div>
           ) : null}
-        </Card>
+        </DisclosureCard>
       </section>
     </>
   );

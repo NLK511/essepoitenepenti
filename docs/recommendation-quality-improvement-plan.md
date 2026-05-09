@@ -56,7 +56,8 @@ Track these before and after each change:
 
 - [x] added time-windowed outcome and plan filters for slice-based evaluation
 - [x] added a smoothed calibration report alongside the current bucket-based report
-- [x] added windowed performance-assessment snapshots for 30d / 90d / 180d views
+- [x] upgraded the smoothed report to use a Bayesian-style empirical calibration curve and feed that curve into gated confidence review when the slice is large enough
+- [x] added windowed performance-assessment snapshots for 1D / 7D / 1M / 3M / 6M / 1Y / ALL views
 - [x] added a walk-forward validation report and research-page validation tab
 - [x] added plan-generation walk-forward promotion validation and a guarded promotion gate
 - [x] added a consolidated recommendation-quality summary API and dashboard card
@@ -101,6 +102,8 @@ Deliverables:
 - better context freshness handling
 - better evidence concentration checks
 - better transmission/context regime labeling
+- a machine-readable context quality score and status
+- a clearer missing-input taxonomy that only flags truly required evidence
 
 ### E. Validation and backtesting
 Protect against tuning to noise.
@@ -206,10 +209,13 @@ Tasks:
 - [ ] capture family-level and regime-level win rates
 - [ ] capture degraded-row performance
 - [ ] record the current baseline thresholds and tuning settings
+- [ ] split required evidence from optional evidence in context missing-input tracking
+- [ ] add a machine-readable context-quality score/status for macro and industry snapshots
 
 Exit criteria:
 - we can reproduce the same metrics on demand
 - we have a baseline snapshot to compare future changes against
+- optional social evidence no longer inflates missing-input counts
 
 ### Phase 2 — Improve measurement quality
 Goal: trust the evaluation pipeline.

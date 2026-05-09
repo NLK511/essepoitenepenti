@@ -182,6 +182,7 @@ class ContextSnapshotRepository:
         limit: int = 50,
         run_id: int | None = None,
         snapshot_id: int | None = None,
+        computed_after: datetime | None = None,
     ) -> list[TickerSignalSnapshot]:
         query = select(TickerSignalSnapshotRecord)
         if snapshot_id is not None:
@@ -190,6 +191,8 @@ class ContextSnapshotRepository:
             query = query.where(TickerSignalSnapshotRecord.ticker == ticker.upper())
         if run_id is not None:
             query = query.where(TickerSignalSnapshotRecord.run_id == run_id)
+        if computed_after is not None:
+            query = query.where(TickerSignalSnapshotRecord.computed_at >= self._normalize_datetime(computed_after))
         rows = self.session.scalars(query.order_by(TickerSignalSnapshotRecord.computed_at.desc()).limit(limit)).all()
         return [self._to_ticker_signal_model(row) for row in rows]
 
