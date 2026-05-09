@@ -2172,12 +2172,13 @@ class RepositoryTests(unittest.TestCase):
             confidence_threshold=60.0,
         )
 
-        self.assertEqual(orchestration._shortlist_limit(StrategyHorizon.ONE_DAY, 4), 4)
-        self.assertEqual(orchestration._shortlist_limit(StrategyHorizon.ONE_WEEK, 12), 12)
-        self.assertEqual(orchestration._shortlist_limit(StrategyHorizon.ONE_MONTH, 24), 24)
-        self.assertEqual(orchestration._minimum_shortlist_confidence(StrategyHorizon.ONE_DAY, 4), 52.0)
-        self.assertEqual(orchestration._minimum_shortlist_confidence(StrategyHorizon.ONE_WEEK, 12), 53.0)
-        self.assertEqual(orchestration._minimum_shortlist_attention(StrategyHorizon.ONE_MONTH, 24), 52.0)
+        shortlist_selection = orchestration.shortlist_selection
+        self.assertEqual(shortlist_selection.shortlist_limit(StrategyHorizon.ONE_DAY, 4), 4)
+        self.assertEqual(shortlist_selection.shortlist_limit(StrategyHorizon.ONE_WEEK, 12), 12)
+        self.assertEqual(shortlist_selection.shortlist_limit(StrategyHorizon.ONE_MONTH, 24), 24)
+        self.assertEqual(shortlist_selection.minimum_shortlist_confidence(StrategyHorizon.ONE_DAY, 4), 52.0)
+        self.assertEqual(shortlist_selection.minimum_shortlist_confidence(StrategyHorizon.ONE_WEEK, 12), 53.0)
+        self.assertEqual(shortlist_selection.minimum_shortlist_attention(StrategyHorizon.ONE_MONTH, 24), 52.0)
 
     def test_watchlist_orchestration_uses_matched_relationships_in_plan_explanation_text(self) -> None:
         session = create_session()

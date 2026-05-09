@@ -32,7 +32,8 @@ This applies whether the plan was generated:
 
 - **Aligned for current core crossing logic:** a dedicated `PlanResolutionEngine` owns entry touch, stop/take ordering, conservative same-bar ties, no-entry diagnostics, phantom outcomes, and realism buffers without database/session dependencies.
 - **Partially aligned for orchestration:** `RecommendationPlanEvaluationService` still owns history loading, daily/intraday source selection, persistence, and expiration finalization.
-- **Still target behavior:** daily bars should become prefilter-only for all terminal trade resolution cases; current orchestration still uses daily data to decide whether intraday resolution is needed.
+- **Aligned for intraday precedence:** when intraday bars are available, they are used as the resolution source even if daily bars disagree.
+- **Still target behavior:** the immediate-or-next-open entry window should become a first-class engine policy if execution semantics tighten further.
 
 ### Implementation conformance matrix
 
@@ -44,8 +45,8 @@ This applies whether the plan was generated:
 | Phantom outcomes | Implemented | `PlanResolutionEngine.evaluate_plan()` plus evaluator intended-action routing | `tests/test_plan_resolution_engine.py`, evaluator tests | None known for current intended-action payload. |
 | Expiration | Implemented in orchestration | `RecommendationPlanEvaluationService._finalize_outcome()` | evaluator tests | Could move into the engine later if expiration policy needs pure-unit coverage. |
 | Batch unresolved filtering | Implemented for default evaluation path | `RecommendationPlanEvaluationService._list_plans()` | evaluator/repository tests | Manual explicit ids can still reevaluate resolved plans by design. |
-| Daily bars as prefilter only | Partially aligned | `RecommendationPlanEvaluationService._resolve_trade_like_outcome()` | evaluator tests | Terminal daily candidates still drive intraday requirement; further simplification should make prefilter semantics explicit. |
-| Intraday truth for terminal order | Partially aligned | history loading + resolution orchestration | evaluator tests | Depends on available intraday bars and provider/persistence coverage. |
+| Daily bars as prefilter only | Mostly aligned | `RecommendationPlanEvaluationService._resolve_trade_like_outcome()` | evaluator tests | Daily no-entry/open states can still be used when intraday is absent; terminal daily outcomes require intraday. |
+| Intraday truth for terminal order | Implemented when intraday is available | history loading + resolution orchestration | evaluator tests | Depends on available intraday bars and provider/persistence coverage. |
 
 ## Live broker execution precedence
 

@@ -90,8 +90,8 @@ class WatchlistOrchestrationPolicyTests(unittest.TestCase):
         for i in range(6):
             candidates.append(_CheapScanCandidate(f"P{i}", "long", 10.0, 10.0, [], ""))
 
-        # Mock catalyst score
-        with patch.object(self.service, "_catalyst_shortlist_score", side_effect=lambda c: 90.0 if c.ticker == "CAT" else 10.0):
+        # Mock catalyst score at the dedicated shortlist-selection boundary.
+        with patch.object(self.service.shortlist_selection, "catalyst_shortlist_score", side_effect=lambda c: 90.0 if c.ticker == "CAT" else 10.0):
             result = self.service._evaluate_shortlist(watchlist, candidates)
             
             self.assertIn("TECH", result["shortlist"])

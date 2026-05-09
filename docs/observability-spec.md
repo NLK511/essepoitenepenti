@@ -1,7 +1,7 @@
 # Observability Spec
 
 ## Status
-Implemented.
+Implemented v1. Run-level events are current behavior; provider and broker lifecycle event coverage is incremental.
 
 ## Goal
 Make run, worker, provider, and broker failures diagnosable across API, scheduler, worker, and operator UI processes.
@@ -42,6 +42,11 @@ The job execution path records at least:
 - `run.dispatch_started`
 - `run.finished`
 - `run.failed`
+
+The broker sync path records at least:
+- `broker.order_sync_started`
+- `broker.order_sync_finished`
+- `broker.order_sync_failed`
 
 Observability writes must never block or fail trading work. If event recording fails, the app logs a warning and continues.
 

@@ -11,15 +11,79 @@ from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
 
 @dataclass(frozen=True)
+class PolicyHealthReport:
+    label: str
+    reasons: list[str]
+    resolved_selected_outcomes: int
+    win_rate_percent: float | None
+    realized_pnl: float
+    calibration_gap_percent: float | None
+    broker_outcome_share_percent: float | None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "label": self.label,
+            "reasons": self.reasons,
+            "resolved_selected_outcomes": self.resolved_selected_outcomes,
+            "win_rate_percent": self.win_rate_percent,
+            "realized_pnl": self.realized_pnl,
+            "calibration_gap_percent": self.calibration_gap_percent,
+            "broker_outcome_share_percent": self.broker_outcome_share_percent,
+        }
+
+
+@dataclass(frozen=True)
 class TradePolicyEvaluationSummary:
     policy_evaluation: PlanPolicyEvaluation
     reliability_report: PlanReliabilityReport
 
+    @property
+    def policy_health(self) -> PolicyHealthReport:
+        evaluation = self.policy_evaluation
+        reasons: list[str] = []
+        if evaluation.resolved_selected_outcomes < 20:
+            reasons.append("thin_resolved_sample")
+        if evaluation.win_rate_percent is None:
+            reasons.append("no_resolved_win_rate")
+        elif evaluation.win_rate_percent < 45.0:
+            reasons.append("weak_selected_win_rate")
+        if evaluation.realized_pnl < 0:
+            reasons.append("negative_realized_pnl")
+        if evaluation.calibration_gap_percent is not None and abs(evaluation.calibration_gap_percent) > 20.0:
+            reasons.append("large_calibration_gap")
+        broker_share = self._percentage(evaluation.broker_selected_outcomes, evaluation.selected_outcomes)
+        if broker_share is not None and broker_share < 25.0:
+            reasons.append("mostly_simulated_evidence")
+        if evaluation.resolved_selected_outcomes >= 40 and evaluation.realized_pnl >= 0 and not reasons:
+            label = "healthy"
+        elif evaluation.resolved_selected_outcomes >= 20 and evaluation.realized_pnl >= 0 and "weak_selected_win_rate" not in reasons:
+            label = "watch"
+        elif evaluation.resolved_selected_outcomes == 0:
+            label = "insufficient"
+        else:
+            label = "degraded"
+        return PolicyHealthReport(
+            label=label,
+            reasons=reasons,
+            resolved_selected_outcomes=evaluation.resolved_selected_outcomes,
+            win_rate_percent=evaluation.win_rate_percent,
+            realized_pnl=evaluation.realized_pnl,
+            calibration_gap_percent=evaluation.calibration_gap_percent,
+            broker_outcome_share_percent=broker_share,
+        )
+
     def to_dict(self) -> dict[str, object]:
         return {
+            "policy_health": self.policy_health.to_dict(),
             "policy_evaluation": self.policy_evaluation.to_dict(),
             "reliability_report": self.reliability_report.to_dict(),
         }
+
+    @staticmethod
+    def _percentage(part: int, total: int) -> float | None:
+        if total <= 0:
+            return None
+        return round((part / total) * 100.0, 1)
 
 
 class TradePolicyEvaluationService:

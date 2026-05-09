@@ -1078,6 +1078,32 @@ class DirectionCorrectTests(EvalTestBase):
 # 4. PHANTOM TRADE LOGIC (end-to-end)
 # ══════════════════════════════════════════════════════════════════════════════
 
+class IntradayTruthDispatchTests(EvalTestBase):
+    def test_intraday_data_is_used_even_when_daily_prefilter_says_no_entry(self) -> None:
+        self._create(
+            ticker="P0",
+            action="long",
+            entry_price_low=100.0,
+            entry_price_high=100.0,
+            stop_loss=90.0,
+            take_profit=110.0,
+            computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
+        )
+        daily = _daily_frame([("2026-01-06", 99.0, 95.0, 98.0)])
+        intraday = _intraday_frame([
+            ("2026-01-06T15:00:00Z", 100.5, 99.5, 100.2),
+            ("2026-01-06T15:05:00Z", 111.0, 100.0, 110.5),
+        ])
+
+        self._eval_dispatch(daily, intraday, as_of=datetime(2026, 1, 7, tzinfo=timezone.utc))
+
+        out = self._get("P0")
+        self.assertEqual(out.outcome, "win")
+        self.assertEqual(out.status, "resolved")
+        self.assertTrue(out.entry_touched)
+        self.assertTrue(out.take_profit_hit)
+
+
 class PhantomTradeEndToEndTests(EvalTestBase):
     """Phantom outcomes wire from signal_breakdown through to persisted outcome.
 

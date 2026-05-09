@@ -269,209 +269,6 @@ class RecommendationPlanEvaluationService:
             intraday_only=intraday_only,
         )
 
-    def _evaluate_plan_legacy(
-        self,
-        plan: RecommendationPlan,
-        price_data: pd.DataFrame | None,
-        *,
-        intended_action: str | None = None,
-        run_id: int | None,
-        as_of: datetime | None = None,
-        intraday_only: bool = False,
-    ) -> RecommendationPlanOutcome:
-        setup_family = self._setup_family(plan)
-        confidence_bucket = self._confidence_bucket(plan.confidence_percent)
-        effective_action = intended_action if plan.action in {"no_action", "watchlist"} and intended_action in {"long", "short"} else plan.action
-
-        logger.debug(
-            "evaluate_plan start: plan_id=%s ticker=%s action=%s effective=%s confidence=%s bucket=%s price_rows=%s",
-            plan.id,
-            plan.ticker,
-            plan.action,
-            effective_action,
-            plan.confidence_percent,
-            confidence_bucket,
-            0 if price_data is None else len(price_data),
-        )
-        
-        if effective_action not in {"long", "short"}:
-            logger.info("evaluate_plan short-circuit: plan_id=%s action=%s outcome=%s", plan.id, plan.action, plan.action)
-            return RecommendationPlanOutcome(
-                recommendation_plan_id=plan.id or 0,
-                ticker=plan.ticker,
-                action=plan.action,
-                outcome=plan.action,
-                status="resolved",
-                evaluated_at=datetime.now(timezone.utc),
-                confidence_bucket=confidence_bucket,
-                setup_family=setup_family,
-                notes="Non-trade action preserved as a first-class evaluated outcome.",
-                run_id=run_id,
-            )
-        if price_data is None or price_data.empty:
-            logger.warning(
-                "evaluate_plan missing price data: plan_id=%s ticker=%s action=%s as_of=%s",
-                plan.id,
-                plan.ticker,
-                plan.action,
-                self._format_datetime(as_of),
-            )
-            return RecommendationPlanOutcome(
-                recommendation_plan_id=plan.id or 0,
-                ticker=plan.ticker,
-                action=plan.action,
-                outcome="pending",
-                status="open",
-                evaluated_at=datetime.now(timezone.utc),
-                confidence_bucket=confidence_bucket,
-                setup_family=setup_family,
-                notes="No price history available for evaluation.",
-                run_id=run_id,
-            )
-
-        sliced = self._rows_on_or_after(
-            price_data,
-            plan.computed_at,
-            intraday_only=intraday_only,
-            plan_id=plan.id,
-            ticker=plan.ticker,
-        )
-        if sliced.empty:
-            logger.warning(
-                "evaluate_plan no post-plan bars: plan_id=%s ticker=%s computed_at=%s as_of=%s price_rows=%s first_available_at=%s last_available_at=%s first_bar_time=%s last_bar_time=%s",
-                plan.id,
-                plan.ticker,
-                self._format_datetime(plan.computed_at),
-                self._format_datetime(as_of),
-                0 if price_data is None else len(price_data),
-                self._frame_bound(price_data, "first", "available_at"),
-                self._frame_bound(price_data, "last", "available_at"),
-                self._frame_bound(price_data, "first", "bar_time"),
-                self._frame_bound(price_data, "last", "bar_time"),
-            )
-            return RecommendationPlanOutcome(
-                recommendation_plan_id=plan.id or 0,
-                ticker=plan.ticker,
-                action=plan.action,
-                outcome="pending",
-                status="open",
-                evaluated_at=datetime.now(timezone.utc),
-                confidence_bucket=confidence_bucket,
-                setup_family=setup_family,
-                notes="No post-plan price bars available yet.",
-                run_id=run_id,
-            )
-
-        entry_reference = self._entry_reference(plan)
-        entry_index = self._find_entry_index(plan, sliced)
-        if entry_index is None:
-            horizon_1d = self._horizon_return(effective_action, sliced, 1, entry_reference)
-            horizon_3d = self._horizon_return(effective_action, sliced, 3, entry_reference)
-            horizon_5d = self._horizon_return(effective_action, sliced, 5, entry_reference)
-            direction_worked = self._direction_correct_from_horizons(horizon_1d, horizon_3d, horizon_5d)
-            entry_miss_distance_percent = self._entry_miss_distance_percent(plan, sliced, entry_reference)
-            near_entry_miss = (
-                entry_miss_distance_percent is not None
-                and entry_miss_distance_percent <= self._near_entry_miss_threshold_percent
-            )
-            logger.info(
-                "evaluate_plan no_entry: plan_id=%s ticker=%s entry_low=%s entry_high=%s rows=%s last_bar=%s miss_pct=%s near_miss=%s direction_worked=%s",
-                plan.id,
-                plan.ticker,
-                plan.entry_price_low,
-                plan.entry_price_high,
-                len(sliced),
-                self._format_datetime(self._last_timestamp(sliced)),
-                entry_miss_distance_percent,
-                near_entry_miss,
-                direction_worked,
-            )
-            notes = "Entry zone has not been touched yet."
-            if near_entry_miss and direction_worked:
-                notes += " Price came very close to entry and still moved in the forecasted direction."
-            elif near_entry_miss:
-                notes += " Price came very close to entry without filling."
-            return RecommendationPlanOutcome(
-                recommendation_plan_id=plan.id or 0,
-                ticker=plan.ticker,
-                action=plan.action,
-                outcome="phantom_no_entry" if plan.action in {"no_action", "watchlist"} else "no_entry",
-                status="open",
-                evaluated_at=self._last_timestamp(sliced) or datetime.now(timezone.utc),
-                entry_touched=False,
-                horizon_return_1d=horizon_1d,
-                horizon_return_3d=horizon_3d,
-                horizon_return_5d=horizon_5d,
-                entry_miss_distance_percent=entry_miss_distance_percent,
-                near_entry_miss=near_entry_miss,
-                direction_worked_without_entry=direction_worked,
-                direction_correct=direction_worked,
-                confidence_bucket=confidence_bucket,
-                setup_family=setup_family,
-                notes=notes,
-                run_id=run_id,
-            )
-
-        active = sliced.iloc[entry_index:]
-        first_stop_hit, first_take_hit, decisive_timestamp = self._resolve_exit(effective_action, plan, active)
-        realized_holding = self._realized_holding_days(plan.computed_at, decisive_timestamp or self._last_timestamp(active))
-        mfe = self._max_favorable_excursion(effective_action, active, entry_reference)
-        mae = self._max_adverse_excursion(effective_action, active, entry_reference)
-        horizon_1d = self._horizon_return(effective_action, active, 1, entry_reference)
-        horizon_3d = self._horizon_return(effective_action, active, 3, entry_reference)
-        horizon_5d = self._horizon_return(effective_action, active, 5, entry_reference)
-        direction_correct = self._direction_correct_from_horizons(horizon_1d, horizon_3d, horizon_5d)
-        outcome = "phantom_pending" if plan.action in {"no_action", "watchlist"} else "open"
-        status = "open"
-        notes = "Entry touched; waiting for stop, take, or more bars."
-        if first_take_hit and not first_stop_hit:
-            outcome = "phantom_win" if plan.action in {"no_action", "watchlist"} else "win"
-            status = "resolved"
-            notes = "Take profit was reached before stop loss."
-        elif first_stop_hit and not first_take_hit:
-            outcome = "phantom_loss" if plan.action in {"no_action", "watchlist"} else "loss"
-            status = "resolved"
-            notes = "Stop loss was reached before take profit."
-        elif first_stop_hit and first_take_hit:
-            outcome = "phantom_loss" if plan.action in {"no_action", "watchlist"} else "loss"
-            status = "resolved"
-            notes = "Stop loss and take profit were both touched on the same bar; conservative resolution marked as loss."
-
-        logger.debug(
-            "evaluate_plan exit resolution: plan_id=%s ticker=%s entry_index=%s stop_loss_hit=%s take_profit_hit=%s decisive_timestamp=%s outcome=%s status=%s",
-            plan.id,
-            plan.ticker,
-            entry_index,
-            first_stop_hit,
-            first_take_hit,
-            self._format_datetime(decisive_timestamp),
-            outcome,
-            status,
-        )
-
-        return RecommendationPlanOutcome(
-            recommendation_plan_id=plan.id or 0,
-            ticker=plan.ticker,
-            action=plan.action,
-            outcome=outcome,
-            status=status,
-            evaluated_at=decisive_timestamp or self._last_timestamp(active) or datetime.now(timezone.utc),
-            entry_touched=True,
-            stop_loss_hit=first_stop_hit,
-            take_profit_hit=first_take_hit,
-            horizon_return_1d=horizon_1d,
-            horizon_return_3d=horizon_3d,
-            horizon_return_5d=horizon_5d,
-            max_favorable_excursion=mfe,
-            max_adverse_excursion=mae,
-            realized_holding_period_days=realized_holding,
-            direction_correct=direction_correct,
-            confidence_bucket=confidence_bucket,
-            setup_family=setup_family,
-            notes=notes,
-            run_id=run_id,
-        )
-
     @staticmethod
     def _setup_family(plan: RecommendationPlan) -> str:
         value = plan.signal_breakdown.get("setup_family")
@@ -850,31 +647,19 @@ class RecommendationPlanEvaluationService:
         daily_outcome: RecommendationPlanOutcome | None = None
         if daily_data is not None and not daily_data.empty:
             daily_outcome = self._evaluate_plan(plan, daily_data, intended_action=intended_action, run_id=run_id, as_of=as_of, intraday_only=False)
-            if daily_outcome.outcome in {"no_entry", "open", "phantom_no_entry", "phantom_pending"}:
-                return self._finalize_outcome(plan, daily_outcome, as_of=as_of), "daily"
-            if intraday_data is not None and not intraday_data.empty:
-                intraday_outcome = self._evaluate_plan(plan, intraday_data, intended_action=intended_action, run_id=run_id, as_of=as_of, intraday_only=True)
-                # Preserve daily horizon returns; intraday horizon metrics are skewed by bar frequency.
-                intraday_outcome.horizon_return_1d = daily_outcome.horizon_return_1d
-                intraday_outcome.horizon_return_3d = daily_outcome.horizon_return_3d
-                intraday_outcome.horizon_return_5d = daily_outcome.horizon_return_5d
-                return self._finalize_outcome(plan, intraday_outcome, as_of=as_of), "intraday"
-            pending_outcome = self._pending_resolution_outcome(
-                plan,
-                run_id=run_id,
-                confidence_bucket=self._confidence_bucket(plan.confidence_percent),
-                setup_family=self._setup_family(plan),
-                notes="Intraday price history is required for final resolution but is unavailable.",
-            )
-            return self._finalize_outcome(plan, pending_outcome, as_of=as_of), "pending"
 
         if intraday_data is not None and not intraday_data.empty:
             intraday_outcome = self._evaluate_plan(plan, intraday_data, intended_action=intended_action, run_id=run_id, as_of=as_of, intraday_only=True)
+            # Preserve daily horizon returns; intraday horizon metrics are skewed by bar frequency.
+            if daily_outcome is not None:
+                intraday_outcome.horizon_return_1d = daily_outcome.horizon_return_1d
+                intraday_outcome.horizon_return_3d = daily_outcome.horizon_return_3d
+                intraday_outcome.horizon_return_5d = daily_outcome.horizon_return_5d
             return self._finalize_outcome(plan, intraday_outcome, as_of=as_of), "intraday"
 
         if daily_outcome is not None:
             if daily_outcome.outcome in {"no_entry", "open", "phantom_no_entry", "phantom_pending"}:
-                return self._finalize_outcome(plan, daily_outcome, as_of=as_of), "daily"
+                return self._finalize_outcome(plan, daily_outcome, as_of=as_of), "daily_prefilter"
             pending_outcome = self._pending_resolution_outcome(
                 plan,
                 run_id=run_id,
@@ -882,7 +667,7 @@ class RecommendationPlanEvaluationService:
                 setup_family=self._setup_family(plan),
                 notes="Intraday price history is required for final resolution but is unavailable.",
             )
-            return self._finalize_outcome(plan, pending_outcome, as_of=as_of), "pending"
+            return self._finalize_outcome(plan, pending_outcome, as_of=as_of), "pending_intraday_required"
 
         pending_outcome = self._pending_resolution_outcome(
             plan,

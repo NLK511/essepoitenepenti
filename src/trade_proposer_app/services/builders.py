@@ -6,6 +6,7 @@ from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRep
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
+from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
@@ -125,6 +126,7 @@ def create_order_execution_service(session: Session) -> OrderExecutionService:
         executions=BrokerOrderExecutionRepository(session),
         client=client,
         positions=BrokerPositionRepository(session),
+        observability=ObservabilityEventRepository(session),
     )
 
 

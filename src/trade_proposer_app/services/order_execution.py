@@ -10,6 +10,7 @@ from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPositio
 from trade_proposer_app.domain.statuses import BrokerPositionStatus, ExecutionStatus, TERMINAL_EXECUTION_STATUSES, TradeOutcome
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
+from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClient, AlpacaPaperClientError
 from trade_proposer_app.services.execution_candidates import ExecutionCandidateBuilder
@@ -43,11 +44,13 @@ class OrderExecutionService:
         executions: BrokerOrderExecutionRepository,
         client: AlpacaPaperClient | None = None,
         positions: BrokerPositionRepository | None = None,
+        observability: ObservabilityEventRepository | None = None,
     ) -> None:
         self.settings = settings
         self.executions = executions
         self.client = client
         self.positions = positions
+        self.observability = observability
         self.candidate_builder = ExecutionCandidateBuilder()
 
     def execute_plans(
@@ -299,6 +302,11 @@ class OrderExecutionService:
         return updated
 
     def sync_open_executions(self, *, limit: int = 200) -> BrokerOrderSyncOutcome:
+        self._record_observability_event(
+            event_type="broker.order_sync_started",
+            message="Broker open-order sync started",
+            payload={"limit": limit},
+        )
         orders = self.executions.list_all(limit=limit)
         synced_orders: list[BrokerOrderExecution] = []
         skipped = 0
@@ -325,6 +333,12 @@ class OrderExecutionService:
             "warnings": warnings,
             "orders": [order.model_dump(mode="json") for order in synced_orders],
         }
+        self._record_observability_event(
+            event_type="broker.order_sync_failed" if failed else "broker.order_sync_finished",
+            severity="warning" if failed else "info",
+            message="Broker open-order sync finished with failures" if failed else "Broker open-order sync finished",
+            payload={key: value for key, value in summary.items() if key != "orders"},
+        )
         return BrokerOrderSyncOutcome(summary=summary, orders=synced_orders)
 
     def _submit_candidate(self, candidate: BrokerOrderExecution) -> BrokerOrderExecution:
@@ -363,6 +377,27 @@ class OrderExecutionService:
             raise ValueError("alpaca provider credential is missing")
         self.client = AlpacaPaperClient(api_key=alpaca_credential.api_key, api_secret=alpaca_credential.api_secret)
         return self.client
+
+    def _record_observability_event(
+        self,
+        *,
+        event_type: str,
+        message: str,
+        payload: dict[str, object] | None = None,
+        severity: str = "info",
+    ) -> None:
+        if self.observability is None:
+            return
+        try:
+            self.observability.record(
+                event_type=event_type,
+                severity=severity,
+                source="broker",
+                message=message,
+                payload=payload or {},
+            )
+        except Exception:
+            pass
 
     @staticmethod
     def _bump(counter: dict[str, int], reason: str) -> None:

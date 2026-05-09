@@ -12,6 +12,7 @@ from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
@@ -556,7 +557,8 @@ class OrderExecutionTests(unittest.TestCase):
                 )
             )
             client = StubAlpacaClient()
-            service = OrderExecutionService(settings=settings, executions=repository, client=client)
+            observability = ObservabilityEventRepository(session)
+            service = OrderExecutionService(settings=settings, executions=repository, client=client, observability=observability)
 
             outcome = service.sync_open_executions()
 
@@ -564,6 +566,8 @@ class OrderExecutionTests(unittest.TestCase):
             self.assertEqual(outcome.summary["skipped_count"], 1)
             self.assertEqual(client.get_requests, ["alpaca-order-2"])
             self.assertEqual(repository.get_by_client_order_id("alpaca", "tp-run-10-plan-1-aapl-live").status, "open")
+            events = observability.list_events(limit=10)
+            self.assertEqual([event["event_type"] for event in reversed(events)], ["broker.order_sync_started", "broker.order_sync_finished"])
         finally:
             session.close()
 

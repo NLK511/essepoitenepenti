@@ -66,6 +66,7 @@ def _performance_workbench_payload(session: Session, *, calibration_evaluated_af
         "effective_summary": metrics.summarize_effective_outcomes(limit=500).to_dict(),
         "calibration_summary": calibration_summary,
         "calibration_report": calibration_summary.calibration_report,
+        "policy_health": policy_review.policy_health.to_dict(),
         "active_policy_evaluation": policy_review.policy_evaluation.to_dict(),
         "reliability_report": policy_review.reliability_report.to_dict(),
         "walk_forward_validation": walk_forward,
