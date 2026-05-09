@@ -19,6 +19,7 @@ from trade_proposer_app.repositories.historical_market_data import HistoricalMar
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
+from trade_proposer_app.services.plan_resolution_engine import PlanResolutionConfig, PlanResolutionEngine
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
@@ -55,6 +56,18 @@ class RecommendationPlanEvaluationService:
         self.settings = SettingsRepository(session)
         self.settings_domains = SettingsDomainService(repository=self.settings)
         self.taxonomy = TickerTaxonomyService()
+        self.resolution_engine = self._build_resolution_engine()
+
+    def _build_resolution_engine(self) -> PlanResolutionEngine:
+        realism = self.settings_domains.execution_settings().evaluation_realism
+        return PlanResolutionEngine(
+            PlanResolutionConfig(
+                friction_pct=float(realism.get("friction_pct", 0.0) or 0.0),
+                stop_buffer_pct=float(realism.get("stop_buffer_pct", 0.0) or 0.0),
+                take_profit_buffer_pct=float(realism.get("take_profit_buffer_pct", 0.0) or 0.0),
+                near_entry_miss_threshold_percent=self._near_entry_miss_threshold_percent,
+            )
+        )
 
     def run_evaluation(
         self,
@@ -238,6 +251,25 @@ class RecommendationPlanEvaluationService:
         return groups
 
     def _evaluate_plan(
+        self,
+        plan: RecommendationPlan,
+        price_data: pd.DataFrame | None,
+        *,
+        intended_action: str | None = None,
+        run_id: int | None,
+        as_of: datetime | None = None,
+        intraday_only: bool = False,
+    ) -> RecommendationPlanOutcome:
+        return self.resolution_engine.evaluate_plan(
+            plan,
+            price_data,
+            intended_action=intended_action,
+            run_id=run_id,
+            as_of=as_of,
+            intraday_only=intraday_only,
+        )
+
+    def _evaluate_plan_legacy(
         self,
         plan: RecommendationPlan,
         price_data: pd.DataFrame | None,

@@ -17,21 +17,31 @@ If you are new to the repo, read these first in order:
 - `glossary.md` — shared terms used across the app, including cohort, slice, bucket, and calibration language
 - `recommendation-methodology.md` — the live recommendation path after you know the page and term basics
 
+## Doc taxonomy
+
+Every active doc should fit exactly one category:
+- **current behavior** — implemented product truth
+- **target behavior** — intended semantics that may include a conformance gap
+- **active plan** — work not yet complete
+- **reference** — stable glossary/schema/raw details
+- **archive** — historical context only
+
 ## Canonical current-state docs
 
-These define the current product truth.
+These define implemented product truth.
 
 ### Product and behavior
 - `product-thesis.md` — product goal, decision rules, and priority order
 - `features-and-capabilities.md` — what the app does today and its current limits
 - `roadmap.md` — active priorities only
-- `architecture-simplification-refactor-plan.md` — phased cleanup plan for outcome, metric, policy, settings, and status abstractions
+- `architecture-simplification-refactor-plan.md` — completed refactor record for outcome, metric, policy, settings, and status abstractions
 - `user-journeys.md` — intended operator journeys
 
 ### Setup and operations
 - `getting-started.md` — local setup, scripts, auth, validation, first-run checks
 - `operational-scripts-reference.md` — reference for maintenance, hydration, and compare tools
 - `observability-spec.md` — run correlation ids, structured observability events, health/debugger diagnostics, and cross-process log requirements
+- `lean-architecture-and-docs-reconciliation-plan.md` — active plan to reduce over-engineering and reconcile the docs surface
 - `default-watchlists.md` — seeded watchlist pack and rationale
 - `data-quality-audit-spec.md` — audit endpoint for repeated no-bars, no-news, stale-coverage, and broker-reject ticker issues
 
@@ -51,9 +61,9 @@ These define the current product truth.
 - `raw-details-reference.md` — stored payload and diagnostics reference
 - `er-model.md` — current schema overview
 
-## Active implementation and research docs
+## Active implementation, target behavior, and research docs
 
-These are useful, but they are not the main current-state entry point.
+These are useful, but they are not the main current-state entry point. They must clearly label whether they describe current behavior, target behavior, or an active plan.
 
 - `recommendation-quality-improvement-plan.md` — working tracker for recommendation-quality, calibration, and validation improvements
 - `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow
@@ -65,12 +75,12 @@ These are useful, but they are not the main current-state entry point.
 - `plan-reliability-report-spec.md` — canonical broker/effective reliability report for confidence, setup-family, and action cohorts
 - `plan-policy-evaluator-spec.md` — canonical evaluator for scoring trade-selection policies against broker-preferred historical outcomes
 - `account-risk-state-spec.md` — canonical account-risk read model for broker safety checks and kill-switch state
-- `architecture-simplification-refactor-plan.md` — active phased implementation plan for simplifying drifted abstractions
+- `architecture-simplification-refactor-plan.md` — completed phased implementation record for simplifying drifted abstractions
 - `nitter-social-relevance-scoring.md` — current Nitter relevance-ranking behavior
 
 ## Redesign reference
 
-These remain active technical reference docs:
+These are transitional technical references. Stable current behavior should be merged into current-state docs over time; historical redesign notes should move to archive.
 - `redesign/README.md` — redesign doc map
 - `redesign/principles.md` — redesign rules
 - `redesign/target-architecture.md` — high-level redesign shape
@@ -107,6 +117,13 @@ When a feature ships:
 When a doc becomes mostly historical:
 - move it to `docs/archive/`
 - keep only a short pointer from active docs if needed
+
+Before adding a new doc, check:
+- Is this current behavior, target behavior, active plan, reference, or archive?
+- Does this duplicate another doc?
+- If shipped, is it removed from roadmap future language?
+- If target-only, is it clearly marked as not fully implemented?
+- Is there a test/spec/code owner for the behavior?
 
 ## Suggested reading paths
 

@@ -13,6 +13,7 @@ from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRep
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
+from trade_proposer_app.services.shortlist_selection import ShortlistSelectionConfig, ShortlistSelectionService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal, CheapScanSignalService
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
@@ -62,6 +63,13 @@ class WatchlistOrchestrationService:
         self.plan_generation_tuning_config = dict(trade_decision_policy.plan_generation_config) if trade_decision_policy is not None else normalize_plan_generation_tuning_config(plan_generation_tuning_config)
         self.calibration_service = calibration_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
+        self.shortlist_selection = ShortlistSelectionService(
+            ShortlistSelectionConfig(
+                confidence_threshold=self.confidence_threshold,
+                signal_gating_tuning_config=self.signal_gating_tuning_config,
+            ),
+            taxonomy_service=self.taxonomy_service,
+        )
 
     @staticmethod
     def _normalize_signal_gating_tuning_config(signal_gating_tuning_config: dict[str, float] | None) -> dict[str, float]:
@@ -304,6 +312,12 @@ class WatchlistOrchestrationService:
         return list(evaluation["shortlist"])
 
     def _evaluate_shortlist(self, watchlist: Watchlist, candidates: list[_CheapScanCandidate]) -> dict[str, object]:
+        # Keep legacy monkey-patchable helpers wired for existing focused tests while
+        # the selection behavior itself lives in ShortlistSelectionService.
+        self.shortlist_selection.catalyst_shortlist_score = self._catalyst_shortlist_score  # type: ignore[method-assign]
+        return self.shortlist_selection.evaluate(watchlist, candidates)
+
+    def _evaluate_shortlist_legacy(self, watchlist: Watchlist, candidates: list[_CheapScanCandidate]) -> dict[str, object]:
         if not candidates:
             return {
                 "shortlist": [],

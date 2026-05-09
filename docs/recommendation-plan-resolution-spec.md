@@ -30,9 +30,22 @@ This applies whether the plan was generated:
 
 ### Current implementation status
 
-- **Partially aligned:** the evaluator already stores resolution outcomes and supports recomputation.
-- **Not yet fully aligned:** the live evaluator still contains legacy session-based selection behavior; see the recompute notes for details.
-- **Not yet fully aligned:** batch open-plan filtering should be the default policy, but may still need to be enforced in the execution path.
+- **Aligned for current core crossing logic:** a dedicated `PlanResolutionEngine` owns entry touch, stop/take ordering, conservative same-bar ties, no-entry diagnostics, phantom outcomes, and realism buffers without database/session dependencies.
+- **Partially aligned for orchestration:** `RecommendationPlanEvaluationService` still owns history loading, daily/intraday source selection, persistence, and expiration finalization.
+- **Still target behavior:** daily bars should become prefilter-only for all terminal trade resolution cases; current orchestration still uses daily data to decide whether intraday resolution is needed.
+
+### Implementation conformance matrix
+
+| Rule | Current status | Code owner | Test owner | Gap |
+|---|---|---|---|---|
+| Entry touch detection | Implemented | `PlanResolutionEngine.find_entry_index()` | `tests/test_plan_resolution_engine.py`, `tests/test_recommendation_plan_evaluations.py` | None known for current bar model. |
+| Stop/take first crossing | Implemented | `PlanResolutionEngine.resolve_exit()` | `tests/test_plan_resolution_engine.py`, `tests/test_recommendation_plan_evaluations.py` | Same-bar tie remains conservative loss by policy. |
+| Near-entry diagnostics | Implemented | `PlanResolutionEngine.entry_miss_distance_percent()` | `tests/test_plan_resolution_engine.py`, evaluator tests | None known. |
+| Phantom outcomes | Implemented | `PlanResolutionEngine.evaluate_plan()` plus evaluator intended-action routing | `tests/test_plan_resolution_engine.py`, evaluator tests | None known for current intended-action payload. |
+| Expiration | Implemented in orchestration | `RecommendationPlanEvaluationService._finalize_outcome()` | evaluator tests | Could move into the engine later if expiration policy needs pure-unit coverage. |
+| Batch unresolved filtering | Implemented for default evaluation path | `RecommendationPlanEvaluationService._list_plans()` | evaluator/repository tests | Manual explicit ids can still reevaluate resolved plans by design. |
+| Daily bars as prefilter only | Partially aligned | `RecommendationPlanEvaluationService._resolve_trade_like_outcome()` | evaluator tests | Terminal daily candidates still drive intraday requirement; further simplification should make prefilter semantics explicit. |
+| Intraday truth for terminal order | Partially aligned | history loading + resolution orchestration | evaluator tests | Depends on available intraday bars and provider/persistence coverage. |
 
 ## Live broker execution precedence
 

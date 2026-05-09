@@ -52,9 +52,10 @@ Already in place:
 - lease-age, stale-running-run, worker-heartbeat-age, and scheduler-heartbeat diagnostics in `/api/health`
 - worker and scheduler daemon logging
 - persisted run correlation ids included in run models and dispatch logs
+- structured `observability_events` for run dispatch, completion, and failure, exposed through `/api/observability/events`
 
 Still needed:
-- richer structured logs beyond the current run correlation id
+- broader structured events for provider and broker lifecycle details beyond the current run execution events
 - easier diagnosis of provider failures across processes
 - continued polish of health signal presentation and operator-facing diagnostics
 

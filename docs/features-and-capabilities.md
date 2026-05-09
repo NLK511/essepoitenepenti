@@ -99,7 +99,7 @@ The shipped baseline includes:
 
 The main limits are still practical:
 - reliability still needs more hardening around worker/scheduler crash recovery and partial-persistence edge cases
-- observability is still thin for a multi-process app; logs are not yet structured enough and daemon health is not surfaced clearly enough
+- observability has run correlation ids, worker heartbeats, health diagnostics, and first structured run events, but provider/broker lifecycle events and daemon-health presentation still need more polish
 - auth, RBAC, tenancy, and credential lifecycle are still incomplete; the app remains single-user and the frontend stores the bearer token locally
 - context extraction is stronger than before at capturing short-horizon state changes, but it is still heuristic rather than a mature event model
 - ticker deep analysis still reuses some older proposal-engine internals

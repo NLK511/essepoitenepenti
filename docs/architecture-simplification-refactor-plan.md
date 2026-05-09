@@ -98,7 +98,7 @@ Acceptance criteria:
 - calibration counts broker-resolved outcomes
 
 ### Phase 2 — Shared performance metrics
-Status: implemented in this pass.
+Status: implemented.
 
 Deliverables:
 - `TradingPerformanceMetricsService`
@@ -112,7 +112,7 @@ Acceptance criteria:
 - test coverage confirms the shared service counts broker and simulation outcomes correctly
 
 ### Phase 3 — Trade decision policy
-Status: foundation implemented; first live consumer migrated; first additive policy evaluator implemented.
+Status: implemented for the current scope.
 
 Implemented:
 - `TradeDecisionPolicy`
@@ -136,7 +136,7 @@ Acceptance criteria:
 - risk manager remains separate from alpha/selection policy
 
 ### Phase 4 — Settings domain split
-Status: typed domain view foundation implemented; persistence split still planned.
+Status: implemented for the current scope; legacy key/value persistence remains the compatibility layer.
 
 Implemented:
 - `SettingsDomainService`
@@ -161,7 +161,7 @@ Acceptance criteria:
 - settings UI still works without data loss
 
 ### Phase 5 — Status taxonomy
-Status: foundation implemented; broad migration still planned.
+Status: implemented for the current scope; future status domains should follow the same taxonomy.
 
 Implemented:
 - `domain/statuses.py` with domain-specific status enums/constants
@@ -180,7 +180,7 @@ Acceptance criteria:
 - order execution, position lifecycle, plan status, outcome status, and job status remain distinct
 
 ### Phase 6 — Plan responsibility split
-Status: execution-candidate foundation implemented; order-execution migration implemented.
+Status: implemented for the current scope.
 
 Implemented:
 - `ExecutionCandidate`
@@ -201,7 +201,7 @@ Acceptance criteria:
 - broad search consumes normalized features and effective outcomes
 
 ### Phase 7 — Backend read models for complex pages
-Status: broker and research read model foundations implemented.
+Status: implemented for the current scope.
 
 Implemented:
 - `/api/broker-workbench` returns broker orders, broker positions, risk state, recent halt audit events, broker sync state, and counts in one backend-reconciled payload
