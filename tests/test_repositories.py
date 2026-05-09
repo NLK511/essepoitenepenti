@@ -45,6 +45,7 @@ from trade_proposer_app.domain.models import (
 from trade_proposer_app.persistence.models import Base, JobRecord, ProviderCredentialRecord, RunRecord
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
@@ -454,6 +455,33 @@ class RepositoryTests(unittest.TestCase):
                 watchlist_id=watchlist.id,
                 job_type=JobType.PLAN_GENERATION_TUNING,
             )
+
+    def test_observability_event_repository_records_and_filters_events(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        events = ObservabilityEventRepository(session)
+        job = jobs.create("Observed", ["AAPL"], None)
+        run = runs.enqueue(job.id or 0)
+
+        recorded = events.record(
+            run_id=run.id,
+            job_id=run.job_id,
+            correlation_id=run.correlation_id,
+            event_type="run.finished",
+            severity="info",
+            source="test",
+            message="done",
+            payload={"final_status": "completed"},
+        )
+
+        self.assertEqual(recorded["event_type"], "run.finished")
+        self.assertEqual(recorded["correlation_id"], run.correlation_id)
+        self.assertEqual(recorded["payload"]["final_status"], "completed")
+        by_run = events.list_events(run_id=run.id or 0)
+        by_correlation = events.list_events(correlation_id=run.correlation_id or "")
+        self.assertEqual(len(by_run), 1)
+        self.assertEqual(by_correlation[0]["id"], recorded["id"])
 
     def test_run_repository_persists_job_type_and_run_metadata(self) -> None:
         session = create_session()
@@ -1208,6 +1236,7 @@ class RepositoryTests(unittest.TestCase):
             operator = domains.operator_settings()
             scheduler = domains.scheduler_settings()
             broker_sync = domains.broker_sync_state()
+            runtime_state = domains.runtime_state()
 
             self.assertIn("confidence_threshold", strategy.to_dict())
             self.assertIn("enabled", risk.risk_management)
@@ -1217,6 +1246,8 @@ class RepositoryTests(unittest.TestCase):
             self.assertIn("social_nitter_enabled", operator.social)
             self.assertIn("last_poll_at", scheduler.to_dict())
             self.assertIn("last_at", broker_sync.to_dict())
+            self.assertIn("risk_halt_enabled", runtime_state.to_dict())
+            self.assertIn("broker_sync_last_at", runtime_state.to_dict())
         finally:
             session.close()
 
@@ -1938,6 +1969,11 @@ class RepositoryTests(unittest.TestCase):
         self.assertIsNotNone(latest_runs[0].timing_json)
         assert latest_runs[0].timing_json is not None
         self.assertIn('"ticker_generation"', latest_runs[0].timing_json)
+        events = ObservabilityEventRepository(session).list_events(run_id=processed_run.id or 0)
+        event_types = {event["event_type"] for event in events}
+        self.assertIn("run.dispatch_started", event_types)
+        self.assertIn("run.finished", event_types)
+        self.assertEqual({event["correlation_id"] for event in events}, {processed_run.correlation_id})
         refreshed_job = jobs.get(job.id or 0)
         self.assertIsNotNone(refreshed_job.last_enqueued_at)
 

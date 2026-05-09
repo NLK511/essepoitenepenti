@@ -31,7 +31,7 @@ These define the current product truth.
 ### Setup and operations
 - `getting-started.md` — local setup, scripts, auth, validation, first-run checks
 - `operational-scripts-reference.md` — reference for maintenance, hydration, and compare tools
-- `observability-spec.md` — run correlation ids, health/debugger diagnostics, and cross-process log requirements
+- `observability-spec.md` — run correlation ids, structured observability events, health/debugger diagnostics, and cross-process log requirements
 - `default-watchlists.md` — seeded watchlist pack and rationale
 - `data-quality-audit-spec.md` — audit endpoint for repeated no-bars, no-news, stale-coverage, and broker-reject ticker issues
 

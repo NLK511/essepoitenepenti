@@ -9,6 +9,7 @@ from trade_proposer_app.api.routes.effective_plan_outcomes import router as effe
 from trade_proposer_app.api.routes.health import router as health_router
 from trade_proposer_app.api.routes.historical_replay import router as historical_replay_router
 from trade_proposer_app.api.routes.jobs import router as jobs_router
+from trade_proposer_app.api.routes.observability import router as observability_router
 from trade_proposer_app.api.routes.signal_gating_tuning import router as signal_gating_tuning_router
 from trade_proposer_app.api.routes.plan_generation_tuning import router as plan_generation_tuning_router
 from trade_proposer_app.api.routes.recommendation_decision_samples import router as recommendation_decision_samples_router
@@ -35,6 +36,7 @@ router.include_router(docs_router)
 router.include_router(effective_plan_outcomes_router)
 router.include_router(context_router)
 router.include_router(historical_replay_router)
+router.include_router(observability_router)
 router.include_router(signal_gating_tuning_router)
 router.include_router(plan_generation_tuning_router)
 router.include_router(recommendation_decision_samples_router)

@@ -37,6 +37,7 @@ from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRep
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
 from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
@@ -145,6 +146,36 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             StubAppPreflightService,
         )
         self.health_preflight_patcher.start()
+
+    async def test_observability_events_endpoint_filters_by_run(self) -> None:
+        session = Session(bind=self.engine)
+        try:
+            jobs = JobRepository(session)
+            runs = RunRepository(session)
+            job = jobs.create("Observed route", ["AAPL"], None)
+            run = runs.enqueue(job.id or 0)
+            ObservabilityEventRepository(session).record(
+                run_id=run.id,
+                job_id=job.id,
+                correlation_id=run.correlation_id,
+                event_type="run.finished",
+                severity="info",
+                source="test",
+                message="done",
+                payload={"final_status": "completed"},
+            )
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get(f"/api/observability/events?run_id={run.id}")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["events"][0]["correlation_id"], run.correlation_id)
+        self.assertEqual(payload["events"][0]["payload"]["final_status"], "completed")
 
     async def asyncTearDown(self) -> None:
         self.health_preflight_patcher.stop()

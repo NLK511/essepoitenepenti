@@ -10,6 +10,7 @@ from trade_proposer_app.config import settings
 from trade_proposer_app.domain.enums import JobType, RunStatus, StrategyHorizon
 from trade_proposer_app.domain.models import EvaluationRunResult, Recommendation, Run, Watchlist, WorkerHeartbeat
 from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.bars_refresh import BarsRefreshService
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
@@ -63,6 +64,7 @@ class JobExecutionService:
         self.order_execution = order_execution
         self.historical_replay = historical_replay
         self.bars_refresh = bars_refresh
+        self.observability = ObservabilityEventRepository(self.runs.session) if getattr(self.runs, "session", None) is not None else None
         if self.order_execution is None and getattr(self.runs, "session", None) is not None:
             from trade_proposer_app.services.builders import create_order_execution_service
 
@@ -102,6 +104,12 @@ class JobExecutionService:
             self._normalize_datetime(run.scheduled_for),
             self._normalize_datetime(run.started_at),
             self._get_run_artifact(run),
+        )
+        self._record_observability_event(
+            run,
+            event_type="run.dispatch_started",
+            message="Run dispatch started",
+            payload={"worker_id": worker_id, "job_type": run.job_type.value},
         )
         if worker_id:
             self.runs.upsert_heartbeat(WorkerHeartbeat(
@@ -678,6 +686,13 @@ class JobExecutionService:
                     6,
                 )
                 self.runs.set_timing(run.id or 0, exc.timing)
+                self._record_observability_event(
+                    current_run,
+                    event_type="run.failed",
+                    severity="error",
+                    message=str(exc.cause),
+                    payload={"timing": exc.timing, "cause_type": type(exc.cause).__name__},
+                )
             except Exception as finalize_exc:
                 self.runs.session.rollback()
                 print(f"failed to finalize run {run.id}: {finalize_exc}")
@@ -698,6 +713,43 @@ class JobExecutionService:
         timing["finalize_seconds"] = round(perf_counter() - finalize_started, 6)
         timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
         self.runs.set_timing(run_id, timing)
+        run = self.runs.get_run(run_id)
+        self._record_observability_event(
+            run,
+            event_type="run.finished",
+            severity="warning" if final_status == RunStatus.COMPLETED_WITH_WARNINGS.value else "info",
+            message=f"Run finished with status {final_status}",
+            payload={"final_status": final_status, "timing": timing},
+        )
+
+    def _record_observability_event(
+        self,
+        run: Run,
+        *,
+        event_type: str,
+        severity: str = "info",
+        message: str = "",
+        payload: dict[str, object] | None = None,
+    ) -> None:
+        if self.observability is None:
+            return
+        try:
+            self.observability.record(
+                run_id=run.id,
+                job_id=run.job_id,
+                correlation_id=run.correlation_id,
+                event_type=event_type,
+                severity=severity,
+                source="job_execution",
+                message=message,
+                payload=payload or {},
+            )
+        except Exception as exc:  # pragma: no cover - observability must not break trading work
+            try:
+                self.runs.session.rollback()
+            except Exception:
+                pass
+            logger.warning("failed to record observability event: run_id=%s event_type=%s error=%s", run.id, event_type, exc)
 
     def enqueue_manual_evaluation(
         self,

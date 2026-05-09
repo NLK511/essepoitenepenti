@@ -70,6 +70,21 @@ class RunRecord(Base, TimestampMixin):
     job: Mapped[JobRecord] = relationship(back_populates="runs")
 
 
+class ObservabilityEventRecord(Base):
+    __tablename__ = "observability_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(32), nullable=False, default="info", index=True)
+    source: Mapped[str] = mapped_column(String(120), nullable=False, default="app", index=True)
+    message: Mapped[str] = mapped_column(Text, default="")
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
 class DashboardTrendSnapshotRecord(Base, TimestampMixin):
     __tablename__ = "dashboard_trend_snapshots"
     __table_args__ = (UniqueConstraint("snapshot_date", name="uq_dashboard_trend_snapshots_snapshot_date"),)

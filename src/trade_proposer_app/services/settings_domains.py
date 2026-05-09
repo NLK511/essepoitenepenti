@@ -54,6 +54,32 @@ class OperatorSettings:
 
 
 @dataclass(frozen=True)
+class RuntimeState:
+    risk_halt_enabled: bool
+    risk_halt_reason: str
+    scheduler_last_poll_at: str | None
+    scheduler_last_success_at: str | None
+    scheduler_last_enqueue_count: str | None
+    scheduler_last_error: str | None
+    broker_sync_last_at: str | None
+    broker_sync_last_count: int | None
+    broker_sync_last_error: str | None
+
+    def to_dict(self) -> dict[str, str | int | bool | None]:
+        return {
+            "risk_halt_enabled": self.risk_halt_enabled,
+            "risk_halt_reason": self.risk_halt_reason,
+            "scheduler_last_poll_at": self.scheduler_last_poll_at,
+            "scheduler_last_success_at": self.scheduler_last_success_at,
+            "scheduler_last_enqueue_count": self.scheduler_last_enqueue_count,
+            "scheduler_last_error": self.scheduler_last_error,
+            "broker_sync_last_at": self.broker_sync_last_at,
+            "broker_sync_last_count": self.broker_sync_last_count,
+            "broker_sync_last_error": self.broker_sync_last_error,
+        }
+
+
+@dataclass(frozen=True)
 class SchedulerSettings:
     last_poll_at: str | None
     last_success_at: str | None
@@ -113,6 +139,20 @@ class SettingsDomainService:
             social=self.repository.get_social_settings(),
         )
 
+    def runtime_state(self) -> RuntimeState:
+        setting_map = self.repository.get_setting_map()
+        return RuntimeState(
+            risk_halt_enabled=self._optional_bool(setting_map.get("risk_halt_enabled"), False),
+            risk_halt_reason=self._optional_string(setting_map.get("risk_halt_reason")) or "",
+            scheduler_last_poll_at=self._optional_string(setting_map.get("scheduler_last_poll_at")),
+            scheduler_last_success_at=self._optional_string(setting_map.get("scheduler_last_success_at")),
+            scheduler_last_enqueue_count=self._optional_string(setting_map.get("scheduler_last_enqueue_count")),
+            scheduler_last_error=self._optional_string(setting_map.get("scheduler_last_error")),
+            broker_sync_last_at=self._optional_string(setting_map.get("broker_order_sync_last_at")),
+            broker_sync_last_count=self._optional_int(setting_map.get("broker_order_sync_last_count")),
+            broker_sync_last_error=self._optional_string(setting_map.get("broker_order_sync_last_error")),
+        )
+
     def scheduler_settings(self) -> SchedulerSettings:
         setting_map = self.repository.get_setting_map()
         return SchedulerSettings(
@@ -136,6 +176,18 @@ class SettingsDomainService:
             return None
         cleaned = value.strip()
         return cleaned or None
+
+    @staticmethod
+    @staticmethod
+    def _optional_bool(value: str | None, default: bool = False) -> bool:
+        if value is None:
+            return default
+        cleaned = value.strip().lower()
+        if cleaned in {"1", "true", "yes", "on"}:
+            return True
+        if cleaned in {"0", "false", "no", "off"}:
+            return False
+        return default
 
     @staticmethod
     def _optional_int(value: str | None) -> int | None:

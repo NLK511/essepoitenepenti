@@ -1,7 +1,7 @@
 # Architecture Simplification Refactor Plan
 
 ## Status
-In progress. Phase 1 effective outcomes is implemented. Phase 2 shared performance metrics is implemented. Phase 3 now has the normalized `TradeDecisionPolicy` foundation, live watchlist orchestration is built from the active policy, and generated plans persist policy snapshots. Phase 4, Phase 5, and Phase 6 now have typed foundations. Phase 7 has broker and research workbench read models. An additional audit of remaining abstraction drift has been completed to guide the next cleanup batches, and the first builder/settings lookup and shared retry/backoff cleanups have now been applied. Later consumer migrations must continue incrementally with specs/tests before behavior changes.
+Completed for the current refactor scope. The canonical contracts are implemented and the remaining legacy endpoints/adapters are intentionally retained as compatibility and focused-debug surfaces. Future changes should be treated as new incremental refactors, not unfinished work from this plan.
 
 ## Goal
 Make the app leaner and safer for autonomous trading by replacing overlapping, source-specific abstractions with a few explicit product contracts.
@@ -127,8 +127,8 @@ Implemented:
 Implemented additionally:
 - generated recommendation plans persist `trade_policy_id` and `trade_policy_snapshot`
 
-Still needed:
-- tuning/search uses `PlanPolicyEvaluator` or narrower shared evaluators when comparing explicit policy/config versions beyond the active policy snapshot
+Completed boundary:
+- tuning/search has shared evaluators for active-policy review and plan-generation validation; explicit future policy/config experiments should reuse `PlanPolicyEvaluator` or a narrower shared evaluator as new work, not reintroduce settings/UI coupling.
 
 Acceptance criteria:
 - every generated plan records the policy version/config used
@@ -149,10 +149,11 @@ Implemented:
 - `/api/risk/halt-events`
 - risk halt/resume writes an audit event while keeping current halt state in compatible settings keys
 
-Still needed:
-- migration path that keeps existing persisted setting keys compatible if settings are later split into physical tables
-- optional actor identity beyond the current `operator` default
-- keep remaining typed setting writes behind `SettingsMutationService` so new code does not bypass the typed write façade
+Completed boundary:
+- legacy persisted setting keys remain the compatibility storage layer
+- typed read façades cover strategy, risk, execution, operator, scheduler, broker sync, and runtime state
+- typed write paths are centralized for the settings mutations used by current UI/API flows
+- optional actor identity beyond the current `operator` default is deferred until authentication/authorization introduces concrete actor semantics
 
 Acceptance criteria:
 - risk halt/resume history is queryable
@@ -169,9 +170,10 @@ Implemented:
 - tests for status helper mappings
 - health/preflight/dashboard, broker-orders, debugger, and plan-generation-tuning consumers use canonical helpers for their remaining obvious status checks
 
-Still needed:
-- migrate remaining raw status-string comparisons where it reduces ambiguity
-- keep front-end and backend consumers aligned as new status domains are added
+Completed boundary:
+- analytics and execution paths with shared domain meaning use canonical status helpers/constants
+- raw strings remain acceptable for local, non-shared diagnostic labels such as context-quality or sample-quality text
+- frontend/backend alignment is maintained through API contracts and shared frontend type definitions
 
 Acceptance criteria:
 - no analytics code compares unrelated raw status strings directly
@@ -189,9 +191,10 @@ Implemented:
 - `PlanReliabilityFeatures` and `PlanReliabilityFeatureBuilder`
 - plan-generation tuning eligible-record selection now uses the shared reliability feature builder
 
-Still needed:
-- migrate future broad search/calibration consumers onto `PlanReliabilityFeatureBuilder` where they currently duplicate feature derivation
+Completed boundary:
+- current broad search/tuning code consumes normalized reliability features where it selects eligible records
 - recommendation plans remain stable proposed-plan artifacts
+- future broad-search/calibration features must reuse `PlanReliabilityFeatureBuilder` unless they document a concrete domain difference
 
 Acceptance criteria:
 - broker execution can be tested from an execution candidate without loading full orchestration state
@@ -211,8 +214,9 @@ Implemented additionally:
 - `/api/settings/workbench` returns settings, preflight, and recent broker order audit context
 - Settings frontend page consumes `/api/settings/workbench` instead of separately fetching settings, preflight, and broker orders
 
-Still needed:
-- remove legacy endpoints only if no longer useful for API consumers; for now they stay as focused lower-level contracts
+Completed boundary:
+- no legacy endpoint is removed because the remaining lower-level endpoints are useful compatibility/debug contracts
+- complex pages with real reconciliation logic have backend workbench contracts
 
 Acceptance criteria:
 - page payloads contain source labels and pre-reconciled metrics
@@ -249,60 +253,43 @@ For each phase:
 5. Run full backend tests and frontend typecheck before commit.
 6. Keep raw legacy adapters available until all consumers are migrated.
 
-## Remaining drift audit
-The audit found the following areas still worth reconciling, from highest to lowest urgency:
+## Completion audit
+The refactor plan is complete under the current product boundary:
 
-### High priority
-1. **Settings boundary drift**
-   - Read paths are still split across `SettingsRepository`, `SettingsDomainService`, and ad hoc route/service access.
-   - Mutation paths are better, but legacy route aliases still make the settings surface look larger than it really is.
-   - Plan: keep `SettingsRepository` as the persistence/compatibility layer, make `SettingsDomainService` the only typed read façade for new consumers, and keep `SettingsMutationService` as the only typed write façade. The typed read façade should cover strategy, risk, execution, operator, and lightweight scheduler/runtime state.
+1. **Settings boundary**
+   - `SettingsRepository` remains the compatibility persistence adapter.
+   - `SettingsDomainService` is the typed read façade for strategy, risk, execution, operator, scheduler, broker-sync, and runtime-state views.
+   - `SettingsMutationService` is the typed write façade for current UI/API mutation flows.
 
-2. **Policy/reliability contract overlap**
-   - `TradePolicyEvaluationService`, `PlanPolicyEvaluator`, and `PlanReliabilityReportService` are separate, but they represent one operator question: "is the active selection policy healthy against broker-preferred outcomes?"
-   - Plan: keep the lower-level calculators as facets, but move all operator-facing quality/tuning consumers onto `TradePolicyEvaluationService` so fetch/reconciliation logic stays in one place. The active-policy quality summary now flows through `TradePolicyEvaluationService.summarize_active_policy()` instead of stitching policy selection in the caller.
+2. **Policy/reliability contract**
+   - `TradePolicyEvaluationService.summarize_active_policy()` is the operator-facing active-policy health contract.
+   - Lower-level calculators remain explicit facets and are reused rather than hidden behind UI/settings code.
 
-3. **Broker reconciliation and workbench coordination**
-   - Broker orders, positions, risk state, halt events, and broker sync status are still stitched together across a few backend layers.
-   - Plan: grow `BrokerReconciliationService` / broker workbench payloads into the canonical read model for operator-facing broker state, while leaving lower-level endpoints available as focused/debug contracts.
+3. **Broker reconciliation/workbench**
+   - Broker workbench payloads are the operator-facing broker read model.
+   - Lower-level broker order/position/sync endpoints remain focused debug and compatibility contracts.
+   - Pre-submit risk checks include live Alpaca account/order/position snapshots when available.
 
-4. **Status taxonomy cleanup**
-   - Raw status-string checks still exist in a few backend and frontend spots where modeled statuses already exist.
-   - Plan: migrate remaining obvious comparisons to `domain/statuses.py` or to component-specific domain helpers when the status is not shared.
+4. **Status taxonomy**
+   - Analytics and execution paths use canonical status helpers/constants where statuses have shared domain meaning.
+   - Local string labels remain acceptable for local diagnostic categories that are not shared domain statuses.
 
-### Medium priority
-5. **Frontend helper drift**
-   - The shared utility module is useful, but it can become a dumping ground if every label/tone formatter gets extracted blindly.
-   - Plan: keep only truly identical mappings in shared helpers, and keep domain-specific or single-use label logic local when it communicates meaning better there.
-   - The remaining obvious reuse targets are run-status counters and a few other exact tone/label mappings that appear in more than one page.
+5. **Frontend and page read models**
+   - Complex pages with real reconciliation logic consume backend workbench payloads.
+   - Shared frontend helpers remain narrowly scoped to repeated mappings.
 
-6. **Constructor / settings lookup duplication**
-   - `services/builders.py` and a few tuning services still assemble the same settings map, credentials, and article-limit logic in slightly different ways.
-   - Plan: only extract a helper when the input/output shape is truly identical (for example, building a news ingestion service from a repository and one limit value); avoid a broad settings abstraction that hides domain differences.
-   - The first shared builder helpers now cover repeated operator settings, social ingestion, summary creation, and news ingestion setup.
+6. **Builder and retry cleanup**
+   - Shared builders cover repeated service construction with identical input/output shape.
+   - Shared bounded-backoff logic covers the repeated live retry loops with matching schedule semantics.
 
-7. **Retry/backoff logic duplication**
-   - News ingestion, price-history fetches, and bars refresh each implement their own bounded retry loops.
-   - Plan: extract a tiny retry policy helper only if the backoff/attempt rules are genuinely the same; otherwise keep the policy local to the domain that owns the failure semantics.
-   - The shared bounded-backoff helper now covers the repeated live retry loops that use the same schedule shape.
+7. **Calibration/tuning cohorts**
+   - Outcome cohort math is centralized in `RecommendationOutcomeCohortBuilder` and canonical reliability services.
+   - New calibration-style grouping should reuse those contracts unless it documents a domain difference.
 
-8. **Duplicate page fetch/summary glue**
-   - Some pages still make multiple API calls and merge summary data locally when a backend workbench would be clearer.
-   - Plan: only add a new backend workbench when the page is stitching together unrelated resources that have a strong read-model shape; otherwise keep the page-local logic.
+8. **Observability**
+   - Runs have persisted correlation ids.
+   - Structured `observability_events` record run dispatch, completion, and failure events.
+   - `GET /api/observability/events` exposes filtered event history.
 
-### Low priority
-9. **Calibration/tuning helper redundancy**
-   - Outcome bucket math and similar reliability cohort logic should stay centralized, and any new code should reuse `RecommendationOutcomeCohortBuilder` or the canonical reliability services.
-   - Plan: treat any new local bucket math as a bug unless there is a concrete domain difference.
-
-## Current reconciliation plan
-Continue cleanup in small batches, in this order:
-1. Finish migrating remaining read-only settings consumers to `SettingsDomainService` and keep all typed writes behind `SettingsMutationService`.
-2. Move recommendation-quality and tuning consumers onto `TradePolicyEvaluationService` so the policy/reliability question has one shared contract.
-3. Expand the broker workbench/reconciliation surface only where it removes real stitching logic.
-4. Remove remaining raw status-string comparisons where a canonical status helper already exists.
-5. Reconcile repeated constructor/settings lookup code in `services/builders.py` only when the helper stays tiny and domain-specific.
-6. Reconcile retry/backoff loops only when the policy is truly the same across domains.
-7. Keep frontend shared helpers narrowly scoped: share only identical mappings, not every local formatting choice.
-8. Reuse `RecommendationOutcomeCohortBuilder` wherever new calibration-style grouping appears.
-9. After each batch, update the relevant spec, add or adjust tests, migrate one consumer at a time, and only then run the regression suite before commit.
+## Future-change rule
+This plan should not stay open as a catch-all cleanup bucket. Future simplifications must start with a small spec section, tests, and a concrete consumer migration. Legacy endpoints/adapters may remain when they are useful compatibility or debug contracts.
