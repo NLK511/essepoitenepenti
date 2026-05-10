@@ -377,10 +377,20 @@ class JobExecutionService:
         }
 
         tuning_started = perf_counter()
+        request = self._plan_generation_tuning_request(run)
         try:
-            tuning_run = self.plan_generation_tuning.run(mode="scheduled", apply=False)
+            tuning_run = self.plan_generation_tuning.run(
+                mode=str(request.get("mode") or "scheduled"),
+                apply=bool(request.get("apply", False)),
+                ticker=self._plan_generation_tuning_string(request.get("ticker")),
+                setup_family=self._plan_generation_tuning_string(request.get("setup_family")),
+                limit=self._plan_generation_tuning_int(request.get("limit"), 500),
+            )
             summary = tuning_run.summary
+            summary = dict(summary)
+            summary["plan_generation_tuning_request"] = request
             artifact = {
+                "plan_generation_tuning_request": request,
                 "plan_generation_tuning_run_id": tuning_run.id,
                 "winner_candidate_id": tuning_run.winning_candidate_id,
                 "promoted_config_version_id": tuning_run.promoted_config_version_id,
@@ -847,6 +857,29 @@ class JobExecutionService:
         except json.JSONDecodeError:
             return {}
         return parsed if isinstance(parsed, dict) else {}
+
+    @classmethod
+    def _plan_generation_tuning_request(cls, run: Run) -> dict[str, object]:
+        artifact = cls._get_run_artifact(run)
+        request = artifact.get("plan_generation_tuning_request")
+        if isinstance(request, dict):
+            return request
+        return {}
+
+    @staticmethod
+    def _plan_generation_tuning_string(value: object) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    @staticmethod
+    def _plan_generation_tuning_int(value: object, default: int) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return default
+        return parsed if parsed > 0 else default
 
     @classmethod
     def _build_failure_artifact(cls, current_run: Run, claimed_run: Run, exc: RunExecutionFailed) -> dict[str, object]:

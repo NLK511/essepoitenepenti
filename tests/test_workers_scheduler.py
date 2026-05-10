@@ -401,28 +401,48 @@ class WorkerSchedulerTests(unittest.TestCase):
         session = self.create_session()
         jobs = JobRepository(session)
         runs = RunRepository(session)
-        job = jobs.create(
-            "Plan Generation Tuning Job",
-            [],
-            None,
-            job_type=JobType.PLAN_GENERATION_TUNING,
-        )
+        job = jobs.get_or_create_system_job("plan-generation-tuning", JobType.PLAN_GENERATION_TUNING)
         run = runs.enqueue(job.id or 0)
+        runs.set_artifact(
+            run.id or 0,
+            {
+                "plan_generation_tuning_request": {
+                    "mode": "explore",
+                    "apply": True,
+                    "ticker": "EOG",
+                    "setup_family": "breakout",
+                    "limit": 25,
+                }
+            },
+        )
+
+        captured: dict[str, object] = {}
+
+        class CapturingOptimizationService(StubOptimizationService):
+            def run(self, *args, **kwargs):
+                captured.update(kwargs)
+                return super().run(*args, **kwargs)
 
         with patch("trade_proposer_app.workers.tasks.SessionLocal", return_value=session), patch(
             "trade_proposer_app.workers.tasks.create_proposal_service", return_value=StubProposalService()
         ), patch(
-            "trade_proposer_app.workers.tasks.PlanGenerationTuningService", StubOptimizationService
+            "trade_proposer_app.workers.tasks.PlanGenerationTuningService", CapturingOptimizationService
         ):
             processed = process_once()
 
         self.assertTrue(processed)
+        self.assertEqual(captured["mode"], "explore")
+        self.assertTrue(captured["apply"])
+        self.assertEqual(captured["ticker"], "EOG")
+        self.assertEqual(captured["setup_family"], "breakout")
+        self.assertEqual(captured["limit"], 25)
         updated_run = runs.get_run(run.id or 0)
         self.assertEqual(updated_run.status, "completed")
         self.assertEqual(updated_run.job_type, JobType.PLAN_GENERATION_TUNING)
         self.assertIn('"winner_candidate_id": 1', (updated_run.summary_json or "").lower())
         self.assertIn('"plan_generation_tuning_run_id": 1', updated_run.artifact_json or "")
         self.assertIn('"plan_generation_tuning_seconds"', updated_run.timing_json or "")
+        self.assertIn('"plan_generation_tuning_request"', updated_run.artifact_json or "")
 
     def test_worker_process_once_processes_macro_context_refresh_run(self) -> None:
         session = self.create_session()

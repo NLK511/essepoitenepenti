@@ -29,7 +29,7 @@ What is live now:
 - settings for active config selection and stored automation readiness flags
 - bounded parameter-schema-driven candidate generation
 - deterministic candidate ranking centered on win rate, then win count, then expected value
-- guarded manual run/apply behavior in the backend
+- guarded worker-backed run/apply behavior in the backend
 - live consumption of the active config during plan construction
 
 What is not yet fully implemented to the target standard in this spec:

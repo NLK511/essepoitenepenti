@@ -4,7 +4,11 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
+from trade_proposer_app.domain.enums import JobType
 from trade_proposer_app.domain.models import PlanGenerationWalkForwardSummary
+from trade_proposer_app.repositories.jobs import JobRepository
+from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningError, PlanGenerationTuningService
 from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
 from trade_proposer_app.services.plan_generation_walk_forward import PlanGenerationWalkForwardService
@@ -47,13 +51,26 @@ async def run_plan_generation_tuning(
     session: Session = Depends(get_db_session),
 ):
     try:
-        return PlanGenerationTuningService(session).run(
-            mode=mode,
-            apply=apply,
-            ticker=ticker,
-            setup_family=setup_family,
-            limit=limit,
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        existing_run = runs.get_active_run_for_job_type(JobType.PLAN_GENERATION_TUNING)
+        if existing_run is not None:
+            return existing_run
+        job = jobs.get_or_create_system_job("plan-generation-tuning", JobType.PLAN_GENERATION_TUNING)
+        queued_run = JobExecutionService(jobs=jobs, runs=runs).enqueue_job(job.id or 0)
+        runs.set_artifact(
+            queued_run.id or 0,
+            {
+                "plan_generation_tuning_request": {
+                    "mode": mode,
+                    "apply": apply,
+                    "ticker": ticker.upper() if ticker else None,
+                    "setup_family": setup_family.strip() if setup_family else None,
+                    "limit": limit,
+                }
+            },
         )
+        return runs.get_run(queued_run.id or 0)
     except PlanGenerationTuningError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

@@ -219,7 +219,7 @@ export function PlanGenerationTuningPage() {
     try {
       setSaving(apply ? `apply-${mode}` : `run-${mode}`);
       setError(null);
-      await postForm<PlanGenerationTuningRun>(`/api/plan-generation-tuning/run?mode=${encodeURIComponent(mode)}&apply=${apply ? "true" : "false"}`, {});
+      await postForm<unknown>(`/api/plan-generation-tuning/run?mode=${encodeURIComponent(mode)}&apply=${apply ? "true" : "false"}`, {});
       await loadData();
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : "Failed to run plan generation tuning");
@@ -287,7 +287,7 @@ export function PlanGenerationTuningPage() {
             </Card>
 
             <Card>
-              <SectionTitle kicker="Controls" title="Run plan generation tuning" subtitle="Launch a dry run or guarded promotion using the immutable backend rules and historical replay." actions={<HelpHint tooltip="Dry runs rank candidates without changing the live config. Apply mode promotes only if the winner passes backend guardrails." to={tuningSpecDoc} />} />
+              <SectionTitle kicker="Controls" title="Queue plan generation tuning" subtitle="Queue a worker-backed dry run or guarded promotion so the run appears in the debugger and worker logs." actions={<HelpHint tooltip="The run is queued to a worker. Dry runs rank candidates without changing the live config. Apply mode promotes only if the winner passes backend guardrails." to={tuningSpecDoc} />} />
               <div className="data-stack top-gap-small">
                 <label className="form-field">
                   <span><input type="checkbox" checked={exploreModeEnabled} onChange={(event) => setExploreModeEnabled(event.target.checked)} /> Explore mode</span>
@@ -305,8 +305,8 @@ export function PlanGenerationTuningPage() {
                       : "Very wide research uses a much larger deterministic candidate pool and denser validation slices; it can take longer and evaluate far more candidates."}
                 </div>
                 <div className="cluster">
-                  <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(runMode, false)}>{saving === `run-${runMode}` ? "Running…" : `Run ${runMode === "manual" ? "dry" : runMode}`}</button>
-                  <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(runMode, true)}>{saving === `apply-${runMode}` ? "Running & applying…" : `Run ${runMode === "manual" ? "and promote if eligible" : `${runMode} and promote if eligible`}`}</button>
+                  <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(runMode, false)}>{saving === `run-${runMode}` ? "Queueing…" : `Queue ${runMode === "manual" ? "dry" : runMode}`}</button>
+                  <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(runMode, true)}>{saving === `apply-${runMode}` ? "Queueing & applying…" : `Queue ${runMode === "manual" ? "and promote if eligible" : `${runMode} and promote if eligible`}`}</button>
                 </div>
               </div>
               <details className="top-gap-small">

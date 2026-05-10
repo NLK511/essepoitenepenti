@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
@@ -514,38 +515,20 @@ class PlanGenerationTuningRouteTests(unittest.IsolatedAsyncioTestCase):
             run_response = await client.post("/api/plan-generation-tuning/run?apply=true")
             self.assertEqual(run_response.status_code, 200)
             run_payload = run_response.json()
-            self.assertIsNotNone(run_payload["winning_candidate_id"])
-            self.assertIsNotNone(run_payload["promoted_config_version_id"])
-            self.assertEqual(run_payload["candidates"][0]["id"], run_payload["winning_candidate_id"])
+            self.assertEqual(run_payload["status"], "queued")
+            self.assertEqual(run_payload["job_type"], "plan_generation_tuning")
+            self.assertEqual(json.loads(run_payload["artifact_json"])["plan_generation_tuning_request"]["apply"], True)
 
-            explore_response = await client.post("/api/plan-generation-tuning/run?mode=explore&apply=false")
-            self.assertEqual(explore_response.status_code, 200)
-            explore_payload = explore_response.json()
-            self.assertEqual(explore_payload["summary"]["validation_mode"], "rolling_walk_forward")
-            self.assertIn("validation_slice_count", explore_payload["summary"])
-
-            wide_response = await client.post("/api/plan-generation-tuning/run?mode=wide&apply=false")
-            self.assertEqual(wide_response.status_code, 200)
-            wide_payload = wide_response.json()
-            self.assertEqual(wide_payload["summary"]["validation_mode"], "rolling_walk_forward")
-            self.assertTrue(wide_payload["summary"]["wide_research_mode"])
-
-            runs = await client.get("/api/plan-generation-tuning/runs?limit=10")
+            runs = await client.get("/api/runs?job_type=plan_generation_tuning&limit=10")
             self.assertEqual(runs.status_code, 200)
             runs_payload = runs.json()
-            self.assertGreaterEqual(runs_payload["total"], 1)
-            self.assertGreaterEqual(len(runs_payload["items"]), 1)
+            self.assertGreaterEqual(len(runs_payload), 1)
+            self.assertEqual(runs_payload[0]["job_type"], "plan_generation_tuning")
 
             configs = await client.get("/api/plan-generation-tuning/configs?limit=10")
             self.assertEqual(configs.status_code, 200)
             configs_payload = configs.json()
-            self.assertGreaterEqual(configs_payload["total"], 2)
-            promoted_config_id = run_payload["promoted_config_version_id"]
-            promoted_detail = await client.get(f"/api/plan-generation-tuning/configs/{promoted_config_id}")
-            self.assertEqual(promoted_detail.status_code, 200)
-            detail_payload = promoted_detail.json()
-            self.assertEqual(detail_payload["config"]["id"], promoted_config_id)
-            self.assertTrue(any(event["event_type"] in {"config_promoted", "config_promoted_manual"} for event in detail_payload["events"]))
+            self.assertGreaterEqual(configs_payload["total"], 1)
 
 
 class PlanGenerationTuningValidationFallbackTests(unittest.IsolatedAsyncioTestCase):
