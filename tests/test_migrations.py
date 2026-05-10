@@ -1,13 +1,26 @@
 import os
+import re
 import sqlite3
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from trade_proposer_app.migrations import HEAD_REVISION, LEGACY_REVISION_MAP, normalize_alembic_revision_ids, try_repair_partial_sqlite_schema
 
 
 class MigrationRepairTests(unittest.TestCase):
+    def test_alembic_revision_ids_fit_default_version_column(self) -> None:
+        versions_dir = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+        too_long: list[tuple[str, int]] = []
+        for path in versions_dir.glob("*.py"):
+            match = re.search(r'^revision = "([^"]+)"', path.read_text(), re.MULTILINE)
+            if match and len(match.group(1)) > 32:
+                too_long.append((match.group(1), len(match.group(1))))
+
+        self.assertEqual(too_long, [])
+        self.assertLessEqual(len(HEAD_REVISION), 32)
+
     def test_normalize_alembic_revision_ids_updates_legacy_revision_value(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = os.path.join(tmpdir, "normalize.db")

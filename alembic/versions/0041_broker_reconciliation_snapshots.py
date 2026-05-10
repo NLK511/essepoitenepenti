@@ -1,6 +1,6 @@
 """add broker reconciliation snapshots
 
-Revision ID: 0041_broker_reconciliation_snapshots
+Revision ID: 0041_broker_recon_snapshots
 Revises: 0040_observability_events
 Create Date: 2026-05-10
 """
@@ -8,7 +8,7 @@ Create Date: 2026-05-10
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0041_broker_reconciliation_snapshots"
+revision = "0041_broker_recon_snapshots"
 down_revision = "0040_observability_events"
 branch_labels = None
 depends_on = None
