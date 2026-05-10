@@ -1,6 +1,6 @@
 # Operational Scripts Reference
 
-**Status:** canonical reference for developer and operator tools
+**Status:** reference
 
 This document lists the standalone scripts available in the `scripts/` directory for maintenance, hydration, and regression testing.
 

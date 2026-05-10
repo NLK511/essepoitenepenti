@@ -1,6 +1,6 @@
 # Decision sample tuning guide
 
-**Status:** practical operator guide
+**Status:** reference
 
 This doc explains how to use `RecommendationDecisionSample` rows to tune the recommendation algorithm.
 

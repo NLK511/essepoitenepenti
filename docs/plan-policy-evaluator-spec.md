@@ -1,7 +1,6 @@
 # Plan Policy Evaluator Spec
 
-## Status
-Implemented in the first additive slice.
+**Status:** current behavior
 
 ## Goal
 Provide one canonical evaluator for answering:

@@ -1,6 +1,6 @@
 # Raw Details Reference
 
-**Status:** technical reference
+**Status:** reference
 
 This document answers one question:
 > what does the app store, and what do the main structured payloads contain?

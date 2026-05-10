@@ -1,6 +1,6 @@
 # Recommendation Methodology
 
-**Status:** canonical recommendation logic
+**Status:** current behavior
 
 This document answers one question:
 > how does the app produce recommendation outputs?
@@ -25,7 +25,7 @@ That means:
 
 ## Pipeline overview
 
-`WatchlistOrchestrationService` is the active proposal-generation path.
+The active proposal-generation path is a watchlist service slice coordinated through the `WatchlistOrchestrationService` facade. `WatchlistExecutionService` owns full-run coordination; `ShortlistSelectionService`, `WatchlistScanRunnerService`, `WatchlistSignalBuilder`, `WatchlistPlanFramingService`, `WatchlistPlanNarrativeService`, `WatchlistCalibrationReviewService`, `WatchlistTransmissionService`, and `WatchlistDecisionSampleService` own focused behavior underneath it.
 
 For each proposal run, the system:
 1. resolves the watchlist or manual ticker scope
@@ -35,7 +35,7 @@ For each proposal run, the system:
 5. fetches recent OHLC data through a live-first hybrid path: fresh remote bars first in live runs, bounded retries on transient remote failures, then persisted local-bar fallback; replay stays point-in-time consistent
 6. computes technical and context-enriched features with `pandas`
 7. loads the latest shared macro and industry context snapshots through the context-native resolver layer
-8. builds recommendation plans, diagnostics, and audit payloads
+8. builds recommendation plans, diagnostics, narratives, calibration reviews, transmission summaries, and audit payloads through focused watchlist services
 9. persists ticker signals, decision samples, recommendation plans when downstream plan framing actually ran, run summaries, and artifacts
 10. emits explicit `no_action` plans when policy gates fail or evidence is too weak after shortlist/deep-analysis, while preserving cheap-scan-only rejections for non-shortlisted names as signal-plus-decision-sample audit records instead of full plans
 

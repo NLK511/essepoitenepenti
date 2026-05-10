@@ -1,7 +1,6 @@
 # Data Quality Audit Spec
 
-## Status
-Implemented as an operator-facing audit endpoint.
+**Status:** current behavior
 
 ## Goal
 Surface repeated market-data, news-coverage, and broker-tradability problems before they distort recommendation quality or waste broker submissions.

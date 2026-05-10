@@ -1,6 +1,6 @@
 # Bars Refresh Spec
 
-**Status:** canonical current behavior for `bars_data_refresh` jobs
+**Status:** current behavior
 
 This document answers one question:
 > how should the bars refresh job fetch and persist intraday bars today?

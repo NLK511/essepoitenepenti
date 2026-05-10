@@ -1,6 +1,6 @@
 # Default Watchlists
 
-**Status:** canonical seed-watchlist reference
+**Status:** reference
 
 This document explains the curated default watchlists deployed by:
 - `scripts/deploy_watchlists.py`

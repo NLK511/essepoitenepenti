@@ -1,7 +1,6 @@
 # Observability Spec
 
-## Status
-Implemented v1. Run-level events are current behavior; provider and broker lifecycle event coverage is incremental.
+**Status:** current behavior
 
 ## Goal
 Make run, worker, provider, and broker failures diagnosable across API, scheduler, worker, and operator UI processes.

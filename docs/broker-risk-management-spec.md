@@ -1,8 +1,6 @@
 # Broker risk management and kill switch
 
-## Status
-
-Implemented v1.
+**Status:** current behavior
 
 ## Product goal
 

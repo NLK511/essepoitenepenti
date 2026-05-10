@@ -1,6 +1,6 @@
 # Documentation Index
 
-**Status:** canonical navigation guide
+**Status:** reference
 
 This index keeps the current reading path short.
 
@@ -19,9 +19,10 @@ If you are new to the repo, read these first in order:
 
 ## Doc taxonomy
 
-Every active doc should fit exactly one category:
+Every active doc should fit exactly one category. Mixed current/target specs are allowed only when they include an explicit conformance/current-status section:
 - **current behavior** — implemented product truth
 - **target behavior** — intended semantics that may include a conformance gap
+- **current + target behavior** — a spec with a current implementation section and an explicit target/conformance section
 - **active plan** — work not yet complete
 - **reference** — stable glossary/schema/raw details
 - **archive** — historical context only
@@ -67,7 +68,7 @@ These are useful, but they are not the main current-state entry point. They must
 
 - `recommendation-quality-improvement-plan.md` — working tracker for recommendation-quality, calibration, and validation improvements
 - `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow
-- `plan-generation-tuning-spec.md` — authoritative implementation spec for autonomous plan-generation tuning
+- `plan-generation-tuning-spec.md` — current phase-1 behavior plus target autonomous plan-generation tuning conformance rules
 - `alpaca-paper-order-execution-spec.md` — first automated broker-execution spec for Alpaca paper trading, including audit UI and manual resubmit/cancel controls
 - `broker-position-lifecycle-spec.md` — broker-backed position state and realized P&L ledger for app-submitted bracket orders
 - `broker-risk-management-spec.md` — broker-backed pre-trade risk limits and manual kill switch

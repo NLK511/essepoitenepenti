@@ -1,6 +1,6 @@
 # User Journeys
 
-**Status:** canonical workflow framing
+**Status:** reference
 
 These journeys describe how the product is meant to be used today.
 

@@ -1,6 +1,6 @@
 # Alpaca paper order execution spec
 
-**Status:** active
+**Status:** current behavior
 
 This document defines the first automated order-execution integration for Trade Proposer App.
 

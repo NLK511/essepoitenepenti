@@ -1,6 +1,6 @@
 # ER Model
 
-**Status:** current database entity-relationship reference
+**Status:** reference
 
 This document describes the current database shape reflected by the live SQLAlchemy persistence models in `src/trade_proposer_app/persistence/models.py`.
 

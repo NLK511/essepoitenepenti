@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** canonical current architecture
+**Status:** current behavior
 
 ## Architecture choice
 
@@ -65,7 +65,10 @@ flowchart LR
     end
 
     subgraph Pipeline["Analysis pipeline"]
-        Orchestration["WatchlistOrchestrationService"]
+        Orchestration["WatchlistOrchestrationService facade"]
+        WatchlistExecution["WatchlistExecutionService"]
+        WatchlistScan["WatchlistScanRunnerService"]
+        WatchlistPlanFraming["WatchlistPlanFramingService"]
         DeepAnalysis["TickerDeepAnalysisService"]
         ProposalService["ProposalService"]
         SnapshotResolver["ContextSnapshotResolver"]
@@ -104,7 +107,10 @@ flowchart LR
     Services --> DeepAnalysis
     Services --> ProposalService
     Services --> RefreshServices
-    Orchestration --> DeepAnalysis
+    Orchestration --> WatchlistExecution
+    WatchlistExecution --> WatchlistScan
+    WatchlistExecution --> WatchlistPlanFraming
+    WatchlistScan --> DeepAnalysis
     DeepAnalysis --> ProposalService
     ProposalService --> SnapshotResolver
     ProposalService --> FeatureEngine
@@ -133,6 +139,8 @@ The recommendation pipeline is organized around four conceptual layers:
 
 This is an architecture for shortlist, setup evaluation, and trade framing. It is not proof of predictive skill by itself.
 
+The active watchlist implementation is split by behavior: `WatchlistExecutionService` coordinates a full run, `ShortlistSelectionService` selects candidates, `WatchlistScanRunnerService` normalizes cheap-scan/deep-analysis execution failures, `WatchlistSignalBuilder` builds signal snapshots, `WatchlistPlanFramingService` builds plans, and focused services build narrative, calibration, transmission, and decision-sample payloads. `WatchlistOrchestrationService` remains the compatibility facade that wires those slices together.
+
 The active persistence truth for this workflow is:
 - `TickerSignalSnapshot`
 - `RecommendationPlan`
@@ -147,7 +155,7 @@ Older compatibility objects may still exist in domain code or tests, but they sh
 1. the operator creates or runs a proposal job
 2. the backend enqueues a run in the database
 3. the worker claims the queued run
-4. `JobExecutionService` executes the orchestration path
+4. `JobExecutionService` calls the watchlist orchestration facade, which delegates run coordination to `WatchlistExecutionService`
 5. the pipeline fetches price history, computes features, loads shared macro and industry artifacts, and performs ticker analysis
 6. shared context refreshes classify active events into persisted fields such as persistence state, state transition, catalyst type, market interpretation, and trigger actor metadata
 7. the system emits ticker signals, recommendation plans, and diagnostics

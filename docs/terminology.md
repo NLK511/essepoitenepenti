@@ -1,5 +1,7 @@
 # Terminology
 
+**Status:** reference
+
 Canonical terminology for the app.
 
 ## Job types

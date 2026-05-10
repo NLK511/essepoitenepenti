@@ -1,6 +1,6 @@
 # Recommendation plan resolution spec
 
-**Status:** canonical reference
+**Status:** current + target behavior
 
 This document defines the intended resolution semantics for `RecommendationPlan` outcomes.
 

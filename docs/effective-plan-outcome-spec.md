@@ -1,7 +1,6 @@
 # Effective Plan Outcome Spec
 
-## Status
-Implemented. The canonical effective outcome layer is the source of truth for performance, calibration, tuning, and research code that needs to ask whether a recommendation plan worked. Legacy recommendation-outcome storage remains only as the raw simulated/replay/manual evidence store.
+**Status:** current behavior
 
 ## Problem
 The app has several outcome records:

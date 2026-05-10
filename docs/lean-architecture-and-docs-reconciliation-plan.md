@@ -21,18 +21,19 @@ The active codebase now has dedicated services for shortlist selection, watchlis
 
 ### 1. Normalize active doc statuses
 
-Problem: active docs still use several status forms such as `canonical reference`, `active`, `active v1`, and `authoritative implementation spec`.
+Status: completed for current top-level docs.
 
-Target: every active doc should clearly be one of:
+Active docs now use normalized status labels:
 - current behavior
 - target behavior
+- current + target behavior
 - active plan
 - reference
 
-Acceptance:
+Maintenance rule:
 - `docs/docs-index.md` remains the single navigation guide.
-- No completed implementation record is listed as current-state reading.
-- Specs with mixed current/target content include an explicit conformance section.
+- No completed implementation record should be listed as current-state reading.
+- Specs with mixed current/target content must include an explicit conformance/current-status section.
 
 ### 2. Split or relabel mixed current/target specs
 
@@ -76,6 +77,12 @@ Target:
 - add an Alembic/Postgres smoke path in default CI or a documented required release gate.
 
 ### 7. Continue architecture simplification only around clear seams
+
+Recent cleanup:
+- watchlist narrative no longer keeps an orchestration back-reference for label lookup
+- watchlist scan execution now uses protocol-typed scanner/deep-analysis dependencies instead of untyped `Any`
+- watchlist execution now documents the coordinator contract with a protocol
+- ticker deep-analysis technical feature/context/normalization logic moved to `TickerTechnicalFeatureService`
 
 Current largest simplification candidates:
 - `ProposalService`

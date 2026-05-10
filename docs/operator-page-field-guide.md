@@ -1,6 +1,6 @@
 # Operator Page & Field Guide
 
-**Status:** operator reference
+**Status:** reference
 
 This guide explains what each main UI page is for and how to read the most important fields.
 

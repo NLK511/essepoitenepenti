@@ -1,17 +1,31 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Protocol, runtime_checkable
 
 from trade_proposer_app.domain.enums import StrategyHorizon
 from trade_proposer_app.domain.models import RunOutput
+from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal
 from trade_proposer_app.services.watchlist_candidates import CheapScanCandidate
+
+
+class CheapScanScorer(Protocol):
+    def score(self, ticker: str, horizon: StrategyHorizon, *, as_of: datetime | None = None) -> CheapScanSignal: ...
+
+
+@runtime_checkable
+class DeepAnalysisRunner(Protocol):
+    def analyze(self, ticker: str, *, horizon: StrategyHorizon | None = None, as_of: datetime | None = None) -> RunOutput: ...
+
+
+class LegacyDeepAnalysisGenerator(Protocol):
+    def generate(self, ticker: str, *, as_of: datetime | None = None) -> RunOutput: ...
 
 
 class WatchlistScanRunnerService:
     """Run cheap scans and deep analysis, normalizing failures into stable orchestration shapes."""
 
-    def __init__(self, cheap_scan_service: Any, deep_analysis_service: Any) -> None:
+    def __init__(self, cheap_scan_service: CheapScanScorer, deep_analysis_service: DeepAnalysisRunner | LegacyDeepAnalysisGenerator) -> None:
         self.cheap_scan_service = cheap_scan_service
         self.deep_analysis_service = deep_analysis_service
 
@@ -53,7 +67,7 @@ class WatchlistScanRunnerService:
         as_of: datetime | None = None,
     ) -> tuple[RunOutput | None, str | None]:
         try:
-            if hasattr(self.deep_analysis_service, "analyze"):
+            if isinstance(self.deep_analysis_service, DeepAnalysisRunner):
                 return self.deep_analysis_service.analyze(ticker, horizon=horizon, as_of=as_of), None
             return self.deep_analysis_service.generate(ticker, as_of=as_of), None
         except Exception as exc:

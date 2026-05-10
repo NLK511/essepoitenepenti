@@ -1,8 +1,6 @@
 # Nitter Social Relevance Scoring
 
-## Status
-
-Implemented in the app-native Nitter social ingestion pipeline.
+**Status:** current behavior
 
 ## Goal
 

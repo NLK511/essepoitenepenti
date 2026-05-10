@@ -1,6 +1,6 @@
 # Product Thesis
 
-**Status:** canonical product direction
+**Status:** current behavior
 
 ## What this product is
 

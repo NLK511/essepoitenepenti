@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status:** canonical current-priority roadmap
+**Status:** active plan
 
 This roadmap is short on purpose.
 

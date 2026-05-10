@@ -1,6 +1,6 @@
 # Recommendation quality improvement plan
 
-**Status:** active tracking plan
+**Status:** active plan
 
 This document is the working plan for improving recommendation quality, calibration, and reviewability in Trade Proposer App.
 

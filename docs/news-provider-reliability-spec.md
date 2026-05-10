@@ -1,6 +1,6 @@
 # News Provider Reliability Spec
 
-**Status:** canonical current behavior for ticker-news provider failure handling
+**Status:** current behavior
 
 This document answers one question:
 > how should ticker-news fetching behave when one provider degrades or fails?

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
 
 from trade_proposer_app.domain.models import TickerSignalSnapshot
 
@@ -8,11 +8,8 @@ from trade_proposer_app.domain.models import TickerSignalSnapshot
 class WatchlistPlanNarrativeService:
     """Build plan narrative, evidence, and risk payloads."""
 
-    def __init__(self, orchestration: Any) -> None:
-        self._orchestration = orchestration
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._orchestration, name)
+    def __init__(self, *, action_reason_label: Callable[[str], str]) -> None:
+        self._action_reason_label = action_reason_label
 
     def rationale_summary(
         self,

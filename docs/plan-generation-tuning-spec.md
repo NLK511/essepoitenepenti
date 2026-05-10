@@ -1,6 +1,6 @@
 # Plan generation tuning spec
 
-**Status:** authoritative implementation spec
+**Status:** current + target behavior
 
 This document defines the required behavior for autonomous plan-generation tuning.
 

@@ -2,17 +2,44 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, Protocol
 
-from trade_proposer_app.domain.models import RecommendationPlan, TickerSignalSnapshot, Watchlist
+from trade_proposer_app.domain.enums import StrategyHorizon
+from trade_proposer_app.domain.models import RecommendationPlan, RunOutput, TickerSignalSnapshot, Watchlist
+from trade_proposer_app.services.watchlist_candidates import CheapScanCandidate
 
 logger = logging.getLogger(__name__)
+
+
+class _SignalSnapshotStore(Protocol):
+    def create_ticker_signal_snapshot(self, signal: TickerSignalSnapshot) -> TickerSignalSnapshot: ...
+
+
+class _RecommendationPlanStore(Protocol):
+    def create_plan(self, plan: RecommendationPlan) -> RecommendationPlan: ...
+
+
+class WatchlistExecutionCoordinator(Protocol):
+    context_snapshots: _SignalSnapshotStore
+    recommendation_plans: _RecommendationPlanStore
+
+    def _load_calibration_summary(self) -> dict[str, object] | None: ...
+    def _run_cheap_scan(self, ticker: str, horizon: StrategyHorizon, as_of: datetime | None = None) -> CheapScanCandidate: ...
+    def _run_deep_analysis(self, ticker: str, horizon: StrategyHorizon, as_of: datetime | None = None) -> tuple[RunOutput | None, str | None]: ...
+    def _evaluate_shortlist(self, watchlist: Watchlist, candidates: list[CheapScanCandidate]) -> dict[str, object]: ...
+    def _shortlist_decision_for_ticker(self, evaluation: dict[str, object], ticker: str) -> dict[str, object] | None: ...
+    def _build_signal_snapshot(self, watchlist: Watchlist, candidate: CheapScanCandidate, **kwargs: Any) -> TickerSignalSnapshot: ...
+    def _record_non_shortlisted_decision_sample(self, watchlist: Watchlist, candidate: CheapScanCandidate, **kwargs: Any) -> None: ...
+    def _build_plan_from_signal(self, watchlist: Watchlist, candidate: CheapScanCandidate, signal: TickerSignalSnapshot, **kwargs: Any) -> RecommendationPlan: ...
+    def _with_trade_policy_snapshot(self, plan: RecommendationPlan) -> RecommendationPlan: ...
+    def _record_decision_sample(self, plan: RecommendationPlan, candidate: CheapScanCandidate, **kwargs: Any) -> None: ...
+    def _counted_shortlist_reason_details(self, rejection_counts: dict[str, int]) -> list[dict[str, object]]: ...
 
 
 class WatchlistExecutionService:
     """Coordinate one full watchlist orchestration run."""
 
-    def __init__(self, orchestration: Any) -> None:
+    def __init__(self, orchestration: WatchlistExecutionCoordinator) -> None:
         self._orchestration = orchestration
 
     def execute(
@@ -102,7 +129,7 @@ class WatchlistExecutionService:
     def _price_history(signal: TickerSignalSnapshot, key: str) -> object | None:
         return signal.diagnostics.get(key) if hasattr(signal.diagnostics, "get") else None
 
-    def _run_cheap_scans(self, watchlist: Watchlist, tickers: list[str], *, as_of: datetime | None) -> list[Any]:
+    def _run_cheap_scans(self, watchlist: Watchlist, tickers: list[str], *, as_of: datetime | None) -> list[CheapScanCandidate]:
         o = self._orchestration
         logger.info("  Running cheap scans...")
         candidates = []
@@ -113,7 +140,7 @@ class WatchlistExecutionService:
         return candidates
 
     @staticmethod
-    def _evaluate_shortlist(o: Any, watchlist: Watchlist, candidates: list[Any]) -> dict[str, object]:
+    def _evaluate_shortlist(o: WatchlistExecutionCoordinator, watchlist: Watchlist, candidates: list[CheapScanCandidate]) -> dict[str, object]:
         logger.info("  Evaluating shortlist...")
         shortlist_evaluation = o._evaluate_shortlist(watchlist, candidates)
         logger.info(f"  Shortlist selected: {len(shortlist_evaluation['shortlist'])} tickers")
@@ -121,9 +148,9 @@ class WatchlistExecutionService:
 
     def _process_non_shortlisted_candidate(
         self,
-        o: Any,
+        o: WatchlistExecutionCoordinator,
         watchlist: Watchlist,
-        candidate: Any,
+        candidate: CheapScanCandidate,
         *,
         shortlist_evaluation: dict[str, object],
         calibration_summary: dict[str, object] | None,
@@ -171,9 +198,9 @@ class WatchlistExecutionService:
 
     def _process_shortlisted_candidate(
         self,
-        o: Any,
+        o: WatchlistExecutionCoordinator,
         watchlist: Watchlist,
-        candidate: Any,
+        candidate: CheapScanCandidate,
         *,
         shortlist_rank: int,
         shortlist_evaluation: dict[str, object],
@@ -242,7 +269,7 @@ class WatchlistExecutionService:
         watchlist: Watchlist,
         *,
         normalized_tickers: list[str],
-        candidates: list[Any],
+        candidates: list[CheapScanCandidate],
         shortlist: list[str],
         shortlist_evaluation: dict[str, object],
         stored_signals: list[TickerSignalSnapshot],

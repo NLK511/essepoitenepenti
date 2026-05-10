@@ -1,6 +1,6 @@
 # Getting Started
 
-**Status:** canonical setup and operations guide
+**Status:** reference
 
 This guide covers local setup, startup, and the first checks to run.
 

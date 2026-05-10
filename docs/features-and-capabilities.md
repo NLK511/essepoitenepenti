@@ -1,6 +1,6 @@
 # Features and Capabilities
 
-**Status:** canonical current product behavior
+**Status:** current behavior
 
 This document answers one question:
 > what can the app do today?

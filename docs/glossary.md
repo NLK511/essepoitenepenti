@@ -1,6 +1,6 @@
 # Glossary
 
-**Status:** shared vocabulary reference
+**Status:** reference
 
 This glossary defines the main terms used across the app and docs.
 

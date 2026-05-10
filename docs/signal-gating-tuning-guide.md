@@ -1,6 +1,6 @@
 # Signal gating tuning guide
 
-**Status:** current shipped behavior
+**Status:** current behavior
 
 This document describes the signal-gating tuning workflow that is available in the app today.
 

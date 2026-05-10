@@ -1,6 +1,6 @@
 # Broker position lifecycle spec
 
-**Status:** active v1
+**Status:** current behavior
 
 This document defines the app-owned lifecycle and performance ledger for positions opened through broker orders submitted by Trade Proposer App.
 

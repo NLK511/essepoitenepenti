@@ -67,7 +67,7 @@ class WatchlistOrchestrationService:
         )
         self.scan_runner = WatchlistScanRunnerService(self.cheap_scan_service, self.deep_analysis_service)
         self.execution_service = WatchlistExecutionService(self)
-        self.plan_narrative = WatchlistPlanNarrativeService(self)
+        self.plan_narrative = WatchlistPlanNarrativeService(action_reason_label=self._action_reason_label)
         self.transmission_service = WatchlistTransmissionService(self)
         self.calibration_review_service = WatchlistCalibrationReviewService(self)
         self.signal_builder = WatchlistSignalBuilder(self)

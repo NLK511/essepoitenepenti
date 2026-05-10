@@ -1,6 +1,6 @@
 # Upstream Decision Benchmarking Spec
 
-**Status:** current shipped behavior
+**Status:** current behavior
 **Goal:** Provide a follow-through label for decision samples, especially early rejections that never reached trade framing.
 
 ## The Benchmark Logic

@@ -1,6 +1,6 @@
 # News provider eligibility spec
 
-Status: implemented in progress
+**Status:** current behavior
 
 ## Problem
 

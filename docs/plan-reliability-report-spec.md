@@ -1,7 +1,6 @@
 # Plan Reliability Report Spec
 
-## Status
-Implemented in the first backend/read-model slice.
+**Status:** current behavior
 
 ## Goal
 Provide one canonical broker/effective outcome report for answering:
