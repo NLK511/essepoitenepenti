@@ -21,6 +21,7 @@ from trade_proposer_app.services.plan_generation_tuning_parameters import normal
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicy
 from trade_proposer_app.services.watchlist_plan_framing import WatchlistPlanFramingService
 from trade_proposer_app.services.watchlist_decision_samples import WatchlistDecisionSampleService
+from trade_proposer_app.services.watchlist_signal_builder import WatchlistSignalBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,7 @@ class WatchlistOrchestrationService:
             ),
             taxonomy_service=self.taxonomy_service,
         )
+        self.signal_builder = WatchlistSignalBuilder(self)
         self.plan_framing = WatchlistPlanFramingService(self)
         self.decision_sample_recorder = WatchlistDecisionSampleService(self)
 
@@ -341,157 +343,16 @@ class WatchlistOrchestrationService:
         shortlist_decision: dict[str, object] | None = None,
         deep_error: str | None = None,
     ) -> TickerSignalSnapshot:
-        analysis = self._analysis_payload(deep_output or candidate.raw_output)
-        deep_recommendation = deep_output.recommendation if deep_output is not None else None
-        technical_score = round(
-            float(
-                deep_recommendation.confidence
-                if deep_recommendation is not None
-                else (candidate.cheap_scan_signal.trend_score if candidate.cheap_scan_signal is not None else candidate.confidence_percent)
-            ),
-            2,
-        )
-        ticker_sentiment_score = self._sentiment_score_to_percent(self._pluck(analysis, "sentiment", "ticker", "score"))
-        macro_exposure_score = self._sentiment_score_to_percent(self._pluck(analysis, "sentiment", "macro", "score"))
-        industry_alignment_score = self._sentiment_score_to_percent(self._pluck(analysis, "sentiment", "industry", "score"))
-        expected_move_score = self._expected_move_score(deep_recommendation)
-        execution_quality_score = self._execution_quality_score(deep_recommendation)
-        warnings = list(candidate.warnings)
-        if deep_output is not None:
-            warnings.extend(deep_output.diagnostics.warnings)
-        if candidate.direction == "short" and not watchlist.allow_shorts:
-            warnings.append("watchlist does not allow shorts")
-        if deep_error:
-            warnings.append(deep_error)
-        transmission_alignment_score = self._transmission_alignment_score(analysis)
-        transmission_bias = self._transmission_bias(analysis)
-        if transmission_bias == "unknown":
-            transmission_alignment_score = round((macro_exposure_score * 0.45) + (industry_alignment_score * 0.55), 2)
-            transmission_bias = self._bias_from_alignment(transmission_alignment_score)
-        primary_drivers = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "primary_drivers") or []
-        primary_driver_details = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "primary_driver_details") or []
-        expected_transmission_window = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "expected_transmission_window") or self._fallback_transmission_window_placeholder(watchlist.default_horizon)
-        expected_transmission_window_detail = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "expected_transmission_window_detail") or self._transmission_window_detail(expected_transmission_window)
-        conflict_flags = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "conflict_flags") or []
-        conflict_flag_details = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "conflict_flag_details") or []
-        transmission_tags = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "transmission_tags") or []
-        transmission_tag_details = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "transmission_tag_details") or []
-        industry_exposure_channels = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "industry_exposure_channels") or []
-        industry_exposure_channel_details = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "industry_exposure_channel_details") or []
-        ticker_exposure_channels = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "ticker_exposure_channels") or []
-        ticker_exposure_channel_details = self._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "ticker_exposure_channel_details") or []
-        transmission_effect = self._transmission_confidence_adjustment(analysis, transmission_bias=transmission_bias, alignment_score=transmission_alignment_score)
-        base_confidence = round(float(deep_recommendation.confidence if deep_recommendation is not None else candidate.confidence_percent), 2)
-        adjusted_confidence = round(max(0.0, min(95.0, base_confidence + transmission_effect)), 2)
-        if not isinstance(primary_drivers, list) or not primary_drivers:
-            primary_drivers = [
-                item for item in [
-                    "industry_context_support" if transmission_bias != "headwind" else "industry_context_headwind",
-                    "macro_context_support" if transmission_bias != "headwind" else "macro_context_headwind",
-                    "fresh_catalyst_pressure" if self._catalyst_score(analysis) >= 45.0 else None,
-                ] if isinstance(item, str)
-            ]
-        if not isinstance(primary_driver_details, list) or not primary_driver_details:
-            primary_driver_details = self._detail_fallback(primary_drivers)
-        if not isinstance(conflict_flags, list):
-            conflict_flags = []
-        if not isinstance(conflict_flag_details, list) or not conflict_flag_details:
-            conflict_flag_details = self._detail_fallback(conflict_flags)
-        if not isinstance(transmission_tags, list):
-            transmission_tags = []
-        if not isinstance(transmission_tag_details, list) or not transmission_tag_details:
-            transmission_tag_details = self._detail_fallback(transmission_tags)
-        if not isinstance(industry_exposure_channels, list):
-            industry_exposure_channels = []
-        if not isinstance(industry_exposure_channel_details, list) or not industry_exposure_channel_details:
-            industry_exposure_channel_details = self._channel_detail_fallback(industry_exposure_channels)
-        if not isinstance(ticker_exposure_channels, list):
-            ticker_exposure_channels = []
-        if not isinstance(ticker_exposure_channel_details, list) or not ticker_exposure_channel_details:
-            ticker_exposure_channel_details = self._channel_detail_fallback(ticker_exposure_channels)
-        return TickerSignalSnapshot(
-            ticker=candidate.ticker,
-            horizon=watchlist.default_horizon,
-            status="degraded" if warnings else "ok",
-            direction=(self._normalize_direction(deep_recommendation.direction) if deep_recommendation is not None else candidate.direction),
-            swing_probability_percent=adjusted_confidence,
-            confidence_percent=adjusted_confidence,
-            attention_score=round(candidate.attention_score, 2),
-            macro_exposure_score=macro_exposure_score,
-            industry_alignment_score=industry_alignment_score,
-            ticker_sentiment_score=ticker_sentiment_score,
-            technical_setup_score=technical_score,
-            catalyst_score=self._catalyst_score(analysis),
-            expected_move_score=expected_move_score,
-            execution_quality_score=execution_quality_score,
-            warnings=list(dict.fromkeys(warnings)),
-            missing_inputs=[],
-            source_breakdown={
-                "cheap_scan_summary": candidate.indicator_summary,
-                "cheap_scan_model": candidate.cheap_scan_signal.diagnostics.get("model") if candidate.cheap_scan_signal is not None else None,
-                "cheap_scan_price_history": candidate.cheap_scan_signal.diagnostics.get("price_history") if candidate.cheap_scan_signal is not None else None,
-                "deep_analysis_available": deep_output is not None,
-                "deep_analysis_model": self._pluck(analysis, "ticker_deep_analysis", "model"),
-                "deep_analysis_price_history": self._pluck(analysis, "ticker_deep_analysis", "price_history"),
-                "summary_method": getattr(deep_output.diagnostics, "summary_method", None) if deep_output is not None else None,
-                "transmission_bias": transmission_bias,
-                "transmission_bias_detail": self._transmission_bias_detail(transmission_bias),
-                "transmission_tags": transmission_tags,
-                "transmission_tag_details": transmission_tag_details,
-                "primary_drivers": primary_drivers,
-                "primary_driver_details": primary_driver_details,
-                "industry_exposure_channels": industry_exposure_channels,
-                "industry_exposure_channel_details": industry_exposure_channel_details,
-                "ticker_exposure_channels": ticker_exposure_channels,
-                "ticker_exposure_channel_details": ticker_exposure_channel_details,
-                "expected_transmission_window": expected_transmission_window,
-                "expected_transmission_window_detail": expected_transmission_window_detail,
-                "conflict_flags": conflict_flags,
-                "conflict_flag_details": conflict_flag_details,
-                "base_confidence_percent": base_confidence,
-                "transmission_confidence_adjustment": transmission_effect,
-            },
-            diagnostics={
-                "mode": "deep_analysis" if shortlisted else "cheap_scan_only",
-                "shortlisted": shortlisted,
-                "shortlist_rank": shortlist_rank,
-                "shortlist_reasons": list(shortlist_decision.get("reasons", [])) if isinstance(shortlist_decision, dict) and isinstance(shortlist_decision.get("reasons"), list) else [],
-                "shortlist_reason_details": list(shortlist_decision.get("reason_details", [])) if isinstance(shortlist_decision, dict) and isinstance(shortlist_decision.get("reason_details"), list) else [],
-                "shortlist_eligible": bool(shortlist_decision.get("eligible")) if isinstance(shortlist_decision, dict) and shortlist_decision.get("eligible") is not None else shortlisted,
-                "selection_lane": shortlist_decision.get("selection_lane") if isinstance(shortlist_decision, dict) else None,
-                "selection_lane_label": shortlist_decision.get("selection_lane_label") if isinstance(shortlist_decision, dict) else None,
-                "cheap_scan_confidence_percent": candidate.confidence_percent,
-                "cheap_scan_directional_score": candidate.cheap_scan_signal.directional_score if candidate.cheap_scan_signal is not None else None,
-                "cheap_scan_component_scores": {
-                    "trend_score": candidate.cheap_scan_signal.trend_score if candidate.cheap_scan_signal is not None else None,
-                    "momentum_score": candidate.cheap_scan_signal.momentum_score if candidate.cheap_scan_signal is not None else None,
-                    "breakout_score": candidate.cheap_scan_signal.breakout_score if candidate.cheap_scan_signal is not None else None,
-                    "volatility_score": candidate.cheap_scan_signal.volatility_score if candidate.cheap_scan_signal is not None else None,
-                    "liquidity_score": candidate.cheap_scan_signal.liquidity_score if candidate.cheap_scan_signal is not None else None,
-                },
-                "cheap_scan_price_history": candidate.cheap_scan_signal.diagnostics.get("price_history") if candidate.cheap_scan_signal is not None else None,
-                "deep_analysis_error": deep_error,
-                "deep_analysis_price_history": self._pluck(analysis, "ticker_deep_analysis", "price_history"),
-                "base_confidence_percent": base_confidence,
-                "transmission_confidence_adjustment": transmission_effect,
-                "transmission_alignment_score": transmission_alignment_score,
-                "transmission_bias": transmission_bias,
-                "transmission_bias_detail": self._transmission_bias_detail(transmission_bias),
-                "transmission_tags": transmission_tags,
-                "transmission_tag_details": transmission_tag_details,
-                "primary_drivers": primary_drivers,
-                "primary_driver_details": primary_driver_details,
-                "industry_exposure_channels": industry_exposure_channels,
-                "industry_exposure_channel_details": industry_exposure_channel_details,
-                "ticker_exposure_channels": ticker_exposure_channels,
-                "ticker_exposure_channel_details": ticker_exposure_channel_details,
-                "expected_transmission_window": expected_transmission_window,
-                "expected_transmission_window_detail": expected_transmission_window_detail,
-                "conflict_flags": conflict_flags,
-                "conflict_flag_details": conflict_flag_details,
-            },
+        return self.signal_builder.build_signal_snapshot(
+            watchlist,
+            candidate,
+            deep_output=deep_output,
             job_id=job_id,
             run_id=run_id,
+            shortlisted=shortlisted,
+            shortlist_rank=shortlist_rank,
+            shortlist_decision=shortlist_decision,
+            deep_error=deep_error,
         )
 
     def _with_trade_policy_snapshot(self, plan: RecommendationPlan) -> RecommendationPlan:
