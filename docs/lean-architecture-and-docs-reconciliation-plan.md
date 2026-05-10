@@ -398,8 +398,9 @@ A short checklist for doc changes:
 4. [x] Extract ticker-signal snapshot construction from orchestration.
 5. [x] Extract calibration-review payload generation from orchestration.
 6. [x] Extract transmission/signal-breakdown payload generation from orchestration.
-7. [ ] Extract diagnostics builder only if it reduces duplicated summary/artifact shaping.
-8. [x] Keep `WatchlistOrchestrationService` as coordinator.
+7. [x] Extract plan narrative/evidence/risk text generation from orchestration.
+8. [ ] Extract diagnostics builder only if it reduces duplicated summary/artifact shaping.
+9. [x] Keep `WatchlistOrchestrationService` as coordinator.
 
 ### Tests/checks
 - `tests/test_watchlist_orchestration_policy.py`

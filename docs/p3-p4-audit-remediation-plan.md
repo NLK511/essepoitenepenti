@@ -16,6 +16,7 @@ Implemented in this pass:
 - extracted ticker-signal snapshot construction into `WatchlistSignalBuilder`; `WatchlistOrchestrationService` now delegates signal payload building while preserving the existing wrapper
 - extracted calibration-review payload generation into `WatchlistCalibrationReviewService`; orchestration keeps small compatibility wrappers for tests and existing helper callers
 - extracted transmission summary, signal-breakdown, and context-quality gate helpers into `WatchlistTransmissionService`
+- extracted plan narrative/evidence/risk text generation into `WatchlistPlanNarrativeService`
 - kept deeper helper extraction conservative because the remaining large-service seams affect persisted plan payloads and need broader regression if changed
 
 Remaining safe next seams:
