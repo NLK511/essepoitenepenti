@@ -1402,6 +1402,32 @@ export interface PerformanceSummary {
   average_r_multiple?: number | null;
 }
 
+export interface PolicyHealthReport {
+  label: string;
+  reasons: string[];
+  resolved_selected_outcomes: number;
+  win_rate_percent: number | null;
+  realized_pnl: number;
+  calibration_gap_percent: number | null;
+  broker_outcome_share_percent: number | null;
+}
+
+export interface EdgeValidationGateReport {
+  label: string;
+  reasons: string[];
+  resolved_selected_outcomes: number;
+  broker_selected_outcomes: number;
+  broker_outcome_share_percent: number | null;
+  win_rate_percent: number | null;
+  realized_pnl: number;
+  average_return_percent: number | null;
+  average_r_multiple: number | null;
+  profit_factor: number | null;
+  calibration_gap_percent: number | null;
+  walk_forward_qualified_slices: number | null;
+  walk_forward_promotion_recommended: boolean | null;
+}
+
 export interface PerformanceAssessmentResponse {
   job: Job;
   history_count: number;
@@ -1409,6 +1435,9 @@ export interface PerformanceAssessmentResponse {
   latest_assessment: Record<string, unknown>;
   calibration_summary: CalibrationSummary | null;
   calibration_report?: CalibrationReport | null;
+  policy_health?: PolicyHealthReport | null;
+  edge_validation_gate?: EdgeValidationGateReport | null;
+  active_policy_evaluation?: Record<string, unknown> | null;
   reliability_report?: PlanReliabilityReport | null;
   walk_forward_validation?: WalkForwardValidationResponse | null;
   near_miss_winners?: RecommendationPlanOutcome[];

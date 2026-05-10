@@ -73,7 +73,8 @@ flowchart LR
         ProposalService["ProposalService"]
         SnapshotResolver["ContextSnapshotResolver"]
         NewsIngestionService["NewsIngestionService"]
-        FeatureEngine["Feature engineering"]
+        FeatureService["TickerTechnicalFeatureService"]
+        PayloadService["TickerAnalysisPayloadService"]
         Calibration["Calibration + tuning config"]
         RefreshServices["Context refresh services"]
     end
@@ -112,10 +113,12 @@ flowchart LR
     WatchlistExecution --> WatchlistPlanFraming
     WatchlistScan --> DeepAnalysis
     DeepAnalysis --> ProposalService
+    DeepAnalysis --> FeatureService
+    DeepAnalysis --> PayloadService
     ProposalService --> SnapshotResolver
-    ProposalService --> FeatureEngine
+    ProposalService --> FeatureService
     ProposalService --> NewsIngestionService
-    FeatureEngine --> Calibration
+    FeatureService --> Calibration
     RefreshServices --> NewsIngestionService
     RefreshServices --> ContextSnapshots
     SnapshotResolver --> ContextSnapshots
@@ -156,13 +159,26 @@ Older compatibility objects may still exist in domain code or tests, but they sh
 2. the backend enqueues a run in the database
 3. the worker claims the queued run
 4. `JobExecutionService` calls the watchlist orchestration facade, which delegates run coordination to `WatchlistExecutionService`
-5. the pipeline fetches price history, computes features, loads shared macro and industry artifacts, and performs ticker analysis
+5. the pipeline fetches price history, uses `TickerTechnicalFeatureService` for technical/context feature construction, uses `TickerAnalysisPayloadService` for persisted analysis payloads/diagnostics, loads shared macro and industry artifacts, and performs ticker analysis
 6. shared context refreshes classify active events into persisted fields such as persistence state, state transition, catalyst type, market interpretation, and trigger actor metadata
 7. the system emits ticker signals, recommendation plans, and diagnostics
 8. the backend persists run state, redesign-native objects, and artifacts
 9. the frontend reads them back through `/api`
 
 If execution fails, run timing, status, and failure metadata are still persisted. Full cross-workflow rollback is still limited.
+
+### Partial-persistence semantics
+
+Current behavior intentionally preserves already-written audit artifacts instead of rolling back an entire run after a late failure.
+
+Validity rules:
+- `Run.status = completed` means run artifacts, signals, plans, and decision samples from that run are valid for normal operator review and downstream evaluation.
+- `Run.status = completed_with_warnings` means persisted artifacts are valid, but degraded-input and warning payloads must be reviewed before using the run for promotion decisions.
+- `Run.status = failed` means the run-level workflow failed; any signals, plans, or decision samples already written remain audit evidence, but they must not be used for automatic tuning promotion or autonomy expansion unless the downstream service explicitly marks them replay-safe and complete.
+- Broker order and broker position lifecycle rows remain canonical audit records even when their originating run later fails.
+- Calibration, reliability, and tuning services should prefer broker/effective outcome completeness over run success alone, and must not silently treat partial failed-run artifacts as promotion-quality evidence.
+
+This preserves forensic visibility while preventing partial failed runs from overstating evidence quality.
 
 ### Context refresh
 1. the scheduler or operator triggers a macro or industry refresh

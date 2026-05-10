@@ -42,6 +42,7 @@ These define implemented product truth.
 - `operational-scripts-reference.md` — reference for maintenance, hydration, and compare tools
 - `observability-spec.md` — run correlation ids, structured observability events, health/debugger diagnostics, and cross-process log requirements
 - `lean-architecture-and-docs-reconciliation-plan.md` — remaining active plan to reduce over-engineering and reconcile the docs surface
+- `audit-remediation-and-autonomy-readiness-plan.md` — umbrella active plan for audit findings, safety gates, migration confidence, and autonomy readiness
 - `audits/full-project-spec-code-audit-2026-05-10-post-watchlist-refactor.md` — latest full audit of spec/code/test coherence and autonomy readiness
 - `default-watchlists.md` — seeded watchlist pack and rationale
 - `data-quality-audit-spec.md` — audit endpoint for repeated no-bars, no-news, stale-coverage, and broker-reject ticker issues
@@ -67,6 +68,7 @@ These define implemented product truth.
 These are useful, but they are not the main current-state entry point. They must clearly label whether they describe current behavior, target behavior, or an active plan.
 
 - `recommendation-quality-improvement-plan.md` — working tracker for recommendation-quality, calibration, and validation improvements
+- `edge-validation-standard.md` — target autonomy gate standard for broker-backed evidence, baselines, drawdown, concentration, and demotion/halt rules
 - `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow
 - `plan-generation-tuning-spec.md` — current phase-1 behavior plus target autonomous plan-generation tuning conformance rules
 - `alpaca-paper-order-execution-spec.md` — first automated broker-execution spec for Alpaca paper trading, including audit UI and manual resubmit/cancel controls

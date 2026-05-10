@@ -28,13 +28,13 @@ What is live now:
 - a real research page for inspecting runs, grouped candidate experiments, per-campaign results, config promotion, the ranked exploration campaign plan, and run controls for manual, explore, and wide research
 - settings for active config selection and stored automation readiness flags
 - bounded parameter-schema-driven candidate generation
-- deterministic candidate ranking centered on win rate, then win count, then expected value
+- deterministic candidate ranking centered on win rate, then win count, then expected value, with explicit tie tolerances (`0.25 percentage points`, `1 win`, `0.02` expected-value units)
 - guarded worker-backed run/apply behavior in the backend
 - live consumption of the active config during plan construction
 
 What is not yet fully implemented to the target standard in this spec:
 - the full autonomous daily evolution workflow
-- the full stricter promotion guardrail set described later in this document
+- the full stricter promotion guardrail set described later in this document beyond the current validation/baseline/tie-tolerance checks
 - all target diversity, concentration, and stability protections
 - complete enforcement of the eventual autonomous promotion thresholds as the sole runtime policy
 
@@ -121,6 +121,12 @@ Initial required tolerances:
 - expected-value tie tolerance: `0.02R` or equivalent normalized return unit
 
 If a different return unit is used, the equivalent tolerance must be documented in the implementation.
+
+### Current implementation status
+
+- **implemented now:** candidate ranking and promotion eligibility use the documented win-rate, win-count, and expected-value tie tolerances.
+- **implemented now:** the current expected-value tolerance is applied to the tuning service's normalized expected-value unit.
+- **still target behavior:** the broader autonomous promotion standard must also include the edge-validation gate, diversity/concentration checks, and demotion/halt policy before unattended promotion can expand autonomy.
 
 ## Relationship to existing tuning systems
 

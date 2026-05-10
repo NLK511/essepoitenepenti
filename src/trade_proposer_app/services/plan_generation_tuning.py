@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import cmp_to_key
 import hashlib
 import math
 import random
@@ -79,6 +80,9 @@ class CandidateEvaluation:
 class PlanGenerationTuningService:
     OBJECTIVE_NAME = "plan_generation_precision_tuning_v1"
     SCHEMA_VERSION = "v1"
+    WIN_RATE_TIE_TOLERANCE = 0.0025
+    WIN_COUNT_TIE_TOLERANCE = 1
+    EXPECTED_VALUE_TIE_TOLERANCE = 0.02
 
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -179,7 +183,7 @@ class PlanGenerationTuningService:
             ]
         else:
             evaluations = [self._evaluate_candidate(config, active_config, search_records, validation_records) for config in candidates]
-        evaluations.sort(key=self._candidate_sort_key, reverse=True)
+        evaluations.sort(key=cmp_to_key(self._candidate_compare))
         winner = evaluations[0]
         baseline_eval = next(item for item in evaluations if item.changed_keys == [])
         history_span_days = self._history_span_days(records)
@@ -723,6 +727,29 @@ class PlanGenerationTuningService:
             return float(plan.entry_price_high)
         return None
 
+    @classmethod
+    def _candidate_compare(cls, left: CandidateEvaluation, right: CandidateEvaluation) -> int:
+        win_rate_delta = left.validation_win_rate - right.validation_win_rate
+        if abs(win_rate_delta) > cls.WIN_RATE_TIE_TOLERANCE:
+            return -1 if win_rate_delta > 0 else 1
+
+        win_count_delta = left.validation_win_count - right.validation_win_count
+        if abs(win_count_delta) > cls.WIN_COUNT_TIE_TOLERANCE:
+            return -1 if win_count_delta > 0 else 1
+
+        expected_value_delta = left.validation_expected_value - right.validation_expected_value
+        if abs(expected_value_delta) > cls.EXPECTED_VALUE_TIE_TOLERANCE:
+            return -1 if expected_value_delta > 0 else 1
+
+        changed_key_delta = len(left.changed_keys) - len(right.changed_keys)
+        if changed_key_delta != 0:
+            return -1 if changed_key_delta < 0 else 1
+
+        ambiguous_delta = left.validation_ambiguous_count - right.validation_ambiguous_count
+        if ambiguous_delta != 0:
+            return -1 if ambiguous_delta < 0 else 1
+        return 0
+
     @staticmethod
     def _candidate_sort_key(item: CandidateEvaluation) -> tuple[float, int, float, float, int]:
         return (
@@ -769,27 +796,33 @@ class PlanGenerationTuningService:
             "validation_average_expected_value_delta": item.validation_average_expected_value_delta,
         }
 
-    @staticmethod
-    def _promotion_eligible(candidate: CandidateEvaluation, baseline: CandidateEvaluation, *, min_validation_resolved: int) -> bool:
+    @classmethod
+    def _promotion_eligible(cls, candidate: CandidateEvaluation, baseline: CandidateEvaluation, *, min_validation_resolved: int) -> bool:
         if candidate.validation_actionable_count < min_validation_resolved:
             return False
-        if candidate.validation_win_rate < baseline.validation_win_rate:
+        win_rate_delta = candidate.validation_win_rate - baseline.validation_win_rate
+        if win_rate_delta < -cls.WIN_RATE_TIE_TOLERANCE:
             return False
-        if candidate.validation_win_rate == baseline.validation_win_rate and candidate.validation_win_count < baseline.validation_win_count:
+        win_count_delta = candidate.validation_win_count - baseline.validation_win_count
+        if abs(win_rate_delta) <= cls.WIN_RATE_TIE_TOLERANCE and win_count_delta < -cls.WIN_COUNT_TIE_TOLERANCE:
             return False
-        if candidate.validation_win_rate == baseline.validation_win_rate and candidate.validation_win_count == baseline.validation_win_count and candidate.validation_expected_value < baseline.validation_expected_value:
+        expected_value_delta = candidate.validation_expected_value - baseline.validation_expected_value
+        if abs(win_rate_delta) <= cls.WIN_RATE_TIE_TOLERANCE and abs(win_count_delta) <= cls.WIN_COUNT_TIE_TOLERANCE and expected_value_delta < -cls.EXPECTED_VALUE_TIE_TOLERANCE:
             return False
         return True
 
-    @staticmethod
-    def _rejection_reasons(candidate: CandidateEvaluation, baseline: CandidateEvaluation, *, min_validation_resolved: int) -> list[str]:
+    @classmethod
+    def _rejection_reasons(cls, candidate: CandidateEvaluation, baseline: CandidateEvaluation, *, min_validation_resolved: int) -> list[str]:
         reasons: list[str] = []
         if candidate.validation_actionable_count < min_validation_resolved:
             reasons.append("insufficient_validation_actionable_records")
-        if candidate.validation_win_rate < baseline.validation_win_rate:
+        win_rate_delta = candidate.validation_win_rate - baseline.validation_win_rate
+        if win_rate_delta < -cls.WIN_RATE_TIE_TOLERANCE:
             reasons.append("validation_win_rate_below_baseline")
-        if candidate.validation_win_rate == baseline.validation_win_rate and candidate.validation_win_count < baseline.validation_win_count:
+        win_count_delta = candidate.validation_win_count - baseline.validation_win_count
+        if abs(win_rate_delta) <= cls.WIN_RATE_TIE_TOLERANCE and win_count_delta < -cls.WIN_COUNT_TIE_TOLERANCE:
             reasons.append("validation_win_count_below_baseline")
-        if candidate.validation_win_rate == baseline.validation_win_rate and candidate.validation_win_count == baseline.validation_win_count and candidate.validation_expected_value < baseline.validation_expected_value:
+        expected_value_delta = candidate.validation_expected_value - baseline.validation_expected_value
+        if abs(win_rate_delta) <= cls.WIN_RATE_TIE_TOLERANCE and abs(win_count_delta) <= cls.WIN_COUNT_TIE_TOLERANCE and expected_value_delta < -cls.EXPECTED_VALUE_TIE_TOLERANCE:
             reasons.append("validation_expected_value_below_baseline")
         return reasons

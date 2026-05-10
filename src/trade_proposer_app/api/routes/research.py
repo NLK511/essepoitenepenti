@@ -9,6 +9,7 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.services.edge_validation_gate import EdgeValidationGateService
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
@@ -67,6 +68,7 @@ def _performance_workbench_payload(session: Session, *, calibration_evaluated_af
         "calibration_summary": calibration_summary,
         "calibration_report": calibration_summary.calibration_report,
         "policy_health": policy_review.policy_health.to_dict(),
+        "edge_validation_gate": EdgeValidationGateService().evaluate(policy_review.policy_evaluation, walk_forward_validation=walk_forward).to_dict(),
         "active_policy_evaluation": policy_review.policy_evaluation.to_dict(),
         "reliability_report": policy_review.reliability_report.to_dict(),
         "walk_forward_validation": walk_forward,

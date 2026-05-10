@@ -79,14 +79,8 @@ class WatchlistDeletionTests(unittest.IsolatedAsyncioTestCase):
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             response = await client.delete(f"/api/watchlists/{watchlist_id}")
-            # SQLite with foreign keys enabled should fail, 
-            # but default sqlite in many envs might not have them enabled by default.
-            # However, SQLAlchemy should still fail if it tries to maintain integrity 
-            # or the DB driver enforces it.
-            # Actually, by default SQLite doesn't enforce FKs unless 'PRAGMA foreign_keys = ON' is called.
-            pass
+            self.assertEqual(response.status_code, 409)
+            self.assertIn("in use", response.json()["detail"])
 
-        # Since I didn't enable PRAGMA foreign_keys = ON in the test setup, 
-        # it might actually succeed in SQLite. 
-        # But in a real Postgres DB (which the app seems to use in prod), it would fail.
-        # Let's see how the app handles it.
+            listed_after = await client.get("/api/watchlists")
+            self.assertEqual(len(listed_after.json()), 1)

@@ -8,6 +8,8 @@ It is the static reference to use when evaluating, recomputing, tuning, or refac
 
 ## Canonical behavior vs implementation status
 
+This document remains a `current + target behavior` spec by design. The conformance matrix below is the boundary between shipped behavior and stricter target semantics; do not read target-only sections as already implemented unless the matrix says they are aligned.
+
 This document defines the **expected behavior** for plan resolution.
 
 It is intentionally stricter than the current evaluator in a few places so that future work can reconcile the codebase back to a single rule set.

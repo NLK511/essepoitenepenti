@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import StrategyHorizon
 from trade_proposer_app.domain.models import Watchlist, WatchlistEvaluationPolicy
-from trade_proposer_app.repositories.watchlists import WatchlistRepository
+from trade_proposer_app.repositories.watchlists import WatchlistInUseError, WatchlistRepository
 from trade_proposer_app.services.watchlist_policy import WatchlistPolicyService
 
 router = APIRouter(prefix="/watchlists", tags=["watchlists"])
@@ -93,6 +93,8 @@ async def delete_watchlist(
     try:
         WatchlistRepository(session).delete(watchlist_id)
         return {"status": "success", "message": f"Watchlist {watchlist_id} deleted"}
+    except WatchlistInUseError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:

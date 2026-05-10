@@ -42,10 +42,19 @@ The job execution path records at least:
 - `run.finished`
 - `run.failed`
 
-The broker sync path records at least:
+The broker lifecycle path records at least:
+- `broker.order_submit_started`
+- `broker.order_submit_finished`
+- `broker.order_submit_failed`
+- `broker.order_refresh_started`
+- `broker.order_refresh_finished`
+- `broker.order_cancel_started`
+- `broker.order_cancel_finished`
 - `broker.order_sync_started`
 - `broker.order_sync_finished`
 - `broker.order_sync_failed`
+
+Where a broker event belongs to a persisted run/job, it should include `run_id` and `job_id`.
 
 Observability writes must never block or fail trading work. If event recording fails, the app logs a warning and continues.
 

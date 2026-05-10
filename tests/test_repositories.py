@@ -1275,11 +1275,28 @@ class RepositoryTests(unittest.TestCase):
             )
             self.assertFalse(assessment.allowed)
             self.assertIn("broker_buying_power_insufficient", assessment.reasons)
+            self.assertIn("broker_reconciliation_material", assessment.reasons)
             self.assertEqual(assessment.metrics["broker_buying_power_usd"], 50.0)
             self.assertEqual(assessment.metrics["broker_open_order_count"], 1)
             self.assertEqual(assessment.metrics["broker_open_position_count"], 1)
+            self.assertEqual(assessment.metrics["broker_drift_severity"], "material")
+            self.assertIn("untracked_broker_exposure:AAPL", assessment.metrics["broker_drift_reasons"])
             self.assertEqual(assessment.metrics["open_ticker_counts"]["AAPL"], 1)
             self.assertEqual(assessment.metrics["open_ticker_counts"]["MSFT"], 1)
+        finally:
+            session.close()
+
+    def test_risk_manager_blocks_uncertain_broker_snapshot(self) -> None:
+        session = create_session()
+        try:
+            snapshot = LiveBrokerSnapshot(warnings=["alpaca account snapshot failed"])
+            assessment = BrokerRiskManager(SettingsRepository(session), BrokerPositionRepository(session)).assess(
+                TradeCandidate(ticker="AAPL", notional_amount=75.0),
+                live_broker_snapshot=snapshot,
+            )
+            self.assertFalse(assessment.allowed)
+            self.assertIn("broker_reconciliation_uncertain", assessment.reasons)
+            self.assertEqual(assessment.metrics["broker_drift_severity"], "uncertain")
         finally:
             session.close()
 

@@ -1340,6 +1340,8 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("effective_summary", payload)
         self.assertIn("calibration_summary", payload)
         self.assertIn("calibration_report", payload)
+        self.assertIn("policy_health", payload)
+        self.assertIn("edge_validation_gate", payload)
         self.assertIn("active_policy_evaluation", payload)
         self.assertIn("reliability_report", payload)
         self.assertIn("walk_forward_validation", payload)
@@ -1347,6 +1349,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("entry_miss_diagnostics", payload)
         self.assertIn("closed_positions", payload["broker_summary"])
         self.assertIn("resolved_outcomes", payload["effective_summary"])
+        self.assertIn("resolved_selected_outcomes", payload["policy_health"])
+        self.assertIn("label", payload["policy_health"])
+        self.assertIn("label", payload["edge_validation_gate"])
         self.assertIn("resolved_selected_outcomes", payload["active_policy_evaluation"])
         self.assertIn("by_confidence_bucket", payload["reliability_report"])
 

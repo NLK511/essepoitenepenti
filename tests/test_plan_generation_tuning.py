@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 from datetime import datetime, timezone
+from functools import cmp_to_key
 from unittest.mock import patch
 
 import httpx
@@ -20,7 +21,7 @@ from trade_proposer_app.repositories.plan_generation_tuning import PlanGeneratio
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
+from trade_proposer_app.services.plan_generation_tuning import CandidateEvaluation, PlanGenerationTuningService
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_BY_KEY, exploration_campaigns, normalize_plan_generation_tuning_config, parameter_definitions
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
@@ -167,6 +168,69 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         payload = self.service.describe()
         self.assertIn("exploration_campaigns", payload)
         self.assertEqual([item["name"] for item in payload["exploration_campaigns"][:3]], ["entry_calibration", "risk_protection", "reward_expansion"])
+
+    def test_candidate_ranking_applies_documented_tie_tolerances(self) -> None:
+        baseline = CandidateEvaluation(
+            config={"a": 1.0},
+            changed_keys=["a"],
+            search_actionable_count=100,
+            search_win_count=60,
+            search_expected_value=1.0,
+            search_ambiguous_count=0,
+            validation_actionable_count=1000,
+            validation_win_count=600,
+            validation_expected_value=1.00,
+            validation_ambiguous_count=0,
+        )
+        higher_ev_inside_ties = CandidateEvaluation(
+            config={"a": 1.0, "b": 1.0},
+            changed_keys=["a", "b"],
+            search_actionable_count=100,
+            search_win_count=60,
+            search_expected_value=1.0,
+            search_ambiguous_count=0,
+            validation_actionable_count=1000,
+            validation_win_count=601,
+            validation_expected_value=1.03,
+            validation_ambiguous_count=0,
+        )
+        lower_win_rate_outside_tolerance = CandidateEvaluation(
+            config={"c": 1.0},
+            changed_keys=["c"],
+            search_actionable_count=100,
+            search_win_count=60,
+            search_expected_value=1.0,
+            search_ambiguous_count=0,
+            validation_actionable_count=1000,
+            validation_win_count=597,
+            validation_expected_value=9.00,
+            validation_ambiguous_count=0,
+        )
+
+        candidates = [lower_win_rate_outside_tolerance, baseline, higher_ev_inside_ties]
+        candidates.sort(key=cmp_to_key(PlanGenerationTuningService._candidate_compare))
+
+        self.assertIs(candidates[0], higher_ev_inside_ties)
+        self.assertIs(candidates[1], baseline)
+        self.assertIs(candidates[2], lower_win_rate_outside_tolerance)
+
+    def test_promotion_eligibility_applies_documented_tie_tolerances(self) -> None:
+        baseline = CandidateEvaluation(
+            config={}, changed_keys=[], search_actionable_count=100, search_win_count=60, search_expected_value=1.0, search_ambiguous_count=0,
+            validation_actionable_count=1000, validation_win_count=600, validation_expected_value=1.0, validation_ambiguous_count=0,
+        )
+        within_tie = CandidateEvaluation(
+            config={}, changed_keys=["x"], search_actionable_count=100, search_win_count=60, search_expected_value=1.0, search_ambiguous_count=0,
+            validation_actionable_count=1000, validation_win_count=599, validation_expected_value=0.99, validation_ambiguous_count=0,
+        )
+        outside_win_rate = CandidateEvaluation(
+            config={}, changed_keys=["x"], search_actionable_count=100, search_win_count=60, search_expected_value=1.0, search_ambiguous_count=0,
+            validation_actionable_count=1000, validation_win_count=597, validation_expected_value=9.0, validation_ambiguous_count=0,
+        )
+
+        self.assertTrue(PlanGenerationTuningService._promotion_eligible(within_tie, baseline, min_validation_resolved=10))
+        self.assertFalse(PlanGenerationTuningService._promotion_eligible(outside_win_rate, baseline, min_validation_resolved=10))
+        self.assertIn("validation_win_rate_below_baseline", PlanGenerationTuningService._rejection_reasons(outside_win_rate, baseline, min_validation_resolved=10))
 
     def test_run_ranks_candidates_lexicographically_and_persists_candidate_history(self) -> None:
         # Search slice

@@ -17,7 +17,7 @@ This feature extends, but does not replace:
 
 Risk is calculated from app-owned broker position lifecycle records plus the next order candidate being considered.
 
-When the execution service has an Alpaca client, pre-submit risk can also include live broker account, open-order, and open-position snapshots. Those snapshots improve exposure and buying-power checks, but the broker position lifecycle ledger remains the persisted source of truth for realized broker outcomes.
+When the execution service has an Alpaca client, pre-submit risk can also include live broker account, open-order, and open-position snapshots. Those snapshots improve exposure and buying-power checks, classify app-vs-broker drift, and block submissions when broker state is uncertain or materially divergent. The broker position lifecycle ledger remains the persisted source of truth for realized broker outcomes.
 
 ## Risk manager responsibilities
 
@@ -32,6 +32,7 @@ The risk manager blocks new submissions when any of these are true:
 5. A ticker already has an open/submitted broker position and same-ticker duplicates are disabled.
 6. Today's realized broker P&L is at or below the configured daily loss limit.
 7. Today's consecutive broker losses are at or above the configured loss streak limit.
+8. Live broker snapshot checks are uncertain or show untracked broker exposure.
 
 Manual resubmission is also blocked by the same risk manager unless the operator first disables the halt or changes the limits.
 
@@ -49,7 +50,9 @@ The following settings control v1:
 - `risk_max_same_ticker_open_positions`: default `1`
 - `risk_max_consecutive_losses`: default `3`
 
-If risk management is disabled, only the manual halt is bypassed along with all risk limits. Disabling it is intended for debugging only.
+The manual halt is absolute whenever `risk_halt_enabled` is true. It blocks new submissions even if `risk_management_enabled` is false.
+
+If `risk_management_enabled` is false, configured exposure, loss, and duplicate-position limits are bypassed, but the manual kill switch still applies. Disabling risk management is intended for debugging only and must not be used to bypass a halt.
 
 ## Risk metrics
 
@@ -87,7 +90,7 @@ The Settings response also includes risk settings so operators can see and edit 
 
 ## Current limitations
 
-- Live Alpaca snapshots are currently used as pre-submit inputs, not as a persisted full broker-account reconciliation ledger.
+- Live Alpaca snapshots are currently used as pre-submit inputs and drift gates, not as a persisted full broker-account reconciliation ledger.
 - The app does not yet calculate unrealized P&L from market prices.
 - The app does not yet liquidate/cancel existing broker exposure automatically when a halt is triggered.
 - Account activities/fills beyond the app-submitted order lifecycle are not fully reconciled.

@@ -34,6 +34,15 @@ class StubAlpacaClient:
         self.cancel_requests: list[str] = []
         self.get_requests: list[str] = []
 
+    def get_account(self) -> AlpacaOrderSubmissionResult:
+        return AlpacaOrderSubmissionResult(status_code=200, payload={"buying_power": "100000"})
+
+    def list_open_orders(self) -> AlpacaOrderSubmissionResult:
+        return AlpacaOrderSubmissionResult(status_code=200, payload={"items": []})
+
+    def list_open_positions(self) -> AlpacaOrderSubmissionResult:
+        return AlpacaOrderSubmissionResult(status_code=200, payload={"items": []})
+
     def submit_order(self, payload: dict[str, object]) -> AlpacaOrderSubmissionResult:
         self.requests.append(payload)
         return AlpacaOrderSubmissionResult(
@@ -110,10 +119,12 @@ class OrderExecutionTests(unittest.TestCase):
         try:
             settings = SettingsRepository(session)
             settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            observability = ObservabilityEventRepository(session)
             order_service = OrderExecutionService(
                 settings=settings,
                 executions=BrokerOrderExecutionRepository(session),
                 client=StubAlpacaClient(),
+                observability=observability,
             )
             plan = RecommendationPlan(
                 id=1,
@@ -146,6 +157,10 @@ class OrderExecutionTests(unittest.TestCase):
             self.assertEqual(stored[0].order_type, "limit")
             self.assertEqual(stored[0].request_payload["order_class"], "bracket")
             self.assertEqual(stored[0].request_payload["qty"], 10)
+            events = observability.list_events(limit=10)
+            self.assertEqual([event["event_type"] for event in reversed(events)], ["broker.order_submit_started", "broker.order_submit_finished"])
+            self.assertEqual(events[-1]["run_id"], 10)
+            self.assertEqual(events[-1]["job_id"], 11)
         finally:
             session.close()
 
@@ -567,7 +582,18 @@ class OrderExecutionTests(unittest.TestCase):
             self.assertEqual(client.get_requests, ["alpaca-order-2"])
             self.assertEqual(repository.get_by_client_order_id("alpaca", "tp-run-10-plan-1-aapl-live").status, "open")
             events = observability.list_events(limit=10)
-            self.assertEqual([event["event_type"] for event in reversed(events)], ["broker.order_sync_started", "broker.order_sync_finished"])
+            self.assertEqual(
+                [event["event_type"] for event in reversed(events)],
+                [
+                    "broker.order_sync_started",
+                    "broker.order_refresh_started",
+                    "broker.order_refresh_finished",
+                    "broker.order_sync_finished",
+                ],
+            )
+            refresh_started = next(event for event in events if event["event_type"] == "broker.order_refresh_started")
+            self.assertEqual(refresh_started["run_id"], 10)
+            self.assertEqual(refresh_started["job_id"], 11)
         finally:
             session.close()
 

@@ -1,9 +1,13 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import StrategyHorizon
 from trade_proposer_app.domain.models import Watchlist
-from trade_proposer_app.persistence.models import WatchlistRecord
+from trade_proposer_app.persistence.models import JobRecord, RecommendationDecisionSampleRecord, RecommendationPlanRecord, WatchlistRecord
+
+
+class WatchlistInUseError(RuntimeError):
+    pass
 
 
 class WatchlistRepository:
@@ -94,8 +98,23 @@ class WatchlistRepository:
         record = self.session.get(WatchlistRecord, watchlist_id)
         if record is None:
             raise ValueError(f"Watchlist {watchlist_id} not found")
+        references = self._reference_counts(watchlist_id)
+        active_references = {name: count for name, count in references.items() if count > 0}
+        if active_references:
+            summary = ", ".join(f"{name}={count}" for name, count in sorted(active_references.items()))
+            raise WatchlistInUseError(f"Watchlist {watchlist_id} is in use and cannot be deleted ({summary})")
         self.session.delete(record)
         self.session.commit()
+
+    def _reference_counts(self, watchlist_id: int) -> dict[str, int]:
+        return {
+            "decision_samples": self._count_records(RecommendationDecisionSampleRecord, watchlist_id),
+            "jobs": self._count_records(JobRecord, watchlist_id),
+            "recommendation_plans": self._count_records(RecommendationPlanRecord, watchlist_id),
+        }
+
+    def _count_records(self, model: type, watchlist_id: int) -> int:
+        return int(self.session.scalar(select(func.count()).select_from(model).where(model.watchlist_id == watchlist_id)) or 0)
 
     def get(self, watchlist_id: int) -> Watchlist:
         record = self.session.get(WatchlistRecord, watchlist_id)

@@ -82,6 +82,8 @@ class BrokerRiskManager:
                 reasons.append("daily_realized_loss_limit_exceeded")
             if max_consecutive_losses > 0 and int(metrics["today_consecutive_losses"]) >= max_consecutive_losses:
                 reasons.append("consecutive_loss_limit_exceeded")
+            if metrics.get("broker_drift_severity") in {"uncertain", "material"}:
+                reasons.append(f"broker_reconciliation_{metrics['broker_drift_severity']}")
 
             metrics["projected_open_position_count"] = projected_open_positions
             metrics["projected_open_notional_usd"] = round(projected_open_notional, 4)
@@ -134,8 +136,10 @@ class BrokerRiskManager:
         ]
         open_ticker_counts: dict[str, int] = {}
         open_notional = 0.0
+        app_open_ticker_counts: dict[str, int] = {}
         for position in open_positions:
             ticker = position.ticker.upper()
+            app_open_ticker_counts[ticker] = app_open_ticker_counts.get(ticker, 0) + 1
             open_ticker_counts[ticker] = open_ticker_counts.get(ticker, 0) + 1
             if position.entry_avg_price is not None:
                 open_notional += abs(float(position.entry_avg_price) * float(position.current_quantity or position.quantity))
@@ -164,6 +168,7 @@ class BrokerRiskManager:
             for ticker, count in broker_ticker_counts.items():
                 open_ticker_counts[str(ticker).upper()] = open_ticker_counts.get(str(ticker).upper(), 0) + int(count)
 
+        drift = self._broker_drift(snapshot=live_broker_snapshot, app_open_ticker_counts=app_open_ticker_counts)
         metrics: dict[str, object] = {
             "open_position_count": len(open_positions) + broker_open_position_count + broker_open_order_count,
             "app_open_position_count": len(open_positions),
@@ -173,6 +178,9 @@ class BrokerRiskManager:
             "app_open_notional_usd": round(open_notional, 4),
             "broker_open_notional_usd": round(broker_open_notional, 4),
             "open_ticker_counts": open_ticker_counts,
+            "app_open_ticker_counts": app_open_ticker_counts,
+            "broker_drift_severity": drift["severity"],
+            "broker_drift_reasons": drift["reasons"],
             "today_realized_pnl_usd": round(realized_pnl, 4),
             "today_win_count": wins,
             "today_loss_count": losses,
@@ -180,6 +188,24 @@ class BrokerRiskManager:
         }
         metrics.update(broker_metrics)
         return metrics
+
+    @classmethod
+    def _broker_drift(cls, *, snapshot: LiveBrokerSnapshot | None, app_open_ticker_counts: dict[str, int]) -> dict[str, object]:
+        if snapshot is None:
+            return {"severity": "not_checked", "reasons": []}
+        reasons: list[str] = []
+        if snapshot.warnings:
+            reasons.append("broker_snapshot_warnings")
+        broker_ticker_counts: dict[str, int] = {}
+        for item in [*snapshot.open_positions, *snapshot.open_orders]:
+            ticker = str(item.get("symbol") or item.get("ticker") or "").strip().upper()
+            if ticker:
+                broker_ticker_counts[ticker] = broker_ticker_counts.get(ticker, 0) + 1
+        for ticker, broker_count in broker_ticker_counts.items():
+            if broker_count > int(app_open_ticker_counts.get(ticker, 0)):
+                reasons.append(f"untracked_broker_exposure:{ticker}")
+        severity = "material" if any(reason.startswith("untracked_broker_exposure:") for reason in reasons) else "uncertain" if reasons else "ok"
+        return {"severity": severity, "reasons": reasons}
 
     @classmethod
     def _live_broker_metrics(cls, snapshot: LiveBrokerSnapshot | None) -> dict[str, object]:

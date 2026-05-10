@@ -256,6 +256,13 @@ class OrderExecutionService:
         if existing.status in {ExecutionStatus.FILLED.value, TradeOutcome.WIN.value, TradeOutcome.LOSS.value}:
             raise ValueError("filled or closed orders cannot be canceled")
         client = self._ensure_client()
+        self._record_observability_event(
+            event_type="broker.order_cancel_started",
+            message="Broker order cancel started",
+            run_id=existing.run_id,
+            job_id=existing.job_id,
+            payload={"broker_order_execution_id": existing.id, "broker_order_id": existing.broker_order_id, "ticker": existing.ticker},
+        )
         result = client.cancel_order(existing.broker_order_id)
         canceled = BrokerOrderExecution(
             id=existing.id,
@@ -289,16 +296,37 @@ class OrderExecutionService:
         )
         updated = self.executions.update(canceled)
         self._sync_position_from_order(updated)
+        self._record_observability_event(
+            event_type="broker.order_cancel_finished",
+            message="Broker order cancel finished",
+            run_id=updated.run_id,
+            job_id=updated.job_id,
+            payload={"broker_order_execution_id": updated.id, "broker_order_id": updated.broker_order_id, "ticker": updated.ticker, "status": updated.status},
+        )
         return updated
 
     def refresh_execution(self, execution_id: int) -> BrokerOrderExecution:
         existing = self.executions.get(execution_id)
         if existing.broker_order_id is None:
             raise ValueError("broker order id is missing, so the order cannot be refreshed")
+        self._record_observability_event(
+            event_type="broker.order_refresh_started",
+            message="Broker order refresh started",
+            run_id=existing.run_id,
+            job_id=existing.job_id,
+            payload={"broker_order_execution_id": existing.id, "broker_order_id": existing.broker_order_id, "ticker": existing.ticker},
+        )
         result = self._ensure_client().get_order(existing.broker_order_id)
         refreshed = self._apply_broker_snapshot(existing, result.payload, broker_status=result.broker_status)
         updated = self.executions.update(refreshed)
         self._sync_position_from_order(updated)
+        self._record_observability_event(
+            event_type="broker.order_refresh_finished",
+            message="Broker order refresh finished",
+            run_id=updated.run_id,
+            job_id=updated.job_id,
+            payload={"broker_order_execution_id": updated.id, "broker_order_id": updated.broker_order_id, "ticker": updated.ticker, "status": updated.status},
+        )
         return updated
 
     def sync_open_executions(self, *, limit: int = 200) -> BrokerOrderSyncOutcome:
@@ -343,6 +371,13 @@ class OrderExecutionService:
 
     def _submit_candidate(self, candidate: BrokerOrderExecution) -> BrokerOrderExecution:
         self._ensure_client()
+        self._record_observability_event(
+            event_type="broker.order_submit_started",
+            message="Broker order submit started",
+            run_id=candidate.run_id,
+            job_id=candidate.job_id,
+            payload={"recommendation_plan_id": candidate.recommendation_plan_id, "ticker": candidate.ticker, "action": candidate.action, "notional_amount": candidate.notional_amount},
+        )
         try:
             result = self.client.submit_order(candidate.request_payload)  # type: ignore[union-attr]
             candidate.broker_order_id = result.broker_order_id
@@ -352,6 +387,13 @@ class OrderExecutionService:
             candidate.error_message = ""
             created = self.executions.create(candidate)
             self._sync_position_from_order(created)
+            self._record_observability_event(
+                event_type="broker.order_submit_finished",
+                message="Broker order submit finished",
+                run_id=created.run_id,
+                job_id=created.job_id,
+                payload={"broker_order_execution_id": created.id, "broker_order_id": created.broker_order_id, "ticker": created.ticker, "status": created.status},
+            )
             return created
         except AlpacaPaperClientError as exc:
             candidate.status = ExecutionStatus.FAILED.value
@@ -360,6 +402,14 @@ class OrderExecutionService:
             candidate.submitted_at = datetime.now(timezone.utc)
             created = self.executions.create(candidate)
             self._sync_position_from_order(created)
+            self._record_observability_event(
+                event_type="broker.order_submit_failed",
+                message="Broker order submit failed",
+                severity="warning",
+                run_id=created.run_id,
+                job_id=created.job_id,
+                payload={"broker_order_execution_id": created.id, "ticker": created.ticker, "error_message": created.error_message},
+            )
             return created
         except Exception as exc:  # pragma: no cover - defensive catch for broker/client integration
             candidate.status = ExecutionStatus.FAILED.value
@@ -367,6 +417,14 @@ class OrderExecutionService:
             candidate.submitted_at = datetime.now(timezone.utc)
             created = self.executions.create(candidate)
             self._sync_position_from_order(created)
+            self._record_observability_event(
+                event_type="broker.order_submit_failed",
+                message="Broker order submit failed",
+                severity="warning",
+                run_id=created.run_id,
+                job_id=created.job_id,
+                payload={"broker_order_execution_id": created.id, "ticker": created.ticker, "error_message": created.error_message},
+            )
             return created
 
     def _ensure_client(self) -> AlpacaPaperClient:
@@ -385,6 +443,8 @@ class OrderExecutionService:
         message: str,
         payload: dict[str, object] | None = None,
         severity: str = "info",
+        run_id: int | None = None,
+        job_id: int | None = None,
     ) -> None:
         if self.observability is None:
             return
@@ -394,6 +454,8 @@ class OrderExecutionService:
                 severity=severity,
                 source="broker",
                 message=message,
+                run_id=run_id,
+                job_id=job_id,
                 payload=payload or {},
             )
         except Exception:
@@ -554,19 +616,25 @@ class OrderExecutionService:
         open_orders: list[dict[str, object]] = []
         open_positions: list[dict[str, object]] = []
         try:
-            account = self.client.get_account().payload
+            account_method = getattr(self.client, "get_account", None)
+            if callable(account_method):
+                account = account_method().payload
         except Exception as exc:  # pragma: no cover - defensive broker integration guard
             warnings.append(f"alpaca account snapshot failed: {exc}")
         try:
-            payload = self.client.list_open_orders().payload
-            items = payload.get("items") if isinstance(payload, dict) else None
-            open_orders = [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+            open_orders_method = getattr(self.client, "list_open_orders", None)
+            if callable(open_orders_method):
+                payload = open_orders_method().payload
+                items = payload.get("items") if isinstance(payload, dict) else None
+                open_orders = [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
         except Exception as exc:  # pragma: no cover - defensive broker integration guard
             warnings.append(f"alpaca open-order snapshot failed: {exc}")
         try:
-            payload = self.client.list_open_positions().payload
-            items = payload.get("items") if isinstance(payload, dict) else None
-            open_positions = [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+            open_positions_method = getattr(self.client, "list_open_positions", None)
+            if callable(open_positions_method):
+                payload = open_positions_method().payload
+                items = payload.get("items") if isinstance(payload, dict) else None
+                open_positions = [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
         except Exception as exc:  # pragma: no cover - defensive broker integration guard
             warnings.append(f"alpaca open-position snapshot failed: {exc}")
         return LiveBrokerSnapshot(account=account, open_orders=open_orders, open_positions=open_positions, warnings=warnings)

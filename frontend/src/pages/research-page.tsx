@@ -8,6 +8,40 @@ import { Badge, Card, DisclosureCard, HelpHint, PageHeader, SectionTitle, Segmen
 
 const assessmentWindows = REVIEW_WINDOW_OPTIONS;
 
+function policyHealthTone(label: string | null | undefined): "ok" | "warning" | "danger" | "neutral" | "info" {
+  const normalized = (label ?? "").trim().toLowerCase();
+  if (normalized === "healthy" || normalized === "eligible_for_cautious_expansion") {
+    return "ok";
+  }
+  if (normalized === "watch" || normalized === "research_only") {
+    return "warning";
+  }
+  if (normalized === "degraded" || normalized === "demote_or_halt" || normalized === "blocked") {
+    return "danger";
+  }
+  if (normalized === "insufficient") {
+    return "neutral";
+  }
+  return "info";
+}
+
+function policyHealthStance(label: string | null | undefined): string {
+  const normalized = (label ?? "").trim().toLowerCase();
+  if (normalized === "healthy") {
+    return "Policy can be reviewed for cautious expansion if broker and risk gates also pass.";
+  }
+  if (normalized === "watch") {
+    return "Keep operator review active; do not expand autonomy without stronger broker-backed evidence.";
+  }
+  if (normalized === "degraded") {
+    return "Do not expand autonomy; investigate weak outcome, P&L, calibration, or broker-evidence reasons.";
+  }
+  if (normalized === "insufficient") {
+    return "Collect more resolved evidence before treating the policy as trusted.";
+  }
+  return "Policy health is unavailable; keep autonomy conservative.";
+}
+
 function renderAssessment(content: string) {
   const lines = content.split(/\r?\n/);
   const nodes: JSX.Element[] = [];
@@ -118,6 +152,8 @@ export function ResearchPage() {
   const calibrationReport = assessment?.calibration_report ?? calibrationSummary?.calibration_report ?? null;
   const calibrationBins = calibrationReport?.bins ?? [];
   const walkForward = assessment?.walk_forward_validation ?? null;
+  const policyHealth = assessment?.policy_health ?? null;
+  const edgeGate = assessment?.edge_validation_gate ?? null;
   const reliabilityReport = assessment?.reliability_report ?? null;
   const topReliabilityBuckets = reliabilityReport?.by_confidence_bucket?.slice(0, 4) ?? [];
   const nearMissWinners = assessment?.near_miss_winners ?? [];
@@ -216,6 +252,46 @@ export function ResearchPage() {
             onChange={setActiveTab}
           />
         </div>
+
+        <Card>
+          <SectionTitle
+            kicker="Policy health"
+            title="Can the active selection policy be trusted?"
+            subtitle="This is the headline trust control. It combines selected outcome count, win rate, P&L, calibration gap, and broker-backed evidence share."
+            actions={<HelpHint tooltip="Policy health is the top-level operator answer for whether selection policy evidence is healthy enough to trust or expand." to="/docs?doc=audit-remediation-and-autonomy-readiness-plan" />}
+          />
+          {loading ? <div className="helper-text">Loading policy health…</div> : null}
+          {!loading && !policyHealth ? <div className="helper-text">Policy health is unavailable.</div> : null}
+          {policyHealth ? (
+            <>
+              <div className="cluster top-gap-small">
+                <Badge tone={policyHealthTone(policyHealth.label)}>{policyHealth.label}</Badge>
+                <span className="helper-text">{policyHealthStance(policyHealth.label)}</span>
+              </div>
+              <section className="metrics-grid top-gap-medium">
+                <StatCard label="Selected resolved" value={policyHealth.resolved_selected_outcomes} helper="Resolved outcomes selected by the active policy" />
+                <StatCard label="Selected win rate" value={policyHealth.win_rate_percent === null ? "—" : `${policyHealth.win_rate_percent.toFixed(1)}%`} helper="Broker/effective selected cohort" />
+                <StatCard label="Selected P&L" value={`$${policyHealth.realized_pnl.toFixed(2)}`} helper="Realized broker/effective selected cohort" />
+                <StatCard label="Broker evidence share" value={policyHealth.broker_outcome_share_percent === null ? "—" : `${policyHealth.broker_outcome_share_percent.toFixed(1)}%`} helper="Higher is safer than simulation-heavy evidence" />
+              </section>
+              <div className="data-points top-gap-small">
+                <div className="data-point"><span className="data-point-label">calibration gap</span><span className="data-point-value">{policyHealth.calibration_gap_percent === null ? "—" : `${policyHealth.calibration_gap_percent.toFixed(1)}pp`}</span></div>
+                <div className="data-point"><span className="data-point-label">reasons</span><span className="data-point-value">{policyHealth.reasons.length > 0 ? policyHealth.reasons.join(" · ") : "none"}</span></div>
+              </div>
+              {edgeGate ? (
+                <div className="data-card top-gap-small">
+                  <div className="cluster cluster-tight"><span className="summary-label">Autonomy gate</span><Badge tone={policyHealthTone(edgeGate.label)}>{edgeGate.label}</Badge></div>
+                  <div className="helper-text top-gap-small">{edgeGate.reasons.length > 0 ? edgeGate.reasons.join(" · ") : "passes current edge-validation standard"}</div>
+                  <div className="data-points top-gap-small">
+                    <div className="data-point"><span className="data-point-label">broker selected</span><span className="data-point-value">{edgeGate.broker_selected_outcomes}</span></div>
+                    <div className="data-point"><span className="data-point-label">profit factor</span><span className="data-point-value">{edgeGate.profit_factor === null ? "—" : edgeGate.profit_factor.toFixed(2)}</span></div>
+                    <div className="data-point"><span className="data-point-label">walk-forward</span><span className="data-point-value">{edgeGate.walk_forward_qualified_slices ?? "—"} slices · {edgeGate.walk_forward_promotion_recommended === null ? "—" : edgeGate.walk_forward_promotion_recommended ? "recommended" : "not recommended"}</span></div>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </Card>
 
         <Card>
           <SectionTitle
