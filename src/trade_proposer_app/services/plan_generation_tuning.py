@@ -295,40 +295,61 @@ class PlanGenerationTuningService:
 
         winner_candidate = stored_candidates[0]
         promoted_config_version_id = None
+        promotion_applied = False
+        promotion_rejection_reasons: list[str] = []
         if apply:
             if not winner_candidate.promotion_eligible:
-                raise PlanGenerationTuningError("winning candidate is not promotion eligible under current guardrails")
+                promotion_rejection_reasons.extend(winner_candidate.rejection_reasons or ["winning_candidate_not_promotion_eligible"])
             if walk_forward_validation.qualified_slices >= 3 and not walk_forward_validation.promotion_recommended:
-                raise PlanGenerationTuningError(f"winning candidate failed walk-forward validation: {walk_forward_validation.promotion_rationale}")
-            promoted = self.repository.create_config_version(
-                PlanGenerationTuningConfigVersion(
-                    version_label=f"run-{run.id}-winner",
-                    status="active",
-                    source="tuning_run",
-                    parent_config_version_id=baseline_version.id,
-                    source_run_id=run.id,
-                    source_candidate_id=winner_candidate.id,
-                    config=winner_candidate.config,
-                    parameter_schema_version=self.SCHEMA_VERSION,
+                rationale = (walk_forward_validation.promotion_rationale or "walk_forward_validation_rejected").strip()
+                if rationale:
+                    promotion_rejection_reasons.append(rationale)
+            if not promotion_rejection_reasons:
+                promoted = self.repository.create_config_version(
+                    PlanGenerationTuningConfigVersion(
+                        version_label=f"run-{run.id}-winner",
+                        status="active",
+                        source="tuning_run",
+                        parent_config_version_id=baseline_version.id,
+                        source_run_id=run.id,
+                        source_candidate_id=winner_candidate.id,
+                        config=winner_candidate.config,
+                        parameter_schema_version=self.SCHEMA_VERSION,
+                    )
                 )
-            )
-            self.settings_mutations.set_plan_generation_active_config_version_id(promoted.id)
-            promoted_config_version_id = promoted.id
-            self.repository.create_event(
-                PlanGenerationTuningEvent(
-                    event_type="config_promoted",
-                    run_id=run.id,
-                    config_version_id=promoted.id,
-                    candidate_id=winner_candidate.id,
-                    payload={"version_label": promoted.version_label},
+                self.settings_mutations.set_plan_generation_active_config_version_id(promoted.id)
+                promoted_config_version_id = promoted.id
+                promotion_applied = True
+                self.repository.create_event(
+                    PlanGenerationTuningEvent(
+                        event_type="config_promoted",
+                        run_id=run.id,
+                        config_version_id=promoted.id,
+                        candidate_id=winner_candidate.id,
+                        payload={"version_label": promoted.version_label},
+                    )
                 )
-            )
+            else:
+                self.repository.create_event(
+                    PlanGenerationTuningEvent(
+                        event_type="config_promotion_skipped",
+                        run_id=run.id,
+                        candidate_id=winner_candidate.id,
+                        payload={
+                            "version_label": f"run-{run.id}-winner",
+                            "rejection_reasons": promotion_rejection_reasons,
+                        },
+                    )
+                )
 
         updated_run = self.repository.get_run(run.id or 0)
         updated_run.winning_candidate_id = winner_candidate.id
         updated_run.promoted_config_version_id = promoted_config_version_id
         updated_run.summary["winner_candidate_id"] = winner_candidate.id
         updated_run.summary["promoted_config_version_id"] = promoted_config_version_id
+        updated_run.summary["promotion_requested"] = apply
+        updated_run.summary["promotion_applied"] = promotion_applied
+        updated_run.summary["promotion_rejection_reasons"] = promotion_rejection_reasons
         updated_run.summary["baseline_config_version_id"] = baseline_version.id
         return self.repository.update_run(run.id or 0, updated_run)
 
