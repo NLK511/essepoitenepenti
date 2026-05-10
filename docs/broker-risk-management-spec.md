@@ -17,7 +17,7 @@ This feature extends, but does not replace:
 
 Risk is calculated from app-owned broker position lifecycle records plus the next order candidate being considered.
 
-When the execution service has an Alpaca client, pre-submit risk can also include live broker account, open-order, and open-position snapshots. Those snapshots improve exposure and buying-power checks, classify app-vs-broker drift, and block submissions when broker state is uncertain or materially divergent. The broker position lifecycle ledger remains the persisted source of truth for realized broker outcomes.
+When the execution service has an Alpaca client, pre-submit risk also captures live broker account, open-order, and open-position snapshots into the broker reconciliation snapshot ledger. Those snapshots improve exposure and buying-power checks, classify app-vs-broker drift, persist the evidence used by the pre-submit gate, and block submissions when broker state is uncertain or materially divergent. The broker position lifecycle ledger remains the persisted source of truth for realized broker outcomes.
 
 ## Risk manager responsibilities
 
@@ -88,11 +88,23 @@ The Broker Orders page must include the risk dashboard directly because risk sta
 
 The Settings response also includes risk settings so operators can see and edit the active limits alongside execution settings.
 
+## Halt aftermath semantics
+
+A risk halt currently means **hold and block new submissions**.
+
+When a halt is active:
+- new autonomous broker submissions and resubmissions are blocked
+- existing broker orders/positions remain visible in the broker workbench
+- operators may manually refresh, cancel eligible open orders, or resume after review
+- the app does not automatically liquidate positions or cancel all open orders
+
+Automatic cancel-all or liquidate behavior must be specified and tested separately before it can be enabled.
+
 ## Current limitations
 
-- Live Alpaca snapshots are currently used as pre-submit inputs and drift gates, not as a persisted full broker-account reconciliation ledger.
+- The broker reconciliation snapshot ledger records pre-submit broker account/open-order/open-position evidence, but it is not yet a full account-activity/fill reconciliation engine.
 - The app does not yet calculate unrealized P&L from market prices.
 - The app does not yet liquidate/cancel existing broker exposure automatically when a halt is triggered.
 - Account activities/fills beyond the app-submitted order lifecycle are not fully reconciled.
 
-These are deliberate follow-up items after the app has a working kill switch and pre-trade risk gate.
+These are deliberate follow-up items after the app has a working kill switch, persisted pre-trade snapshot evidence, and pre-trade risk gate.

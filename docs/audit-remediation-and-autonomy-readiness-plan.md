@@ -49,7 +49,8 @@ Deliverables:
 - [x] demotion/halt rules when live results degrade
 
 Acceptance criteria:
-- [ ] promotion/autonomy expansion cannot happen unless the standard passes
+- [x] plan-generation promotion cannot happen unless the standard passes
+- [x] no current broker autonomy-scope expansion setting exists; any future setting must use the same gate before it ships
 - [x] the standard is visible in operator-facing docs and UI
 - [x] failing the standard produces a clear halt or demotion reason
 
@@ -58,10 +59,10 @@ Acceptance criteria:
 Purpose: prevent app/broker drift from becoming silent exposure.
 
 Deliverables:
-- [ ] persisted broker account/order/position snapshots or an equivalent reconciliation ledger
+- [x] persisted broker account/order/position snapshots or an equivalent reconciliation ledger
 - [x] drift classification by severity in pre-submit live snapshot checks
 - [x] block new submissions when broker state is uncertain or materially divergent in pre-submit live snapshot checks
-- [ ] explicit semantics for cancel/liquidate/hold on halt
+- [x] explicit semantics for cancel/liquidate/hold on halt
 
 Acceptance criteria:
 - the app can explain whether it trusts current broker state
@@ -119,8 +120,8 @@ Deliverables:
 - [x] define partial-persistence semantics for failed runs
 - [x] add structured observability coverage for broker lifecycle events
 - [x] ensure broker lifecycle events include run/job ids where the data allows it
-- [ ] add structured observability coverage for provider lifecycle events
-- [ ] ensure correlation ids are available where the data allows it beyond run/job-linked broker events
+- [x] add structured observability coverage for provider lifecycle events
+- [x] ensure correlation ids are available where the data allows it beyond run/job-linked broker events
 
 Acceptance criteria:
 - integrity failures are tested against the target datastore behavior
@@ -158,13 +159,13 @@ Acceptance criteria:
 4. [x] update docs that still mix current and target behavior
 
 ### Phase 1 — bind the safety loop
-1. [ ] implement persisted broker reconciliation snapshots/drift classes
+1. [x] implement persisted broker reconciliation snapshots/drift classes
 2. [x] add pre-submit block behavior for uncertain or divergent live broker state
 3. [x] require Postgres/Alembic validation in the normal path
 
 ### Phase 2 — harden the evidence path
 1. [x] codify partial-persistence semantics
-2. [ ] strengthen provider observability events and broader correlation coverage
+2. [x] strengthen provider observability events and broader correlation coverage
 3. [x] fix integrity tests against target datastore behavior
 
 ### Phase 3 — simplify only where seams are obvious

@@ -388,6 +388,47 @@ class NewsIngestionServiceTests(unittest.TestCase):
         self.assertEqual([article.title for article in bundle.articles], ["In window"])
         self.assertEqual(bundle.feeds_used, ["Stub"])
 
+    def test_fetch_records_provider_observability_event(self) -> None:
+        class StubProvider:
+            provider_key = "stub"
+            name = "Stub"
+            supports_ticker = True
+            supports_topic = False
+            supports_live_windowed_queries = True
+            supports_replay_windowed_queries = True
+            counts_as_primary_news = True
+
+            def fetch(self, ticker, limit, *, start_at=None, end_at=None):
+                return [
+                    NewsArticle(
+                        title="Observed provider article",
+                        summary="ok",
+                        publisher="Stub",
+                        link="https://example.com/observed",
+                        published_at=datetime(2026, 3, 26, 10, 0, tzinfo=timezone.utc),
+                    )
+                ]
+
+        class FakeObservability:
+            def __init__(self) -> None:
+                self.events = []
+
+            def record(self, **kwargs):
+                self.events.append(kwargs)
+                return kwargs
+
+        observability = FakeObservability()
+        service = NewsIngestionService([StubProvider()], max_articles=10, observability=observability)
+
+        bundle = service.fetch("AAPL")
+
+        self.assertEqual(len(bundle.articles), 1)
+        self.assertEqual(len(observability.events), 1)
+        self.assertEqual(observability.events[0]["event_type"], "provider.news_fetch_finished")
+        self.assertEqual(observability.events[0]["source"], "news")
+        self.assertEqual(observability.events[0]["payload"]["subject"], "AAPL")
+        self.assertEqual(observability.events[0]["payload"]["successful_provider_count"], 1)
+
     def test_naive_sentiment_analyzer_scores_positive_headlines(self) -> None:
         analyzer = NaiveSentimentAnalyzer()
         article = NewsArticle(

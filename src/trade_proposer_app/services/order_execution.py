@@ -6,10 +6,11 @@ from decimal import Decimal, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 from uuid import uuid4
 
-from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPosition, RecommendationPlan
+from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPosition, BrokerReconciliationSnapshot, RecommendationPlan
 from trade_proposer_app.domain.statuses import BrokerPositionStatus, ExecutionStatus, TERMINAL_EXECUTION_STATUSES, TradeOutcome
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
+from trade_proposer_app.repositories.broker_reconciliation_snapshots import BrokerReconciliationSnapshotRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClient, AlpacaPaperClientError
@@ -45,12 +46,14 @@ class OrderExecutionService:
         client: AlpacaPaperClient | None = None,
         positions: BrokerPositionRepository | None = None,
         observability: ObservabilityEventRepository | None = None,
+        reconciliation_snapshots: BrokerReconciliationSnapshotRepository | None = None,
     ) -> None:
         self.settings = settings
         self.executions = executions
         self.client = client
         self.positions = positions
         self.observability = observability
+        self.reconciliation_snapshots = reconciliation_snapshots
         self.candidate_builder = ExecutionCandidateBuilder()
 
     def execute_plans(
@@ -144,7 +147,7 @@ class OrderExecutionService:
             notional_amount = round(quantity * entry_price, 4)
             risk_assessment = self._risk_manager().assess(
                 TradeCandidate(ticker=plan.ticker, notional_amount=notional_amount),
-                live_broker_snapshot=self._live_broker_snapshot(),
+                live_broker_snapshot=self._live_broker_snapshot(run_id=run_id, job_id=job_id, ticker=plan.ticker),
             )
             if not risk_assessment.allowed:
                 risk_reason = "risk_" + "_".join(risk_assessment.reasons or ["blocked"])
@@ -219,7 +222,7 @@ class OrderExecutionService:
         )
         risk_assessment = self._risk_manager().assess(
             TradeCandidate(ticker=existing.ticker, notional_amount=existing.notional_amount),
-            live_broker_snapshot=self._live_broker_snapshot(),
+            live_broker_snapshot=self._live_broker_snapshot(run_id=existing.run_id, job_id=existing.job_id, broker_order_execution_id=existing.id, ticker=existing.ticker),
         )
         if not risk_assessment.allowed:
             raise ValueError(f"broker order resubmit blocked by risk manager: {', '.join(risk_assessment.reasons)}")
@@ -608,7 +611,15 @@ class OrderExecutionService:
             raise ValueError("broker position repository is required for risk management")
         return BrokerRiskManager(self.settings, repository)
 
-    def _live_broker_snapshot(self) -> LiveBrokerSnapshot | None:
+    def _live_broker_snapshot(
+        self,
+        *,
+        run_id: int | None = None,
+        job_id: int | None = None,
+        broker_order_execution_id: int | None = None,
+        ticker: str = "",
+        snapshot_type: str = "pre_submit",
+    ) -> LiveBrokerSnapshot | None:
         if self.client is None:
             return None
         warnings: list[str] = []
@@ -637,7 +648,78 @@ class OrderExecutionService:
                 open_positions = [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
         except Exception as exc:  # pragma: no cover - defensive broker integration guard
             warnings.append(f"alpaca open-position snapshot failed: {exc}")
-        return LiveBrokerSnapshot(account=account, open_orders=open_orders, open_positions=open_positions, warnings=warnings)
+        snapshot = LiveBrokerSnapshot(account=account, open_orders=open_orders, open_positions=open_positions, warnings=warnings)
+        self._persist_live_broker_snapshot(
+            snapshot,
+            run_id=run_id,
+            job_id=job_id,
+            broker_order_execution_id=broker_order_execution_id,
+            ticker=ticker,
+            snapshot_type=snapshot_type,
+        )
+        return snapshot
+
+    def _persist_live_broker_snapshot(
+        self,
+        snapshot: LiveBrokerSnapshot,
+        *,
+        run_id: int | None,
+        job_id: int | None,
+        broker_order_execution_id: int | None,
+        ticker: str,
+        snapshot_type: str,
+    ) -> None:
+        repository = self.reconciliation_snapshots or self._snapshot_repository()
+        if repository is None:
+            return
+        app_open_ticker_counts: dict[str, int] = {}
+        position_repository = self._position_repository()
+        if position_repository is not None:
+            for position in position_repository.list_all(limit=1000):
+                if position.status not in {"submitted", "open"}:
+                    continue
+                normalized = position.ticker.upper()
+                app_open_ticker_counts[normalized] = app_open_ticker_counts.get(normalized, 0) + 1
+        drift = BrokerRiskManager._broker_drift(snapshot=snapshot, app_open_ticker_counts=app_open_ticker_counts)
+        config = SettingsDomainService(repository=self.settings).execution_settings().broker_order_execution
+        try:
+            created = repository.create(
+                BrokerReconciliationSnapshot(
+                    broker=str(config["broker"]),
+                    account_mode=str(config["account_mode"]),
+                    snapshot_type=snapshot_type,
+                    run_id=run_id,
+                    job_id=job_id,
+                    broker_order_execution_id=broker_order_execution_id,
+                    ticker=ticker,
+                    account_payload=snapshot.account,
+                    open_orders_payload=snapshot.open_orders,
+                    open_positions_payload=snapshot.open_positions,
+                    warnings=snapshot.warnings,
+                    drift_severity=str(drift.get("severity") or "not_evaluated"),
+                    drift_reasons=[str(reason) for reason in drift.get("reasons", [])] if isinstance(drift.get("reasons"), list) else [],
+                )
+            )
+            self.reconciliation_snapshots = repository
+            self._record_observability_event(
+                event_type="broker.reconciliation_snapshot_recorded",
+                message="Broker reconciliation snapshot recorded",
+                run_id=run_id,
+                job_id=job_id,
+                severity="warning" if created.drift_severity in {"uncertain", "material"} else "info",
+                payload={
+                    "broker_reconciliation_snapshot_id": created.id,
+                    "ticker": created.ticker,
+                    "snapshot_type": created.snapshot_type,
+                    "drift_severity": created.drift_severity,
+                    "drift_reasons": created.drift_reasons,
+                    "open_order_count": len(created.open_orders_payload),
+                    "open_position_count": len(created.open_positions_payload),
+                    "warning_count": len(created.warnings),
+                },
+            )
+        except Exception:
+            pass
 
     def _position_repository(self) -> BrokerPositionRepository | None:
         if self.positions is not None:
@@ -647,6 +729,15 @@ class OrderExecutionService:
             return None
         self.positions = BrokerPositionRepository(session)
         return self.positions
+
+    def _snapshot_repository(self) -> BrokerReconciliationSnapshotRepository | None:
+        if self.reconciliation_snapshots is not None:
+            return self.reconciliation_snapshots
+        session = getattr(self.executions, "session", None)
+        if session is None:
+            return None
+        self.reconciliation_snapshots = BrokerReconciliationSnapshotRepository(session)
+        return self.reconciliation_snapshots
 
     def _sync_position_from_order(self, order: BrokerOrderExecution) -> BrokerPosition | None:
         if order.id is None or order.broker_order_id is None or order.status == ExecutionStatus.SKIPPED.value:

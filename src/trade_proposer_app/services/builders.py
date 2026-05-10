@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
+from trade_proposer_app.repositories.broker_reconciliation_snapshots import BrokerReconciliationSnapshotRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
@@ -58,6 +59,7 @@ def _news_service(session: Session, repository: SettingsRepository, article_limi
         credentials,
         max_articles=int(settings_map.get(article_limit_key, "12")),
         historical_news=HistoricalNewsRepository(session),
+        observability=ObservabilityEventRepository(session),
     )
 
 
@@ -127,6 +129,7 @@ def create_order_execution_service(session: Session) -> OrderExecutionService:
         client=client,
         positions=BrokerPositionRepository(session),
         observability=ObservabilityEventRepository(session),
+        reconciliation_snapshots=BrokerReconciliationSnapshotRepository(session),
     )
 
 

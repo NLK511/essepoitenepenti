@@ -15,6 +15,7 @@ import yfinance as yf
 
 from trade_proposer_app.domain.models import NewsArticle, NewsBundle, ProviderCredential
 from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
+from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.services.constants import DEFAULT_CONTEXT_FLAGS
 
 MAX_ARTICLES_PER_PROVIDER = 10
@@ -733,10 +734,12 @@ class NewsIngestionService:
         *,
         max_articles: int = 12,
         historical_news: HistoricalNewsRepository | None = None,
+        observability: ObservabilityEventRepository | None = None,
     ) -> None:
         self.providers = list(providers or [])
         self.max_articles = max_articles
         self.historical_news = historical_news
+        self.observability = observability
         self._sentiment_analyzer = NaiveSentimentAnalyzer()
         self._windowed_query_cache: dict[tuple[object, ...], NewsBundle] = {}
 
@@ -747,6 +750,7 @@ class NewsIngestionService:
         *,
         max_articles: int = 12,
         historical_news: HistoricalNewsRepository | None = None,
+        observability: ObservabilityEventRepository | None = None,
     ) -> "NewsIngestionService":
         providers: list[NewsProvider] = []
 
@@ -768,7 +772,7 @@ class NewsIngestionService:
             credential = provider_credentials.get(key)
             if credential and (credential.api_key or credential.api_secret):
                 providers.append(builder(credential))
-        return cls(providers, max_articles=max_articles, historical_news=historical_news)
+        return cls(providers, max_articles=max_articles, historical_news=historical_news, observability=observability)
 
     def fetch(
         self,
@@ -833,6 +837,7 @@ class NewsIngestionService:
                     "provider_fetch_skipped": True,
                     "provider_fetch_skip_reason": "database coverage satisfied minimum",
                 }
+                self._record_provider_observability(subject=ticker, query_type="ticker", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)
                 if cache_key is not None:
                     self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
                 return bundle
@@ -860,6 +865,7 @@ class NewsIngestionService:
                 )
                 bundle.query_diagnostics["provider_fetch_skipped"] = True
                 bundle.query_diagnostics["provider_fetch_skip_reason"] = "no eligible providers"
+            self._record_provider_observability(subject=ticker, query_type="ticker", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)
             if cache_key is not None:
                 self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
             return bundle
@@ -928,9 +934,39 @@ class NewsIngestionService:
         if fallback_note:
             bundle.feed_errors.append(fallback_note)
             bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
+        self._record_provider_observability(subject=ticker, query_type="ticker", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)
         if cache_key is not None:
             self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
         return bundle
+
+    def _record_provider_observability(self, *, subject: str, query_type: NewsQueryType, diagnostics: dict[str, object], feed_errors: list[str]) -> None:
+        if self.observability is None:
+            return
+        failed_count = int(diagnostics.get("failed_provider_count") or 0)
+        skipped = bool(diagnostics.get("provider_fetch_skipped"))
+        severity = "warning" if failed_count or feed_errors else "info"
+        try:
+            self.observability.record(
+                event_type="provider.news_fetch_finished",
+                severity=severity,
+                source="news",
+                message="News provider fetch finished",
+                payload={
+                    "subject": subject,
+                    "query_type": query_type,
+                    "request_mode": diagnostics.get("request_mode"),
+                    "provider_results": diagnostics.get("provider_results", []),
+                    "successful_provider_count": diagnostics.get("successful_provider_count", 0),
+                    "failed_provider_count": diagnostics.get("failed_provider_count", 0),
+                    "unsupported_provider_count": diagnostics.get("unsupported_provider_count", 0),
+                    "article_count": diagnostics.get("article_count", 0),
+                    "provider_fetch_skipped": skipped,
+                    "provider_fetch_skip_reason": diagnostics.get("provider_fetch_skip_reason"),
+                    "feed_errors": feed_errors,
+                },
+            )
+        except Exception:
+            pass
 
     @staticmethod
     def _clone_bundle(bundle: NewsBundle) -> NewsBundle:
@@ -1084,6 +1120,7 @@ class NewsIngestionService:
                 bundle.query_diagnostics["database_article_count"] = len(local_articles)
                 bundle.query_diagnostics["provider_fetch_skipped"] = True
                 bundle.query_diagnostics["provider_fetch_skip_reason"] = "database coverage satisfied minimum"
+                self._record_provider_observability(subject=topic, query_type="topic", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)
                 if cache_key is not None:
                     self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
                 return bundle
@@ -1108,6 +1145,7 @@ class NewsIngestionService:
             bundle.query_diagnostics["provider_fetch_skip_reason"] = "no eligible providers"
             if selection_errors:
                 bundle.query_diagnostics["provider_selection_errors"] = selection_errors
+            self._record_provider_observability(subject=topic, query_type="topic", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)
             if cache_key is not None:
                 self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
             return bundle
@@ -1155,6 +1193,7 @@ class NewsIngestionService:
             feeds_used=bundle.feeds_used,
             article_count=len(bundle.articles),
         )
+        self._record_provider_observability(subject=topic, query_type="topic", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)
         if cache_key is not None:
             self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
         return bundle

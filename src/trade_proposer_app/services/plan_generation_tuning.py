@@ -25,12 +25,15 @@ from trade_proposer_app.repositories.recommendation_decision_samples import Reco
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
+from trade_proposer_app.services.edge_validation_gate import EdgeValidationGateService
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
 from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_BY_KEY, exploration_campaigns, normalize_plan_generation_tuning_config, parameter_definitions
 from trade_proposer_app.services.plan_generation_walk_forward import PlanGenerationWalkForwardService
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.settings_mutations import SettingsMutationService
+from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicyService
+from trade_proposer_app.services.trade_policy_evaluation import TradePolicyEvaluationService
 
 
 class PlanGenerationTuningError(Exception):
@@ -308,6 +311,9 @@ class PlanGenerationTuningService:
                 rationale = (walk_forward_validation.promotion_rationale or "walk_forward_validation_rejected").strip()
                 if rationale:
                     promotion_rejection_reasons.append(rationale)
+            edge_gate_report = self._edge_validation_gate_report(walk_forward_validation=walk_forward_validation)
+            if edge_gate_report["label"] != "eligible_for_cautious_expansion":
+                promotion_rejection_reasons.append(f"edge_validation_gate_{edge_gate_report['label']}")
             if not promotion_rejection_reasons:
                 promoted = self.repository.create_config_version(
                     PlanGenerationTuningConfigVersion(
@@ -342,6 +348,7 @@ class PlanGenerationTuningService:
                         payload={
                             "version_label": f"run-{run.id}-winner",
                             "rejection_reasons": promotion_rejection_reasons,
+                            "edge_validation_gate": edge_gate_report,
                         },
                     )
                 )
@@ -354,20 +361,35 @@ class PlanGenerationTuningService:
         updated_run.summary["promotion_requested"] = apply
         updated_run.summary["promotion_applied"] = promotion_applied
         updated_run.summary["promotion_rejection_reasons"] = promotion_rejection_reasons
+        if apply:
+            updated_run.summary["edge_validation_gate"] = edge_gate_report
         updated_run.summary["baseline_config_version_id"] = baseline_version.id
         return self.repository.update_run(run.id or 0, updated_run)
 
     def promote_config_version(self, config_version_id: int) -> PlanGenerationTuningConfigVersion:
+        gate_report = self._edge_validation_gate_report()
+        if gate_report["label"] != "eligible_for_cautious_expansion":
+            raise PlanGenerationTuningError(f"edge validation gate blocks manual promotion: {gate_report['label']}")
         version = self.repository.get_config_version(config_version_id)
         self.settings_mutations.set_plan_generation_active_config_version_id(version.id)
         self.repository.create_event(
             PlanGenerationTuningEvent(
                 event_type="config_promoted_manual",
                 config_version_id=version.id,
-                payload={"version_label": version.version_label},
+                payload={"version_label": version.version_label, "edge_validation_gate": gate_report},
             )
         )
         return version
+
+    def _edge_validation_gate_report(self, *, walk_forward_validation: object | None = None) -> dict[str, object]:
+        policy_summary = TradePolicyEvaluationService(
+            self.outcomes,
+            policy_service=TradeDecisionPolicyService(self.session),
+        ).summarize_active_policy()
+        return EdgeValidationGateService().evaluate(
+            policy_summary.policy_evaluation,
+            walk_forward_validation=walk_forward_validation,
+        ).to_dict()
 
     def _resolve_active_config_version(self) -> PlanGenerationTuningConfigVersion:
         baseline = self.ensure_baseline_config_version()

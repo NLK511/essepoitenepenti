@@ -141,6 +141,26 @@ class RiskHaltEventRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
 
+class BrokerReconciliationSnapshotRecord(Base):
+    __tablename__ = "broker_reconciliation_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    broker: Mapped[str] = mapped_column(String(64), default="alpaca", index=True)
+    account_mode: Mapped[str] = mapped_column(String(32), default="paper", index=True)
+    snapshot_type: Mapped[str] = mapped_column(String(64), default="pre_submit", index=True)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    broker_order_execution_id: Mapped[int | None] = mapped_column(ForeignKey("broker_order_executions.id"), nullable=True, index=True)
+    ticker: Mapped[str] = mapped_column(String(32), default="", index=True)
+    account_payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    open_orders_payload_json: Mapped[str] = mapped_column(Text, default="[]")
+    open_positions_payload_json: Mapped[str] = mapped_column(Text, default="[]")
+    warnings_json: Mapped[str] = mapped_column(Text, default="[]")
+    drift_severity: Mapped[str] = mapped_column(String(32), default="not_evaluated", index=True)
+    drift_reasons_json: Mapped[str] = mapped_column(Text, default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
 class BrokerPositionRecord(Base, TimestampMixin):
     __tablename__ = "broker_positions"
     __table_args__ = (

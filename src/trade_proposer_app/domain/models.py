@@ -337,6 +337,24 @@ class RiskHaltEvent(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class BrokerReconciliationSnapshot(BaseModel):
+    id: int | None = None
+    broker: str = "alpaca"
+    account_mode: str = "paper"
+    snapshot_type: str = "pre_submit"
+    run_id: int | None = None
+    job_id: int | None = None
+    broker_order_execution_id: int | None = None
+    ticker: str = ""
+    account_payload: dict[str, object] | None = None
+    open_orders_payload: list[dict[str, object]] = Field(default_factory=list)
+    open_positions_payload: list[dict[str, object]] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    drift_severity: str = "not_evaluated"
+    drift_reasons: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class AccountRiskState(BaseModel):
     allowed: bool = True
     enabled: bool = True

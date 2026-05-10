@@ -11,6 +11,7 @@ from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPositio
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
+from trade_proposer_app.repositories.broker_reconciliation_snapshots import BrokerReconciliationSnapshotRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
@@ -158,7 +159,15 @@ class OrderExecutionTests(unittest.TestCase):
             self.assertEqual(stored[0].request_payload["order_class"], "bracket")
             self.assertEqual(stored[0].request_payload["qty"], 10)
             events = observability.list_events(limit=10)
-            self.assertEqual([event["event_type"] for event in reversed(events)], ["broker.order_submit_started", "broker.order_submit_finished"])
+            self.assertEqual(
+                [event["event_type"] for event in reversed(events)],
+                ["broker.reconciliation_snapshot_recorded", "broker.order_submit_started", "broker.order_submit_finished"],
+            )
+            snapshots = BrokerReconciliationSnapshotRepository(session).list_latest(limit=10)
+            self.assertEqual(len(snapshots), 1)
+            self.assertEqual(snapshots[0].run_id, 10)
+            self.assertEqual(snapshots[0].job_id, 11)
+            self.assertEqual(snapshots[0].drift_severity, "ok")
             self.assertEqual(events[-1]["run_id"], 10)
             self.assertEqual(events[-1]["job_id"], 11)
         finally:

@@ -377,7 +377,8 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self._seed_record(created_at=datetime(2026, 3, 5, tzinfo=timezone.utc), mfe=10.9, mae=3.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
         self._seed_record(created_at=datetime(2026, 3, 6, tzinfo=timezone.utc), mfe=2.0, mae=11.0, outcome="loss", take_profit_hit=False, stop_loss_hit=True)
 
-        run = self.service.run(limit=50, apply=True)
+        with patch.object(PlanGenerationTuningService, "_edge_validation_gate_report", return_value={"label": "eligible_for_cautious_expansion", "reasons": []}):
+            run = self.service.run(limit=50, apply=True)
 
         self.assertIsNotNone(run.promoted_config_version_id)
         self.assertTrue(run.summary["promotion_applied"])
@@ -387,6 +388,22 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         promoted = self.tuning_repository.get_config_version(run.promoted_config_version_id or 0)
         self.assertEqual(promoted.source_run_id, run.id)
         self.assertEqual(promoted.status, "active")
+
+    def test_apply_blocks_promotion_when_edge_validation_gate_fails(self) -> None:
+        self._seed_record(created_at=datetime(2026, 3, 1, tzinfo=timezone.utc), mfe=15.0, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
+        self._seed_record(created_at=datetime(2026, 3, 2, tzinfo=timezone.utc), mfe=12.5, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
+        self._seed_record(created_at=datetime(2026, 3, 3, tzinfo=timezone.utc), mfe=2.0, mae=11.0, outcome="loss", take_profit_hit=False, stop_loss_hit=True)
+        self._seed_record(created_at=datetime(2026, 3, 4, tzinfo=timezone.utc), mfe=10.9, mae=3.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
+        self._seed_record(created_at=datetime(2026, 3, 5, tzinfo=timezone.utc), mfe=10.9, mae=3.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
+        self._seed_record(created_at=datetime(2026, 3, 6, tzinfo=timezone.utc), mfe=2.0, mae=11.0, outcome="loss", take_profit_hit=False, stop_loss_hit=True)
+
+        with patch.object(PlanGenerationTuningService, "_edge_validation_gate_report", return_value={"label": "research_only", "reasons": ["thin_broker_sample"]}):
+            run = self.service.run(limit=50, apply=True)
+
+        self.assertIsNone(run.promoted_config_version_id)
+        self.assertFalse(run.summary["promotion_applied"])
+        self.assertIn("edge_validation_gate_research_only", run.summary["promotion_rejection_reasons"])
+        self.assertEqual(run.summary["edge_validation_gate"]["label"], "research_only")
 
     def test_apply_completes_without_promotion_when_winner_is_not_eligible(self) -> None:
         self._seed_record(created_at=datetime(2026, 3, 1, tzinfo=timezone.utc), mfe=15.0, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)

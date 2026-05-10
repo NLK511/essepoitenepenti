@@ -127,9 +127,10 @@ Even when the gate passes, autonomy must expand in small increments only:
 1. [x] Implement the standard as a service using broker-preferred effective outcomes.
 2. [x] Expose the result in the research/performance workbench.
 3. [x] Render the result near `policy_health` in the UI.
-4. [ ] Wire the result into tuning promotion and broker autonomy settings.
-5. [x] Add regression tests for pass, fail, demote, and broker-uncertain cases.
+4. [x] Wire the result into plan-generation tuning promotion.
+5. [x] State that no broker autonomy-scope expansion setting may ship without this gate.
+6. [x] Add regression tests for pass, fail, demote, broker-uncertain, and tuning-promotion block cases.
 
 ## Current conformance
 
-Current behavior computes and displays the gate through `EdgeValidationGateService`, the research performance workbench, and the Research UI. Autonomy expansion is not yet fully bound to this gate in tuning promotion and broker autonomy settings.
+Current behavior computes and displays the gate through `EdgeValidationGateService`, the research performance workbench, and the Research UI. Plan-generation tuning promotion is blocked unless the gate returns `eligible_for_cautious_expansion`. There is no separate broker autonomy-scope expansion setting today; any future setting that increases broker autonomy must use this gate before it ships.
