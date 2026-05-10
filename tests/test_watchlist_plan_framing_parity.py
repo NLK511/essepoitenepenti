@@ -237,6 +237,52 @@ def test_actionable_plan_framing_payload_contract_is_stable() -> None:
     }
 
 
+def test_actionable_short_plan_framing_payload_contract_is_stable() -> None:
+    service = _service()
+
+    plan = service._build_plan_from_signal(
+        _watchlist(allow_shorts=True),
+        _candidate(direction="short"),
+        _signal(direction="short"),
+        deep_output=_deep_output(direction=RecommendationDirection.SHORT, confidence=74.0, setup_family="breakdown"),
+        deep_error=None,
+        calibration_summary=None,
+        job_id=101,
+        run_id=202,
+    )
+
+    contract = _plan_contract(plan)
+    assert contract["action"] == "short"
+    assert contract["status"] == "partial"
+    assert contract["confidence_percent"] == 74.0
+    assert contract["entry_price_low"] == 100.0
+    assert contract["entry_price_high"] == 100.0
+    assert contract["stop_loss"] == 104.25
+    assert contract["take_profit"] == 86.56
+    assert contract["holding_period_days"] == 5
+    assert contract["risk_reward_ratio"] == 2.4
+    assert contract["rationale_summary"] == "cheap scan bullish · setup family breakdown · context tailwind · window 2d_5d · driver AI demand strength · relationship supplier to TSM via supply chain · attention 88.0 · confidence 55.0"
+    assert contract["risks"] == [
+        "signal warning",
+        "failed follow-through can reverse quickly after entry",
+        "ticker relationship read-through can break if peer, supplier, or customer confirmation fades",
+        "short squeeze risk remains elevated if sentiment reverses",
+    ]
+    assert contract["evidence"] == {
+        "setup_family": "breakdown",
+        "action_reason": "actionable_setup",
+        "action_reason_detail": "Promoted because the breakdown structure met the current execution and confidence requirements. Relationship read-through: supplier to TSM via supply chain.",
+        "entry_style": "break_or_failed_retest",
+        "stop_style": "above_failed_retest_level",
+        "target_style": "measured_move_or_next_support",
+        "timing_expectation": "2d_5d",
+        "evaluation_focus": ["support_failure_persistence", "reclaim_risk", "downside_extension_quality"],
+        "invalidation_summary": "invalidate if the breakdown reclaims lost support or the failed retest resolves higher; primary driver to monitor is AI demand strength; ticker read-through to monitor is supplier to TSM via supply chain",
+    }
+    assert contract["signal"]["intended_action"] == "short"
+    assert contract["signal"]["deep_analysis_confidence_percent"] == 74.0
+
+
 def test_no_action_plan_from_policy_gate_preserves_intended_trade_framing_for_phantom_evaluation() -> None:
     service = _service(confidence_threshold=60.0)
 
