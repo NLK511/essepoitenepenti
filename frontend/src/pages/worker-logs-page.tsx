@@ -113,7 +113,7 @@ export function WorkerLogsPage() {
       <PageHeader
         kicker="Worker diagnostics"
         title={workerId ? `Worker logs · ${workerId}` : "Worker logs"}
-        actions={<Link to="/" className="button-secondary">Back to dashboard</Link>}
+        actions={<Link to="/" className="button-secondary">← Dashboard</Link>}
       />
 
       {error ? <ErrorState message={error} /> : null}

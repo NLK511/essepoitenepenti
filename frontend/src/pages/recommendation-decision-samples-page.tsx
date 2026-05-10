@@ -117,9 +117,9 @@ export function RecommendationDecisionSamplesPage() {
         actions={
           <>
             <HelpHint tooltip="Decision samples are for review and learning: actionable, near-miss, and degraded cases stay visible even when final action counts are small." to="/docs?doc=operator-page-field-guide" />
-            <Link to="/research" className="button-subtle">Research hub</Link>
-            <Link to="/research/signal-gating/gating-job" className="button-secondary">Gating tuning job</Link>
-            <Link to="/jobs/recommendation-plans" className="button-secondary">Back to plans</Link>
+            <Link to="/research" className="button-subtle">⌂ Research</Link>
+            <Link to="/research/signal-gating/gating-job" className="button-secondary">↯ Gating</Link>
+            <Link to="/jobs/recommendation-plans" className="button-secondary">← Plans</Link>
           </>
         }
       />
@@ -227,13 +227,13 @@ export function RecommendationDecisionSamplesPage() {
               </select>
             </label>
             <button type="button" className="button-subtle" onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1}>
-              Previous
+              ← Prev
             </button>
             <div className="helper-text">
               Page {currentPage} of {pageCount}{allSamples.length > 0 ? ` · showing ${pageStart}–${pageEnd} of ${totalSamples}` : " · no results on this page"}
             </div>
             <button type="button" className="button-subtle" onClick={() => goToPage(currentPage + 1)} disabled={!hasNextPage}>
-              Next
+              Next →
             </button>
           </div>
 

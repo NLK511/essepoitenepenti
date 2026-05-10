@@ -298,7 +298,7 @@ export function ResearchPage() {
           <SectionTitle
             kicker="Performance assessment"
             title="Latest automated review"
-            actions={<button type="button" className="button-secondary" onClick={() => void handleRunAssessment()} disabled={running}>{running ? "Queueing…" : "Run now"}</button>}
+            actions={<button type="button" className="button-secondary" onClick={() => void handleRunAssessment()} disabled={running}>{running ? "… Queueing" : "▶ Run"}</button>}
           />
           {loading ? <div className="helper-text">Loading latest assessment…</div> : null}
           {error ? <div className="helper-text">{error}</div> : null}
@@ -424,21 +424,21 @@ export function ResearchPage() {
             <Card>
               <SectionTitle kicker="Advanced review" title="Decision samples" subtitle="Review near-misses and borderline cases when you need deeper evidence review." />
               <div className="cluster top-gap-small">
-                <Link to="/research/decision-samples" className="button-secondary">Open decision samples</Link>
+                <Link to="/research/decision-samples" className="button-secondary">◉ Samples</Link>
                 <Badge tone="info">advanced review</Badge>
               </div>
             </Card>
             <Card>
               <SectionTitle kicker="Advanced review" title="Recommendation quality summary" subtitle="Use this for a consolidated view of confidence quality, simple baselines, where results look strongest, and walk-forward readiness." />
               <div className="cluster top-gap-small">
-                <Link to="/recommendation-quality" className="button-secondary">Open quality summary</Link>
+                <Link to="/recommendation-quality" className="button-secondary">◈ Quality</Link>
                 <Badge tone="info">advanced review</Badge>
               </div>
             </Card>
             <Card>
               <SectionTitle kicker="Tuning" title="Signal gating tuning" subtitle="Use this when shortlist recall is too strict or too loose." />
               <div className="cluster top-gap-small">
-                <Link to="/research/signal-gating/gating-job" className="button-secondary">Open signal gating tuning</Link>
+                <Link to="/research/signal-gating/gating-job" className="button-secondary">↯ Gating</Link>
                 <Badge tone="info">research</Badge>
               </div>
             </Card>
@@ -449,7 +449,7 @@ export function ResearchPage() {
                 <div className="data-point"><span className="data-point-label">top setup family</span><span className="data-point-value">{nearMissFamilies[0]?.family ?? "—"}</span></div>
               </div>
               <div className="cluster top-gap-small">
-                <Link to="/jobs/recommendation-plans?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&page=1&limit=100" className="button-secondary">Open filtered plans</Link>
+                <Link to="/jobs/recommendation-plans?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&page=1&limit=100" className="button-secondary">↗ Filtered plans</Link>
                 <Badge tone="info">advanced research</Badge>
               </div>
               <div className="top-gap-small">
@@ -503,7 +503,7 @@ export function ResearchPage() {
             <Card>
               <SectionTitle kicker="Tuning" title="Plan generation tuning" subtitle="Use this when actionable plan precision or trade framing needs work." />
               <div className="cluster top-gap-small">
-                <Link to="/research/plan-generation-tuning" className="button-secondary">Open plan generation tuning</Link>
+                <Link to="/research/plan-generation-tuning" className="button-secondary">⚒ Plan tuning</Link>
                 <Badge tone="info">research</Badge>
               </div>
             </Card>
@@ -546,13 +546,13 @@ export function ResearchPage() {
             <Card>
               <SectionTitle kicker="Upstream" title="Signal gating tuning" subtitle="Recall-oriented shortlist tuning." />
               <div className="cluster top-gap-small">
-                <Link to="/research/signal-gating/gating-job" className="button-secondary">Open signal gating tuning</Link>
+                <Link to="/research/signal-gating/gating-job" className="button-secondary">↯ Gating</Link>
               </div>
             </Card>
             <Card>
               <SectionTitle kicker="Downstream" title="Plan generation tuning" subtitle="Precision-oriented plan-construction tuning." />
               <div className="cluster top-gap-small">
-                <Link to="/research/plan-generation-tuning" className="button-secondary">Open plan generation tuning</Link>
+                <Link to="/research/plan-generation-tuning" className="button-secondary">⚒ Plan tuning</Link>
               </div>
             </Card>
           </section>

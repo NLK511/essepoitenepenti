@@ -175,8 +175,8 @@ export function RunDetailPage() {
         title={detail ? `Run #${detail.run.id}` : "Run detail"}
         actions={
           <>
-            <Link to="/jobs/debugger" className="button-secondary">Back to debugger</Link>
-            <Link to="/jobs/recommendation-plans" className="button-subtle">Browse recommendation plans</Link>
+            <Link to="/jobs/debugger" className="button-secondary">← Debugger</Link>
+            <Link to="/jobs/recommendation-plans" className="button-subtle">↗ Plans</Link>
             {detail ? (
               <button
                 type="button"
@@ -220,7 +220,7 @@ export function RunDetailPage() {
             ) : null}
             {artifactSnapshotId ? (
               <div className="top-gap-small">
-                <Link to={`/context/sentiment/${artifactSnapshotId}`} className="button-subtle">Open created support artifact</Link>
+                <Link to={`/context/sentiment/${artifactSnapshotId}`} className="button-subtle">↗ Support artifact</Link>
               </div>
             ) : null}
             {artifactSnapshotIds.length > 0 ? (
@@ -239,8 +239,8 @@ export function RunDetailPage() {
                 title="Cheap scan, shortlist, deep analysis, and plan outputs"
                 actions={
                   <>
-                    <Link to={detail.run.id ? `/jobs/ticker-signals?run_id=${detail.run.id}` : "/jobs/ticker-signals"} className="button-subtle">Browse ticker signals</Link>
-                    <Link to={detail.run.id ? `/jobs/recommendation-plans?run_id=${detail.run.id}` : "/jobs/recommendation-plans"} className="button-subtle">Browse recommendation plans</Link>
+                    <Link to={detail.run.id ? `/jobs/ticker-signals?run_id=${detail.run.id}` : "/jobs/ticker-signals"} className="button-subtle">≈ Signals</Link>
+                    <Link to={detail.run.id ? `/jobs/recommendation-plans?run_id=${detail.run.id}` : "/jobs/recommendation-plans"} className="button-subtle">↗ Plans</Link>
                   </>
                 }
               />
@@ -613,12 +613,12 @@ export function RunDetailPage() {
                           <div className="helper-text top-gap-small">qty {order.quantity} · entry {order.entry_price ?? "—"} · stop {order.stop_loss ?? "—"} · take profit {order.take_profit ?? "—"}</div>
                           <div className="cluster top-gap-small">
                             {isBrokerExecutionResubmittable(order.status) ? (
-                              <button type="button" className="button-secondary" disabled={activeOrderActionId === order.id} onClick={() => order.id && void handleOrderAction(order.id, "resubmit")}>Resubmit</button>
+                              <button type="button" className="button-secondary" disabled={activeOrderActionId === order.id} onClick={() => order.id && void handleOrderAction(order.id, "resubmit")}>↻ Resubmit</button>
                             ) : null}
                             {!["canceled", "filled", "win", "loss"].includes(order.status) && order.broker_order_id ? (
-                              <button type="button" className="button button-danger" disabled={activeOrderActionId === order.id} onClick={() => order.id && void handleOrderAction(order.id, "cancel")}>Cancel</button>
+                              <button type="button" className="button button-danger" disabled={activeOrderActionId === order.id} onClick={() => order.id && void handleOrderAction(order.id, "cancel")}>✕ Cancel</button>
                             ) : null}
-                            {order.run_id ? <Link to={`/broker-orders?run_id=${order.run_id}&order_id=${order.id ?? ""}`} className="button-subtle">Open in broker orders</Link> : null}
+                            {order.run_id ? <Link to={`/broker-orders?run_id=${order.run_id}&order_id=${order.id ?? ""}`} className="button-subtle">⟐ Broker orders</Link> : null}
                           </div>
                         </div>
                       ))}
@@ -650,7 +650,7 @@ export function RunDetailPage() {
                             ]}
                           />
                           <div className="cluster top-gap-small">
-                            {item.id ? <Link to={`/context/macro/${item.id}`} className="button-subtle">Open detail</Link> : null}
+                            {item.id ? <Link to={`/context/macro/${item.id}`} className="button-subtle">↗ Detail</Link> : null}
                           </div>
                         </div>
                       );
@@ -674,7 +674,7 @@ export function RunDetailPage() {
                             ]}
                           />
                           <div className="cluster top-gap-small">
-                            {item.id ? <Link to={`/context/industry/${item.id}`} className="button-subtle">Open detail</Link> : null}
+                            {item.id ? <Link to={`/context/industry/${item.id}`} className="button-subtle">↗ Detail</Link> : null}
                           </div>
                         </div>
                       );

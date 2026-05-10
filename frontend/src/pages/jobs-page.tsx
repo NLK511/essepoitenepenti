@@ -298,7 +298,7 @@ export function JobsPage() {
               </label>
             </div>
             <button type="submit" className="button" disabled={submitting}>
-              {submitting ? "Creating…" : "Create workflow"}
+              {submitting ? "… Creating" : "＋ Create"}
             </button>
           </form>
         </DisclosureCard>
@@ -461,8 +461,8 @@ export function JobsPage() {
                                           <span>Workflow enabled</span>
                                         </label>
                                         <div className="cluster">
-                                          <button type="submit" className="button" disabled={busyJobId === job.id}>Save changes</button>
-                                          <button type="button" className="button-subtle" onClick={() => setEditingJobId(null)} disabled={busyJobId === job.id}>Cancel</button>
+                                          <button type="submit" className="button" disabled={busyJobId === job.id}>✓ Save</button>
+                                          <button type="button" className="button-subtle" onClick={() => setEditingJobId(null)} disabled={busyJobId === job.id}>✕ Cancel</button>
                                         </div>
                                       </form>
                                     </td>

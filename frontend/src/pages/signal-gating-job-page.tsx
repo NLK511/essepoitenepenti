@@ -108,8 +108,8 @@ export function SignalGatingJobPage() {
         actions={
           <>
             <HelpHint tooltip="Signal-gating tuning adjusts upstream selection thresholds to improve recall before plans are generated." to="/docs?doc=signal-gating-tuning-guide" />
-            <Link to="/research" className="button-subtle">Research hub</Link>
-            <Link to="/research/decision-samples" className="button-secondary">Decision samples</Link>
+            <Link to="/research" className="button-subtle">⌂ Research</Link>
+            <Link to="/research/decision-samples" className="button-secondary">◉ Samples</Link>
           </>
         }
       />
@@ -143,9 +143,9 @@ export function SignalGatingJobPage() {
               </div>
               <div className="helper-text">Zeroed settings preserve baseline behavior. The effective live threshold combines the base confidence threshold with the tuning offset.</div>
               <div className="cluster top-gap-small">
-                <button className="button" type="submit" disabled={saving !== null}>{saving === "config" ? "Saving…" : "Save gating settings"}</button>
-                <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(false)}>{saving === "run" ? "Running…" : "Run tuning"}</button>
-                <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(true)}>{saving === "apply" ? "Running & applying…" : "Run and apply"}</button>
+                <button className="button" type="submit" disabled={saving !== null}>{saving === "config" ? "… Saving" : "✓ Save gates"}</button>
+                <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(false)}>{saving === "run" ? "… Running" : "▶ Tune"}</button>
+                <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(true)}>{saving === "apply" ? "… Applying" : "▶ Apply tune"}</button>
               </div>
             </form>
           </Card>

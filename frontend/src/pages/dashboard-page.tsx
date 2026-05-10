@@ -230,9 +230,9 @@ export function DashboardPage() {
         actions={
           <>
             <HelpHint tooltip="Use this board to judge edge and operational risk quickly. Open deeper review screens only after one of the three colors looks concerning." to="/docs?doc=operator-page-field-guide" />
-            <button type="button" className="button-secondary" disabled={refreshing} onClick={() => void refreshBrokerState()}>{refreshing ? "Refreshing…" : "Refresh broker stats"}</button>
-            <Link to="/jobs/recommendation-plans" className="button-secondary">Review plans</Link>
-            <Link to="/recommendation-quality" className="button">Quality report</Link>
+            <button type="button" className="button-secondary" disabled={refreshing} onClick={() => void refreshBrokerState()}>{refreshing ? "… Refreshing" : "⟳ Broker"}</button>
+            <Link to="/jobs/recommendation-plans" className="button-secondary">↗ Plans</Link>
+            <Link to="/recommendation-quality" className="button">◈ Quality</Link>
           </>
         }
       />
@@ -258,7 +258,7 @@ export function DashboardPage() {
                     }
                   }}
                 >
-                  {showTrendlines ? "Hide trendlines" : "Show trendlines"}
+                  {showTrendlines ? "▴ Trends" : "▾ Trends"}
                 </button>
               }
             />
@@ -294,7 +294,7 @@ export function DashboardPage() {
               kicker="Operator status"
               title="Trust, autonomy, risk, and data gates"
               subtitle="One compact strip for the checks that should stop risk expansion before deeper review."
-              actions={<Link to="/research" className="button-subtle">Open research</Link>}
+              actions={<Link to="/research" className="button-subtle">⌂ Research</Link>}
             />
             {operatorStatusError ? <div className="helper-text top-gap-small">{operatorStatusError}</div> : null}
             <div className="operator-status-grid top-gap-small">
@@ -366,9 +366,9 @@ export function DashboardPage() {
             <Card>
               <SectionTitle kicker="Next move" title="Open the deeper evidence only when needed" subtitle="The board should stay minimal; everything else belongs on a dedicated detail page." />
               <div className="cluster top-gap-small">
-                <Link to="/jobs/recommendation-plans" className="button-secondary">Review plans</Link>
-                <Link to="/recommendation-quality" className="button-secondary">Quality report</Link>
-                <Link to="/jobs/debugger" className="button-subtle">Debugger</Link>
+                <Link to="/jobs/recommendation-plans" className="button-secondary">↗ Plans</Link>
+                <Link to="/recommendation-quality" className="button-secondary">◈ Quality</Link>
+                <Link to="/jobs/debugger" className="button-subtle">⌘ Debug</Link>
               </div>
             </Card>
 
@@ -416,7 +416,7 @@ export function DashboardPage() {
                               </div>
                               <div className="data-card-title top-gap-small">{failure.label}</div>
                             </div>
-                            {failure.run_id ? <Link to={`/runs/${failure.run_id}`} className="button-subtle">Open run</Link> : null}
+                            {failure.run_id ? <Link to={`/runs/${failure.run_id}`} className="button-subtle">↗ Run</Link> : null}
                           </div>
                           <div className="helper-text top-gap-small">{failure.detail}</div>
                           <div className="helper-text">{failure.created_at ? formatDate(failure.created_at) : "—"}</div>

@@ -109,7 +109,7 @@ export function TickerSignalsPage() {
           <label className="form-field"><span>Ticker</span><input name="ticker" defaultValue={searchParams.get("ticker") ?? ""} placeholder="AAPL" /></label>
           <label className="form-field"><span>Run id</span><input name="run_id" defaultValue={searchParams.get("run_id") ?? ""} placeholder="145" /></label>
           <label className="form-field"><span>Limit</span><select name="limit" defaultValue={searchParams.get("limit") ?? "100"}><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="200">200</option></select></label>
-          <div className="form-actions"><button className="button" type="submit">Apply</button></div>
+          <div className="form-actions"><button className="button" type="submit">✓ Apply</button></div>
         </form>
       </DisclosureCard>
 

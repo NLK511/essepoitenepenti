@@ -395,8 +395,8 @@ export function RecommendationPlansPage() {
               <Badge tone="info">research</Badge>
             </div>
             <div className="cluster top-gap-small">
-              <Link to="/recommendation-quality" className="button-secondary">Recommendation quality</Link>
-              <Link to="/research" className="button-secondary">Research hub</Link>
+              <Link to="/recommendation-quality" className="button-secondary">◈ Quality</Link>
+              <Link to="/research" className="button-secondary">⌂ Research</Link>
             </div>
             <ul className="list-reset top-gap-small">
               <li className="list-item compact-item">Confidence quality, simple baselines, where results look strongest, family review, and validation now live on the dedicated quality and research surfaces.</li>

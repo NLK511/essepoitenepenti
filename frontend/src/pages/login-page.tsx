@@ -87,7 +87,7 @@ export function LoginPage() {
           </label>
           <div className="form-actions">
             <button type="submit" className="button" disabled={submitDisabled}>
-              {submitting ? "Authenticating…" : "Sign in"}
+              {submitting ? "… Signing in" : "↪ Sign in"}
             </button>
           </div>
         </form>

@@ -139,7 +139,7 @@ export function WatchlistsPage() {
               <span>Optimize evaluation timing for the watchlist exchange</span>
             </label>
             <button type="submit" className="button" disabled={submitting}>
-              {submitting ? "Creating…" : "Create watchlist"}
+              {submitting ? "… Creating" : "＋ Create"}
             </button>
           </form>
         </DisclosureCard>

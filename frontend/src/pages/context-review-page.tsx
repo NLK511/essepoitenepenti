@@ -215,10 +215,10 @@ export function ContextReviewPage() {
         actions={
           <>
             <button type="button" className="button" onClick={() => void enqueueRefresh(activeScope)} disabled={busyAction !== null}>
-              {busyAction === activeScope ? `Queueing ${activeScope} refresh…` : `Refresh ${activeScope} context`}
+              {busyAction === activeScope ? `… Queueing ${activeScope}` : `⟳ ${activeScope} context`}
             </button>
             <button type="button" className="button-subtle" onClick={() => void load()} disabled={loading || busyAction !== null}>
-              Reload
+              ⟳ Reload
             </button>
           </>
         }
@@ -282,8 +282,8 @@ function MacroContextTab(props: {
           actions={snapshot ? (
             <div className="cluster">
               <HelpHint tooltip="Review the latest macro context snapshot first when checking whether the broad market backdrop is supportive or contradictory." to={contextReviewDoc("context-review")} />
-              {snapshot.id ? <Link to={`/context/macro/${snapshot.id}`} className="button-subtle">Open context detail</Link> : null}
-              {snapshot.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">Open source run</Link> : null}
+              {snapshot.id ? <Link to={`/context/macro/${snapshot.id}`} className="button-subtle">↗ Detail</Link> : null}
+              {snapshot.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">↗ Source run</Link> : null}
             </div>
           ) : <HelpHint tooltip="Review the latest macro context snapshot first when checking whether the broad market backdrop is supportive or contradictory." to={contextReviewDoc("context-review")} />}
         />
@@ -333,8 +333,8 @@ function IndustryContextTab(props: {
           actions={snapshot ? (
             <div className="cluster">
               <HelpHint tooltip="Use industry context to check whether sector-specific transmission supports or fights the current trade ideas." to={contextReviewDoc("context-review")} />
-              {snapshot.id ? <Link to={`/context/industry/${snapshot.id}`} className="button-subtle">Open context detail</Link> : null}
-              {snapshot.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">Open source run</Link> : null}
+              {snapshot.id ? <Link to={`/context/industry/${snapshot.id}`} className="button-subtle">↗ Detail</Link> : null}
+              {snapshot.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">↗ Source run</Link> : null}
             </div>
           ) : <HelpHint tooltip="Use industry context to check whether sector-specific transmission supports or fights the current trade ideas." to={contextReviewDoc("context-review")} />}
         />
@@ -387,8 +387,8 @@ function IndustryContextList({ snapshots }: { snapshots: IndustryContextSnapshot
                 {contextSummaryError(snapshot.metadata) ? <div className="helper-text top-gap-small">{contextSummaryError(snapshot.metadata)}</div> : null}
               </div>
               <div className="cluster">
-                {snapshot.id ? <Link to={`/context/industry/${snapshot.id}`} className="button-subtle">Open detail</Link> : null}
-                {snapshot.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">Open run</Link> : null}
+                {snapshot.id ? <Link to={`/context/industry/${snapshot.id}`} className="button-subtle">↗ Detail</Link> : null}
+                {snapshot.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">↗ Run</Link> : null}
               </div>
             </div>
           </li>
@@ -434,8 +434,8 @@ function MacroContextList({ snapshots }: { snapshots: MacroContextSnapshot[] }) 
                 {contextSummaryError(snapshot.metadata) ? <div className="helper-text top-gap-small">{contextSummaryError(snapshot.metadata)}</div> : null}
               </div>
               <div className="cluster">
-                {snapshot.id ? <Link to={`/context/macro/${snapshot.id}`} className="button-subtle">Open detail</Link> : null}
-                {snapshot.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">Open run</Link> : null}
+                {snapshot.id ? <Link to={`/context/macro/${snapshot.id}`} className="button-subtle">↗ Detail</Link> : null}
+                {snapshot.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">↗ Run</Link> : null}
               </div>
             </div>
           </li>

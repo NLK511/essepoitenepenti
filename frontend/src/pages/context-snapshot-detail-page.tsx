@@ -165,8 +165,8 @@ export function ContextSnapshotDetailPage() {
         title={title}
         actions={
           <>
-            <Link to="/context" className="button-secondary">Back to context review</Link>
-            {snapshot?.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">Open source run</Link> : null}
+            <Link to="/context" className="button-secondary">← Context</Link>
+            {snapshot?.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">↗ Source run</Link> : null}
           </>
         }
       />

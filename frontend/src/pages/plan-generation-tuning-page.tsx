@@ -305,8 +305,8 @@ export function PlanGenerationTuningPage() {
                       : "Very wide research uses a much larger deterministic candidate pool and denser validation slices; it can take longer and evaluate far more candidates."}
                 </div>
                 <div className="cluster">
-                  <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(runMode, false)}>{saving === `run-${runMode}` ? "Queueing…" : `Queue ${runMode === "manual" ? "dry" : runMode}`}</button>
-                  <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(runMode, true)}>{saving === `apply-${runMode}` ? "Queueing & applying…" : `Queue ${runMode === "manual" ? "and promote if eligible" : `${runMode} and promote if eligible`}`}</button>
+                  <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(runMode, false)}>{saving === `run-${runMode}` ? "… Queueing" : `▶ ${runMode === "manual" ? "Dry run" : runMode}`}</button>
+                  <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(runMode, true)}>{saving === `apply-${runMode}` ? "… Applying" : `↑ ${runMode === "manual" ? "Promote if eligible" : `${runMode} promote`}`}</button>
                 </div>
               </div>
               <details className="top-gap-small">
@@ -524,7 +524,7 @@ export function PlanGenerationTuningPage() {
                     </div>
                     <div className="cluster top-gap-small">
                       <button className="button-secondary" type="button" disabled={saving === `promote-${config.id ?? 0}` || config.id === state.state.active_config_version_id} onClick={() => void promote(config.id)}>
-                        {saving === `promote-${config.id ?? 0}` ? "Promoting…" : config.id === state.state.active_config_version_id ? "Active" : "Promote"}
+                        {saving === `promote-${config.id ?? 0}` ? "… Promoting" : config.id === state.state.active_config_version_id ? "✓ Active" : "↑ Promote"}
                       </button>
                     </div>
                   </article>

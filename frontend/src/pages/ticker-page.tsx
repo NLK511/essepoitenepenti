@@ -163,8 +163,8 @@ function TickerPriceChart(props: {
         <Badge>{props.series.timeframe}</Badge>
         <Badge>{bars.length} bars</Badge>
         <Badge>{visibleOverlays.length}/{overlays.length} overlays</Badge>
-        <button type="button" className="button-subtle" onClick={props.onSelectAll}>Show all</button>
-        <button type="button" className="button-subtle" onClick={props.onSelectNone}>Hide all</button>
+        <button type="button" className="button-subtle" onClick={props.onSelectAll}>☑ All</button>
+        <button type="button" className="button-subtle" onClick={props.onSelectNone}>☐ None</button>
       </div>
       <div className="chart-scroll-shell" ref={chartScrollRef}>
         <svg
@@ -376,8 +376,8 @@ export function TickerPage() {
         title={data ? `${data.ticker} review` : "Ticker analysis"}
         actions={
           <>
-            <Link to="/jobs/recommendation-plans" className="button-secondary">Back to plans</Link>
-            {data ? <a href={`/api/tickers/${data.ticker}`} className="button-subtle" target="_blank" rel="noreferrer">JSON</a> : null}
+            <Link to="/jobs/recommendation-plans" className="button-secondary">← Plans</Link>
+            {data ? <a href={`/api/tickers/${data.ticker}`} className="button-subtle" target="_blank" rel="noreferrer">{} JSON</a> : null}
           </>
         }
       />
@@ -404,7 +404,7 @@ export function TickerPage() {
                   options={REVIEW_WINDOW_OPTIONS}
                 />
                 <button type="button" className="button-subtle" onClick={() => setFitChartToScreen((current) => !current)}>
-                  {fitChartToScreen ? "Scroll chart" : "Fit to screen"}
+                  {fitChartToScreen ? "↔ Scroll" : "⛶ Fit"}
                 </button>
               </div>
               <div className="top-gap-small">
@@ -518,7 +518,7 @@ export function TickerPage() {
                               <Badge>{setupFamily}</Badge>
                               <Badge>{item.horizon}</Badge>
                               {item.run_id ? <Link to={`/runs/${item.run_id}`} className="badge badge-info badge-link" onClick={(event) => event.stopPropagation()}>run #{item.run_id}</Link> : null}
-                              {item.id !== null ? <button type="button" className="button-subtle" onClick={(event) => { event.stopPropagation(); togglePlan(item.id!); }}>{isSelected ? "Hide on chart" : "Show on chart"}</button> : null}
+                              {item.id !== null ? <button type="button" className="button-subtle" onClick={(event) => { event.stopPropagation(); togglePlan(item.id!); }}>{isSelected ? "⊖ Chart" : "⊕ Chart"}</button> : null}
                             </div>
                             <div className="cluster top-gap-small"><ScoreBadge label="Confidence" value={`${item.confidence_percent}%`} tone="info" /></div>
                             <div className="helper-text">{formatDate(item.computed_at)} · relationships {relationshipSummary(item)} · source {item.effective_evaluation_source === "broker" ? "broker" : item.effective_evaluation_source === "missing" ? "missing" : "simulated"}</div>

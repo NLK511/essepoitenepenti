@@ -272,7 +272,7 @@ export function SettingsPage() {
                   <label className="form-field"><span>pi CLI args</span><input name="pi_cli_args" defaultValue={settingMap.summary_pi_cli_args ?? ""} /></label>
                 </div>
                 <label className="form-field"><span>Summary prompt</span><textarea name="prompt" rows={6} defaultValue={settingMap.summary_prompt ?? ""} /></label>
-                <div className="cluster"><button className="button" type="submit" disabled={saving === "summary"}>{saving === "summary" ? "Saving…" : "Save summarization settings"}</button></div>
+                <div className="cluster"><button className="button" type="submit" disabled={saving === "summary"}>{saving === "summary" ? "… Saving" : "✓ Save summary"}</button></div>
               </form>
             </DisclosureCard>
 
@@ -281,7 +281,7 @@ export function SettingsPage() {
                 <form className="stack-form" onSubmit={(event) => void saveProvider(event, provider.provider)}>
                   <label className="form-field"><span>API key</span><input name="api_key" defaultValue={provider.api_key} /></label>
                   <label className="form-field"><span>API secret</span><input name="api_secret" type="password" autoComplete="new-password" placeholder="Enter a new secret to create or rotate the credential" defaultValue="" /></label>
-                  <div className="cluster"><button className="button" type="submit" disabled={saving === provider.provider}>{saving === provider.provider ? "Saving…" : `Save ${provider.provider}`}</button></div>
+                  <div className="cluster"><button className="button" type="submit" disabled={saving === provider.provider}>{saving === provider.provider ? "… Saving" : `✓ Save ${provider.provider}`}</button></div>
                 </form>
               </DisclosureCard>
             ))}
@@ -297,7 +297,7 @@ export function SettingsPage() {
                   <label className="form-field"><span>Notional per plan</span><input name="notional_per_plan" type="number" min="1" step="1" defaultValue={String(data.orderExecution.notional_per_plan)} /></label>
                 </div>
                 <div className="helper-text">Actionable long/short plans are submitted as Alpaca paper bracket orders when this toggle is enabled.</div>
-                <div className="cluster"><button className="button" type="submit" disabled={saving === "order-execution"}>{saving === "order-execution" ? "Saving…" : "Save order execution settings"}</button></div>
+                <div className="cluster"><button className="button" type="submit" disabled={saving === "order-execution"}>{saving === "order-execution" ? "… Saving" : "✓ Save execution"}</button></div>
               </form>
             </DisclosureCard>
 
@@ -313,7 +313,7 @@ export function SettingsPage() {
                   <label className="form-field"><span>Max consecutive losses</span><input name="max_consecutive_losses" type="number" min="0" step="1" defaultValue={String(data.riskManagement.max_consecutive_losses)} /></label>
                 </div>
                 <div className="helper-text">Manual halt state: {data.riskManagement.halt_enabled ? `halted · ${data.riskManagement.halt_reason || "no reason"}` : "clear"}. Use the Risk Manager page to halt or resume trading.</div>
-                <div className="cluster"><button className="button" type="submit" disabled={saving === "risk-management"}>{saving === "risk-management" ? "Saving…" : "Save risk settings"}</button></div>
+                <div className="cluster"><button className="button" type="submit" disabled={saving === "risk-management"}>{saving === "risk-management" ? "… Saving" : "✓ Save risk"}</button></div>
               </form>
             </DisclosureCard>
 
@@ -357,7 +357,7 @@ export function SettingsPage() {
                   <label className="form-field"><span>Industry article limit</span><input name="industry_article_limit" defaultValue={settingMap.news_industry_article_limit ?? "12"} /></label>
                   <label className="form-field"><span>Ticker article limit</span><input name="ticker_article_limit" defaultValue={settingMap.news_ticker_article_limit ?? "12"} /></label>
                 </div>
-                <div className="cluster"><button className="button" type="submit" disabled={saving === "news"}>{saving === "news" ? "Saving…" : "Save news settings"}</button></div>
+                <div className="cluster"><button className="button" type="submit" disabled={saving === "news"}>{saving === "news" ? "… Saving" : "✓ Save news"}</button></div>
               </form>
             </DisclosureCard>
 
@@ -373,7 +373,7 @@ export function SettingsPage() {
                   <label className="form-field"><span>Max items per query</span><input name="nitter_max_items_per_query" defaultValue={settingMap.social_nitter_max_items_per_query ?? "12"} /></label>
                   <label className="form-field"><span>Query window hours</span><input name="nitter_query_window_hours" defaultValue={settingMap.social_nitter_query_window_hours ?? "12"} /></label>
                 </div>
-                <div className="cluster"><button className="button" type="submit" disabled={saving === "social"}>{saving === "social" ? "Saving…" : "Save social settings"}</button></div>
+                <div className="cluster"><button className="button" type="submit" disabled={saving === "social"}>{saving === "social" ? "… Saving" : "✓ Save social"}</button></div>
               </form>
             </DisclosureCard>
           </section>
@@ -386,7 +386,7 @@ export function SettingsPage() {
                   <label className="form-field"><span>Take profit buffer %</span><input name="take_profit_buffer_pct" type="number" step="0.001" defaultValue={String(data.evaluationRealism.take_profit_buffer_pct)} /></label>
                   <label className="form-field"><span>Round-trip friction %</span><input name="friction_pct" type="number" step="0.01" defaultValue={String(data.evaluationRealism.friction_pct)} /></label>
                 </div>
-                <div className="cluster"><button className="button" type="submit" disabled={saving === "evaluation-realism"}>{saving === "evaluation-realism" ? "Saving…" : "Save realism settings"}</button></div>
+                <div className="cluster"><button className="button" type="submit" disabled={saving === "evaluation-realism"}>{saving === "evaluation-realism" ? "… Saving" : "✓ Save realism"}</button></div>
               </form>
             </DisclosureCard>
 
@@ -399,7 +399,7 @@ export function SettingsPage() {
                   <label className="form-field"><span>Minimum validation resolved records</span><input name="min_validation_resolved" type="number" min="1" defaultValue={String(data.planGenerationTuning.settings.min_validation_resolved)} /></label>
                 </div>
                 <div className="helper-text">Current live tuning profile: {data.planGenerationTuning.settings.active_config_version_id ?? "baseline"}. Promote or inspect specific configs from the research tuning page.</div>
-                <div className="cluster"><button className="button" type="submit" disabled={saving === "plan-generation-tuning"}>{saving === "plan-generation-tuning" ? "Saving…" : "Save advanced tuning settings"}</button></div>
+                <div className="cluster"><button className="button" type="submit" disabled={saving === "plan-generation-tuning"}>{saving === "plan-generation-tuning" ? "… Saving" : "✓ Save tuning"}</button></div>
               </form>
               <details className="top-gap-small">
                 <summary className="helper-text">Show current live tuning profile</summary>

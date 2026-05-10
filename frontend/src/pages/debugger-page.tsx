@@ -232,7 +232,7 @@ export function DebuggerPage() {
                 <SectionTitle
                   kicker="Selected run"
                   title={`Run #${detail.run.id}`}
-                  actions={<Link to={`/runs/${detail.run.id}`} className="button-secondary">Open full run review</Link>}
+                  actions={<Link to={`/runs/${detail.run.id}`} className="button-secondary">↗ Full run</Link>}
                 />
                 <div className="data-points debugger-summary-points top-gap-small" aria-label="Selected run summary">
                   <div className="data-point"><span className="data-point-label">status</span><span className="data-point-value"><Badge tone={runTone(detail.run.status)}>{detail.run.status}</Badge></span></div>

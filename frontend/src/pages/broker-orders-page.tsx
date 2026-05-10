@@ -167,7 +167,7 @@ export function BrokerOrdersPage() {
         title="Broker orders" 
         actions={
           <div className="cluster">
-            <button type="button" className="button-secondary" onClick={() => void refreshVisibleOrders()}>Refresh statuses</button>
+            <button type="button" className="button-secondary" onClick={() => void refreshVisibleOrders()}>⟳ Statuses</button>
             <HelpHint tooltip="This page shows the latest broker submissions, their status, and the exact bracket order payloads sent to Alpaca paper trading." to="/docs?doc=alpaca-paper-order-execution-spec" />
           </div>
         }
@@ -204,11 +204,11 @@ export function BrokerOrdersPage() {
           defaultOpen
           actions={
             <div className="cluster">
-              <button type="button" className="button-secondary" onClick={() => void reloadOrders(selectedOrder?.id ?? undefined)}>Refresh risk</button>
+              <button type="button" className="button-secondary" onClick={() => void reloadOrders(selectedOrder?.id ?? undefined)}>⟳ Risk</button>
               {risk.halt_enabled ? (
-                <button type="button" className="button-secondary" onClick={() => void resumeTrading()}>Resume trading</button>
+                <button type="button" className="button-secondary" onClick={() => void resumeTrading()}>▶ Resume</button>
               ) : (
-                <button type="button" className="button button-danger" onClick={() => void haltTrading()}>Halt trading</button>
+                <button type="button" className="button button-danger" onClick={() => void haltTrading()}>⛔ Halt</button>
               )}
               <HelpHint tooltip="The risk manager blocks new broker submissions when halt, loss, exposure, or concentration limits are breached." to="/docs?doc=broker-risk-management-spec" />
             </div>
@@ -281,7 +281,7 @@ export function BrokerOrdersPage() {
           ) : null}
         </DisclosureCard>
 
-        <DisclosureCard title={selectedOrder ? `Order #${selectedOrder.id}` : "Select an order"} subtitle="Inspect the payload and broker response only when you need the full audit trail." defaultOpen={Boolean(selectedOrder)} actions={selectedOrder?.run_id ? <Link className="button-secondary" to={`/runs/${selectedOrder.run_id}`}>Open run</Link> : undefined}>
+        <DisclosureCard title={selectedOrder ? `Order #${selectedOrder.id}` : "Select an order"} subtitle="Inspect the payload and broker response only when you need the full audit trail." defaultOpen={Boolean(selectedOrder)} actions={selectedOrder?.run_id ? <Link className="button-secondary" to={`/runs/${selectedOrder.run_id}`}>↗ Run</Link> : undefined}>
           {!selectedOrder && !error ? <EmptyState message="Choose an order from the left panel to inspect its payload and broker response." /> : null}
           {selectedOrder ? (
             <div className="stack-page top-gap-small">
@@ -316,12 +316,12 @@ export function BrokerOrdersPage() {
                 </Card>
               ) : null}
               <div className="cluster top-gap-small">
-                {selectedOrder.id ? <button type="button" className="button-secondary" disabled={activeActionId === selectedOrder.id} onClick={() => void handleAction(selectedOrder.id as number, "refresh")}>Refresh status</button> : null}
+                {selectedOrder.id ? <button type="button" className="button-secondary" disabled={activeActionId === selectedOrder.id} onClick={() => void handleAction(selectedOrder.id as number, "refresh")}>⟳ Status</button> : null}
                 {isBrokerExecutionResubmittable(selectedOrder.status) ? (
-                  <button type="button" className="button-secondary" disabled={activeActionId === selectedOrder.id} onClick={() => selectedOrder.id && void handleAction(selectedOrder.id, "resubmit")}>Resubmit</button>
+                  <button type="button" className="button-secondary" disabled={activeActionId === selectedOrder.id} onClick={() => selectedOrder.id && void handleAction(selectedOrder.id, "resubmit")}>↻ Resubmit</button>
                 ) : null}
                 {isBrokerExecutionCancelable(selectedOrder.status) && selectedOrder.broker_order_id ? (
-                  <button type="button" className="button button-danger" disabled={activeActionId === selectedOrder.id} onClick={() => selectedOrder.id && void handleAction(selectedOrder.id, "cancel")}>Cancel</button>
+                  <button type="button" className="button button-danger" disabled={activeActionId === selectedOrder.id} onClick={() => selectedOrder.id && void handleAction(selectedOrder.id, "cancel")}>✕ Cancel</button>
                 ) : null}
               </div>
 

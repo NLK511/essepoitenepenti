@@ -162,7 +162,7 @@ export function RecommendationQualityPage() {
 
           <section className="card-grid">
             <Card>
-              <SectionTitle kicker="Next actions" title="What to do next" subtitle="Recommended follow-ups based on the current summary." actions={<Link to="/research" className="button-secondary">Open research</Link>} />
+              <SectionTitle kicker="Next actions" title="What to do next" subtitle="Recommended follow-ups based on the current summary." actions={<Link to="/research" className="button-secondary">⌂ Research</Link>} />
               {data.next_actions.length === 0 ? <EmptyState message="No next actions generated." /> : <ul className="list-reset top-gap-small">{data.next_actions.map((item) => <li key={item} className="list-item compact-item">{item}</li>)}</ul>}
             </Card>
           </section>
@@ -209,7 +209,7 @@ export function RecommendationQualityPage() {
               <SectionTitle kicker="Details" title="Calibration buckets" subtitle="Use the research page for the full reliability curves." actions={<HelpHint tooltip="Calibration buckets are confidence bands used to compare predicted confidence against what actually happened after outcomes resolved." to={glossaryDoc("confidence-bucket")} />} />
               <div className="cluster top-gap-small">
                 <Badge tone="info">{selectedSummary.status}</Badge>
-                <Link to="/research" className="button-secondary">Open research</Link>
+                <Link to="/research" className="button-secondary">⌂ Research</Link>
               </div>
             </Card>
           </section>
