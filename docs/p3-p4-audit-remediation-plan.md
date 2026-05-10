@@ -14,6 +14,7 @@ Implemented in this pass:
 - extracted plan payload construction into `WatchlistPlanFramingService`; `WatchlistOrchestrationService` now delegates plan framing while keeping compatibility wrappers for existing callers/tests
 - extracted decision-sample persistence into `WatchlistDecisionSampleService`; `WatchlistOrchestrationService` now delegates audit/tuning sample writes while preserving compatibility wrappers for helper tests
 - extracted ticker-signal snapshot construction into `WatchlistSignalBuilder`; `WatchlistOrchestrationService` now delegates signal payload building while preserving the existing wrapper
+- extracted calibration-review payload generation into `WatchlistCalibrationReviewService`; orchestration keeps small compatibility wrappers for tests and existing helper callers
 - kept deeper helper extraction conservative because the remaining large-service seams affect persisted plan payloads and need broader regression if changed
 
 Remaining safe next seams:

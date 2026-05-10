@@ -396,8 +396,9 @@ A short checklist for doc changes:
 2. [x] Extract plan framing if tests can isolate behavior.
 3. [x] Extract decision-sample persistence from orchestration.
 4. [x] Extract ticker-signal snapshot construction from orchestration.
-5. [ ] Extract diagnostics builder only if it reduces duplicated summary/artifact shaping.
-6. [x] Keep `WatchlistOrchestrationService` as coordinator.
+5. [x] Extract calibration-review payload generation from orchestration.
+6. [ ] Extract diagnostics builder only if it reduces duplicated summary/artifact shaping.
+7. [x] Keep `WatchlistOrchestrationService` as coordinator.
 
 ### Tests/checks
 - `tests/test_watchlist_orchestration_policy.py`
