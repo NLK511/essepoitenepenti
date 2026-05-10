@@ -43,6 +43,7 @@ These define implemented product truth.
 - `observability-spec.md` — run correlation ids, structured observability events, health/debugger diagnostics, and cross-process log requirements
 - `lean-architecture-and-docs-reconciliation-plan.md` — active plan to reduce over-engineering and reconcile the docs surface
 - `p0-p4-remediation-plan.md` — current priority implementation record from outcome correctness through docs cleanup
+- `audits/full-project-spec-code-audit-2026-05-10.md` — latest full audit of spec/code/test coherence and autonomy readiness
 - `default-watchlists.md` — seeded watchlist pack and rationale
 - `data-quality-audit-spec.md` — audit endpoint for repeated no-bars, no-news, stale-coverage, and broker-reject ticker issues
 
