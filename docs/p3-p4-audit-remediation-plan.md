@@ -12,6 +12,7 @@ Implemented in this pass:
 - removed a dead duplicate `_relationship_summary()` implementation from `WatchlistOrchestrationService`; the later richer relationship formatter remains the single implementation
 - added `tests/test_watchlist_plan_framing_parity.py` to freeze the current plan-framing payload contract before extracting plan framing from orchestration
 - extracted plan payload construction into `WatchlistPlanFramingService`; `WatchlistOrchestrationService` now delegates plan framing while keeping compatibility wrappers for existing callers/tests
+- extracted decision-sample persistence into `WatchlistDecisionSampleService`; `WatchlistOrchestrationService` now delegates audit/tuning sample writes while preserving compatibility wrappers for helper tests
 - kept deeper helper extraction conservative because the remaining large-service seams affect persisted plan payloads and need broader regression if changed
 
 Remaining safe next seams:
