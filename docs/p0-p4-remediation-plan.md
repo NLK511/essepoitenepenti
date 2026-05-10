@@ -72,6 +72,6 @@ Implemented in this pass:
 - recommendation plan resolution spec should be read as closer to current behavior for intraday precedence after this pass.
 
 Remaining follow-up:
-- archive or merge transitional `docs/redesign/` material
+- continue pruning docs after the 2026-05-10 redesign-source merge into canonical docs
 - shorten large active specs by moving implementation history to archive
 - keep one source of truth per business question

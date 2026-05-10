@@ -450,7 +450,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         payload = response.json()
         self.assertTrue(any(document["slug"] == "readme" for document in payload["documents"]))
         self.assertTrue(any(document["slug"] == "raw-details-reference" for document in payload["documents"]))
-        self.assertTrue(any(document["slug"] == "redesign-readme" for document in payload["documents"]))
+        self.assertTrue(any(document["slug"] == "archive-redesign-merged-2026-05-10-readme" for document in payload["documents"]))
         methodology = next(document for document in payload["documents"] if document["slug"] == "recommendation-methodology")
         self.assertTrue(any("Pipeline overview" in section["title"] for section in methodology["sections"]))
         self.assertTrue(any("Price levels and risk" in section["title"] for section in methodology["sections"]))

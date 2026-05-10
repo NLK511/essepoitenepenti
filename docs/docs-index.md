@@ -43,6 +43,7 @@ These define implemented product truth.
 - `observability-spec.md` — run correlation ids, structured observability events, health/debugger diagnostics, and cross-process log requirements
 - `lean-architecture-and-docs-reconciliation-plan.md` — active plan to reduce over-engineering and reconcile the docs surface
 - `p0-p4-remediation-plan.md` — current priority implementation record from outcome correctness through docs cleanup
+- `p3-p4-audit-remediation-plan.md` — active implementation record for the latest architecture/docs cleanup pass
 - `audits/full-project-spec-code-audit-2026-05-10.md` — latest full audit of spec/code/test coherence and autonomy readiness
 - `default-watchlists.md` — seeded watchlist pack and rationale
 - `data-quality-audit-spec.md` — audit endpoint for repeated no-bars, no-news, stale-coverage, and broker-reject ticker issues
@@ -80,18 +81,16 @@ These are useful, but they are not the main current-state entry point. They must
 - `architecture-simplification-refactor-plan.md` — completed phased implementation record for simplifying drifted abstractions
 - `nitter-social-relevance-scoring.md` — current Nitter relevance-ranking behavior
 
-## Redesign reference
+## Redesign history
 
-These are transitional technical references. Stable current behavior should be merged into current-state docs over time; historical redesign notes should move to archive.
-- `redesign/README.md` — redesign doc map
-- `redesign/principles.md` — redesign rules
-- `redesign/target-architecture.md` — high-level redesign shape
-- `redesign/ui-decluttering-plan.md` — UI/UX redesign goals, mobile rules, and phased implementation plan
-- `redesign/transmission-modeling-spec.md` — context-to-ticker transmission rules
-- `redesign/calibration-governance-spec.md` — outcome-aware calibration rules
-- `redesign/setup-family-playbook.md` — setup-family expectations
-- `redesign/data-model-and-persistence.md` — redesign persistence direction
-- `redesign/short-horizon-recommendation-architecture.md` — combined redesign reference
+The stable redesign material has been merged into canonical docs:
+- product principles → `product-thesis.md`
+- four-layer architecture → `architecture.md`
+- transmission, setup families, and calibration governance → `recommendation-methodology.md`
+- UI/navigation principles → `operator-page-field-guide.md`
+- persistence direction → `er-model.md`
+
+Historical source docs now live under `archive/redesign/` for provenance only.
 
 ## Archive
 
@@ -108,6 +107,7 @@ Start with:
 - `archive/implementation-plans/ontology-enrichment-plan.md` — archived ontology expansion and governance plan
 - `archive/implementation-plans/tech-debt-remediation-plan.md` — archived context-refresh cleanup and terminology convergence plan
 - `archive/implementation-plans/ui-decluttering-plan.md` — archived UI decluttering execution plan
+- `archive/redesign/` — historical redesign source docs whose stable content has been merged into canonical docs
 
 ## Maintenance rule
 
@@ -146,4 +146,4 @@ Before adding a new doc, check:
 ### Technical reference
 - `architecture.md`
 - `raw-details-reference.md`
-- `redesign/README.md`
+- `er-model.md`

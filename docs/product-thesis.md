@@ -12,6 +12,12 @@ The point is to keep execution, review, diagnostics, and outcome tracking in one
 
 ## Core goal
 
+The app should answer this sequence:
+1. what are the most important market-moving developments right now?
+2. which industries are exposed to those developments?
+3. which tickers are most likely to react within the next few days?
+4. is there a tradeable setup with a clear entry, stop, and target?
+
 The goal is not to maximize signal count.
 
 The goal is to produce recommendations that are:
@@ -33,6 +39,21 @@ That means:
 - stale shared context remains visible in health/preflight
 - provider failures remain visible in diagnostics
 - fallback behavior must not look equivalent to healthy input
+- uncertainty is allowed, but false certainty is not allowed
+
+### Practical recommendation standard
+
+A practical recommendation should include:
+- direction
+- entry zone
+- take profit
+- stop loss
+- horizon
+- confidence
+- rationale
+- risks
+
+If the system cannot support those fields credibly, it should not force a trade. `watchlist` and `no_action` are first-class successful outputs because selective inaction is part of recommendation quality.
 
 ## Product shape
 
@@ -56,11 +77,19 @@ Work should be prioritized in this order:
 4. **Evidence of recommendation quality**
 5. **Feature expansion**
 
+## Source hierarchy
+
+Use source quality explicitly:
+- macro context should prioritize financial newswires, major newspapers, official statements, and central-bank releases; social is secondary support
+- industry context should prioritize trade press, sector/company read-through, product-cycle coverage, and macro context; social is secondary support
+- ticker analysis should prioritize ticker-specific news/catalysts, price action, macro/industry context, and ticker sentiment
+
 ## What to avoid
 
 - speculative integrations as near-term priorities
 - duplicate roadmap language across many docs
 - fallback heuristics that hide degraded inputs
+- forced recommendations when `watchlist` or `no_action` is more honest
 - multi-user expansion before the single-user model is operationally solid
 
 ## Standard for future decisions

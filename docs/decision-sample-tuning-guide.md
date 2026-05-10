@@ -160,4 +160,4 @@ They are best used as a structured review layer for:
 - `recommendation-methodology.md`
 - `operator-page-field-guide.md`
 - `raw-details-reference.md`
-- `redesign/calibration-governance-spec.md`
+- `recommendation-methodology.md#calibration-governance`

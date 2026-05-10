@@ -1550,25 +1550,6 @@ class WatchlistOrchestrationService:
         components.append(f"confidence {signal.confidence_percent:.1f}")
         return " · ".join(component for component in components if component)
 
-    @staticmethod
-    def _relationship_summary(transmission_summary: dict[str, object] | None) -> str:
-        if not isinstance(transmission_summary, dict):
-            return ""
-        matched = transmission_summary.get("matched_ticker_relationships")
-        if not isinstance(matched, list) or not matched:
-            return ""
-        labels: list[str] = []
-        for item in matched[:2]:
-            if not isinstance(item, dict):
-                continue
-            relation = str(item.get("type", "")).strip().replace("_", " ")
-            target = str(item.get("target_label") or item.get("target") or "").strip()
-            if relation and target:
-                labels.append(f"{relation} {target}")
-            elif target:
-                labels.append(target)
-        return ", ".join(labels)
-
     def _evidence_summary(
         self,
         summary_text: str,

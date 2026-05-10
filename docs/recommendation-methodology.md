@@ -226,18 +226,40 @@ A data-quality cap can reduce the final confidence when warnings, weak coverage,
 
 ### Setup family
 Each recommendation is classified into a setup family for later analysis and calibration, including:
-- catalyst follow-through
 - continuation
-- breakout/breakdown
+- breakout
+- breakdown
 - mean reversion
+- catalyst follow-through
 - macro beneficiary/loser
+- no action / uncategorized fallback states
+
+A setup family is only useful if it changes behavior. It should affect trade construction, invalidation logic, evaluation expectations, and operator explanation rather than acting as a cosmetic tag.
+
+Family guidance:
+- **continuation:** favor pullback/reclaim entries, stops below/above pullback structure, and trend-extension targets
+- **breakout:** favor break-or-retest entries, stops around failed break levels, and measured-move or next-resistance targets
+- **breakdown:** favor support-failure or failed-retest entries, stops around reclaimed support, and next-support/measured downside targets
+- **mean reversion:** require exhaustion or reversal confirmation, stop beyond the extreme, and target range midpoint / moving-average retests
+- **catalyst follow-through:** require fresh credible catalysts, use post-catalyst continuation entries, and invalidate if confirmation fades
+- **macro beneficiary/loser:** require explicit exposure channels and active non-stale context, with invalidation tied to weakening transmission or sector sympathy
 
 Light feature wiring is also in place here:
 - strong relative strength plus above-baseline volume can help confirm a continuation or breakout-style label
 - when those confirming features are absent, the older momentum/RSI rules still remain the main path
 
+Family-specific `no_action` is valid when structure exists but execution quality, confidence, calibration, or invalidation clarity is insufficient.
+
 ### Transmission analysis
 The methodology also tracks how well a trade idea is supported from macro or industry context down to the ticker.
+
+Transmission is not a generic sentiment overlay. It should answer:
+1. what active context is present?
+2. what concrete catalyst or state change is driving it now?
+3. which industries and tickers are exposed?
+4. through which channels?
+5. is the direction supportive, hostile, mixed, or negligible?
+6. over what window should it matter?
 
 Transmission is now treated as a governed edge graph rather than a flat label match. Each edge can carry:
 - direction (`positive`, `negative`, `mixed`)
@@ -246,10 +268,23 @@ Transmission is now treated as a governed edge graph rather than a flat label ma
 - validity windows when they are known
 - a lightweight relationship score used for ranking and inspection
 
-In broad terms it considers:
+Ticker-facing transmission summaries should preserve fields such as:
+- `context_bias`
+- `alignment_percent`
+- `primary_drivers`
+- `industry_exposure_channels`
+- `ticker_exposure_channels`
+- `expected_transmission_window`
+- `catalyst_intensity_percent`
+- `conflict_flags`
+- `decay_state`
+
+In broad terms transmission scoring considers:
 - alignment across macro, industry, and ticker evidence
 - relevance of matched themes or events
 - freshness of supporting context
+- source quality and recency
+- horizon fit
 - contradiction penalties when major signals conflict
 - whether an edge is explicit, derived, or only a weak structural fallback
 
@@ -313,6 +348,35 @@ It stores decision context such as:
 - `review_priority` for borderline cases
 
 The research workflow now exposes richer filters for these samples, including shortlist state, setup family, transmission bias, context regime, and date ranges. The calibration report endpoint also surfaces confidence reliability bins with Brier score and expected calibration error so operators can compare predicted confidence against realized outcomes.
+
+## Calibration governance
+
+Calibration must never hide sparse evidence behind precise-looking threshold changes. If evidence is weak, the app should say so and rely more on broader cohorts.
+
+Approved review slices are:
+- confidence bucket
+- setup family
+- horizon
+- transmission bias
+- context regime
+- horizon + setup family
+
+When applying calibration to action gating, broader cohorts should dominate narrow slices unless sample size is clearly adequate. Suggested minimum resolved counts before a slice materially influences gating are: horizon `12`, setup family `10`, confidence bucket `10`, transmission bias `10`, context regime `10`, and horizon + setup family `8`.
+
+Calibration may:
+- raise thresholds for underperforming cohorts
+- modestly relax thresholds for clearly stronger cohorts
+- flag extra operator review
+- explain why a plan was blocked despite decent raw confidence
+
+Calibration must not:
+- auto-size positions
+- claim reliable probabilities from thin data
+- bypass explicit signal conflicts
+- overrule broken trade structure
+- treat small-sample slices as statistically meaningful
+
+Operator payloads should show raw confidence, calibrated confidence, threshold adjustment, contributing slices, sample status, resolved count, win rate, and readable reasons.
 
 See:
 - `decision-sample-tuning-guide.md`

@@ -10,11 +10,10 @@ Use it when you want quick answers to questions like:
 - what do confidence, transmission, shortlist, and outcome fields mean?
 
 If you are new to the app, use this reading order:
-1. `redesign/ui-decluttering-plan.md` for the current UI/UX direction and mobile rules
-2. this guide for page orientation
-3. `glossary.md` for shared terms such as cohort, slice, and calibration
-4. `recommendation-methodology.md` for the live recommendation path
-5. `raw-details-reference.md` only when you need payload detail
+1. this guide for page orientation and UI/navigation principles
+2. `glossary.md` for shared terms such as cohort, slice, and calibration
+3. `recommendation-methodology.md` for the live recommendation path
+4. `raw-details-reference.md` only when you need payload detail
 
 For payload-level storage details, see `raw-details-reference.md`.
 
@@ -50,6 +49,24 @@ A simple mental model:
 - **Ticker signals** = why a ticker got attention
 - **Run detail** = how the workflow got there
 - **Context review** = the broader market backdrop reused by the app
+
+## UI and navigation principles
+
+The workspace should make the main journey obvious:
+1. **Monitor** — check health, attention items, freshness, and recent activity.
+2. **Review** — inspect plans, signals, context, broker orders, or runs when something needs a decision.
+3. **Investigate** — drill into a single degraded, surprising, or suspicious item.
+4. **Tune** — use research pages when evaluating performance or changing thresholds/configs.
+5. **Administer** — use jobs, watchlists, settings, docs, and debugger tools for setup and maintenance.
+
+Page design should follow these rules:
+- one page, one primary question
+- summary first, detail on demand
+- lightweight filters
+- progressive disclosure for raw diagnostics and secondary comparisons
+- never hide warnings, degraded inputs, provenance, or evaluated-vs-resolved distinctions
+
+On mobile, pages should reshape rather than compress desktop tables: use stacked cards, fewer headline metrics, condensed rows, collapsible filters, and one primary action where possible.
 
 ## Common concepts across pages
 

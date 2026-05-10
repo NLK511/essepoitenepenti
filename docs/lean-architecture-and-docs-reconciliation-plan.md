@@ -304,18 +304,18 @@ Roadmap repeats shipped features and overlaps with current-state docs.
 
 ## B4. Prune overlapping redesign docs
 
-### Problem
-`docs/redesign/` still contains active redesign references even though the redesign is now the active architecture.
+### Status
+Implemented in the 2026-05-10 P3/P4 cleanup pass.
 
-### Approach
-1. Identify redesign docs that are now normal current behavior.
-2. Merge still-useful content into current docs/specs.
-3. Archive the rest.
+### Result
+`docs/redesign/` no longer acts as a second active architecture tree. Stable content was merged into canonical docs and the source redesign files were moved to `docs/archive/redesign/merged-2026-05-10/` for provenance.
 
-### Candidate actions
-- Merge `redesign/short-horizon-recommendation-architecture.md` into `recommendation-methodology.md` or `architecture.md`.
-- Merge stable principles from `redesign/principles.md` into `product-thesis.md`.
-- Archive implementation-history content.
+Merged destinations:
+- principles → `product-thesis.md`
+- four-layer architecture → `architecture.md`
+- transmission modeling, setup families, and calibration governance → `recommendation-methodology.md`
+- UI/navigation principles → `operator-page-field-guide.md`
+- persistence direction → `er-model.md`
 
 ### Acceptance criteria
 - `docs/redesign/README.md` no longer acts as a second active architecture index.

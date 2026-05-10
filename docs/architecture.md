@@ -122,6 +122,25 @@ flowchart LR
     ProposalService --> OptionalLLM
 ```
 
+## Analysis architecture
+
+The recommendation pipeline is organized around four conceptual layers:
+
+1. **Context** — identify what matters now through macro and industry context snapshots.
+2. **Exposure** — map active context into industry and ticker impact through explicit transmission channels.
+3. **Ticker setup** — decide whether a ticker has a realistic short-horizon swing setup using catalysts, sentiment, technical structure, liquidity, and context alignment.
+4. **Trade plan** — convert a valid setup into entry, stop, target, horizon, confidence, risks, and an actionable or non-actionable state.
+
+This is an architecture for shortlist, setup evaluation, and trade framing. It is not proof of predictive skill by itself.
+
+The active persistence truth for this workflow is:
+- `TickerSignalSnapshot`
+- `RecommendationPlan`
+- `RecommendationPlanOutcome`
+- broker order/position lifecycle records when a plan is submitted to Alpaca paper
+
+Older compatibility objects may still exist in domain code or tests, but they should not become the main operator truth again.
+
 ## Most important runtime flows
 
 ### Proposal generation

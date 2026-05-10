@@ -6,8 +6,10 @@ This document describes the current database shape reflected by the live SQLAlch
 
 Notes:
 - this is a practical ER view of the current app schema, not an aspirational redesign-only schema
+- Postgres is the target production datastore; SQLite remains the default local startup datastore
 - the legacy `recommendations` table was removed in migration `0015_drop_legacy_recommendations_table.py`
 - several tables store structured payloads in `*_json` text columns, so not every business concept is normalized into its own table
+- diagnostics are first-class persisted data, not log-only data: warnings, missing inputs, provider failures, confidence caps, suppression reasons, evidence counts, and source breakdowns should remain queryable or embedded in durable payloads
 - some foreign keys exist without explicit ORM back-populated relationship fields, but they are still part of the relational model
 
 ## Mermaid ER diagram
