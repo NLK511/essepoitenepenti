@@ -243,7 +243,8 @@ export function SettingsPage() {
     <>
       <PageHeader
         kicker="Reference"
-        title="Configure the app without digging into internals."
+        title="Settings"
+        subtitle="System setup, data ingestion, execution controls, and advanced research flags."
         actions={<HelpHint tooltip="Settings is split into system setup, data ingestion, and advanced research controls." to="/docs?doc=operator-page-field-guide" />}
       />
       {error ? <ErrorState message={error} /> : null}

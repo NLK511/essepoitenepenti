@@ -37,34 +37,29 @@ const navSections: NavSection[] = [
     label: "Overview",
     items: [
       { to: "/", label: "Dashboard", shortLabel: "Dash", icon: "◌", end: true },
-      { to: "/jobs", label: "Jobs", shortLabel: "Jobs", icon: "▣", end: true },
       { to: "/jobs/watchlists", label: "Watchlists", shortLabel: "WL", icon: "◎" },
+      { to: "/jobs", label: "Jobs", shortLabel: "Jobs", icon: "▣", end: true },
     ],
   },
   {
-    label: "Review",
+    label: "Daily review",
     items: [
-      { to: "/jobs/ticker-signals", label: "Ticker signals", shortLabel: "Signals", icon: "≈" },
       { to: "/jobs/recommendation-plans", label: "Recommendation plans", shortLabel: "Plans", icon: "↗" },
-      { to: "/jobs/debugger", label: "Run debugger", shortLabel: "Debug", icon: "⌘" },
+      { to: "/recommendation-quality", label: "Quality summary", shortLabel: "Quality", icon: "◈" },
+      { to: "/jobs/ticker-signals", label: "Ticker signals", shortLabel: "Signals", icon: "≈" },
       { to: "/broker-orders", label: "Broker orders", shortLabel: "Orders", icon: "⟐" },
       { to: "/data-quality", label: "Data quality", shortLabel: "Data", icon: "◇" },
       { to: "/context", label: "Context review", shortLabel: "Context", icon: "◔" },
+      { to: "/jobs/debugger", label: "Run debugger", shortLabel: "Debug", icon: "⌘" },
     ],
   },
   {
     label: "Research",
     items: [
       { to: "/research", label: "Research home", shortLabel: "Hub", icon: "⌂", end: true },
+      { to: "/research/decision-samples", label: "Decision samples", shortLabel: "Samples", icon: "◉" },
     ],
     subsections: [
-      {
-        label: "Advanced review",
-        items: [
-          { to: "/research/decision-samples", label: "Decision samples", shortLabel: "Samples", icon: "◉" },
-          { to: "/recommendation-quality", label: "Quality summary", shortLabel: "Quality", icon: "◈" },
-        ],
-      },
       {
         label: "Tuning",
         items: [
@@ -357,9 +352,9 @@ export function AppLayout() {
           >
             <div className="sidebar-status-card">
               <div className="kicker">Current mode</div>
-              <h2>Disciplined conviction</h2>
+              <h2>Operating status</h2>
               <p>
-                Review watchlists, shortlist candidates, and inspect recommendation plans with outcome-aware evidence.
+                Watch workers and review plans before expanding risk.
               </p>
 
               <div className="sidebar-status-indicator-group">

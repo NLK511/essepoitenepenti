@@ -691,7 +691,8 @@ export function DocsPage() {
     <>
       <PageHeader
         kicker="Documentation"
-        title="Read the app docs in a tighter, operator-first layout."
+        title="Operator docs"
+        subtitle="Search current specs, guides, and reference material without leaving the app."
       />
       {error ? <ErrorState message={error} /> : null}
       {!documents && !error ? <LoadingState message="Loading docs…" /> : null}

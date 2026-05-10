@@ -235,7 +235,8 @@ export function ResearchPage() {
     <>
       <PageHeader
         kicker="Research"
-        title="Keep advanced review and tuning separate from daily operations."
+        title="Evidence and tuning"
+        subtitle="Keep calibration, validation, and tuning separate from daily operations."
         actions={<HelpHint tooltip="Research pages are secondary tools for advanced review, tuning, and performance assessment." to="/docs?doc=operator-page-field-guide" />}
       />
 
