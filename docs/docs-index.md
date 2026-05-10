@@ -34,17 +34,14 @@ These define implemented product truth.
 - `product-thesis.md` — product goal, decision rules, and priority order
 - `features-and-capabilities.md` — what the app does today and its current limits
 - `roadmap.md` — active priorities only
-- `architecture-simplification-refactor-plan.md` — completed refactor record for outcome, metric, policy, settings, and status abstractions
 - `user-journeys.md` — intended operator journeys
 
 ### Setup and operations
 - `getting-started.md` — local setup, scripts, auth, validation, first-run checks
 - `operational-scripts-reference.md` — reference for maintenance, hydration, and compare tools
 - `observability-spec.md` — run correlation ids, structured observability events, health/debugger diagnostics, and cross-process log requirements
-- `lean-architecture-and-docs-reconciliation-plan.md` — active plan to reduce over-engineering and reconcile the docs surface
-- `p0-p4-remediation-plan.md` — current priority implementation record from outcome correctness through docs cleanup
-- `p3-p4-audit-remediation-plan.md` — active implementation record for the latest architecture/docs cleanup pass
-- `audits/full-project-spec-code-audit-2026-05-10.md` — latest full audit of spec/code/test coherence and autonomy readiness
+- `lean-architecture-and-docs-reconciliation-plan.md` — remaining active plan to reduce over-engineering and reconcile the docs surface
+- `audits/full-project-spec-code-audit-2026-05-10-post-watchlist-refactor.md` — latest full audit of spec/code/test coherence and autonomy readiness
 - `default-watchlists.md` — seeded watchlist pack and rationale
 - `data-quality-audit-spec.md` — audit endpoint for repeated no-bars, no-news, stale-coverage, and broker-reject ticker issues
 
@@ -78,7 +75,6 @@ These are useful, but they are not the main current-state entry point. They must
 - `plan-reliability-report-spec.md` — canonical broker/effective reliability report for confidence, setup-family, and action cohorts
 - `plan-policy-evaluator-spec.md` — canonical evaluator for scoring trade-selection policies against broker-preferred historical outcomes
 - `account-risk-state-spec.md` — canonical account-risk read model for broker safety checks and kill-switch state
-- `architecture-simplification-refactor-plan.md` — completed phased implementation record for simplifying drifted abstractions
 - `nitter-social-relevance-scoring.md` — current Nitter relevance-ranking behavior
 
 ## Redesign history
@@ -107,6 +103,9 @@ Start with:
 - `archive/implementation-plans/ontology-enrichment-plan.md` — archived ontology expansion and governance plan
 - `archive/implementation-plans/tech-debt-remediation-plan.md` — archived context-refresh cleanup and terminology convergence plan
 - `archive/implementation-plans/ui-decluttering-plan.md` — archived UI decluttering execution plan
+- `archive/implementation-plans/p0-p4-remediation-plan-2026-05.md` — archived outcome/broker/policy/docs remediation record
+- `archive/implementation-plans/p3-p4-audit-remediation-plan-2026-05.md` — archived watchlist/doc cleanup implementation record
+- `archive/implementation-plans/architecture-simplification-refactor-plan-2026-05.md` — archived abstraction simplification implementation record
 - `archive/redesign/` — historical redesign source docs whose stable content has been merged into canonical docs
 
 ## Maintenance rule

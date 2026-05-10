@@ -34,3 +34,9 @@ For those, start with:
 - `../recommendation-methodology.md`
 - `../architecture.md`
 - `../roadmap.md`
+
+## Recently archived implementation records
+
+- `implementation-plans/p0-p4-remediation-plan-2026-05.md`
+- `implementation-plans/p3-p4-audit-remediation-plan-2026-05.md`
+- `implementation-plans/architecture-simplification-refactor-plan-2026-05.md`

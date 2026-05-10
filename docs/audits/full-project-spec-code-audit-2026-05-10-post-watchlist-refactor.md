@@ -136,13 +136,13 @@ Impact: low runtime risk, but the docs no longer explain the real module boundar
 
 Recommendation: update `architecture.md` and `recommendation-methodology.md` to describe `WatchlistExecutionService`, `WatchlistScanRunnerService`, `WatchlistPlanFramingService`, and supporting services as the current implementation.
 
-#### D5 — active remediation docs are becoming historical
+#### D5 — active remediation docs were becoming historical
 
-`p0-p4-remediation-plan.md`, `p3-p4-audit-remediation-plan.md`, and `lean-architecture-and-docs-reconciliation-plan.md` still appear in the active reading path. Parts are useful, but many items are now completed implementation history.
+Remediated after this audit snapshot: completed implementation records were moved to `docs/archive/implementation-plans/`, and `lean-architecture-and-docs-reconciliation-plan.md` was shortened to the remaining active work.
 
-Impact: active docs remain larger and more repetitive than necessary.
+Impact before remediation: active docs were larger and more repetitive than necessary.
 
-Recommendation: convert completed sections into a short completed-change log and archive stale plan detail.
+Remaining recommendation: keep archiving completed plan detail promptly after each cleanup pass.
 
 ## Code/spec coherence
 
