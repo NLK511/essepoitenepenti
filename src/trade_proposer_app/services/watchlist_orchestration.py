@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import math
 import logging
-from dataclasses import dataclass
 from typing import Any
 from datetime import datetime, timezone
 
@@ -15,7 +14,7 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.shortlist_selection import ShortlistSelectionConfig, ShortlistSelectionService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
-from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal, CheapScanSignalService
+from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignalService
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicy
@@ -25,21 +24,11 @@ from trade_proposer_app.services.watchlist_signal_builder import WatchlistSignal
 from trade_proposer_app.services.watchlist_calibration_review import WatchlistCalibrationReviewService
 from trade_proposer_app.services.watchlist_transmission import WatchlistTransmissionService
 from trade_proposer_app.services.watchlist_plan_narrative import WatchlistPlanNarrativeService
+from trade_proposer_app.services.watchlist_candidates import CheapScanCandidate as _CheapScanCandidate
+from trade_proposer_app.services.watchlist_scan_runner import WatchlistScanRunnerService
+from trade_proposer_app.services.watchlist_execution import WatchlistExecutionService
 
 logger = logging.getLogger(__name__)
-
-@dataclass
-class _CheapScanCandidate:
-    ticker: str
-    direction: str
-    confidence_percent: float
-    attention_score: float
-    warnings: list[str]
-    indicator_summary: str
-    cheap_scan_signal: CheapScanSignal | None = None
-    raw_output: RunOutput | None = None
-    error_message: str | None = None
-
 
 class WatchlistOrchestrationService:
     def __init__(
@@ -76,6 +65,8 @@ class WatchlistOrchestrationService:
             ),
             taxonomy_service=self.taxonomy_service,
         )
+        self.scan_runner = WatchlistScanRunnerService(self.cheap_scan_service, self.deep_analysis_service)
+        self.execution_service = WatchlistExecutionService(self)
         self.plan_narrative = WatchlistPlanNarrativeService(self)
         self.transmission_service = WatchlistTransmissionService(self)
         self.calibration_review_service = WatchlistCalibrationReviewService(self)
@@ -124,200 +115,13 @@ class WatchlistOrchestrationService:
         run_id: int | None = None,
         as_of: datetime | None = None,
     ) -> dict[str, object]:
-        normalized_tickers = [ticker.strip().upper() for ticker in tickers if ticker and ticker.strip()]
-        if not normalized_tickers:
-            raise ValueError("watchlist job has no effective tickers configured")
-
-        logger.info(f"Starting watchlist orchestration for '{watchlist.name}' ({len(normalized_tickers)} tickers)")
-        if as_of:
-            logger.info(f"  Simulation mode active: as_of {as_of.isoformat()}")
-
-        calibration_summary = self._load_calibration_summary()
-        
-        logger.info("  Running cheap scans...")
-        candidates = []
-        for i, ticker in enumerate(normalized_tickers):
-            if (i + 1) % 50 == 0:
-                logger.info(f"    Cheap scan progress: {i+1}/{len(normalized_tickers)}")
-            candidates.append(self._run_cheap_scan(ticker, watchlist.default_horizon, as_of=as_of))
-
-        logger.info("  Evaluating shortlist...")
-        shortlist_evaluation = self._evaluate_shortlist(watchlist, candidates)
-        shortlist = shortlist_evaluation["shortlist"]
-        shortlist_map = {ticker: rank for rank, ticker in enumerate(shortlist, start=1)}
-        logger.info(f"  Shortlist selected: {len(shortlist)} tickers")
-
-        stored_signals: list[TickerSignalSnapshot] = []
-        stored_plans: list[RecommendationPlan] = []
-        ticker_generation: list[dict[str, object]] = []
-        warnings_found = False
-
-        logger.info("  Processing candidates...")
-        for i, candidate in enumerate(candidates):
-            shortlist_rank = shortlist_map.get(candidate.ticker)
-            if shortlist_rank is None:
-                decision = self._shortlist_decision_for_ticker(shortlist_evaluation, candidate.ticker)
-                signal = self._build_signal_snapshot(
-                    watchlist,
-                    candidate,
-                    deep_output=None,
-                    job_id=job_id,
-                    run_id=run_id,
-                    shortlisted=False,
-                    shortlist_rank=None,
-                    shortlist_decision=decision,
-                )
-                stored_signal = self.context_snapshots.create_ticker_signal_snapshot(signal)
-                stored_signals.append(stored_signal)
-                self._record_non_shortlisted_decision_sample(
-                    watchlist,
-                    candidate,
-                    signal=stored_signal,
-                    calibration_summary=calibration_summary,
-                    job_id=job_id,
-                    run_id=run_id,
-                    shortlist_decision=decision,
-                )
-                ticker_generation.append(
-                    {
-                        "ticker": candidate.ticker,
-                        "status": "cheap_scan_only",
-                        "shortlisted": False,
-                        "attention_score": candidate.attention_score,
-                        "shortlist_decision": decision,
-                        "recommendation_plan_generated": False,
-                        "cheap_scan_price_history": stored_signal.diagnostics.get("cheap_scan_price_history") if hasattr(stored_signal.diagnostics, "get") else None,
-                        "deep_analysis_price_history": None,
-                    }
-                )
-                if candidate.warnings or candidate.error_message:
-                    warnings_found = True
-                continue
-
-            logger.info(f"    Running deep analysis for {candidate.ticker} (rank {shortlist_rank})...")
-            deep_output, deep_error = self._run_deep_analysis(candidate.ticker, watchlist.default_horizon, as_of=as_of)
-            decision = self._shortlist_decision_for_ticker(shortlist_evaluation, candidate.ticker)
-            signal = self._build_signal_snapshot(
-                watchlist,
-                candidate,
-                deep_output=deep_output,
-                job_id=job_id,
-                run_id=run_id,
-                shortlisted=True,
-                shortlist_rank=shortlist_rank,
-                shortlist_decision=decision,
-                deep_error=deep_error,
-            )
-            stored_signal = self.context_snapshots.create_ticker_signal_snapshot(signal)
-            stored_signals.append(stored_signal)
-            plan = self._build_plan_from_signal(
-                watchlist,
-                candidate,
-                stored_signal,
-                deep_output=deep_output,
-                deep_error=deep_error,
-                calibration_summary=calibration_summary,
-                job_id=job_id,
-                run_id=run_id,
-            )
-            stored_plan = self.recommendation_plans.create_plan(self._with_trade_policy_snapshot(plan))
-            self._record_decision_sample(
-                stored_plan,
-                candidate,
-                signal=stored_signal,
-                shortlisted=True,
-                shortlist_rank=shortlist_rank,
-                shortlist_decision=decision,
-            )
-            stored_plans.append(stored_plan)
-            ticker_generation.append(
-                {
-                    "ticker": candidate.ticker,
-                    "status": "deep_analysis" if deep_output is not None and deep_error is None else "deep_analysis_failed",
-                    "shortlisted": True,
-                    "shortlist_rank": shortlist_rank,
-                    "attention_score": candidate.attention_score,
-                    "plan_action": stored_plan.action,
-                    "shortlist_decision": decision,
-                    "cheap_scan_price_history": stored_signal.diagnostics.get("cheap_scan_price_history") if hasattr(stored_signal.diagnostics, "get") else None,
-                    "deep_analysis_price_history": stored_signal.diagnostics.get("deep_analysis_price_history") if hasattr(stored_signal.diagnostics, "get") else None,
-                }
-            )
-            if candidate.warnings or deep_error or plan.warnings:
-                warnings_found = True
-
-        summary = {
-            "mode": "watchlist_orchestration",
-            "watchlist_id": watchlist.id,
-            "watchlist_name": watchlist.name,
-            "horizon": watchlist.default_horizon.value,
-            "ticker_count": len(normalized_tickers),
-            "cheap_scan_count": len(candidates),
-            "shortlist_count": len(shortlist),
-            "deep_analysis_count": len(shortlist),
-            "ticker_signal_snapshot_count": len(stored_signals),
-            "recommendation_plan_count": len(stored_plans),
-            "actionable_plan_count": len([plan for plan in stored_plans if plan.action in {"long", "short"}]),
-            "no_action_plan_count": len([plan for plan in stored_plans if plan.action == "no_action"]),
-            "shortlist_rules": shortlist_evaluation["rules"],
-            "shortlist_rejections": shortlist_evaluation["rejection_counts"],
-            "shortlist_rejection_details": self._counted_shortlist_reason_details(shortlist_evaluation["rejection_counts"]),
-            "calibration_enabled": calibration_summary is not None,
-            "warnings_found": warnings_found,
-            "as_of": as_of.isoformat() if as_of else None,
-        }
-        artifact = {
-            "mode": "watchlist_orchestration",
-            "watchlist_id": watchlist.id,
-            "shortlist": shortlist,
-            "shortlist_rules": shortlist_evaluation["rules"],
-            "shortlist_decisions": shortlist_evaluation["decisions"],
-            "ticker_generation": ticker_generation,
-            "calibration_enabled": calibration_summary is not None,
-            "ticker_signal_snapshot_ids": [item.id for item in stored_signals],
-            "recommendation_plan_ids": [item.id for item in stored_plans],
-        }
-        logger.info(f"Orchestration complete: {len(stored_plans)} plans generated.")
-        return {
-            "summary": summary,
-            "artifact": artifact,
-            "ticker_generation": ticker_generation,
-            "warnings_found": warnings_found,
-        }
+        return self.execution_service.execute(watchlist, tickers, job_id=job_id, run_id=run_id, as_of=as_of)
 
     def _run_cheap_scan(self, ticker: str, horizon: StrategyHorizon, as_of: datetime | None = None) -> _CheapScanCandidate:
-        try:
-            signal = self.cheap_scan_service.score(ticker, horizon, as_of=as_of)
-        except Exception as exc:
-            return _CheapScanCandidate(
-                ticker=ticker,
-                direction="neutral",
-                confidence_percent=0.0,
-                attention_score=0.0,
-                warnings=[str(exc)],
-                indicator_summary="cheap scan failed",
-                cheap_scan_signal=None,
-                raw_output=None,
-                error_message=str(exc),
-            )
-        return _CheapScanCandidate(
-            ticker=ticker,
-            direction=signal.directional_bias,
-            confidence_percent=signal.confidence_percent,
-            attention_score=signal.attention_score,
-            warnings=list(signal.warnings),
-            indicator_summary=signal.indicator_summary,
-            cheap_scan_signal=signal,
-            raw_output=None,
-        )
+        return self.scan_runner.run_cheap_scan(ticker, horizon, as_of=as_of)
 
     def _run_deep_analysis(self, ticker: str, horizon: StrategyHorizon, as_of: datetime | None = None) -> tuple[RunOutput | None, str | None]:
-        try:
-            if hasattr(self.deep_analysis_service, "analyze"):
-                return self.deep_analysis_service.analyze(ticker, horizon=horizon, as_of=as_of), None
-            return self.deep_analysis_service.generate(ticker, as_of=as_of), None
-        except Exception as exc:
-            return None, str(exc)
+        return self.scan_runner.run_deep_analysis(ticker, horizon, as_of=as_of)
 
     def _select_shortlist(self, watchlist: Watchlist, candidates: list[_CheapScanCandidate]) -> list[str]:
         evaluation = self._evaluate_shortlist(watchlist, candidates)

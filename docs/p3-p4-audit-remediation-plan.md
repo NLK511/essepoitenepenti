@@ -17,6 +17,8 @@ Implemented in this pass:
 - extracted calibration-review payload generation into `WatchlistCalibrationReviewService`; orchestration keeps small compatibility wrappers for tests and existing helper callers
 - extracted transmission summary, signal-breakdown, and context-quality gate helpers into `WatchlistTransmissionService`
 - extracted plan narrative/evidence/risk text generation into `WatchlistPlanNarrativeService`
+- extracted full watchlist run coordination into `WatchlistExecutionService`
+- extracted cheap-scan/deep-analysis failure normalization into `WatchlistScanRunnerService`
 - kept deeper helper extraction conservative because the remaining large-service seams affect persisted plan payloads and need broader regression if changed
 
 Remaining safe next seams:
