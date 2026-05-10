@@ -11,10 +11,10 @@ Goal: reduce duplicate logic and unnecessary active surfaces without changing tr
 Implemented in this pass:
 - removed a dead duplicate `_relationship_summary()` implementation from `WatchlistOrchestrationService`; the later richer relationship formatter remains the single implementation
 - added `tests/test_watchlist_plan_framing_parity.py` to freeze the current plan-framing payload contract before extracting plan framing from orchestration
-- kept service extraction conservative because the remaining large-service seams affect persisted plan payloads and need broader regression if changed
+- extracted plan payload construction into `WatchlistPlanFramingService`; `WatchlistOrchestrationService` now delegates plan framing while keeping compatibility wrappers for existing callers/tests
+- kept deeper helper extraction conservative because the remaining large-service seams affect persisted plan payloads and need broader regression if changed
 
 Remaining safe next seams:
-- extract plan framing from `WatchlistOrchestrationService`
 - extract technical feature calculation from `TickerDeepAnalysisService` / `ProposalService`
 - keep `policy_health` as the headline quality contract and avoid adding another summary layer
 

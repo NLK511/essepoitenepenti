@@ -19,6 +19,7 @@ from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignal, Ch
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicy
+from trade_proposer_app.services.watchlist_plan_framing import WatchlistPlanFramingService
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,7 @@ class WatchlistOrchestrationService:
             ),
             taxonomy_service=self.taxonomy_service,
         )
+        self.plan_framing = WatchlistPlanFramingService(self)
 
     @staticmethod
     def _normalize_signal_gating_tuning_config(signal_gating_tuning_config: dict[str, float] | None) -> dict[str, float]:
@@ -513,145 +515,15 @@ class WatchlistOrchestrationService:
         job_id: int | None,
         run_id: int | None,
     ) -> RecommendationPlan:
-        analysis = self._analysis_payload(deep_output)
-        summary_text = self._pluck(analysis, "summary", "text") or signal.source_breakdown.get("cheap_scan_summary") or ""
-        setup_family = self._plan_setup_family(signal, analysis, candidate)
-        confidence_components = self._plan_confidence_components(signal, analysis, candidate)
-        transmission_summary = self._transmission_summary(signal, analysis, candidate)
-        raw_plan_confidence = self._plan_gate_confidence(signal, deep_output=deep_output, deep_error=deep_error)
-        deep_analysis_confidence = self._deep_analysis_confidence(deep_output, deep_error=deep_error)
-        calibration_review = self._calibration_review(
-            calibration_summary,
-            setup_family,
-            raw_plan_confidence,
-            horizon=watchlist.default_horizon.value,
-            transmission_summary=transmission_summary,
-        )
-        calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", raw_plan_confidence) or raw_plan_confidence)
-        rationale = self._rationale_summary(signal, candidate, setup_family, transmission_summary)
-        warnings = list(signal.warnings)
-        shortlisted = bool(signal.diagnostics.get("shortlisted"))
-        shortlist_rank = signal.diagnostics.get("shortlist_rank") if isinstance(signal.diagnostics.get("shortlist_rank"), int) else None
-        if deep_output is None or deep_error is not None:
-            return RecommendationPlan(
-                ticker=candidate.ticker,
-                horizon=watchlist.default_horizon,
-                action="no_action",
-                status="degraded",
-                confidence_percent=calibrated_confidence,
-                thesis_summary="Deep analysis did not complete; no actionable plan emitted.",
-                rationale_summary=rationale,
-                warnings=warnings,
-                evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason="deep_analysis_unavailable", calibration_review=calibration_review, transmission_summary=transmission_summary),
-                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, shortlisted=shortlisted, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
-                computed_at=signal.computed_at,
-                run_id=run_id,
-                job_id=job_id,
-                watchlist_id=watchlist.id,
-                ticker_signal_snapshot_id=signal.id,
-            )
-
-        recommendation = deep_output.recommendation
-        direction = self._normalize_direction(recommendation.direction)
-        intended_action = direction if direction in {"long", "short"} else None
-        action_reason = "actionable_setup"
-        effective_threshold = float(calibration_review.get("effective_confidence_threshold", self.confidence_threshold))
-        effective_threshold = min(effective_threshold, float(self.action_confidence_threshold))
-        calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", raw_plan_confidence) or raw_plan_confidence)
-        
-        entry_price_low, entry_price_high, stop_loss, take_profit, risk_reward_ratio = None, None, None, None, None
-        if intended_action:
-            entry_price_low, entry_price_high, stop_loss, take_profit = self._family_adjusted_trade_levels(
-                recommendation,
-                setup_family=setup_family,
-                action=intended_action,
-                transmission_summary=transmission_summary,
-            )
-            risk_reward_ratio = self._risk_reward_ratio(recommendation)
-
-        context_quality_status = self._trade_context_quality_status(transmission_summary)
-        if context_quality_status == "blocked":
-            warnings.append("context quality is blocked; the setup is not tradeable")
-            action = "no_action"
-            action_reason = "context_quality_blocked"
-        else:
-            if context_quality_status == "degraded":
-                warnings.append("context quality is degraded; trade with caution")
-            if direction == "short" and not watchlist.allow_shorts:
-                warnings.append("watchlist does not allow shorts")
-                action = "no_action"
-                action_reason = "shorts_disabled"
-            elif intended_action and self.trade_decision_policy is not None and not self.trade_decision_policy.action_allowed(intended_action):
-                warnings.append("active trade decision policy blocks this action")
-                action = "no_action"
-                action_reason = "trade_policy_action_blocked"
-            elif self.trade_decision_policy is not None and not self.trade_decision_policy.setup_family_allowed(setup_family):
-                warnings.append("active trade decision policy blocks this setup family")
-                action = "no_action"
-                action_reason = "trade_policy_setup_family_blocked"
-            elif calibrated_confidence < effective_threshold:
-                action = "no_action"
-                action_reason = "below_calibrated_action_threshold" if effective_threshold > self.confidence_threshold or calibrated_confidence != raw_plan_confidence else "below_action_confidence_threshold"
-            elif direction not in {"long", "short"}:
-                action = "no_action"
-                action_reason = "direction_not_actionable"
-            elif self._should_block_for_transmission_contradiction(transmission_summary, calibrated_confidence, effective_threshold):
-                action = "no_action"
-                action_reason = "context_transmission_contradiction"
-            elif transmission_summary.get("context_bias") == "headwind" and calibrated_confidence < min(95.0, effective_threshold + 5.0):
-                action = "no_action"
-                action_reason = "context_transmission_headwind"
-            else:
-                action = direction
-
-        if action == "no_action":
-            return RecommendationPlan(
-                ticker=candidate.ticker,
-                horizon=watchlist.default_horizon,
-                action=action,
-                status="degraded" if action_reason == "context_quality_blocked" else ("ok" if not warnings else "partial"),
-                confidence_percent=calibrated_confidence,
-                entry_price_low=entry_price_low,
-                entry_price_high=entry_price_high,
-                stop_loss=stop_loss,
-                take_profit=take_profit,
-                holding_period_days=self._holding_period_days(watchlist.default_horizon) if intended_action else None,
-                risk_reward_ratio=risk_reward_ratio,
-                thesis_summary=self._no_action_thesis(setup_family, action_reason, transmission_summary=transmission_summary),
-                rationale_summary=rationale,
-                warnings=list(dict.fromkeys(warnings)),
-                evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
-                signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
-                computed_at=signal.computed_at,
-                run_id=run_id,
-                job_id=job_id,
-                watchlist_id=watchlist.id,
-                ticker_signal_snapshot_id=signal.id,
-            )
-
-        return RecommendationPlan(
-            ticker=candidate.ticker,
-            horizon=watchlist.default_horizon,
-            action=action,
-            status="ok" if not warnings else "partial",
-            confidence_percent=calibrated_confidence,
-            entry_price_low=entry_price_low,
-            entry_price_high=entry_price_high,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-            holding_period_days=self._holding_period_days(watchlist.default_horizon),
-            risk_reward_ratio=risk_reward_ratio,
-            thesis_summary=summary_text or self._actionable_thesis(action, setup_family, transmission_summary=transmission_summary),
-            rationale_summary=rationale,
-            risks=self._plan_risks(warnings, setup_family, action, transmission_summary),
-            warnings=list(dict.fromkeys(warnings)),
-            evidence_summary=self._evidence_summary(summary_text, setup_family, confidence_components, action_reason=action_reason, calibration_review=calibration_review, transmission_summary=transmission_summary),
-            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, intended_action=intended_action, shortlisted=True, shortlist_rank=shortlist_rank, deep_analysis_confidence_percent=deep_analysis_confidence),
-            computed_at=signal.computed_at,
-            run_id=run_id,
+        return self.plan_framing.build_plan_from_signal(
+            watchlist,
+            candidate,
+            signal,
+            deep_output=deep_output,
+            deep_error=deep_error,
+            calibration_summary=calibration_summary,
             job_id=job_id,
-            watchlist_id=watchlist.id,
-            ticker_signal_snapshot_id=signal.id,
+            run_id=run_id,
         )
 
     def _build_no_action_plan(
@@ -665,33 +537,14 @@ class WatchlistOrchestrationService:
         run_id: int | None,
         reason: str,
     ) -> RecommendationPlan:
-        setup_family = self._cheap_scan_setup_family(candidate)
-        confidence_components = self._plan_confidence_components(signal, {}, candidate)
-        transmission_summary = self._transmission_summary(signal, {}, candidate)
-        calibration_review = self._calibration_review(
-            calibration_summary,
-            setup_family,
-            signal.confidence_percent,
-            horizon=watchlist.default_horizon.value,
-            transmission_summary=transmission_summary,
-        )
-        calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", signal.confidence_percent) or signal.confidence_percent)
-        return RecommendationPlan(
-            ticker=candidate.ticker,
-            horizon=watchlist.default_horizon,
-            action="no_action",
-            status="ok" if not signal.warnings else "partial",
-            confidence_percent=calibrated_confidence,
-            thesis_summary=reason,
-            rationale_summary=self._rationale_summary(signal, candidate, setup_family, transmission_summary),
-            warnings=list(signal.warnings),
-            evidence_summary=self._evidence_summary(candidate.indicator_summary, setup_family, confidence_components, action_reason="not_shortlisted", calibration_review=calibration_review, transmission_summary=transmission_summary),
-            signal_breakdown=self._signal_breakdown(signal, setup_family=setup_family, confidence_components=confidence_components, calibration_review=calibration_review, transmission_summary=transmission_summary, shortlisted=False, shortlist_rank=None),
-            computed_at=signal.computed_at,
-            run_id=run_id,
+        return self.plan_framing.build_no_action_plan(
+            watchlist,
+            candidate,
+            signal,
+            calibration_summary=calibration_summary,
             job_id=job_id,
-            watchlist_id=watchlist.id,
-            ticker_signal_snapshot_id=signal.id,
+            run_id=run_id,
+            reason=reason,
         )
 
     def _record_non_shortlisted_decision_sample(

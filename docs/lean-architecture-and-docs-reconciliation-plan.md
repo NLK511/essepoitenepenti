@@ -392,10 +392,10 @@ A short checklist for doc changes:
 ## Phase 4 — Orchestration slimming
 
 ### Tasks
-1. Extract shortlist selection if tests can isolate behavior.
-2. Extract plan framing if tests can isolate behavior.
-3. Extract diagnostics builder only if it reduces duplicated summary/artifact shaping.
-4. Keep `WatchlistOrchestrationService` as coordinator.
+1. [x] Extract shortlist selection if tests can isolate behavior.
+2. [x] Extract plan framing if tests can isolate behavior.
+3. [ ] Extract diagnostics builder only if it reduces duplicated summary/artifact shaping.
+4. [x] Keep `WatchlistOrchestrationService` as coordinator.
 
 ### Tests/checks
 - `tests/test_watchlist_orchestration_policy.py`
