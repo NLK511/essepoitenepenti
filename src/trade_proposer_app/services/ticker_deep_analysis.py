@@ -9,14 +9,9 @@ import pandas as pd
 
 from trade_proposer_app.domain.enums import RecommendationDirection, RecommendationState, StrategyHorizon
 from trade_proposer_app.domain.models import Recommendation, RunDiagnostics, RunOutput
-from trade_proposer_app.services.proposals import (
-    DEFAULT_SUMMARY_METHOD,
-    DEFAULT_SUMMARY_TEXT,
-    ProposalExecutionError,
-    ProposalService,
-    _sanitize_for_json,
-)
+from trade_proposer_app.services.proposals import ProposalExecutionError, ProposalService, _sanitize_for_json
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
+from trade_proposer_app.services.ticker_analysis_payloads import TickerAnalysisPayloadService
 from trade_proposer_app.services.ticker_technical_features import TickerTechnicalFeatureService
 
 
@@ -36,6 +31,13 @@ class TickerDeepAnalysisService:
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
         self.model_name = model_name
         self.technical_features = TickerTechnicalFeatureService()
+        self.analysis_payloads = TickerAnalysisPayloadService(
+            macro_context_score=self._macro_context_score,
+            macro_context_label=self._macro_context_label,
+            industry_context_score=self._industry_context_score,
+            industry_context_label=self._industry_context_label,
+            context_quality_status=self._context_quality_status,
+        )
         self._reference_history_cache: dict[tuple[str, str | None], pd.DataFrame | None] = {}
 
     def analyze(self, ticker: str, *, horizon: StrategyHorizon | None = None, as_of: datetime | None = None) -> RunOutput:
@@ -1078,111 +1080,25 @@ class TickerDeepAnalysisService:
         transmission_analysis: dict[str, Any],
         horizon: StrategyHorizon | None,
     ) -> dict[str, Any]:
-        return {
-            "summary": {
-                "text": context.get("summary_text", DEFAULT_SUMMARY_TEXT),
-                "method": context.get("summary_method", DEFAULT_SUMMARY_METHOD),
-                "backend": context.get("summary_backend"),
-                "model": context.get("summary_model"),
-                "runtime_seconds": context.get("summary_runtime_seconds"),
-                "metadata": context.get("summary_metadata", {}),
-                "digest": context.get("news_digest", ""),
-                "error": context.get("summary_error"),
-                "llm_error": context.get("llm_error"),
-            },
-            "news": {
-                "item_count": context.get("news_item_count", 0),
-                "context_count": context.get("context_count", 0),
-                "point_count": context.get("news_point_count", 0),
-                "feeds_used": context.get("news_feeds_used", []),
-                "feed_errors": context.get("news_feed_errors", []),
-                "items": context.get("news_items", []),
-            },
-            "sentiment": {
-                "score": context.get("sentiment_score", 0.0),
-                "label": context.get("sentiment_label"),
-                "macro": {
-                    "score": TickerDeepAnalysisService._macro_context_score(context),
-                    "label": TickerDeepAnalysisService._macro_context_label(context),
-                    "coverage_insights": context.get("macro_coverage_insights", []),
-                    "context_quality_score": context.get("macro_context_quality_score"),
-                    "context_quality_status": context.get("macro_context_quality_status"),
-                    "context_quality_flags": context.get("macro_context_quality_flags", {}),
-                    "context_quality_notes": context.get("macro_context_quality_notes", []),
-                },
-                "industry": {
-                    "score": TickerDeepAnalysisService._industry_context_score(context),
-                    "label": TickerDeepAnalysisService._industry_context_label(context),
-                    "coverage_insights": context.get("industry_coverage_insights", []),
-                    "context_quality_score": context.get("industry_context_quality_score"),
-                    "context_quality_status": context.get("industry_context_quality_status"),
-                    "context_quality_flags": context.get("industry_context_quality_flags", {}),
-                    "context_quality_notes": context.get("industry_context_quality_notes", []),
-                },
-                "ticker": {
-                    "score": context.get("ticker_sentiment_score", context.get("sentiment_score", 0.0)),
-                    "label": context.get("ticker_sentiment_label", context.get("sentiment_label")),
-                },
-            },
-            "proposal": {
-                "ticker": ticker,
-                "direction": direction,
-                "technical_direction": technical_direction,
-                "direction_score": direction_score,
-                "confidence": confidence,
-                "entry_price": entry_price,
-                "stop_loss": stop_loss,
-                "take_profit": take_profit,
-            },
-            "technical": {
-                "price": context.get("price", 0.0),
-                "sma20": context.get("sma20"),
-                "sma50": context.get("sma50"),
-                "sma200": context.get("sma200"),
-                "rsi": context.get("rsi"),
-                "atr": context.get("atr"),
-                "atr_pct": context.get("atr_pct"),
-                "price_above_sma50": context.get("price_above_sma50"),
-                "price_above_sma200": context.get("price_above_sma200"),
-                "momentum_short": context.get("momentum_short"),
-                "momentum_medium": context.get("momentum_medium"),
-                "momentum_long": context.get("momentum_long"),
-                "rel_return_5d_vs_spy": context.get("rel_return_5d_vs_spy"),
-                "rel_return_20d_vs_spy": context.get("rel_return_20d_vs_spy"),
-                "rel_return_5d_vs_sector": context.get("rel_return_5d_vs_sector"),
-                "rel_return_20d_vs_sector": context.get("rel_return_20d_vs_sector"),
-                "volume_ratio_20": context.get("volume_ratio_20"),
-                "dollar_volume_ratio_20": context.get("dollar_volume_ratio_20"),
-                "reference_features": context.get("reference_features", {}),
-            },
-            "feature_vector": feature_vector,
-            "normalized_feature_vector": normalized_vector,
-            "aggregations": aggregations,
-            "ticker_deep_analysis": {
-                "model": self.model_name,
-                "execution_path": "native",
-                "horizon": horizon.value if horizon is not None else None,
-                "setup_family": setup_family,
-                "confidence_components": confidence_components,
-                "transmission_analysis": transmission_analysis,
-                "context_quality": {
-                    "status": TickerDeepAnalysisService._context_quality_status(context),
-                    "macro": {
-                        "score": context.get("macro_context_quality_score"),
-                        "status": context.get("macro_context_quality_status"),
-                        "flags": context.get("macro_context_quality_flags", {}),
-                        "notes": context.get("macro_context_quality_notes", []),
-                    },
-                    "industry": {
-                        "score": context.get("industry_context_quality_score"),
-                        "status": context.get("industry_context_quality_status"),
-                        "flags": context.get("industry_context_quality_flags", {}),
-                        "notes": context.get("industry_context_quality_notes", []),
-                    },
-                },
-                "price_history": context.get("price_history_diagnostics", {}),
-            },
-        }
+        return self.analysis_payloads.build_analysis_payload(
+            ticker=ticker,
+            direction=direction,
+            technical_direction=technical_direction,
+            direction_score=direction_score,
+            confidence=confidence,
+            entry_price=entry_price,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            context=context,
+            feature_vector=feature_vector,
+            normalized_vector=normalized_vector,
+            aggregations=aggregations,
+            setup_family=setup_family,
+            confidence_components=confidence_components,
+            transmission_analysis=transmission_analysis,
+            horizon=horizon,
+            model_name=self.model_name,
+        )
 
     def _build_diagnostics(
         self,
@@ -1192,22 +1108,13 @@ class TickerDeepAnalysisService:
         aggregations: dict[str, float],
         context: dict[str, Any],
     ) -> RunDiagnostics:
-        configured = getattr(self.proposal_service, "weights", {}) or {}
-        confidence_weights = configured.get("confidence", {}) if isinstance(configured, dict) else {}
-        return RunDiagnostics(
-            warnings=list(dict.fromkeys(context.get("problems", []))),
-            provider_errors=[],
-            problems=context.get("problems", []),
-            news_feed_errors=context.get("news_feed_errors", []),
-            summary_error=context.get("summary_error"),
-            llm_error=context.get("llm_error"),
-            raw_output=analysis_json,
-            analysis_json=analysis_json,
-            feature_vector_json=json.dumps(_sanitize_for_json(feature_vector), indent=2, sort_keys=True),
-            normalized_feature_vector_json=json.dumps(_sanitize_for_json(normalized_vector), indent=2, sort_keys=True),
-            aggregations_json=json.dumps(_sanitize_for_json(aggregations), indent=2, sort_keys=True),
-            confidence_weights_json=json.dumps(_sanitize_for_json(confidence_weights), indent=2, sort_keys=True),
-            summary_method=str(context.get("summary_method", DEFAULT_SUMMARY_METHOD)),
+        return self.analysis_payloads.build_diagnostics(
+            analysis_json,
+            feature_vector,
+            normalized_vector,
+            aggregations,
+            context,
+            weights=getattr(self.proposal_service, "weights", {}) or {},
         )
 
     def _suggest_price_levels(

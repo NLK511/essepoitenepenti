@@ -16,7 +16,7 @@ from unittest.mock import Mock
 
 import pandas as pd
 
-from trade_proposer_app.domain.enums import RecommendationDirection
+from trade_proposer_app.domain.enums import RecommendationDirection, StrategyHorizon
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
 
 
@@ -38,6 +38,136 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         # Ensure context passthrough for enrichment
         self.proposal_service._apply_news_context.side_effect = lambda ctx, t, as_of=None: ctx
         self.service = TickerDeepAnalysisService(self.proposal_service, taxonomy_service=self.taxonomy_service)
+
+    def test_analysis_payload_service_matches_compatibility_wrapper(self) -> None:
+        context = {
+            "summary_text": "sample summary",
+            "summary_method": "stub",
+            "summary_backend": "local",
+            "summary_model": "test-model",
+            "summary_runtime_seconds": 0.1,
+            "summary_metadata": {"k": "v"},
+            "news_digest": "digest",
+            "news_item_count": 2,
+            "context_count": 1,
+            "news_point_count": 3,
+            "news_feeds_used": ["feed-a"],
+            "news_feed_errors": ["feed-b failed"],
+            "news_items": [{"title": "item"}],
+            "sentiment_score": 0.25,
+            "sentiment_label": "mixed",
+            "ticker_sentiment_score": 0.4,
+            "ticker_sentiment_label": "constructive",
+            "macro_context_score": 0.7,
+            "macro_context_label": "supportive",
+            "industry_context_score": 0.6,
+            "industry_context_label": "neutral",
+            "macro_coverage_insights": ["macro ok"],
+            "industry_coverage_insights": ["industry ok"],
+            "macro_context_quality_score": 0.9,
+            "macro_context_quality_status": "ok",
+            "macro_context_quality_flags": {"fresh": True},
+            "macro_context_quality_notes": ["fresh macro"],
+            "industry_context_quality_score": 0.8,
+            "industry_context_quality_status": "degraded",
+            "industry_context_quality_flags": {"stale": True},
+            "industry_context_quality_notes": ["stale industry"],
+            "price": 123.45,
+            "sma20": 120.0,
+            "sma50": 118.0,
+            "sma200": 110.0,
+            "rsi": 55.0,
+            "atr": 2.5,
+            "atr_pct": 2.0,
+            "price_above_sma50": 1,
+            "price_above_sma200": 1,
+            "momentum_short": 0.02,
+            "momentum_medium": 0.04,
+            "momentum_long": 0.08,
+            "rel_return_5d_vs_spy": 0.01,
+            "rel_return_20d_vs_spy": 0.02,
+            "rel_return_5d_vs_sector": -0.01,
+            "rel_return_20d_vs_sector": 0.03,
+            "volume_ratio_20": 1.2,
+            "dollar_volume_ratio_20": 1.4,
+            "reference_features": {"spy": "available"},
+            "price_history_diagnostics": {"source": "remote"},
+        }
+        feature_vector = {"momentum_short": 0.02, "rsi": 55.0}
+        normalized_vector = {"momentum_short": 0.6, "rsi": 0.55}
+        aggregations = {"direction_score": 0.7, "entry_adjustment": 123.5}
+        confidence_components = {"technical_clarity": 70.0}
+        transmission_analysis = {"expected_transmission_window": "2d_5d"}
+
+        wrapper_payload = self.service._build_analysis_payload(
+            ticker="AAPL",
+            direction="LONG",
+            technical_direction="LONG",
+            direction_score=0.72,
+            confidence=68.0,
+            entry_price=123.5,
+            stop_loss=120.0,
+            take_profit=130.0,
+            context=context,
+            feature_vector=feature_vector,
+            normalized_vector=normalized_vector,
+            aggregations=aggregations,
+            setup_family="momentum_breakout",
+            confidence_components=confidence_components,
+            transmission_analysis=transmission_analysis,
+            horizon=StrategyHorizon.ONE_WEEK,
+        )
+        direct_payload = self.service.analysis_payloads.build_analysis_payload(
+            ticker="AAPL",
+            direction="LONG",
+            technical_direction="LONG",
+            direction_score=0.72,
+            confidence=68.0,
+            entry_price=123.5,
+            stop_loss=120.0,
+            take_profit=130.0,
+            context=context,
+            feature_vector=feature_vector,
+            normalized_vector=normalized_vector,
+            aggregations=aggregations,
+            setup_family="momentum_breakout",
+            confidence_components=confidence_components,
+            transmission_analysis=transmission_analysis,
+            horizon=StrategyHorizon.ONE_WEEK,
+            model_name=self.service.model_name,
+        )
+
+        self.assertEqual(wrapper_payload, direct_payload)
+        self.assertEqual(wrapper_payload["ticker_deep_analysis"]["price_history"], {"source": "remote"})
+        self.assertEqual(wrapper_payload["technical"]["reference_features"], {"spy": "available"})
+
+    def test_diagnostics_payload_service_matches_compatibility_wrapper(self) -> None:
+        self.proposal_service.weights = {"confidence": {"technical_clarity": 0.2}}
+        context = {
+            "problems": ["missing benchmark", "missing benchmark", "stale industry"],
+            "news_feed_errors": ["feed failed"],
+            "summary_error": "summary failed",
+            "llm_error": "llm unavailable",
+            "summary_method": "fallback",
+        }
+        feature_vector = {"momentum_short": 0.02}
+        normalized_vector = {"momentum_short": 0.6}
+        aggregations = {"direction_score": 0.7}
+        analysis_json = '{"summary": {"text": "x"}}'
+
+        wrapper = self.service._build_diagnostics(analysis_json, feature_vector, normalized_vector, aggregations, context)
+        direct = self.service.analysis_payloads.build_diagnostics(
+            analysis_json,
+            feature_vector,
+            normalized_vector,
+            aggregations,
+            context,
+            weights=self.proposal_service.weights,
+        )
+
+        self.assertEqual(wrapper.model_dump(), direct.model_dump())
+        self.assertEqual(wrapper.warnings, ["missing benchmark", "stale industry"])
+        self.assertEqual(json.loads(wrapper.confidence_weights_json), {"technical_clarity": 0.2})
 
     # ─── Price Level Arithmetic ───────────────────────────────────────────────
 

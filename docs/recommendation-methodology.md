@@ -191,6 +191,7 @@ The app persists both raw and normalized values.
 
 ### Current implementation status
 - **implemented now:** broad-market relative strength (`SPY`) and sector-ETF relative strength over short and medium lookbacks, plus simple volume-ratio and dollar-volume-ratio confirmation features in ticker deep analysis
+- **implemented now:** ticker technical feature/context/normalization/aggregation logic lives in `TickerTechnicalFeatureService`; ticker analysis payload and diagnostics construction lives in `TickerAnalysisPayloadService`; `TickerDeepAnalysisService` coordinates the native deep-analysis run and keeps compatibility wrappers for existing callers/tests
 - **implemented now:** if benchmark or sector ETF data is missing, deep analysis falls back to neutral values and records the gap in diagnostics instead of failing the whole recommendation
 - **not implemented yet:** broader feature expansion such as full breadth, gap/overnight behavior, or more advanced chop/compression regime measures
 
@@ -389,7 +390,7 @@ Current limits still matter:
 - sentiment is inspectable, but not yet proven as measured edge
 - cheap scan is only a triage layer
 - context extraction is still heuristic
-- ticker deep analysis still reuses some older proposal internals
+- ticker deep analysis still reuses some older proposal internals for price history, news/context enrichment, and fallback compatibility
 - the shared context layer is context-native now, but its event extraction and scoring are still heuristic
 - calibration is active, but evidence depth is still growing
 

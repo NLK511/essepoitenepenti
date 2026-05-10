@@ -83,10 +83,11 @@ Recent cleanup:
 - watchlist scan execution now uses protocol-typed scanner/deep-analysis dependencies instead of untyped `Any`
 - watchlist execution now documents the coordinator contract with a protocol
 - ticker deep-analysis technical feature/context/normalization logic moved to `TickerTechnicalFeatureService`
+- ticker deep-analysis payload/diagnostics construction moved to `TickerAnalysisPayloadService` with compatibility-wrapper parity tests
 
 Current largest simplification candidates:
 - `ProposalService`
-- `TickerDeepAnalysisService`
+- remaining `TickerDeepAnalysisService` orchestration/fallback seams
 - `NewsIngestionService`
 - `TaxonomyService`
 - `RecommendationPlanEvaluationService`
