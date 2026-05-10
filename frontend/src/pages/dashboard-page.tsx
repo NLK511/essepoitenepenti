@@ -3,8 +3,22 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
-import type { DashboardResponse, DashboardTrends, DashboardTrendSeries, DashboardTrendWindow } from "../types";
-import { dashboardBoardTone, dashboardFailureTone, formatDate, normalizeReviewWindow, REVIEW_WINDOW_OPTIONS, reviewWindowLabel } from "../utils";
+import type { AccountRiskState, DashboardResponse, DashboardTrends, DashboardTrendSeries, DashboardTrendWindow, EdgeValidationGateReport, PerformanceAssessmentResponse, PolicyHealthReport } from "../types";
+import { dashboardBoardTone, dashboardFailureTone, formatDate, normalizeReviewWindow, REVIEW_WINDOW_OPTIONS, reviewWindowLabel, reviewWindowStartIso } from "../utils";
+
+type DataQualityAuditResponse = {
+  generated_at: string;
+  ticker_count: number;
+  issue_ticker_count: number;
+  issue_counts: Record<string, number>;
+};
+
+type OperatorStatusStrip = {
+  policyHealth: PolicyHealthReport | null;
+  edgeGate: EdgeValidationGateReport | null;
+  risk: AccountRiskState | null;
+  dataQuality: DataQualityAuditResponse | null;
+};
 
 type DashboardWindow = (typeof REVIEW_WINDOW_OPTIONS)[number]["value"];
 
@@ -32,6 +46,33 @@ function formatCurrency(value: number | null | undefined): string {
 
 function normalizeWindow(value: string | null): DashboardWindow {
   return normalizeReviewWindow(value, "1d") as DashboardWindow;
+}
+
+function policyHealthTone(label: string | null | undefined): "ok" | "warning" | "danger" | "neutral" | "info" {
+  const normalized = (label ?? "").trim().toLowerCase();
+  if (normalized === "healthy" || normalized === "eligible_for_cautious_expansion") return "ok";
+  if (normalized === "watch" || normalized === "research_only") return "warning";
+  if (normalized === "degraded" || normalized === "demote_or_halt" || normalized === "blocked") return "danger";
+  if (normalized === "insufficient") return "neutral";
+  return "info";
+}
+
+function riskTone(risk: AccountRiskState | null): "ok" | "warning" | "danger" | "neutral" {
+  if (!risk) return "neutral";
+  if (!risk.enabled) return "warning";
+  if (!risk.allowed || risk.halt_enabled) return "danger";
+  return "ok";
+}
+
+function dataQualityTone(payload: DataQualityAuditResponse | null): "ok" | "warning" | "danger" | "neutral" {
+  if (!payload) return "neutral";
+  if ((payload.issue_counts.broker_rejected ?? 0) > 0 || (payload.issue_counts.no_bars ?? 0) > 0) return "danger";
+  if (payload.issue_ticker_count > 0) return "warning";
+  return "ok";
+}
+
+function formatReasons(reasons: string[] | null | undefined, fallback: string): string {
+  return reasons && reasons.length > 0 ? reasons.slice(0, 3).join(" · ") : fallback;
 }
 
 function formatTrendValue(kind: DashboardTrendSeries["kind"], value: number | null): string {
@@ -93,6 +134,8 @@ export function DashboardPage() {
   const selectedWindow = normalizeWindow(searchParams.get("window"));
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [dashboardTrends, setDashboardTrends] = useState<DashboardTrends | null>(null);
+  const [operatorStatus, setOperatorStatus] = useState<OperatorStatusStrip | null>(null);
+  const [operatorStatusError, setOperatorStatusError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
@@ -126,9 +169,34 @@ export function DashboardPage() {
     }
   }
 
+  async function loadOperatorStatus() {
+    setOperatorStatusError(null);
+    const windowStart = reviewWindowStartIso(selectedWindow);
+    const researchPath = windowStart ? `/api/research/performance-workbench?calibration_evaluated_after=${encodeURIComponent(windowStart)}` : "/api/research/performance-workbench";
+    const [research, risk, dataQuality] = await Promise.allSettled([
+      getJson<PerformanceAssessmentResponse>(researchPath),
+      getJson<AccountRiskState>("/api/risk"),
+      getJson<DataQualityAuditResponse>("/api/data-quality/audit?limit=300"),
+    ]);
+    setOperatorStatus({
+      policyHealth: research.status === "fulfilled" ? research.value.policy_health ?? null : null,
+      edgeGate: research.status === "fulfilled" ? research.value.edge_validation_gate ?? null : null,
+      risk: risk.status === "fulfilled" ? risk.value : null,
+      dataQuality: dataQuality.status === "fulfilled" ? dataQuality.value : null,
+    });
+    const failures = [research, risk, dataQuality].filter((result) => result.status === "rejected").length;
+    if (failures > 0) {
+      setOperatorStatusError(`${failures} operator status check${failures === 1 ? "" : "s"} unavailable`);
+    }
+  }
+
   useEffect(() => {
     void loadDashboard({ clear: true, includeTrends: false });
-    const interval = window.setInterval(() => void loadDashboard({ includeTrends: false }), 60000);
+    void loadOperatorStatus();
+    const interval = window.setInterval(() => {
+      void loadDashboard({ includeTrends: false });
+      void loadOperatorStatus();
+    }, 60000);
     return () => window.clearInterval(interval);
   }, [selectedWindow]);
 
@@ -218,6 +286,38 @@ export function DashboardPage() {
               <Badge tone={dashboardBoardTone(quality?.status)}>{quality?.status ?? "unknown"}</Badge>
               <Badge tone={dashboardBoardTone(quality?.status)}>{quality?.status === "healthy" ? "green" : quality?.status === "needs_attention" ? "red" : "yellow"}</Badge>
               <span className="helper-text">Updated {lastLoadedAt ? formatDate(lastLoadedAt.toISOString()) : quality?.generated_at ? formatDate(quality.generated_at) : "—"} · resolved outcomes {quality?.resolved_outcomes ?? "—"}</span>
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle
+              kicker="Operator status"
+              title="Trust, autonomy, risk, and data gates"
+              subtitle="One compact strip for the checks that should stop risk expansion before deeper review."
+              actions={<Link to="/research" className="button-subtle">Open research</Link>}
+            />
+            {operatorStatusError ? <div className="helper-text top-gap-small">{operatorStatusError}</div> : null}
+            <div className="operator-status-grid top-gap-small">
+              <div className="operator-status-item">
+                <div className="operator-status-head"><span className="summary-label">policy health</span><Badge tone={policyHealthTone(operatorStatus?.policyHealth?.label)}>{operatorStatus?.policyHealth?.label ?? "unknown"}</Badge></div>
+                <div className="operator-status-value">{operatorStatus?.policyHealth?.resolved_selected_outcomes ?? "—"} selected resolved</div>
+                <div className="helper-text">{formatReasons(operatorStatus?.policyHealth?.reasons, "No policy-health reasons reported")}</div>
+              </div>
+              <div className="operator-status-item">
+                <div className="operator-status-head"><span className="summary-label">autonomy gate</span><Badge tone={policyHealthTone(operatorStatus?.edgeGate?.label)}>{operatorStatus?.edgeGate?.label ?? "unknown"}</Badge></div>
+                <div className="operator-status-value">{operatorStatus?.edgeGate?.broker_selected_outcomes ?? "—"} broker selected</div>
+                <div className="helper-text">{formatReasons(operatorStatus?.edgeGate?.reasons, "No autonomy-gate reasons reported")}</div>
+              </div>
+              <div className="operator-status-item">
+                <div className="operator-status-head"><span className="summary-label">broker risk</span><Badge tone={riskTone(operatorStatus?.risk ?? null)}>{operatorStatus?.risk ? operatorStatus.risk.allowed ? "allowed" : "blocked" : "unknown"}</Badge></div>
+                <div className="operator-status-value">{operatorStatus?.risk?.halt_enabled ? "halt active" : operatorStatus?.risk?.enabled ? "risk enabled" : "risk disabled"}</div>
+                <div className="helper-text">{operatorStatus?.risk?.halt_reason || formatReasons(operatorStatus?.risk?.reasons, "No broker-risk reasons reported")}</div>
+              </div>
+              <div className="operator-status-item">
+                <div className="operator-status-head"><span className="summary-label">data quality</span><Badge tone={dataQualityTone(operatorStatus?.dataQuality ?? null)}>{operatorStatus?.dataQuality ? `${operatorStatus.dataQuality.issue_ticker_count} issue tickers` : "unknown"}</Badge></div>
+                <div className="operator-status-value">{operatorStatus?.dataQuality?.ticker_count ?? "—"} tickers audited</div>
+                <div className="helper-text">{operatorStatus?.dataQuality ? Object.entries(operatorStatus.dataQuality.issue_counts).slice(0, 3).map(([key, count]) => `${key.replace(/_/g, " ")}: ${count}`).join(" · ") || "No data-quality issues reported" : "Audit unavailable"}</div>
+              </div>
             </div>
           </Card>
 
