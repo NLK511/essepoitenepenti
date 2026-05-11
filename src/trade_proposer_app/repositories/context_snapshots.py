@@ -53,6 +53,24 @@ class ContextSnapshotRepository:
         ).all()
         return [self._to_macro_model(row) for row in rows]
 
+    def latest_macro_context_snapshots_by_run(self, run_ids: list[int]) -> dict[int, MacroContextSnapshot]:
+        wanted = [run_id for run_id in dict.fromkeys(run_ids) if run_id > 0]
+        if not wanted:
+            return {}
+        rows = self.session.scalars(
+            select(MacroContextSnapshotRecord)
+            .where(MacroContextSnapshotRecord.run_id.in_(wanted))
+            .order_by(MacroContextSnapshotRecord.run_id.asc(), MacroContextSnapshotRecord.computed_at.desc())
+        ).all()
+        snapshots: dict[int, MacroContextSnapshot] = {}
+        for row in rows:
+            if row.run_id is None or row.run_id in snapshots:
+                continue
+            snapshots[row.run_id] = self._to_macro_model(row)
+            if len(snapshots) == len(wanted):
+                break
+        return snapshots
+
     def get_latest_macro_context_snapshot_before(self, as_of: datetime) -> MacroContextSnapshot | None:
         record = self.session.scalar(
             select(MacroContextSnapshotRecord)
@@ -117,6 +135,24 @@ class ContextSnapshotRepository:
             query = query.where(IndustryContextSnapshotRecord.run_id == run_id)
         rows = self.session.scalars(query.order_by(IndustryContextSnapshotRecord.computed_at.desc()).limit(limit)).all()
         return [self._to_industry_model(row) for row in rows]
+
+    def latest_industry_context_snapshots_by_run(self, run_ids: list[int]) -> dict[int, IndustryContextSnapshot]:
+        wanted = [run_id for run_id in dict.fromkeys(run_ids) if run_id > 0]
+        if not wanted:
+            return {}
+        rows = self.session.scalars(
+            select(IndustryContextSnapshotRecord)
+            .where(IndustryContextSnapshotRecord.run_id.in_(wanted))
+            .order_by(IndustryContextSnapshotRecord.run_id.asc(), IndustryContextSnapshotRecord.computed_at.desc())
+        ).all()
+        snapshots: dict[int, IndustryContextSnapshot] = {}
+        for row in rows:
+            if row.run_id is None or row.run_id in snapshots:
+                continue
+            snapshots[row.run_id] = self._to_industry_model(row)
+            if len(snapshots) == len(wanted):
+                break
+        return snapshots
 
     def get_latest_industry_context_snapshot_before(self, industry_key: str, as_of: datetime) -> IndustryContextSnapshot | None:
         record = self.session.scalar(

@@ -95,6 +95,11 @@ function HelpLabel({ label, tooltip, to }: { label: string; tooltip: string; to:
   );
 }
 
+type RunContextSnapshotBatch = {
+  macro_context_by_run: Record<string, MacroContextSnapshot>;
+  industry_context_by_run: Record<string, IndustryContextSnapshot>;
+};
+
 export function RecommendationPlansPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams({ limit: "100", page: "1" });
@@ -155,24 +160,29 @@ export function RecommendationPlansPage() {
         if (outcome) {
           summaryParams.set("outcome", outcome);
         }
-        const summaryQuery = summaryParams.toString();
         const statsParams = new URLSearchParams();
         if (computedAfter) {
           summaryParams.set("computed_after", computedAfter);
           summaryParams.set("evaluated_after", computedAfter);
           statsParams.set("computed_after", computedAfter);
         }
-        const [planResults, stats] = await Promise.all([
+        const summaryQuery = summaryParams.toString();
+        const [planResults, stats, calibrationResult, baselinesResult, familyReviewResult, evidenceResult, actionabilityResult] = await Promise.all([
           getJson<RecommendationPlanListResponse>(buildQuery(searchParams, computedAfter)),
           getJson<RecommendationPlanStats>(`/api/recommendation-plans/stats?${statsParams.toString()}`),
+          getJson<RecommendationCalibrationSummary>(`/api/recommendation-outcomes/summary?${summaryQuery}`),
+          getJson<RecommendationBaselineSummary>(`/api/recommendation-plans/baselines?${summaryQuery}`),
+          getJson<RecommendationSetupFamilyReviewSummary>(`/api/recommendation-outcomes/setup-family-review?${summaryQuery}`),
+          getJson<RecommendationEvidenceConcentrationSummary>(`/api/recommendation-outcomes/evidence-concentration?${summaryQuery}`),
+          getJson<RecommendationActionabilityDiagnostics>(`/api/recommendation-outcomes/actionability-diagnostics?${summaryQuery}`),
         ]);
         setPlansResponse(planResults);
         setPlanStats(stats);
-        setCalibration(await getJson<RecommendationCalibrationSummary>(`/api/recommendation-outcomes/summary?${summaryQuery}`));
-        setBaselines(await getJson<RecommendationBaselineSummary>(`/api/recommendation-plans/baselines?${summaryQuery}`));
-        setFamilyReview(await getJson<RecommendationSetupFamilyReviewSummary>(`/api/recommendation-outcomes/setup-family-review?${summaryQuery}`));
-        setEvidenceConcentration(await getJson<RecommendationEvidenceConcentrationSummary>(`/api/recommendation-outcomes/evidence-concentration?${summaryQuery}`));
-        setActionability(await getJson<RecommendationActionabilityDiagnostics>(`/api/recommendation-outcomes/actionability-diagnostics?${summaryQuery}`));
+        setCalibration(calibrationResult);
+        setBaselines(baselinesResult);
+        setFamilyReview(familyReviewResult);
+        setEvidenceConcentration(evidenceResult);
+        setActionability(actionabilityResult);
 
         const runIds = Array.from(new Set(planResults.items.map((item) => item.run_id).filter((value): value is number => typeof value === "number"))).slice(0, 20);
         if (planId) {
@@ -188,14 +198,9 @@ export function RecommendationPlansPage() {
           setMacroContextByRun({});
           setIndustryContextByRun({});
         } else {
-          const macroEntries = await Promise.all(
-            runIds.map(async (id) => [id, (await getJson<MacroContextSnapshot[]>(`/api/context/macro?run_id=${id}&limit=1`))[0] ?? null] as const),
-          );
-          const industryEntries = await Promise.all(
-            runIds.map(async (id) => [id, (await getJson<IndustryContextSnapshot[]>(`/api/context/industry?run_id=${id}&limit=1`))[0] ?? null] as const),
-          );
-          setMacroContextByRun(Object.fromEntries(macroEntries));
-          setIndustryContextByRun(Object.fromEntries(industryEntries));
+          const contextBatch = await getJson<RunContextSnapshotBatch>(`/api/context/run-snapshots?run_ids=${runIds.join(",")}`);
+          setMacroContextByRun(Object.fromEntries(runIds.map((id) => [id, contextBatch.macro_context_by_run[String(id)] ?? null])));
+          setIndustryContextByRun(Object.fromEntries(runIds.map((id) => [id, contextBatch.industry_context_by_run[String(id)] ?? null])));
         }
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load recommendation plans");

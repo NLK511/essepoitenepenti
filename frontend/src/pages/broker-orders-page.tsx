@@ -61,7 +61,7 @@ export function BrokerOrdersPage() {
       }
     }
     void load();
-  }, [limit, runId, searchParams, selectedOrderId, setSearchParams]);
+  }, [limit, runId, setSearchParams]);
 
   const stats = useMemo(() => {
     const items = orders ?? [];

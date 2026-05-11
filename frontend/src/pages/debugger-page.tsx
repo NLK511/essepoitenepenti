@@ -31,6 +31,7 @@ export function DebuggerPage() {
 
   const selectedJobType = searchParams.get("job_type") || "all";
   const selectedLimit = Number.parseInt(searchParams.get("limit") || "10", 10) || 10;
+  const selectedRunId = searchParams.get("run_id");
 
   useEffect(() => {
     async function loadRuns() {
@@ -43,8 +44,7 @@ export function DebuggerPage() {
         }
         const loadedRuns = await getJson<Run[]>(`/api/runs?${query.toString()}`);
         setRuns(loadedRuns);
-        const selectedId = searchParams.get("run_id");
-        const matchingRun = selectedId ? loadedRuns.find((run) => String(run.id) === selectedId) : null;
+        const matchingRun = selectedRunId ? loadedRuns.find((run) => String(run.id) === selectedRunId) : null;
         if (matchingRun?.id) {
           return;
         }
@@ -58,24 +58,23 @@ export function DebuggerPage() {
       }
     }
     void loadRuns();
-  }, [searchParams, setSearchParams, selectedJobType, selectedLimit]);
+  }, [setSearchParams, selectedJobType, selectedLimit]);
 
   useEffect(() => {
     async function loadDetail() {
-      const selectedId = searchParams.get("run_id");
-      if (!selectedId) {
+      if (!selectedRunId) {
         setDetail(null);
         return;
       }
       try {
         setError(null);
-        setDetail(await getJson<RunDetailResponse>(`/api/runs/${selectedId}`));
+        setDetail(await getJson<RunDetailResponse>(`/api/runs/${selectedRunId}`));
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load run detail");
       }
     }
     void loadDetail();
-  }, [searchParams]);
+  }, [selectedRunId]);
 
   const runStats = useMemo(() => {
     const items = runs ?? [];
@@ -87,7 +86,6 @@ export function DebuggerPage() {
     };
   }, [runs]);
 
-  const selectedRunId = searchParams.get("run_id");
   async function handleDeleteRun(runId: number) {
     if (
       !window.confirm(

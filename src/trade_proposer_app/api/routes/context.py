@@ -84,6 +84,32 @@ async def get_industry_context_snapshot(
     return snapshot
 
 
+@router.get("/run-snapshots")
+async def latest_context_snapshots_by_run(
+    run_ids: str = Query(default="", description="Comma-separated run ids"),
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    parsed_run_ids: list[int] = []
+    for value in run_ids.split(","):
+        candidate = value.strip()
+        if not candidate:
+            continue
+        try:
+            parsed = int(candidate)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="run_ids must be a comma-separated list of integers") from exc
+        if parsed > 0 and parsed not in parsed_run_ids:
+            parsed_run_ids.append(parsed)
+    parsed_run_ids = parsed_run_ids[:50]
+    repository = ContextSnapshotRepository(session)
+    macro_by_run = repository.latest_macro_context_snapshots_by_run(parsed_run_ids)
+    industry_by_run = repository.latest_industry_context_snapshots_by_run(parsed_run_ids)
+    return {
+        "macro_context_by_run": {str(run_id): snapshot.model_dump(mode="json") for run_id, snapshot in macro_by_run.items()},
+        "industry_context_by_run": {str(run_id): snapshot.model_dump(mode="json") for run_id, snapshot in industry_by_run.items()},
+    }
+
+
 @router.get("/ticker-signals")
 async def list_ticker_signal_snapshots(
     ticker: str | None = Query(default=None),
