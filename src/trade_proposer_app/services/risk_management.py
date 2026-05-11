@@ -197,7 +197,7 @@ class BrokerRiskManager:
         if snapshot.warnings:
             reasons.append("broker_snapshot_warnings")
         broker_ticker_counts: dict[str, int] = {}
-        for item in [*snapshot.open_positions, *snapshot.open_orders]:
+        for item in snapshot.open_positions:
             ticker = str(item.get("symbol") or item.get("ticker") or "").strip().upper()
             if ticker:
                 broker_ticker_counts[ticker] = broker_ticker_counts.get(ticker, 0) + 1

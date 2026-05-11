@@ -1267,7 +1267,7 @@ class RepositoryTests(unittest.TestCase):
             snapshot = LiveBrokerSnapshot(
                 account={"buying_power": "50"},
                 open_orders=[{"symbol": "AAPL", "qty": "2", "limit_price": "100"}],
-                open_positions=[{"symbol": "MSFT", "market_value": "300"}],
+                open_positions=[{"symbol": "AAPL", "market_value": "300"}, {"symbol": "MSFT", "market_value": "300"}],
             )
             assessment = BrokerRiskManager(SettingsRepository(session), BrokerPositionRepository(session)).assess(
                 TradeCandidate(ticker="AAPL", notional_amount=75.0),
@@ -1278,13 +1278,23 @@ class RepositoryTests(unittest.TestCase):
             self.assertIn("broker_reconciliation_material", assessment.reasons)
             self.assertEqual(assessment.metrics["broker_buying_power_usd"], 50.0)
             self.assertEqual(assessment.metrics["broker_open_order_count"], 1)
-            self.assertEqual(assessment.metrics["broker_open_position_count"], 1)
+            self.assertEqual(assessment.metrics["broker_open_position_count"], 2)
             self.assertEqual(assessment.metrics["broker_drift_severity"], "material")
             self.assertIn("untracked_broker_exposure:AAPL", assessment.metrics["broker_drift_reasons"])
-            self.assertEqual(assessment.metrics["open_ticker_counts"]["AAPL"], 1)
+            self.assertIn("untracked_broker_exposure:MSFT", assessment.metrics["broker_drift_reasons"])
+            self.assertGreaterEqual(assessment.metrics["open_ticker_counts"]["AAPL"], 1)
             self.assertEqual(assessment.metrics["open_ticker_counts"]["MSFT"], 1)
         finally:
             session.close()
+
+    def test_risk_manager_does_not_treat_open_orders_as_drift_by_themselves(self) -> None:
+        snapshot = LiveBrokerSnapshot(
+            open_orders=[{"symbol": "AAPL", "qty": "2", "limit_price": "100"}],
+            open_positions=[],
+        )
+        drift = BrokerRiskManager._broker_drift(snapshot=snapshot, app_open_ticker_counts={})
+        self.assertEqual(drift["severity"], "ok")
+        self.assertEqual(drift["reasons"], [])
 
     def test_risk_manager_blocks_uncertain_broker_snapshot(self) -> None:
         session = create_session()

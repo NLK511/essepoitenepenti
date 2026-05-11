@@ -151,7 +151,7 @@ AGGREGATOR_DEFAULTS = {
 }
 
 DEFAULT_SUMMARY_METHOD = "price_only"
-DEFAULT_SUMMARY_TEXT = "Price-based signal only (news feeds not configured)."
+DEFAULT_SUMMARY_TEXT = "No usable news articles were returned for this run."
 
 WEIGHTS_PATH = Path(__file__).resolve().parent.parent / "data" / "weights.json"
 
@@ -1199,7 +1199,13 @@ class ProposalService:
             )
         if self.news_service is None:
             merged_problems = list(dict.fromkeys(context.get("problems", []) + context.get("signal_feed_errors", [])))
-            context["problems"] = merged_problems
+            context.update(
+                {
+                    "problems": merged_problems,
+                    "summary_text": "News service unavailable; no usable news articles were returned for this run.",
+                    "summary_method": DEFAULT_SUMMARY_METHOD,
+                }
+            )
             return context
         bundle = self.news_service.fetch(ticker, start_at=start_at, end_at=effective_now, request_mode=request_mode)
         sentiment = self.sentiment_analyzer.analyze(bundle)

@@ -9,7 +9,7 @@ import json
 
 from trade_proposer_app.domain.models import HistoricalMarketBar, NewsArticle, NewsBundle
 from trade_proposer_app.services.news import SUMMARY_METHOD_NEWS_DIGEST
-from trade_proposer_app.services.proposals import DEFAULT_SUMMARY_METHOD, ProposalExecutionError, ProposalService
+from trade_proposer_app.services.proposals import DEFAULT_SUMMARY_METHOD, DEFAULT_SUMMARY_TEXT, ProposalExecutionError, ProposalService
 from trade_proposer_app.services.summary import SummaryResult
 
 
@@ -431,6 +431,30 @@ class ProposalServiceTests(unittest.TestCase):
         self.assertEqual(context["summary_method"], SUMMARY_METHOD_NEWS_DIGEST)
         self.assertEqual(context["news_items"], [])
         self.assertEqual(context["news_point_count"], 0)
+
+    def test_apply_news_context_uses_generic_no_news_fallback_text_when_bundle_is_empty(self) -> None:
+        bundle = NewsBundle(ticker="", articles=[], feeds_used=["GoogleNews"])
+        service = ProposalService(news_service=_FakeNewsService(bundle))
+        service.sentiment_analyzer.analyze = MagicMock(
+            return_value={
+                "score": 0.0,
+                "label": "NEUTRAL",
+                "contexts": [],
+                "context_flags": {},
+                "sentiment_volatility": 0.0,
+                "polarity_trend": 0.0,
+                "sources": ["GoogleNews"],
+                "news_items": [],
+                "problems": [],
+            }
+        )
+
+        context = service._apply_news_context({}, "AAPL")
+
+        self.assertEqual(context["summary_text"], DEFAULT_SUMMARY_TEXT)
+        self.assertEqual(context["summary_method"], DEFAULT_SUMMARY_METHOD)
+        self.assertEqual(context["news_item_count"], 0)
+        self.assertEqual(context["news_feeds_used"], ["GoogleNews"])
 
     def test_generate_uses_macro_and_industry_snapshots_in_analysis_payload(self) -> None:
         history = make_sample_history()
