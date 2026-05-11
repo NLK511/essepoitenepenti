@@ -7,22 +7,30 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.persistence.models import BrokerOrderExecutionRecord, HistoricalMarketBarRecord, HistoricalNewsRecord, TickerSignalSnapshotRecord
+from trade_proposer_app.persistence.models import BrokerOrderExecutionRecord, HistoricalMarketBarRecord, HistoricalNewsRecord, RecommendationPlanRecord, TickerSignalSnapshotRecord
 from trade_proposer_app.domain.enums import RunStatus
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
+from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
+from trade_proposer_app.repositories.risk_halt_events import RiskHaltEventRepository
 from trade_proposer_app.repositories.runs import RunRepository
+from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.dashboard_trends import DashboardTrendService
+from trade_proposer_app.services.data_quality_audit import DataQualityAuditService
+from trade_proposer_app.services.edge_validation_gate import EdgeValidationGateService
 from trade_proposer_app.services.recommendation_evidence_concentration import RecommendationEvidenceConcentrationService
 from trade_proposer_app.services.recommendation_plan_baselines import RecommendationPlanBaselineService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.recommendation_quality_summary import RecommendationQualitySummaryService
 from trade_proposer_app.services.recommendation_setup_family_reviews import RecommendationSetupFamilyReviewService
+from trade_proposer_app.services.risk_management import BrokerRiskManager
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.time_windows import normalize_review_window, review_window_start
+from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicyService
+from trade_proposer_app.services.trade_policy_evaluation import TradePolicyEvaluationService
 from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -63,15 +71,32 @@ def _recent_items_within_window(items: list, *, computed_after: datetime | None,
     return filtered
 
 
-def _sum_plan_item_count(plans: list, key: str) -> int:
+def _sum_plan_signal_breakdown_count(
+    session: Session,
+    key: str,
+    *,
+    computed_after: datetime | None,
+    computed_before: datetime | None,
+) -> int:
+    query = select(RecommendationPlanRecord.signal_breakdown_json)
+    if computed_after is not None:
+        query = query.where(RecommendationPlanRecord.computed_at >= computed_after)
+    if computed_before is not None:
+        query = query.where(RecommendationPlanRecord.computed_at <= computed_before)
     total = 0
-    for plan in plans:
-        breakdown = getattr(plan, "signal_breakdown", None)
-        if hasattr(breakdown, "get"):
-            try:
-                total += int(breakdown.get(key, 0) or 0)
-            except (TypeError, ValueError):
-                continue
+    for raw_breakdown in session.scalars(query).all():
+        if not raw_breakdown:
+            continue
+        try:
+            breakdown = json.loads(raw_breakdown)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(breakdown, dict):
+            continue
+        try:
+            total += int(breakdown.get(key, 0) or 0)
+        except (TypeError, ValueError):
+            continue
     return total
 
 
@@ -132,7 +157,6 @@ def _dashboard_window_metrics(
     plan_amount = plan_repository.count_plans(computed_after=computed_after, computed_before=now)
     shortlisted_plans = plan_repository.count_plans(shortlisted=True, computed_after=computed_after, computed_before=now)
     actionable_plans = plan_repository.count_plans(action="long", computed_after=computed_after, computed_before=now) + plan_repository.count_plans(action="short", computed_after=computed_after, computed_before=now)
-    technical_plans = plan_repository.list_plans(limit=5000, computed_after=computed_after, computed_before=now)
 
     news_processed = _count_records(session, HistoricalNewsRecord, HistoricalNewsRecord.published_at, computed_after, now)
     bars_stored = _count_records(session, HistoricalMarketBarRecord, HistoricalMarketBarRecord.bar_time, computed_after, now)
@@ -140,7 +164,7 @@ def _dashboard_window_metrics(
     performance = TradingPerformanceMetricsService(session)
     broker_summary = performance.summarize_broker_closed_positions(evaluated_after=computed_after, evaluated_before=now).to_dict()
     effective_summary = performance.summarize_effective_outcomes(evaluated_after=computed_after, evaluated_before=now).to_dict()
-    tweets_processed = _sum_plan_item_count(technical_plans, "social_item_count")
+    tweets_processed = _sum_plan_signal_breakdown_count(session, "social_item_count", computed_after=computed_after, computed_before=now)
 
     calibration = RecommendationPlanCalibrationService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
     baselines = RecommendationPlanBaselineService(plan_repository).summarize(computed_after=computed_after, computed_before=now)
@@ -203,6 +227,41 @@ async def get_dashboard_trends(session: Session = Depends(get_db_session)) -> di
     return {"dashboard_trends": _build_dashboard_trends(session, now=now)}
 
 
+@router.get("/operator-status")
+async def get_dashboard_operator_status(
+    session: Session = Depends(get_db_session),
+    window: str = Query("1d", description="Dashboard time window"),
+) -> dict[str, object]:
+    now = datetime.now(timezone.utc)
+    computed_after = _window_start(_normalize_window(window), now)
+    effective_outcomes = EffectivePlanOutcomeRepository(session)
+    policy_review = TradePolicyEvaluationService(
+        effective_outcomes,
+        policy_service=TradeDecisionPolicyService(session),
+    ).summarize_active_policy(
+        evaluated_after=computed_after,
+        evaluated_before=now,
+        limit=5000,
+    )
+    risk = BrokerRiskManager(
+        SettingsRepository(session),
+        BrokerPositionRepository(session),
+        RiskHaltEventRepository(session),
+    ).assess()
+    data_quality = DataQualityAuditService(session).summarize(limit=1)
+    data_quality_summary = {
+        key: data_quality[key]
+        for key in ("generated_at", "ticker_count", "issue_ticker_count", "issue_counts")
+        if key in data_quality
+    }
+    return {
+        "policy_health": policy_review.policy_health.to_dict(),
+        "edge_validation_gate": EdgeValidationGateService().evaluate(policy_review.policy_evaluation).to_dict(),
+        "risk": risk.model_dump(mode="json"),
+        "data_quality": data_quality_summary,
+    }
+
+
 @router.get("")
 async def get_dashboard(
     session: Session = Depends(get_db_session),
@@ -227,7 +286,6 @@ async def get_dashboard(
     recent_runs = _recent_items_within_window(runs.list_latest_runs(limit=50), computed_after=computed_after)
     recommendation_plans = plan_repository.list_plans(limit=12, computed_after=computed_after, computed_before=now)
     recent_plans = plan_repository.list_plans(limit=500, computed_after=computed_after, computed_before=now)
-    technical_plans = plan_repository.list_plans(limit=5000, computed_after=computed_after, computed_before=now)
 
     signals_amount = _count_ticker_signals(session, computed_after=computed_after, computed_before=now)
     plan_amount = plan_repository.count_plans(computed_after=computed_after, computed_before=now)
@@ -239,7 +297,7 @@ async def get_dashboard(
     bars_stored = _count_records(session, HistoricalMarketBarRecord, HistoricalMarketBarRecord.bar_time, computed_after, now)
     orders_placed = _count_records(session, BrokerOrderExecutionRecord, BrokerOrderExecutionRecord.created_at, computed_after, now)
     broker_summary = TradingPerformanceMetricsService(session).summarize_broker_closed_positions(evaluated_after=computed_after, evaluated_before=now).to_dict()
-    tweets_processed = _sum_plan_item_count(technical_plans, "social_item_count")
+    tweets_processed = _sum_plan_signal_breakdown_count(session, "social_item_count", computed_after=computed_after, computed_before=now)
 
     calibration = RecommendationPlanCalibrationService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
     baselines = RecommendationPlanBaselineService(plan_repository).summarize(computed_after=computed_after, computed_before=now)

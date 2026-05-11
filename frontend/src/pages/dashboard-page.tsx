@@ -3,8 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
-import type { AccountRiskState, DashboardResponse, DashboardTrends, DashboardTrendSeries, DashboardTrendWindow, EdgeValidationGateReport, PerformanceAssessmentResponse, PolicyHealthReport } from "../types";
-import { dashboardBoardTone, dashboardFailureTone, formatDate, normalizeReviewWindow, REVIEW_WINDOW_OPTIONS, reviewWindowLabel, reviewWindowStartIso } from "../utils";
+import type { AccountRiskState, DashboardResponse, DashboardTrends, DashboardTrendSeries, DashboardTrendWindow, EdgeValidationGateReport, PolicyHealthReport } from "../types";
+import { dashboardBoardTone, dashboardFailureTone, formatDate, normalizeReviewWindow, REVIEW_WINDOW_OPTIONS, reviewWindowLabel } from "../utils";
 
 type DataQualityAuditResponse = {
   generated_at: string;
@@ -18,6 +18,13 @@ type OperatorStatusStrip = {
   edgeGate: EdgeValidationGateReport | null;
   risk: AccountRiskState | null;
   dataQuality: DataQualityAuditResponse | null;
+};
+
+type DashboardOperatorStatusResponse = {
+  policy_health: PolicyHealthReport | null;
+  edge_validation_gate: EdgeValidationGateReport | null;
+  risk: AccountRiskState | null;
+  data_quality: DataQualityAuditResponse | null;
 };
 
 type DashboardWindow = (typeof REVIEW_WINDOW_OPTIONS)[number]["value"];
@@ -171,22 +178,17 @@ export function DashboardPage() {
 
   async function loadOperatorStatus() {
     setOperatorStatusError(null);
-    const windowStart = reviewWindowStartIso(selectedWindow);
-    const researchPath = windowStart ? `/api/research/performance-workbench?calibration_evaluated_after=${encodeURIComponent(windowStart)}` : "/api/research/performance-workbench";
-    const [research, risk, dataQuality] = await Promise.allSettled([
-      getJson<PerformanceAssessmentResponse>(researchPath),
-      getJson<AccountRiskState>("/api/risk"),
-      getJson<DataQualityAuditResponse>("/api/data-quality/audit?limit=300"),
-    ]);
-    setOperatorStatus({
-      policyHealth: research.status === "fulfilled" ? research.value.policy_health ?? null : null,
-      edgeGate: research.status === "fulfilled" ? research.value.edge_validation_gate ?? null : null,
-      risk: risk.status === "fulfilled" ? risk.value : null,
-      dataQuality: dataQuality.status === "fulfilled" ? dataQuality.value : null,
-    });
-    const failures = [research, risk, dataQuality].filter((result) => result.status === "rejected").length;
-    if (failures > 0) {
-      setOperatorStatusError(`${failures} operator status check${failures === 1 ? "" : "s"} unavailable`);
+    try {
+      const payload = await getJson<DashboardOperatorStatusResponse>(`/api/dashboard/operator-status?window=${encodeURIComponent(selectedWindow)}`);
+      setOperatorStatus({
+        policyHealth: payload.policy_health ?? null,
+        edgeGate: payload.edge_validation_gate ?? null,
+        risk: payload.risk ?? null,
+        dataQuality: payload.data_quality ?? null,
+      });
+    } catch (loadError) {
+      setOperatorStatus({ policyHealth: null, edgeGate: null, risk: null, dataQuality: null });
+      setOperatorStatusError(loadError instanceof Error ? loadError.message : "Operator status unavailable");
     }
   }
 

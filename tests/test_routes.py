@@ -1355,6 +1355,25 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("resolved_selected_outcomes", payload["active_policy_evaluation"])
         self.assertIn("by_confidence_bucket", payload["reliability_report"])
 
+    async def test_dashboard_operator_status_returns_compact_gate_payload(self) -> None:
+        self.seed_run_with_diagnostics()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/api/dashboard/operator-status", params={"window": "1d"})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("policy_health", payload)
+        self.assertIn("edge_validation_gate", payload)
+        self.assertIn("risk", payload)
+        self.assertIn("data_quality", payload)
+        self.assertIn("label", payload["policy_health"])
+        self.assertIn("label", payload["edge_validation_gate"])
+        self.assertIn("allowed", payload["risk"])
+        self.assertIn("issue_ticker_count", payload["data_quality"])
+        self.assertNotIn("items", payload["data_quality"])
+
     async def test_broker_workbench_returns_orders_positions_and_risk(self) -> None:
         run_id = self.seed_run_with_diagnostics()
         session = Session(bind=self.engine)
