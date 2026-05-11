@@ -165,9 +165,6 @@ def _dashboard_window_metrics(
     broker_summary = performance.summarize_broker_closed_positions(evaluated_after=computed_after, evaluated_before=now).to_dict()
     effective_summary = performance.summarize_effective_outcomes(evaluated_after=computed_after, evaluated_before=now).to_dict()
     tweets_processed = _sum_plan_signal_breakdown_count(session, "social_item_count", computed_after=computed_after, computed_before=now)
-
-    calibration = RecommendationPlanCalibrationService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
-    baselines = RecommendationPlanBaselineService(plan_repository).summarize(computed_after=computed_after, computed_before=now)
     actionability = outcome_repository.summarize_actionability_diagnostics(evaluated_after=computed_after, evaluated_before=now)
 
     overall_win_rate_percent = effective_summary["win_rate_percent"]
@@ -227,6 +224,43 @@ async def get_dashboard_trends(session: Session = Depends(get_db_session)) -> di
     return {"dashboard_trends": _build_dashboard_trends(session, now=now)}
 
 
+def _dashboard_quality_payload(session: Session, *, now: datetime, window_key: str) -> dict[str, object]:
+    computed_after = _window_start(window_key, now)
+    plan_repository = RecommendationPlanRepository(session)
+    outcome_repository = RecommendationOutcomeRepository(session)
+    effective_outcome_repository = EffectivePlanOutcomeRepository(session)
+    quality_service = RecommendationQualitySummaryService(session)
+    calibration = RecommendationPlanCalibrationService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
+    baselines = RecommendationPlanBaselineService(plan_repository).summarize(computed_after=computed_after, computed_before=now)
+    evidence = RecommendationEvidenceConcentrationService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
+    family_review = RecommendationSetupFamilyReviewService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
+    entry_miss = outcome_repository.summarize_entry_miss_diagnostics(evaluated_after=computed_after, evaluated_before=now)
+    selected_quality = quality_service._summary_payload(  # noqa: SLF001 - dashboard needs the selected window summary
+        calibration,
+        baselines,
+        evidence,
+        family_review,
+        entry_miss,
+        walk_forward=None,
+        walk_forward_error=None,
+        window_label=window_key,
+        computed_after=computed_after or (now - timedelta(days=3650)),
+        computed_before=now,
+        evaluated_after=computed_after or (now - timedelta(days=3650)),
+        evaluated_before=now,
+    )
+    return {"summary": selected_quality}
+
+
+@router.get("/quality")
+async def get_dashboard_quality(
+    session: Session = Depends(get_db_session),
+    window: str = Query("1d", description="Dashboard time window"),
+) -> dict[str, object]:
+    now = datetime.now(timezone.utc)
+    return {"recommendation_quality": _dashboard_quality_payload(session, now=now, window_key=_normalize_window(window))}
+
+
 @router.get("/operator-status")
 async def get_dashboard_operator_status(
     session: Session = Depends(get_db_session),
@@ -267,6 +301,8 @@ async def get_dashboard(
     session: Session = Depends(get_db_session),
     window: str = Query("1d", description="Dashboard time window"),
     include_trends: bool = Query(True, description="Include dashboard trend sweep data"),
+    include_quality: bool = Query(True, description="Include heavier recommendation quality summary"),
+    include_diagnostics: bool = Query(True, description="Include warning diagnostics from recent runs/plans"),
 ) -> dict[str, object]:
     now = datetime.now(timezone.utc)
     window_key = _normalize_window(window)
@@ -275,8 +311,6 @@ async def get_dashboard(
     jobs = JobRepository(session).list_all()
     runs = RunRepository(session)
     plan_repository = RecommendationPlanRepository(session)
-    outcome_repository = RecommendationOutcomeRepository(session)
-    effective_outcome_repository = EffectivePlanOutcomeRepository(session)
     confidence_threshold = SettingsDomainService(session).strategy_settings().confidence_threshold
 
     latest_runs = _recent_items_within_window(
@@ -285,41 +319,10 @@ async def get_dashboard(
     )[:10]
     recent_runs = _recent_items_within_window(runs.list_latest_runs(limit=50), computed_after=computed_after)
     recommendation_plans = plan_repository.list_plans(limit=12, computed_after=computed_after, computed_before=now)
-    recent_plans = plan_repository.list_plans(limit=500, computed_after=computed_after, computed_before=now)
+    recent_plans = plan_repository.list_plans(limit=500, computed_after=computed_after, computed_before=now) if include_diagnostics else []
 
-    signals_amount = _count_ticker_signals(session, computed_after=computed_after, computed_before=now)
-    plan_amount = plan_repository.count_plans(computed_after=computed_after, computed_before=now)
-    shortlisted_plans = plan_repository.count_plans(shortlisted=True, computed_after=computed_after, computed_before=now)
-    actionable_plans = plan_repository.count_plans(action="long", computed_after=computed_after, computed_before=now) + plan_repository.count_plans(action="short", computed_after=computed_after, computed_before=now)
-
-    quality_service = RecommendationQualitySummaryService(session)
-    news_processed = _count_records(session, HistoricalNewsRecord, HistoricalNewsRecord.published_at, computed_after, now)
-    bars_stored = _count_records(session, HistoricalMarketBarRecord, HistoricalMarketBarRecord.bar_time, computed_after, now)
-    orders_placed = _count_records(session, BrokerOrderExecutionRecord, BrokerOrderExecutionRecord.created_at, computed_after, now)
-    broker_summary = TradingPerformanceMetricsService(session).summarize_broker_closed_positions(evaluated_after=computed_after, evaluated_before=now).to_dict()
-    tweets_processed = _sum_plan_signal_breakdown_count(session, "social_item_count", computed_after=computed_after, computed_before=now)
-
-    calibration = RecommendationPlanCalibrationService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
-    baselines = RecommendationPlanBaselineService(plan_repository).summarize(computed_after=computed_after, computed_before=now)
-    evidence = RecommendationEvidenceConcentrationService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
-    family_review = RecommendationSetupFamilyReviewService(effective_outcome_repository).summarize(evaluated_after=computed_after, evaluated_before=now)
-    entry_miss = outcome_repository.summarize_entry_miss_diagnostics(evaluated_after=computed_after, evaluated_before=now)
-    actionability = outcome_repository.summarize_actionability_diagnostics(evaluated_after=computed_after, evaluated_before=now)
-    selected_quality = quality_service._summary_payload(  # noqa: SLF001 - dashboard needs the selected window summary
-        calibration,
-        baselines,
-        evidence,
-        family_review,
-        entry_miss,
-        walk_forward=None,
-        walk_forward_error=None,
-        window_label=window_key,
-        computed_after=computed_after or (now - timedelta(days=3650)),
-        computed_before=now,
-        evaluated_after=computed_after or (now - timedelta(days=3650)),
-        evaluated_before=now,
-    )
-    selected_window_metrics = _dashboard_window_metrics(session, now=now, window_key=window_key, quality_fallback=selected_quality)
+    selected_quality = _dashboard_quality_payload(session, now=now, window_key=window_key)["summary"] if include_quality else None
+    selected_window_metrics = _dashboard_window_metrics(session, now=now, window_key=window_key)
     dashboard_trends = _build_dashboard_trends(session, now=now) if include_trends else None
 
     major_failures: list[dict[str, object]] = []
@@ -357,10 +360,11 @@ async def get_dashboard(
     for plan in recent_plans:
         for warning in plan.warnings:
             add_warning(warning, f"plan:{plan.id or 'unknown'}")
-    status_reason = str(selected_quality.get("status_reason") or "").strip()
-    if status_reason and str(selected_quality.get("status") or "") in {"thin", "needs_attention"}:
-        add_warning(status_reason, "quality")
-    add_warning(selected_quality.get("walk_forward_error") if isinstance(selected_quality, dict) else None, "quality")
+    if isinstance(selected_quality, dict):
+        status_reason = str(selected_quality.get("status_reason") or "").strip()
+        if status_reason and str(selected_quality.get("status") or "") in {"thin", "needs_attention"}:
+            add_warning(status_reason, "quality")
+        add_warning(selected_quality.get("walk_forward_error"), "quality")
 
     distinct_warnings = [
         {
@@ -378,7 +382,7 @@ async def get_dashboard(
         "latest_runs": latest_runs,
         "recent_runs": recent_runs,
         "recommendation_plans": recommendation_plans,
-        "recommendation_quality": {"summary": selected_quality},
+        "recommendation_quality": {"summary": selected_quality} if isinstance(selected_quality, dict) else None,
         "dashboard_summary": selected_window_metrics["dashboard_summary"],
         "technical_summary": selected_window_metrics["technical_summary"],
         "dashboard_trends": dashboard_trends,

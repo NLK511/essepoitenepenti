@@ -154,7 +154,7 @@ export function DashboardPage() {
       if (clear) {
         setData(null);
       }
-      const query = new URLSearchParams({ window: selectedWindow, include_trends: String(includeTrends) });
+      const query = new URLSearchParams({ window: selectedWindow, include_trends: String(includeTrends), include_quality: "false", include_diagnostics: "false" });
       const payload = await getJson<DashboardResponse>(`/api/dashboard?${query.toString()}`);
       setData(payload);
       if (includeTrends && payload.dashboard_trends) {
@@ -163,6 +163,15 @@ export function DashboardPage() {
       setLastLoadedAt(new Date());
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load dashboard");
+    }
+  }
+
+  async function loadDashboardQuality() {
+    try {
+      const payload = await getJson<Pick<DashboardResponse, "recommendation_quality">>(`/api/dashboard/quality?window=${encodeURIComponent(selectedWindow)}`);
+      setData((current) => current ? { ...current, recommendation_quality: payload.recommendation_quality } : current);
+    } catch (_loadError) {
+      // Keep the first-paint dashboard usable; quality remains unavailable until the next refresh.
     }
   }
 
@@ -193,11 +202,17 @@ export function DashboardPage() {
   }
 
   useEffect(() => {
-    void loadDashboard({ clear: true, includeTrends: false });
-    void loadOperatorStatus();
-    const interval = window.setInterval(() => {
-      void loadDashboard({ includeTrends: false });
+    void (async () => {
+      await loadDashboard({ clear: true, includeTrends: false });
+      void loadDashboardQuality();
       void loadOperatorStatus();
+    })();
+    const interval = window.setInterval(() => {
+      void (async () => {
+        await loadDashboard({ includeTrends: false });
+        void loadDashboardQuality();
+        void loadOperatorStatus();
+      })();
     }, 60000);
     return () => window.clearInterval(interval);
   }, [selectedWindow]);

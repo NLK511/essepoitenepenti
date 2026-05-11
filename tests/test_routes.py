@@ -1355,6 +1355,22 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("resolved_selected_outcomes", payload["active_policy_evaluation"])
         self.assertIn("by_confidence_bucket", payload["reliability_report"])
 
+    async def test_dashboard_can_defer_quality_and_diagnostics_for_fast_first_paint(self) -> None:
+        self.seed_run_with_diagnostics()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            dashboard = await client.get("/api/dashboard", params={"include_quality": "false", "include_diagnostics": "false", "include_trends": "false"})
+            quality = await client.get("/api/dashboard/quality", params={"window": "1d"})
+
+        self.assertEqual(dashboard.status_code, 200)
+        dashboard_payload = dashboard.json()
+        self.assertIsNone(dashboard_payload["recommendation_quality"])
+        self.assertIn("distinct_warnings", dashboard_payload)
+        self.assertIn("dashboard_summary", dashboard_payload)
+        self.assertEqual(quality.status_code, 200)
+        self.assertIn("summary", quality.json()["recommendation_quality"])
+
     async def test_dashboard_operator_status_returns_compact_gate_payload(self) -> None:
         self.seed_run_with_diagnostics()
 
