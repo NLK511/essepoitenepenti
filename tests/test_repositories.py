@@ -1296,6 +1296,73 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(drift["severity"], "ok")
         self.assertEqual(drift["reasons"], [])
 
+    def test_recommendation_plan_repository_falls_back_to_simulation_for_skipped_orders(self) -> None:
+        session = create_session()
+        try:
+            plans = RecommendationPlanRepository(session)
+            outcomes = RecommendationOutcomeRepository(session)
+            orders = BrokerOrderExecutionRepository(session)
+
+            plan = plans.create_plan(
+                RecommendationPlan(
+                    ticker="AAPL",
+                    horizon=StrategyHorizon.ONE_WEEK,
+                    action="long",
+                    confidence_percent=72.0,
+                    entry_price_low=100.0,
+                    entry_price_high=101.0,
+                    stop_loss=96.0,
+                    take_profit=110.0,
+                    thesis_summary="Skipped order fallback",
+                    computed_at=datetime.now(timezone.utc),
+                )
+            )
+            outcomes.upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=plan.id or 0,
+                    ticker="AAPL",
+                    action="long",
+                    outcome="no_entry",
+                    status="open",
+                    evaluated_at=datetime.now(timezone.utc),
+                    confidence_percent=72.0,
+                    setup_family="breakout",
+                    horizon=StrategyHorizon.ONE_WEEK.value,
+                )
+            )
+            orders.create(
+                BrokerOrderExecution(
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker="AAPL",
+                    run_id=None,
+                    job_id=None,
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    time_in_force="gtc",
+                    quantity=10,
+                    notional_amount=1000.0,
+                    entry_price=100.0,
+                    stop_loss=96.0,
+                    take_profit=110.0,
+                    status="skipped",
+                    client_order_id="skip-1",
+                    request_payload={"reason": "risk_open_notional_limit_exceeded"},
+                    response_payload={},
+                    error_message="risk_open_notional_limit_exceeded",
+                )
+            )
+
+            loaded = plans.get_plan(plan.id or 0)
+            self.assertEqual(loaded.broker_order_status, "skipped")
+            self.assertEqual(loaded.effective_evaluation_source, "simulated")
+            self.assertEqual(loaded.effective_evaluation, "no_entry")
+        finally:
+            session.close()
+
     def test_risk_manager_blocks_uncertain_broker_snapshot(self) -> None:
         session = create_session()
         try:

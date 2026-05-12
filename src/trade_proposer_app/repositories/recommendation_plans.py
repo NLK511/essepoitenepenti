@@ -350,7 +350,7 @@ class RecommendationPlanRepository:
             TradeOutcome.LOSS.value,
         }:
             return "broker"
-        if status in {ExecutionStatus.CANCELED.value, ExecutionStatus.EXPIRED.value, ExecutionStatus.REJECTED.value, ExecutionStatus.FAILED.value}:
+        if status in {ExecutionStatus.CANCELED.value, ExecutionStatus.EXPIRED.value, ExecutionStatus.REJECTED.value, ExecutionStatus.FAILED.value, ExecutionStatus.SKIPPED.value}:
             return "simulated"
         return "missing"
 
