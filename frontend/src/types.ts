@@ -531,6 +531,7 @@ export interface DashboardWarningSummary {
   label: string;
   count: number;
   sources: string[];
+  tickers: string[];
 }
 
 export interface DashboardResponse {

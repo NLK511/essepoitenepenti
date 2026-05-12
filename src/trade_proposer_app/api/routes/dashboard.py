@@ -356,13 +356,19 @@ async def get_dashboard(
 
     warning_counter: Counter[str] = Counter()
     warning_sources: dict[str, set[str]] = {}
+    warning_tickers: dict[str, set[str]] = {}
 
-    def add_warning(message: str | None, source: str) -> None:
+    def add_warning(message: str | None, source: str, ticker: str | None = None) -> None:
         text = str(message or "").strip()
         if not text:
             return
-        warning_counter[text] += 1
-        warning_sources.setdefault(text, set()).add(source)
+        normalized = text
+        if ticker and normalized.startswith(f"{ticker} "):
+            normalized = normalized[len(ticker) + 1 :].strip()
+        warning_counter[normalized] += 1
+        warning_sources.setdefault(normalized, set()).add(source)
+        if ticker:
+            warning_tickers.setdefault(normalized, set()).add(ticker)
 
     for run in recent_runs:
         if run.error_message:
@@ -373,7 +379,7 @@ async def get_dashboard(
             add_warning(f"run {run.id or 'unknown'} completed with warnings", f"run:{run.id or 'unknown'}")
     for plan in recent_plans:
         for warning in plan.warnings:
-            add_warning(warning, f"plan:{plan.id or 'unknown'}")
+            add_warning(warning, f"plan:{plan.id or 'unknown'}", getattr(plan, "ticker", None))
     if isinstance(selected_quality, dict):
         status_reason = str(selected_quality.get("status_reason") or "").strip()
         if status_reason and str(selected_quality.get("status") or "") in {"thin", "needs_attention"}:
@@ -385,6 +391,7 @@ async def get_dashboard(
             "label": warning,
             "count": count,
             "sources": sorted(warning_sources.get(warning, set())),
+            "tickers": sorted(warning_tickers.get(warning, set())),
         }
         for warning, count in warning_counter.most_common(8)
     ]

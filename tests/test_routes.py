@@ -1041,6 +1041,26 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                         setup_family="continuation",
                     )
                 )
+            for ticker in ["AAPL", "MSFT"]:
+                actionability_plan_repository.create_plan(
+                    RecommendationPlan(
+                        ticker=ticker,
+                        horizon="1w",
+                        action="long",
+                        confidence_percent=70.0,
+                        entry_price_low=100.0,
+                        entry_price_high=101.0,
+                        stop_loss=95.0,
+                        take_profit=110.0,
+                        holding_period_days=5,
+                        risk_reward_ratio=1.7,
+                        thesis_summary="Dashboard warning grouping test",
+                        rationale_summary="Dashboard warning grouping test",
+                        warnings=[f"{ticker} broker execution blocked by risk manager: risk_position_notional_limit_exceeded"],
+                        signal_breakdown={"setup_family": "continuation"},
+                        computed_at=now,
+                    )
+                )
             session.execute(
                 update(RunRecord)
                 .where(RunRecord.id == old_run.id)
@@ -1109,6 +1129,9 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(series["key"] == "actionability_gap_percent" for series in one_day_payload["dashboard_trends"]["series"]))
         self.assertTrue(all(item["status"] == "failed" for item in one_day_payload["major_failures"]))
         self.assertFalse(any(item["status"] == "completed_with_warnings" for item in all_payload["major_failures"]))
+        grouped_warning = next(item for item in one_day_payload["distinct_warnings"] if item["label"] == "broker execution blocked by risk manager: risk_position_notional_limit_exceeded")
+        self.assertEqual(grouped_warning["count"], 2)
+        self.assertEqual(grouped_warning["tickers"], ["AAPL", "MSFT"])
         self.assertTrue(any(item["label"] == "summary timeout" for item in one_day_payload["distinct_warnings"]))
 
     async def test_run_detail_includes_broker_orders_and_manual_actions_work(self) -> None:

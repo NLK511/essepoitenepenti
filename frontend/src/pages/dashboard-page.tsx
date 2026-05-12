@@ -387,15 +387,6 @@ export function DashboardPage() {
               </div>
             </Card>
 
-            <Card>
-              <SectionTitle kicker="Next move" title="Open the deeper evidence only when needed" subtitle="The board should stay minimal; everything else belongs on a dedicated detail page." />
-              <div className="cluster top-gap-small">
-                <Link to="/jobs/recommendation-plans" className="button-secondary">↗ Plans</Link>
-                <Link to="/recommendation-quality" className="button-secondary">◈ Quality</Link>
-                <Link to="/jobs/debugger" className="button-subtle">⌘ Debug</Link>
-              </div>
-            </Card>
-
             <DisclosureCard
               kicker="Supporting diagnostics"
               title="Warnings, failures, and pipeline volume"
@@ -417,7 +408,7 @@ export function DashboardPage() {
                             </div>
                             <Badge tone={warning.count >= 3 ? "danger" : warning.count === 2 ? "warning" : "neutral"}>{warning.count}</Badge>
                           </summary>
-                          <div className="helper-text top-gap-small">Sources: {warning.sources.length > 0 ? warning.sources.join(" · ") : "—"}</div>
+                          <div className="helper-text top-gap-small">{warning.tickers.length > 0 ? `Tickers: ${warning.tickers.join(" · ")}` : "Tickers: —"} · Sources: {warning.sources.length > 0 ? warning.sources.join(" · ") : "—"}</div>
                         </details>
                       ))}
                     </div>
