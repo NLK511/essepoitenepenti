@@ -469,10 +469,10 @@ export interface DashboardSummary {
   overall_win_rate_percent: number | null;
   broker_win_rate_percent?: number | null;
   total_profit: number | null;
-  average_profit?: number | null;
+  average_profit_percent?: number | null;
   broker_realized_pnl?: number | null;
-  broker_average_profit?: number | null;
-  simulated_average_profit?: number | null;
+  broker_average_profit_percent?: number | null;
+  simulated_average_profit_percent?: number | null;
   win_rate_percent: number | null;
   win_rate_source?: string;
   profit_percent: number | null;

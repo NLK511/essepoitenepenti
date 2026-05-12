@@ -53,6 +53,9 @@ class EffectiveOutcomeSummary:
     plan_realized_pnl: float
     average_profit: float | None
     average_return_percent: float | None
+    broker_average_return_percent: float | None
+    simulation_average_return_percent: float | None
+    plan_average_return_percent: float | None
     average_r_multiple: float | None
 
     def to_dict(self) -> dict[str, object]:
@@ -75,6 +78,9 @@ class EffectiveOutcomeSummary:
             "plan_realized_pnl": self.plan_realized_pnl,
             "average_profit": self.average_profit,
             "average_return_percent": self.average_return_percent,
+            "broker_average_return_percent": self.broker_average_return_percent,
+            "simulation_average_return_percent": self.simulation_average_return_percent,
+            "plan_average_return_percent": self.plan_average_return_percent,
             "average_r_multiple": self.average_r_multiple,
         }
 
@@ -133,6 +139,9 @@ class TradingPerformanceMetricsService:
         broker_resolved = [item for item in resolved if item.outcome_source == "broker"]
         simulation_resolved = [item for item in resolved if item.outcome_source == "simulation"]
         plan_resolved = [item for item in resolved if item.outcome_source == "plan"]
+        broker_returns = [float(item.realized_return_pct) for item in broker_resolved if item.realized_return_pct is not None]
+        simulation_returns = [float(item.realized_return_pct) for item in simulation_resolved if item.realized_return_pct is not None]
+        plan_returns = [float(item.realized_return_pct) for item in plan_resolved if item.realized_return_pct is not None]
         broker_realized_pnl = round(sum(float(item.realized_pnl or 0.0) for item in broker_resolved), 4)
         simulation_realized_pnl = round(sum(float(item.realized_pnl or 0.0) for item in simulation_resolved), 4)
         plan_realized_pnl = round(sum(float(item.realized_pnl or 0.0) for item in plan_resolved), 4)
@@ -158,6 +167,9 @@ class TradingPerformanceMetricsService:
             plan_realized_pnl=plan_realized_pnl,
             average_profit=average_profit,
             average_return_percent=self._average(returns, digits=2),
+            broker_average_return_percent=self._average(broker_returns, digits=2),
+            simulation_average_return_percent=self._average(simulation_returns, digits=2),
+            plan_average_return_percent=self._average(plan_returns, digits=2),
             average_r_multiple=self._average(r_multiples, digits=4),
         )
 

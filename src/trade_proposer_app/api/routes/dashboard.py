@@ -169,17 +169,9 @@ def _dashboard_window_metrics(
 
     overall_win_rate_percent = effective_summary["win_rate_percent"]
     total_profit = effective_summary["realized_pnl"]
-    average_profit = effective_summary["average_profit"]
-    broker_average_profit = (
-        round(broker_summary["realized_pnl"] / broker_summary["closed_positions"], 4)
-        if broker_summary["closed_positions"]
-        else None
-    )
-    simulated_average_profit = (
-        round(effective_summary["simulation_realized_pnl"] / effective_summary["simulation_resolved_outcomes"], 4)
-        if effective_summary["simulation_resolved_outcomes"]
-        else None
-    )
+    average_profit_percent = effective_summary["average_return_percent"]
+    broker_average_profit_percent = broker_summary["average_return_percent"]
+    simulated_average_profit_percent = effective_summary["simulation_average_return_percent"]
 
     dashboard_summary = {
         "plan_amount": plan_amount,
@@ -191,10 +183,10 @@ def _dashboard_window_metrics(
         "overall_win_rate_percent": overall_win_rate_percent,
         "broker_win_rate_percent": broker_summary["win_rate_percent"],
         "total_profit": total_profit,
-        "average_profit": average_profit,
+        "average_profit_percent": average_profit_percent,
         "broker_realized_pnl": broker_summary["realized_pnl"],
-        "broker_average_profit": broker_average_profit,
-        "simulated_average_profit": simulated_average_profit,
+        "broker_average_profit_percent": broker_average_profit_percent,
+        "simulated_average_profit_percent": simulated_average_profit_percent,
         "win_rate_percent": overall_win_rate_percent,
         "profit_percent": total_profit,
         "win_rate_source": "effective",
