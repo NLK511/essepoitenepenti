@@ -44,7 +44,14 @@ class EffectiveOutcomeSummary:
     broker_outcomes: int
     simulation_outcomes: int
     plan_outcomes: int
+    broker_resolved_outcomes: int
+    simulation_resolved_outcomes: int
+    plan_resolved_outcomes: int
     realized_pnl: float
+    broker_realized_pnl: float
+    simulation_realized_pnl: float
+    plan_realized_pnl: float
+    average_profit: float | None
     average_return_percent: float | None
     average_r_multiple: float | None
 
@@ -59,7 +66,14 @@ class EffectiveOutcomeSummary:
             "broker_outcomes": self.broker_outcomes,
             "simulation_outcomes": self.simulation_outcomes,
             "plan_outcomes": self.plan_outcomes,
+            "broker_resolved_outcomes": self.broker_resolved_outcomes,
+            "simulation_resolved_outcomes": self.simulation_resolved_outcomes,
+            "plan_resolved_outcomes": self.plan_resolved_outcomes,
             "realized_pnl": self.realized_pnl,
+            "broker_realized_pnl": self.broker_realized_pnl,
+            "simulation_realized_pnl": self.simulation_realized_pnl,
+            "plan_realized_pnl": self.plan_realized_pnl,
+            "average_profit": self.average_profit,
             "average_return_percent": self.average_return_percent,
             "average_r_multiple": self.average_r_multiple,
         }
@@ -116,17 +130,33 @@ class TradingPerformanceMetricsService:
         losses = sum(1 for item in resolved if item.outcome == TradeOutcome.LOSS.value)
         returns = [float(item.realized_return_pct) for item in resolved if item.realized_return_pct is not None]
         r_multiples = [float(item.realized_r_multiple) for item in resolved if item.realized_r_multiple is not None]
+        broker_resolved = [item for item in resolved if item.outcome_source == "broker"]
+        simulation_resolved = [item for item in resolved if item.outcome_source == "simulation"]
+        plan_resolved = [item for item in resolved if item.outcome_source == "plan"]
+        broker_realized_pnl = round(sum(float(item.realized_pnl or 0.0) for item in broker_resolved), 4)
+        simulation_realized_pnl = round(sum(float(item.realized_pnl or 0.0) for item in simulation_resolved), 4)
+        plan_realized_pnl = round(sum(float(item.realized_pnl or 0.0) for item in plan_resolved), 4)
+        realized_pnl = round(broker_realized_pnl + simulation_realized_pnl + plan_realized_pnl, 4)
+        resolved_outcomes = len(resolved)
+        average_profit = round(realized_pnl / resolved_outcomes, 4) if resolved_outcomes else None
         return EffectiveOutcomeSummary(
             total_outcomes=len(outcomes),
-            resolved_outcomes=len(resolved),
+            resolved_outcomes=resolved_outcomes,
             open_outcomes=sum(1 for item in outcomes if item.status != OutcomeStatus.RESOLVED.value),
             wins=wins,
             losses=losses,
-            win_rate_percent=self._percentage(wins, len(resolved)),
+            win_rate_percent=self._percentage(wins, resolved_outcomes),
             broker_outcomes=sum(1 for item in outcomes if item.outcome_source == "broker"),
             simulation_outcomes=sum(1 for item in outcomes if item.outcome_source == "simulation"),
             plan_outcomes=sum(1 for item in outcomes if item.outcome_source == "plan"),
-            realized_pnl=round(sum(float(item.realized_pnl or 0.0) for item in resolved), 4),
+            broker_resolved_outcomes=len(broker_resolved),
+            simulation_resolved_outcomes=len(simulation_resolved),
+            plan_resolved_outcomes=len(plan_resolved),
+            realized_pnl=realized_pnl,
+            broker_realized_pnl=broker_realized_pnl,
+            simulation_realized_pnl=simulation_realized_pnl,
+            plan_realized_pnl=plan_realized_pnl,
+            average_profit=average_profit,
             average_return_percent=self._average(returns, digits=2),
             average_r_multiple=self._average(r_multiples, digits=4),
         )

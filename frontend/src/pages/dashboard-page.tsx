@@ -358,6 +358,13 @@ export function DashboardPage() {
                 />
                 <StatCard
                   className={showTrendlines ? "stat-card-compact" : undefined}
+                  label="Avg profit"
+                  value={formatCurrency(summary?.average_profit)}
+                  trend={showTrendlines ? <MetricSparkline label="Avg profit" series={trendSeriesMap.get("average_profit")} windows={trendWindows} /> : null}
+                  helper={`Broker: ${formatCurrency(summary?.broker_average_profit)} · Simulated: ${formatCurrency(summary?.simulated_average_profit)}`}
+                />
+                <StatCard
+                  className={showTrendlines ? "stat-card-compact" : undefined}
                   label="Shortlist rate"
                   value={formatPercent(summary?.shortlist_rate_percent)}
                   trend={showTrendlines ? <MetricSparkline label="Shortlist rate" series={trendSeriesMap.get("shortlist_rate_percent")} windows={trendWindows} /> : null}
