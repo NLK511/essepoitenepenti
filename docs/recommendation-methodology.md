@@ -176,6 +176,8 @@ Operators can optionally route that digest through:
 
 The result is stored in `analysis_json.summary`. If enrichment fails, the fallback digest remains and the error is recorded.
 
+A future market-intelligence layer for event calendars, options context, and analyst revisions is specified in `market-intelligence-analysis-spec.md`. It should be treated as an evidence layer that feeds the same analysis and plan-framing path, not as a standalone scoring system.
+
 ## Feature engineering
 
 The feature set includes market-derived inputs such as:
