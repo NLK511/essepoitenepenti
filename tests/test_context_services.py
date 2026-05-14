@@ -428,7 +428,10 @@ class ContextServiceTests(unittest.TestCase):
         self.assertTrue(any(driver.get("transmission_channel_details") for driver in context.active_drivers))
         self.assertTrue(any(item["key"] in {"supply_chain", "product_cycle"} for driver in context.active_drivers for item in driver.get("transmission_channel_details", [])))
         self.assertEqual(context.source_breakdown["primary_news_coverage_quality"], "high")
+        self.assertEqual(context.source_breakdown["coverage_state"], "news+social")
+        self.assertEqual(context.source_breakdown["evidence_state"], "usable")
         self.assertEqual(context.source_breakdown["context_quality_status"], "usable")
+        self.assertGreater(context.source_breakdown["support_score"], 0.0)
         self.assertGreaterEqual(context.source_breakdown["context_quality_score"], 85.0)
         self.assertNotIn("supporting_social_evidence", context.missing_inputs)
         self.assertIn("trade:1", context.source_breakdown["primary_news_source_priorities"])
@@ -447,6 +450,38 @@ class ContextServiceTests(unittest.TestCase):
         self.assertEqual(news_service.fetch_many_calls[0]["symbols"], ["NVDA", "AMD"])
         self.assertEqual(news_service.fetch_many_calls[0]["request_mode"], "live")
         self.assertTrue(news_service.fetch_many_calls[0]["primary_only"])
+
+    def test_industry_context_blocks_when_no_salient_evidence_is_found(self) -> None:
+        repository = MagicMock()
+        repository.get_latest_industry_context_snapshot.return_value = None
+        repository.get_latest_industry_context_snapshot_before.return_value = None
+        repository.create_industry_context_snapshot.side_effect = lambda context: context
+        news_bundle = NewsBundle(ticker="NVDA, AMD", articles=[], feeds_used=["NewsAPI"])
+        news_service = StubNewsService(
+            news_bundle,
+            {
+                "news_items": [],
+                "coverage_insights": [],
+            },
+        )
+        snapshot = IndustryContextRefreshPayload(
+            subject_key="semiconductors",
+            subject_label="Semiconductors",
+            score=0.0,
+            label="NEUTRAL",
+            coverage={"tracked_tickers": ["NVDA", "AMD"]},
+            signals={"social_items": []},
+            diagnostics={"queries": ["semiconductor", "chip demand"], "providers": ["nitter"]},
+            source_breakdown={},
+        )
+
+        context = IndustryContextService(repository, news_service=news_service).create_from_refresh_payload(snapshot)
+
+        self.assertIn("No salient industry evidence was found", context.summary_text)
+        self.assertEqual(context.source_breakdown["evidence_state"], "missing")
+        self.assertEqual(context.source_breakdown["coverage_state"], "missing")
+        self.assertEqual(context.metadata["context_quality"]["status"], "blocked")
+        self.assertTrue(any("no salient industry evidence" in warning.lower() for warning in context.warnings))
 
     def test_industry_context_uses_llm_summary_when_available(self) -> None:
         repository = MagicMock()

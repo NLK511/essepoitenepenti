@@ -8,6 +8,21 @@ import { ContextEventSummary, ContextScoreSummary, ProvenanceStrip, WarningSumma
 import type { ContextEventRow, IndustryContextSnapshot, MacroContextSnapshot, Run } from "../types";
 import { contextInterpretationTone, contextProvenanceLabel, contextSummaryBackend, contextSummaryError, contextSummaryMethod, contextSummaryModel, contextSnapshotTone, extractDisplayLabels, formatDate } from "../utils";
 
+type IndustryContextSummary = {
+  total_count: number;
+  status_counts: Record<string, number>;
+  evidence_state_counts: Record<string, number>;
+  quality_status_counts: Record<string, number>;
+  active_driver_count: number;
+  empty_driver_count: number;
+  zero_confidence_count: number;
+  usable_rate_percent: number;
+  active_driver_rate_percent: number;
+  warning_count: number;
+  top_warnings: Array<[string, number]>;
+  top_missing_inputs: Array<[string, number]>;
+};
+
 function topMacroTheme(snapshot: MacroContextSnapshot): ContextEventRow | null {
   return snapshot.active_themes[0] ?? null;
 }
@@ -56,6 +71,7 @@ export function ContextReviewPage() {
   const { showToast } = useToast();
   const [macroContexts, setMacroContexts] = useState<MacroContextSnapshot[]>([]);
   const [industryContexts, setIndustryContexts] = useState<IndustryContextSnapshot[]>([]);
+  const [industrySummary, setIndustrySummary] = useState<IndustryContextSummary | null>(null);
   const [selectedIndustryHistory, setSelectedIndustryHistory] = useState<IndustryContextSnapshot[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,12 +82,14 @@ export function ContextReviewPage() {
     try {
       setLoading(true);
       setError(null);
-      const [macroContextResponse, industryContextResponse] = await Promise.all([
+      const [macroContextResponse, industryContextResponse, industrySummaryResponse] = await Promise.all([
         getJson<MacroContextSnapshot[]>("/api/context/macro?limit=6"),
         getJson<IndustryContextSnapshot[]>("/api/context/industry?limit=24"),
+        getJson<IndustryContextSummary>("/api/context/industry/summary"),
       ]);
       setMacroContexts(macroContextResponse);
       setIndustryContexts(industryContextResponse);
+      setIndustrySummary(industrySummaryResponse);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load context review data");
     } finally {
@@ -249,6 +267,31 @@ export function ContextReviewPage() {
               ]}
             />
           </div>
+
+          {activeTab === "industry" && industrySummary ? (
+            <section className="metrics-grid">
+              <Card>
+                <div className="metric-label">Industry snapshots</div>
+                <div className="metric-value">{industrySummary.total_count}</div>
+                <div className="helper-text">Stored industry context rows</div>
+              </Card>
+              <Card>
+                <div className="metric-label">Usable rate</div>
+                <div className="metric-value">{industrySummary.usable_rate_percent.toFixed(1)}%</div>
+                <div className="helper-text">Rows marked usable</div>
+              </Card>
+              <Card>
+                <div className="metric-label">Active-driver rate</div>
+                <div className="metric-value">{industrySummary.active_driver_rate_percent.toFixed(1)}%</div>
+                <div className="helper-text">Rows with at least one driver</div>
+              </Card>
+              <Card>
+                <div className="metric-label">Zero-confidence rows</div>
+                <div className="metric-value">{industrySummary.zero_confidence_count}</div>
+                <div className="helper-text">Rows that resolved to neutral</div>
+              </Card>
+            </section>
+          ) : null}
 
           {activeTab === "macro" ? (
             <MacroContextTab snapshot={latestMacroContext} history={macroContexts} />

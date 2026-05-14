@@ -90,20 +90,26 @@ class ContextSnapshotResolver:
                 "subject_key": subject_key,
                 "subject_label": subject_label,
                 "coverage": {},
-                "source_breakdown": {},
+                "source_breakdown": {"evidence_state": "missing_snapshot", "coverage_state": "missing"},
                 "drivers": [],
                 "context_metadata": taxonomy_metadata,
                 "context_quality_score": 0.0,
                 "context_quality_status": "blocked",
                 "context_quality_flags": {"hard_missing": True},
-                "context_quality_notes": [f"industry context snapshot unavailable for {subject_label}; using neutral fallback"],
-                "diagnostics": {"warnings": [f"industry context snapshot unavailable for {subject_label}; using neutral fallback"]},
+                "context_quality_notes": [f"industry context snapshot unavailable for {subject_label}; blocked fallback"],
+                "diagnostics": {"warnings": [f"industry context snapshot unavailable for {subject_label}; blocked fallback"]},
+                "context_evidence_state": "missing_snapshot",
+                "context_coverage_state": "missing",
             }
         source_breakdown = snapshot.source_breakdown if isinstance(snapshot.source_breakdown, dict) else {}
         metadata = self._metadata(snapshot)
         context_quality = self._context_quality(source_breakdown, metadata)
         support_label = str(source_breakdown.get("support_label") or self._label_from_direction(snapshot.direction))
         support_score = float(source_breakdown.get("support_score", 0.0) or 0.0)
+        evidence_state = str(source_breakdown.get("evidence_state") or ("usable" if support_score else "missing"))
+        coverage_state = str(source_breakdown.get("coverage_state") or "missing")
+        if context_quality["status"] != "usable" or evidence_state not in {"usable", "degraded"}:
+            support_score = 0.0
         return {
             "score": support_score,
             "label": support_label,
@@ -133,6 +139,8 @@ class ContextSnapshotResolver:
             "context_quality_status": context_quality["status"],
             "context_quality_flags": context_quality["flags"],
             "context_quality_notes": context_quality["notes"],
+            "context_evidence_state": evidence_state,
+            "context_coverage_state": coverage_state,
             "diagnostics": {"warnings": list(snapshot.warnings)},
         }
 

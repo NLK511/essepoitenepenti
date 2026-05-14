@@ -73,6 +73,11 @@ async def list_industry_context_snapshots(
     )
 
 
+@router.get("/industry/summary")
+async def industry_context_summary(session: Session = Depends(get_db_session)) -> dict[str, object]:
+    return ContextSnapshotRepository(session).industry_context_summary()
+
+
 @router.get("/industry/{snapshot_id}")
 async def get_industry_context_snapshot(
     snapshot_id: int,

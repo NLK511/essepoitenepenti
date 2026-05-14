@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 from typing import Any
 
 from pydantic import BaseModel
@@ -182,6 +183,44 @@ class ContextSnapshotRepository:
         if record is None:
             return None
         return self._to_industry_model(record)
+
+    def industry_context_summary(self) -> dict[str, Any]:
+        rows = self.session.scalars(select(IndustryContextSnapshotRecord)).all()
+        status_counts = Counter(str(row.status or "unknown") for row in rows)
+        evidence_counts = Counter(
+            str(self._load(row.source_breakdown_json, {}).get("evidence_state") or "missing")
+            for row in rows
+        )
+        quality_counts = Counter(
+            str(self._load(row.source_breakdown_json, {}).get("context_quality_status") or "unknown")
+            for row in rows
+        )
+        warnings = Counter()
+        missing_inputs = Counter()
+        for row in rows:
+            for warning in self._load(row.warnings_json, []):
+                if isinstance(warning, str) and warning.strip():
+                    warnings[warning.strip()] += 1
+            for input_name in self._load(row.missing_inputs_json, []):
+                if isinstance(input_name, str) and input_name.strip():
+                    missing_inputs[input_name.strip()] += 1
+        active_driver_count = sum(1 for row in rows if self._load(row.active_drivers_json, []))
+        zero_confidence_count = sum(1 for row in rows if float(row.confidence_percent or 0.0) == 0.0)
+        total = len(rows)
+        return {
+            "total_count": total,
+            "status_counts": dict(status_counts),
+            "evidence_state_counts": dict(evidence_counts),
+            "quality_status_counts": dict(quality_counts),
+            "active_driver_count": active_driver_count,
+            "empty_driver_count": total - active_driver_count,
+            "zero_confidence_count": zero_confidence_count,
+            "usable_rate_percent": round((status_counts.get("ok", 0) / total * 100.0) if total else 0.0, 1),
+            "active_driver_rate_percent": round((active_driver_count / total * 100.0) if total else 0.0, 1),
+            "warning_count": sum(status_counts.values()) - status_counts.get("ok", 0),
+            "top_warnings": warnings.most_common(5),
+            "top_missing_inputs": missing_inputs.most_common(5),
+        }
 
     def create_ticker_signal_snapshot(self, snapshot: TickerSignalSnapshot) -> TickerSignalSnapshot:
         record = TickerSignalSnapshotRecord(

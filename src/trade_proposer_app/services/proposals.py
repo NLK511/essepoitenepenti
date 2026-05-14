@@ -1305,6 +1305,8 @@ class ProposalService:
                     "industry_context_quality_status": industry_snapshot.get("context_quality_status"),
                     "industry_context_quality_flags": industry_snapshot.get("context_quality_flags", {}),
                     "industry_context_quality_notes": industry_snapshot.get("context_quality_notes", []),
+                    "industry_context_evidence_state": industry_snapshot.get("context_evidence_state"),
+                    "industry_context_coverage_state": industry_snapshot.get("context_coverage_state"),
                     "industry_context_events": industry_snapshot.get("context_active_events", []),
                     "industry_context_active_drivers": industry_snapshot.get("context_active_drivers", []),
                     "industry_context_regime_tags": industry_snapshot.get("context_regime_tags", []),

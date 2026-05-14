@@ -1904,15 +1904,19 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             macro = await client.get("/api/context/macro")
             industry = await client.get("/api/context/industry", params={"industry_key": "consumer_electronics"})
+            industry_summary = await client.get("/api/context/industry/summary")
             macro_detail = await client.get(f"/api/context/macro/{macro.json()[0]['id']}")
             industry_detail = await client.get(f"/api/context/industry/{industry.json()[0]['id']}")
 
         self.assertEqual(macro.status_code, 200)
         self.assertEqual(industry.status_code, 200)
+        self.assertEqual(industry_summary.status_code, 200)
         self.assertEqual(macro_detail.status_code, 200)
         self.assertEqual(industry_detail.status_code, 200)
         self.assertEqual(macro.json()[0]["active_themes"][0]["key"], "fed_policy")
         self.assertEqual(industry.json()[0]["industry_key"], "consumer_electronics")
+        self.assertGreaterEqual(industry_summary.json()["total_count"], 1)
+        self.assertIn("usable_rate_percent", industry_summary.json())
         self.assertEqual(macro_detail.json()["summary_text"], "Fed and yields remain the dominant macro themes.")
         self.assertEqual(industry_detail.json()["industry_key"], "consumer_electronics")
 

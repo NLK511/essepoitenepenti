@@ -49,6 +49,7 @@ It is not yet a proven short-horizon prediction engine.
 ### Shared context and ontology
 - Persist macro and industry context snapshots as the canonical shared-context artifacts.
 - Review macro and industry context from the Context pages and detail views.
+- Industry context now exposes explicit evidence states (`usable`, `degraded`, `missing`, `missing_snapshot`) and coverage states (`news`, `social`, `news+social`, `missing`) so neutral-looking fallback rows are not mistaken for decision-grade evidence.
 - **Realistic Context Reconstruction:** Re-generate historical context snapshots from past news and social data. For time-windowed company/ticker news requests, the app now prefers Finnhub and rejects undated or future-dated articles so historical simulations do not silently mix in later company news.
 - Store context-event fields such as persistence state, state transition, catalyst type, market interpretation, trigger actor, trigger actor role, trigger source type, and short "why now" summaries.
 - Trace which shared artifacts were used by a run or recommendation plan.

@@ -68,6 +68,7 @@ These define implemented product truth.
 These are useful, but they are not the main current-state entry point. They must clearly label whether they describe current behavior, target behavior, or an active plan.
 
 - `recommendation-quality-improvement-plan.md` — working tracker for recommendation-quality, calibration, and validation improvements
+- `industry-context-improvement-plan.md` — active plan for making industry context evidence-rich enough to matter or shrinking its decision role if it stays neutral
 - `edge-validation-standard.md` — target autonomy gate standard for broker-backed evidence, baselines, drawdown, concentration, and demotion/halt rules
 - `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow
 - `plan-generation-tuning-spec.md` — current phase-1 behavior plus target autonomous plan-generation tuning conformance rules

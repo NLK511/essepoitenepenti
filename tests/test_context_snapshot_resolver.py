@@ -62,6 +62,8 @@ class ContextSnapshotResolverTests(unittest.TestCase):
             source_breakdown={
                 "support_label": "POSITIVE",
                 "support_score": 0.3,
+                "evidence_state": "usable",
+                "coverage_state": "news+social",
                 "context_quality_score": 88.0,
                 "context_quality_status": "usable",
                 "context_quality_flags": {"hard_missing": False},
@@ -77,7 +79,18 @@ class ContextSnapshotResolverTests(unittest.TestCase):
         self.assertEqual(payload["context_quality_status"], "usable")
         self.assertEqual(payload["context_quality_score"], 88.0)
         self.assertFalse(payload["context_quality_flags"]["hard_missing"])
+        self.assertEqual(payload["context_evidence_state"], "usable")
+        self.assertEqual(payload["context_coverage_state"], "news+social")
         self.assertEqual(payload["label"], "POSITIVE")
+    def test_industry_resolution_blocks_when_snapshot_missing(self) -> None:
+        resolver = ContextSnapshotResolver(_StubRepository(industry_snapshot=None))
+
+        payload = resolver.resolve_industry_snapshot("NVDA")
+
+        self.assertEqual(payload["context_quality_status"], "blocked")
+        self.assertEqual(payload["context_evidence_state"], "missing_snapshot")
+        self.assertEqual(payload["context_coverage_state"], "missing")
+        self.assertIn("blocked fallback", payload["context_quality_notes"][0])
 
 
 if __name__ == "__main__":

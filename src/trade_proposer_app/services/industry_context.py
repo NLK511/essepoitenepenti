@@ -7,7 +7,7 @@ from typing import Any
 
 from trade_proposer_app.domain.models import IndustryContextRefreshPayload, IndustryContextSnapshot
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
-from trade_proposer_app.services.context_quality import assess_context_quality
+from trade_proposer_app.services.context_quality import ContextQualityAssessment, assess_context_quality
 from trade_proposer_app.services.event_extraction import (
     EventDefinition,
     count_events_above_saliency,
@@ -95,7 +95,21 @@ class IndustryContextService:
         tracked_tickers = coverage.get("tracked_tickers", []) if isinstance(coverage, dict) else []
         query_terms = diagnostics.get("queries", []) if isinstance(diagnostics, dict) else []
         ontology_profile = self._with_profile_channel_details(self.taxonomy_service.get_industry_definition(industry_key or industry_label))
-        expanded_queries = self._expanded_query_terms(industry_label, query_terms, ontology_profile)
+        sector_definition = self.taxonomy_service.get_sector_definition(ontology_profile.get("sector", ""))
+        expanded_queries = self._expanded_query_terms(
+            industry_label,
+            query_terms,
+            ontology_profile,
+            sector_definition=sector_definition,
+            tracked_tickers=tracked_tickers,
+        )
+        news_lookback_hours = self._news_lookback_hours(
+            industry_label,
+            ontology_profile,
+            sector_definition,
+            tracked_tickers,
+            query_terms,
+        )
 
         news_bundle, news_sentiment = self._load_news_evidence(
             industry_label,
@@ -103,6 +117,7 @@ class IndustryContextService:
             expanded_queries,
             as_of=effective_now,
             request_mode=request_mode,
+            lookback_hours=news_lookback_hours,
         )
         primary_news_items = news_sentiment.get("news_items", []) if isinstance(news_sentiment, dict) else []
         news_items = primary_news_items if isinstance(primary_news_items, list) else []
@@ -129,7 +144,6 @@ class IndustryContextService:
         linked_macro_themes = event_keys(linked_macro_events)
         linked_industry_themes = self._linked_industry_themes(active_drivers)
         lifecycle_summary = summarize_event_lifecycle(active_drivers, previous_events=previous_drivers)
-        sector_definition = self.taxonomy_service.get_sector_definition(ontology_profile.get("sector", ""))
         ontology_relationships = self.taxonomy_service.list_relationships(industry_key or industry_label, direction="outbound")
         matched_ontology_relationships = self._matched_ontology_relationships(
             industry_label,
@@ -195,7 +209,7 @@ class IndustryContextService:
             summary_warning = summary_fallback_warning(f"industry context for {industry_label}", summary_result.llm_error)
             warnings.append(summary_warning)
         summary_text = summary_result.summary or fallback_summary
-        quality = assess_context_quality(
+        raw_quality = assess_context_quality(
             primary_evidence_present=bool(news_items),
             primary_coverage_quality=primary_coverage_quality,
             primary_item_count=len(news_items),
@@ -204,6 +218,32 @@ class IndustryContextService:
             contradiction_count=int(lifecycle_summary.get("contradiction_count", 0) or 0),
             summary_error=summary_result.llm_error,
         )
+        evidence_state = self._evidence_state(
+            news_items=news_items,
+            supporting_social_items=supporting_social_items,
+            active_drivers=active_drivers,
+            quality=raw_quality,
+        )
+        coverage_state = self._coverage_state(news_items=news_items, supporting_social_items=supporting_social_items)
+        quality = self._refine_context_quality(
+            raw_quality,
+            industry_label=industry_label,
+            active_drivers=active_drivers,
+            news_items=news_items,
+            supporting_social_items=supporting_social_items,
+            evidence_state=evidence_state,
+        )
+        for note in quality.notes:
+            if note not in warnings:
+                warnings.append(note)
+        support_label = str(getattr(payload, "label", "NEUTRAL") or "NEUTRAL").strip().upper() or "NEUTRAL"
+        support_score = self._support_score(
+            support_label,
+            saliency_score=saliency_score,
+            confidence_percent=confidence_percent,
+            quality=quality,
+            active_drivers=active_drivers,
+        )
         context = IndustryContextSnapshot(
             industry_key=industry_key,
             industry_label=industry_label,
@@ -211,7 +251,7 @@ class IndustryContextService:
             expires_at=getattr(payload, "expires_at", None),
             status="warning" if warnings or quality.status != "usable" else "ok",
             summary_text=summary_text,
-            direction=self._direction_from_label(str(getattr(payload, "label", "NEUTRAL") or "NEUTRAL")),
+            direction=self._direction_from_label(support_label),
             saliency_score=saliency_score,
             confidence_percent=confidence_percent,
             active_drivers=active_drivers,
@@ -227,11 +267,16 @@ class IndustryContextService:
                 "supporting_social_item_count": len(supporting_social_items),
                 "tracked_tickers": tracked_tickers,
                 "expanded_queries": expanded_queries,
+                "news_lookback_hours": news_lookback_hours,
                 "primary_news_providers": list(dict.fromkeys(news_bundle.feeds_used)) if news_bundle is not None else [],
                 "primary_news_feed_errors": feed_errors,
                 "primary_news_source_priorities": summarize_source_priorities(news_items, source_type="news"),
                 "primary_news_publishers": publisher_summary(news_items),
                 "primary_news_coverage_quality": primary_coverage_quality,
+                "coverage_state": coverage_state,
+                "evidence_state": evidence_state,
+                "support_label": support_label,
+                "support_score": support_score,
                 "context_quality_score": quality.score,
                 "context_quality_status": quality.status,
                 "context_quality_flags": quality.flags,
@@ -244,6 +289,7 @@ class IndustryContextService:
                 "query_diagnostics": diagnostics.get("query_diagnostics", {}) if isinstance(diagnostics, dict) else {},
                 "queries": query_terms,
                 "expanded_queries": expanded_queries,
+                "news_lookback_hours": news_lookback_hours,
                 "news_coverage_insights": news_sentiment.get("coverage_insights", []) if isinstance(news_sentiment, dict) else [],
                 "top_news_titles": [self._item_text(item)[:140] for item in news_items[:5]],
                 "top_social_titles": [self._item_text(item)[:140] for item in supporting_social_items[:5]],
@@ -268,6 +314,8 @@ class IndustryContextService:
                 "context_summary_warning": summary_warning,
                 "context_summary_duration_seconds": summary_result.duration_seconds,
                 "context_summary_metadata": summary_result.metadata,
+                "context_evidence_state": evidence_state,
+                "context_coverage_state": coverage_state,
                 "context_quality": {
                     "score": quality.score,
                     "status": quality.status,
@@ -311,6 +359,140 @@ class IndustryContextService:
         payload["transmission_channel_details"] = self._channel_details(channels)
         return payload
 
+    @staticmethod
+    def _news_lookback_hours(
+        industry_label: str,
+        ontology_profile: dict[str, object],
+        sector_definition: dict[str, object],
+        tracked_tickers: list[object],
+        query_terms: list[object],
+    ) -> int:
+        label_text = " ".join(
+            [
+                str(industry_label or ""),
+                str(ontology_profile.get("label", "") or ""),
+                str(ontology_profile.get("sector", "") or ""),
+                str(sector_definition.get("label", "") or ""),
+                " ".join(str(value).strip() for value in query_terms if str(value).strip()),
+                " ".join(str(value).strip().upper() for value in tracked_tickers if str(value).strip()),
+            ]
+        ).lower()
+        fast_tokens = (
+            "semiconductor",
+            "software",
+            "cloud",
+            "airline",
+            "automotive",
+            "automobile",
+            "aerospace",
+            "defense",
+            "biotech",
+            "pharma",
+            "gaming",
+            "consumer electronics",
+            "crypto",
+        )
+        slow_tokens = (
+            "bank",
+            "insurance",
+            "reit",
+            "utilities",
+            "staple",
+            "telecom",
+            "industrial",
+            "materials",
+            "health care",
+            "healthcare",
+            "real estate",
+        )
+        if any(token in label_text for token in fast_tokens):
+            return 24
+        if any(token in label_text for token in slow_tokens):
+            return 72
+        if len([value for value in tracked_tickers if str(value).strip()]) >= 4:
+            return 24
+        return 48
+
+    @staticmethod
+    def _coverage_state(news_items: list[object], supporting_social_items: list[object]) -> str:
+        has_news = bool(news_items)
+        has_social = bool(supporting_social_items)
+        if has_news and has_social:
+            return "news+social"
+        if has_news:
+            return "news"
+        if has_social:
+            return "social"
+        return "missing"
+
+    @staticmethod
+    def _evidence_state(
+        *,
+        news_items: list[object],
+        supporting_social_items: list[object],
+        active_drivers: list[dict[str, object]],
+        quality: ContextQualityAssessment,
+    ) -> str:
+        if not news_items and not supporting_social_items and not active_drivers:
+            return "missing"
+        if not active_drivers:
+            return "thin"
+        if quality.status == "usable":
+            return "usable"
+        if news_items or supporting_social_items:
+            return "degraded"
+        return "missing"
+
+    @staticmethod
+    def _refine_context_quality(
+        quality: ContextQualityAssessment,
+        *,
+        industry_label: str,
+        active_drivers: list[dict[str, object]],
+        news_items: list[object],
+        supporting_social_items: list[object],
+        evidence_state: str,
+    ) -> ContextQualityAssessment:
+        score = quality.score
+        status = quality.status
+        flags = dict(quality.flags)
+        notes = list(quality.notes)
+        if not active_drivers:
+            flags["no_salient_drivers"] = True
+            if not news_items and not supporting_social_items:
+                flags["hard_missing"] = True
+                score = min(score, 12.0)
+                status = "blocked"
+                notes.append(f"no salient industry evidence was found for {industry_label}")
+            else:
+                score = min(score, 34.0)
+                status = "degraded"
+                notes.append(f"industry evidence for {industry_label} was too thin to produce a salient driver")
+        elif evidence_state in {"thin", "social"} and status == "usable":
+            score = min(score, 78.0)
+            status = "degraded"
+            notes.append(f"industry evidence for {industry_label} is present but thin")
+        return ContextQualityAssessment(score=round(score, 1), status=status, flags=flags, notes=list(dict.fromkeys(notes)))
+
+    @staticmethod
+    def _support_score(
+        support_label: str,
+        *,
+        saliency_score: float,
+        confidence_percent: float,
+        quality: ContextQualityAssessment,
+        active_drivers: list[dict[str, object]],
+    ) -> float:
+        if quality.status != "usable" or not active_drivers:
+            return 0.0
+        normalized = support_label.strip().upper()
+        direction_sign = 1.0 if normalized == "POSITIVE" else -1.0 if normalized == "NEGATIVE" else 0.0
+        if direction_sign == 0.0:
+            return 0.0
+        evidence_strength = min(1.0, (saliency_score * 0.7) + (confidence_percent / 180.0))
+        quality_factor = max(0.0, min(1.0, quality.score / 100.0))
+        return round(direction_sign * evidence_strength * quality_factor, 3)
+
     def _load_news_evidence(
         self,
         industry_label: str,
@@ -319,13 +501,14 @@ class IndustryContextService:
         *,
         as_of: datetime | None = None,
         request_mode: str = "live",
+        lookback_hours: int = 24,
     ) -> tuple[object | None, dict[str, object]]:
         if self.news_service is None:
             return None, {}
-        
+
         effective_now = as_of or datetime.now(timezone.utc)
-        start_at = effective_now - timedelta(hours=24)
-        
+        start_at = effective_now - timedelta(hours=max(24, lookback_hours))
+
         normalized_tickers = [str(ticker).strip().upper() for ticker in tracked_tickers if str(ticker).strip()]
         queries = [str(query).strip() for query in query_terms if str(query).strip()]
         if normalized_tickers and len(normalized_tickers) >= 2:
@@ -357,6 +540,9 @@ class IndustryContextService:
         industry_label: str,
         query_terms: list[object],
         ontology_profile: dict[str, object],
+        *,
+        sector_definition: dict[str, object],
+        tracked_tickers: list[object],
     ) -> list[str]:
         candidates: list[str] = []
 
@@ -378,12 +564,17 @@ class IndustryContextService:
             add(str(value).replace("_", " "))
         for value in ontology_profile.get("risk_flags", []) if isinstance(ontology_profile.get("risk_flags"), list) else []:
             add(str(value).replace("_", " "))
-        sector_label = str(ontology_profile.get("sector", "") or "").replace("_", " ").strip()
+        sector_label = str(sector_definition.get("label") or ontology_profile.get("sector", "") or "").replace("_", " ").strip()
         if sector_label:
             add(sector_label)
+        if isinstance(tracked_tickers, list):
+            add(" OR ".join([str(value).strip().upper() for value in tracked_tickers if str(value).strip()][:4]))
         companies = [str(value).strip() for value in (ontology_profile.get("companies", []) if isinstance(ontology_profile.get("companies"), list) else []) if str(value).strip()]
         if companies:
             add(" OR ".join(companies[:3]))
+        peer_industries = [str(value).strip() for value in (ontology_profile.get("peer_industries", []) if isinstance(ontology_profile.get("peer_industries"), list) else []) if str(value).strip()]
+        if peer_industries:
+            add(" OR ".join(peer_industries[:4]))
 
         normalized = [item for item in candidates if item]
         queries: list[str] = []
@@ -837,7 +1028,7 @@ class IndustryContextService:
             return f"{industry_label} context still points to {focus}, but primary industry news was thin so the run leans more on social confirmation than desired.{relationship_note}"
         if previous and previous.summary_text:
             return f"{industry_label} context is broadly unchanged, but this run did not surface a clearly dominant fresh driver."
-        return f"{industry_label} context is currently light on salient evidence, so the output mainly records continuity and known macro links."
+        return f"No salient industry evidence was found for {industry_label}; the snapshot is blocked or too thin to act as decision-grade context."
 
     @staticmethod
     def _source_priority_for_item(raw_item: dict[str, object]) -> str:

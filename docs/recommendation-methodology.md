@@ -124,14 +124,14 @@ That allows the system to:
 
 Macro and industry context now use context snapshots as the canonical shared-artifact layer for refresh, review, and proposal-time reuse.
 
-If macro or industry artifacts are missing or stale, the methodology falls back to neutral values and explicit warnings.
+If macro or industry artifacts are missing or stale, the methodology falls back to neutral values and explicit warnings. For industry context specifically, missing-snapshot handling is now blocked rather than neutrally informative, and thin snapshots expose explicit evidence and coverage states.
 
 Macro and industry context snapshots also carry operator-facing heuristic scores:
 - **saliency**: how prominent the active events or drivers look relative to the rest of the current evidence set
 - **confidence**: how trustworthy the context read looks given evidence volume, source quality, contradictions, and degradation
 - **context quality**: whether the snapshot is usable, degraded, or blocked after separating required evidence from optional fallback evidence
 
-These are bounded review aids, not prediction probabilities.
+These are bounded review aids, not prediction probabilities. Industry context only contributes positive support when it has usable evidence; empty-driver rows should not create false confidence.
 
 A current limitation is that context extraction is still not a fully mature event model, but it now does more than broad theme detection. Current macro and industry snapshots try to preserve short-horizon state through fields such as persistence state, state transition, catalyst type, market interpretation, trigger actor metadata, and a short why-now summary. That means the system is better than before at distinguishing cases like escalation versus de-escalation or guidance improvement versus guidance cuts, even though it still relies on heuristic extraction and imperfect evidence coverage.
 

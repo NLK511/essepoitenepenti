@@ -43,6 +43,8 @@ Common macro/industry fields include:
 - `label`
 - `score`
 - freshness and source metadata
+- `context_evidence_state`
+- `context_coverage_state`
 - optional context summary/event fields
 
 Current context-event payloads may also include fields such as:
@@ -60,6 +62,7 @@ Current context-event payloads may also include fields such as:
 `score` is a heuristic 0-100 confidence-style value, not a probability.
 
 Context events may also carry `saliency_weight`, a normalized 0-1 prominence score.
+`context_evidence_state` is the operator-facing evidence label (`usable`, `degraded`, `missing`, or `missing_snapshot` in resolver fallbacks), and `context_coverage_state` describes whether the snapshot had news, social, both, or nothing.
 
 ### Other stored payloads
 Common related payloads include:
