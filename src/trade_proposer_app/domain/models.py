@@ -279,6 +279,7 @@ class Job(BaseModel):
 class Run(BaseModel):
     id: int | None = None
     job_id: int
+    job_name: str | None = None
     job_type: JobType = JobType.PROPOSAL_GENERATION
     status: RunStatus = RunStatus.QUEUED
     error_message: str | None = None

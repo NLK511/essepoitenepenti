@@ -71,6 +71,7 @@ export interface Job {
 export interface Run {
   id: number | null;
   job_id: number;
+  job_name: string | null;
   job_type: JobType;
   status: RunStatus;
   error_message: string | null;

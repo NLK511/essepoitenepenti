@@ -414,6 +414,7 @@ class RunRepository:
         return Run(
             id=record.id,
             job_id=record.job_id,
+            job_name=record.job.name if getattr(record, "job", None) is not None else None,
             job_type=JobType.parse(record.job_type or JobType.PROPOSAL_GENERATION.value),
             status=record.status,
             error_message=record.error_message or None,

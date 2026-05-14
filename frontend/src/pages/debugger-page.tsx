@@ -186,7 +186,7 @@ export function DebuggerPage() {
                     <div className="data-card-header">
                       <div>
                         <div className="data-card-title">Run #{run.id}</div>
-                        <div className="helper-text">{jobTypeLabel(run.job_type)} · job {run.job_id}</div>
+                        <div className="helper-text">{jobTypeLabel(run.job_type)} · job {run.job_id}{run.job_name ? ` · ${run.job_name}` : ""}</div>
                       </div>
                       <Badge tone={runTone(run.status)}>{run.status}</Badge>
                     </div>
@@ -236,6 +236,7 @@ export function DebuggerPage() {
                   <div className="data-point"><span className="data-point-label">status</span><span className="data-point-value"><Badge tone={runTone(detail.run.status)}>{detail.run.status}</Badge></span></div>
                   <div className="data-point"><span className="data-point-label">job</span><span className="data-point-value">{detail.run.job_id}</span></div>
                   <div className="data-point"><span className="data-point-label">workflow</span><span className="data-point-value">{jobTypeLabel(detail.run.job_type)}</span></div>
+                  <div className="data-point"><span className="data-point-label">job name</span><span className="data-point-value">{detail.run.job_name ?? "—"}</span></div>
                   <div className="data-point"><span className="data-point-label">duration</span><span className="data-point-value">{formatDuration(detail.run.duration_seconds)}</span></div>
                   <div className="data-point"><span className="data-point-label">plans written</span><span className="data-point-value">{detail.recommendation_plans.length}</span></div>
                   <div className="data-point"><span className="data-point-label">signals written</span><span className="data-point-value">{detail.ticker_signal_snapshots.length}</span></div>
