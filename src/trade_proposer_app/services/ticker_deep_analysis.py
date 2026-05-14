@@ -9,6 +9,7 @@ import pandas as pd
 
 from trade_proposer_app.domain.enums import RecommendationDirection, RecommendationState, StrategyHorizon
 from trade_proposer_app.domain.models import Recommendation, RunDiagnostics, RunOutput
+from trade_proposer_app.services.market_intelligence import MarketIntelligenceService
 from trade_proposer_app.services.proposals import ProposalExecutionError, ProposalService, _sanitize_for_json
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 from trade_proposer_app.services.ticker_analysis_payloads import TickerAnalysisPayloadService
@@ -25,12 +26,14 @@ class TickerDeepAnalysisService:
         proposal_service: ProposalService,
         *,
         taxonomy_service: TickerTaxonomyService | None = None,
+        market_intelligence_service: MarketIntelligenceService | None = None,
         model_name: str = "ticker_deep_analysis_v2",
     ) -> None:
         self.proposal_service = proposal_service
         self.taxonomy_service = taxonomy_service or TickerTaxonomyService()
         self.model_name = model_name
         self.technical_features = TickerTechnicalFeatureService()
+        self.market_intelligence_service = market_intelligence_service or MarketIntelligenceService()
         self.analysis_payloads = TickerAnalysisPayloadService(
             macro_context_score=self._macro_context_score,
             macro_context_label=self._macro_context_label,
@@ -52,6 +55,7 @@ class TickerDeepAnalysisService:
             context = self._build_context(enriched)
             context["price_history_diagnostics"] = dict(getattr(self.proposal_service, "_last_price_history_fetch_diagnostics", {}) or {})
             context = self._apply_context_enrichment(context, normalized_ticker, as_of=as_of)
+            context = self._apply_market_intelligence(context, normalized_ticker, as_of=as_of, horizon=horizon)
             context = self._apply_support_aliases(context)
             context = self._apply_taxonomy_profile(context, normalized_ticker)
             context.update(self._build_reference_features(normalized_ticker, history, context.get("ticker_profile", {}), as_of=as_of))
@@ -148,6 +152,87 @@ class TickerDeepAnalysisService:
         if callable(apply_news_context):
             return apply_news_context(context, ticker, as_of=as_of)
         return context
+
+    def _apply_market_intelligence(self, context: dict[str, Any], ticker: str, *, as_of: datetime | None = None, horizon: StrategyHorizon | None = None) -> dict[str, Any]:
+        if self.market_intelligence_service is None:
+            return context
+        market_intelligence = self.market_intelligence_service.analyze(ticker, as_of=as_of, horizon=horizon)
+        enriched = dict(context)
+        enriched["market_intelligence"] = market_intelligence
+        enriched["market_intelligence_summary"] = self.market_intelligence_service.summarize(market_intelligence)
+        enriched["market_intelligence_warnings"] = list(market_intelligence.get("warnings", [])) if isinstance(market_intelligence.get("warnings"), list) else []
+        enriched["market_intelligence_conflict_flags"] = list(market_intelligence.get("conflict_flags", [])) if isinstance(market_intelligence.get("conflict_flags"), list) else []
+        enriched["market_intelligence_confidence_contribution"] = market_intelligence.get("confidence_contribution", {}) if isinstance(market_intelligence.get("confidence_contribution"), dict) else {}
+        if market_intelligence.get("coverage_status") not in {"ok", "fresh"} and enriched["market_intelligence_warnings"]:
+            problems = list(enriched.get("problems", []) or [])
+            problems.extend(f"market intelligence: {warning}" for warning in enriched["market_intelligence_warnings"] if warning)
+            enriched["problems"] = list(dict.fromkeys(problems))
+        return enriched
+
+    @staticmethod
+    def _market_intelligence_snapshot(context: dict[str, Any]) -> dict[str, Any]:
+        raw = context.get("market_intelligence")
+        return raw if isinstance(raw, dict) else {}
+
+    @classmethod
+    def _market_intelligence_support(cls, context: dict[str, Any], direction: RecommendationDirection) -> float:
+        snapshot = cls._market_intelligence_snapshot(context)
+        if not snapshot:
+            return 0.0
+        signal_bias = cls._market_intelligence_bias(snapshot)
+        contribution = float(snapshot.get("confidence_contribution", {}).get("combined", 0.0) if isinstance(snapshot.get("confidence_contribution"), dict) else 0.0)
+        support = 0.0
+        if signal_bias == "bullish":
+            support = contribution if direction == RecommendationDirection.LONG else -contribution * 0.75
+        elif signal_bias == "bearish":
+            support = contribution if direction == RecommendationDirection.SHORT else -contribution * 0.75
+        elif signal_bias == "mixed":
+            support = contribution * 0.35
+        return max(-100.0, min(100.0, support))
+
+    @classmethod
+    def _market_intelligence_confidence(cls, context: dict[str, Any], direction: RecommendationDirection) -> float:
+        support = abs(cls._market_intelligence_support(context, direction))
+        snapshot = cls._market_intelligence_snapshot(context)
+        warnings = snapshot.get("warnings", []) if isinstance(snapshot.get("warnings"), list) else []
+        if not snapshot or support <= 0.0:
+            return 0.0
+        return max(0.0, min(100.0, support - (len(warnings) * 6.0)))
+
+    @staticmethod
+    def _market_intelligence_summary(snapshot: dict[str, Any]) -> str | None:
+        if not isinstance(snapshot, dict) or not snapshot:
+            return None
+        summary = snapshot.get("summary")
+        if isinstance(summary, str) and summary.strip():
+            return summary.strip()
+        parts: list[str] = []
+        event = snapshot.get("event_intelligence") if isinstance(snapshot.get("event_intelligence"), dict) else {}
+        if isinstance(event, dict) and event.get("available"):
+            label = str(event.get("event_label") or event.get("event_class") or "event").strip()
+            window = str(event.get("window_label") or "unknown").strip()
+            parts.append(f"{label} {window}")
+        options = snapshot.get("options_intelligence") if isinstance(snapshot.get("options_intelligence"), dict) else {}
+        if isinstance(options, dict) and options.get("available"):
+            parts.append(f"options {options.get('pressure_bias', 'neutral')}")
+        analyst = snapshot.get("analyst_intelligence") if isinstance(snapshot.get("analyst_intelligence"), dict) else {}
+        if isinstance(analyst, dict) and analyst.get("available"):
+            parts.append(f"analyst {analyst.get('bias', 'neutral')}")
+        return " · ".join(parts) if parts else None
+
+    @staticmethod
+    def _market_intelligence_bias(snapshot: dict[str, Any]) -> str:
+        if not isinstance(snapshot, dict):
+            return "neutral"
+        contributions = snapshot.get("confidence_contribution", {})
+        if not isinstance(contributions, dict):
+            return "neutral"
+        combined = float(contributions.get("combined", 0.0) or 0.0)
+        if combined >= 60.0:
+            return "bullish"
+        if combined <= 35.0:
+            return "bearish"
+        return "mixed"
 
     @staticmethod
     def _apply_support_aliases(context: dict[str, Any]) -> dict[str, Any]:
@@ -369,6 +454,7 @@ class TickerDeepAnalysisService:
             + (TickerDeepAnalysisService._industry_context_score(context) * 0.55),
             directional_multiplier=directional_multiplier,
         )
+        market_intelligence_confidence = self._market_intelligence_confidence(context, direction)
         directional_confidence = self._scale_signed(
             (float(context.get("ticker_sentiment_score", 0.0) or 0.0) * 0.55)
             + (float(context.get("momentum_medium", 0.0) or 0.0) * 1.2)
@@ -394,13 +480,14 @@ class TickerDeepAnalysisService:
         context_quality_multiplier = self._context_quality_multiplier(context)
         data_quality_cap = self._scale_unsigned(
             (1.0
-            - min(0.7, (len(context.get("problems", []) or []) * 0.12) + (len(context.get("news_feed_errors", []) or []) * 0.1)))
+            - min(0.7, (len(context.get("problems", []) or []) * 0.12) + (len(context.get("news_feed_errors", []) or []) * 0.1) + (len(context.get("market_intelligence_warnings", []) or []) * 0.04)))
             * context_quality_multiplier
         )
         return {
             "context_confidence": round(context_confidence, 2),
             "directional_confidence": round(directional_confidence, 2),
             "catalyst_confidence": round(catalyst_confidence, 2),
+            "market_intelligence_confidence": round(market_intelligence_confidence, 2),
             "technical_clarity": round(technical_clarity, 2),
             "execution_clarity": round(execution_clarity, 2),
             "data_quality_cap": round(data_quality_cap, 2),
@@ -438,11 +525,12 @@ class TickerDeepAnalysisService:
     @staticmethod
     def _compose_confidence(components: dict[str, float]) -> float:
         weighted = (
-            components.get("context_confidence", 0.0) * 0.18
-            + components.get("directional_confidence", 0.0) * 0.3
-            + components.get("catalyst_confidence", 0.0) * 0.14
-            + components.get("technical_clarity", 0.0) * 0.2
-            + components.get("execution_clarity", 0.0) * 0.18
+            components.get("context_confidence", 0.0) * 0.16
+            + components.get("directional_confidence", 0.0) * 0.27
+            + components.get("catalyst_confidence", 0.0) * 0.11
+            + components.get("market_intelligence_confidence", 0.0) * 0.12
+            + components.get("technical_clarity", 0.0) * 0.18
+            + components.get("execution_clarity", 0.0) * 0.16
         )
         quality_cap = components.get("data_quality_cap", 100.0) / 100.0
         return round(max(0.0, min(95.0, weighted * quality_cap)), 2)
@@ -455,6 +543,7 @@ class TickerDeepAnalysisService:
         macro_score = TickerDeepAnalysisService._macro_context_score(context)
         industry_score = TickerDeepAnalysisService._industry_context_score(context)
         ticker_score = float(context.get("ticker_sentiment_score", 0.0) or 0.0)
+        market_intelligence = self._market_intelligence_snapshot(context)
         profile = context.get("ticker_profile") if isinstance(context.get("ticker_profile"), dict) else {}
         macro_events = TickerDeepAnalysisService._context_events(context.get("macro_context_events") or context.get("macro_context_active_themes"))
         industry_events = TickerDeepAnalysisService._context_events(context.get("industry_context_events") or context.get("industry_context_active_drivers"))
@@ -483,6 +572,7 @@ class TickerDeepAnalysisService:
         )
         contradiction_count = TickerDeepAnalysisService._context_contradiction_count(context, macro_events, industry_events)
         matched_ticker_relationships = TickerDeepAnalysisService._matched_ticker_relationships(context, profile, macro_events, industry_events)
+        market_intelligence_support = TickerDeepAnalysisService._market_intelligence_support(context, direction)
         freshness_bonus = TickerDeepAnalysisService._freshness_bonus(macro_events, industry_events)
         contradiction_penalty = min(12.0, contradiction_count * 4.0)
         alignment_percent = max(
@@ -491,6 +581,7 @@ class TickerDeepAnalysisService:
                 100.0,
                 base_alignment_percent
                 + ((macro_event_strength * 0.4) + (industry_event_strength * 0.6)) * (0.1 if base_alignment_percent >= 50.0 else -0.1)
+                + market_intelligence_support * 0.12
                 + freshness_bonus
                 - contradiction_penalty,
             ),
@@ -555,6 +646,14 @@ class TickerDeepAnalysisService:
             "expected_transmission_window_detail": self.taxonomy_service.get_transmission_window_definition(
                 TickerDeepAnalysisService._expected_transmission_window(catalyst_intensity, macro_score, industry_score, macro_events, industry_events)
             ),
+            "market_intelligence": market_intelligence,
+            "market_intelligence_summary": self._market_intelligence_summary(market_intelligence),
+            "market_intelligence_bias": self._market_intelligence_bias(market_intelligence),
+            "market_intelligence_alignment_percent": round(market_intelligence_support, 1),
+            "market_intelligence_confidence_contribution": market_intelligence.get("confidence_contribution", {}) if isinstance(market_intelligence.get("confidence_contribution"), dict) else {},
+            "market_intelligence_conflict_flags": list(market_intelligence.get("conflict_flags", [])) if isinstance(market_intelligence.get("conflict_flags"), list) else [],
+            "market_intelligence_warnings": list(market_intelligence.get("warnings", [])) if isinstance(market_intelligence.get("warnings"), list) else [],
+            "market_intelligence_support_percent": round(market_intelligence_support, 1),
             "context_quality_status": TickerDeepAnalysisService._context_quality_status(context),
             "macro_context_quality_status": context.get("macro_context_quality_status"),
             "industry_context_quality_status": context.get("industry_context_quality_status"),
@@ -1049,6 +1148,9 @@ class TickerDeepAnalysisService:
     def _build_indicator_summary(context: dict[str, Any], setup_family: str) -> str:
         parts = [f"setup {setup_family.replace('_', ' ')}"]
         sentiment_label = context.get("ticker_sentiment_label") or context.get("sentiment_label")
+        market_summary = context.get("market_intelligence_summary")
+        if isinstance(market_summary, str) and market_summary.strip():
+            parts.append(market_summary.strip())
         if sentiment_label:
             parts.append(f"ticker sentiment {sentiment_label}")
         rsi = context.get("rsi")

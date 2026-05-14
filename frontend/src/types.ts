@@ -644,6 +644,13 @@ export interface RecommendationTransmissionSummary {
   decay_state?: string;
   transmission_confidence_adjustment?: number;
   lane_hint?: string;
+  market_intelligence?: Record<string, unknown>;
+  market_intelligence_summary?: string | null;
+  market_intelligence_bias?: string | null;
+  market_intelligence_alignment_percent?: number;
+  market_intelligence_confidence_contribution?: Record<string, number>;
+  market_intelligence_conflict_flags?: string[];
+  market_intelligence_warnings?: string[];
   ticker_relationship_edges?: Array<Record<string, unknown>>;
   matched_ticker_relationships?: Array<Record<string, unknown>>;
   [key: string]: unknown;
@@ -708,6 +715,8 @@ export interface RecommendationPlanSignalBreakdown {
   confidence_bucket?: string;
   calibration_review?: RecommendationCalibrationReview;
   transmission_summary?: RecommendationTransmissionSummary;
+  market_intelligence?: Record<string, unknown>;
+  market_intelligence_summary?: string | null;
   mode?: string;
   shortlisted?: boolean;
   shortlist_rank?: number | null;
@@ -737,6 +746,8 @@ export interface TickerSignalSourceBreakdown extends RecommendationTransmissionS
   deep_analysis_model?: string | null;
   summary_method?: string | null;
   base_confidence_percent?: number;
+  market_intelligence?: Record<string, unknown>;
+  market_intelligence_summary?: string | null;
   [key: string]: unknown;
 }
 

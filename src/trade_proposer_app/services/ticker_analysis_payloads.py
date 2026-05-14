@@ -68,6 +68,7 @@ class TickerAnalysisPayloadService:
                 "feed_errors": context.get("news_feed_errors", []),
                 "items": context.get("news_items", []),
             },
+            "market_intelligence": context.get("market_intelligence", {}),
             "sentiment": {
                 "score": context.get("sentiment_score", 0.0),
                 "label": context.get("sentiment_label"),
@@ -135,6 +136,8 @@ class TickerAnalysisPayloadService:
                 "setup_family": setup_family,
                 "confidence_components": confidence_components,
                 "transmission_analysis": transmission_analysis,
+                "market_intelligence": context.get("market_intelligence", {}),
+                "market_intelligence_summary": context.get("market_intelligence_summary"),
                 "context_quality": {
                     "status": self._context_quality_status(context),
                     "macro": {

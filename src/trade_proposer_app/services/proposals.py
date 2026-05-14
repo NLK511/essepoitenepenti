@@ -15,6 +15,7 @@ import yfinance as yf
 from trade_proposer_app.domain.enums import RecommendationDirection, RecommendationState
 from trade_proposer_app.domain.models import HistoricalMarketBar, NewsArticle, Recommendation, RunDiagnostics, RunOutput, TechnicalSnapshot
 from trade_proposer_app.services.constants import DEFAULT_CONTEXT_FLAGS
+from trade_proposer_app.services.market_intelligence import MarketIntelligenceService
 from trade_proposer_app.services.retry_utils import bounded_backoff_seconds
 from trade_proposer_app.services.news import (
     NaiveSentimentAnalyzer,
@@ -186,6 +187,7 @@ class ProposalService:
         sentiment_analyzer: NaiveSentimentAnalyzer | None = None,
         summary_service: SummaryService | None = None,
         historical_market_data: HistoricalMarketDataRepository | None = None,
+        market_intelligence_service: MarketIntelligenceService | None = None,
     ) -> None:
         self.weights_path = weights_path or WEIGHTS_PATH
         self.weights = self._load_weights()
@@ -196,6 +198,7 @@ class ProposalService:
         self.sentiment_analyzer = sentiment_analyzer or NaiveSentimentAnalyzer()
         self.summary_service = summary_service or SummaryService()
         self.historical_market_data = historical_market_data
+        self.market_intelligence_service = market_intelligence_service or MarketIntelligenceService()
         self._last_price_history_fetch_diagnostics: dict[str, Any] = {}
 
     def generate(self, ticker: str, *, as_of: datetime | None = None) -> RunOutput:
@@ -205,6 +208,7 @@ class ProposalService:
         context = self._build_context(enriched)
         context["price_history_diagnostics"] = dict(self._last_price_history_fetch_diagnostics)
         context = self._apply_news_context(context, normalized_ticker, as_of=as_of)
+        context = self._apply_market_intelligence(context, normalized_ticker, as_of=as_of)
         feature_vector = self._build_feature_vector(context)
         column_ranges = self._compute_column_ranges(enriched)
         normalized_vector = self._normalize_feature_vector(feature_vector, column_ranges)
@@ -279,6 +283,9 @@ class ProposalService:
         sentiment_label = context.get("sentiment_label")
         if sentiment_label:
             parts.append(f"Sentiment {sentiment_label}")
+        market_summary = context.get("market_intelligence_summary")
+        if isinstance(market_summary, str) and market_summary.strip():
+            parts.append(f"Market intelligence {market_summary.strip()}")
         rsi = context.get("rsi")
         if isinstance(rsi, (int, float)):
             parts.append(f"RSI {float(rsi):.1f}")
@@ -346,6 +353,7 @@ class ProposalService:
                 "sources": context.get("sentiment_sources") or [],
             },
         }
+        market_intelligence_section = context.get("market_intelligence", {})
         sentiment_section = {
             "score": context.get("sentiment_score"),
             "label": context.get("sentiment_label"),
@@ -470,6 +478,7 @@ class ProposalService:
             },
             "summary": summary_section,
             "news": news_section,
+            "market_intelligence": market_intelligence_section,
             "signals": signals_section,
             "social": social_section,
             "entities": entities_section,
@@ -1376,6 +1385,22 @@ class ProposalService:
             merged_problems.append(summary_fallback_warning("plan context", summary_problem))
         context["problems"] = list(dict.fromkeys(merged_problems))
         return context
+
+    def _apply_market_intelligence(self, context: dict[str, Any], ticker: str, *, as_of: datetime | None = None) -> dict[str, Any]:
+        if self.market_intelligence_service is None:
+            return context
+        market_intelligence = self.market_intelligence_service.analyze(ticker, as_of=as_of)
+        enriched = dict(context)
+        enriched["market_intelligence"] = market_intelligence
+        enriched["market_intelligence_summary"] = self.market_intelligence_service.summarize(market_intelligence)
+        enriched["market_intelligence_warnings"] = list(market_intelligence.get("warnings", [])) if isinstance(market_intelligence.get("warnings"), list) else []
+        enriched["market_intelligence_conflict_flags"] = list(market_intelligence.get("conflict_flags", [])) if isinstance(market_intelligence.get("conflict_flags"), list) else []
+        enriched["market_intelligence_confidence_contribution"] = market_intelligence.get("confidence_contribution", {}) if isinstance(market_intelligence.get("confidence_contribution"), dict) else {}
+        warnings = enriched.get("problems", []) if isinstance(enriched.get("problems"), list) else []
+        if market_intelligence.get("coverage_status") not in {"ok", "fresh"} and enriched["market_intelligence_warnings"]:
+            warnings.extend(f"market intelligence: {warning}" for warning in enriched["market_intelligence_warnings"] if warning)
+            enriched["problems"] = list(dict.fromkeys(warnings))
+        return enriched
 
     def _build_news_summary(self, news_items: list[Any]) -> str:
         titles: list[str] = []

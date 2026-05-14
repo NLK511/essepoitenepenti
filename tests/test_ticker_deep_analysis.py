@@ -20,6 +20,33 @@ from trade_proposer_app.domain.enums import RecommendationDirection, StrategyHor
 from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
 
 
+
+
+def _neutral_market_intelligence_service() -> Mock:
+    service = Mock()
+    service.analyze.return_value = json.loads(
+        """
+        {
+          "ticker": "AAPL",
+          "as_of": "2026-05-03T00:00:00+00:00",
+          "source_set": [],
+          "coverage_status": "ok",
+          "freshness_status": "fresh",
+          "event_intelligence": {"available": false, "warnings": [], "conflict_flags": []},
+          "options_intelligence": {"available": false, "warnings": [], "conflict_flags": []},
+          "analyst_intelligence": {"available": false, "warnings": [], "conflict_flags": []},
+          "confidence_contribution": {"event": 0.0, "options": 0.0, "analyst": 0.0, "combined": 0.0},
+          "conflict_flags": [],
+          "warnings": [],
+          "provider_diagnostics": {"source_name": "mock", "provider_keys": [], "info_available": false, "errors": []},
+          "raw_payload_refs": {},
+          "summary": "Market intelligence unavailable."
+        }
+        """
+    )
+    service.summarize.return_value = "Market intelligence unavailable."
+    return service
+
 class TickerDeepAnalysisServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         from trade_proposer_app.services.proposals import ProposalService
@@ -37,7 +64,12 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         self.taxonomy_service.get_transmission_bias_definition.return_value = None
         # Ensure context passthrough for enrichment
         self.proposal_service._apply_news_context.side_effect = lambda ctx, t, as_of=None: ctx
-        self.service = TickerDeepAnalysisService(self.proposal_service, taxonomy_service=self.taxonomy_service)
+        self.market_intelligence_service = _neutral_market_intelligence_service()
+        self.service = TickerDeepAnalysisService(
+            self.proposal_service,
+            taxonomy_service=self.taxonomy_service,
+            market_intelligence_service=self.market_intelligence_service,
+        )
 
     def test_analysis_payload_service_matches_compatibility_wrapper(self) -> None:
         context = {
@@ -240,18 +272,19 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
             "context_confidence": 80.0,
             "directional_confidence": 80.0,
             "catalyst_confidence": 80.0,
+            "market_intelligence_confidence": 80.0,
             "technical_clarity": 80.0,
             "execution_clarity": 80.0,
             "data_quality_cap": 50.0 # 50% multiplier
         }
-        # 80 * (0.18+0.3+0.14+0.2+0.18) = 80 * 1.0 = 80.0
+        # 80 * (0.16+0.27+0.11+0.12+0.18+0.16) = 80 * 1.0 = 80.0
         # 80 * 0.5 = 40.0
         result = self.service._compose_confidence(components)
         self.assertEqual(result, 40.0)
 
     def test_compose_confidence_clamps_to_95(self) -> None:
         """System never reports 100% confidence."""
-        components = {k: 100.0 for k in ["context_confidence", "directional_confidence", "catalyst_confidence", "technical_clarity", "execution_clarity", "data_quality_cap"]}
+        components = {k: 100.0 for k in ["context_confidence", "directional_confidence", "catalyst_confidence", "market_intelligence_confidence", "technical_clarity", "execution_clarity", "data_quality_cap"]}
         result = self.service._compose_confidence(components)
         self.assertEqual(result, 95.0)
 
@@ -496,6 +529,48 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
         self.assertEqual(analysis["technical"]["reference_features"]["sector_etf_symbol"], "XLK")
         self.assertIn("context_quality", analysis["ticker_deep_analysis"])
         self.assertEqual(analysis["ticker_deep_analysis"]["context_quality"]["status"], "unknown")
+
+    def test_analyze_includes_market_intelligence_in_payload_and_confidence_components(self) -> None:
+        dates = pd.date_range("2026-01-01", periods=250, freq="B")
+        history = pd.DataFrame(
+            {
+                "Open": [100.0 + (i * 0.05) for i in range(250)],
+                "High": [101.0 + (i * 0.05) for i in range(250)],
+                "Low": [99.0 + (i * 0.05) for i in range(250)],
+                "Close": [100.0 + (i * 0.05) for i in range(250)],
+                "Volume": [900] * 250,
+            }, index=dates)
+
+        def fetch_history(symbol: str, as_of=None):
+            return history
+
+        self.proposal_service._fetch_price_history.side_effect = fetch_history
+        self.proposal_service._last_price_history_fetch_diagnostics = {"source": "remote", "remote_attempt_count": 1, "selected_bar_count": 250}
+        self.market_intelligence_service.analyze.return_value = {
+            "ticker": "AAPL",
+            "as_of": "2026-05-03T00:00:00+00:00",
+            "source_set": ["mock"],
+            "coverage_status": "ok",
+            "freshness_status": "fresh",
+            "event_intelligence": {"available": True, "event_label": "earnings", "window_label": "2d_5d", "bias": "bullish", "score": 82.0, "warnings": [], "conflict_flags": []},
+            "options_intelligence": {"available": True, "pressure_bias": "bullish", "score": 61.0, "warnings": [], "conflict_flags": []},
+            "analyst_intelligence": {"available": True, "bias": "bullish", "score": 75.0, "warnings": [], "conflict_flags": []},
+            "confidence_contribution": {"event": 82.0, "options": 61.0, "analyst": 75.0, "combined": 76.0},
+            "conflict_flags": [],
+            "warnings": [],
+            "provider_diagnostics": {"source_name": "mock", "provider_keys": [], "info_available": True, "errors": []},
+            "raw_payload_refs": {},
+            "summary": "earnings 2d_5d · options bullish · analyst bullish",
+        }
+        self.market_intelligence_service.summarize.return_value = "earnings 2d_5d · options bullish · analyst bullish"
+
+        output = self.service.analyze("AAPL")
+        analysis = json.loads(output.diagnostics.analysis_json)
+
+        self.assertEqual(analysis["market_intelligence"]["summary"], "earnings 2d_5d · options bullish · analyst bullish")
+        self.assertEqual(analysis["ticker_deep_analysis"]["market_intelligence_summary"], "earnings 2d_5d · options bullish · analyst bullish")
+        self.assertGreater(analysis["ticker_deep_analysis"]["confidence_components"]["market_intelligence_confidence"], 0)
+        self.assertEqual(analysis["ticker_deep_analysis"]["transmission_analysis"]["market_intelligence_summary"], "earnings 2d_5d · options bullish · analyst bullish")
 
     def test_analyze_resolves_direction_from_aggregated_score(self) -> None:
         dates = pd.date_range("2026-01-01", periods=250, freq="B")

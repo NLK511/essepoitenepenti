@@ -56,6 +56,8 @@ class WatchlistSignalBuilder:
         primary_driver_details = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "primary_driver_details") or []
         expected_transmission_window = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "expected_transmission_window") or o._fallback_transmission_window_placeholder(watchlist.default_horizon)
         expected_transmission_window_detail = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "expected_transmission_window_detail") or o._transmission_window_detail(expected_transmission_window)
+        market_intelligence = o._pluck(analysis, "ticker_deep_analysis", "market_intelligence") or o._pluck(analysis, "market_intelligence") or {}
+        market_intelligence_summary = o._pluck(analysis, "ticker_deep_analysis", "market_intelligence_summary") or o._pluck(analysis, "market_intelligence_summary")
         conflict_flags = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "conflict_flags") or []
         conflict_flag_details = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "conflict_flag_details") or []
         transmission_tags = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "transmission_tags") or []
@@ -130,6 +132,8 @@ class WatchlistSignalBuilder:
                 "ticker_exposure_channel_details": ticker_exposure_channel_details,
                 "expected_transmission_window": expected_transmission_window,
                 "expected_transmission_window_detail": expected_transmission_window_detail,
+                "market_intelligence": market_intelligence,
+                "market_intelligence_summary": market_intelligence_summary,
                 "conflict_flags": conflict_flags,
                 "conflict_flag_details": conflict_flag_details,
                 "base_confidence_percent": base_confidence,
@@ -165,6 +169,8 @@ class WatchlistSignalBuilder:
                 "transmission_tag_details": transmission_tag_details,
                 "primary_drivers": primary_drivers,
                 "primary_driver_details": primary_driver_details,
+                "market_intelligence": market_intelligence,
+                "market_intelligence_summary": market_intelligence_summary,
                 "industry_exposure_channels": industry_exposure_channels,
                 "industry_exposure_channel_details": industry_exposure_channel_details,
                 "ticker_exposure_channels": ticker_exposure_channels,

@@ -521,6 +521,13 @@ class RecommendationTransmissionSummary(DictLikeModel):
     decay_state: str | None = None
     transmission_confidence_adjustment: float | None = None
     lane_hint: str | None = None
+    market_intelligence: dict[str, object] = Field(default_factory=dict)
+    market_intelligence_summary: str | None = None
+    market_intelligence_bias: str | None = None
+    market_intelligence_alignment_percent: float | None = None
+    market_intelligence_confidence_contribution: dict[str, float] = Field(default_factory=dict)
+    market_intelligence_conflict_flags: list[str] = Field(default_factory=list)
+    market_intelligence_warnings: list[str] = Field(default_factory=list)
     ticker_relationship_edges: list[dict[str, object]] = Field(default_factory=list)
     matched_ticker_relationships: list[dict[str, object]] = Field(default_factory=list)
     matched_ticker_relationship_details: list[dict[str, object]] = Field(default_factory=list)

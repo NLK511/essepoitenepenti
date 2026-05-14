@@ -390,7 +390,16 @@ class WatchlistOrchestrationService:
     def _catalyst_score(analysis: dict[str, Any]) -> float:
         explicit = WatchlistOrchestrationService._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "catalyst_intensity_percent")
         if WatchlistOrchestrationService._is_number(explicit):
-            return round(float(explicit), 2)
+            market_support = WatchlistOrchestrationService._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "market_intelligence_support_percent")
+            support = float(market_support) if WatchlistOrchestrationService._is_number(market_support) else 0.0
+            return round(max(0.0, min(100.0, float(explicit) + (support * 0.2))), 2)
+        market_intelligence = WatchlistOrchestrationService._pluck(analysis, "market_intelligence") or WatchlistOrchestrationService._pluck(analysis, "ticker_deep_analysis", "market_intelligence")
+        if isinstance(market_intelligence, dict):
+            combined = market_intelligence.get("confidence_contribution", {}) if isinstance(market_intelligence.get("confidence_contribution"), dict) else {}
+            if isinstance(combined, dict):
+                score = float(combined.get("combined", 0.0) or 0.0)
+                if score > 0.0:
+                    return round(max(0.0, min(100.0, score)), 2)
         news_item_count = WatchlistOrchestrationService._pluck(analysis, "news", "item_count")
         try:
             count = float(news_item_count)

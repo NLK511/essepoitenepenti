@@ -40,6 +40,10 @@ class WatchlistTransmissionService:
         elif decay_state == "fading":
             adjustment -= 1.5
         adjustment -= min(6.0, contradiction_count * 2.0)
+        if "market_intelligence_alignment_percent" in transmission and self._is_number(transmission.get("market_intelligence_alignment_percent")):
+            market_intelligence_alignment = float(transmission.get("market_intelligence_alignment_percent", 0.0) or 0.0)
+            market_intelligence_adjustment = max(-3.0, min(3.0, (market_intelligence_alignment - 50.0) * 0.04))
+            adjustment += market_intelligence_adjustment
         return round(max(-10.0, min(8.0, adjustment)), 2)
 
     def signal_breakdown(
@@ -133,11 +137,13 @@ class WatchlistTransmissionService:
         if isinstance(explicit, dict) and explicit:
             normalized = {str(key): round(float(value), 2) for key, value in explicit.items() if self._is_number(value)}
             normalized.setdefault("transmission_quality", round(signal.diagnostics.get("transmission_alignment_score", 0.0) if self._is_number(signal.diagnostics.get("transmission_alignment_score")) else 0.0, 2))
+            normalized.setdefault("market_intelligence_confidence", round(max(0.0, min(100.0, signal.catalyst_score * 0.35)), 2))
             return normalized
         return {
             "context_confidence": round((signal.macro_exposure_score * 0.45) + (signal.industry_alignment_score * 0.55), 2),
             "directional_confidence": round(max(signal.ticker_sentiment_score, candidate.confidence_percent), 2),
             "catalyst_confidence": round(signal.catalyst_score, 2),
+            "market_intelligence_confidence": round(max(0.0, min(100.0, signal.catalyst_score * 0.35)), 2),
             "technical_clarity": round(signal.technical_setup_score, 2),
             "execution_clarity": round(signal.execution_quality_score if signal.execution_quality_score > 0 else signal.attention_score, 2),
             "transmission_quality": round(signal.diagnostics.get("transmission_alignment_score", 0.0) if self._is_number(signal.diagnostics.get("transmission_alignment_score")) else 0.0, 2),
@@ -169,8 +175,16 @@ class WatchlistTransmissionService:
                 "transmission_bias": bias,
                 "transmission_bias_detail": self._transmission_bias_detail(bias),
                 "catalyst_intensity_percent": round(float(explicit.get("catalyst_intensity_percent", 0.0)), 2) if self._is_number(explicit.get("catalyst_intensity_percent")) else signal.catalyst_score,
+                "market_intelligence_support_percent": round(float(explicit.get("market_intelligence_support_percent", 0.0)), 2) if self._is_number(explicit.get("market_intelligence_support_percent")) else 0.0,
                 "context_strength_percent": round(float(explicit.get("context_strength_percent", 0.0)), 2) if self._is_number(explicit.get("context_strength_percent")) else 0.0,
                 "context_event_relevance_percent": round(float(explicit.get("context_event_relevance_percent", 0.0)), 2) if self._is_number(explicit.get("context_event_relevance_percent")) else 0.0,
+                "market_intelligence_summary": explicit.get("market_intelligence_summary") if isinstance(explicit.get("market_intelligence_summary"), str) else None,
+                "market_intelligence_bias": explicit.get("market_intelligence_bias") if isinstance(explicit.get("market_intelligence_bias"), str) else None,
+                "market_intelligence_alignment_percent": round(float(explicit.get("market_intelligence_alignment_percent", 0.0)), 2) if self._is_number(explicit.get("market_intelligence_alignment_percent")) else 0.0,
+                "market_intelligence_confidence_contribution": explicit.get("market_intelligence_confidence_contribution", {}) if isinstance(explicit.get("market_intelligence_confidence_contribution"), dict) else {},
+                "market_intelligence_conflict_flags": explicit.get("market_intelligence_conflict_flags", []) if isinstance(explicit.get("market_intelligence_conflict_flags"), list) else [],
+                "market_intelligence_warnings": explicit.get("market_intelligence_warnings", []) if isinstance(explicit.get("market_intelligence_warnings"), list) else [],
+                "market_intelligence": explicit.get("market_intelligence", {}) if isinstance(explicit.get("market_intelligence"), dict) else {},
                 "contradiction_count": int(float(explicit.get("contradiction_count", 0.0))) if self._is_number(explicit.get("contradiction_count")) else 0,
                 "context_quality_status": str(explicit.get("context_quality_status") or "unknown"),
                 "trade_context_quality_status": self.trade_context_quality_status({
@@ -214,6 +228,13 @@ class WatchlistTransmissionService:
             "transmission_bias": bias,
             "transmission_bias_detail": self._transmission_bias_detail(bias),
             "catalyst_intensity_percent": signal.catalyst_score,
+            "market_intelligence_summary": None,
+            "market_intelligence_bias": None,
+            "market_intelligence_alignment_percent": 0.0,
+            "market_intelligence_confidence_contribution": {},
+            "market_intelligence_conflict_flags": [],
+            "market_intelligence_warnings": [],
+            "market_intelligence": {},
             "trade_context_quality_status": self.trade_context_quality_status({
                 "context_quality_status": signal.diagnostics.get("context_quality_status"),
                 "macro_context_quality_status": signal.diagnostics.get("macro_context_quality_status"),

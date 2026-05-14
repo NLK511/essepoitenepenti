@@ -110,9 +110,36 @@ class _StubSnapshotResolver:
         }
 
 
+
+
+def _neutral_market_intelligence_service() -> Mock:
+    service = Mock()
+    service.analyze.return_value = json.loads(
+        """
+        {
+          "ticker": "AAPL",
+          "as_of": "2026-05-03T00:00:00+00:00",
+          "source_set": [],
+          "coverage_status": "ok",
+          "freshness_status": "fresh",
+          "event_intelligence": {"available": false, "warnings": [], "conflict_flags": []},
+          "options_intelligence": {"available": false, "warnings": [], "conflict_flags": []},
+          "analyst_intelligence": {"available": false, "warnings": [], "conflict_flags": []},
+          "confidence_contribution": {"event": 0.0, "options": 0.0, "analyst": 0.0, "combined": 0.0},
+          "conflict_flags": [],
+          "warnings": [],
+          "provider_diagnostics": {"source_name": "mock", "provider_keys": [], "info_available": false, "errors": []},
+          "raw_payload_refs": {},
+          "summary": "Market intelligence unavailable."
+        }
+        """
+    )
+    service.summarize.return_value = "Market intelligence unavailable."
+    return service
+
 class ProposalServiceTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.service = ProposalService()
+        self.service = ProposalService(market_intelligence_service=_neutral_market_intelligence_service())
 
     def test_generate_requires_price_history(self) -> None:
         with patch.object(ProposalService, "_fetch_price_history", side_effect=ProposalExecutionError("no data")):
@@ -151,7 +178,7 @@ class ProposalServiceTests(unittest.TestCase):
             published_at=None,
         )
         bundle = NewsBundle(ticker="", articles=[article], feeds_used=["Finnhub"])
-        service = ProposalService(
+        service = ProposalService(market_intelligence_service=_neutral_market_intelligence_service(),
             news_service=_FakeNewsService(bundle),
             summary_service=_StubSummaryService(
                 SummaryResult(
@@ -201,7 +228,7 @@ class ProposalServiceTests(unittest.TestCase):
 
     def test_fetch_price_history_retries_live_remote_failures(self) -> None:
         history = make_sample_history()
-        service = ProposalService()
+        service = ProposalService(market_intelligence_service=_neutral_market_intelligence_service())
         with patch.object(service, "_fetch_price_history_remote", side_effect=[ProposalExecutionError("temporary"), pd.DataFrame(), history]) as remote_fetch:
             with patch("time.sleep", return_value=None):
                 result = service._fetch_price_history("AAPL")
@@ -226,7 +253,7 @@ class ProposalServiceTests(unittest.TestCase):
             )
             for index, row in history.iterrows()
         ]
-        service = ProposalService(historical_market_data=repo)
+        service = ProposalService(market_intelligence_service=_neutral_market_intelligence_service(), historical_market_data=repo)
         with patch.object(service, "_fetch_price_history_remote", side_effect=ProposalExecutionError("remote down")) as remote_fetch:
             with patch("time.sleep", return_value=None):
                 result = service._fetch_price_history("AAPL")
@@ -242,7 +269,7 @@ class ProposalServiceTests(unittest.TestCase):
 
     def test_apply_news_context_prefers_news_items(self) -> None:
         bundle = NewsBundle(ticker="", articles=[], feeds_used=["NewsAPI"])
-        service = ProposalService(news_service=_FakeNewsService(bundle))
+        service = ProposalService(market_intelligence_service=_neutral_market_intelligence_service(), news_service=_FakeNewsService(bundle))
         sentiment_payload = {
             "score": 0.0,
             "label": "NEUTRAL",
@@ -280,7 +307,7 @@ class ProposalServiceTests(unittest.TestCase):
             "context_quality_flags": {"hard_missing": False},
             "context_quality_notes": [],
         }
-        service = ProposalService(news_service=_FakeNewsService(bundle), snapshot_resolver=resolver)
+        service = ProposalService(market_intelligence_service=_neutral_market_intelligence_service(), news_service=_FakeNewsService(bundle), snapshot_resolver=resolver)
         service.sentiment_analyzer.analyze = MagicMock(
             return_value={
                 "score": 0.0,
@@ -305,7 +332,7 @@ class ProposalServiceTests(unittest.TestCase):
     def test_apply_news_context_uses_replay_mode_for_historical_as_of(self) -> None:
         bundle = NewsBundle(ticker="", articles=[], feeds_used=["database"])
         news_service = _FakeNewsService(bundle)
-        service = ProposalService(news_service=news_service)
+        service = ProposalService(market_intelligence_service=_neutral_market_intelligence_service(), news_service=news_service)
         service.sentiment_analyzer.analyze = MagicMock(
             return_value={
                 "score": 0.0,
@@ -333,7 +360,7 @@ class ProposalServiceTests(unittest.TestCase):
             published_at=None,
         )
         bundle = NewsBundle(ticker="", articles=[article], feeds_used=["NewsAPI"])
-        service = ProposalService(
+        service = ProposalService(market_intelligence_service=_neutral_market_intelligence_service(),
             news_service=_FakeNewsService(bundle),
             summary_service=_StubSummaryService(
                 SummaryResult(
@@ -375,7 +402,7 @@ class ProposalServiceTests(unittest.TestCase):
             articles=[],
             feeds_used=["NewsAPI"],
         )
-        service = ProposalService(
+        service = ProposalService(market_intelligence_service=_neutral_market_intelligence_service(),
             news_service=_FakeNewsService(bundle),
             summary_service=_StubSummaryService(
                 SummaryResult(
@@ -413,7 +440,7 @@ class ProposalServiceTests(unittest.TestCase):
             published_at=None,
         )
         bundle = NewsBundle(ticker="", articles=[article], feeds_used=["NewsAPI"])
-        service = ProposalService(news_service=_FakeNewsService(bundle))
+        service = ProposalService(market_intelligence_service=_neutral_market_intelligence_service(), news_service=_FakeNewsService(bundle))
         sentiment_payload = {
             "score": 0.0,
             "label": "NEUTRAL",
@@ -434,7 +461,7 @@ class ProposalServiceTests(unittest.TestCase):
 
     def test_apply_news_context_uses_generic_no_news_fallback_text_when_bundle_is_empty(self) -> None:
         bundle = NewsBundle(ticker="", articles=[], feeds_used=["GoogleNews"])
-        service = ProposalService(news_service=_FakeNewsService(bundle))
+        service = ProposalService(market_intelligence_service=_neutral_market_intelligence_service(), news_service=_FakeNewsService(bundle))
         service.sentiment_analyzer.analyze = MagicMock(
             return_value={
                 "score": 0.0,
@@ -466,7 +493,7 @@ class ProposalServiceTests(unittest.TestCase):
             published_at=None,
         )
         bundle = NewsBundle(ticker="", articles=[article], feeds_used=["NewsAPI"])
-        service = ProposalService(
+        service = ProposalService(market_intelligence_service=_neutral_market_intelligence_service(),
             news_service=_FakeNewsService(bundle),
             snapshot_resolver=_StubSnapshotResolver(),
             summary_service=_StubSummaryService(

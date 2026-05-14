@@ -28,6 +28,9 @@ class WatchlistPlanNarrativeService:
             window = transmission_summary.get("expected_transmission_window")
             if isinstance(window, str) and window and window != "unknown":
                 components.append(f"window {window}")
+            market_summary = transmission_summary.get("market_intelligence_summary")
+            if isinstance(market_summary, str) and market_summary:
+                components.append(f"mi {market_summary}")
             driver_label = self.primary_driver_label(transmission_summary)
             if driver_label:
                 components.append(f"driver {driver_label}")
@@ -105,10 +108,14 @@ class WatchlistPlanNarrativeService:
             return f"Detected a {setup_label} structure, but {family_text}.{relationship_suffix}"
         if action_reason == "context_transmission_headwind":
             driver = self.primary_driver_label(transmission_summary)
-            return f"Detected a {setup_label} structure, but macro and industry transmission remained a headwind to the proposed trade direction{f' ({driver})' if driver else ''}.{relationship_suffix}"
+            market_summary = None if not isinstance(transmission_summary, dict) else transmission_summary.get("market_intelligence_summary")
+            market_suffix = f" Market intelligence: {market_summary}." if isinstance(market_summary, str) and market_summary else ""
+            return f"Detected a {setup_label} structure, but macro and industry transmission remained a headwind to the proposed trade direction{f' ({driver})' if driver else ''}.{market_suffix}{relationship_suffix}"
         if action_reason == "context_transmission_contradiction":
             driver = self.primary_driver_label(transmission_summary)
-            return f"Detected a {setup_label} structure, but active context evidence was internally contradictory{f' around {driver}' if driver else ''}, so the trade case was not clean enough to promote.{relationship_suffix}"
+            market_summary = None if not isinstance(transmission_summary, dict) else transmission_summary.get("market_intelligence_summary")
+            market_suffix = f" Market intelligence: {market_summary}." if isinstance(market_summary, str) and market_summary else ""
+            return f"Detected a {setup_label} structure, but active context evidence was internally contradictory{f' around {driver}' if driver else ''}, so the trade case was not clean enough to promote.{market_suffix}{relationship_suffix}"
         if action_reason == "context_quality_blocked":
             return f"Detected a {setup_label} structure, but context quality was blocked and the setup was not tradeable.{relationship_suffix}"
         return f"Signal quality was insufficient for an actionable trade plan.{relationship_suffix}".strip()
@@ -215,7 +222,9 @@ class WatchlistPlanNarrativeService:
         relationship_suffix = f" Relationship read-through: {relationship_summary}." if relationship_summary else ""
         family_label = setup_family.replace("_", " ") if setup_family else "setup"
         if action_reason == "actionable_setup":
-            return f"Promoted because the {family_label} structure met the current execution and confidence requirements.{relationship_suffix}"
+            market_summary = None if not isinstance(transmission_summary, dict) else transmission_summary.get("market_intelligence_summary")
+            market_suffix = f" Market intelligence: {market_summary}." if isinstance(market_summary, str) and market_summary else ""
+            return f"Promoted because the {family_label} structure met the current execution and confidence requirements.{market_suffix}{relationship_suffix}"
         if action_reason == "not_shortlisted":
             return f"Observed a potential {family_label} structure, but it did not clear shortlist competition for deep analysis.{relationship_suffix}"
         if action_reason in {"below_action_confidence_threshold", "below_calibrated_action_threshold"}:
@@ -231,7 +240,9 @@ class WatchlistPlanNarrativeService:
         if action_reason == "context_transmission_contradiction":
             return f"Broader context evidence remained too contradictory to trust the setup cleanly{f' around {driver}' if driver else ''}.{relationship_suffix}"
         if action_reason == "context_quality_blocked":
-            return f"Context quality was blocked, so the {family_label} setup was not tradeable.{relationship_suffix}"
+            market_summary = None if not isinstance(transmission_summary, dict) else transmission_summary.get("market_intelligence_summary")
+            market_suffix = f" Market intelligence: {market_summary}." if isinstance(market_summary, str) and market_summary else ""
+            return f"Context quality was blocked, so the {family_label} setup was not tradeable.{market_suffix}{relationship_suffix}"
         return f"The {family_label} setup was reviewed but did not earn promotion.{relationship_suffix}"
 
     def invalidation_summary(self, setup_family: str, *, transmission_summary: dict[str, object] | None = None) -> str:
@@ -323,6 +334,8 @@ class WatchlistPlanNarrativeService:
                     risks.append("price structure and broader context are not fully aligned")
                 if "macro_industry_conflict" in conflict_flags or "industry_ticker_conflict" in conflict_flags:
                     risks.append("cross-layer context conflicts can weaken follow-through")
+                if "market_intelligence_conflict" in conflict_flags:
+                    risks.append("market intelligence does not cleanly confirm the thesis")
                 if "context_quality_blocked" in conflict_flags:
                     risks.append("context quality is blocked; this setup should not be traded")
                 if "context_quality_degraded" in conflict_flags:
