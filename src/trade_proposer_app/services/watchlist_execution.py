@@ -262,7 +262,8 @@ class WatchlistExecutionService:
                 "deep_analysis_price_history": self._price_history(stored_signal, "deep_analysis_price_history"),
             }
         )
-        return warnings_found or bool(candidate.warnings or deep_error or plan.warnings)
+        deep_warnings = list(getattr(getattr(deep_output, "diagnostics", None), "warnings", []) or []) if deep_output is not None else []
+        return warnings_found or bool(candidate.warnings or deep_warnings or deep_error or plan.warnings)
 
     def _build_result(
         self,

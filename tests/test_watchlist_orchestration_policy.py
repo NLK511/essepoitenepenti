@@ -16,7 +16,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from trade_proposer_app.domain.enums import RecommendationDirection, StrategyHorizon
-from trade_proposer_app.domain.models import Recommendation, RunDiagnostics, RunOutput, TickerSignalSnapshot, Watchlist
+from trade_proposer_app.domain.models import Recommendation, RecommendationPlan, RunDiagnostics, RunOutput, TickerSignalSnapshot, Watchlist
+from trade_proposer_app.services.watchlist_execution import WatchlistExecutionService
 from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService, _CheapScanCandidate
 
 
@@ -168,6 +169,48 @@ class WatchlistOrchestrationPolicyTests(unittest.TestCase):
         }
         adj = self.service._transmission_confidence_adjustment(analysis, transmission_bias="headwind", alignment_score=40.0)
         self.assertEqual(adj, -2.4)
+
+    def test_shortlisted_candidate_with_deep_summary_fallback_marks_warning(self) -> None:
+        watchlist = Watchlist(name="test", default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)
+        candidate = _CheapScanCandidate("AAPL", "long", 80.0, 90.0, [], "")
+        deep_output = RunOutput(
+            recommendation=Recommendation(
+                ticker="AAPL",
+                direction=RecommendationDirection.LONG,
+                confidence=81.0,
+                entry_price=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+            ),
+            diagnostics=RunDiagnostics(warnings=["plan context summary fell back to digest/static summary because pi_agent CLI timed out after 5s"]),
+        )
+        signal = Mock(diagnostics=Mock(get=Mock(return_value=None)))
+        plan = RecommendationPlan(ticker="AAPL", horizon="1w", action="long", confidence_percent=81.0, entry_price_low=99.0, entry_price_high=101.0, stop_loss=95.0, take_profit=110.0)
+        self.service._shortlist_decision_for_ticker = Mock(return_value={"ticker": "AAPL"})
+        self.service._run_deep_analysis = Mock(return_value=(deep_output, None))
+        self.service._build_signal_snapshot = Mock(return_value=signal)
+        self.service.context_snapshots.create_ticker_signal_snapshot.return_value = signal
+        self.service._build_plan_from_signal = Mock(return_value=plan)
+        self.service.recommendation_plans.create_plan.return_value = plan
+        self.service._record_decision_sample = Mock()
+
+        warnings_found = WatchlistExecutionService(self.service)._process_shortlisted_candidate(
+            self.service,
+            watchlist,
+            candidate,
+            shortlist_rank=1,
+            shortlist_evaluation={"shortlist": ["AAPL"]},
+            calibration_summary=None,
+            stored_signals=[],
+            stored_plans=[],
+            ticker_generation=[],
+            warnings_found=False,
+            job_id=1,
+            run_id=1,
+            as_of=None,
+        )
+
+        self.assertTrue(warnings_found)
 
     def test_calibration_curve_snapshot_adjusts_confidence_from_smoothed_bin(self) -> None:
         calibration_summary = SimpleNamespace(
