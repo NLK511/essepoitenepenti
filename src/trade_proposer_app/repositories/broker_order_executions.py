@@ -142,6 +142,24 @@ class BrokerOrderExecutionRepository:
             query = query.where(BrokerOrderExecutionRecord.created_at <= self._normalize_datetime(created_before))
         return int(self.session.scalar(select(func.count()).select_from(query.subquery())) or 0)
 
+    def has_known_unavailable_ticker(self, broker: str, ticker: str) -> bool:
+        record = self.session.scalars(
+            select(BrokerOrderExecutionRecord)
+            .where(BrokerOrderExecutionRecord.broker == broker)
+            .where(BrokerOrderExecutionRecord.ticker == ticker.upper())
+            .where(BrokerOrderExecutionRecord.status == "skipped")
+            .order_by(BrokerOrderExecutionRecord.created_at.desc(), BrokerOrderExecutionRecord.id.desc())
+            .limit(1)
+        ).first()
+        if record is None:
+            return False
+        payload = self._load(record.response_payload_json, {})
+        if isinstance(payload, dict):
+            availability = payload.get("availability")
+            if isinstance(availability, dict) and availability.get("known_unavailable") is True:
+                return True
+        return str(record.error_message or "").startswith("broker_symbol_unavailable")
+
     def get_latest_by_plan_ids(self, plan_ids: list[int]) -> dict[int, BrokerOrderExecution]:
         normalized = [plan_id for plan_id in plan_ids if isinstance(plan_id, int)]
         if not normalized:

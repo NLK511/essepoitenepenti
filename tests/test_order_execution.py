@@ -1070,6 +1070,7 @@ class OrderExecutionTests(unittest.TestCase):
             def submit_order(self, payload: dict[str, object]) -> AlpacaOrderSubmissionResult:
                 return AlpacaOrderSubmissionResult(status_code=200, payload={"id": "alpaca-order-reject", "status": "rejected"})
 
+
         session = create_session()
         try:
             settings = SettingsRepository(session)
@@ -1093,6 +1094,55 @@ class OrderExecutionTests(unittest.TestCase):
             self.assertEqual(outcome.summary["failed_order_count"], 1)
             self.assertEqual(outcome.orders[0].status, "rejected")
             self.assertEqual(outcome.orders[0].response_payload["status"], "rejected")
+        finally:
+            session.close()
+
+    def test_order_execution_service_caches_broker_unavailable_tickers_and_allows_forced_retry(self) -> None:
+        class UnavailableTickerClient:
+            def __init__(self) -> None:
+                self.requests: list[dict[str, object]] = []
+
+            def submit_order(self, payload: dict[str, object]) -> AlpacaOrderSubmissionResult:
+                self.requests.append(payload)
+                raise AlpacaPaperClientError(
+                    "alpaca request failed with status 422",
+                    status_code=422,
+                    payload={"message": "symbol not tradable on alpaca"},
+                )
+
+        session = create_session()
+        try:
+            settings = SettingsRepository(session)
+            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            repository = BrokerOrderExecutionRepository(session)
+            client = UnavailableTickerClient()
+            service = OrderExecutionService(settings=settings, executions=repository, client=client)
+            plan = RecommendationPlan(
+                id=9,
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=77.0,
+                entry_price_low=99.0,
+                entry_price_high=101.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                computed_at=datetime.now(timezone.utc),
+            )
+
+            first_outcome = service.execute_plans([plan], run_id=21, job_id=22)
+            second_outcome = service.execute_plans([plan], run_id=23, job_id=24)
+            forced_outcome = service.execute_plans([plan], run_id=25, job_id=26, force_tickers={"AAPL"})
+
+            self.assertEqual(len(client.requests), 2)
+            self.assertEqual(first_outcome.summary["skipped_order_count"], 1)
+            self.assertEqual(first_outcome.orders[0].status, "skipped")
+            self.assertEqual(second_outcome.summary["skipped_order_count"], 1)
+            self.assertEqual(second_outcome.orders[0].status, "skipped")
+            self.assertEqual(forced_outcome.summary["failed_order_count"], 0)
+            self.assertEqual(forced_outcome.summary["skipped_order_count"], 1)
+            self.assertEqual(forced_outcome.orders[0].status, "skipped")
+            self.assertTrue(repository.has_known_unavailable_ticker("alpaca", "AAPL"))
         finally:
             session.close()
 

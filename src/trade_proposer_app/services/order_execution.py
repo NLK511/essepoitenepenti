@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -62,6 +63,7 @@ class OrderExecutionService:
         *,
         run_id: int | None = None,
         job_id: int | None = None,
+        force_tickers: set[str] | None = None,
     ) -> OrderExecutionOutcome:
         config = SettingsDomainService(repository=self.settings).execution_settings().broker_order_execution
         warnings: list[str] = []
@@ -99,8 +101,22 @@ class OrderExecutionService:
 
         ordered_results: list[BrokerOrderExecution] = []
         skip_reasons: dict[str, int] = {}
+        forced_tickers = {ticker.strip().upper() for ticker in force_tickers or set() if ticker and ticker.strip()}
+        broker_name = str(config["broker"])
 
         for plan in plans:
+            if plan.ticker.upper() not in forced_tickers and self.executions.has_known_unavailable_ticker(broker_name, plan.ticker):
+                self._bump(skip_reasons, "broker_symbol_unavailable")
+                ordered_results.append(
+                    self._store_skip(
+                        plan,
+                        run_id=run_id,
+                        job_id=job_id,
+                        reason="broker_symbol_unavailable",
+                        config=config,
+                    )
+                )
+                continue
             candidate_result = self.candidate_builder.build(plan, notional_per_plan=float(config["notional_per_plan"]), run_id=run_id)
             if candidate_result.skip_reason == "non_actionable":
                 skip_reasons["non_actionable"] = skip_reasons.get("non_actionable", 0) + 1
@@ -192,6 +208,8 @@ class OrderExecutionService:
             latest_order = ordered_results[-1]
             if latest_order.status in {ExecutionStatus.ACCEPTED.value, ExecutionStatus.FILLED.value, ExecutionStatus.SUBMITTED.value}:
                 summary["submitted_order_count"] = int(summary["submitted_order_count"]) + 1
+            elif latest_order.status == ExecutionStatus.SKIPPED.value:
+                self._bump(skip_reasons, latest_order.error_message or "broker_symbol_unavailable")
             else:
                 summary["failed_order_count"] = int(summary["failed_order_count"]) + 1
 
@@ -399,15 +417,26 @@ class OrderExecutionService:
             )
             return created
         except AlpacaPaperClientError as exc:
-            candidate.status = ExecutionStatus.FAILED.value
-            candidate.error_message = str(exc)
-            candidate.response_payload = exc.payload
+            if self._is_unavailable_broker_error(exc):
+                candidate.status = ExecutionStatus.SKIPPED.value
+                candidate.error_message = self._broker_unavailable_reason(exc)
+                candidate.response_payload = {
+                    "availability": {
+                        "known_unavailable": True,
+                        "reason": candidate.error_message,
+                        "broker_payload": exc.payload,
+                    }
+                }
+            else:
+                candidate.status = ExecutionStatus.FAILED.value
+                candidate.error_message = str(exc)
+                candidate.response_payload = exc.payload
             candidate.submitted_at = datetime.now(timezone.utc)
             created = self.executions.create(candidate)
             self._sync_position_from_order(created)
             self._record_observability_event(
-                event_type="broker.order_submit_failed",
-                message="Broker order submit failed",
+                event_type="broker.order_submit_failed" if created.status != ExecutionStatus.SKIPPED.value else "broker.order_submit_skipped",
+                message="Broker order submit failed" if created.status != ExecutionStatus.SKIPPED.value else "Broker order skipped because ticker is unavailable on broker",
                 severity="warning",
                 run_id=created.run_id,
                 job_id=created.job_id,
@@ -467,6 +496,30 @@ class OrderExecutionService:
     @staticmethod
     def _bump(counter: dict[str, int], reason: str) -> None:
         counter[reason] = counter.get(reason, 0) + 1
+
+    @staticmethod
+    def _is_unavailable_broker_error(exc: AlpacaPaperClientError) -> bool:
+        text = str(exc).lower()
+        payload = json.dumps(exc.payload, default=str).lower() if exc.payload else ""
+        markers = (
+            "symbol not available",
+            "symbol unavailable",
+            "ticker not available",
+            "ticker unavailable",
+            "not tradable",
+            "not tradable on",
+            "asset not found",
+            "unknown symbol",
+            "unsupported symbol",
+            "symbol not found",
+        )
+        return any(marker in text or marker in payload for marker in markers)
+
+    @staticmethod
+    def _broker_unavailable_reason(exc: AlpacaPaperClientError) -> str:
+        payload = exc.payload if isinstance(exc.payload, dict) else {}
+        message = str(payload.get("message") or payload.get("error") or exc or "broker symbol unavailable").strip()
+        return f"broker_symbol_unavailable:{message}" if message else "broker_symbol_unavailable"
 
     @staticmethod
     def _build_order_payload(
@@ -866,6 +919,14 @@ class OrderExecutionService:
         stop_loss: float | None = None,
         take_profit: float | None = None,
     ) -> BrokerOrderExecution:
+        response_payload: dict[str, object] = {}
+        if reason == "broker_symbol_unavailable" or reason.startswith("broker_symbol_unavailable:"):
+            response_payload = {
+                "availability": {
+                    "known_unavailable": True,
+                    "reason": reason,
+                }
+            }
         execution = BrokerOrderExecution(
             broker=str(config["broker"]),
             account_mode=str(config["account_mode"]),
@@ -887,6 +948,6 @@ class OrderExecutionService:
             client_order_id=ExecutionCandidateBuilder.client_order_id(plan, run_id=run_id),
             error_message=reason,
             request_payload={"reason": reason},
-            response_payload={},
+            response_payload=response_payload,
         )
         return self.executions.create(execution)
