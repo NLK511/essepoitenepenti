@@ -127,6 +127,20 @@ class RecommendationDecisionSampleRepository:
             query = query.where(RecommendationDecisionSampleRecord.created_at <= created_before)
         return query
 
+    def get_samples_by_plan_ids(self, plan_ids: list[int]) -> dict[int, RecommendationDecisionSample]:
+        self.session.rollback()
+        normalized = [plan_id for plan_id in plan_ids if isinstance(plan_id, int)]
+        if not normalized:
+            return {}
+        rows = self.session.scalars(
+            select(RecommendationDecisionSampleRecord).where(RecommendationDecisionSampleRecord.recommendation_plan_id.in_(normalized))
+        ).all()
+        return {
+            record.recommendation_plan_id: self._to_model(record)
+            for record in rows
+            if record.recommendation_plan_id is not None
+        }
+
     def count_samples(
         self,
         *,

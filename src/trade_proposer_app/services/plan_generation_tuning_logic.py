@@ -9,6 +9,7 @@ def family_adjusted_trade_levels(
     setup_family: str,
     action: str,
     transmission_context_bias: str | None,
+    volatility_score: float | None = None,
     tuning_config: dict[str, float],
 ) -> tuple[float, float, float, float]:
     entry = round(float(entry_price), 4)
@@ -26,7 +27,15 @@ def family_adjusted_trade_levels(
     bias = str(transmission_context_bias or "").strip().lower() or None
 
     entry_band_fraction = max(0.0, float(tuning_config.get("global.entry_band_risk_fraction", 0.0) or 0.0))
-    entry_band_distance = risk_distance * entry_band_fraction
+    family_entry_multiplier = float(tuning_config.get("setup_family.entry_band_multiplier", 1.0) or 1.0)
+    family_entry_bias = {
+        "breakout": 1.0,
+        "breakdown": 1.0,
+        "mean_reversion": 0.92,
+        "catalyst_follow_through": 1.08,
+        "macro_beneficiary_loser": 0.96,
+    }.get(family, 1.0)
+    entry_band_distance = risk_distance * entry_band_fraction * family_entry_multiplier * family_entry_bias
     entry_low = round(entry - entry_band_distance, 4)
     entry_high = round(entry + entry_band_distance, 4)
 
@@ -43,7 +52,13 @@ def family_adjusted_trade_levels(
     elif family == "macro_beneficiary_loser":
         take_multiplier = float(tuning_config.get("setup_family.macro_beneficiary_loser.take_profit_distance_multiplier", 1.08) or 1.08)
 
-    adjusted_risk_distance = risk_distance * stop_multiplier
+    volatility_multiplier = 1.0
+    if volatility_score is not None:
+        volatility = max(0.0, min(100.0, float(volatility_score)))
+        volatility_sensitivity = max(0.0, float(tuning_config.get("global.volatility_stop_multiplier", 0.12) or 0.12))
+        volatility_multiplier = 1.0 + (((volatility - 50.0) / 100.0) * volatility_sensitivity)
+
+    adjusted_risk_distance = risk_distance * stop_multiplier * volatility_multiplier
     adjusted_reward_distance = reward_distance * take_multiplier
     stop = round(entry - (direction * adjusted_risk_distance), 4)
     take = round(entry + (direction * adjusted_reward_distance), 4)

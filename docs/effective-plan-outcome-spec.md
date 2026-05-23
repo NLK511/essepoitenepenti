@@ -15,11 +15,11 @@ Before this spec, many services read only simulated recommendation outcomes and 
 For every recommendation plan, the app must expose one effective outcome. Source precedence is:
 
 1. Closed broker position (`win` or `loss`).
-2. Open/review broker position (`submitted`, `open`, `needs_review`, `error`, `canceled`) as broker-backed unresolved state.
-3. Simulated/replay/manual recommendation outcome.
+2. Simulated/replay/manual recommendation outcome.
+3. Open/review broker position (`submitted`, `open`, `needs_review`, `error`, `canceled`) as broker-backed unresolved state when no simulation exists.
 4. Plan fallback unresolved state.
 
-Closed broker positions override simulated outcomes. Simulation remains useful fallback evidence when no broker lifecycle record exists.
+Closed broker positions override simulated outcomes. Any non-closed broker state should defer to simulation when simulation exists; broker-backed unresolved state is only used when no simulation record exists.
 
 ## Market outcome versus execution outcome
 `win` and `loss` are market/trade outcomes. Risk-skipped, failed, rejected, and canceled broker orders are execution outcomes and must not be counted as market losses unless a broker position explicitly closed as a loss.

@@ -133,4 +133,4 @@ Even when the gate passes, autonomy must expand in small increments only:
 
 ## Current conformance
 
-Current behavior computes and displays the gate through `EdgeValidationGateService`, the research performance workbench, and the Research UI. Plan-generation tuning promotion is blocked unless the gate returns `eligible_for_cautious_expansion`. There is no separate broker autonomy-scope expansion setting today; any future setting that increases broker autonomy must use this gate before it ships.
+Current behavior computes and displays the gate through `EdgeValidationGateService`, the research performance workbench, and the Research UI. Plan-generation tuning auto-promotion is blocked unless the gate returns `eligible_for_cautious_expansion`. Manual promotion of a specific eligible candidate does not depend on this gate. There is no separate broker autonomy-scope expansion setting today; any future setting that increases broker autonomy must use this gate before it ships.

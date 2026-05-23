@@ -1235,6 +1235,79 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("broker_orders", payload)
         self.assertIn("order_execution", payload)
         self.assertIn("risk_management", payload)
+        self.assertIn("steering", payload)
+
+    async def test_steering_routes_run_dry_run_and_list_decisions(self) -> None:
+        session = Session(bind=self.engine)
+        try:
+            plans = RecommendationPlanRepository(session)
+            orders = BrokerOrderExecutionRepository(session)
+            positions = BrokerPositionRepository(session)
+            plan = plans.create_plan(
+                RecommendationPlan(
+                    ticker="AAPL",
+                    horizon="1w",
+                    action="long",
+                    confidence_percent=72.0,
+                    entry_price_low=100.0,
+                    entry_price_high=100.0,
+                    stop_loss=95.0,
+                    take_profit=110.0,
+                    holding_period_days=5,
+                    computed_at=datetime(2026, 4, 28, tzinfo=timezone.utc),
+                )
+            )
+            order = orders.create(
+                BrokerOrderExecution(
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker=plan.ticker,
+                    ticker=plan.ticker,
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    time_in_force="gtc",
+                    quantity=10,
+                    notional_amount=1000.0,
+                    entry_price=100.0,
+                    stop_loss=95.0,
+                    take_profit=110.0,
+                    status="submitted",
+                    broker_order_id="alpaca-order-steering",
+                    client_order_id="steering-order-1",
+                    request_payload={"symbol": "AAPL"},
+                    response_payload={"id": "alpaca-order-steering", "status": "submitted"},
+                )
+            )
+            positions.create(
+                BrokerPosition(
+                    broker_order_execution_id=order.id or 0,
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker=plan.ticker,
+                    ticker=plan.ticker,
+                    action="long",
+                    side="buy",
+                    quantity=10,
+                    current_quantity=10,
+                    status="open",
+                    entry_order_id="steering-order-1",
+                    entry_avg_price=100.0,
+                    exit_order_id=None,
+                )
+            )
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post("/api/steering/run-now")
+            decisions = await client.get("/api/steering/decisions", params={"limit": 10})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["executed"])
+        self.assertEqual(response.json()["summary"]["candidate_count"], 1)
+        self.assertEqual(decisions.status_code, 200)
+        self.assertEqual(decisions.json()["items"][0]["ticker"], "AAPL")
+        self.assertEqual(decisions.json()["items"][0]["execution_status"], "dry_run")
 
     async def test_risk_routes_assess_halt_and_resume(self) -> None:
         run_id = self.seed_run_with_diagnostics()
@@ -1840,6 +1913,35 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
                     "min_validation_resolved": "12",
                 },
             )
+            steering_response = await client.post(
+                "/api/settings/steering",
+                data={
+                    "enabled": "true",
+                    "dry_run": "false",
+                    "cancel_expired_pending_orders_enabled": "true",
+                    "cancel_invalidated_pending_orders_enabled": "false",
+                    "move_to_profit_enabled": "true",
+                    "close_on_severe_invalidation_enabled": "true",
+                    "tighten_on_deterioration_enabled": "true",
+                    "lower_tp_on_weakness_enabled": "true",
+                    "pending_expiration_grace_minutes": "7",
+                    "pending_min_confidence_percent": "56.5",
+                    "pending_invalidation_required_signals": "3",
+                    "pending_price_chase_limit_percent": "1.25",
+                    "breakeven_trigger_percent": "0.8",
+                    "min_profit_lock_percent": "0.2",
+                    "position_close_confidence_percent": "41",
+                    "position_close_required_signals": "4",
+                    "position_min_hold_confidence_percent": "51",
+                    "position_deterioration_required_signals": "3",
+                    "deterioration_stop_cushion_percent": "0.4",
+                    "weakened_thesis_tp_cushion_percent": "0.6",
+                    "min_tp_distance_percent": "0.2",
+                    "min_reviewed_dry_run_decisions_before_enable": "40",
+                    "min_reviewed_dry_run_amendments_before_enable": "15",
+                    "min_reviewed_dry_run_close_now_before_enable": "12",
+                },
+            )
             realism_response = await client.post(
                 "/api/settings/evaluation-realism",
                 data={
@@ -1863,6 +1965,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(signal_gating_tuning_response.status_code, 200)
         self.assertEqual(social_response.status_code, 200)
         self.assertEqual(plan_generation_tuning_response.status_code, 200)
+        self.assertEqual(steering_response.status_code, 200)
         self.assertEqual(realism_response.status_code, 200)
         self.assertEqual(provider_response.status_code, 200)
         self.assertEqual(listed.status_code, 200)
@@ -1887,6 +1990,10 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(setting_map["plan_generation_tuning_auto_enabled"], "true")
         self.assertEqual(setting_map["plan_generation_tuning_auto_promote_enabled"], "true")
         self.assertEqual(setting_map["plan_generation_tuning_min_actionable_resolved"], "31")
+        self.assertEqual(setting_map["steering_enabled"], "true")
+        self.assertEqual(setting_map["steering_dry_run"], "false")
+        self.assertEqual(setting_map["steering_pending_expiration_grace_minutes"], "7")
+        self.assertEqual(payload["steering"]["min_reviewed_dry_run_close_now_before_enable"], 12)
         self.assertEqual(setting_map["plan_generation_tuning_min_validation_resolved"], "12")
         self.assertEqual(payload["plan_generation_tuning"]["settings"]["auto_enabled"], True)
         self.assertEqual(payload["plan_generation_tuning"]["settings"]["auto_promote_enabled"], True)

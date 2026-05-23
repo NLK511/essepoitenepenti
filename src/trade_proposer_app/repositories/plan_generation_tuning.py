@@ -75,6 +75,12 @@ class PlanGenerationTuningRepository:
         self.session.refresh(record)
         return self._to_candidate_model(record)
 
+    def get_candidate(self, candidate_id: int) -> PlanGenerationTuningCandidate:
+        record = self.session.get(PlanGenerationTuningCandidateRecord, candidate_id)
+        if record is None:
+            raise ValueError(f"plan generation tuning candidate {candidate_id} not found")
+        return self._to_candidate_model(record)
+
     def list_candidates_for_run(self, run_id: int) -> list[PlanGenerationTuningCandidate]:
         rows = self.session.scalars(
             select(PlanGenerationTuningCandidateRecord)

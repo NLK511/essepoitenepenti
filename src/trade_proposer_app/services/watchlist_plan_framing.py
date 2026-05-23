@@ -44,6 +44,7 @@ class WatchlistPlanFramingService:
             transmission_summary=transmission_summary,
         )
         calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", raw_plan_confidence) or raw_plan_confidence)
+        confidence_floor = o._plan_generation_tuning_value("global.actionable_confidence_floor_percent", 60.0)
         rationale = o._rationale_summary(signal, candidate, setup_family, transmission_summary)
         warnings = list(signal.warnings)
         shortlisted = bool(signal.diagnostics.get("shortlisted"))
@@ -73,15 +74,18 @@ class WatchlistPlanFramingService:
         action_reason = "actionable_setup"
         effective_threshold = float(calibration_review.get("effective_confidence_threshold", o.confidence_threshold))
         effective_threshold = min(effective_threshold, float(o.action_confidence_threshold))
+        effective_threshold = max(effective_threshold, confidence_floor)
         calibrated_confidence = float(calibration_review.get("calibrated_confidence_percent", raw_plan_confidence) or raw_plan_confidence)
 
         entry_price_low, entry_price_high, stop_loss, take_profit, risk_reward_ratio = None, None, None, None, None
         if intended_action:
+            cheap_scan_component_scores = signal.diagnostics.get("cheap_scan_component_scores") if isinstance(signal.diagnostics.get("cheap_scan_component_scores"), dict) else {}
             entry_price_low, entry_price_high, stop_loss, take_profit = o._family_adjusted_trade_levels(
                 recommendation,
                 setup_family=setup_family,
                 action=intended_action,
                 transmission_summary=transmission_summary,
+                volatility_score=cheap_scan_component_scores.get("volatility_score") if isinstance(cheap_scan_component_scores.get("volatility_score"), (int, float)) else None,
             )
             risk_reward_ratio = o._risk_reward_ratio(recommendation)
 

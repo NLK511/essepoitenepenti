@@ -195,6 +195,29 @@ class BrokerPositionRecord(Base, TimestampMixin):
     error_message: Mapped[str] = mapped_column(Text, default="")
 
 
+class BrokerSteeringDecisionRecord(Base, TimestampMixin):
+    __tablename__ = "broker_steering_decisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    recommendation_plan_id: Mapped[int] = mapped_column(ForeignKey("recommendation_plans.id"), index=True)
+    broker_order_id: Mapped[int | None] = mapped_column(ForeignKey("broker_order_executions.id"), nullable=True, index=True)
+    broker_position_id: Mapped[int | None] = mapped_column(ForeignKey("broker_positions.id"), nullable=True, index=True)
+    ticker: Mapped[str] = mapped_column(String(32), index=True)
+    decision: Mapped[str] = mapped_column(String(64), index=True)
+    execute_allowed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    execution_status: Mapped[str] = mapped_column(String(32), default="dry_run", index=True)
+    reason_codes_json: Mapped[str] = mapped_column(Text, default="[]")
+    proposed_stop_loss: Mapped[float | None] = mapped_column(Float, nullable=True)
+    proposed_take_profit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    current_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    current_stop_loss: Mapped[float | None] = mapped_column(Float, nullable=True)
+    current_take_profit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    risk_delta_json: Mapped[str] = mapped_column(Text, default="{}")
+    diagnostics_json: Mapped[str] = mapped_column(Text, default="{}")
+    error_message: Mapped[str] = mapped_column(Text, default="")
+
+
 class WorkerHeartbeatRecord(Base, TimestampMixin):
     __tablename__ = "worker_heartbeats"
 

@@ -62,6 +62,7 @@ class WatchlistTransmissionService:
         calibration = calibration_review or {}
         raw_plan_confidence = calibration.get("raw_confidence_percent") if isinstance(calibration.get("raw_confidence_percent"), (int, float)) else signal.confidence_percent
         calibrated_confidence = calibration.get("calibrated_confidence_percent") if isinstance(calibration.get("calibrated_confidence_percent"), (int, float)) else raw_plan_confidence
+        cheap_scan_component_scores = signal.diagnostics.get("cheap_scan_component_scores") if isinstance(signal.diagnostics.get("cheap_scan_component_scores"), dict) else {}
         payload = {
             "attention_score": signal.attention_score,
             "macro_exposure_score": signal.macro_exposure_score,
@@ -76,6 +77,7 @@ class WatchlistTransmissionService:
             "raw_confidence_percent": round(float(raw_plan_confidence), 2),
             "raw_plan_confidence_percent": round(float(raw_plan_confidence), 2),
             "cheap_scan_confidence_percent": round(float(signal.confidence_percent), 2),
+            "cheap_scan_volatility_score": round(float(cheap_scan_component_scores.get("volatility_score", 50.0) or 50.0), 2),
             "deep_analysis_confidence_percent": round(float(deep_analysis_confidence_percent), 2) if deep_analysis_confidence_percent is not None else None,
             "calibrated_confidence_percent": round(float(calibrated_confidence), 2),
             "confidence_bucket": self._confidence_bucket(float(calibrated_confidence)),

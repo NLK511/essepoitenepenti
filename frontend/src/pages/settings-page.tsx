@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { getJson, postForm } from "../api";
 import { Card, DisclosureCard, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
-import type { AppSetting, AppPreflightReport, BrokerOrderExecution, EvaluationRealismState, ProviderCredential, SettingsResponse, SettingsWorkbench } from "../types";
+import type { AppSetting, AppPreflightReport, BrokerOrderExecution, EvaluationRealismState, ProviderCredential, SettingsResponse, SettingsWorkbench, SteeringDecision, SteeringRunResponse } from "../types";
 import { toSettingMap } from "../utils";
 
 interface SettingsViewData {
@@ -13,7 +13,9 @@ interface SettingsViewData {
   evaluationRealism: EvaluationRealismState;
   orderExecution: SettingsResponse["order_execution"];
   riskManagement: SettingsResponse["risk_management"];
+  steering: SettingsResponse["steering"];
   planGenerationTuning: SettingsResponse["plan_generation_tuning"];
+  steeringDecisions: SteeringDecision[];
 }
 
 export function SettingsPage() {
@@ -26,6 +28,7 @@ export function SettingsPage() {
     try {
       setError(null);
       const settingsResponse = await getJson<SettingsWorkbench>("/api/settings/workbench");
+      const steeringResponse = await getJson<{ items: SteeringDecision[] }>('/api/steering/decisions?limit=10');
       setData({
         settings: settingsResponse.settings,
         providers: settingsResponse.providers,
@@ -33,7 +36,9 @@ export function SettingsPage() {
         evaluationRealism: settingsResponse.evaluation_realism,
         orderExecution: settingsResponse.order_execution,
         riskManagement: settingsResponse.risk_management,
+        steering: settingsResponse.steering,
         planGenerationTuning: settingsResponse.plan_generation_tuning,
+        steeringDecisions: steeringResponse.items ?? [],
         preflight: settingsResponse.preflight,
       });
     } catch (loadError) {
@@ -193,6 +198,22 @@ export function SettingsPage() {
     }
   }
 
+  async function runSteeringNow() {
+    try {
+      setSaving("steering-run");
+      setError(null);
+      setNotice(null);
+      const response = await postForm<SteeringRunResponse>("/api/steering/run-now", {});
+      const summary = response.summary?.candidate_count ?? 0;
+      setNotice(`Steering run completed (${summary} candidates)`);
+      await loadData();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to run steering");
+    } finally {
+      setSaving(null);
+    }
+  }
+
   async function saveRiskManagementSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -299,6 +320,45 @@ export function SettingsPage() {
                 <div className="helper-text">Actionable long/short plans are submitted as Alpaca paper bracket orders when this toggle is enabled.</div>
                 <div className="cluster"><button className="button" type="submit" disabled={saving === "order-execution"}>{saving === "order-execution" ? "… Saving" : "✓ Save execution"}</button></div>
               </form>
+            </DisclosureCard>
+
+            <DisclosureCard kicker="Steering" title="Broker dry-run steering" subtitle="Conservative post-submit controls for app-owned orders and positions." actions={<HelpHint tooltip="Broker steering audits pending orders and open positions before live mutation is enabled." to="/docs?doc=broker-position-steering-spec" />}>
+              <div className="stack-form">
+                <div className="form-grid">
+                  <StatCard label="Enabled" value={data.steering.enabled ? "on" : "off"} helper="Autonomous steering gate" />
+                  <StatCard label="Dry run" value={data.steering.dry_run ? "yes" : "no"} helper="Persist decisions without broker mutation" />
+                  <StatCard label="Pending cancel" value={data.steering.cancel_invalidated_pending_orders_enabled ? "on" : "off"} helper="Invalidation cancel rule" />
+                  <StatCard label="Close now" value={data.steering.close_on_severe_invalidation_enabled ? "on" : "off"} helper="Severe invalidation rule" />
+                </div>
+                <div className="helper-text">Conservative defaults stay visible here even while the feature runs dry-run only.</div>
+                <div className="cluster"><button className="button" type="button" onClick={() => void runSteeringNow()} disabled={saving === "steering-run"}>{saving === "steering-run" ? "… Running" : "▶ Run steering dry-run"}</button></div>
+                {data.steeringDecisions.length > 0 ? (
+                  <div className="table-wrap top-gap-small">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Ticker</th>
+                          <th>Decision</th>
+                          <th>Allowed</th>
+                          <th>Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.steeringDecisions.map((decision) => (
+                          <tr key={decision.id ?? `${decision.ticker}-${decision.created_at}`}>
+                            <td>{decision.ticker}</td>
+                            <td>{decision.decision}</td>
+                            <td>{decision.execute_allowed ? "yes" : "no"}</td>
+                            <td>{decision.reason_codes.join(", ") || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="helper-text top-gap-small">No steering decisions recorded yet.</div>
+                )}
+              </div>
             </DisclosureCard>
 
             <DisclosureCard kicker="Risk management" title="Broker kill switch limits" subtitle="Pre-trade guardrails used before automated Alpaca paper submissions and manual resubmits." actions={<HelpHint tooltip="The risk manager blocks new broker submissions when halt, loss, exposure, or concentration limits are breached." to="/docs?doc=broker-risk-management-spec" />}>

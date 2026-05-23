@@ -18,6 +18,7 @@ def _settings_payload(session: Session, repository: SettingsRepository | None = 
     domain_settings = SettingsDomainService(repository=repository)
     strategy_settings = domain_settings.strategy_settings()
     execution_settings = domain_settings.execution_settings()
+    steering_settings = domain_settings.steering_settings()
     risk_settings = domain_settings.risk_settings()
     return {
         "settings": repository.list_settings(),
@@ -28,6 +29,7 @@ def _settings_payload(session: Session, repository: SettingsRepository | None = 
         "signal_gating_tuning": strategy_settings.signal_gating,
         "evaluation_realism": execution_settings.evaluation_realism,
         "order_execution": execution_settings.broker_order_execution,
+        "steering": steering_settings.steering,
         "risk_management": risk_settings.risk_management,
         "plan_generation_tuning": {
             "settings": strategy_settings.plan_generation_tuning,
@@ -240,6 +242,66 @@ async def set_order_execution_settings(
             broker=broker,
             account_mode=account_mode,
             notional_per_plan=notional_per_plan,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return config
+
+
+@router.post("/steering")
+async def set_steering_settings(
+    enabled: str = Form(default="false"),
+    dry_run: str = Form(default="true"),
+    cancel_expired_pending_orders_enabled: str = Form(default="true"),
+    cancel_invalidated_pending_orders_enabled: str = Form(default="true"),
+    move_to_profit_enabled: str = Form(default="true"),
+    close_on_severe_invalidation_enabled: str = Form(default="true"),
+    tighten_on_deterioration_enabled: str = Form(default="true"),
+    lower_tp_on_weakness_enabled: str = Form(default="true"),
+    pending_expiration_grace_minutes: str = Form(default="5"),
+    pending_min_confidence_percent: str = Form(default="55"),
+    pending_invalidation_required_signals: str = Form(default="2"),
+    pending_price_chase_limit_percent: str = Form(default="1.0"),
+    breakeven_trigger_percent: str = Form(default="0.75"),
+    min_profit_lock_percent: str = Form(default="0.10"),
+    position_close_confidence_percent: str = Form(default="40"),
+    position_close_required_signals: str = Form(default="3"),
+    position_min_hold_confidence_percent: str = Form(default="50"),
+    position_deterioration_required_signals: str = Form(default="2"),
+    deterioration_stop_cushion_percent: str = Form(default="0.35"),
+    weakened_thesis_tp_cushion_percent: str = Form(default="0.50"),
+    min_tp_distance_percent: str = Form(default="0.10"),
+    min_reviewed_dry_run_decisions_before_enable: str = Form(default="30"),
+    min_reviewed_dry_run_amendments_before_enable: str = Form(default="10"),
+    min_reviewed_dry_run_close_now_before_enable: str = Form(default="10"),
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    try:
+        config = SettingsMutationService(session).set_steering_settings(
+            enabled=enabled,
+            dry_run=dry_run,
+            cancel_expired_pending_orders_enabled=cancel_expired_pending_orders_enabled,
+            cancel_invalidated_pending_orders_enabled=cancel_invalidated_pending_orders_enabled,
+            move_to_profit_enabled=move_to_profit_enabled,
+            close_on_severe_invalidation_enabled=close_on_severe_invalidation_enabled,
+            tighten_on_deterioration_enabled=tighten_on_deterioration_enabled,
+            lower_tp_on_weakness_enabled=lower_tp_on_weakness_enabled,
+            pending_expiration_grace_minutes=pending_expiration_grace_minutes,
+            pending_min_confidence_percent=pending_min_confidence_percent,
+            pending_invalidation_required_signals=pending_invalidation_required_signals,
+            pending_price_chase_limit_percent=pending_price_chase_limit_percent,
+            breakeven_trigger_percent=breakeven_trigger_percent,
+            min_profit_lock_percent=min_profit_lock_percent,
+            position_close_confidence_percent=position_close_confidence_percent,
+            position_close_required_signals=position_close_required_signals,
+            position_min_hold_confidence_percent=position_min_hold_confidence_percent,
+            position_deterioration_required_signals=position_deterioration_required_signals,
+            deterioration_stop_cushion_percent=deterioration_stop_cushion_percent,
+            weakened_thesis_tp_cushion_percent=weakened_thesis_tp_cushion_percent,
+            min_tp_distance_percent=min_tp_distance_percent,
+            min_reviewed_dry_run_decisions_before_enable=min_reviewed_dry_run_decisions_before_enable,
+            min_reviewed_dry_run_amendments_before_enable=min_reviewed_dry_run_amendments_before_enable,
+            min_reviewed_dry_run_close_now_before_enable=min_reviewed_dry_run_close_now_before_enable,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

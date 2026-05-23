@@ -42,6 +42,14 @@ class ExecutionSettings:
 
 
 @dataclass(frozen=True)
+class SteeringSettings:
+    steering: dict[str, object]
+
+    def to_dict(self) -> dict[str, object]:
+        return {"steering": dict(self.steering)}
+
+
+@dataclass(frozen=True)
 class OperatorSettings:
     summary: dict[str, object]
     social: dict[str, object]
@@ -132,6 +140,9 @@ class SettingsDomainService:
             broker_order_execution=self.repository.get_order_execution_config(),
             evaluation_realism=self.repository.get_evaluation_realism_config(),
         )
+
+    def steering_settings(self) -> SteeringSettings:
+        return SteeringSettings(steering=self.repository.get_steering_config())
 
     def operator_settings(self) -> OperatorSettings:
         return OperatorSettings(

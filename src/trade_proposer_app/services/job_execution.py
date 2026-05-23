@@ -13,6 +13,7 @@ from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.bars_refresh import BarsRefreshService
+from trade_proposer_app.services.broker_position_steering_workflow import BrokerSteeringService
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
@@ -137,6 +138,8 @@ class JobExecutionService:
             return self._execute_historical_replay_run(run)
         if run.job_type == JobType.BARS_DATA_REFRESH:
             return self._execute_bars_data_refresh_run(run)
+        if run.job_type == JobType.BROKER_STEERING:
+            return self._execute_broker_steering_run(run)
         raise RuntimeError(f"unsupported job_type execution: {run.job_type.value}")
 
     def _execute_proposal_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
@@ -378,13 +381,25 @@ class JobExecutionService:
 
         tuning_started = perf_counter()
         request = self._plan_generation_tuning_request(run)
+        plan_generation_tuning_limit = self._plan_generation_tuning_int(request.get("limit"), None)
+        logger.info(
+            "job execution plan generation tuning started: run_id=%s job_id=%s worker=%s mode=%s apply=%s limit=%s ticker=%s setup_family=%s",
+            run.id,
+            run.job_id,
+            socket.gethostname(),
+            request.get("mode") or "scheduled",
+            bool(request.get("apply", False)),
+            plan_generation_tuning_limit,
+            self._plan_generation_tuning_string(request.get("ticker")),
+            self._plan_generation_tuning_string(request.get("setup_family")),
+        )
         try:
             tuning_run = self.plan_generation_tuning.run(
                 mode=str(request.get("mode") or "scheduled"),
                 apply=bool(request.get("apply", False)),
                 ticker=self._plan_generation_tuning_string(request.get("ticker")),
                 setup_family=self._plan_generation_tuning_string(request.get("setup_family")),
-                limit=self._plan_generation_tuning_int(request.get("limit"), 500),
+                limit=plan_generation_tuning_limit,
             )
             summary = tuning_run.summary
             summary = dict(summary)
@@ -400,6 +415,14 @@ class JobExecutionService:
             tuning_run_seconds = round(perf_counter() - tuning_started, 6)
             timing["plan_generation_tuning_seconds"] = tuning_run_seconds
             timing["total_execution_seconds"] = round(perf_counter() - execution_started, 6)
+            logger.exception(
+                "job execution plan generation tuning failed: run_id=%s job_id=%s worker=%s seconds=%.3f error=%s",
+                run.id,
+                run.job_id,
+                socket.gethostname(),
+                tuning_run_seconds,
+                exc,
+            )
             raise RunExecutionFailed(exc, timing) from exc
 
         persistence_started = perf_counter()
@@ -408,6 +431,16 @@ class JobExecutionService:
         timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
 
         self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
+        logger.info(
+            "job execution plan generation tuning finished: run_id=%s job_id=%s worker=%s tuning_run_id=%s winner_candidate_id=%s promoted_config_version_id=%s seconds=%.3f",
+            run.id,
+            run.job_id,
+            socket.gethostname(),
+            tuning_run.id,
+            tuning_run.winning_candidate_id,
+            tuning_run.promoted_config_version_id,
+            timing["plan_generation_tuning_seconds"],
+        )
         return [], timing
 
     def _execute_performance_assessment_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
@@ -622,6 +655,36 @@ class JobExecutionService:
         )
         timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
 
+        self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
+        return [], timing
+
+    def _execute_broker_steering_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
+        execution_started = perf_counter()
+        timing: dict[str, object] = {
+            "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
+            "broker_steering_seconds": 0.0,
+            "persistence_seconds": 0.0,
+            "finalize_seconds": 0.0,
+            "total_execution_seconds": 0.0,
+        }
+        steering_started = perf_counter()
+        service = BrokerSteeringService(self.runs.session)
+        summary = service.run_once(run_id=run.id, job_id=run.job_id, correlation_id=run.correlation_id)
+        timing["broker_steering_seconds"] = round(perf_counter() - steering_started, 6)
+        persistence_started = perf_counter()
+        run_summary = {
+            "candidate_count": summary.total_candidates,
+            "decision_counts": summary.decisions,
+            "execution_status": summary.execution_status,
+        }
+        self.runs.set_summary(run.id or 0, run_summary)
+        self.runs.set_artifact(
+            run.id or 0,
+            {
+                "broker_steering": run_summary,
+            },
+        )
+        timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
         self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
         return [], timing
 
@@ -874,7 +937,7 @@ class JobExecutionService:
         return text or None
 
     @staticmethod
-    def _plan_generation_tuning_int(value: object, default: int) -> int:
+    def _plan_generation_tuning_int(value: object, default: int | None) -> int | None:
         try:
             parsed = int(value)
         except (TypeError, ValueError):

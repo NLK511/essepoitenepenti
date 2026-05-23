@@ -33,6 +33,7 @@ class StubAlpacaClient:
     def __init__(self) -> None:
         self.requests: list[dict[str, object]] = []
         self.cancel_requests: list[str] = []
+        self.close_requests: list[str] = []
         self.get_requests: list[str] = []
 
     def get_account(self) -> AlpacaOrderSubmissionResult:
@@ -55,7 +56,7 @@ class StubAlpacaClient:
         self.get_requests.append(order_id)
         return AlpacaOrderSubmissionResult(
             status_code=200,
-            payload={"id": order_id, "status": "filled", "filled_at": "2026-04-22T15:00:00Z", "submitted_at": "2026-04-22T14:30:00Z", "legs": []},
+            payload={"id": order_id, "status": "filled", "order_class": "bracket", "filled_at": "2026-04-22T15:00:00Z", "submitted_at": "2026-04-22T14:30:00Z", "legs": []},
         )
 
     def cancel_order(self, order_id: str) -> AlpacaOrderSubmissionResult:
@@ -63,6 +64,20 @@ class StubAlpacaClient:
         return AlpacaOrderSubmissionResult(
             status_code=200,
             payload={"id": order_id, "status": "canceled"},
+        )
+
+    def amend_order(self, order_id: str, payload: dict[str, object]) -> AlpacaOrderSubmissionResult:
+        self.requests.append({"order_id": order_id, **payload})
+        return AlpacaOrderSubmissionResult(
+            status_code=200,
+            payload={"id": order_id, "status": "accepted", **payload},
+        )
+
+    def close_position(self, symbol: str) -> AlpacaOrderSubmissionResult:
+        self.close_requests.append(symbol)
+        return AlpacaOrderSubmissionResult(
+            status_code=200,
+            payload={"symbol": symbol, "status": "closed"},
         )
 
 
@@ -606,6 +621,97 @@ class OrderExecutionTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_order_execution_service_amends_open_order_levels(self) -> None:
+        session = create_session()
+        try:
+            settings = SettingsRepository(session)
+            settings.upsert_provider_credential("alpaca", "paper-key", "paper-secret")
+            repository = BrokerOrderExecutionRepository(session)
+            stored = repository.create(
+                BrokerOrderExecution(
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=1,
+                    recommendation_plan_ticker="AAPL",
+                    run_id=10,
+                    job_id=11,
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    time_in_force="gtc",
+                    quantity=10,
+                    notional_amount=1000.0,
+                    entry_price=100.0,
+                    stop_loss=95.0,
+                    take_profit=110.0,
+                    status="submitted",
+                    broker_order_id="alpaca-order-9",
+                    client_order_id="tp-run-10-plan-1-aapl-open",
+                    submitted_at=datetime.now(timezone.utc),
+                    request_payload={"symbol": "AAPL", "qty": 10},
+                    response_payload={"id": "alpaca-order-9", "status": "accepted"},
+                )
+            )
+            client = StubAlpacaClient()
+            service = OrderExecutionService(settings=settings, executions=repository, client=client)
+
+            amended = service.amend_execution(stored.id or 0, stop_loss=97.5, take_profit=108.5)
+
+            self.assertEqual(client.get_requests, ["alpaca-order-9"])
+            self.assertEqual(client.requests[-1]["order_id"], "alpaca-order-9")
+            self.assertEqual(client.requests[-1]["stop_loss"]["stop_price"], 97.5)
+            self.assertEqual(client.requests[-1]["take_profit"]["limit_price"], 108.5)
+            self.assertEqual(amended.stop_loss, 97.5)
+            self.assertEqual(amended.take_profit, 108.5)
+        finally:
+            session.close()
+
+    def test_order_execution_service_rejects_non_bracket_amendments(self) -> None:
+        session = create_session()
+        try:
+            settings = SettingsRepository(session)
+            settings.upsert_provider_credential("alpaca", "paper-key", "paper-secret")
+            repository = BrokerOrderExecutionRepository(session)
+            stored = repository.create(
+                BrokerOrderExecution(
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=1,
+                    recommendation_plan_ticker="AAPL",
+                    run_id=10,
+                    job_id=11,
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    time_in_force="gtc",
+                    quantity=10,
+                    notional_amount=1000.0,
+                    entry_price=100.0,
+                    stop_loss=95.0,
+                    take_profit=110.0,
+                    status="submitted",
+                    broker_order_id="alpaca-order-9",
+                    client_order_id="tp-run-10-plan-1-aapl-open",
+                    submitted_at=datetime.now(timezone.utc),
+                    request_payload={"symbol": "AAPL", "qty": 10},
+                    response_payload={"id": "alpaca-order-9", "status": "accepted"},
+                )
+            )
+
+            class NonBracketAmendClient(StubAlpacaClient):
+                def get_order(self, order_id: str) -> AlpacaOrderSubmissionResult:
+                    self.get_requests.append(order_id)
+                    return AlpacaOrderSubmissionResult(status_code=200, payload={"id": order_id, "status": "accepted"})
+
+            service = OrderExecutionService(settings=settings, executions=repository, client=NonBracketAmendClient())
+
+            with self.assertRaises(ValueError):
+                service.amend_execution(stored.id or 0, stop_loss=97.5)
+        finally:
+            session.close()
+
     def test_order_execution_service_rejects_invalid_manual_actions(self) -> None:
         session = create_session()
         try:
@@ -1001,11 +1107,13 @@ class OrderExecutionTests(unittest.TestCase):
         finally:
             session.close()
 
-    def test_alpaca_paper_client_supports_submit_get_and_cancel(self) -> None:
+    def test_alpaca_paper_client_supports_submit_get_cancel_and_close_position(self) -> None:
         responses = [
             FakeHttpxResponse(200, {"id": "alpaca-order-1", "status": "accepted"}),
             FakeHttpxResponse(200, {"id": "alpaca-order-1", "status": "filled", "legs": []}),
             FakeHttpxResponse(200, {"id": "alpaca-order-1", "status": "canceled"}),
+            FakeHttpxResponse(200, {"id": "alpaca-order-1", "status": "accepted"}),
+            FakeHttpxResponse(200, {"symbol": "AAPL", "status": "closed"}),
         ]
         client = FakeHttpxClient(responses)
         alpaca = AlpacaPaperClient(api_key="paper-key", api_secret="paper-secret", client=client)
@@ -1013,11 +1121,15 @@ class OrderExecutionTests(unittest.TestCase):
         submitted = alpaca.submit_order({"symbol": "AAPL", "qty": 10})
         fetched = alpaca.get_order("alpaca-order-1")
         canceled = alpaca.cancel_order("alpaca-order-1")
+        amended = alpaca.amend_order("alpaca-order-1", {"take_profit": {"limit_price": 111.0}})
+        closed = alpaca.close_position("AAPL")
 
         self.assertEqual(submitted.broker_order_id, "alpaca-order-1")
         self.assertEqual(fetched.payload["legs"], [])
         self.assertEqual(canceled.broker_status, "canceled")
-        self.assertEqual([call[0] for call in client.calls], ["POST", "GET", "DELETE"])
+        self.assertEqual(amended.broker_status, "accepted")
+        self.assertEqual(closed.broker_status, "closed")
+        self.assertEqual([call[0] for call in client.calls], ["POST", "GET", "DELETE", "PATCH", "DELETE"])
         self.assertTrue(str(client.calls[1][1]).endswith("/v2/orders/alpaca-order-1?nested=true"))
 
     def test_alpaca_paper_client_raises_on_http_error_and_non_object_payload(self) -> None:

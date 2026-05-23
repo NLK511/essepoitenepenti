@@ -5,6 +5,7 @@ from uuid import uuid4
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.config import settings
 from trade_proposer_app.domain.enums import JobType, RunStatus
 from trade_proposer_app.domain.models import Run, WorkerHeartbeat
 from trade_proposer_app.persistence.models import (
@@ -133,23 +134,35 @@ class RunRepository:
         *,
         stale_after_seconds: int,
         now: datetime | None = None,
+        worker_stale_after_seconds: int | None = None,
     ) -> list[Run]:
-        if stale_after_seconds <= 0:
+        if stale_after_seconds <= 0 and (worker_stale_after_seconds is not None and worker_stale_after_seconds <= 0):
             return []
         reference_now = self._normalize_optional_datetime(now) or datetime.now(timezone.utc)
         stale_before = reference_now - timedelta(seconds=stale_after_seconds)
+        worker_stale_after_seconds = worker_stale_after_seconds if worker_stale_after_seconds is not None else max(1, int(settings.worker_heartbeat_interval_seconds) * 2)
+        worker_stale_before = reference_now - timedelta(seconds=worker_stale_after_seconds)
+        active_worker_ids = select(WorkerHeartbeatRecord.worker_id).where(WorkerHeartbeatRecord.last_heartbeat_at >= worker_stale_before)
 
-        # Recover based on lease expiration
+        worker_stale_records = list(
+            self.session.scalars(
+                select(RunRecord)
+                .where(RunRecord.status == RunStatus.RUNNING.value)
+                .where(RunRecord.worker_id.is_not(None))
+                .where(~RunRecord.worker_id.in_(active_worker_ids))
+            ).all()
+        )
+
         lease_stale_records = list(
             self.session.scalars(
                 select(RunRecord)
                 .where(RunRecord.status == RunStatus.RUNNING.value)
                 .where(RunRecord.lease_expires_at.is_not(None))
                 .where(RunRecord.lease_expires_at < reference_now)
+                .where(RunRecord.worker_id.is_(None) | ~RunRecord.worker_id.in_(active_worker_ids))
             ).all()
         )
 
-        # Recover based on legacy started_at timeout (for runs without leases)
         started_at_stale_records = list(
             self.session.scalars(
                 select(RunRecord)
@@ -158,38 +171,42 @@ class RunRepository:
                 .where(RunRecord.started_at.is_not(None))
                 .where(RunRecord.completed_at.is_(None))
                 .where(RunRecord.started_at < stale_before)
+                .where(RunRecord.worker_id.is_(None) | ~RunRecord.worker_id.in_(active_worker_ids))
                 .order_by(RunRecord.started_at.asc())
             ).all()
         )
 
-        stale_records = list({r.id: r for r in (lease_stale_records + started_at_stale_records)}.values())
-        recovered: list[Run] = []
-        for record in stale_records:
-            timing = self._deserialize_json_object(record.timing_json)
-            strategy = "lease_timeout" if record.lease_expires_at else "started_at_timeout"
-            timing["recovery"] = {
-                "recovered_at": reference_now.isoformat(),
-                "strategy": strategy,
-                "stale_after_seconds": stale_after_seconds,
-                "previous_status": record.status,
-            }
-            record.status = RunStatus.FAILED.value
-            previous_error = (record.error_message or "").strip()
-            timeout_error = (
-                f"Recovered stale running run via {strategy}."
-            )
-            record.error_message = f"{previous_error} | {timeout_error}" if previous_error else timeout_error
-            record.timing_json = self._serialize_timing(timing)
-            record.completed_at = reference_now
-            started_at = self._normalize_optional_datetime(record.started_at)
-            record.duration_seconds = (
-                max(0.0, (reference_now - started_at).total_seconds()) if started_at is not None else None
-            )
-            recovered.append(self._to_run_model(record))
+        stale_records = list({r.id: r for r in (worker_stale_records + lease_stale_records + started_at_stale_records)}.values())
+        stale_record_ids = {record.id for record in worker_stale_records}
         if stale_records:
+            for record in stale_records:
+                timing = self._deserialize_json_object(record.timing_json)
+                if record.id in stale_record_ids:
+                    strategy = "worker_heartbeat_stale"
+                elif record.lease_expires_at:
+                    strategy = "lease_timeout"
+                else:
+                    strategy = "started_at_timeout"
+                timing["recovery"] = {
+                    "recovered_at": reference_now.isoformat(),
+                    "strategy": strategy,
+                    "stale_after_seconds": stale_after_seconds,
+                    "worker_stale_after_seconds": worker_stale_after_seconds,
+                    "previous_status": record.status,
+                }
+                record.status = RunStatus.FAILED.value
+                previous_error = (record.error_message or "").strip()
+                timeout_error = f"Recovered stale running run via {strategy}."
+                record.error_message = f"{previous_error} | {timeout_error}" if previous_error else timeout_error
+                record.timing_json = self._serialize_timing(timing)
+                record.completed_at = reference_now
+                started_at = self._normalize_optional_datetime(record.started_at)
+                record.duration_seconds = (
+                    max(0.0, (reference_now - started_at).total_seconds()) if started_at is not None else None
+                )
             self.session.commit()
-            recovered = [self._to_run_model(record) for record in stale_records]
-        return recovered
+            return [self._to_run_model(record) for record in stale_records]
+        return []
 
     def claim_queued_run(self, run_id: int, worker_id: str | None = None, lease_seconds: int = 1200) -> Run | None:
         started_at = datetime.now(timezone.utc)
@@ -360,10 +377,19 @@ class RunRepository:
     def count_stale_running_runs(self, *, stale_after_seconds: int, now: datetime | None = None) -> int:
         reference_now = self._normalize_optional_datetime(now) or datetime.now(timezone.utc)
         stale_before = reference_now - timedelta(seconds=stale_after_seconds)
+        worker_stale_after_seconds = max(1, int(settings.worker_heartbeat_interval_seconds) * 2)
+        worker_stale_before = reference_now - timedelta(seconds=worker_stale_after_seconds)
+        active_worker_ids = select(WorkerHeartbeatRecord.worker_id).where(WorkerHeartbeatRecord.last_heartbeat_at >= worker_stale_before)
+        worker_stale = select(func.count()).select_from(RunRecord).where(
+            RunRecord.status == RunStatus.RUNNING.value,
+            RunRecord.worker_id.is_not(None),
+            ~RunRecord.worker_id.in_(active_worker_ids),
+        )
         lease_stale = select(func.count()).select_from(RunRecord).where(
             RunRecord.status == RunStatus.RUNNING.value,
             RunRecord.lease_expires_at.is_not(None),
             RunRecord.lease_expires_at < reference_now,
+            RunRecord.worker_id.is_(None) | ~RunRecord.worker_id.in_(active_worker_ids),
         )
         started_at_stale = select(func.count()).select_from(RunRecord).where(
             RunRecord.status == RunStatus.RUNNING.value,
@@ -371,8 +397,9 @@ class RunRepository:
             RunRecord.started_at.is_not(None),
             RunRecord.completed_at.is_(None),
             RunRecord.started_at < stale_before,
+            RunRecord.worker_id.is_(None) | ~RunRecord.worker_id.in_(active_worker_ids),
         )
-        return int((self.session.scalar(lease_stale) or 0) + (self.session.scalar(started_at_stale) or 0))
+        return int((self.session.scalar(worker_stale) or 0) + (self.session.scalar(lease_stale) or 0) + (self.session.scalar(started_at_stale) or 0))
 
     def oldest_active_lease_age_seconds(self, now: datetime | None = None) -> float | None:
         reference_now = self._normalize_optional_datetime(now) or datetime.now(timezone.utc)

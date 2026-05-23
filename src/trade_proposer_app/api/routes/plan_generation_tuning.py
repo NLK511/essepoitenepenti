@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query
+
+from trade_proposer_app.config import settings
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
@@ -45,7 +47,7 @@ async def get_plan_generation_tuning_run(run_id: int, session: Session = Depends
 async def run_plan_generation_tuning(
     ticker: str | None = Query(default=None),
     setup_family: str | None = Query(default=None),
-    limit: int = Query(default=500, ge=1, le=5000),
+    limit: int | None = Query(default=None, ge=1, le=5000),
     mode: str = Query(default="manual"),
     apply: bool = Query(default=False),
     session: Session = Depends(get_db_session),
@@ -53,6 +55,7 @@ async def run_plan_generation_tuning(
     try:
         jobs = JobRepository(session)
         runs = RunRepository(session)
+        runs.recover_stale_running_runs(stale_after_seconds=settings.run_stale_after_seconds)
         existing_run = runs.get_active_run_for_job_type(JobType.PLAN_GENERATION_TUNING)
         if existing_run is not None:
             return existing_run
@@ -105,6 +108,19 @@ async def promote_plan_generation_tuning_config(config_version_id: int, session:
         version = PlanGenerationTuningService(session).promote_config_version(config_version_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PlanGenerationTuningError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"config": version, "promoted": True}
+
+
+@router.post("/runs/{run_id}/candidates/{candidate_id}/promote")
+async def promote_plan_generation_tuning_candidate(run_id: int, candidate_id: int, session: Session = Depends(get_db_session)):
+    try:
+        version = PlanGenerationTuningService(session).promote_candidate(run_id, candidate_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PlanGenerationTuningError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"config": version, "promoted": True}
 
 

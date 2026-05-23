@@ -12,13 +12,14 @@ from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchest
 COMPUTED_AT = datetime(2026, 1, 5, 14, 30, tzinfo=timezone.utc)
 
 
-def _service(*, confidence_threshold: float = 60.0) -> WatchlistOrchestrationService:
+def _service(*, confidence_threshold: float = 60.0, plan_generation_tuning_config: dict[str, float] | None = None) -> WatchlistOrchestrationService:
     return WatchlistOrchestrationService(
         context_snapshots=Mock(),
         recommendation_plans=Mock(),
         cheap_scan_service=Mock(),
         deep_analysis_service=Mock(),
         confidence_threshold=confidence_threshold,
+        plan_generation_tuning_config=plan_generation_tuning_config,
     )
 
 
@@ -281,6 +282,31 @@ def test_actionable_short_plan_framing_payload_contract_is_stable() -> None:
     }
     assert contract["signal"]["intended_action"] == "short"
     assert contract["signal"]["deep_analysis_confidence_percent"] == 74.0
+
+
+def test_confidence_floor_blocks_actionable_plan_but_preserves_framing() -> None:
+    service = _service(confidence_threshold=60.0, plan_generation_tuning_config={"global.actionable_confidence_floor_percent": 80.0})
+
+    plan = service._build_plan_from_signal(
+        _watchlist(),
+        _candidate(),
+        _signal(),
+        deep_output=_deep_output(),
+        deep_error=None,
+        calibration_summary=None,
+        job_id=101,
+        run_id=202,
+    )
+
+    contract = _plan_contract(plan)
+    assert contract["action"] == "no_action"
+    assert contract["status"] == "partial"
+    assert contract["confidence_percent"] == 74.0
+    assert contract["entry_price_low"] == 100.0
+    assert contract["entry_price_high"] == 100.0
+    assert contract["stop_loss"] == 95.75
+    assert contract["take_profit"] == 113.44
+    assert contract["evidence"]["action_reason"] == "below_calibrated_action_threshold"
 
 
 def test_no_action_plan_from_policy_gate_preserves_intended_trade_framing_for_phantom_evaluation() -> None:

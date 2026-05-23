@@ -12,7 +12,10 @@ export type JobType =
   | "plan_generation_tuning"
   | "performance_assessment"
   | "macro_context_refresh"
-  | "industry_context_refresh";
+  | "industry_context_refresh"
+  | "historical_replay"
+  | "bars_data_refresh"
+  | "broker_steering";
 
 export type RecommendationDirection = "LONG" | "SHORT" | "NEUTRAL";
 export type RecommendationState = "PENDING" | "WIN" | "LOSS";
@@ -1500,6 +1503,33 @@ export interface CalibrationReportResponse {
   calibration_report: CalibrationReport | null;
 }
 
+export interface SteeringSettingsState {
+  enabled: boolean;
+  dry_run: boolean;
+  cancel_expired_pending_orders_enabled: boolean;
+  cancel_invalidated_pending_orders_enabled: boolean;
+  move_to_profit_enabled: boolean;
+  close_on_severe_invalidation_enabled: boolean;
+  tighten_on_deterioration_enabled: boolean;
+  lower_tp_on_weakness_enabled: boolean;
+  pending_expiration_grace_minutes: number;
+  pending_min_confidence_percent: number;
+  pending_invalidation_required_signals: number;
+  pending_price_chase_limit_percent: number;
+  breakeven_trigger_percent: number;
+  min_profit_lock_percent: number;
+  position_close_confidence_percent: number;
+  position_close_required_signals: number;
+  position_min_hold_confidence_percent: number;
+  position_deterioration_required_signals: number;
+  deterioration_stop_cushion_percent: number;
+  weakened_thesis_tp_cushion_percent: number;
+  min_tp_distance_percent: number;
+  min_reviewed_dry_run_decisions_before_enable: number;
+  min_reviewed_dry_run_amendments_before_enable: number;
+  min_reviewed_dry_run_close_now_before_enable: number;
+}
+
 export interface OrderExecutionSettingsState {
   enabled: boolean;
   broker: string;
@@ -1538,10 +1568,48 @@ export interface SettingsResponse {
   evaluation_realism: EvaluationRealismState;
   order_execution: OrderExecutionSettingsState;
   risk_management: RiskManagementSettingsState;
+  steering: SteeringSettingsState;
   plan_generation_tuning: {
     settings: PlanGenerationTuningSettingsState;
     active_config: Record<string, unknown>;
   };
+}
+
+export interface SteeringDecision {
+  id: number | null;
+  recommendation_plan_id: number;
+  broker_order_id: number | null;
+  broker_position_id: number | null;
+  ticker: string;
+  decision: string;
+  execute_allowed: boolean;
+  executed_at: string | null;
+  execution_status: string;
+  reason_codes: string[];
+  proposed_stop_loss: number | null;
+  proposed_take_profit: number | null;
+  current_price: number | null;
+  current_stop_loss: number | null;
+  current_take_profit: number | null;
+  risk_delta: Record<string, unknown>;
+  diagnostics: Record<string, unknown>;
+  error_message: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SteeringRunSummary {
+  candidate_count: number;
+  decision_counts: Record<string, number>;
+  execution_status: string;
+}
+
+export interface SteeringRunResponse {
+  run: Run;
+  executed: boolean;
+  reason?: string;
+  summary?: SteeringRunSummary;
+  artifact?: Record<string, unknown>;
 }
 
 export interface SettingsWorkbench extends SettingsResponse {

@@ -846,6 +846,7 @@ class WatchlistOrchestrationService:
         setup_family: str,
         action: str,
         transmission_summary: dict[str, object] | None = None,
+        volatility_score: float | None = None,
     ) -> tuple[float, float, float, float]:
         bias = transmission_summary.get("context_bias") if isinstance(transmission_summary, dict) else None
         return family_adjusted_trade_levels(
@@ -855,6 +856,7 @@ class WatchlistOrchestrationService:
             setup_family=setup_family,
             action=action,
             transmission_context_bias=str(bias) if bias is not None else None,
+            volatility_score=volatility_score,
             tuning_config=self.plan_generation_tuning_config,
         )
 

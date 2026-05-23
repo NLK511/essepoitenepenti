@@ -14,7 +14,7 @@ from trade_proposer_app.repositories.broker_positions import BrokerPositionRepos
 from trade_proposer_app.repositories.broker_reconciliation_snapshots import BrokerReconciliationSnapshotRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClient, AlpacaPaperClientError
+from trade_proposer_app.services.alpaca_paper_client import AlpacaOrderSubmissionResult, AlpacaPaperClient, AlpacaPaperClientError
 from trade_proposer_app.services.execution_candidates import ExecutionCandidateBuilder
 from trade_proposer_app.services.risk_management import BrokerRiskManager, LiveBrokerSnapshot, TradeCandidate
 from trade_proposer_app.services.settings_domains import SettingsDomainService
@@ -326,6 +326,91 @@ class OrderExecutionService:
         )
         return updated
 
+    def close_position(self, ticker: str) -> AlpacaOrderSubmissionResult:
+        client = self._ensure_client()
+        self._record_observability_event(
+            event_type="broker.position_close_started",
+            message="Broker position close started",
+            payload={"ticker": ticker},
+        )
+        result = client.close_position(ticker.upper())
+        self._record_observability_event(
+            event_type="broker.position_close_finished",
+            message="Broker position close finished",
+            payload={"ticker": ticker, "status": result.broker_status, "broker_order_id": result.broker_order_id},
+        )
+        return result
+
+    def amend_execution(
+        self,
+        execution_id: int,
+        *,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+    ) -> BrokerOrderExecution:
+        existing = self.executions.get(execution_id)
+        if existing.broker_order_id is None:
+            raise ValueError("broker order id is missing, so the order cannot be amended")
+        if existing.status in {ExecutionStatus.CANCELED.value, ExecutionStatus.FAILED.value, ExecutionStatus.REJECTED.value, ExecutionStatus.EXPIRED.value}:
+            raise ValueError("terminal broker orders cannot be amended")
+        if stop_loss is None and take_profit is None:
+            raise ValueError("at least one amendment level is required")
+        client = self._ensure_client()
+        current = self._validate_amendable_bracket_order(existing, client=client)
+        payload: dict[str, object] = {"client_order_id": existing.client_order_id}
+        if stop_loss is not None:
+            payload["stop_loss"] = {"stop_price": OrderExecutionService._normalize_price(stop_loss)}
+        if take_profit is not None:
+            payload["take_profit"] = {"limit_price": OrderExecutionService._normalize_price(take_profit)}
+        self._record_observability_event(
+            event_type="broker.order_amend_started",
+            message="Broker order amend started",
+            run_id=existing.run_id,
+            job_id=existing.job_id,
+            payload={"broker_order_execution_id": existing.id, "broker_order_id": existing.broker_order_id, "ticker": existing.ticker, "payload": payload, "validated_broker_status": current.broker_status, "validated_broker_order_id": current.broker_order_id},
+        )
+        result = client.amend_order(existing.broker_order_id, payload)
+        amended = BrokerOrderExecution(
+            id=existing.id,
+            broker=existing.broker,
+            account_mode=existing.account_mode,
+            recommendation_plan_id=existing.recommendation_plan_id,
+            recommendation_plan_ticker=existing.recommendation_plan_ticker,
+            run_id=existing.run_id,
+            job_id=existing.job_id,
+            ticker=existing.ticker,
+            action=existing.action,
+            side=existing.side,
+            order_type=existing.order_type,
+            time_in_force=existing.time_in_force,
+            quantity=existing.quantity,
+            notional_amount=existing.notional_amount,
+            entry_price=existing.entry_price,
+            stop_loss=stop_loss if stop_loss is not None else existing.stop_loss,
+            take_profit=take_profit if take_profit is not None else existing.take_profit,
+            status=existing.status,
+            broker_order_id=existing.broker_order_id,
+            client_order_id=existing.client_order_id,
+            submitted_at=existing.submitted_at,
+            filled_at=existing.filled_at,
+            canceled_at=existing.canceled_at,
+            request_payload={**existing.request_payload, **payload},
+            response_payload=result.payload,
+            error_message="",
+            created_at=existing.created_at,
+            updated_at=datetime.now(timezone.utc),
+        )
+        updated = self.executions.update(amended)
+        self._sync_position_from_order(updated)
+        self._record_observability_event(
+            event_type="broker.order_amend_finished",
+            message="Broker order amend finished",
+            run_id=updated.run_id,
+            job_id=updated.job_id,
+            payload={"broker_order_execution_id": updated.id, "broker_order_id": updated.broker_order_id, "ticker": updated.ticker, "status": updated.status},
+        )
+        return updated
+
     def refresh_execution(self, execution_id: int) -> BrokerOrderExecution:
         existing = self.executions.get(execution_id)
         if existing.broker_order_id is None:
@@ -520,6 +605,15 @@ class OrderExecutionService:
         payload = exc.payload if isinstance(exc.payload, dict) else {}
         message = str(payload.get("message") or payload.get("error") or exc or "broker symbol unavailable").strip()
         return f"broker_symbol_unavailable:{message}" if message else "broker_symbol_unavailable"
+
+    def _validate_amendable_bracket_order(self, existing: BrokerOrderExecution, *, client: AlpacaPaperClient) -> AlpacaOrderSubmissionResult:
+        current = client.get_order(existing.broker_order_id or "")
+        payload = current.payload if isinstance(current.payload, dict) else {}
+        order_class = str(payload.get("order_class") or existing.request_payload.get("order_class") or "").strip().lower()
+        legs = payload.get("legs")
+        if order_class != "bracket" and not (isinstance(legs, list) and legs):
+            raise ValueError("broker order is not a bracket order and cannot be amended safely")
+        return current
 
     @staticmethod
     def _build_order_payload(

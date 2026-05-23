@@ -76,6 +76,7 @@ These are useful, but they are not the main current-state entry point. They must
 - `alpaca-paper-order-execution-spec.md` — first automated broker-execution spec for Alpaca paper trading, including audit UI and manual resubmit/cancel controls
 - `broker-position-lifecycle-spec.md` — broker-backed position state and realized P&L ledger for app-submitted bracket orders
 - `broker-risk-management-spec.md` — broker-backed pre-trade risk limits and manual kill switch
+- `broker-position-steering-spec.md` — active plan for post-submit pending-order cancellation and conservative SL/TP steering
 - `effective-plan-outcome-spec.md` — canonical broker-first outcome view for reconciling broker positions with simulated recommendation outcomes
 - `plan-reliability-report-spec.md` — canonical broker/effective reliability report for confidence, setup-family, and action cohorts
 - `plan-policy-evaluator-spec.md` — canonical evaluator for scoring trade-selection policies against broker-preferred historical outcomes

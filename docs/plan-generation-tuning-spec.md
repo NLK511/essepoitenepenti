@@ -27,8 +27,10 @@ What is live now:
 - dedicated plan-generation tuning routes, persistence, runs, candidates, and config versions
 - a real research page for inspecting runs, grouped candidate experiments, per-campaign results, config promotion, the ranked exploration campaign plan, and run controls for manual, explore, and wide research
 - settings for active config selection and stored automation readiness flags
-- bounded parameter-schema-driven candidate generation
+- bounded parameter-schema-driven candidate generation using deterministic local perturbations around the live config, plus small deterministic refinement passes around the top initial seeds and the best key on the leading candidate when it already beats baseline
+- live family-aware entry offset, default-actionable confidence-floor (currently seeded at 60%), and volatility-normalized stop controls are part of the plan-generation config surface and are wired into both live framing and tuning evaluation
 - deterministic candidate ranking centered on win rate, then win count, then expected value, with explicit tie tolerances (`0.25 percentage points`, `1 win`, `0.02` expected-value units)
+- wide/explore runs are evaluated in batches and fail fast on high memory usage instead of letting the worker get killed by the kernel
 - guarded worker-backed run/apply behavior in the backend
 - live consumption of the active config during plan construction
 
@@ -128,6 +130,18 @@ If a different return unit is used, the equivalent tolerance must be documented 
 - **implemented now:** the current expected-value tolerance is applied to the tuning service's normalized expected-value unit.
 - **still target behavior:** the broader autonomous promotion standard must also include the edge-validation gate, diversity/concentration checks, and demotion/halt policy before unattended promotion can expand autonomy.
 
+### Active plan: next knob expansion
+
+The next small, bounded expansion should add three live-tuned controls:
+- a family-aware entry band multiplier so setup families can widen or narrow the global entry offset without adding combinatorics
+- an actionable confidence floor so low-conviction plans can be made explicitly non-actionable
+- a volatility-normalized stop multiplier driven by the stored volatility proxy so stop width can expand or contract with market noise
+
+Implementation rule:
+- wire each new knob into live plan construction and the tuning evaluation path at the same time
+- keep the knobs bounded, deterministic, and replayable
+- add parity tests for live plan framing and tuning scoring before widening the search surface
+
 ## Relationship to existing tuning systems
 
 ### Signal gating tuning
@@ -179,6 +193,8 @@ These are in scope if they exist in the implementation:
 - breakout / pullback thresholds
 - technical-indicator weights used in confidence or price framing
 - context-bias adjustments that alter target/stop spacing
+- volatility-normalized stop multipliers driven by stored volatility proxies
+- actionable confidence floors that control whether a plan remains actionable
 - degraded-data penalties that alter plan selectivity or price aggressiveness
 - regime-specific overrides
 - family-specific confidence floors for actionable status
@@ -324,7 +340,7 @@ Required exploration behavior:
 - adapt the walk-forward window to the available history when the nominal window is too large, so short history still yields at least one full validation slice instead of an empty summary
 - rank exploration candidates from rolling walk-forward summary metrics instead of a single tail holdout slice
 - persist the exploration seed, candidate list, and full candidate metrics for replayability
-- include at least one baseline candidate, local perturbations, historical configs, and bounded random mutations when the exploration mode is enabled
+- include at least one baseline candidate plus deterministic local perturbations when the exploration mode is enabled; after the first sweep, a small refinement pass may probe the top seeds, and a second targeted pass may probe the leading candidate's best key with a smaller step when the leading candidate already beats baseline
 - keep the search bounded; exploration must remain auditable and capped
 - prefer the oldest eligible records for search/fit summaries only when a time split is required; validation must remain holdout-based
 - include broker-resolved records and phantom scoreable records in the eligible exploration set when they satisfy the replay rules above
@@ -344,8 +360,8 @@ The initial manual exploration campaign must stay inside the following exact par
 | `setup_family.catalyst_follow_through.take_profit_distance_multiplier` | `1.05` | `1.50` |
 | `setup_family.macro_beneficiary_loser.take_profit_distance_multiplier` | `1.00` | `1.30` |
 
-Bounded random mutations and step-based local perturbations in exploration mode must be clamped to this envelope.
-The exploration generator should also broaden its candidate diversity with deeper local steps and additional bounded random mutations, while still staying capped and replayable.
+Step-based local perturbations in exploration mode must be clamped to this envelope.
+The exploration generator should widen only by taking deeper local steps, not by adding random or historical reuse branches.
 
 ### Ranked exploration campaign plan
 
@@ -353,32 +369,35 @@ The first exploration campaign should allocate effort in this order:
 
 | Priority | Campaign | Primary knobs | Candidate budget |
 | --- | --- | --- | ---: |
-| 1 | Entry calibration | `global.entry_band_risk_fraction` | `16` |
-| 2 | Risk protection | `global.headwind_stop_multiplier`, `setup_family.breakout.stop_distance_multiplier`, `setup_family.mean_reversion.stop_distance_multiplier` | `32` |
-| 3 | Reward expansion | `setup_family.breakout.take_profit_distance_multiplier`, `setup_family.mean_reversion.take_profit_distance_multiplier`, `setup_family.catalyst_follow_through.take_profit_distance_multiplier`, `setup_family.macro_beneficiary_loser.take_profit_distance_multiplier` | `48` |
-| 4 | Historical reuse | Re-test promoted and high-scoring historical configs | `24` |
-| 5 | Bounded random mutation | Deterministic local mutations across the full schema | `24` |
+| 1 | Entry calibration | `global.entry_band_risk_fraction` | `2` |
+| 2 | Risk protection | `global.headwind_stop_multiplier`, `setup_family.breakout.stop_distance_multiplier`, `setup_family.mean_reversion.stop_distance_multiplier` | `6` |
+| 3 | Reward expansion | `setup_family.breakout.take_profit_distance_multiplier`, `setup_family.mean_reversion.take_profit_distance_multiplier`, `setup_family.catalyst_follow_through.take_profit_distance_multiplier`, `setup_family.macro_beneficiary_loser.take_profit_distance_multiplier` | `8` |
 
-This yields a default exploration budget of `144` candidates per run before deduplication.
+This yields a default exploration budget of `16` perturbation candidates plus the baseline config per run before deduplication.
 
 ### Candidate generation constraints
 
 ### Candidate generation constraints
 
 - candidate count per run must be explicitly capped
-- every candidate must be fully materialized and stored before evaluation finishes
+- the historical record window used to build eligible tuning records must be loaded in deterministic chunks so the full corpus can be processed without materializing it all at once
+- evaluation may happen in batches, but each candidate must still be fully materialized and stored before the run completes
+- wide/explore runs must abort cleanly if memory usage crosses the configured guardrail, instead of risking an OOM crash
 - candidates must declare which parameters differ from the baseline
 - large multi-dimensional blind searches are not allowed in the initial implementation
 
 ### Initial default limits
 
 Unless explicitly overridden by config:
-- max candidates per scheduled automatic run: `50`
-- max candidates per manual research run: `200`
-- max candidates per wide research run: `500`
-- max changed parameters per candidate in automatic mode: `5`
-- max absolute step distance from live baseline in automatic mode: parameter-specific, but default `2 steps`
-- wide research may use deeper step sizes and more random mutations, but it must remain deterministic, capped, and replayable
+- max candidates per scheduled automatic run: `17`
+- max candidates per manual research run: `17`
+- max candidates per wide research run: `49`
+- eligible records are loaded in deterministic batches of `250` rows internally; user-specified limits remain respected, and omitting a limit means the service processes all available eligible records
+- max changed parameters per candidate in all modes: `1`
+- max absolute step distance from live baseline in manual mode: `1 step`
+- max absolute step distance from live baseline in explore mode: `2 steps`
+- max absolute step distance from live baseline in wide mode: `3 steps`
+- wide research may use deeper local steps, but it must remain deterministic, capped, and replayable
 
 ## Candidate scoring outputs
 
@@ -503,14 +522,15 @@ The system must support:
 
 ### Promotion requirements
 
-A candidate may be promoted only if:
-- it is rank 1 under the canonical ranking rules
+A candidate may be promoted if:
 - it passes hard validity rules
 - it passes sample-size thresholds
 - it passes holdout validation
 - it passes protected secondary metric guardrails
 - it exceeds the minimum improvement threshold
 - a full audit trail is persisted
+
+Auto-promotion still targets the rank-1 candidate by default, but manual promotion may target any candidate that passes the promotion checks. Manual promotion does not require the edge-validation autonomy gate; that gate is reserved for autonomous expansion and auto-promotion paths.
 
 ### Rollback requirements
 
@@ -542,7 +562,7 @@ Each scheduled run must:
 3. generate bounded candidates
 4. evaluate and rank candidates
 5. validate the winner against holdout rules
-6. auto-promote only if all requirements pass
+6. auto-promote only if all requirements pass; manual promotion may proceed without the edge-validation autonomy gate
 7. persist a complete run summary and candidate list
 8. update the active state endpoint and UI history
 
@@ -719,11 +739,11 @@ The frontend must provide a dedicated plan-generation tuning workflow under rese
    - filters for status, mode, date range, promotion outcome
 
 3. **Run detail page**
-   - candidate ranking table grouped by experiment/knob when the same knob-set produces multiple candidates
    - baseline vs winner comparison
+   - eligible candidates shown first, with blocked candidates hidden behind an explicit toggle
    - eligibility and validation summary
    - guardrail pass/fail reasons
-   - manual promote action if allowed
+   - manual promote action for any eligible candidate
 
 4. **Config history page**
    - version history
@@ -734,6 +754,7 @@ The frontend must provide a dedicated plan-generation tuning workflow under rese
 
 - the UI must clearly distinguish `dry_run`, `manual_promote`, and `auto_promote`
 - the UI must clearly label candidates that are rankable but not promotion-eligible
+- the UI should default to showing only eligible candidates and let the operator reveal blocked rows on demand
 - the UI must show why a candidate failed promotion
 - the UI must show the currently active config version at all times
 

@@ -46,6 +46,12 @@ class AlpacaPaperClient:
     def cancel_order(self, order_id: str) -> AlpacaOrderSubmissionResult:
         return self._request("delete", f"/v2/orders/{order_id}")
 
+    def amend_order(self, order_id: str, payload: dict[str, Any]) -> AlpacaOrderSubmissionResult:
+        return self._request("patch", f"/v2/orders/{order_id}", payload=payload)
+
+    def close_position(self, symbol: str) -> AlpacaOrderSubmissionResult:
+        return self._request("delete", f"/v2/positions/{symbol}")
+
     def get_account(self) -> AlpacaOrderSubmissionResult:
         return self._request("get", "/v2/account")
 

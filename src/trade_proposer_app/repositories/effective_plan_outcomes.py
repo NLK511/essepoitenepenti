@@ -115,10 +115,12 @@ class EffectivePlanOutcomeRepository:
         simulated: RecommendationOutcomeRecord | None,
     ) -> RecommendationPlanOutcome:
         broker = self._preferred_broker_position(broker_positions)
-        if broker is not None:
+        if broker is not None and broker.status in self.BROKER_RESOLVED:
             return self._from_broker(plan, broker)
         if simulated is not None:
             return self._from_simulation(plan, simulated)
+        if broker is not None:
+            return self._from_broker(plan, broker)
         return self._from_plan(plan)
 
     def _preferred_broker_position(self, positions: list[BrokerPositionRecord]) -> BrokerPositionRecord | None:

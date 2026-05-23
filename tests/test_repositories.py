@@ -1,6 +1,6 @@
 import json
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pandas as pd
@@ -42,7 +42,7 @@ from trade_proposer_app.domain.models import (
     TickerSignalSnapshot,
     TickerSignalSourceBreakdown,
 )
-from trade_proposer_app.persistence.models import Base, JobRecord, ProviderCredentialRecord, RunRecord
+from trade_proposer_app.persistence.models import Base, JobRecord, ProviderCredentialRecord, RunRecord, WorkerHeartbeatRecord
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
@@ -802,6 +802,56 @@ class RepositoryTests(unittest.TestCase):
             self.assertEqual(outcome.outcome_source, "simulation")
             self.assertEqual(outcome.outcome, "win")
             self.assertEqual(outcome.setup_family, "breakout")
+        finally:
+            session.close()
+
+    def test_effective_plan_outcome_repository_uses_simulation_for_open_broker_position(self) -> None:
+        session = create_session()
+        try:
+            plan_repository = RecommendationPlanRepository(session)
+            plan = plan_repository.create_plan(
+                RecommendationPlan(
+                    ticker="NVDA",
+                    horizon=StrategyHorizon.ONE_WEEK,
+                    action="long",
+                    confidence_percent=68.0,
+                    thesis_summary="Open broker position should defer to simulation",
+                    signal_breakdown={"setup_family": "continuation"},
+                )
+            )
+            RecommendationOutcomeRepository(session).upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=plan.id or 0,
+                    ticker="NVDA",
+                    action="long",
+                    outcome="loss",
+                    status="resolved",
+                    confidence_bucket="65_to_79",
+                    setup_family="continuation",
+                )
+            )
+            BrokerPositionRepository(session).create(
+                BrokerPosition(
+                    broker_order_execution_id=2,
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker="NVDA",
+                    ticker="NVDA",
+                    action="long",
+                    side="buy",
+                    quantity=5,
+                    current_quantity=5,
+                    status="open",
+                )
+            )
+
+            outcome = EffectivePlanOutcomeRepository(session).list_outcomes(ticker="NVDA", limit=10)[0]
+
+            self.assertEqual(outcome.outcome_source, "simulation")
+            self.assertEqual(outcome.outcome, "loss")
+            self.assertEqual(outcome.status, "resolved")
+            self.assertEqual(outcome.setup_family, "continuation")
         finally:
             session.close()
 
@@ -3045,6 +3095,41 @@ class RepositoryTests(unittest.TestCase):
         stale_run = runs.get_run(original.id or 0)
         self.assertEqual(stale_run.status, "failed")
 
+    def test_recover_stale_running_run_keeps_live_worker_with_expired_lease_active(self) -> None:
+        session = create_session()
+        jobs = JobRepository(session)
+        runs = RunRepository(session)
+        job = jobs.create("Live Worker", ["AAPL"], None)
+        run = runs.enqueue(job.id or 0)
+        reference_now = datetime(2026, 3, 24, 12, 0, tzinfo=timezone.utc)
+        session.add(
+            WorkerHeartbeatRecord(
+                worker_id="worker-live",
+                hostname="host",
+                pid=123,
+                status="running",
+                last_heartbeat_at=reference_now,
+                started_at=reference_now,
+                active_run_id=run.id,
+            )
+        )
+        session.execute(
+            update(RunRecord)
+            .where(RunRecord.id == run.id)
+            .values(
+                status="running",
+                started_at=reference_now - timedelta(minutes=5),
+                lease_expires_at=reference_now - timedelta(minutes=1),
+                worker_id="worker-live",
+            )
+        )
+        session.commit()
+
+        recovered = runs.recover_stale_running_runs(stale_after_seconds=60, now=reference_now)
+
+        self.assertEqual(recovered, [])
+        self.assertEqual(runs.get_run(run.id or 0).status, "running")
+
     def test_settings_repository_defaults_summary_backend_to_pi_agent(self) -> None:
         session = create_session()
         repository = SettingsRepository(session)
@@ -3054,9 +3139,51 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(summary_settings["summary_timeout_seconds"], "600")
         self.assertEqual(repository.get_plan_generation_tuning_settings()["min_actionable_resolved"], 20)
         self.assertEqual(repository.get_plan_generation_tuning_settings()["min_validation_resolved"], 8)
+        steering = repository.get_steering_config()
+        self.assertFalse(steering["enabled"])
+        self.assertTrue(steering["dry_run"])
+        self.assertEqual(steering["min_reviewed_dry_run_decisions_before_enable"], 30)
+        self.assertEqual(steering["min_reviewed_dry_run_close_now_before_enable"], 10)
         self.assertIn("price fluctuation", summary_settings["summary_prompt"])
         self.assertIn("industry context", summary_settings["summary_prompt"])
         self.assertIn("global macroeconomic stage", summary_settings["summary_prompt"])
+
+    def test_settings_repository_round_trips_steering_config(self) -> None:
+        session = create_session()
+        repository = SettingsRepository(session)
+        steering = repository.set_steering_config(
+            enabled=True,
+            dry_run=False,
+            cancel_expired_pending_orders_enabled=True,
+            cancel_invalidated_pending_orders_enabled=False,
+            move_to_profit_enabled=True,
+            close_on_severe_invalidation_enabled=True,
+            tighten_on_deterioration_enabled=True,
+            lower_tp_on_weakness_enabled=True,
+            pending_expiration_grace_minutes=7,
+            pending_min_confidence_percent=56.5,
+            pending_invalidation_required_signals=3,
+            pending_price_chase_limit_percent=1.25,
+            breakeven_trigger_percent=0.8,
+            min_profit_lock_percent=0.2,
+            position_close_confidence_percent=41.0,
+            position_close_required_signals=4,
+            position_min_hold_confidence_percent=51.0,
+            position_deterioration_required_signals=3,
+            deterioration_stop_cushion_percent=0.4,
+            weakened_thesis_tp_cushion_percent=0.6,
+            min_tp_distance_percent=0.2,
+            min_reviewed_dry_run_decisions_before_enable=40,
+            min_reviewed_dry_run_amendments_before_enable=15,
+            min_reviewed_dry_run_close_now_before_enable=12,
+        )
+
+        self.assertTrue(steering["enabled"])
+        self.assertFalse(steering["dry_run"])
+        self.assertFalse(steering["cancel_invalidated_pending_orders_enabled"])
+        self.assertEqual(steering["pending_expiration_grace_minutes"], 7)
+        self.assertEqual(steering["pending_min_confidence_percent"], 56.5)
+        self.assertEqual(steering["min_reviewed_dry_run_decisions_before_enable"], 40)
 
     def test_settings_repository_encrypts_provider_credentials_at_rest(self) -> None:
         session = create_session()
