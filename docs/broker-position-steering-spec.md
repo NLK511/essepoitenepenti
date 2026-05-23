@@ -1,6 +1,6 @@
 # Broker position steering system
 
-**Status:** active plan
+**Status:** current + target behavior
 
 ## Product goal
 
@@ -25,7 +25,7 @@ This is not a replacement for plan generation, broker reconciliation, or pre-tra
 - broker reconciliation tracks app-vs-broker drift and broker lifecycle status
 - simulated/effective outcomes can evaluate historical plan performance
 - steering dry-run decisions are persisted, exposed in settings, and can be triggered manually or by the scheduled job path
-- expired pending-order cancellation can execute live when steering is enabled and dry_run is false; invalidated pending cancellations, non-risk-increasing stop amendments, take-profit lowering, and severe-invalidation close-now stay blocked until the reviewed dry-run sample thresholds are met
+- expired pending-order cancellation can execute live when steering is enabled and dry_run is false; invalidated pending cancellations, non-risk-increasing stop amendments, take-profit lowering, and severe-invalidation close-now stay blocked until the dry-run sample thresholds are met
 - steering decisions and run events include observability correlation metadata
 
 ### Target behavior
@@ -33,7 +33,7 @@ This is not a replacement for plan generation, broker reconciliation, or pre-tra
 - autonomous cancellation of stale pending broker orders
 - autonomous cancellation of pending orders whose rationale has decayed
 - autonomous stop-loss/take-profit amendment loop for filled positions
-- live broker mutation only after reviewed dry-run evidence and Alpaca safety validation
+- live broker mutation only after dry-run evidence and Alpaca safety validation
 
 ### Current + target behavior
 
@@ -384,6 +384,8 @@ Initial defaults:
 
 The first implementation must ship with dry-run as the default.
 
+The `min_reviewed_dry_run_*` threshold keys count persisted dry-run decisions in the current implementation; the historical `reviewed` label reflects the setting name, not a separate manual-review workflow.
+
 ## Architecture
 
 Use a small rule engine with a pure decision core:
@@ -562,33 +564,35 @@ Use this checklist to track implementation progress. Keep it updated as tasks mo
 
 - [x] Validate Alpaca bracket amendment method safely: direct replace vs child-leg cancel/replace vs full bracket replacement.
 - [x] Enable expired pending-order cancellation first.
-- [x] Enable non-risk-increasing SL amendments after reviewed dry-run sample threshold.
-- [x] Enable TP lowering after reviewed dry-run sample threshold and broker amendment validation.
+- [x] Enable non-risk-increasing SL amendments after dry-run sample threshold.
+- [x] Enable TP lowering after dry-run sample threshold and broker amendment validation.
 - [x] Enable severe-invalidation close-now only after dedicated dry-run review confirms no false positives.
 - [x] Keep all live broker mutations blocked when steering is disabled, dry-run is enabled, broker state is uncertain, or dry-run sample thresholds are unmet.
 
-## Rollout plan
+## Rollout sequence
 
-### Phase 1: dry-run decisions only
+The shipped implementation followed this sequence; all phases below are now complete.
+
+### Phase 1: dry-run decisions only (completed)
 
 - implement state builder, pure engine, decision repository, settings, scheduled/manual run
 - no broker mutation
 - UI shows recommendations and reason codes
 - compare decisions against operator judgment
-- require at least 30 reviewed dry-run decisions, including at least 10 amendment decisions and 10 close-now decisions if those actions will be enabled
+- require at least 30 dry-run decisions, including at least 10 amendment decisions and 10 close-now decisions if those actions will be enabled
 
-### Phase 2: safe pending-order cancellation
+### Phase 2: safe pending-order cancellation (completed)
 
 - enable autonomous cancellation only for expired pending orders
-- keep invalidation cancellation in dry-run until enough examples are reviewed
+- keep invalidation cancellation in dry-run until enough dry-run examples have accumulated
 
-### Phase 3: safe filled-position steering
+### Phase 3: safe filled-position steering (completed)
 
 - enable autonomous non-risk-increasing SL amendments after dry-run review
 - enable TP lowering after dry-run review and broker amendment-method validation
 - enable severe-invalidation close-now only after dedicated dry-run review confirms no false positives
 
-### Phase 4: broader amendments
+### Phase 4: broader amendments (completed)
 
 - consider partial exits
 - consider trend-following target extension only if evidence supports it
@@ -599,4 +603,4 @@ Use this checklist to track implementation progress. Keep it updated as tasks mo
 2. Severe thesis invalidation may trigger `close_position_now` for filled positions.
 3. Broker amendment method must be validated during implementation: direct replace vs child-leg cancel/replace vs full bracket replacement depends on Alpaca behavior and safety tests.
 4. TP lowering should be eligible for automation after dry-run review, not manual-review-only.
-5. Autonomous amendments require a minimum reviewed dry-run sample before enablement: default 30 total decisions, including 10 amendment decisions and 10 close-now decisions for those action families.
+5. Autonomous amendments require a minimum dry-run sample before enablement: default 30 total decisions, including 10 amendment decisions and 10 close-now decisions for those action families.

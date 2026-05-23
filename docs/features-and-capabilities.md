@@ -39,7 +39,8 @@ It is not yet a proven short-horizon prediction engine.
 - Show broker-backed dashboard performance statistics, including closed broker positions, broker win rate, realized P&L, and manual/periodic dashboard refresh, so live paper-trading performance is visible even when simulated outcome calibration is thin.
 - When a plan has live Alpaca execution data, operator-facing plan views treat broker evaluation as the primary status and keep the simulated plan outcome as secondary context.
 - Use a canonical effective outcome layer so confidence calibration, recommendation quality summaries, performance assessment, walk-forward validation, and plan-generation tuning prefer closed broker positions before falling back to simulated outcomes; `/api/effective-plan-outcomes` exposes that canonical view explicitly.
-- Inspect broker-order submissions, payloads, statuses, linked position lifecycle state, realized P&L, and re-submit/cancel/refresh controls through the Broker Orders page and the broker-orders panel on run detail.
+- Inspect broker-order submissions, payloads, statuses, linked position lifecycle state, realized P&L, steering decisions, and re-submit/cancel/refresh controls through the Broker Orders page and the broker-orders panel on run detail.
+- Review live or dry-run broker steering settings, latest decisions, and action results from the steering section in Settings.
 - Run detail now includes the broker-order history for that run so operators can audit execution without switching pages.
 - Use decision samples to review near-misses, shortlist behavior, triage priority, and richer filters such as shortlist state, setup family, transmission bias, context regime, and benchmark result.
 - Run signal-gating tuning through its dedicated research workflow to inspect shortlist recall and calibration-related review surfaces.

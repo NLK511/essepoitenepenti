@@ -149,6 +149,7 @@ The active persistence truth for this workflow is:
 - `RecommendationPlan`
 - `RecommendationPlanOutcome`
 - broker order/position lifecycle records when a plan is submitted to Alpaca paper
+- broker steering decision records and mutation outcome events for post-submit broker control
 
 Older compatibility objects may still exist in domain code or tests, but they should not become the main operator truth again.
 
@@ -240,6 +241,7 @@ Stored entities include:
 - runs
 - macro, industry, and ticker context/signal objects
 - recommendation plans and outcomes
+- broker steering decisions
 - settings
 - provider credentials
 
@@ -254,7 +256,7 @@ Core models and typed contracts.
 Persistence translation and queries.
 
 ### `services`
-Proposal generation, refresh, job execution, scheduling, and preflight logic.
+Proposal generation, refresh, job execution, scheduling, broker steering, and preflight logic.
 
 ### `api`
 Machine-facing routes used by the frontend.

@@ -442,6 +442,7 @@ Important fields:
 - **Entry / stop / take profit**
 - **Client order id / broker order id**
 - **Raw request / response payloads**
+- **Steering decision history** when the order is also part of the broker-steering flow
 - **Action buttons** for resubmit and cancel when available
 
 Use this page when you want the execution trail detached from the run detail context.
@@ -455,6 +456,7 @@ Key areas:
 - **Summarization**
 - **News ingestion**
 - **Social/Nitter settings**
+- **Broker steering controls**
 - **Advanced research controls**
 
 Go here early when startup or run quality looks off.

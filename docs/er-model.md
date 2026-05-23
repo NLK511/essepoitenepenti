@@ -186,6 +186,84 @@ erDiagram
         datetime updated_at
     }
 
+    BROKER_ORDER_EXECUTIONS {
+        int id PK
+        int recommendation_plan_id FK
+        int run_id FK
+        int job_id FK
+        string ticker
+        string action
+        string side
+        string order_type
+        string time_in_force
+        int quantity
+        float notional_amount
+        float entry_price
+        float stop_loss
+        float take_profit
+        string status
+        string broker_order_id
+        string client_order_id
+        datetime submitted_at
+        datetime filled_at
+        datetime canceled_at
+        text request_payload_json
+        text response_payload_json
+        text error_message
+        datetime created_at
+        datetime updated_at
+    }
+
+    BROKER_POSITIONS {
+        int id PK
+        int broker_order_execution_id FK
+        int recommendation_plan_id FK
+        int run_id FK
+        int job_id FK
+        string ticker
+        string action
+        string side
+        int quantity
+        int current_quantity
+        string status
+        string entry_order_id
+        string exit_order_id
+        float entry_avg_price
+        float exit_avg_price
+        datetime entry_filled_at
+        datetime exit_filled_at
+        float realized_pnl
+        float realized_return_pct
+        float realized_r_multiple
+        text raw_broker_payload_json
+        text error_message
+        datetime created_at
+        datetime updated_at
+    }
+
+    BROKER_STEERING_DECISIONS {
+        int id PK
+        int recommendation_plan_id FK
+        int broker_order_id FK
+        int broker_position_id FK
+        string ticker
+        string decision
+        boolean execute_allowed
+        datetime executed_at
+        string execution_status
+        text reason_codes_json
+        float proposed_stop_loss
+        float proposed_take_profit
+        float current_price
+        float current_stop_loss
+        float current_take_profit
+        text risk_delta_json
+        text diagnostics_json
+        text error_message
+        datetime created_at
+        datetime updated_at
+    }
+
     WATCHLISTS ||--o{ JOBS : owns
     JOBS ||--o{ RUNS : schedules
 
@@ -208,6 +286,15 @@ erDiagram
 
     RECOMMENDATION_PLANS ||--o| RECOMMENDATION_OUTCOMES : resolves_to
     RUNS ||--o{ RECOMMENDATION_OUTCOMES : evaluates
+
+    RECOMMENDATION_PLANS ||--o{ BROKER_ORDER_EXECUTIONS : submits
+    RUNS ||--o{ BROKER_ORDER_EXECUTIONS : records
+    JOBS ||--o{ BROKER_ORDER_EXECUTIONS : records
+    BROKER_ORDER_EXECUTIONS ||--o| BROKER_POSITIONS : opens
+    RECOMMENDATION_PLANS ||--o{ BROKER_POSITIONS : resolves
+    BROKER_ORDER_EXECUTIONS ||--o{ BROKER_STEERING_DECISIONS : audits
+    BROKER_POSITIONS ||--o{ BROKER_STEERING_DECISIONS : audits
+    RECOMMENDATION_PLANS ||--o{ BROKER_STEERING_DECISIONS : informs
 ```
 
 ## Relationship summary
@@ -233,6 +320,11 @@ Outcome evaluation:
 - `recommendation_outcomes` may also attach to the `run` that performed evaluation
 - the `outcome` field can be `win`, `loss`, `expired`, `no_action`, `watchlist`, `phantom_win`, `phantom_loss`, or `phantom_no_entry`
 - phantom outcomes are produced when a `no_action` plan carried an `intended_action` and valid trade levels, allowing the evaluation engine to simulate the skipped trade against real market data
+
+Broker execution and steering outputs:
+- `broker_order_executions` attach to a `recommendation_plan`, `job`, and `run`
+- `broker_positions` attach to the parent `broker_order_execution` and resolve back to a `recommendation_plan`
+- `broker_steering_decisions` attach to the relevant `recommendation_plan` and, when present, the app-owned broker order/position ids used for the decision
 
 Standalone tables:
 - `app_settings`

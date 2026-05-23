@@ -1,6 +1,6 @@
 # Edge validation and autonomy gate standard
 
-**Status:** target behavior
+**Status:** current + target behavior
 
 This standard defines the minimum evidence required before Aurelio may expand autonomous broker execution.
 

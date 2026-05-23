@@ -130,15 +130,14 @@ If a different return unit is used, the equivalent tolerance must be documented 
 - **implemented now:** the current expected-value tolerance is applied to the tuning service's normalized expected-value unit.
 - **still target behavior:** the broader autonomous promotion standard must also include the edge-validation gate, diversity/concentration checks, and demotion/halt policy before unattended promotion can expand autonomy.
 
-### Active plan: next knob expansion
+### Current live knob set
 
-The next small, bounded expansion should add three live-tuned controls:
+These three controls are already wired into live plan construction and tuning evaluation:
 - a family-aware entry band multiplier so setup families can widen or narrow the global entry offset without adding combinatorics
 - an actionable confidence floor so low-conviction plans can be made explicitly non-actionable
 - a volatility-normalized stop multiplier driven by the stored volatility proxy so stop width can expand or contract with market noise
 
 Implementation rule:
-- wire each new knob into live plan construction and the tuning evaluation path at the same time
 - keep the knobs bounded, deterministic, and replayable
 - add parity tests for live plan framing and tuning scoring before widening the search surface
 
@@ -374,8 +373,6 @@ The first exploration campaign should allocate effort in this order:
 | 3 | Reward expansion | `setup_family.breakout.take_profit_distance_multiplier`, `setup_family.mean_reversion.take_profit_distance_multiplier`, `setup_family.catalyst_follow_through.take_profit_distance_multiplier`, `setup_family.macro_beneficiary_loser.take_profit_distance_multiplier` | `8` |
 
 This yields a default exploration budget of `16` perturbation candidates plus the baseline config per run before deduplication.
-
-### Candidate generation constraints
 
 ### Candidate generation constraints
 

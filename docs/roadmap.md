@@ -20,6 +20,7 @@ Trade Proposer App already has its core workflow in place:
 - the operator UI supports dashboard, watchlists, jobs, debugger, run detail, context review, ticker signals, recommendation plans, ticker drill-down, settings, and docs browsing
 - proposal generation, evaluation, optimization, and macro/industry refresh runs all execute inside this repository through the worker-backed run system
 - recommendation review is centered on `TickerSignalSnapshot`, `RecommendationPlan`, and `RecommendationPlanOutcome`
+- broker paper-trading now persists broker order, broker position, and broker steering decision records for app-owned exposure
 - health and preflight surface degraded dependencies and freshness instead of hiding them
 - optimization already uses redesign-native outcomes
 

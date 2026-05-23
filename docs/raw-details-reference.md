@@ -184,6 +184,30 @@ Typical stored fields include:
 
 The request payload stores the exact Alpaca order body, including the bracket-order structure and client order id.
 
+### `BrokerSteeringDecisionRecord`
+The persisted broker-steering audit record stores the decision trail for downstream cancellation/amendment/close checks.
+
+Typical stored fields include:
+- `recommendation_plan_id`
+- `broker_order_id` and `broker_position_id` when applicable
+- `ticker`
+- `decision`
+- `execute_allowed`
+- `executed_at`
+- `execution_status`
+- `reason_codes_json`
+- `proposed_stop_loss`
+- `proposed_take_profit`
+- `current_price`
+- `current_stop_loss`
+- `current_take_profit`
+- `risk_delta_json`
+- `diagnostics_json`
+- `error_message`
+- `created_at`, `updated_at`
+
+The decision payload is the operator/audit trail for steering, not a live broker mutation record.
+
 ## Retired support snapshot records
 
 Older builds introduced `SupportSnapshot` records during context refresh workflows, but active builds persist context snapshots directly.
