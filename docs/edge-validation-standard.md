@@ -45,6 +45,7 @@ The autonomy gate must evaluate:
 - max drawdown and loss streak
 - setup-family, action, ticker, and regime concentration
 - degraded-input share
+- broker-reconciliation certainty for the evidence used by the policy summary
 
 ## Minimum pass criteria
 

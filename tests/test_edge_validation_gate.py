@@ -60,3 +60,25 @@ def test_edge_validation_gate_demotes_when_broker_reconciliation_is_uncertain() 
 
     assert report.label == "demote_or_halt"
     assert "broker_reconciliation_uncertain" in report.reasons
+
+
+def test_edge_validation_gate_flags_concentrated_edge() -> None:
+    report = EdgeValidationGateService().evaluate(
+        _evaluation(),
+        walk_forward_validation={"qualified_slices": 3, "promotion_recommended": True},
+        evidence_concentration_ready_for_expansion=False,
+    )
+
+    assert report.label == "watch"
+    assert "concentrated_edge" in report.reasons
+
+
+def test_edge_validation_gate_flags_degraded_input_edge() -> None:
+    report = EdgeValidationGateService().evaluate(
+        _evaluation(),
+        walk_forward_validation={"qualified_slices": 3, "promotion_recommended": True},
+        degraded_input_share_percent=62.5,
+    )
+
+    assert report.label == "watch"
+    assert "degraded_input_edge" in report.reasons

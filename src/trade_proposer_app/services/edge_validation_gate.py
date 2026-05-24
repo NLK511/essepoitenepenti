@@ -22,6 +22,8 @@ class EdgeValidationGateReport:
     calibration_gap_percent: float | None
     walk_forward_qualified_slices: int | None
     walk_forward_promotion_recommended: bool | None
+    evidence_concentration_ready_for_expansion: bool | None
+    degraded_input_share_percent: float | None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -38,6 +40,8 @@ class EdgeValidationGateReport:
             "calibration_gap_percent": self.calibration_gap_percent,
             "walk_forward_qualified_slices": self.walk_forward_qualified_slices,
             "walk_forward_promotion_recommended": self.walk_forward_promotion_recommended,
+            "evidence_concentration_ready_for_expansion": self.evidence_concentration_ready_for_expansion,
+            "degraded_input_share_percent": self.degraded_input_share_percent,
         }
 
 
@@ -58,6 +62,8 @@ class EdgeValidationGateService:
         *,
         walk_forward_validation: RecommendationWalkForwardSummary | dict[str, Any] | None = None,
         broker_reconciliation_uncertain: bool = False,
+        evidence_concentration_ready_for_expansion: bool | None = None,
+        degraded_input_share_percent: float | None = None,
     ) -> EdgeValidationGateReport:
         reasons: list[str] = []
         broker_share = self._percentage(evaluation.broker_selected_outcomes, evaluation.selected_outcomes)
@@ -82,9 +88,13 @@ class EdgeValidationGateService:
         qualified_slices = self._walk_forward_value(walk_forward_validation, "qualified_slices")
         promotion_recommended = self._walk_forward_value(walk_forward_validation, "promotion_recommended")
         if isinstance(qualified_slices, int) and qualified_slices < self.MIN_WALK_FORWARD_QUALIFIED_SLICES:
-            reasons.append("walk_forward_underpowered")
-        if promotion_recommended is False:
             reasons.append("walk_forward_not_recommended")
+        elif promotion_recommended is False:
+            reasons.append("walk_forward_not_recommended")
+        if evidence_concentration_ready_for_expansion is False:
+            reasons.append("concentrated_edge")
+        if degraded_input_share_percent is not None and degraded_input_share_percent > 50.0:
+            reasons.append("degraded_input_edge")
         if broker_reconciliation_uncertain:
             reasons.append("broker_reconciliation_uncertain")
 
@@ -103,6 +113,8 @@ class EdgeValidationGateService:
             calibration_gap_percent=evaluation.calibration_gap_percent,
             walk_forward_qualified_slices=qualified_slices if isinstance(qualified_slices, int) else None,
             walk_forward_promotion_recommended=promotion_recommended if isinstance(promotion_recommended, bool) else None,
+            evidence_concentration_ready_for_expansion=evidence_concentration_ready_for_expansion,
+            degraded_input_share_percent=degraded_input_share_percent,
         )
 
     @staticmethod
