@@ -5,14 +5,16 @@ from datetime import datetime, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPosition, RecommendationPlan
+from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPosition, BrokerReconciliationSnapshot, RecommendationPlan
 from trade_proposer_app.persistence.models import Base, BrokerSteeringDecisionRecord, ObservabilityEventRecord
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
+from trade_proposer_app.repositories.broker_reconciliation_snapshots import BrokerReconciliationSnapshotRepository
 from trade_proposer_app.repositories.broker_steering_decisions import BrokerSteeringDecisionRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
+from trade_proposer_app.services.broker_position_steering import BrokerSteeringConfig, BrokerSteeringEngine
 from trade_proposer_app.services.broker_position_steering_workflow import BrokerSteeringService, BrokerSteeringStateBuilder
 
 
@@ -87,6 +89,19 @@ def _seed_reviewed_steering_history(session: Session) -> None:
         record("close_position_now")
     for _ in range(10):
         record("keep_position_exits")
+
+
+def _seed_healthy_reconciliation_snapshot(session: Session, ticker: str) -> None:
+    BrokerReconciliationSnapshotRepository(session).create(
+        BrokerReconciliationSnapshot(
+            broker="alpaca",
+            account_mode="paper",
+            snapshot_type="post_sync",
+            ticker=ticker,
+            drift_severity="ok",
+            warnings=[],
+        )
+    )
 
 
 def test_steering_decision_repository_round_trip() -> None:
@@ -166,6 +181,129 @@ def test_state_builder_prefers_open_position_over_pending_order() -> None:
     assert states[0].current_price == 101.0
 
 
+def test_state_builder_keeps_active_orders_even_when_history_exceeds_paging_limit() -> None:
+    session = create_session()
+    plans = RecommendationPlanRepository(session)
+    orders = BrokerOrderExecutionRepository(session)
+
+    plan = plans.create_plan(_plan())
+    active_order = orders.create(
+        BrokerOrderExecution(
+            recommendation_plan_id=plan.id or 1,
+            recommendation_plan_ticker="AAPL",
+            ticker="AAPL",
+            action="long",
+            side="buy",
+            order_type="limit",
+            quantity=1,
+            notional_amount=100.0,
+            stop_loss=95.0,
+            take_profit=110.0,
+            status="submitted",
+            client_order_id="order-active",
+        )
+    )
+    for idx in range(205):
+        orders.create(
+            BrokerOrderExecution(
+                recommendation_plan_id=plan.id or 1,
+                recommendation_plan_ticker="AAPL",
+                ticker="AAPL",
+                action="long",
+                side="buy",
+                order_type="limit",
+                quantity=1,
+                notional_amount=100.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                status="canceled",
+                client_order_id=f"order-closed-{idx}",
+            )
+        )
+
+    states = BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 101.0).list_states(now=NOW)
+
+    assert len(states) == 1
+    assert states[0].broker_order_id == active_order.id
+    assert states[0].has_pending_order is True
+
+
+def test_state_builder_marks_unknown_direction_plans_for_manual_review() -> None:
+    session = create_session()
+    plans = RecommendationPlanRepository(session)
+    positions = BrokerPositionRepository(session)
+
+    plan = plans.create_plan(_plan(action="no_action"))
+    positions.create(
+        BrokerPosition(
+            broker_order_execution_id=1,
+            recommendation_plan_id=plan.id or 1,
+            recommendation_plan_ticker=plan.ticker,
+            ticker=plan.ticker,
+            action="no_action",
+            side="buy",
+            quantity=1,
+            current_quantity=1,
+            status="open",
+            entry_order_id="order-1",
+            entry_avg_price=100.0,
+            current_stop_loss=95.0,
+            exit_order_id=None,
+        )
+    )
+
+    decision = BrokerSteeringEngine().evaluate(
+        BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 101.0).list_states(now=NOW)[0],
+        BrokerSteeringConfig(enabled=True, dry_run=False),
+    )
+
+    assert decision.decision == "manual_review_required"
+    assert decision.requires_manual_review is True
+
+
+def test_state_builder_uses_latest_reconciliation_snapshot_to_keep_broker_uncertainty_visible() -> None:
+    session = create_session()
+    plans = RecommendationPlanRepository(session)
+    positions = BrokerPositionRepository(session)
+    snapshots = BrokerReconciliationSnapshotRepository(session)
+
+    plan = plans.create_plan(_plan())
+    positions.create(
+        BrokerPosition(
+            broker_order_execution_id=1,
+            recommendation_plan_id=plan.id or 1,
+            recommendation_plan_ticker=plan.ticker,
+            ticker=plan.ticker,
+            action="long",
+            side="buy",
+            quantity=1,
+            current_quantity=1,
+            status="open",
+            entry_order_id="order-1",
+            entry_avg_price=100.0,
+            current_stop_loss=95.0,
+            exit_order_id=None,
+        )
+    )
+    snapshots.create(
+        BrokerReconciliationSnapshot(
+            broker="alpaca",
+            account_mode="paper",
+            snapshot_type="post_sync",
+            ticker=plan.ticker,
+            drift_severity="material",
+            warnings=["broker snapshot warnings"],
+        )
+    )
+
+    state = BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 101.0).list_states(now=NOW)[0]
+    decision = BrokerSteeringEngine().evaluate(state, BrokerSteeringConfig(enabled=True, dry_run=False))
+
+    assert state.broker_reconciliation_healthy is False
+    assert decision.decision == "manual_review_required"
+    assert "broker_uncertainty" in decision.reason_codes
+
+
 def test_steering_service_persists_decisions_and_events() -> None:
     session = create_session()
     plans = RecommendationPlanRepository(session)
@@ -210,7 +348,7 @@ def test_steering_service_blocks_live_pending_invalidation_without_reviewed_hist
         RecommendationPlan(
             ticker="MSFT",
             horizon="1w",
-            action="no_action",
+            action="long",
             confidence_percent=70.0,
             entry_price_low=100.0,
             entry_price_high=100.0,
@@ -258,6 +396,7 @@ def test_steering_service_blocks_live_pending_invalidation_without_reviewed_hist
         def amend_execution(self, execution_id: int, *, stop_loss=None, take_profit=None):
             raise AssertionError("unexpected amend_execution")
 
+    _seed_healthy_reconciliation_snapshot(session, plan.ticker)
     order_execution = LiveOrderExecutionStub()
     service = BrokerSteeringService(
         session,
@@ -267,7 +406,7 @@ def test_steering_service_blocks_live_pending_invalidation_without_reviewed_hist
 
     summary = service.run_once(now=NOW)
 
-    assert summary.execution_status == "live"
+    assert summary.execution_status == "submitted"
     assert order_execution.canceled == []
     stored = session.query(BrokerSteeringDecisionRecord).one()
     assert stored.decision == "cancel_pending_order"
@@ -332,6 +471,7 @@ def test_steering_service_can_execute_supported_live_pending_cancellation() -> N
         def amend_execution(self, execution_id: int, *, stop_loss=None, take_profit=None):
             raise AssertionError("unexpected amend_execution")
 
+    _seed_healthy_reconciliation_snapshot(session, plan.ticker)
     order_execution = LiveOrderExecutionStub()
     service = BrokerSteeringService(
         session,
@@ -341,7 +481,7 @@ def test_steering_service_can_execute_supported_live_pending_cancellation() -> N
 
     summary = service.run_once(now=NOW)
 
-    assert summary.execution_status == "live"
+    assert summary.execution_status == "submitted"
     assert order_execution.canceled == [order.id or 0]
     stored = session.query(BrokerSteeringDecisionRecord).one()
     assert stored.execution_status == "succeeded"
@@ -451,6 +591,7 @@ def test_steering_service_can_execute_supported_live_stop_amendment() -> None:
             return None
 
     _seed_reviewed_steering_history(session)
+    _seed_healthy_reconciliation_snapshot(session, plan.ticker)
     order_execution = LiveOrderExecutionStub()
     service = BrokerSteeringService(
         session,
@@ -460,7 +601,7 @@ def test_steering_service_can_execute_supported_live_stop_amendment() -> None:
 
     summary = service.run_once(now=NOW)
 
-    assert summary.execution_status == "live"
+    assert summary.execution_status == "submitted"
     assert order_execution.amended == [(order.id or 0, 97.5, None)]
     stored = session.query(BrokerSteeringDecisionRecord).filter(BrokerSteeringDecisionRecord.broker_position_id == order.id).one()
     assert stored.decision == "tighten_stop_loss"
@@ -570,6 +711,7 @@ def test_steering_service_can_execute_supported_live_take_profit_lowering() -> N
             return None
 
     _seed_reviewed_steering_history(session)
+    _seed_healthy_reconciliation_snapshot(session, plan.ticker)
     order_execution = LiveOrderExecutionStub()
     service = BrokerSteeringService(
         session,
@@ -579,7 +721,7 @@ def test_steering_service_can_execute_supported_live_take_profit_lowering() -> N
 
     summary = service.run_once(now=NOW)
 
-    assert summary.execution_status == "live"
+    assert summary.execution_status == "submitted"
     assert order_execution.amended[0][0] == (order.id or 0)
     assert order_execution.amended[0][1] is None
     assert round(order_execution.amended[0][2] or 0.0, 4) == 101.0025
@@ -599,7 +741,7 @@ def test_steering_service_can_execute_supported_live_close_position() -> None:
         RecommendationPlan(
             ticker="AAPL",
             horizon="1w",
-            action="no_action",
+            action="long",
             confidence_percent=30.0,
             entry_price_low=100.0,
             entry_price_high=100.0,
@@ -665,6 +807,7 @@ def test_steering_service_can_execute_supported_live_close_position() -> None:
             raise AssertionError("unexpected amend_execution")
 
     _seed_reviewed_steering_history(session)
+    _seed_healthy_reconciliation_snapshot(session, plan.ticker)
     order_execution = LiveOrderExecutionStub()
     service = BrokerSteeringService(
         session,
@@ -674,7 +817,7 @@ def test_steering_service_can_execute_supported_live_close_position() -> None:
 
     summary = service.run_once(now=NOW)
 
-    assert summary.execution_status == "live"
+    assert summary.execution_status == "submitted"
     assert order_execution.closed == ["AAPL"]
     stored = session.query(BrokerSteeringDecisionRecord).filter(BrokerSteeringDecisionRecord.broker_position_id == position.id).one()
     assert stored.decision == "close_position_now"

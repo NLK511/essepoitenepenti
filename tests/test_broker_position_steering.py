@@ -187,3 +187,14 @@ def test_broker_uncertainty_produces_manual_review() -> None:
     assert decision.decision == "manual_review_required"
     assert decision.requires_manual_review is True
     assert "broker_uncertainty" in decision.reason_codes
+
+
+def test_unknown_direction_produces_manual_review() -> None:
+    engine = BrokerSteeringEngine()
+    state = _state(direction="unknown", actionability="no_action", analysis_direction=None, has_open_position=True)
+
+    decision = engine.evaluate(state, _config())
+
+    assert decision.decision == "manual_review_required"
+    assert decision.requires_manual_review is True
+    assert "ambiguous_direction" in decision.reason_codes

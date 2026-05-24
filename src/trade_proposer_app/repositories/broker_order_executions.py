@@ -109,6 +109,15 @@ class BrokerOrderExecutionRepository:
         ).all()
         return [self._to_model(row) for row in rows]
 
+    def list_active(self, limit: int = 200) -> list[BrokerOrderExecution]:
+        rows = self.session.scalars(
+            select(BrokerOrderExecutionRecord)
+            .where(BrokerOrderExecutionRecord.status.in_(sorted({"queued", "submitted", "accepted", "open", "new", "partially_filled"})))
+            .order_by(BrokerOrderExecutionRecord.created_at.desc(), BrokerOrderExecutionRecord.id.desc())
+            .limit(max(1, limit))
+        ).all()
+        return [self._to_model(row) for row in rows]
+
     def list_by_run(self, run_id: int, limit: int = 200) -> list[BrokerOrderExecution]:
         rows = self.session.scalars(
             select(BrokerOrderExecutionRecord)

@@ -106,6 +106,13 @@ class BrokerSteeringEngine:
     def evaluate(self, state: BrokerSteeringState, config: BrokerSteeringConfig) -> BrokerSteeringDecision:
         now = state.now or datetime.now(timezone.utc)
         confidence = self._effective_confidence(state)
+        if not self._direction_supported(state.direction):
+            return self._manual_review(
+                state,
+                ["ambiguous_direction"],
+                "Broker direction is missing or unsupported; do not guess long or short.",
+                config=config,
+            )
         if state.has_pending_order:
             return self._evaluate_pending(state, config, now, confidence)
         if state.has_open_position:
@@ -114,6 +121,7 @@ class BrokerSteeringEngine:
             state,
             ["no_active_pending_order_or_open_position"],
             "No active pending order or open position was found.",
+            config=config,
         )
 
     def _evaluate_pending(
@@ -450,6 +458,10 @@ class BrokerSteeringEngine:
         return False
 
     @staticmethod
+    def _direction_supported(direction: str | None) -> bool:
+        return str(direction or "").strip().lower() in {"long", "short"}
+
+    @staticmethod
     def _is_no_action(value: str | None) -> bool:
         return str(value or "").strip().lower() in {"no_action", "hold", "watchlist", "neutral"}
 
@@ -481,10 +493,11 @@ class BrokerSteeringEngine:
         human_summary: str,
         *,
         broker_confidence: str = "low",
+        config: BrokerSteeringConfig | None = None,
     ) -> BrokerSteeringDecision:
         return self._decision(
             state,
-            BrokerSteeringConfig(),
+            config or BrokerSteeringConfig(),
             "manual_review_required",
             reason_codes,
             human_summary,

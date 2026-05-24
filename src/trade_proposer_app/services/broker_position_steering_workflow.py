@@ -10,6 +10,7 @@ from trade_proposer_app.domain.enums import StrategyHorizon
 from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPosition, RecommendationPlan
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
+from trade_proposer_app.repositories.broker_reconciliation_snapshots import BrokerReconciliationSnapshotRepository
 from trade_proposer_app.repositories.broker_steering_decisions import BrokerSteeringDecisionRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
@@ -39,16 +40,17 @@ class BrokerSteeringStateBuilder:
         self.plans = RecommendationPlanRepository(session)
         self.orders = BrokerOrderExecutionRepository(session)
         self.positions = BrokerPositionRepository(session)
+        self.snapshots = BrokerReconciliationSnapshotRepository(session)
 
     def list_states(self, *, limit: int = 200, now: datetime | None = None) -> list[BrokerSteeringState]:
-        plans = {plan.id: plan for plan in self.plans.list_plans(limit=limit) if plan.id is not None}
         order_map = self._active_orders_by_plan_id(limit=limit)
         position_map = self._active_positions_by_plan_id(limit=limit)
         plan_ids = sorted({*order_map.keys(), *position_map.keys()})
         states: list[BrokerSteeringState] = []
         for plan_id in plan_ids:
-            plan = plans.get(plan_id)
-            if plan is None:
+            try:
+                plan = self.plans.get_plan(plan_id)
+            except ValueError:
                 continue
             order = order_map.get(plan_id)
             position = position_map.get(plan_id)
@@ -56,11 +58,11 @@ class BrokerSteeringStateBuilder:
         return states
 
     def _active_orders_by_plan_id(self, *, limit: int) -> dict[int, BrokerOrderExecution]:
-        orders = [order for order in self.orders.list_all(limit=limit) if order.status.lower() in self.PENDING_STATUSES]
+        orders = [order for order in self.orders.list_active(limit=limit) if order.recommendation_plan_id is not None]
         return {order.recommendation_plan_id: order for order in orders}
 
     def _active_positions_by_plan_id(self, *, limit: int) -> dict[int, BrokerPosition]:
-        positions = [position for position in self.positions.list_all(limit=limit) if position.status.lower() in self.POSITION_STATUSES]
+        positions = [position for position in self.positions.list_active(limit=limit) if position.recommendation_plan_id is not None]
         return {position.recommendation_plan_id: position for position in positions}
 
     def _build_state(
@@ -85,6 +87,7 @@ class BrokerSteeringStateBuilder:
         expiration_at = None
         if plan.computed_at and plan.holding_period_days is not None:
             expiration_at = plan.computed_at + timedelta(days=max(1, int(plan.holding_period_days)))
+        broker_reconciliation_healthy = self._broker_reconciliation_healthy(plan.ticker)
         return BrokerSteeringState(
             recommendation_plan_id=plan.id or 0,
             ticker=plan.ticker,
@@ -100,8 +103,8 @@ class BrokerSteeringStateBuilder:
             confidence_percent=plan.confidence_percent,
             calibrated_confidence_percent=self._calibrated_confidence(plan),
             actionability=plan.action,
-            analysis_direction=plan.action,
-            severe_negative_news=bool(plan.warnings),
+            analysis_direction=plan.action if direction in {"long", "short"} else None,
+            severe_negative_news=self._has_severe_negative_news(plan),
             price_chase_percent=None,
             volatility_percent=None,
             has_pending_order=order is not None and not is_position,
@@ -110,8 +113,8 @@ class BrokerSteeringStateBuilder:
             broker_position_status=broker_position_status,
             broker_quantity=position.current_quantity if position is not None else (order.quantity if order is not None else None),
             broker_side=broker_side,
-            broker_ownership_known=True,
-            broker_reconciliation_healthy=True,
+            broker_ownership_known=bool(order is not None or position is not None),
+            broker_reconciliation_healthy=broker_reconciliation_healthy,
             linked_exit_orders_missing=bool(position is not None and not position.exit_order_id and position.current_quantity > 0),
             expiration_at=expiration_at,
             now=now,
@@ -122,7 +125,26 @@ class BrokerSteeringStateBuilder:
         action = str(plan.action or "").strip().lower()
         if action in {"short", "sell"}:
             return "short"
-        return "long"
+        if action in {"long", "buy"}:
+            return "long"
+        return "unknown"
+
+    def _broker_reconciliation_healthy(self, ticker: str) -> bool:
+        snapshots = self.snapshots.list_latest_for_ticker(ticker, limit=1)
+        if not snapshots:
+            return False
+        latest = snapshots[0]
+        if latest.warnings:
+            return False
+        return str(latest.drift_severity or "").strip().lower() == "ok"
+
+    @staticmethod
+    def _has_severe_negative_news(plan: RecommendationPlan) -> bool:
+        for warning in plan.warnings:
+            normalized = str(warning or "").strip().lower().replace(" ", "_")
+            if "severe_negative_news" in normalized or "severe_negative_event" in normalized:
+                return True
+        return False
 
     @staticmethod
     def _calibrated_confidence(plan: RecommendationPlan) -> float | None:
@@ -177,14 +199,14 @@ class BrokerSteeringService:
         reviewed_sample_counts = self._reviewed_sample_counts() if config.enabled and not config.dry_run else None
         self.observability.record(
             event_type="steering_run_started",
-            message="Broker steering dry-run started",
+            message="Broker steering run started",
             run_id=run_id,
             job_id=job_id,
             correlation_id=correlation_id,
             payload={"candidate_count": len(states), "dry_run": config.dry_run, "enabled": config.enabled},
         )
         counts: dict[str, int] = {}
-        execution_status = "dry_run" if config.dry_run else "live"
+        execution_status = "dry_run" if config.dry_run else "submitted"
         for state in states:
             decision = self.engine.evaluate(state, config)
             counts[decision.decision] = counts.get(decision.decision, 0) + 1
@@ -218,7 +240,7 @@ class BrokerSteeringService:
                 )
         self.observability.record(
             event_type="steering_run_completed",
-            message="Broker steering dry-run completed",
+            message="Broker steering run completed",
             run_id=run_id,
             job_id=job_id,
             correlation_id=correlation_id,

@@ -34,6 +34,9 @@ This is not a replacement for plan generation, broker reconciliation, or pre-tra
 - autonomous cancellation of pending orders whose rationale has decayed
 - autonomous stop-loss/take-profit amendment loop for filled positions
 - live broker mutation only after dry-run evidence and Alpaca safety validation
+- active state discovery must not miss still-open orders or positions just because they are older than a paging limit; discovery should prioritize active broker records over historical noise
+- if the plan direction is missing, unsupported, or ambiguous, the engine must emit `manual_review_required` instead of guessing long/short
+- broker reconciliation health should be derived from the latest reconciliation evidence available for the app-owned broker record; missing reconciliation evidence should keep the system on the safe side
 
 ### Current + target behavior
 
@@ -112,6 +115,7 @@ The steering engine needs a compact state object per broker order/position:
 - latest calibrated confidence/actionability if available
 - original rationale snapshot from the plan payload
 - current broker reconciliation health
+- a clear broker-reconciliation verdict for the specific app-owned order/position being reviewed
 
 The engine must tolerate missing analysis/news/price fields. Missing evidence should reduce confidence in amendments and may force manual review, but missing news alone must not cancel or amend an order.
 

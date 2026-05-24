@@ -58,6 +58,13 @@ class BrokerPositionRepository:
         rows = self.session.scalars(query.order_by(BrokerPositionRecord.created_at.desc()).limit(max(1, limit))).all()
         return [self._to_model(row) for row in rows]
 
+    def list_active(self, *, run_id: int | None = None, limit: int = 200) -> list[BrokerPosition]:
+        query = select(BrokerPositionRecord).where(BrokerPositionRecord.status.in_(["submitted", "open"]))
+        if run_id is not None:
+            query = query.where(BrokerPositionRecord.run_id == run_id)
+        rows = self.session.scalars(query.order_by(BrokerPositionRecord.created_at.desc()).limit(max(1, limit))).all()
+        return [self._to_model(row) for row in rows]
+
     def list_by_ticker(
         self,
         ticker: str,

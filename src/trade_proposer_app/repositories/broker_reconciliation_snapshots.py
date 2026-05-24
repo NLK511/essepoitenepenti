@@ -43,6 +43,15 @@ class BrokerReconciliationSnapshotRepository:
         query = query.order_by(BrokerReconciliationSnapshotRecord.created_at.desc(), BrokerReconciliationSnapshotRecord.id.desc()).limit(max(1, min(int(limit), 500)))
         return [self._to_model(record) for record in self.session.scalars(query).all()]
 
+    def list_latest_for_ticker(self, ticker: str, *, limit: int = 1) -> list[BrokerReconciliationSnapshot]:
+        query = (
+            select(BrokerReconciliationSnapshotRecord)
+            .where(BrokerReconciliationSnapshotRecord.ticker == ticker.upper())
+            .order_by(BrokerReconciliationSnapshotRecord.created_at.desc(), BrokerReconciliationSnapshotRecord.id.desc())
+            .limit(max(1, min(int(limit), 50)))
+        )
+        return [self._to_model(record) for record in self.session.scalars(query).all()]
+
     def _to_model(self, record: BrokerReconciliationSnapshotRecord) -> BrokerReconciliationSnapshot:
         return BrokerReconciliationSnapshot(
             id=record.id,
