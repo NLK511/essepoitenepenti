@@ -542,6 +542,86 @@ class YahooFinanceProvider(NewsProvider):
         return articles[:limit]
 
 
+class AlpacaNewsProvider(NewsProvider):
+    name: ClassVar[str] = "Alpaca"
+    provider_key: ClassVar[str] = "alpaca"
+    supports_ticker: ClassVar[bool] = True
+    supports_topic: ClassVar[bool] = False
+    supports_live_windowed_queries: ClassVar[bool] = True
+    supports_replay_windowed_queries: ClassVar[bool] = False
+    counts_as_primary_news: ClassVar[bool] = True
+
+    def fetch(self, ticker: str, limit: int, *, start_at: datetime | None = None, end_at: datetime | None = None) -> list[NewsArticle]:
+        api_key = (self.credential.api_key or "").strip()
+        api_secret = (self.credential.api_secret or "").strip()
+        if not api_key or not api_secret:
+            raise NewsFetchError("missing Alpaca api credentials")
+
+        params: dict[str, object] = {
+            "symbols": ticker,
+            "limit": min(limit, MAX_ARTICLES_PER_PROVIDER),
+            "sort": "desc",
+        }
+        if start_at is not None:
+            params["start"] = start_at.isoformat()
+        if end_at is not None:
+            params["end"] = end_at.isoformat()
+
+        response = httpx.get(
+            "https://data.alpaca.markets/v1beta1/news",
+            params=params,
+            headers={"APCA-API-KEY-ID": api_key, "APCA-API-SECRET-KEY": api_secret},
+            timeout=self.timeout,
+        )
+        if response.status_code != 200:
+            raise NewsFetchError(f"unexpected status {response.status_code} from Alpaca news")
+
+        payload = response.json()
+        if isinstance(payload, dict):
+            entries = payload.get("news") or payload.get("data") or payload.get("articles") or []
+        elif isinstance(payload, list):
+            entries = payload
+        else:
+            raise NewsFetchError("unexpected response from Alpaca news")
+
+        if not isinstance(entries, list):
+            raise NewsFetchError("unexpected response from Alpaca news")
+
+        ticker_symbol = ticker.strip().upper()
+        articles: list[NewsArticle] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            symbols = entry.get("symbols")
+            if isinstance(symbols, list):
+                normalized_symbols = {str(symbol).strip().upper() for symbol in symbols if str(symbol).strip()}
+                if normalized_symbols and ticker_symbol not in normalized_symbols:
+                    continue
+            published = _normalize_timestamp(
+                entry.get("created_at") or entry.get("updated_at") or entry.get("published_at") or entry.get("publishedAt")
+            )
+            title = _cleanup_text(_first_non_empty(entry.get("headline"), entry.get("title")))
+            summary = _cleanup_text(_first_non_empty(entry.get("summary"), entry.get("description"), entry.get("content")))
+            publisher_value = entry.get("source")
+            if isinstance(publisher_value, dict):
+                publisher = _cleanup_text(_first_non_empty(publisher_value.get("name"), publisher_value.get("source")))
+            else:
+                publisher = _cleanup_text(_first_non_empty(publisher_value, entry.get("author")))
+            link = _cleanup_text(_first_non_empty(entry.get("url"), entry.get("link")))
+            if not title and not summary:
+                continue
+            articles.append(
+                NewsArticle(
+                    title=title or summary,
+                    summary=summary,
+                    publisher=publisher or "Alpaca",
+                    link=link,
+                    published_at=published,
+                )
+            )
+        return articles[:limit]
+
+
 class GoogleNewsProvider(NewsProvider):
     name: ClassVar[str] = "GoogleNews"
     provider_key: ClassVar[str] = "googlenews"
@@ -628,6 +708,7 @@ class GoogleNewsProvider(NewsProvider):
 PROVIDER_BUILDERS[NewsAPIProvider.provider_key] = NewsAPIProvider
 PROVIDER_BUILDERS[FinnhubProvider.provider_key] = FinnhubProvider
 PROVIDER_BUILDERS[YahooFinanceProvider.provider_key] = YahooFinanceProvider
+PROVIDER_BUILDERS[AlpacaNewsProvider.provider_key] = AlpacaNewsProvider
 PROVIDER_BUILDERS[GoogleNewsProvider.provider_key] = GoogleNewsProvider
 
 

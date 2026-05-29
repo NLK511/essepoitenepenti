@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from trade_proposer_app.domain.models import NewsArticle, NewsBundle, ProviderCredential
-from trade_proposer_app.services.news import FinnhubProvider, GoogleNewsProvider, NewsIngestionService, NaiveSentimentAnalyzer, NewsProvider, UnsupportedMarketError, YahooFinanceProvider
+from trade_proposer_app.services.news import AlpacaNewsProvider, FinnhubProvider, GoogleNewsProvider, NewsIngestionService, NaiveSentimentAnalyzer, NewsProvider, UnsupportedMarketError, YahooFinanceProvider
 
 
 class NewsIngestionServiceTests(unittest.TestCase):
@@ -111,6 +111,74 @@ class NewsIngestionServiceTests(unittest.TestCase):
         self.assertEqual(articles[0].summary, "Yahoo summary")
         self.assertEqual(articles[0].publisher, "Yahoo Finance")
         self.assertEqual(articles[0].link, "https://finance.yahoo.com/news/yahoo-headline")
+
+    @patch("trade_proposer_app.services.news.httpx.get")
+    def test_alpaca_news_provider_parses_news_payload(self, mock_get):
+        response = MagicMock()
+        response.status_code = 200
+        response.json.return_value = {
+            "news": [
+                {
+                    "headline": "Alpaca headline",
+                    "summary": "Alpaca summary",
+                    "source": "Alpaca News",
+                    "url": "https://example.com/alpaca-headline",
+                    "created_at": "2026-03-26T14:00:00Z",
+                    "symbols": ["AAPL"],
+                }
+            ]
+        }
+        mock_get.return_value = response
+
+        provider = AlpacaNewsProvider(ProviderCredential(provider="alpaca", api_key="paper-key", api_secret="paper-secret"))
+        articles = provider.fetch("AAPL", 10)
+
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0].title, "Alpaca headline")
+        self.assertEqual(articles[0].summary, "Alpaca summary")
+        self.assertEqual(articles[0].publisher, "Alpaca News")
+        self.assertEqual(articles[0].link, "https://example.com/alpaca-headline")
+        self.assertEqual(mock_get.call_args.kwargs["params"]["symbols"], "AAPL")
+        self.assertEqual(mock_get.call_args.kwargs["headers"]["APCA-API-KEY-ID"], "paper-key")
+
+    @patch("trade_proposer_app.services.news.yf.Ticker")
+    @patch("trade_proposer_app.services.news.httpx.get")
+    def test_fetch_uses_alpaca_news_when_credentials_exist(self, mock_get, mock_ticker):
+        google_response = MagicMock()
+        google_response.status_code = 200
+        google_response.text = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><rss><channel></channel></rss>"
+        alpaca_response = MagicMock()
+        alpaca_response.status_code = 200
+        alpaca_response.json.return_value = {
+            "news": [
+                {
+                    "headline": "Alpaca live article",
+                    "summary": "Live coverage",
+                    "source": "Alpaca",
+                    "url": "https://example.com/alpaca-live",
+                    "created_at": "2026-03-26T14:00:00Z",
+                    "symbols": ["AAPL"],
+                }
+            ]
+        }
+
+        def side_effect(url, *args, **kwargs):
+            if url == "https://news.google.com/rss/search":
+                return google_response
+            if url == "https://data.alpaca.markets/v1beta1/news":
+                return alpaca_response
+            raise AssertionError(f"unexpected url {url}")
+
+        mock_get.side_effect = side_effect
+        mock_ticker.return_value.news = []
+
+        service = NewsIngestionService.from_provider_credentials(
+            {"alpaca": ProviderCredential(provider="alpaca", api_key="paper-key", api_secret="paper-secret")}
+        )
+        bundle = service.fetch("AAPL")
+
+        self.assertIn("Alpaca", bundle.feeds_used)
+        self.assertIn("Alpaca live article", [article.title for article in bundle.articles])
 
     @patch("trade_proposer_app.services.news.httpx.get")
     def test_newsapi_is_disabled_by_default_even_when_credentials_exist(self, mock_get):

@@ -107,6 +107,13 @@ Example shape:
 - supports replay windowed queries
 - counts as primary news
 
+### Alpaca
+- supports ticker queries
+- does not support topic queries
+- supports live windowed queries
+- does not support replay windowed queries
+- counts as primary news
+
 ### Google News
 - supports ticker queries
 - supports topic queries

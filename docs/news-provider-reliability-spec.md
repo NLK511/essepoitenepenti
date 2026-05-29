@@ -37,6 +37,7 @@ For ticker-news requests, the provider set is still determined by request semant
 
 Typical live ticker-news flows may include:
 - Finnhub
+- Alpaca
 - Google News
 - Yahoo Finance
 
