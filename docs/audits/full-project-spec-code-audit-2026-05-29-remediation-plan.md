@@ -1,8 +1,35 @@
 # Remediation plan for full project spec/code audit — 2026-05-29
 
-**Status:** active plan
+**Status:** current behavior
 **Source audit:** `full-project-spec-code-audit-2026-05-29.md`
 **Owner:** Aurelio
+
+## Implementation status
+
+Completed in commits:
+
+- `aa9c9a7` — canonical policy trust report, effective/raw outcome labeling and paging, broker steering run-status aggregation, local close-position lifecycle marker.
+- `0484cd0` — fresh steering evidence fallback, market-intelligence current-status reconciliation, Postgres validation script, settings cleanup.
+- `315afa0` — normalized provider observability helper and dashboard provider-failure summary.
+
+Validation after implementation:
+
+```text
+.venv/bin/pytest -q
+653 passed, 3 skipped
+
+cd frontend && ./node_modules/.bin/tsc --noEmit
+passed
+
+.venv/bin/python scripts/check_postgres_validation.py
+POSTGRES_TEST_DATABASE_URL is not set; skipping Postgres validation.
+
+.venv/bin/python -m alembic heads
+0042_merge_broker_heads (head)
+
+git diff --check
+clean
+```
 
 This plan turns each audit finding into concrete tasks. Each implementation phase must follow the project rule:
 
