@@ -1093,7 +1093,7 @@ class ProposalService:
         context.update(self._build_news_context_base())
         effective_now, start_at, request_mode = self._news_context_window(as_of)
         self._apply_signal_context(context, ticker, start_at=start_at, effective_now=effective_now, request_mode=request_mode)
-        social_sentiment, social_scope_breakdown = self._apply_social_context(context, ticker, start_at=start_at, effective_now=effective_now)
+        social_scope_breakdown = self._apply_social_context(context, ticker, start_at=start_at, effective_now=effective_now)
         if self.news_service is None:
             return self._apply_no_news_service_context(context)
         bundle = self.news_service.fetch(ticker, start_at=start_at, end_at=effective_now, request_mode=request_mode)
@@ -1230,9 +1230,9 @@ class ProposalService:
         *,
         start_at: datetime,
         effective_now: datetime,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
+    ) -> dict[str, Any]:
         if self.social_service is None:
-            return {}, {}
+            return {}
         social_result = self.social_service.analyze(ticker, start_at=start_at, end_at=effective_now)
         social_sentiment = social_result.get("sentiment", {})
         social_scope_breakdown = social_sentiment.get("scope_breakdown", {})
@@ -1249,7 +1249,7 @@ class ProposalService:
                 "social_scope_breakdown": social_scope_breakdown,
             }
         )
-        return social_sentiment, social_scope_breakdown
+        return social_scope_breakdown
 
     @staticmethod
     def _apply_no_news_service_context(context: dict[str, Any]) -> dict[str, Any]:

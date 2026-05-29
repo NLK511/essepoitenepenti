@@ -41,11 +41,13 @@ Goal: reduce code complexity without changing product behavior, safety rules, da
 
 ## Dead-code audit candidates
 
+Latest audit: `dead-code-audit-2026-05-29.md`.
+
 Do not delete until references and tests prove safe:
 - `TickerDeepAnalysisService._analyze_with_compatibility_fallback`
 - deprecated job-type aliases
 - legacy provider observability compatibility events
-- legacy proposal helper paths still imported by ticker technical/payload services
+- legacy proposal helper paths still imported by tests/compatibility callers
 
 ## Acceptance criteria for each refactor
 
