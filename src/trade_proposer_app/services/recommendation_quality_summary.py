@@ -10,6 +10,7 @@ from trade_proposer_app.services.performance_assessment import PerformanceAssess
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
 from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
 from trade_proposer_app.services.plan_generation_walk_forward import PlanGenerationWalkForwardService
+from trade_proposer_app.services.policy_trust_report import PolicyTrustReportService
 from trade_proposer_app.services.recommendation_evidence_concentration import RecommendationEvidenceConcentrationService
 from trade_proposer_app.services.recommendation_plan_baselines import RecommendationPlanBaselineService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
@@ -115,6 +116,13 @@ class RecommendationQualitySummaryService:
         if summary is None or calibration is None or baselines is None or evidence is None or family_review is None:
             raise RuntimeError("failed to build default recommendation-quality summary window")
 
+        policy_trust = PolicyTrustReportService(self.effective_outcomes).build(
+            policy_review,
+            walk_forward_validation=walk_forward,
+            evidence_concentration=evidence,
+            degraded_input_summary=None,
+            risk_state=None,
+        )
         summary.update(
             {
                 "tuning_settings": self.settings_domains.strategy_settings().to_dict(),
@@ -124,6 +132,9 @@ class RecommendationQualitySummaryService:
                 "walk_forward_error": walk_forward_error,
                 "latest_assessment": latest_assessment.get("latest_summary", {}),
                 "active_policy_evaluation": policy_review.policy_evaluation.to_dict(),
+                "policy_trust": policy_trust.to_dict(),
+                "edge_validation_gate": policy_trust.edge_validation_gate.to_dict(),
+                "policy_health": policy_trust.policy_health_headline.to_dict(),
             }
         )
         next_actions = self._next_actions(summary)
@@ -132,6 +143,10 @@ class RecommendationQualitySummaryService:
             "windowed_summaries": windowed_summaries,
             "calibration": calibration.model_dump(mode="json"),
             "entry_miss_diagnostics": self.outcomes.summarize_entry_miss_diagnostics(
+                evaluated_after=now - timedelta(days=30),
+                evaluated_before=now,
+            ),
+            "simulated_entry_miss_diagnostics": self.outcomes.summarize_entry_miss_diagnostics(
                 evaluated_after=now - timedelta(days=30),
                 evaluated_before=now,
             ),
@@ -182,6 +197,7 @@ class RecommendationQualitySummaryService:
             "weakest_count": len(evidence.weakest_cohorts),
             "family_count": len(family_review.families),
             "entry_miss_diagnostics": entry_miss_diagnostics,
+            "simulated_entry_miss_diagnostics": entry_miss_diagnostics,
             "walk_forward_promotion_recommended": walk_forward.get("promotion_recommended") if isinstance(walk_forward, dict) else None,
             "walk_forward_average_win_rate_delta": walk_forward.get("average_win_rate_delta") if isinstance(walk_forward, dict) else None,
             "walk_forward_average_expected_value_delta": walk_forward.get("average_expected_value_delta") if isinstance(walk_forward, dict) else None,

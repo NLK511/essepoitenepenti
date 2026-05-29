@@ -50,6 +50,14 @@ These systems must use effective outcomes when measuring recommendation quality:
 Operator-facing summaries should keep the distinction visible:
 - dashboard headline win rate and profit should use the effective aggregate, with broker win rate / broker realized P&L shown as detail
 - recommendation-plan analytics should show overall effective win rate, actionable win rate, and phantom win rate side by side
+- raw simulated entry-miss and actionability diagnostics must be named with a `simulated_` prefix when they appear beside effective metrics
+
+## API naming rules
+
+- Effective/broker-preferred metrics may use headline names such as `win_rate_percent`, `total_profit`, or `policy_evaluation` only when the endpoint documentation makes the effective source clear.
+- Simulation-only diagnostics must use explicit names such as `simulated_entry_miss_diagnostics` or `simulated_actionability_diagnostics`.
+- Compatibility aliases may keep old keys temporarily, but the explicit `simulated_*` key must be present for new callers.
+- Repository filtering must not apply a small pre-filtered plan limit before semantic filters such as outcome, resolved state, setup family, or evaluated window. The effective repository must fetch enough candidate plans, or push filters into SQL where practical, so narrow cohorts are not hidden behind newer unmatched plans.
 
 `RecommendationOutcomeRepository` remains the raw simulated/replay/manual persistence adapter. New code must use explicit raw method names such as `list_simulated_outcomes` or `get_simulated_outcomes_by_plan_ids` when it deliberately needs simulation-only evidence.
 

@@ -20,7 +20,7 @@ from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.dashboard_trends import DashboardTrendService
 from trade_proposer_app.services.data_quality_audit import DataQualityAuditService
-from trade_proposer_app.services.edge_validation_gate import EdgeValidationGateService
+from trade_proposer_app.services.policy_trust_report import PolicyTrustReportService
 from trade_proposer_app.services.recommendation_evidence_concentration import RecommendationEvidenceConcentrationService
 from trade_proposer_app.services.recommendation_plan_baselines import RecommendationPlanBaselineService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
@@ -30,7 +30,6 @@ from trade_proposer_app.services.risk_management import BrokerRiskManager
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.time_windows import normalize_review_window, review_window_start
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicyService
-from trade_proposer_app.services.trade_policy_evaluation import TradePolicyEvaluationService
 from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -202,6 +201,7 @@ def _dashboard_window_metrics(
         "phantom_loss_outcomes": actionability["phantom_loss_outcomes"],
         "no_action_outcomes": actionability["no_action_outcomes"],
         "watchlist_outcomes": actionability["watchlist_outcomes"],
+        "simulated_actionability_diagnostics": actionability,
     }
     technical_summary = {
         "news_processed": news_processed,
@@ -275,14 +275,6 @@ async def get_dashboard_operator_status(
     now = datetime.now(timezone.utc)
     computed_after = _window_start(_normalize_window(window), now)
     effective_outcomes = EffectivePlanOutcomeRepository(session)
-    policy_review = TradePolicyEvaluationService(
-        effective_outcomes,
-        policy_service=TradeDecisionPolicyService(session),
-    ).summarize_active_policy(
-        evaluated_after=computed_after,
-        evaluated_before=now,
-        limit=5000,
-    )
     risk = BrokerRiskManager(
         SettingsRepository(session),
         BrokerPositionRepository(session),
@@ -294,9 +286,21 @@ async def get_dashboard_operator_status(
         for key in ("generated_at", "ticker_count", "issue_ticker_count", "issue_counts")
         if key in data_quality
     }
+    policy_trust = PolicyTrustReportService(
+        effective_outcomes,
+        policy_service=TradeDecisionPolicyService(session),
+    ).summarize_active_policy(
+        evaluated_after=computed_after,
+        evaluated_before=now,
+        limit=5000,
+        degraded_input_summary=None,
+        risk_state=risk,
+    )
+    policy_trust_payload = policy_trust.to_dict()
     return {
-        "policy_health": policy_review.policy_health.to_dict(),
-        "edge_validation_gate": EdgeValidationGateService().evaluate(policy_review.policy_evaluation).to_dict(),
+        "policy_trust": policy_trust_payload,
+        "policy_health": policy_trust_payload["policy_health_headline"],
+        "edge_validation_gate": policy_trust_payload["edge_validation_gate"],
         "risk": risk.model_dump(mode="json"),
         "data_quality": data_quality_summary,
     }

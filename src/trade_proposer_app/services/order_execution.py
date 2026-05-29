@@ -334,12 +334,30 @@ class OrderExecutionService:
             payload={"ticker": ticker},
         )
         result = client.close_position(ticker.upper())
+        updated_position = self._mark_position_close_submitted(ticker=ticker, result=result)
         self._record_observability_event(
             event_type="broker.position_close_finished",
             message="Broker position close finished",
-            payload={"ticker": ticker, "status": result.broker_status, "broker_order_id": result.broker_order_id},
+            payload={"ticker": ticker, "status": result.broker_status, "broker_order_id": result.broker_order_id, "broker_position_id": updated_position.id if updated_position else None},
         )
         return result
+
+    def _mark_position_close_submitted(self, *, ticker: str, result: AlpacaOrderSubmissionResult) -> BrokerPosition | None:
+        if self.positions is None:
+            return None
+        normalized = ticker.strip().upper()
+        candidates = [position for position in self.positions.list_by_ticker(normalized, limit=20) if position.status in {BrokerPositionStatus.SUBMITTED.value, BrokerPositionStatus.OPEN.value}]
+        if not candidates:
+            return None
+        position = candidates[0]
+        payload = dict(position.raw_broker_payload or {})
+        payload["close_position_response"] = result.payload
+        position.status = BrokerPositionStatus.CLOSING.value
+        position.exit_order_id = result.broker_order_id or position.exit_order_id
+        position.exit_reason = position.exit_reason or "steering_close_submitted"
+        position.raw_broker_payload = payload
+        position.updated_at = self._now()
+        return self.positions.update(position)
 
     def amend_execution(
         self,

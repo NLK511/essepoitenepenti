@@ -45,38 +45,45 @@ class EffectivePlanOutcomeRepository:
             query = query.where(RecommendationPlanRecord.id == recommendation_plan_id)
         if run_id is not None:
             query = query.where(RecommendationPlanRecord.run_id == run_id)
-        plans = self.session.scalars(query.order_by(RecommendationPlanRecord.computed_at.desc()).limit(max(limit * 5, limit))).all()
-        if not plans:
-            return []
-        plan_ids = [int(plan.id) for plan in plans if plan.id is not None]
-        broker_by_plan = self._broker_positions_by_plan(plan_ids)
-        simulated_by_plan = self._simulated_outcomes_by_plan(plan_ids)
         results: list[RecommendationPlanOutcome] = []
-        for plan in plans:
-            if plan.id is None:
-                continue
-            item = self._effective_for_plan(plan, broker_by_plan.get(int(plan.id), []), simulated_by_plan.get(int(plan.id)))
-            if outcome and item.outcome != outcome:
-                continue
-            if setup_family and item.setup_family != setup_family:
-                continue
-            if resolved == OutcomeStatus.RESOLVED.value and item.status != OutcomeStatus.RESOLVED.value:
-                continue
-            if resolved == "unresolved" and item.status == OutcomeStatus.RESOLVED.value:
-                continue
-            if entry_touched is not None and item.entry_touched is not entry_touched:
-                continue
-            if near_entry_miss is not None and item.near_entry_miss is not near_entry_miss:
-                continue
-            if direction_worked_without_entry is not None and item.direction_worked_without_entry is not direction_worked_without_entry:
-                continue
-            if evaluated_after is not None and self._normalize_datetime(item.evaluated_at) < self._normalize_datetime(evaluated_after):
-                continue
-            if evaluated_before is not None and self._normalize_datetime(item.evaluated_at) > self._normalize_datetime(evaluated_before):
-                continue
-            results.append(item)
-            if len(results) >= limit:
+        batch_size = max(limit * 5, limit, 50)
+        max_scanned = max(limit * 100, batch_size)
+        offset = 0
+        while len(results) < limit and offset < max_scanned:
+            plans = self.session.scalars(
+                query.order_by(RecommendationPlanRecord.computed_at.desc()).offset(offset).limit(batch_size)
+            ).all()
+            if not plans:
                 break
+            plan_ids = [int(plan.id) for plan in plans if plan.id is not None]
+            broker_by_plan = self._broker_positions_by_plan(plan_ids)
+            simulated_by_plan = self._simulated_outcomes_by_plan(plan_ids)
+            for plan in plans:
+                if plan.id is None:
+                    continue
+                item = self._effective_for_plan(plan, broker_by_plan.get(int(plan.id), []), simulated_by_plan.get(int(plan.id)))
+                if outcome and item.outcome != outcome:
+                    continue
+                if setup_family and item.setup_family != setup_family:
+                    continue
+                if resolved == OutcomeStatus.RESOLVED.value and item.status != OutcomeStatus.RESOLVED.value:
+                    continue
+                if resolved == "unresolved" and item.status == OutcomeStatus.RESOLVED.value:
+                    continue
+                if entry_touched is not None and item.entry_touched is not entry_touched:
+                    continue
+                if near_entry_miss is not None and item.near_entry_miss is not near_entry_miss:
+                    continue
+                if direction_worked_without_entry is not None and item.direction_worked_without_entry is not direction_worked_without_entry:
+                    continue
+                if evaluated_after is not None and self._normalize_datetime(item.evaluated_at) < self._normalize_datetime(evaluated_after):
+                    continue
+                if evaluated_before is not None and self._normalize_datetime(item.evaluated_at) > self._normalize_datetime(evaluated_before):
+                    continue
+                results.append(item)
+                if len(results) >= limit:
+                    break
+            offset += len(plans)
         return results
 
     def get_outcomes_by_plan_ids(self, plan_ids: list[int]) -> dict[int, RecommendationPlanOutcome]:

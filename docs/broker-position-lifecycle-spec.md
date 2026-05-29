@@ -22,6 +22,7 @@ The first implementation must:
   - `open` after entry fill and before exit fill
   - `win` when the take-profit leg fills
   - `loss` when the stop-loss leg fills
+  - `closing` when the app submitted an explicit broker close request but final fill/P&L evidence has not arrived yet
   - `canceled` when the order is canceled before entry
   - `error` for rejected/failed lifecycle states
   - `needs_review` when the payload is contradictory or incomplete
@@ -50,6 +51,7 @@ Given a `BrokerOrderExecution` and the latest Alpaca order payload:
 5. If the bracket stop-loss leg (`type=stop` or `stop_limit`, close side) filled, position status is `loss`.
 6. If both exit legs appear filled, position status is `needs_review`.
 7. If a terminal broker failure occurs before entry, position status is `error` or `canceled` depending on broker status.
+8. If steering or an operator submits an explicit close request and the broker accepts it, the local position is marked `closing` immediately. This is an audit/lifecycle marker only; it does not resolve the trade as `win` or `loss` until broker fill/reconciliation evidence confirms the exit.
 
 ## P&L rules
 

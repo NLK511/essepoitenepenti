@@ -187,6 +187,7 @@ Typical cards include:
 - macro and industry freshness
 - overall effective win rate and total profit, with broker win/P&L shown as detail
 - actionability gap between phantom and actionable outcomes
+- policy trust from the shared `PolicyTrustReport`: `edge_validation_gate` is authoritative, while `policy_health` is only a compact headline
 - attention items
 
 Use the trendlines toggle when you want to compare the dashboard metrics across the last 7 daily snapshots without keeping the long helper text visible. Trendlines are backed by persisted daily aggregates so the dashboard can open faster when you only need the headline view.

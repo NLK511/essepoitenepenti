@@ -61,7 +61,7 @@ class EdgeValidationGateService:
         evaluation: PlanPolicyEvaluation,
         *,
         walk_forward_validation: RecommendationWalkForwardSummary | dict[str, Any] | None = None,
-        broker_reconciliation_uncertain: bool = False,
+        broker_reconciliation_uncertain: bool | None = None,
         evidence_concentration_ready_for_expansion: bool | None = None,
         degraded_input_share_percent: float | None = None,
     ) -> EdgeValidationGateReport:
@@ -87,15 +87,23 @@ class EdgeValidationGateService:
             reasons.append("large_calibration_gap")
         qualified_slices = self._walk_forward_value(walk_forward_validation, "qualified_slices")
         promotion_recommended = self._walk_forward_value(walk_forward_validation, "promotion_recommended")
-        if isinstance(qualified_slices, int) and qualified_slices < self.MIN_WALK_FORWARD_QUALIFIED_SLICES:
+        if walk_forward_validation is None:
+            reasons.append("walk_forward_input_missing")
+        elif isinstance(qualified_slices, int) and qualified_slices < self.MIN_WALK_FORWARD_QUALIFIED_SLICES:
             reasons.append("walk_forward_not_recommended")
         elif promotion_recommended is False:
             reasons.append("walk_forward_not_recommended")
-        if evidence_concentration_ready_for_expansion is False:
+        if evidence_concentration_ready_for_expansion is None:
+            reasons.append("concentration_input_missing")
+        elif evidence_concentration_ready_for_expansion is False:
             reasons.append("concentrated_edge")
-        if degraded_input_share_percent is not None and degraded_input_share_percent > 50.0:
+        if degraded_input_share_percent is None:
+            reasons.append("degraded_input_input_missing")
+        elif degraded_input_share_percent > 50.0:
             reasons.append("degraded_input_edge")
-        if broker_reconciliation_uncertain:
+        if broker_reconciliation_uncertain is None:
+            reasons.append("broker_reconciliation_input_missing")
+        elif broker_reconciliation_uncertain:
             reasons.append("broker_reconciliation_uncertain")
 
         label = self._label(reasons, evaluation)

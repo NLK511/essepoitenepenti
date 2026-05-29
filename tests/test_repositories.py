@@ -805,6 +805,53 @@ class RepositoryTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_effective_plan_outcome_repository_paginates_until_filtered_limit_is_filled(self) -> None:
+        session = create_session()
+        try:
+            plan_repository = RecommendationPlanRepository(session)
+            outcome_repository = RecommendationOutcomeRepository(session)
+            for index in range(3):
+                plan = plan_repository.create_plan(
+                    RecommendationPlan(
+                        ticker=f"OLD{index}",
+                        horizon=StrategyHorizon.ONE_WEEK,
+                        action="long",
+                        confidence_percent=70.0,
+                        thesis_summary="Older matching outcome",
+                        signal_breakdown={"setup_family": "breakout"},
+                    )
+                )
+                outcome_repository.upsert_outcome(
+                    RecommendationPlanOutcome(
+                        recommendation_plan_id=plan.id or 0,
+                        ticker=plan.ticker,
+                        action="long",
+                        outcome="win",
+                        status="resolved",
+                        confidence_bucket="65_to_79",
+                        setup_family="breakout",
+                    )
+                )
+            for index in range(30):
+                plan_repository.create_plan(
+                    RecommendationPlan(
+                        ticker=f"NEW{index}",
+                        horizon=StrategyHorizon.ONE_WEEK,
+                        action="long",
+                        confidence_percent=45.0,
+                        thesis_summary="Recent unmatched open plan",
+                        signal_breakdown={"setup_family": "mean_reversion"},
+                    )
+                )
+
+            outcomes = EffectivePlanOutcomeRepository(session).list_outcomes(outcome="win", resolved="resolved", setup_family="breakout", limit=2)
+
+            self.assertEqual(len(outcomes), 2)
+            self.assertEqual([item.outcome for item in outcomes], ["win", "win"])
+            self.assertTrue(all(item.setup_family == "breakout" for item in outcomes))
+        finally:
+            session.close()
+
     def test_effective_plan_outcome_repository_uses_simulation_for_open_broker_position(self) -> None:
         session = create_session()
         try:

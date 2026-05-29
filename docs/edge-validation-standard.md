@@ -47,6 +47,24 @@ The autonomy gate must evaluate:
 - degraded-input share
 - broker-reconciliation certainty for the evidence used by the policy summary
 
+Operator-facing consumers must not call the gate with silently omitted inputs. They must use a shared `PolicyTrustReport` assembly that either supplies each required input or records an explicit missing-input reason. Missing required inputs keep the autonomy label below `eligible_for_cautious_expansion`.
+
+## PolicyTrustReport read model
+
+`PolicyTrustReport` is the canonical operator and promotion read model for current policy trust. It contains:
+
+- `edge_validation_gate`: the authoritative autonomy gate result.
+- `policy_health_headline`: a compact derived headline for UI continuity. It is not an autonomy gate and must not contradict the edge gate.
+- `policy_evaluation`: selected-outcome metrics from the active policy evaluator.
+- `reliability_report`: bucketed reliability/calibration summary.
+- `walk_forward_validation`: current walk-forward validation when available.
+- `evidence_concentration`: current concentration summary when available.
+- `degraded_input_summary`: degraded-input share and source when available.
+- `broker_reconciliation_summary`: broker certainty state used by the gate.
+- `missing_inputs`: machine-readable list of required inputs that were not available.
+
+Dashboard, recommendation-quality, research, and tuning promotion must use this read model instead of stitching trust labels independently.
+
 ## Minimum pass criteria
 
 A policy may be considered for autonomy expansion only when all of these pass:
@@ -104,6 +122,10 @@ The gate should return machine-readable reasons, including:
 - `concentrated_edge`
 - `degraded_input_edge`
 - `broker_reconciliation_uncertain`
+- `walk_forward_input_missing`
+- `concentration_input_missing`
+- `degraded_input_input_missing`
+- `broker_reconciliation_input_missing`
 
 ## Operator stance labels
 
@@ -134,4 +156,4 @@ Even when the gate passes, autonomy must expand in small increments only:
 
 ## Current conformance
 
-Current behavior computes and displays the gate through `EdgeValidationGateService`, the research performance workbench, and the Research UI. Plan-generation tuning auto-promotion is blocked unless the gate returns `eligible_for_cautious_expansion`. Manual promotion of a specific eligible candidate does not depend on this gate. There is no separate broker autonomy-scope expansion setting today; any future setting that increases broker autonomy must use this gate before it ships.
+Current behavior computes the gate through `EdgeValidationGateService` and assembles operator-facing trust via `PolicyTrustReport`. Dashboard, recommendation-quality, research, and plan-generation tuning promotion should consume the shared trust report so required inputs are either supplied or explicitly marked missing. Plan-generation tuning auto-promotion is blocked unless the gate returns `eligible_for_cautious_expansion`. Manual promotion of a specific eligible candidate does not depend on this gate. There is no separate broker autonomy-scope expansion setting today; any future setting that increases broker autonomy must use this gate before it ships.

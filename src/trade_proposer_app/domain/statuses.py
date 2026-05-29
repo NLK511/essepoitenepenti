@@ -22,6 +22,7 @@ class TradeOutcome(StrEnum):
 class BrokerPositionStatus(StrEnum):
     SUBMITTED = "submitted"
     OPEN = "open"
+    CLOSING = "closing"
     WIN = "win"
     LOSS = "loss"
     CANCELED = "canceled"

@@ -220,7 +220,8 @@ class BrokerSteeringService:
             payload={"candidate_count": len(states), "dry_run": config.dry_run, "enabled": config.enabled},
         )
         counts: dict[str, int] = {}
-        execution_status = "dry_run" if config.dry_run else "submitted"
+        decision_execution_statuses: list[str] = []
+        initial_execution_status = "dry_run" if config.dry_run else "submitted" if config.enabled else "blocked"
         for state in states:
             decision = self.engine.evaluate(state, config)
             counts[decision.decision] = counts.get(decision.decision, 0) + 1
@@ -230,7 +231,7 @@ class BrokerSteeringService:
                 decision=decision,
                 broker_order_id=decision.broker_order_id,
                 broker_position_id=decision.broker_position_id,
-                execution_status=execution_status,
+                execution_status=initial_execution_status,
                 executed_at=normalized_now,
             )
             self.observability.record(
@@ -242,7 +243,7 @@ class BrokerSteeringService:
                 payload={"decision": decision.decision, "ticker": decision.ticker, "reason_codes": decision.reason_codes, "recommendation_plan_id": decision.recommendation_plan_id},
             )
             if config.enabled and not config.dry_run:
-                self._execute_decision_if_supported(
+                decision_execution_statuses.append(self._execute_decision_if_supported(
                     saved_decision_id=int(saved_decision.get("id") or 0),
                     state=state,
                     decision=decision,
@@ -251,16 +252,18 @@ class BrokerSteeringService:
                     job_id=job_id,
                     correlation_id=correlation_id,
                     normalized_now=normalized_now,
-                )
+                ))
+            else:
+                decision_execution_statuses.append(initial_execution_status)
         self.observability.record(
             event_type="steering_run_completed",
             message="Broker steering run completed",
             run_id=run_id,
             job_id=job_id,
             correlation_id=correlation_id,
-            payload={"candidate_count": len(states), "decisions": counts, "dry_run": config.dry_run},
+            payload={"candidate_count": len(states), "decisions": counts, "dry_run": config.dry_run, "execution_status": self._aggregate_execution_status(decision_execution_statuses, dry_run=config.dry_run)},
         )
-        return BrokerSteeringRunSummary(total_candidates=len(states), decisions=counts, execution_status=execution_status)
+        return BrokerSteeringRunSummary(total_candidates=len(states), decisions=counts, execution_status=self._aggregate_execution_status(decision_execution_statuses, dry_run=config.dry_run))
 
     def _execute_decision_if_supported(
         self,
@@ -273,7 +276,7 @@ class BrokerSteeringService:
         job_id: int | None,
         correlation_id: str | None,
         normalized_now: datetime,
-    ) -> None:
+    ) -> str:
         if self.order_execution is None:
             self.decision_repository.update_execution_result(
                 saved_decision_id,
@@ -290,14 +293,14 @@ class BrokerSteeringService:
                 correlation_id=correlation_id,
                 payload={"decision": decision.decision, "ticker": decision.ticker, "reason_codes": decision.reason_codes},
             )
-            return
+            return "blocked"
 
         broker_order_id = state.broker_order_id
         broker_position_id = state.broker_position_id
         if decision.decision == "cancel_pending_order":
             if not state.has_pending_order or broker_order_id is None:
                 self._block_unsupported_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now)
-                return
+                return "blocked"
             if not self._cancel_pending_order_is_live_enabled(decision, reviewed_sample_counts):
                 self._block_threshold_decision(
                     saved_decision_id,
@@ -309,7 +312,7 @@ class BrokerSteeringService:
                     normalized_now=normalized_now,
                     payload={"broker_order_id": broker_order_id, "reviewed_sample_counts": reviewed_sample_counts},
                 )
-                return
+                return "blocked"
             if "pending_expired" not in set(decision.reason_codes):
                 self.observability.record(
                     event_type="steering_broker_mutation_attempted",
@@ -332,14 +335,14 @@ class BrokerSteeringService:
                 self.order_execution.cancel_execution(broker_order_id)
             except Exception as exc:
                 self._fail_decision(saved_decision_id, decision, exc, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, payload={"broker_order_id": broker_order_id})
-                return
+                return "failed"
             self._succeed_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, message="Broker steering cancellation succeeded", payload={"broker_order_id": broker_order_id})
-            return
+            return "succeeded"
 
         if decision.decision == "close_position_now":
             if not state.has_open_position or broker_position_id is None:
                 self._block_unsupported_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now)
-                return
+                return "blocked"
             if not self._close_now_is_live_enabled(reviewed_sample_counts):
                 self._block_threshold_decision(
                     saved_decision_id,
@@ -351,7 +354,7 @@ class BrokerSteeringService:
                     normalized_now=normalized_now,
                     payload={"broker_position_id": broker_position_id, "reviewed_sample_counts": reviewed_sample_counts},
                 )
-                return
+                return "blocked"
             self.observability.record(
                 event_type="steering_broker_mutation_attempted",
                 message="Broker steering close-position attempted",
@@ -364,14 +367,14 @@ class BrokerSteeringService:
                 self.order_execution.close_position(state.ticker)
             except Exception as exc:
                 self._fail_decision(saved_decision_id, decision, exc, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, payload={"broker_position_id": broker_position_id, "ticker": state.ticker})
-                return
+                return "failed"
             self._succeed_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, message="Broker steering close-position succeeded", payload={"broker_position_id": broker_position_id, "ticker": state.ticker})
-            return
+            return "succeeded"
 
         if decision.decision in {"tighten_stop_loss", "move_stop_to_breakeven_or_profit", "lower_take_profit"}:
             if not state.has_open_position or broker_order_id is None:
                 self._block_unsupported_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now)
-                return
+                return "blocked"
             if not self._amendment_is_live_enabled(reviewed_sample_counts):
                 self._block_threshold_decision(
                     saved_decision_id,
@@ -383,7 +386,7 @@ class BrokerSteeringService:
                     normalized_now=normalized_now,
                     payload={"broker_order_id": broker_order_id, "reviewed_sample_counts": reviewed_sample_counts},
                 )
-                return
+                return "blocked"
             amend_stop_loss = decision.proposed_stop_loss if decision.decision in {"tighten_stop_loss", "move_stop_to_breakeven_or_profit"} else None
             amend_take_profit = decision.proposed_take_profit if decision.decision == "lower_take_profit" else None
             self.observability.record(
@@ -398,11 +401,33 @@ class BrokerSteeringService:
                 self.order_execution.amend_execution(broker_order_id, stop_loss=amend_stop_loss, take_profit=amend_take_profit)
             except Exception as exc:
                 self._fail_decision(saved_decision_id, decision, exc, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, payload={"broker_order_id": broker_order_id, "stop_loss": amend_stop_loss, "take_profit": amend_take_profit})
-                return
+                return "failed"
             self._succeed_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, message="Broker steering amendment succeeded", payload={"broker_order_id": broker_order_id, "stop_loss": amend_stop_loss, "take_profit": amend_take_profit})
-            return
+            return "succeeded"
 
         self._block_unsupported_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now)
+        return "blocked"
+
+    @staticmethod
+    def _aggregate_execution_status(statuses: list[str], *, dry_run: bool) -> str:
+        if dry_run:
+            return "dry_run"
+        if not statuses:
+            return "no_action"
+        normalized = [str(status or "").strip().lower() for status in statuses]
+        if all(status == "succeeded" for status in normalized):
+            return "succeeded"
+        if all(status == "blocked" for status in normalized):
+            return "blocked"
+        if all(status == "failed" for status in normalized):
+            return "failed"
+        if any(status == "succeeded" for status in normalized):
+            return "partial_success"
+        if any(status == "failed" for status in normalized):
+            return "failed"
+        if all(status == "dry_run" for status in normalized):
+            return "dry_run"
+        return "blocked"
 
     def _reviewed_sample_counts(self) -> dict[str, int]:
         total_dry_run = self.decision_repository.count(execution_status="dry_run")

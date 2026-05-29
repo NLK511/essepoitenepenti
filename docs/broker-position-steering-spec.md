@@ -234,6 +234,7 @@ Safety constraints:
 - never close if broker ownership, quantity, or side is uncertain
 - never close if the position is already closing or has an active market/exit order that would duplicate the close
 - persist the close decision before submitting the broker mutation
+- when the broker accepts a close request, immediately mark the local position lifecycle as `closing` with the raw close response and close order id if available; final win/loss/P&L still comes from broker fill/reconciliation evidence
 - in dry-run, record the proposed close without broker mutation
 
 Tunable knobs:
@@ -420,7 +421,8 @@ Minimum fields:
 - decision
 - execute_allowed
 - executed_at nullable
-- execution_status: `dry_run`, `submitted`, `succeeded`, `failed`, `blocked`
+- per-decision execution_status: `dry_run`, `submitted`, `succeeded`, `failed`, `blocked`
+- run-level execution_status: `dry_run`, `no_action`, `blocked`, `partial_success`, `succeeded`, `failed`. Run status is aggregated after decision execution; it must not say `submitted` when every live decision was blocked.
 - reason_codes JSON
 - proposed_stop_loss nullable
 - proposed_take_profit nullable

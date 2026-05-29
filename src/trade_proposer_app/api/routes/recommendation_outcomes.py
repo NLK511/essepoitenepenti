@@ -88,14 +88,19 @@ async def summarize_recommendation_actionability_diagnostics(
     evaluated_after: datetime | None = Query(default=None),
     evaluated_before: datetime | None = Query(default=None),
     session: Session = Depends(get_db_session),
-) -> dict[str, float | int | None]:
-    return RecommendationOutcomeRepository(session).summarize_actionability_diagnostics(
+) -> dict[str, object]:
+    diagnostics = RecommendationOutcomeRepository(session).summarize_actionability_diagnostics(
         ticker=ticker.strip().upper() if ticker else None,
         run_id=run_id,
         setup_family=setup_family.strip().lower() if setup_family else None,
         evaluated_after=evaluated_after,
         evaluated_before=evaluated_before,
     )
+    return {
+        **diagnostics,
+        "diagnostic_source": "simulation",
+        "simulated_actionability_diagnostics": diagnostics,
+    }
 
 
 @router.get("/calibration-report")

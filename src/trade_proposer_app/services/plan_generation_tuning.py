@@ -30,7 +30,7 @@ from trade_proposer_app.repositories.recommendation_decision_samples import Reco
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.services.edge_validation_gate import EdgeValidationGateService
+from trade_proposer_app.services.policy_trust_report import PolicyTrustReportService
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
 from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_BY_KEY, exploration_campaigns, normalize_plan_generation_tuning_config, parameter_definitions
@@ -38,7 +38,6 @@ from trade_proposer_app.services.plan_generation_walk_forward import PlanGenerat
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.settings_mutations import SettingsMutationService
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicyService
-from trade_proposer_app.services.trade_policy_evaluation import TradePolicyEvaluationService
 
 
 logger = logging.getLogger(__name__)
@@ -575,14 +574,14 @@ class PlanGenerationTuningService:
         return version
 
     def _edge_validation_gate_report(self, *, walk_forward_validation: object | None = None) -> dict[str, object]:
-        policy_summary = TradePolicyEvaluationService(
+        return PolicyTrustReportService(
             self.outcomes,
             policy_service=TradeDecisionPolicyService(self.session),
-        ).summarize_active_policy()
-        return EdgeValidationGateService().evaluate(
-            policy_summary.policy_evaluation,
+        ).summarize_active_policy(
             walk_forward_validation=walk_forward_validation,
-        ).to_dict()
+            degraded_input_summary=None,
+            risk_state=None,
+        ).edge_validation_gate.to_dict()
 
     def _resolve_active_config_version(self) -> PlanGenerationTuningConfigVersion:
         baseline = self.ensure_baseline_config_version()

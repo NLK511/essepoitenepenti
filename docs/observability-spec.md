@@ -53,6 +53,18 @@ The broker lifecycle path records at least:
 - `broker.order_sync_started`
 - `broker.order_sync_finished`
 - `broker.order_sync_failed`
+- `broker.position_close_started`
+- `broker.position_close_finished`
+
+The broker steering path records at least:
+- `steering_run_started`
+- `steering_decision_created`
+- `steering_broker_mutation_attempted`
+- `steering_broker_mutation_succeeded`
+- `steering_broker_mutation_failed`
+- `steering_run_completed`
+
+Steering mutation events must include the steering decision, ticker, persisted broker order or position id when available, result status, and run/job/correlation ids when the steering run came from scheduled job execution.
 
 Where a broker event belongs to a persisted run/job, it should include `run_id` and `job_id`.
 

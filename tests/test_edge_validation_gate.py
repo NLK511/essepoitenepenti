@@ -31,6 +31,9 @@ def test_edge_validation_gate_allows_cautious_expansion_when_thresholds_pass() -
     report = EdgeValidationGateService().evaluate(
         _evaluation(),
         walk_forward_validation={"qualified_slices": 3, "promotion_recommended": True},
+        evidence_concentration_ready_for_expansion=True,
+        degraded_input_share_percent=5.0,
+        broker_reconciliation_uncertain=False,
     )
 
     assert report.label == "eligible_for_cautious_expansion"
@@ -42,6 +45,9 @@ def test_edge_validation_gate_blocks_thin_simulation_heavy_evidence() -> None:
     report = EdgeValidationGateService().evaluate(
         _evaluation(resolved_selected_outcomes=12, broker_selected_outcomes=2, selected_outcomes=20),
         walk_forward_validation={"qualified_slices": 1, "promotion_recommended": False},
+        evidence_concentration_ready_for_expansion=True,
+        degraded_input_share_percent=5.0,
+        broker_reconciliation_uncertain=False,
     )
 
     assert report.label == "research_only"
@@ -56,6 +62,8 @@ def test_edge_validation_gate_demotes_when_broker_reconciliation_is_uncertain() 
         _evaluation(),
         walk_forward_validation={"qualified_slices": 3, "promotion_recommended": True},
         broker_reconciliation_uncertain=True,
+        evidence_concentration_ready_for_expansion=True,
+        degraded_input_share_percent=5.0,
     )
 
     assert report.label == "demote_or_halt"
@@ -67,6 +75,8 @@ def test_edge_validation_gate_flags_concentrated_edge() -> None:
         _evaluation(),
         walk_forward_validation={"qualified_slices": 3, "promotion_recommended": True},
         evidence_concentration_ready_for_expansion=False,
+        degraded_input_share_percent=5.0,
+        broker_reconciliation_uncertain=False,
     )
 
     assert report.label == "watch"
@@ -78,6 +88,8 @@ def test_edge_validation_gate_flags_degraded_input_edge() -> None:
         _evaluation(),
         walk_forward_validation={"qualified_slices": 3, "promotion_recommended": True},
         degraded_input_share_percent=62.5,
+        evidence_concentration_ready_for_expansion=True,
+        broker_reconciliation_uncertain=False,
     )
 
     assert report.label == "watch"

@@ -1107,6 +1107,57 @@ class OrderExecutionTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_close_position_marks_local_position_as_closing_without_resolving_trade(self) -> None:
+        session = create_session()
+        try:
+            settings = SettingsRepository(session)
+            executions = BrokerOrderExecutionRepository(session)
+            positions = BrokerPositionRepository(session)
+            order = executions.create(
+                BrokerOrderExecution(
+                    recommendation_plan_id=1,
+                    recommendation_plan_ticker="AAPL",
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    time_in_force="gtc",
+                    quantity=10,
+                    status="filled",
+                    broker_order_id="entry-order-1",
+                    response_payload={"id": "entry-order-1", "status": "filled"},
+                )
+            )
+            position = positions.create(
+                BrokerPosition(
+                    broker_order_execution_id=order.id or 0,
+                    recommendation_plan_id=1,
+                    recommendation_plan_ticker="AAPL",
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    quantity=10,
+                    current_quantity=10,
+                    status="open",
+                    entry_order_id="entry-order-1",
+                    entry_avg_price=100.0,
+                )
+            )
+            client = StubAlpacaClient()
+            service = OrderExecutionService(settings=settings, executions=executions, positions=positions, client=client)
+
+            service.close_position("AAPL")
+
+            updated = positions.get(position.id or 0)
+            self.assertEqual(updated.status, "closing")
+            self.assertEqual(updated.exit_reason, "steering_close_submitted")
+            self.assertEqual(updated.current_quantity, 10)
+            self.assertIsNone(updated.realized_pnl)
+            self.assertEqual(updated.raw_broker_payload["close_position_response"]["status"], "closed")
+            self.assertEqual(client.close_requests, ["AAPL"])
+        finally:
+            session.close()
+
     def test_alpaca_paper_client_supports_submit_get_cancel_and_close_position(self) -> None:
         responses = [
             FakeHttpxResponse(200, {"id": "alpaca-order-1", "status": "accepted"}),

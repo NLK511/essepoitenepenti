@@ -71,9 +71,11 @@ These labels are conservative and should gate autonomous promotion in future mig
 The Research performance workbench also uses the combined service for active-policy evaluation and reliability reporting instead of stitching lower-level policy and reliability contracts locally.
 
 ## Shared policy/reliability evaluation
-`TradePolicyEvaluationService` combines the policy evaluation with the canonical reliability report so operator-facing summaries do not have to stitch those contracts together separately.
+`TradePolicyEvaluationService` combines the policy evaluation with the canonical reliability report so lower-level summaries do not have to stitch those contracts together separately.
 
-When an operator-facing consumer needs the current active policy, it should ask the shared combined service via `TradePolicyEvaluationService.summarize_active_policy()` rather than reloading policy settings and then calling the lower-level evaluators itself.
+`policy_health` is a compact derived headline for UI continuity. It is not the autonomy gate. Operator-facing consumers that decide whether trust can expand must use the shared `PolicyTrustReport` from the edge-validation standard. The trust report embeds `policy_health` as `policy_health_headline` and keeps `edge_validation_gate` authoritative.
+
+When an operator-facing consumer needs the current active policy for trust/readiness decisions, it should ask the shared trust-report service rather than reloading policy settings and then calling the lower-level evaluators itself.
 
 ## Future migrations
 Future batches should migrate:

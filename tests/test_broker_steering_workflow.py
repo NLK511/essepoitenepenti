@@ -467,7 +467,7 @@ def test_steering_service_blocks_live_pending_invalidation_without_reviewed_hist
 
     summary = service.run_once(now=NOW)
 
-    assert summary.execution_status == "submitted"
+    assert summary.execution_status == "blocked"
     assert order_execution.canceled == []
     stored = session.query(BrokerSteeringDecisionRecord).one()
     assert stored.decision == "cancel_pending_order"
@@ -542,7 +542,7 @@ def test_steering_service_can_execute_supported_live_pending_cancellation() -> N
 
     summary = service.run_once(now=NOW)
 
-    assert summary.execution_status == "submitted"
+    assert summary.execution_status == "succeeded"
     assert order_execution.canceled == [order.id or 0]
     stored = session.query(BrokerSteeringDecisionRecord).one()
     assert stored.execution_status == "succeeded"
@@ -662,7 +662,7 @@ def test_steering_service_can_execute_supported_live_stop_amendment() -> None:
 
     summary = service.run_once(now=NOW)
 
-    assert summary.execution_status == "submitted"
+    assert summary.execution_status == "succeeded"
     assert order_execution.amended == [(order.id or 0, 97.5, None)]
     stored = session.query(BrokerSteeringDecisionRecord).filter(BrokerSteeringDecisionRecord.broker_position_id == order.id).one()
     assert stored.decision == "tighten_stop_loss"
@@ -782,7 +782,7 @@ def test_steering_service_can_execute_supported_live_take_profit_lowering() -> N
 
     summary = service.run_once(now=NOW)
 
-    assert summary.execution_status == "submitted"
+    assert summary.execution_status == "succeeded"
     assert order_execution.amended[0][0] == (order.id or 0)
     assert order_execution.amended[0][1] is None
     assert round(order_execution.amended[0][2] or 0.0, 4) == 101.0025
@@ -878,7 +878,7 @@ def test_steering_service_can_execute_supported_live_close_position() -> None:
 
     summary = service.run_once(now=NOW)
 
-    assert summary.execution_status == "submitted"
+    assert summary.execution_status == "succeeded"
     assert order_execution.closed == ["AAPL"]
     stored = session.query(BrokerSteeringDecisionRecord).filter(BrokerSteeringDecisionRecord.broker_position_id == position.id).one()
     assert stored.decision == "close_position_now"
