@@ -1091,58 +1091,11 @@ class ProposalService:
 
     def _apply_news_context(self, context: dict[str, Any], ticker: str, *, as_of: datetime | None = None) -> dict[str, Any]:
         context.update(self._build_news_context_base())
-        
-        effective_now = as_of or datetime.now(timezone.utc)
-        start_at = effective_now - timedelta(hours=24)
-        request_mode = "replay" if as_of is not None else "live"
-        
-        signal_bundle = (
-            self.signal_service.fetch(ticker, start_at=start_at, end_at=effective_now, request_mode=request_mode)
-            if self.signal_service is not None
-            else None
-        )
-        if signal_bundle is not None:
-            signal_items = [item.model_dump(mode="json") for item in signal_bundle.items]
-            social_items = [item for item in signal_items if item.get("source_type") == "social"]
-            context.update(
-                {
-                    "signal_items": signal_items,
-                    "signal_feeds_used": signal_bundle.feeds_used,
-                    "signal_feed_errors": signal_bundle.feed_errors,
-                    "signal_coverage": signal_bundle.coverage,
-                    "signal_query_diagnostics": signal_bundle.query_diagnostics,
-                    "social_items": social_items,
-                }
-            )
-        social_sentiment: dict[str, Any] = {}
-        social_scope_breakdown: dict[str, Any] = {}
-        if self.social_service is not None:
-            social_result = self.social_service.analyze(ticker, start_at=start_at, end_at=effective_now)
-            social_sentiment = social_result.get("sentiment", {})
-            social_scope_breakdown = social_sentiment.get("scope_breakdown", {})
-            context.update(
-                {
-                    "ticker_profile": social_result.get("profile", {}),
-                    "social_sentiment_score": social_sentiment.get("score", 0.0),
-                    "social_sentiment_label": social_sentiment.get("label"),
-                    "social_sentiment_volatility": social_sentiment.get("sentiment_volatility", 0.0),
-                    "social_keyword_hits": social_sentiment.get("keyword_hits", 0),
-                    "social_coverage_insights": social_sentiment.get("coverage_insights", []),
-                    "social_item_count": social_sentiment.get("item_count", len(context.get("social_items", []))),
-                    "social_items": social_sentiment.get("items", context.get("social_items", [])),
-                    "social_scope_breakdown": social_scope_breakdown,
-                }
-            )
+        effective_now, start_at, request_mode = self._news_context_window(as_of)
+        self._apply_signal_context(context, ticker, start_at=start_at, effective_now=effective_now, request_mode=request_mode)
+        social_sentiment, social_scope_breakdown = self._apply_social_context(context, ticker, start_at=start_at, effective_now=effective_now)
         if self.news_service is None:
-            merged_problems = list(dict.fromkeys(context.get("problems", []) + context.get("signal_feed_errors", [])))
-            context.update(
-                {
-                    "problems": merged_problems,
-                    "summary_text": "News service unavailable; no usable news articles were returned for this run.",
-                    "summary_method": DEFAULT_SUMMARY_METHOD,
-                }
-            )
-            return context
+            return self._apply_no_news_service_context(context)
         bundle = self.news_service.fetch(ticker, start_at=start_at, end_at=effective_now, request_mode=request_mode)
         sentiment = self.sentiment_analyzer.analyze(bundle)
         feeds = list(dict.fromkeys(bundle.feeds_used))
@@ -1239,6 +1192,75 @@ class ProposalService:
             merged_problems.append(summary_problem)
             merged_problems.append(summary_fallback_warning("plan context", summary_problem))
         context["problems"] = list(dict.fromkeys(merged_problems))
+        return context
+
+    @staticmethod
+    def _news_context_window(as_of: datetime | None) -> tuple[datetime, datetime, str]:
+        effective_now = as_of or datetime.now(timezone.utc)
+        return effective_now, effective_now - timedelta(hours=24), "replay" if as_of is not None else "live"
+
+    def _apply_signal_context(
+        self,
+        context: dict[str, Any],
+        ticker: str,
+        *,
+        start_at: datetime,
+        effective_now: datetime,
+        request_mode: str,
+    ) -> None:
+        if self.signal_service is None:
+            return
+        signal_bundle = self.signal_service.fetch(ticker, start_at=start_at, end_at=effective_now, request_mode=request_mode)
+        signal_items = [item.model_dump(mode="json") for item in signal_bundle.items]
+        context.update(
+            {
+                "signal_items": signal_items,
+                "signal_feeds_used": signal_bundle.feeds_used,
+                "signal_feed_errors": signal_bundle.feed_errors,
+                "signal_coverage": signal_bundle.coverage,
+                "signal_query_diagnostics": signal_bundle.query_diagnostics,
+                "social_items": [item for item in signal_items if item.get("source_type") == "social"],
+            }
+        )
+
+    def _apply_social_context(
+        self,
+        context: dict[str, Any],
+        ticker: str,
+        *,
+        start_at: datetime,
+        effective_now: datetime,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        if self.social_service is None:
+            return {}, {}
+        social_result = self.social_service.analyze(ticker, start_at=start_at, end_at=effective_now)
+        social_sentiment = social_result.get("sentiment", {})
+        social_scope_breakdown = social_sentiment.get("scope_breakdown", {})
+        context.update(
+            {
+                "ticker_profile": social_result.get("profile", {}),
+                "social_sentiment_score": social_sentiment.get("score", 0.0),
+                "social_sentiment_label": social_sentiment.get("label"),
+                "social_sentiment_volatility": social_sentiment.get("sentiment_volatility", 0.0),
+                "social_keyword_hits": social_sentiment.get("keyword_hits", 0),
+                "social_coverage_insights": social_sentiment.get("coverage_insights", []),
+                "social_item_count": social_sentiment.get("item_count", len(context.get("social_items", []))),
+                "social_items": social_sentiment.get("items", context.get("social_items", [])),
+                "social_scope_breakdown": social_scope_breakdown,
+            }
+        )
+        return social_sentiment, social_scope_breakdown
+
+    @staticmethod
+    def _apply_no_news_service_context(context: dict[str, Any]) -> dict[str, Any]:
+        merged_problems = list(dict.fromkeys(context.get("problems", []) + context.get("signal_feed_errors", [])))
+        context.update(
+            {
+                "problems": merged_problems,
+                "summary_text": "News service unavailable; no usable news articles were returned for this run.",
+                "summary_method": DEFAULT_SUMMARY_METHOD,
+            }
+        )
         return context
 
     def _apply_market_intelligence(self, context: dict[str, Any], ticker: str, *, as_of: datetime | None = None) -> dict[str, Any]:

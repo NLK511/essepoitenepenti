@@ -23,7 +23,8 @@ Goal: reduce code complexity without changing product behavior, safety rules, da
    - Problem: `ProposalService` is still large and acts as a dependency magnet for price history, payload building, news/context enrichment, and compatibility helpers.
    - Done now: moved shared summary defaults and JSON sanitization to `payload_utils` while keeping `ProposalService` compatibility exports.
    - Done now: extracted price-history fetch orchestration into `PriceHistoryFetcher` while preserving `ProposalService` wrapper methods for compatibility.
-   - Safe next step: extract news-context helpers without deleting wrappers.
+   - Done now: split `ProposalService._apply_news_context` into focused signal, social, and no-news helper methods.
+   - Safe next step: audit remaining compatibility-only proposal paths before any deletion.
 
 3. **Macro/industry context duplication**
    - Problem: refresh payload parsing, prompt construction, diagnostics, and quality/warning normalization are similar across macro and industry services.
