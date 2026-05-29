@@ -16,6 +16,7 @@ import yfinance as yf
 from trade_proposer_app.domain.models import NewsArticle, NewsBundle, ProviderCredential
 from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
+from trade_proposer_app.services.provider_observability import ProviderObservabilityService
 from trade_proposer_app.services.constants import DEFAULT_CONTEXT_FLAGS
 
 MAX_ARTICLES_PER_PROVIDER = 10
@@ -1027,6 +1028,34 @@ class NewsIngestionService:
         skipped = bool(diagnostics.get("provider_fetch_skipped"))
         severity = "warning" if failed_count or feed_errors else "info"
         try:
+            provider_observability = ProviderObservabilityService(self.observability)
+            provider_results = diagnostics.get("provider_results") if isinstance(diagnostics.get("provider_results"), list) else []
+            if skipped and not provider_results:
+                provider_observability.record(
+                    "skipped",
+                    provider="provider_selection",
+                    source_type=f"news.{query_type}",
+                    ticker=subject if query_type == "ticker" else None,
+                    topic=subject if query_type == "topic" else None,
+                    mode=str(diagnostics.get("request_mode") or "live"),
+                    reason=str(diagnostics.get("provider_fetch_skip_reason") or "provider fetch skipped"),
+                )
+            for result in provider_results:
+                if not isinstance(result, dict):
+                    continue
+                status = str(result.get("status") or "").strip().lower()
+                normalized_status = "failed" if status == "error" else "skipped" if status in {"unsupported_market", "skipped"} else "succeeded"
+                provider_observability.record(
+                    normalized_status,
+                    provider=str(result.get("provider") or "unknown"),
+                    source_type=f"news.{query_type}",
+                    ticker=subject if query_type == "ticker" else None,
+                    topic=subject if query_type == "topic" else None,
+                    mode=str(diagnostics.get("request_mode") or "live"),
+                    attempt=int(result.get("attempt_count") or 1),
+                    reason=str(result.get("error") or status or normalized_status),
+                    payload={"article_count": result.get("article_count", 0), "legacy_status": status},
+                )
             self.observability.record(
                 event_type="provider.news_fetch_finished",
                 severity=severity,

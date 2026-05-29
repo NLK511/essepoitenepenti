@@ -1,6 +1,7 @@
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 import json
+import json
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
@@ -308,15 +309,42 @@ async def get_dashboard_operator_status(
 
 
 def _provider_failure_summary(session: Session, *, computed_after: datetime, computed_before: datetime) -> dict[str, object]:
-    rows = session.execute(
-        select(ObservabilityEventRecord.payload_json, func.count())
-        .where(ObservabilityEventRecord.event_type == "provider.request_failed")
+    rows = session.scalars(
+        select(ObservabilityEventRecord)
+        .where(ObservabilityEventRecord.event_type.in_(["provider.request_failed", "provider.request_skipped"]))
         .where(ObservabilityEventRecord.created_at >= computed_after.replace(tzinfo=None))
         .where(ObservabilityEventRecord.created_at <= computed_before.replace(tzinfo=None))
-        .group_by(ObservabilityEventRecord.payload_json)
+        .order_by(ObservabilityEventRecord.created_at.desc())
+        .limit(500)
     ).all()
-    total = sum(int(count) for _payload, count in rows)
-    return {"failed_request_count": total}
+    failed = [row for row in rows if row.event_type == "provider.request_failed"]
+    skipped = [row for row in rows if row.event_type == "provider.request_skipped"]
+    providers: set[str] = set()
+    reasons: list[str] = []
+    for row in failed:
+        payload = _json_object(row.payload_json)
+        provider = str(payload.get("provider") or "").strip()
+        reason = str(payload.get("reason") or row.message or "").strip()
+        if provider:
+            providers.add(provider)
+        if reason:
+            reasons.append(reason)
+    return {
+        "failed_request_count": len(failed),
+        "skipped_request_count": len(skipped),
+        "providers_with_failures": sorted(providers),
+        "recent_failure_reasons": list(dict.fromkeys(reasons))[:5],
+    }
+
+
+def _json_object(raw: str | None) -> dict[str, object]:
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 @router.get("")

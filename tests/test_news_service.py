@@ -491,11 +491,18 @@ class NewsIngestionServiceTests(unittest.TestCase):
         bundle = service.fetch("AAPL")
 
         self.assertEqual(len(bundle.articles), 1)
-        self.assertEqual(len(observability.events), 1)
-        self.assertEqual(observability.events[0]["event_type"], "provider.news_fetch_finished")
-        self.assertEqual(observability.events[0]["source"], "news")
-        self.assertEqual(observability.events[0]["payload"]["subject"], "AAPL")
-        self.assertEqual(observability.events[0]["payload"]["successful_provider_count"], 1)
+        event_types = [event["event_type"] for event in observability.events]
+        self.assertIn("provider.request_succeeded", event_types)
+        self.assertIn("provider.news_fetch_finished", event_types)
+        normalized = next(event for event in observability.events if event["event_type"] == "provider.request_succeeded")
+        self.assertEqual(normalized["source"], "provider")
+        self.assertEqual(normalized["payload"]["provider"], "Stub")
+        self.assertEqual(normalized["payload"]["source_type"], "news.ticker")
+        self.assertEqual(normalized["payload"]["ticker"], "AAPL")
+        aggregate = next(event for event in observability.events if event["event_type"] == "provider.news_fetch_finished")
+        self.assertEqual(aggregate["source"], "news")
+        self.assertEqual(aggregate["payload"]["subject"], "AAPL")
+        self.assertEqual(aggregate["payload"]["successful_provider_count"], 1)
 
     def test_naive_sentiment_analyzer_scores_positive_headlines(self) -> None:
         analyzer = NaiveSentimentAnalyzer()

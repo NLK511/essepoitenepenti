@@ -48,7 +48,7 @@ Provider lifecycle events use one normalized schema:
 - `provider.request_failed`
 - `provider.request_skipped`
 
-Provider event payloads include provider, source_type, ticker/topic when available, as-of/window, replay/live mode, attempt, duration, reason, and run/job/correlation ids when available.
+Provider event payloads include provider, source_type, ticker/topic when available, as-of/window, replay/live mode, attempt, duration, reason, and run/job/correlation ids when available. Normalized provider lifecycle events are canonical for operator failure counts. Legacy aggregate provider events may remain temporarily for compatibility diagnostics, but dashboard/provider-health summaries must not depend on them once normalized events are emitted.
 
 The broker lifecycle path records at least:
 - `broker.order_submit_started`
