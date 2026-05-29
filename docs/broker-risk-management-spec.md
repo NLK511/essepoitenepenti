@@ -26,7 +26,7 @@ Before submitting a new broker order, the app must evaluate whether trading is a
 The risk manager blocks new submissions when any of these are true:
 
 1. The manual kill switch is active.
-2. The projected number of open/submitted broker positions would exceed the configured maximum.
+2. The projected number of active broker positions would exceed the configured maximum. Active app-owned positions include `submitted`, `open`, and `closing`; `closing` remains exposure until broker fill/reconciliation confirms closure.
 3. The projected open notional exposure would exceed the configured maximum.
 4. The projected single-position notional would exceed the configured maximum.
 5. A ticker already has an open/submitted broker position and same-ticker duplicates are disabled.
@@ -64,8 +64,8 @@ The risk dashboard must expose:
 - today's realized P&L
 - today's win/loss counts
 - consecutive broker losses today
-- open/submitted position count
-- open/submitted notional estimate
+- active position count (`submitted`, `open`, and pending-close `closing`)
+- active notional estimate
 - configured limits
 
 Open notional estimate uses position entry average price when known, otherwise falls back to the intended order notional from the broker order lifecycle record when available in the position payload. If a reliable notional cannot be inferred, it contributes zero to v1 notional exposure and remains visible as a limitation.

@@ -52,6 +52,8 @@ Given a `BrokerOrderExecution` and the latest Alpaca order payload:
 6. If both exit legs appear filled, position status is `needs_review`.
 7. If a terminal broker failure occurs before entry, position status is `error` or `canceled` depending on broker status.
 8. If steering or an operator submits an explicit close request and the broker accepts it, the local position is marked `closing` immediately. This is an audit/lifecycle marker only; it does not resolve the trade as `win` or `loss` until broker fill/reconciliation evidence confirms the exit.
+9. `closing` remains active market exposure for broker-risk counts until fill/reconciliation evidence confirms the position is closed. Risk limits must include `submitted`, `open`, and `closing` app positions.
+10. A rejected/failed close response must not move the local lifecycle to `closing`; the raw response should remain observable through broker/observability records.
 
 ## P&L rules
 

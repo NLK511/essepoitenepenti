@@ -1158,6 +1158,58 @@ class OrderExecutionTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_close_position_rejected_response_does_not_mark_position_closing(self) -> None:
+        session = create_session()
+        try:
+            settings = SettingsRepository(session)
+            executions = BrokerOrderExecutionRepository(session)
+            positions = BrokerPositionRepository(session)
+            order = executions.create(
+                BrokerOrderExecution(
+                    recommendation_plan_id=1,
+                    recommendation_plan_ticker="AAPL",
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    quantity=10,
+                    status="filled",
+                    broker_order_id="entry-order-1",
+                )
+            )
+            position = positions.create(
+                BrokerPosition(
+                    broker_order_execution_id=order.id or 0,
+                    recommendation_plan_id=1,
+                    recommendation_plan_ticker="AAPL",
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    quantity=10,
+                    current_quantity=10,
+                    status="open",
+                    entry_order_id="entry-order-1",
+                    entry_avg_price=100.0,
+                )
+            )
+
+            class RejectedCloseClient(StubAlpacaClient):
+                def close_position(self, symbol: str) -> AlpacaOrderSubmissionResult:
+                    self.close_requests.append(symbol)
+                    return AlpacaOrderSubmissionResult(status_code=200, payload={"symbol": symbol, "status": "rejected", "reason": "no close accepted"})
+
+            client = RejectedCloseClient()
+            service = OrderExecutionService(settings=settings, executions=executions, positions=positions, client=client)
+
+            service.close_position("AAPL")
+
+            updated = positions.get(position.id or 0)
+            self.assertEqual(updated.status, "open")
+            self.assertIsNone(updated.exit_reason)
+            self.assertEqual(client.close_requests, ["AAPL"])
+        finally:
+            session.close()
+
     def test_alpaca_paper_client_supports_submit_get_cancel_and_close_position(self) -> None:
         responses = [
             FakeHttpxResponse(200, {"id": "alpaca-order-1", "status": "accepted"}),

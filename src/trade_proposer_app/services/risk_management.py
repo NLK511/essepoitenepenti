@@ -11,7 +11,7 @@ from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.settings_mutations import SettingsMutationService
 
-OPEN_STATUSES = {BrokerPositionStatus.SUBMITTED.value, BrokerPositionStatus.OPEN.value}
+OPEN_STATUSES = {BrokerPositionStatus.SUBMITTED.value, BrokerPositionStatus.OPEN.value, BrokerPositionStatus.CLOSING.value}
 CLOSED_STATUSES = BROKER_RESOLVED_POSITION_STATUSES
 
 

@@ -334,13 +334,22 @@ class OrderExecutionService:
             payload={"ticker": ticker},
         )
         result = client.close_position(ticker.upper())
-        updated_position = self._mark_position_close_submitted(ticker=ticker, result=result)
+        updated_position = self._mark_position_close_submitted(ticker=ticker, result=result) if self._close_response_accepted(result) else None
         self._record_observability_event(
             event_type="broker.position_close_finished",
             message="Broker position close finished",
             payload={"ticker": ticker, "status": result.broker_status, "broker_order_id": result.broker_order_id, "broker_position_id": updated_position.id if updated_position else None},
         )
         return result
+
+    @staticmethod
+    def _close_response_accepted(result: AlpacaOrderSubmissionResult) -> bool:
+        if result.status_code < 200 or result.status_code >= 300:
+            return False
+        status = str(result.broker_status or "").strip().lower()
+        if not status:
+            return True
+        return status in {"accepted", "submitted", "queued", "pending_new", "new", "partially_filled", "filled", "closed", "done_for_day"}
 
     def _mark_position_close_submitted(self, *, ticker: str, result: AlpacaOrderSubmissionResult) -> BrokerPosition | None:
         if self.positions is None:

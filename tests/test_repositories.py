@@ -1358,6 +1358,37 @@ class RepositoryTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_risk_manager_counts_closing_positions_as_active_exposure(self) -> None:
+        session = create_session()
+        try:
+            BrokerPositionRepository(session).create(
+                BrokerPosition(
+                    broker_order_execution_id=1,
+                    recommendation_plan_id=1,
+                    recommendation_plan_ticker="AAPL",
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    quantity=2,
+                    current_quantity=2,
+                    status="closing",
+                    entry_avg_price=100.0,
+                )
+            )
+
+            assessment = BrokerRiskManager(SettingsRepository(session), BrokerPositionRepository(session)).assess(
+                TradeCandidate(ticker="MSFT", notional_amount=50.0)
+            )
+
+            self.assertEqual(assessment.metrics["app_open_position_count"], 1)
+            self.assertEqual(assessment.metrics["open_position_count"], 1)
+            self.assertEqual(assessment.metrics["open_notional_usd"], 200.0)
+            self.assertEqual(assessment.metrics["projected_open_position_count"], 2)
+            self.assertEqual(assessment.metrics["projected_open_notional_usd"], 250.0)
+            self.assertEqual(assessment.metrics["open_ticker_counts"]["AAPL"], 1)
+        finally:
+            session.close()
+
     def test_risk_manager_includes_live_broker_snapshot_and_buying_power(self) -> None:
         session = create_session()
         try:

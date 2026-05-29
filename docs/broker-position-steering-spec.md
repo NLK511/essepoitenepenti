@@ -249,6 +249,7 @@ Safety constraints:
 - never close if the position is already closing or has an active market/exit order that would duplicate the close
 - persist the close decision before submitting the broker mutation
 - when the broker accepts a close request, immediately mark the local position lifecycle as `closing` with the raw close response and close order id if available; final win/loss/P&L still comes from broker fill/reconciliation evidence
+- accepted close responses are 2xx broker responses whose status is absent or one of `accepted`, `submitted`, `queued`, `pending_new`, `new`, `partially_filled`, `filled`, `closed`, or `done_for_day`; rejected/failed/canceled/expired responses must not move the local lifecycle to `closing`
 - in dry-run, record the proposed close without broker mutation
 
 Tunable knobs:

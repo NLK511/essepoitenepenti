@@ -39,6 +39,7 @@ The canonical model keeps the current risk-assessment contract:
 - `config` carries the effective risk settings that produced the state.
 - If a candidate is provided and a live broker account snapshot includes buying power, risk blocks submission when candidate notional exceeds buying power.
 - If live broker positions or open orders are available, they are added to the app-owned exposure counters so risk does not undercount broker-side exposure.
+- App-owned `closing` positions still count as active exposure until broker fill/reconciliation evidence confirms closure; risk metrics must not drop them merely because a close request was submitted.
 - Live broker snapshot failures are surfaced as metrics warnings; they do not silently look equivalent to healthy broker reconciliation.
 
 ## Compatibility
