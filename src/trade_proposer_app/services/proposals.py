@@ -317,142 +317,14 @@ class ProposalService:
             for key in context
             if key.startswith("context_tag_")
         }
-        summary_section = {
-            "text": summary_text,
-            "method": summary_method,
-            "backend": context.get("summary_backend"),
-            "model": context.get("summary_model"),
-            "runtime_seconds": context.get("summary_runtime_seconds"),
-            "metadata": context.get("summary_metadata", {}),
-            "digest": context.get("news_digest", ""),
-            "error": summary_error,
-            "llm_error": context.get("llm_error"),
-        }
-        news_section = {
-            "digest": context.get("news_digest", ""),
-            "items": news_items,
-            "item_count": context.get("news_item_count", 0),
-            "point_count": context.get("news_point_count", 0),
-            "feeds_used": context.get("news_feeds_used", []),
-            "feed_errors": context.get("news_feed_errors", []),
-            "query_diagnostics": context.get("news_query_diagnostics", {}),
-            "source_count": context.get("source_count", 0),
-            "context_count": context.get("context_count", 0),
-            "sentiment": {
-                "score": context.get("news_sentiment_score", 0.0),
-                "volatility": context.get("sentiment_volatility", 0.0),
-                "polarity_trend": context.get("polarity_trend", 0.0),
-                "sources": context.get("sentiment_sources") or [],
-            },
-        }
+        summary_section = self._analysis_summary_section(context, summary_text=summary_text, summary_method=summary_method, summary_error=summary_error)
+        news_section = self._analysis_news_section(context, news_items=news_items)
         market_intelligence_section = context.get("market_intelligence", {})
-        sentiment_section = {
-            "score": context.get("sentiment_score"),
-            "label": context.get("sentiment_label"),
-            "enhanced": {
-                "score": context.get("enhanced_sentiment_score"),
-                "label": context.get("enhanced_sentiment_label"),
-                "components": context.get("enhanced_sentiment_components", {}),
-            },
-            "macro": {
-                "source": context.get("macro_snapshot_source", "computed"),
-                "snapshot_id": context.get("macro_snapshot_id"),
-                "subject_key": context.get("macro_snapshot_subject_key", "global_macro"),
-                "subject_label": context.get("macro_snapshot_subject_label", "Global Macro"),
-                "score": self._macro_context_score(context),
-                "label": self._macro_context_label(context),
-                "coverage_insights": context.get("macro_coverage_insights", []),
-                "coverage": context.get("macro_snapshot_coverage", {}),
-                "drivers": context.get("macro_snapshot_drivers", []),
-                "context_snapshot_id": context.get("macro_context_snapshot_id"),
-                "context_summary": context.get("macro_context_summary"),
-                "context_status": context.get("macro_context_status"),
-                "context_saliency_score": context.get("macro_context_saliency_score", 0.0),
-                "context_confidence_percent": context.get("macro_context_confidence_percent", 0.0),
-                "context_regime_tags": context.get("macro_context_regime_tags", []),
-                "context_lifecycle": context.get("macro_context_lifecycle", {}),
-                "context_contradictory_event_labels": context.get("macro_context_contradictory_event_labels", []),
-                "context_events": context.get("macro_context_events") or context.get("macro_context_active_themes") or [],
-                "source_breakdown": context.get("macro_snapshot_source_breakdown", {
-                    "news": {"score": context.get("macro_news_sentiment_score", 0.0), "item_count": context.get("macro_news_item_count", 0)},
-                    "social": {"score": context.get("macro_social_sentiment_score", 0.0), "item_count": context.get("macro_social_item_count", 0)},
-                }),
-            },
-            "industry": {
-                "source": context.get("industry_snapshot_source", "computed"),
-                "snapshot_id": context.get("industry_snapshot_id"),
-                "subject_key": context.get("industry_snapshot_subject_key"),
-                "subject_label": context.get("industry_snapshot_subject_label", context.get("ticker_profile", {}).get("industry", "")),
-                "score": self._industry_context_score(context),
-                "label": self._industry_context_label(context),
-                "coverage_insights": context.get("industry_coverage_insights", []),
-                "coverage": context.get("industry_snapshot_coverage", {}),
-                "drivers": context.get("industry_snapshot_drivers", []),
-                "context_snapshot_id": context.get("industry_context_snapshot_id"),
-                "context_summary": context.get("industry_context_summary"),
-                "context_status": context.get("industry_context_status"),
-                "context_saliency_score": context.get("industry_context_saliency_score", 0.0),
-                "context_confidence_percent": context.get("industry_context_confidence_percent", 0.0),
-                "context_regime_tags": context.get("industry_context_regime_tags", []),
-                "context_lifecycle": context.get("industry_context_lifecycle", {}),
-                "context_contradictory_event_labels": context.get("industry_context_contradictory_event_labels", []),
-                "context_events": context.get("industry_context_events") or context.get("industry_context_active_drivers") or [],
-                "industry": context.get("ticker_profile", {}).get("industry", ""),
-                "source_breakdown": context.get("industry_snapshot_source_breakdown", {
-                    "news": {"score": context.get("industry_news_sentiment_score", 0.0), "item_count": context.get("industry_news_item_count", 0)},
-                    "social": {"score": context.get("industry_social_sentiment_score", 0.0), "item_count": context.get("industry_social_item_count", 0)},
-                }),
-            },
-            "ticker": {
-                "source": "live",
-                "score": context.get("ticker_sentiment_score", context.get("sentiment_score")),
-                "label": context.get("ticker_sentiment_label", context.get("sentiment_label")),
-                "coverage_insights": context.get("social_coverage_insights", []),
-                "source_breakdown": {
-                    "news": {"score": context.get("news_sentiment_score", 0.0), "item_count": context.get("news_item_count", 0)},
-                    "social": {"score": context.get("social_sentiment_score", 0.0), "item_count": context.get("social_item_count", len(context.get("social_items", [])))},
-                },
-            },
-            "overall": {
-                "score": context.get("enhanced_sentiment_score", context.get("sentiment_score")),
-                "label": context.get("enhanced_sentiment_label", context.get("sentiment_label")),
-                "weights": {"macro": 0.2, "industry": 0.3, "ticker": 0.5, "news": 0.55, "social_max": 0.45},
-                "divergence_signals": self._build_sentiment_divergence_signals(context),
-            },
-            "keyword_hits": context.get("sentiment_keyword_hits", 0),
-            "coverage_insights": context.get("sentiment_coverage_insights", []),
-        }
-        signals_section = {
-            "version": "0.1",
-            "items": context.get("signal_items", []),
-            "feeds_used": context.get("signal_feeds_used", []),
-            "feed_errors": context.get("signal_feed_errors", []),
-            "coverage": context.get("signal_coverage", {}),
-            "query_diagnostics": context.get("signal_query_diagnostics", {}),
-        }
-        social_section = {
-            "provider": "nitter",
-            "enabled": bool(context.get("social_items") or context.get("signal_query_diagnostics")),
-            "items_fetched": len(context.get("social_items", [])),
-            "top_items": context.get("social_items", [])[:5],
-            "query_diagnostics": context.get("signal_query_diagnostics", {}),
-        }
-        diagnostics_section = {
-            "problems": context.get("problems", []),
-            "news_feed_errors": context.get("news_feed_errors", []),
-            "news_query_diagnostics": context.get("news_query_diagnostics", {}),
-            "signal_feed_errors": context.get("signal_feed_errors", []),
-            "summary_error": summary_error,
-            "llm_error": context.get("llm_error"),
-        }
-        entities_section = {
-            "ticker": ticker,
-            "company_aliases": context.get("ticker_profile", {}).get("aliases", []),
-            "sector": context.get("ticker_profile", {}).get("sector", ""),
-            "industry": context.get("ticker_profile", {}).get("industry", ""),
-            "themes": context.get("ticker_profile", {}).get("themes", []),
-            "matched_keywords": context.get("signal_query_diagnostics", {}),
-        }
+        sentiment_section = self._analysis_sentiment_section(context)
+        signals_section = self._analysis_signals_section(context)
+        social_section = self._analysis_social_section(context)
+        diagnostics_section = self._analysis_diagnostics_section(context, summary_error=summary_error)
+        entities_section = self._analysis_entities_section(ticker, context)
         payload = {
             "metadata": {
                 "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
@@ -486,6 +358,165 @@ class ProposalService:
             "diagnostics": diagnostics_section,
         }
         return _sanitize_for_json(payload)
+
+    def _analysis_summary_section(self, context: dict[str, Any], *, summary_text: object, summary_method: object, summary_error: object) -> dict[str, Any]:
+        return {
+            "text": summary_text,
+            "method": summary_method,
+            "backend": context.get("summary_backend"),
+            "model": context.get("summary_model"),
+            "runtime_seconds": context.get("summary_runtime_seconds"),
+            "metadata": context.get("summary_metadata", {}),
+            "digest": context.get("news_digest", ""),
+            "error": summary_error,
+            "llm_error": context.get("llm_error"),
+        }
+
+    def _analysis_news_section(self, context: dict[str, Any], *, news_items: object) -> dict[str, Any]:
+        return {
+            "digest": context.get("news_digest", ""),
+            "items": news_items,
+            "item_count": context.get("news_item_count", 0),
+            "point_count": context.get("news_point_count", 0),
+            "feeds_used": context.get("news_feeds_used", []),
+            "feed_errors": context.get("news_feed_errors", []),
+            "query_diagnostics": context.get("news_query_diagnostics", {}),
+            "source_count": context.get("source_count", 0),
+            "context_count": context.get("context_count", 0),
+            "sentiment": {
+                "score": context.get("news_sentiment_score", 0.0),
+                "volatility": context.get("sentiment_volatility", 0.0),
+                "polarity_trend": context.get("polarity_trend", 0.0),
+                "sources": context.get("sentiment_sources") or [],
+            },
+        }
+
+    def _analysis_sentiment_section(self, context: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "score": context.get("sentiment_score"),
+            "label": context.get("sentiment_label"),
+            "enhanced": {
+                "score": context.get("enhanced_sentiment_score"),
+                "label": context.get("enhanced_sentiment_label"),
+                "components": context.get("enhanced_sentiment_components", {}),
+            },
+            "macro": self._analysis_macro_sentiment_section(context),
+            "industry": self._analysis_industry_sentiment_section(context),
+            "ticker": {
+                "source": "live",
+                "score": context.get("ticker_sentiment_score", context.get("sentiment_score")),
+                "label": context.get("ticker_sentiment_label", context.get("sentiment_label")),
+                "coverage_insights": context.get("social_coverage_insights", []),
+                "source_breakdown": {
+                    "news": {"score": context.get("news_sentiment_score", 0.0), "item_count": context.get("news_item_count", 0)},
+                    "social": {"score": context.get("social_sentiment_score", 0.0), "item_count": context.get("social_item_count", len(context.get("social_items", [])))},
+                },
+            },
+            "overall": {
+                "score": context.get("enhanced_sentiment_score", context.get("sentiment_score")),
+                "label": context.get("enhanced_sentiment_label", context.get("sentiment_label")),
+                "weights": {"macro": 0.2, "industry": 0.3, "ticker": 0.5, "news": 0.55, "social_max": 0.45},
+                "divergence_signals": self._build_sentiment_divergence_signals(context),
+            },
+            "keyword_hits": context.get("sentiment_keyword_hits", 0),
+            "coverage_insights": context.get("sentiment_coverage_insights", []),
+        }
+
+    def _analysis_macro_sentiment_section(self, context: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "source": context.get("macro_snapshot_source", "computed"),
+            "snapshot_id": context.get("macro_snapshot_id"),
+            "subject_key": context.get("macro_snapshot_subject_key", "global_macro"),
+            "subject_label": context.get("macro_snapshot_subject_label", "Global Macro"),
+            "score": self._macro_context_score(context),
+            "label": self._macro_context_label(context),
+            "coverage_insights": context.get("macro_coverage_insights", []),
+            "coverage": context.get("macro_snapshot_coverage", {}),
+            "drivers": context.get("macro_snapshot_drivers", []),
+            "context_snapshot_id": context.get("macro_context_snapshot_id"),
+            "context_summary": context.get("macro_context_summary"),
+            "context_status": context.get("macro_context_status"),
+            "context_saliency_score": context.get("macro_context_saliency_score", 0.0),
+            "context_confidence_percent": context.get("macro_context_confidence_percent", 0.0),
+            "context_regime_tags": context.get("macro_context_regime_tags", []),
+            "context_lifecycle": context.get("macro_context_lifecycle", {}),
+            "context_contradictory_event_labels": context.get("macro_context_contradictory_event_labels", []),
+            "context_events": context.get("macro_context_events") or context.get("macro_context_active_themes") or [],
+            "source_breakdown": context.get("macro_snapshot_source_breakdown", {
+                "news": {"score": context.get("macro_news_sentiment_score", 0.0), "item_count": context.get("macro_news_item_count", 0)},
+                "social": {"score": context.get("macro_social_sentiment_score", 0.0), "item_count": context.get("macro_social_item_count", 0)},
+            }),
+        }
+
+    def _analysis_industry_sentiment_section(self, context: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "source": context.get("industry_snapshot_source", "computed"),
+            "snapshot_id": context.get("industry_snapshot_id"),
+            "subject_key": context.get("industry_snapshot_subject_key"),
+            "subject_label": context.get("industry_snapshot_subject_label", context.get("ticker_profile", {}).get("industry", "")),
+            "score": self._industry_context_score(context),
+            "label": self._industry_context_label(context),
+            "coverage_insights": context.get("industry_coverage_insights", []),
+            "coverage": context.get("industry_snapshot_coverage", {}),
+            "drivers": context.get("industry_snapshot_drivers", []),
+            "context_snapshot_id": context.get("industry_context_snapshot_id"),
+            "context_summary": context.get("industry_context_summary"),
+            "context_status": context.get("industry_context_status"),
+            "context_saliency_score": context.get("industry_context_saliency_score", 0.0),
+            "context_confidence_percent": context.get("industry_context_confidence_percent", 0.0),
+            "context_regime_tags": context.get("industry_context_regime_tags", []),
+            "context_lifecycle": context.get("industry_context_lifecycle", {}),
+            "context_contradictory_event_labels": context.get("industry_context_contradictory_event_labels", []),
+            "context_events": context.get("industry_context_events") or context.get("industry_context_active_drivers") or [],
+            "industry": context.get("ticker_profile", {}).get("industry", ""),
+            "source_breakdown": context.get("industry_snapshot_source_breakdown", {
+                "news": {"score": context.get("industry_news_sentiment_score", 0.0), "item_count": context.get("industry_news_item_count", 0)},
+                "social": {"score": context.get("industry_social_sentiment_score", 0.0), "item_count": context.get("industry_social_item_count", 0)},
+            }),
+        }
+
+    @staticmethod
+    def _analysis_signals_section(context: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "version": "0.1",
+            "items": context.get("signal_items", []),
+            "feeds_used": context.get("signal_feeds_used", []),
+            "feed_errors": context.get("signal_feed_errors", []),
+            "coverage": context.get("signal_coverage", {}),
+            "query_diagnostics": context.get("signal_query_diagnostics", {}),
+        }
+
+    @staticmethod
+    def _analysis_social_section(context: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "provider": "nitter",
+            "enabled": bool(context.get("social_items") or context.get("signal_query_diagnostics")),
+            "items_fetched": len(context.get("social_items", [])),
+            "top_items": context.get("social_items", [])[:5],
+            "query_diagnostics": context.get("signal_query_diagnostics", {}),
+        }
+
+    @staticmethod
+    def _analysis_diagnostics_section(context: dict[str, Any], *, summary_error: object) -> dict[str, Any]:
+        return {
+            "problems": context.get("problems", []),
+            "news_feed_errors": context.get("news_feed_errors", []),
+            "news_query_diagnostics": context.get("news_query_diagnostics", {}),
+            "signal_feed_errors": context.get("signal_feed_errors", []),
+            "summary_error": summary_error,
+            "llm_error": context.get("llm_error"),
+        }
+
+    @staticmethod
+    def _analysis_entities_section(ticker: str, context: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "ticker": ticker,
+            "company_aliases": context.get("ticker_profile", {}).get("aliases", []),
+            "sector": context.get("ticker_profile", {}).get("sector", ""),
+            "industry": context.get("ticker_profile", {}).get("industry", ""),
+            "themes": context.get("ticker_profile", {}).get("themes", []),
+            "matched_keywords": context.get("signal_query_diagnostics", {}),
+        }
 
     def _build_diagnostics(
         self,
