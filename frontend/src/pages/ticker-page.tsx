@@ -39,6 +39,21 @@ function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(parsed);
 }
 
+function marketIntelligenceLabel(plan: { signal_breakdown?: Record<string, unknown>; evidence_summary?: Record<string, unknown> }): string {
+  const signal = plan.signal_breakdown ?? {};
+  const market = typeof signal.market_intelligence === "object" && signal.market_intelligence !== null ? signal.market_intelligence as Record<string, unknown> : null;
+  const coverage = typeof market?.coverage_status === "string" ? market.coverage_status : null;
+  if (coverage === "disabled") {
+    return "disabled";
+  }
+  if (coverage === "replay_unavailable" || coverage === "blocked" || coverage === "degraded") {
+    return coverage.replace(/_/g, " ");
+  }
+  const transmission = typeof plan.evidence_summary?.transmission_summary === "object" && plan.evidence_summary.transmission_summary !== null ? plan.evidence_summary.transmission_summary as Record<string, unknown> : {};
+  const summary = typeof signal.market_intelligence_summary === "string" && signal.market_intelligence_summary ? signal.market_intelligence_summary : typeof transmission.market_intelligence_summary === "string" && transmission.market_intelligence_summary ? transmission.market_intelligence_summary : "—";
+  return summary === "Market intelligence disabled." ? "disabled" : summary;
+}
+
 function TickerPriceChart(props: {
   series: TickerChartSeries;
   selectedPlanIds: number[];
@@ -456,7 +471,7 @@ export function TickerPage() {
                     <div className="cluster"><Badge tone={latestPlan.action === "long" ? "ok" : latestPlan.action === "short" ? "warning" : "neutral"}>{latestPlan.action}</Badge><Badge>{latestPlan.horizon}</Badge><Badge>{typeof latestPlan.signal_breakdown?.setup_family === "string" ? latestPlan.signal_breakdown.setup_family : "setup —"}</Badge><ScoreBadge label="Confidence" value={`${latestPlan.confidence_percent}%`} tone="info" /></div>
                     <div className="helper-text">{latestPlan.thesis_summary || latestPlan.rationale_summary || "No thesis summary stored."}</div>
                     <div className="helper-text">Entry {latestPlan.entry_price_low ?? latestPlan.entry_price_high ?? "—"} · Stop {latestPlan.stop_loss ?? "—"} · Take {latestPlan.take_profit ?? "—"}</div>
-                    <div className="helper-text">Market intelligence {typeof latestPlan.signal_breakdown?.market_intelligence_summary === "string" && latestPlan.signal_breakdown.market_intelligence_summary ? latestPlan.signal_breakdown.market_intelligence_summary : typeof latestPlan.evidence_summary?.transmission_summary?.market_intelligence_summary === "string" && latestPlan.evidence_summary.transmission_summary.market_intelligence_summary ? latestPlan.evidence_summary.transmission_summary.market_intelligence_summary : "—"}</div>
+                    <div className="helper-text">Market intelligence {marketIntelligenceLabel(latestPlan)}</div>
                     <div className="helper-text">Relationships {relationshipSummary(latestPlan ?? {})} · Bias {latestOutcomeBias} · Regime {latestOutcomeRegime}</div>
                     <RecommendationPlanEvaluationSummary plan={latestPlan} />
                     {latestPlan.latest_outcome?.entry_touched === false ? (
@@ -527,7 +542,7 @@ export function TickerPage() {
                           </div>
                         </div>
                         <div className="helper-text">{item.thesis_summary || item.rationale_summary || "No thesis summary stored."}</div>
-                        <div className="helper-text top-gap-small">market intelligence {typeof item.signal_breakdown?.market_intelligence_summary === "string" && item.signal_breakdown.market_intelligence_summary ? item.signal_breakdown.market_intelligence_summary : typeof item.evidence_summary?.transmission_summary?.market_intelligence_summary === "string" && item.evidence_summary.transmission_summary.market_intelligence_summary ? item.evidence_summary.transmission_summary.market_intelligence_summary : "—"}</div>
+                        <div className="helper-text top-gap-small">market intelligence {marketIntelligenceLabel(item)}</div>
                         <div className="helper-text top-gap-small">relationships {relationshipSummary(item)} · entry {item.entry_price_low ?? item.entry_price_high ?? "—"}{item.entry_price_high && item.entry_price_low && item.entry_price_high !== item.entry_price_low ? ` to ${item.entry_price_high}` : ""} · stop {item.stop_loss ?? "—"} · take {item.take_profit ?? "—"}</div>
                         <div className="helper-text">outcome {item.effective_evaluation_source === "broker" ? item.effective_evaluation_detail || "broker evaluation" : item.effective_evaluation_source === "missing" ? item.effective_evaluation_detail || "broker evaluation missing" : item.latest_outcome?.notes || (item.warnings.length > 0 ? `${item.warnings.length} warning(s)` : "—")} · analytics {item.latest_outcome ? `${outcomeBias} · ${outcomeRegime}` : "—"}</div>
                         {item.latest_outcome?.entry_touched === false ? (

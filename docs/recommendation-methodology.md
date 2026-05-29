@@ -155,6 +155,8 @@ The app currently prefers near-real-time free sources first, especially:
 
 NewsAPI remains disabled by default on the free plan.
 
+Market intelligence is also disabled by default unless explicitly configured. Disabled market-intelligence snapshots are absence markers only: they contribute zero confidence and should not be narrated as active supporting/conflicting evidence.
+
 Ticker sentiment is derived from the available article set.
 
 Stored transparency fields include things like:

@@ -37,7 +37,7 @@ A partial `MarketIntelligenceService` now exists. Current behavior is intentiona
 - no canonical market-intelligence snapshot table exists yet
 - no Settings API/UI toggle exists yet
 
-Therefore market intelligence is not yet a production decision-grade input. It is a bounded, disabled-by-default evidence modifier until persistence, provider policy, and operator settings are shipped.
+Therefore market intelligence is not yet a production decision-grade input. It is a bounded, disabled-by-default evidence modifier until persistence, provider policy, and operator settings are shipped. Operator UI must distinguish disabled/unavailable snapshots from active evidence: disabled snapshots can be persisted as absence markers, but they must display as “Market intelligence disabled” and contribute no confidence or narrative strength.
 
 ## Target behavior
 
