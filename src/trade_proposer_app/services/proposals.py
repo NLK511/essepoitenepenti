@@ -16,6 +16,7 @@ from trade_proposer_app.domain.enums import RecommendationDirection, Recommendat
 from trade_proposer_app.domain.models import HistoricalMarketBar, NewsArticle, Recommendation, RunDiagnostics, RunOutput, TechnicalSnapshot
 from trade_proposer_app.services.constants import DEFAULT_CONTEXT_FLAGS
 from trade_proposer_app.services.market_intelligence import MarketIntelligenceService
+from trade_proposer_app.services.payload_utils import DEFAULT_SUMMARY_METHOD, DEFAULT_SUMMARY_TEXT, sanitize_for_json
 from trade_proposer_app.services.retry_utils import bounded_backoff_seconds
 from trade_proposer_app.services.news import (
     NaiveSentimentAnalyzer,
@@ -151,9 +152,6 @@ AGGREGATOR_DEFAULTS = {
     },
 }
 
-DEFAULT_SUMMARY_METHOD = "price_only"
-DEFAULT_SUMMARY_TEXT = "No usable news articles were returned for this run."
-
 WEIGHTS_PATH = Path(__file__).resolve().parent.parent / "data" / "weights.json"
 
 
@@ -162,14 +160,7 @@ class ProposalExecutionError(Exception):
 
 
 def _sanitize_for_json(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: _sanitize_for_json(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_sanitize_for_json(item) for item in value]
-    if isinstance(value, float):
-        if math.isnan(value) or math.isinf(value):
-            return None
-    return value
+    return sanitize_for_json(value)
 
 
 class ProposalService:

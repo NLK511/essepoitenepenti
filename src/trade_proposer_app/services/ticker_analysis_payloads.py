@@ -6,7 +6,7 @@ from typing import Any
 
 from trade_proposer_app.domain.enums import StrategyHorizon
 from trade_proposer_app.domain.models import RunDiagnostics
-from trade_proposer_app.services.proposals import DEFAULT_SUMMARY_METHOD, DEFAULT_SUMMARY_TEXT, _sanitize_for_json
+from trade_proposer_app.services.payload_utils import DEFAULT_SUMMARY_METHOD, DEFAULT_SUMMARY_TEXT, sanitize_for_json
 
 
 class TickerAnalysisPayloadService:
@@ -178,9 +178,9 @@ class TickerAnalysisPayloadService:
             llm_error=context.get("llm_error"),
             raw_output=analysis_json,
             analysis_json=analysis_json,
-            feature_vector_json=json.dumps(_sanitize_for_json(feature_vector), indent=2, sort_keys=True),
-            normalized_feature_vector_json=json.dumps(_sanitize_for_json(normalized_vector), indent=2, sort_keys=True),
-            aggregations_json=json.dumps(_sanitize_for_json(aggregations), indent=2, sort_keys=True),
-            confidence_weights_json=json.dumps(_sanitize_for_json(confidence_weights), indent=2, sort_keys=True),
+            feature_vector_json=json.dumps(sanitize_for_json(feature_vector), indent=2, sort_keys=True),
+            normalized_feature_vector_json=json.dumps(sanitize_for_json(normalized_vector), indent=2, sort_keys=True),
+            aggregations_json=json.dumps(sanitize_for_json(aggregations), indent=2, sort_keys=True),
+            confidence_weights_json=json.dumps(sanitize_for_json(confidence_weights), indent=2, sort_keys=True),
             summary_method=str(context.get("summary_method", DEFAULT_SUMMARY_METHOD)),
         )

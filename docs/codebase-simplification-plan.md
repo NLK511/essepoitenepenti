@@ -21,7 +21,8 @@ Goal: reduce code complexity without changing product behavior, safety rules, da
 
 2. **Legacy proposal compatibility surface**
    - Problem: `ProposalService` is still large and acts as a dependency magnet for price history, payload building, news/context enrichment, and compatibility helpers.
-   - Safe next step: extract shared JSON/payload/news-context helpers without deleting wrappers.
+   - Done now: moved shared summary defaults and JSON sanitization to `payload_utils` while keeping `ProposalService` compatibility exports.
+   - Safe next step: extract price-history and news-context helpers without deleting wrappers.
 
 3. **Macro/industry context duplication**
    - Problem: refresh payload parsing, prompt construction, diagnostics, and quality/warning normalization are similar across macro and industry services.

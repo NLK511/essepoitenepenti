@@ -10,7 +10,8 @@ import pandas as pd
 from trade_proposer_app.domain.enums import RecommendationDirection, RecommendationState, StrategyHorizon
 from trade_proposer_app.domain.models import Recommendation, RunDiagnostics, RunOutput
 from trade_proposer_app.services.market_intelligence import MarketIntelligenceService
-from trade_proposer_app.services.proposals import ProposalExecutionError, ProposalService, _sanitize_for_json
+from trade_proposer_app.services.payload_utils import sanitize_for_json
+from trade_proposer_app.services.proposals import ProposalExecutionError, ProposalService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 from trade_proposer_app.services.ticker_analysis_payloads import TickerAnalysisPayloadService
 from trade_proposer_app.services.ticker_technical_features import TickerTechnicalFeatureService
@@ -101,7 +102,7 @@ class TickerDeepAnalysisService:
                 transmission_analysis=transmission_analysis,
                 horizon=horizon,
             )
-            analysis_json = json.dumps(_sanitize_for_json(analysis), indent=2, sort_keys=True)
+            analysis_json = json.dumps(sanitize_for_json(analysis), indent=2, sort_keys=True)
             diagnostics = self._build_diagnostics(analysis_json, feature_vector, normalized_vector, aggregations, context)
             recommendation = Recommendation(
                 ticker=normalized_ticker,
@@ -140,7 +141,7 @@ class TickerDeepAnalysisService:
             "transmission_analysis": existing_ticker_deep_analysis.get("transmission_analysis", {}),
             "price_history": existing_ticker_deep_analysis.get("price_history", dict(getattr(self.proposal_service, "_last_price_history_fetch_diagnostics", {}) or {})),
         }
-        analysis_json = json.dumps(_sanitize_for_json(analysis_payload), indent=2, sort_keys=True)
+        analysis_json = json.dumps(sanitize_for_json(analysis_payload), indent=2, sort_keys=True)
         diagnostics = diagnostics.model_copy(update={"analysis_json": analysis_json, "raw_output": analysis_json})
         return output.model_copy(update={"diagnostics": diagnostics})
 

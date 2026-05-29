@@ -5,10 +5,9 @@ from typing import Any
 
 import pandas as pd
 
+from trade_proposer_app.services.payload_utils import DEFAULT_SUMMARY_METHOD, DEFAULT_SUMMARY_TEXT
 from trade_proposer_app.services.proposals import (
     AGGREGATOR_DEFAULTS,
-    DEFAULT_SUMMARY_METHOD,
-    DEFAULT_SUMMARY_TEXT,
     FEATURE_COLUMN_MAP,
     MANUAL_FEATURE_RANGES,
     RANGE_COLUMNS,
