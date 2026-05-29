@@ -104,7 +104,7 @@ Typical stored themes:
 Typical stored themes:
 - entry touched, stop hit, target hit
 - fixed-horizon returns
-- near-entry-miss diagnostics for unfilled plans (`entry_miss_distance_percent`, `near_entry_miss`, `direction_worked_without_entry`)
+- simulation-only near-entry-miss diagnostics for unfilled plans (`entry_miss_distance_percent`, `near_entry_miss`, `direction_worked_without_entry`); API summary keys use `simulated_entry_miss_diagnostics` with `entry_miss_diagnostics` kept only as a compatibility alias
 - favorable/adverse excursion
 - realized holding period
 - direction correctness

@@ -394,6 +394,7 @@ export interface RecommendationQualityWindowSummary {
   weakest_count: number;
   family_count: number;
   entry_miss_diagnostics: EntryMissDiagnosticsSummary;
+  simulated_entry_miss_diagnostics?: EntryMissDiagnosticsSummary;
   walk_forward_promotion_recommended: boolean | null;
   walk_forward_average_win_rate_delta: number | null;
   walk_forward_average_expected_value_delta: number | null;
@@ -455,6 +456,7 @@ export interface RecommendationQualityResponse {
   windowed_summaries: RecommendationQualityWindowSummary[];
   calibration: CalibrationSummary;
   entry_miss_diagnostics: EntryMissDiagnosticsSummary;
+  simulated_entry_miss_diagnostics?: EntryMissDiagnosticsSummary;
   baselines: RecommendationBaselineSummary;
   evidence_concentration: RecommendationEvidenceConcentrationSummary;
   setup_family_review: Record<string, unknown>;

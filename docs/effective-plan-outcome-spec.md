@@ -56,6 +56,7 @@ Operator-facing summaries should keep the distinction visible:
 
 - Effective/broker-preferred metrics may use headline names such as `win_rate_percent`, `total_profit`, or `policy_evaluation` only when the endpoint documentation makes the effective source clear.
 - Simulation-only diagnostics must use explicit names such as `simulated_entry_miss_diagnostics` or `simulated_actionability_diagnostics`.
+- Compatibility aliases such as `entry_miss_diagnostics` may remain temporarily for existing clients, but frontend/operator surfaces should read and label the `simulated_*` keys first. Remove aliases only after API consumer inventory confirms no active caller depends on them.
 - Compatibility aliases may keep old keys temporarily, but the explicit `simulated_*` key must be present for new callers.
 - Repository filtering must not apply a small pre-filtered plan limit before semantic filters such as outcome, resolved state, setup family, or evaluated window. The effective repository must fetch enough candidate plans, or push filters into SQL where practical, so narrow cohorts are not hidden behind newer unmatched plans.
 

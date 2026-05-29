@@ -475,6 +475,7 @@ Important fields:
 - wins / losses / open plans
 - average confidence
 - plan history with action, setup family, horizon, run link, latest outcome, and real/simulated resolution source
+- recommendation-quality entry-miss/actionability diagnostics are simulation-only and should be read as setup/entry debugging aids, not broker-preferred P&L evidence
 - price chart from stored 1m bars with entry / stop / take-profit / resolution overlays
 - plan selection toggles so you can hide or show overlays on the chart
 - standard time-window toggle (`1d` / `7d` / `1m` / `3m` / `6m` / `1y` / `all`)
