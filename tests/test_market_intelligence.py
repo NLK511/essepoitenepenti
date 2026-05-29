@@ -12,6 +12,16 @@ from trade_proposer_app.services.market_intelligence import MarketIntelligenceSe
 
 
 class MarketIntelligenceServiceTests(unittest.TestCase):
+    def test_disabled_snapshot_is_not_decision_grade_evidence(self) -> None:
+        service = MarketIntelligenceService()
+        with patch("trade_proposer_app.services.market_intelligence.yf.Ticker", side_effect=AssertionError("disabled market intelligence should not fetch")):
+            snapshot = service.analyze("AAPL", horizon=StrategyHorizon.ONE_WEEK)
+
+        self.assertEqual(snapshot["coverage_status"], "disabled")
+        self.assertEqual(snapshot["freshness_status"], "disabled")
+        self.assertEqual(snapshot["confidence_contribution"]["combined"], 0.0)
+        self.assertEqual(snapshot["conflict_flags"], [])
+
     def test_live_snapshot_combines_event_options_and_analyst_signals(self) -> None:
         service = MarketIntelligenceService(config=MarketIntelligenceServiceConfig(enabled=True))
         ticker_obj = Mock()

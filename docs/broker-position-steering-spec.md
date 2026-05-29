@@ -120,6 +120,20 @@ The steering engine needs a compact state object per broker order/position:
 
 The engine must tolerate missing analysis/news/price fields. Missing evidence should reduce confidence in amendments and may force manual review, but missing news alone must not cancel or amend an order.
 
+### Current evidence read model
+
+Current implementation may read a compact `steering_evidence` payload from the latest plan/signal payload while a fuller persisted read model is still pending. The payload can include:
+
+- `computed_at`
+- `warnings`
+- `market_intelligence_conflict_flags`
+- `actionability`
+- `calibrated_confidence_percent`
+- `analysis_direction`
+- `freshness_status`
+
+Evidence older than one day, explicitly stale, or missing `computed_at` must not trigger live thesis invalidation by itself. Fresh ticker-specific warnings or market-intelligence conflicts may set severe invalidation reason codes. Plan warning strings remain only a compatibility fallback.
+
 ## Decision outputs
 
 Every steering evaluation returns a structured decision:

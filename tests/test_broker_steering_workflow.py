@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -28,18 +28,20 @@ def create_session() -> Session:
     return Session(bind=engine)
 
 
-def _plan(ticker: str = "AAPL", action: str = "long") -> RecommendationPlan:
-    return RecommendationPlan(
-        ticker=ticker,
-        horizon="1w",
-        action=action,
-        confidence_percent=70.0,
-        entry_price_low=100.0,
-        entry_price_high=100.0,
-        stop_loss=95.0,
-        take_profit=110.0,
-        holding_period_days=5,
-    )
+def _plan(ticker: str = "AAPL", action: str = "long", **overrides) -> RecommendationPlan:
+    values = {
+        "ticker": ticker,
+        "horizon": "1w",
+        "action": action,
+        "confidence_percent": 70.0,
+        "entry_price_low": 100.0,
+        "entry_price_high": 100.0,
+        "stop_loss": 95.0,
+        "take_profit": 110.0,
+        "holding_period_days": 5,
+    }
+    values.update(overrides)
+    return RecommendationPlan(**values)
 
 
 def _set_steering_defaults(settings: SettingsRepository, *, enabled: bool, dry_run: bool) -> None:
@@ -227,6 +229,81 @@ def test_state_builder_keeps_active_orders_even_when_history_exceeds_paging_limi
     assert len(states) == 1
     assert states[0].broker_order_id == active_order.id
     assert states[0].has_pending_order is True
+
+
+def test_state_builder_uses_fresh_steering_evidence_for_severe_invalidation() -> None:
+    session = create_session()
+    plans = RecommendationPlanRepository(session)
+    positions = BrokerPositionRepository(session)
+    plan = plans.create_plan(
+        _plan(
+            signal_breakdown={
+                "steering_evidence": {
+                    "computed_at": NOW.isoformat(),
+                    "warnings": ["severe_negative_news"],
+                    "market_intelligence_conflict_flags": [],
+                    "freshness_status": "fresh",
+                }
+            }
+        )
+    )
+    positions.create(
+        BrokerPosition(
+            broker_order_execution_id=1,
+            recommendation_plan_id=plan.id or 1,
+            recommendation_plan_ticker="AAPL",
+            ticker="AAPL",
+            action="long",
+            side="buy",
+            quantity=1,
+            current_quantity=1,
+            status="open",
+            entry_order_id="order-1",
+            entry_avg_price=100.0,
+            exit_order_id=None,
+        )
+    )
+
+    state = BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 94.0).list_states(now=NOW)[0]
+
+    assert state.severe_negative_news is True
+
+
+def test_state_builder_ignores_stale_steering_evidence_for_severe_invalidation() -> None:
+    session = create_session()
+    plans = RecommendationPlanRepository(session)
+    positions = BrokerPositionRepository(session)
+    plan = plans.create_plan(
+        _plan(
+            signal_breakdown={
+                "steering_evidence": {
+                    "computed_at": (NOW - timedelta(days=3)).isoformat(),
+                    "warnings": ["severe_negative_news"],
+                    "freshness_status": "fresh",
+                }
+            }
+        )
+    )
+    positions.create(
+        BrokerPosition(
+            broker_order_execution_id=1,
+            recommendation_plan_id=plan.id or 1,
+            recommendation_plan_ticker="AAPL",
+            ticker="AAPL",
+            action="long",
+            side="buy",
+            quantity=1,
+            current_quantity=1,
+            status="open",
+            entry_order_id="order-1",
+            entry_avg_price=100.0,
+            exit_order_id=None,
+        )
+    )
+
+    state = BrokerSteeringStateBuilder(session, price_lookup=lambda _ticker: 94.0).list_states(now=NOW)[0]
+
+    assert state.severe_negative_news is False
 
 
 def test_state_builder_marks_unknown_direction_plans_for_manual_review() -> None:

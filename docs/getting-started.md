@@ -230,13 +230,15 @@ python3 -m compileall src tests alembic
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-Optional Postgres migration test:
+Optional Postgres validation:
 
 ```bash
 docker compose up -d postgres
 POSTGRES_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/trade_proposer_test \
-  .venv/bin/python -m unittest tests.test_postgres_integration -v
+  .venv/bin/python scripts/check_postgres_validation.py
 ```
+
+The script upgrades the configured Postgres test database to Alembic head and runs `tests/test_postgres_integration.py`. If `POSTGRES_TEST_DATABASE_URL` is not set, it exits successfully with an explicit skip message.
 
 Frontend:
 

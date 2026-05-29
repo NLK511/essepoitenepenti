@@ -189,7 +189,6 @@ class SettingsDomainService:
         return cleaned or None
 
     @staticmethod
-    @staticmethod
     def _optional_bool(value: str | None, default: bool = False) -> bool:
         if value is None:
             return default

@@ -118,7 +118,7 @@ class BrokerSteeringStateBuilder:
             calibrated_confidence_percent=self._calibrated_confidence(plan),
             actionability=plan.action,
             analysis_direction=plan.action if direction in {"long", "short"} else None,
-            severe_negative_news=self._has_severe_negative_news(plan),
+            severe_negative_news=self._has_severe_negative_news(plan, now=now),
             price_chase_percent=None,
             volatility_percent=None,
             has_pending_order=order is not None and not is_position,
@@ -152,13 +152,39 @@ class BrokerSteeringStateBuilder:
             return False
         return str(latest.drift_severity or "").strip().lower() == "ok"
 
-    @staticmethod
-    def _has_severe_negative_news(plan: RecommendationPlan) -> bool:
+    @classmethod
+    def _has_severe_negative_news(cls, plan: RecommendationPlan, *, now: datetime | None) -> bool:
+        evidence = plan.signal_breakdown.get("steering_evidence") if hasattr(plan.signal_breakdown, "get") else None
+        if isinstance(evidence, dict) and cls._fresh_steering_evidence(evidence, now=now):
+            warnings = evidence.get("warnings") if isinstance(evidence.get("warnings"), list) else []
+            conflict_flags = evidence.get("market_intelligence_conflict_flags") if isinstance(evidence.get("market_intelligence_conflict_flags"), list) else []
+            for value in [*warnings, *conflict_flags]:
+                normalized = str(value or "").strip().lower().replace(" ", "_")
+                if "severe_negative_news" in normalized or "severe_negative_event" in normalized or "thesis_invalidated" in normalized:
+                    return True
         for warning in plan.warnings:
             normalized = str(warning or "").strip().lower().replace(" ", "_")
             if "severe_negative_news" in normalized or "severe_negative_event" in normalized:
                 return True
         return False
+
+    @staticmethod
+    def _fresh_steering_evidence(evidence: dict[str, object], *, now: datetime | None) -> bool:
+        if str(evidence.get("freshness_status") or "").strip().lower() == "stale":
+            return False
+        raw_computed_at = evidence.get("computed_at")
+        if not raw_computed_at:
+            return False
+        try:
+            computed_at = datetime.fromisoformat(str(raw_computed_at).replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        if computed_at.tzinfo is None:
+            computed_at = computed_at.replace(tzinfo=timezone.utc)
+        reference = now or datetime.now(timezone.utc)
+        if reference.tzinfo is None:
+            reference = reference.replace(tzinfo=timezone.utc)
+        return computed_at.astimezone(timezone.utc) >= reference.astimezone(timezone.utc) - timedelta(days=1)
 
     @staticmethod
     def _calibrated_confidence(plan: RecommendationPlan) -> float | None:

@@ -28,13 +28,16 @@ The current analysis path already supports:
 - calibration review
 - diagnostic warnings and fallback behavior when inputs are missing
 
-What it does **not** yet have is a dedicated market-intelligence layer for:
-- scheduled events
-- event-driven catalyst timing
-- options pressure / implied-volatility context
-- analyst sentiment and estimate/revision context
+A partial `MarketIntelligenceService` now exists. Current behavior is intentionally experimental:
+- it is disabled by default
+- disabled snapshots are marked `coverage_status=disabled` and contribute `0.0` confidence
+- enabled snapshots use yfinance-style data to infer limited event/options/analyst context
+- ticker deep analysis can carry the payload for review
+- replay/as-of historical snapshots are unavailable without stored vendor snapshots and must not fetch live data for old dates
+- no canonical market-intelligence snapshot table exists yet
+- no Settings API/UI toggle exists yet
 
-So today those signals are either absent or only weakly implied by news/context.
+Therefore market intelligence is not yet a production decision-grade input. It is a bounded, disabled-by-default evidence modifier until persistence, provider policy, and operator settings are shipped.
 
 ## Target behavior
 
