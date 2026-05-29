@@ -15,6 +15,7 @@ import yfinance as yf
 from trade_proposer_app.domain.enums import RecommendationDirection, RecommendationState
 from trade_proposer_app.domain.models import HistoricalMarketBar, NewsArticle, Recommendation, RunDiagnostics, RunOutput, TechnicalSnapshot
 from trade_proposer_app.services.constants import DEFAULT_CONTEXT_FLAGS
+from trade_proposer_app.services.context_payload_utils import industry_snapshot_context_fields, macro_snapshot_context_fields
 from trade_proposer_app.services.market_intelligence import MarketIntelligenceService
 from trade_proposer_app.services.payload_utils import DEFAULT_SUMMARY_METHOD, DEFAULT_SUMMARY_TEXT, sanitize_for_json
 from trade_proposer_app.services.price_history_fetcher import PriceHistoryFetcher, latest_bar_time_iso
@@ -1170,84 +1171,10 @@ class ProposalService:
         )
         macro_snapshot = self.snapshot_resolver.resolve_macro_snapshot(as_of=as_of) if self.snapshot_resolver is not None else None
         if macro_snapshot is not None:
-            hierarchical.update(
-                {
-                    "macro_sentiment_score": float(macro_snapshot.get("score", 0.0) or 0.0),
-                    "macro_sentiment_label": macro_snapshot.get("label", "NEUTRAL"),
-                    "macro_context_score": float(macro_snapshot.get("score", 0.0) or 0.0),
-                    "macro_context_label": macro_snapshot.get("label", "NEUTRAL"),
-                    "macro_snapshot_id": macro_snapshot.get("snapshot_id"),
-                    "macro_snapshot_subject_key": macro_snapshot.get("subject_key"),
-                    "macro_snapshot_subject_label": macro_snapshot.get("subject_label"),
-                    "macro_snapshot_source": macro_snapshot.get("source", "snapshot"),
-                    "macro_snapshot_coverage": macro_snapshot.get("coverage", {}),
-                    "macro_snapshot_source_breakdown": macro_snapshot.get("source_breakdown", {}),
-                    "macro_snapshot_drivers": macro_snapshot.get("drivers", []),
-                    "macro_context_snapshot_id": macro_snapshot.get("context_snapshot_id"),
-                    "macro_context_status": macro_snapshot.get("context_status"),
-                    "macro_context_summary": macro_snapshot.get("context_summary"),
-                    "macro_context_saliency_score": float(macro_snapshot.get("context_saliency_score", 0.0) or 0.0),
-                    "macro_context_confidence_percent": float(macro_snapshot.get("context_confidence_percent", 0.0) or 0.0),
-                    "macro_context_quality_score": float(macro_snapshot.get("context_quality_score", 0.0) or 0.0),
-                    "macro_context_quality_status": macro_snapshot.get("context_quality_status"),
-                    "macro_context_quality_flags": macro_snapshot.get("context_quality_flags", {}),
-                    "macro_context_quality_notes": macro_snapshot.get("context_quality_notes", []),
-                    "macro_context_events": macro_snapshot.get("context_active_events", []),
-                    "macro_context_active_themes": macro_snapshot.get("context_active_themes", []),
-                    "macro_context_regime_tags": macro_snapshot.get("context_regime_tags", []),
-                    "macro_context_lifecycle": macro_snapshot.get("context_lifecycle", {}),
-                    "macro_context_contradictory_event_labels": macro_snapshot.get("context_contradictory_event_labels", []),
-                    "macro_context_source_breakdown": macro_snapshot.get("context_source_breakdown", {}),
-                    "macro_context_metadata": macro_snapshot.get("context_metadata", {}),
-                    "macro_coverage_insights": list(
-                        dict.fromkeys(
-                            hierarchical.get("macro_coverage_insights", [])
-                            + list((macro_snapshot.get("diagnostics", {}) or {}).get("warnings", []))
-                        )
-                    ),
-                }
-            )
+            hierarchical.update(macro_snapshot_context_fields(macro_snapshot, hierarchical.get("macro_coverage_insights", [])))
         industry_snapshot = self.snapshot_resolver.resolve_industry_snapshot(ticker, as_of=as_of) if self.snapshot_resolver is not None else None
         if industry_snapshot is not None:
-            hierarchical.update(
-                {
-                    "industry_sentiment_score": float(industry_snapshot.get("score", 0.0) or 0.0),
-                    "industry_sentiment_label": industry_snapshot.get("label", "NEUTRAL"),
-                    "industry_context_score": float(industry_snapshot.get("score", 0.0) or 0.0),
-                    "industry_context_label": industry_snapshot.get("label", "NEUTRAL"),
-                    "industry_snapshot_id": industry_snapshot.get("snapshot_id"),
-                    "industry_snapshot_subject_key": industry_snapshot.get("subject_key"),
-                    "industry_snapshot_subject_label": industry_snapshot.get("subject_label"),
-                    "industry_snapshot_source": industry_snapshot.get("source", "snapshot"),
-                    "industry_snapshot_coverage": industry_snapshot.get("coverage", {}),
-                    "industry_snapshot_source_breakdown": industry_snapshot.get("source_breakdown", {}),
-                    "industry_snapshot_drivers": industry_snapshot.get("drivers", []),
-                    "industry_context_snapshot_id": industry_snapshot.get("context_snapshot_id"),
-                    "industry_context_status": industry_snapshot.get("context_status"),
-                    "industry_context_summary": industry_snapshot.get("context_summary"),
-                    "industry_context_saliency_score": float(industry_snapshot.get("context_saliency_score", 0.0) or 0.0),
-                    "industry_context_confidence_percent": float(industry_snapshot.get("context_confidence_percent", 0.0) or 0.0),
-                    "industry_context_quality_score": float(industry_snapshot.get("context_quality_score", 0.0) or 0.0),
-                    "industry_context_quality_status": industry_snapshot.get("context_quality_status"),
-                    "industry_context_quality_flags": industry_snapshot.get("context_quality_flags", {}),
-                    "industry_context_quality_notes": industry_snapshot.get("context_quality_notes", []),
-                    "industry_context_evidence_state": industry_snapshot.get("context_evidence_state"),
-                    "industry_context_coverage_state": industry_snapshot.get("context_coverage_state"),
-                    "industry_context_events": industry_snapshot.get("context_active_events", []),
-                    "industry_context_active_drivers": industry_snapshot.get("context_active_drivers", []),
-                    "industry_context_regime_tags": industry_snapshot.get("context_regime_tags", []),
-                    "industry_context_lifecycle": industry_snapshot.get("context_lifecycle", {}),
-                    "industry_context_contradictory_event_labels": industry_snapshot.get("context_contradictory_event_labels", []),
-                    "industry_context_source_breakdown": industry_snapshot.get("context_source_breakdown", {}),
-                    "industry_context_metadata": industry_snapshot.get("context_metadata", {}),
-                    "industry_coverage_insights": list(
-                        dict.fromkeys(
-                            hierarchical.get("industry_coverage_insights", [])
-                            + list((industry_snapshot.get("diagnostics", {}) or {}).get("warnings", []))
-                        )
-                    ),
-                }
-            )
+            hierarchical.update(industry_snapshot_context_fields(industry_snapshot, hierarchical.get("industry_coverage_insights", [])))
         ticker_sentiment_score = float(hierarchical.get("ticker_sentiment_score", 0.0) or 0.0)
         ticker_sentiment_label = hierarchical.get("ticker_sentiment_label")
         overall_base_score = self._clamp_value(

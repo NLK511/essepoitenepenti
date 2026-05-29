@@ -27,7 +27,8 @@ Goal: reduce code complexity without changing product behavior, safety rules, da
 
 3. **Macro/industry context duplication**
    - Problem: refresh payload parsing, prompt construction, diagnostics, and quality/warning normalization are similar across macro and industry services.
-   - Safe next step: extract common context payload utilities.
+   - Done now: extracted proposal-time macro/industry snapshot payload mapping into `context_payload_utils`.
+   - Safe next step: extract common refresh/prompt diagnostics only after a focused spec pass.
 
 4. **Broker steering execution handlers**
    - Problem: workflow execution had multiple broker mutation branches in one method.
