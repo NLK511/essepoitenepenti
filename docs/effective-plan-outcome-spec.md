@@ -63,6 +63,8 @@ Operator-facing summaries should keep the distinction visible:
 
 The API exposes the canonical view at `/api/effective-plan-outcomes`. Existing `/api/recommendation-outcomes` analytics endpoints are kept as compatibility aliases for effective outcomes; raw simulation access should be added explicitly if needed rather than overloading those endpoints again.
 
+When callers pass `evaluated_after` / `evaluated_before`, filtering and ordering are based on the effective outcome `evaluated_at` timestamp, not plan creation time. Broker-resolved rows use broker exit/update time, simulated rows use simulation `evaluated_at`, and plan fallbacks use plan `computed_at` only when no broker/simulation outcome exists.
+
 ## Regression expectations
 Tests must cover:
 

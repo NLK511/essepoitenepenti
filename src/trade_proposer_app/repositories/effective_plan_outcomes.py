@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import KeyLabelDetail, RecommendationPlanOutcome
@@ -45,11 +45,18 @@ class EffectivePlanOutcomeRepository:
             query = query.where(RecommendationPlanRecord.id == recommendation_plan_id)
         if run_id is not None:
             query = query.where(RecommendationPlanRecord.run_id == run_id)
+        candidate_ids: set[int] = set()
+        if evaluated_after is not None or evaluated_before is not None:
+            candidate_ids = self._candidate_plan_ids_for_evaluated_window(evaluated_after=evaluated_after, evaluated_before=evaluated_before)
+            if not candidate_ids:
+                return []
+            query = query.where(RecommendationPlanRecord.id.in_(candidate_ids))
         results: list[RecommendationPlanOutcome] = []
+        window_filtered = evaluated_after is not None or evaluated_before is not None
         batch_size = max(limit * 5, limit, 50)
-        max_scanned = max(limit * 100, batch_size)
+        max_scanned = max(len(candidate_ids) if window_filtered else 0, limit * 100, batch_size)
         offset = 0
-        while len(results) < limit and offset < max_scanned:
+        while (window_filtered or len(results) < limit) and offset < max_scanned:
             plans = self.session.scalars(
                 query.order_by(RecommendationPlanRecord.computed_at.desc()).offset(offset).limit(batch_size)
             ).all()
@@ -81,10 +88,43 @@ class EffectivePlanOutcomeRepository:
                 if evaluated_before is not None and self._normalize_datetime(item.evaluated_at) > self._normalize_datetime(evaluated_before):
                     continue
                 results.append(item)
-                if len(results) >= limit:
+                if not window_filtered and len(results) >= limit:
                     break
             offset += len(plans)
-        return results
+        if evaluated_after is not None or evaluated_before is not None:
+            results.sort(key=lambda item: self._normalize_datetime(item.evaluated_at), reverse=True)
+        return results[:limit]
+
+    def _candidate_plan_ids_for_evaluated_window(self, *, evaluated_after: datetime | None, evaluated_before: datetime | None) -> set[int]:
+        candidate_ids: set[int] = set()
+        broker_query = select(BrokerPositionRecord.recommendation_plan_id)
+        broker_time = BrokerPositionRecord.exit_filled_at
+        broker_update = BrokerPositionRecord.updated_at
+        broker_clauses = []
+        if evaluated_after is not None:
+            normalized_after = self._normalize_datetime(evaluated_after).replace(tzinfo=None)
+            broker_clauses.append(or_(broker_time >= normalized_after, broker_update >= normalized_after))
+        if evaluated_before is not None:
+            normalized_before = self._normalize_datetime(evaluated_before).replace(tzinfo=None)
+            broker_clauses.append(or_(broker_time <= normalized_before, broker_update <= normalized_before))
+        for clause in broker_clauses:
+            broker_query = broker_query.where(clause)
+        candidate_ids.update(int(value) for value in self.session.scalars(broker_query).all() if value is not None)
+
+        simulated_query = select(RecommendationOutcomeRecord.recommendation_plan_id)
+        if evaluated_after is not None:
+            simulated_query = simulated_query.where(RecommendationOutcomeRecord.evaluated_at >= self._normalize_datetime(evaluated_after).replace(tzinfo=None))
+        if evaluated_before is not None:
+            simulated_query = simulated_query.where(RecommendationOutcomeRecord.evaluated_at <= self._normalize_datetime(evaluated_before).replace(tzinfo=None))
+        candidate_ids.update(int(value) for value in self.session.scalars(simulated_query).all() if value is not None)
+
+        plan_query = select(RecommendationPlanRecord.id)
+        if evaluated_after is not None:
+            plan_query = plan_query.where(RecommendationPlanRecord.computed_at >= self._normalize_datetime(evaluated_after).replace(tzinfo=None))
+        if evaluated_before is not None:
+            plan_query = plan_query.where(RecommendationPlanRecord.computed_at <= self._normalize_datetime(evaluated_before).replace(tzinfo=None))
+        candidate_ids.update(int(value) for value in self.session.scalars(plan_query.limit(10000)).all() if value is not None)
+        return candidate_ids
 
     def get_outcomes_by_plan_ids(self, plan_ids: list[int]) -> dict[int, RecommendationPlanOutcome]:
         self.session.rollback()

@@ -12,6 +12,8 @@ The report exists because confidence, calibration, performance, and tuning code 
 ## Source of truth
 The report reads from `EffectivePlanOutcomeRepository`.
 
+Time windows use effective outcome evaluation time, not plan creation time. Broker-resolved rows use broker exit/update time, simulated rows use simulation evaluation time, and open plan fallbacks use plan computed time only when no broker/simulation outcome exists.
+
 That means:
 - broker-resolved positions are preferred when available
 - simulated outcomes remain fallback/research evidence

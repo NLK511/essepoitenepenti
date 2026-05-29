@@ -1464,6 +1464,82 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(drift["severity"], "ok")
         self.assertEqual(drift["reasons"], [])
 
+    def test_effective_outcomes_evaluated_window_includes_recently_resolved_old_plans(self) -> None:
+        session = create_session()
+        try:
+            plans = RecommendationPlanRepository(session)
+            base_time = datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc)
+            for idx in range(80):
+                plans.create_plan(
+                    RecommendationPlan(
+                        ticker=f"NEW{idx}",
+                        horizon=StrategyHorizon.ONE_WEEK,
+                        action="long",
+                        confidence_percent=55.0,
+                        computed_at=base_time,
+                    )
+                )
+            old_broker_plan = plans.create_plan(
+                RecommendationPlan(
+                    ticker="OLD1",
+                    horizon=StrategyHorizon.ONE_WEEK,
+                    action="long",
+                    confidence_percent=75.0,
+                    computed_at=base_time - timedelta(days=30),
+                )
+            )
+            old_sim_plan = plans.create_plan(
+                RecommendationPlan(
+                    ticker="OLD2",
+                    horizon=StrategyHorizon.ONE_WEEK,
+                    action="long",
+                    confidence_percent=75.0,
+                    computed_at=base_time - timedelta(days=31),
+                )
+            )
+            BrokerPositionRepository(session).create(
+                BrokerPosition(
+                    broker_order_execution_id=1,
+                    recommendation_plan_id=old_broker_plan.id or 0,
+                    recommendation_plan_ticker="OLD1",
+                    ticker="OLD1",
+                    action="long",
+                    side="buy",
+                    quantity=1,
+                    current_quantity=0,
+                    status="win",
+                    entry_avg_price=100.0,
+                    exit_avg_price=105.0,
+                    exit_filled_at=base_time + timedelta(hours=1),
+                    realized_pnl=5.0,
+                )
+            )
+            RecommendationOutcomeRepository(session).upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=old_sim_plan.id or 0,
+                    ticker="OLD2",
+                    action="long",
+                    outcome="loss",
+                    status="resolved",
+                    evaluated_at=base_time + timedelta(hours=2),
+                    confidence_bucket="65_to_79",
+                    setup_family="uncategorized",
+                    realized_pnl=-2.0,
+                )
+            )
+
+            outcomes = EffectivePlanOutcomeRepository(session).list_outcomes(
+                evaluated_after=base_time,
+                evaluated_before=base_time + timedelta(days=1),
+                limit=10,
+            )
+
+            self.assertEqual([item.ticker for item in outcomes[:2]], ["OLD2", "OLD1"])
+            self.assertEqual(outcomes[0].outcome_source, "simulation")
+            self.assertEqual(outcomes[1].outcome_source, "broker")
+        finally:
+            session.close()
+
     def test_recommendation_plan_repository_falls_back_to_simulation_for_skipped_orders(self) -> None:
         session = create_session()
         try:
