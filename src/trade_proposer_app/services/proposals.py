@@ -17,7 +17,7 @@ from trade_proposer_app.domain.models import HistoricalMarketBar, NewsArticle, R
 from trade_proposer_app.services.constants import DEFAULT_CONTEXT_FLAGS
 from trade_proposer_app.services.market_intelligence import MarketIntelligenceService
 from trade_proposer_app.services.payload_utils import DEFAULT_SUMMARY_METHOD, DEFAULT_SUMMARY_TEXT, sanitize_for_json
-from trade_proposer_app.services.retry_utils import bounded_backoff_seconds
+from trade_proposer_app.services.price_history_fetcher import PriceHistoryFetcher, latest_bar_time_iso
 from trade_proposer_app.services.news import (
     NaiveSentimentAnalyzer,
     NEWS_SUMMARY_ARTICLE_LIMIT,
@@ -535,87 +535,22 @@ class ProposalService:
         return {"confidence": confidence, "aggregators": aggregators}
 
     def _fetch_price_history(self, ticker: str, *, as_of: datetime | None = None) -> pd.DataFrame:
-        normalized_ticker = ticker.strip().upper()
-        is_replay = as_of is not None
-        local_history = self._fetch_price_history_from_local_store(normalized_ticker, as_of=as_of)
-        local_bar_count = len(local_history)
-        self._last_price_history_fetch_diagnostics = {
-            "ticker": normalized_ticker,
-            "mode": "replay" if is_replay else "live",
-            "source": "unavailable",
-            "fallback_used": False,
-            "remote_attempt_count": 0,
-            "remote_attempted": False,
-            "remote_errors": [],
-            "local_bar_count": local_bar_count,
-            "selected_bar_count": 0,
-            "latest_bar_time": self._latest_bar_time_iso(local_history),
-        }
-        if is_replay and not local_history.empty:
-            self._last_price_history_fetch_diagnostics.update(
-                {
-                    "source": "local_replay",
-                    "selected_bar_count": local_bar_count,
-                    "fallback_used": False,
-                }
-            )
-            return local_history
-
-        remote_error: ProposalExecutionError | None = None
-        remote_history = pd.DataFrame()
-        remote_attempts = 1 if is_replay else self.LIVE_REMOTE_FETCH_ATTEMPTS
-        for attempt in range(remote_attempts):
-            backoff = bounded_backoff_seconds(self.LIVE_REMOTE_FETCH_BACKOFF_SECONDS, attempt, enabled=not is_replay)
-            if backoff > 0:
-                time.sleep(backoff)
-            self._last_price_history_fetch_diagnostics["remote_attempted"] = True
-            self._last_price_history_fetch_diagnostics["remote_attempt_count"] = attempt + 1
-            try:
-                remote_history = self._fetch_price_history_remote(normalized_ticker, as_of=as_of)
-            except ProposalExecutionError as exc:
-                remote_error = exc
-                self._last_price_history_fetch_diagnostics.setdefault("remote_errors", []).append(str(exc))
-                continue
-            if not remote_history.empty:
-                self._last_price_history_fetch_diagnostics.update(
-                    {
-                        "source": "remote",
-                        "fallback_used": False,
-                        "selected_bar_count": len(remote_history),
-                        "latest_bar_time": self._latest_bar_time_iso(remote_history),
-                    }
-                )
-                self._persist_price_history(normalized_ticker, remote_history)
-                return remote_history
-            remote_error = ProposalExecutionError(f"could not retrieve historical data for '{normalized_ticker}'")
-            self._last_price_history_fetch_diagnostics.setdefault("remote_errors", []).append(str(remote_error))
-
-        if not local_history.empty:
-            self._last_price_history_fetch_diagnostics.update(
-                {
-                    "source": "local_fallback",
-                    "fallback_used": True,
-                    "selected_bar_count": local_bar_count,
-                    "latest_bar_time": self._latest_bar_time_iso(local_history),
-                }
-            )
-            return local_history
-        if remote_error is not None:
-            raise remote_error
-        raise ProposalExecutionError(f"could not retrieve historical data for '{normalized_ticker}'")
+        fetcher = PriceHistoryFetcher(
+            local_fetch=lambda normalized_ticker, target_as_of: self._fetch_price_history_from_local_store(normalized_ticker, as_of=target_as_of),
+            remote_fetch=lambda normalized_ticker, target_as_of: self._fetch_price_history_remote(normalized_ticker, as_of=target_as_of),
+            persist=self._persist_price_history,
+            sleep=time.sleep,
+            live_attempts=self.LIVE_REMOTE_FETCH_ATTEMPTS,
+            live_backoff_seconds=self.LIVE_REMOTE_FETCH_BACKOFF_SECONDS,
+            error_type=ProposalExecutionError,
+        )
+        history, diagnostics = fetcher.fetch(ticker, as_of=as_of)
+        self._last_price_history_fetch_diagnostics = diagnostics
+        return history
 
     @staticmethod
     def _latest_bar_time_iso(history: pd.DataFrame) -> str | None:
-        if history.empty:
-            return None
-        latest = history.index[-1]
-        if not isinstance(latest, datetime):
-            latest = pd.to_datetime(latest).to_pydatetime()
-        if latest.tzinfo is None:
-            latest = latest.replace(tzinfo=timezone.utc)
-        else:
-            latest = latest.astimezone(timezone.utc)
-        return latest.isoformat()
+        return latest_bar_time_iso(history)
 
     def _fetch_price_history_remote(self, ticker: str, *, as_of: datetime | None = None) -> pd.DataFrame:
         try:
