@@ -17,6 +17,7 @@ from trade_proposer_app.repositories.observability_events import ObservabilityEv
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.broker_position_steering import BrokerSteeringConfig, BrokerSteeringDecision, BrokerSteeringEngine, BrokerSteeringState
+from trade_proposer_app.services.broker_steering_evidence import BrokerSteeringEvidenceBuilder
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,7 @@ class BrokerSteeringStateBuilder:
         self.positions = BrokerPositionRepository(session)
         self.snapshots = BrokerReconciliationSnapshotRepository(session)
         self.market_data = HistoricalMarketDataRepository(session)
+        self.evidence_builder = BrokerSteeringEvidenceBuilder()
         self._price_cache: dict[str, float | None] = {}
 
     def list_states(self, *, limit: int = 200, now: datetime | None = None) -> list[BrokerSteeringState]:
@@ -102,6 +104,7 @@ class BrokerSteeringStateBuilder:
         if plan.computed_at and plan.holding_period_days is not None:
             expiration_at = plan.computed_at + timedelta(days=max(1, int(plan.holding_period_days)))
         broker_reconciliation_healthy = self._broker_reconciliation_healthy(plan.ticker)
+        steering_evidence = self.evidence_builder.build(plan, now=now)
         return BrokerSteeringState(
             recommendation_plan_id=plan.id or 0,
             ticker=plan.ticker,
@@ -118,7 +121,7 @@ class BrokerSteeringStateBuilder:
             calibrated_confidence_percent=self._calibrated_confidence(plan),
             actionability=plan.action,
             analysis_direction=plan.action if direction in {"long", "short"} else None,
-            severe_negative_news=self._has_severe_negative_news(plan, now=now),
+            severe_negative_news=self._has_severe_negative_news(plan, now=now, evidence=steering_evidence),
             price_chase_percent=None,
             volatility_percent=None,
             has_pending_order=order is not None and not is_position,
@@ -153,7 +156,9 @@ class BrokerSteeringStateBuilder:
         return str(latest.drift_severity or "").strip().lower() == "ok"
 
     @classmethod
-    def _has_severe_negative_news(cls, plan: RecommendationPlan, *, now: datetime | None) -> bool:
+    def _has_severe_negative_news(cls, plan: RecommendationPlan, *, now: datetime | None, evidence: dict[str, object] | None = None) -> bool:
+        if evidence is not None and BrokerSteeringEvidenceBuilder.has_severe_invalidation(evidence):
+            return True
         evidence = plan.signal_breakdown.get("steering_evidence") if hasattr(plan.signal_breakdown, "get") else None
         if isinstance(evidence, dict) and cls._fresh_steering_evidence(evidence, now=now):
             warnings = evidence.get("warnings") if isinstance(evidence.get("warnings"), list) else []
