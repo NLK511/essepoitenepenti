@@ -1483,6 +1483,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("edge_validation_gate", payload)
         self.assertIn("risk", payload)
         self.assertIn("data_quality", payload)
+        self.assertIn("provider_failures", payload)
         self.assertIn("missing_inputs", payload["policy_trust"])
         self.assertIn("policy_evaluation", payload["policy_trust"])
         self.assertIn("broker_reconciliation_summary", payload["policy_trust"])
@@ -1490,6 +1491,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("label", payload["edge_validation_gate"])
         self.assertIn("allowed", payload["risk"])
         self.assertIn("issue_ticker_count", payload["data_quality"])
+        self.assertIn("failed_request_count", payload["provider_failures"])
         self.assertNotIn("items", payload["data_quality"])
 
     async def test_broker_workbench_returns_orders_positions_and_risk(self) -> None:

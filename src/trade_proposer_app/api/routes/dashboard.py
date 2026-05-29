@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.persistence.models import BrokerOrderExecutionRecord, HistoricalMarketBarRecord, HistoricalNewsRecord, RecommendationPlanRecord, TickerSignalSnapshotRecord
+from trade_proposer_app.persistence.models import BrokerOrderExecutionRecord, HistoricalMarketBarRecord, HistoricalNewsRecord, ObservabilityEventRecord, RecommendationPlanRecord, TickerSignalSnapshotRecord
 from trade_proposer_app.domain.enums import RunStatus
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
@@ -303,7 +303,20 @@ async def get_dashboard_operator_status(
         "edge_validation_gate": policy_trust_payload["edge_validation_gate"],
         "risk": risk.model_dump(mode="json"),
         "data_quality": data_quality_summary,
+        "provider_failures": _provider_failure_summary(session, computed_after=computed_after, computed_before=now),
     }
+
+
+def _provider_failure_summary(session: Session, *, computed_after: datetime, computed_before: datetime) -> dict[str, object]:
+    rows = session.execute(
+        select(ObservabilityEventRecord.payload_json, func.count())
+        .where(ObservabilityEventRecord.event_type == "provider.request_failed")
+        .where(ObservabilityEventRecord.created_at >= computed_after.replace(tzinfo=None))
+        .where(ObservabilityEventRecord.created_at <= computed_before.replace(tzinfo=None))
+        .group_by(ObservabilityEventRecord.payload_json)
+    ).all()
+    total = sum(int(count) for _payload, count in rows)
+    return {"failed_request_count": total}
 
 
 @router.get("")

@@ -42,6 +42,14 @@ The job execution path records at least:
 - `run.finished`
 - `run.failed`
 
+Provider lifecycle events use one normalized schema:
+- `provider.request_started`
+- `provider.request_succeeded`
+- `provider.request_failed`
+- `provider.request_skipped`
+
+Provider event payloads include provider, source_type, ticker/topic when available, as-of/window, replay/live mode, attempt, duration, reason, and run/job/correlation ids when available.
+
 The broker lifecycle path records at least:
 - `broker.order_submit_started`
 - `broker.order_submit_finished`
