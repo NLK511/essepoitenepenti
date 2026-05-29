@@ -259,7 +259,7 @@ def _dashboard_quality_payload(session: Session, *, now: datetime, window_key: s
 
 
 @router.get("/quality")
-async def get_dashboard_quality(
+def get_dashboard_quality(
     session: Session = Depends(get_db_session),
     window: str = Query("1d", description="Dashboard time window"),
 ) -> dict[str, object]:

@@ -22,7 +22,7 @@ from trade_proposer_app.services.trade_policy_evaluation import TradePolicyEvalu
 
 class RecommendationQualitySummaryService:
     WINDOW_DEFINITIONS: list[str] = ["1d", "7d", "1m", "3m", "6m", "1y", "all"]
-    METRIC_SAMPLE_LIMIT = 500_000
+    METRIC_SAMPLE_LIMIT = 5_000
     DEFAULT_SUMMARY_WINDOW = "1d"
 
     def __init__(self, session) -> None:

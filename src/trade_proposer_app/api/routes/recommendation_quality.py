@@ -8,5 +8,5 @@ router = APIRouter(prefix="/recommendation-quality", tags=["recommendation-quali
 
 
 @router.get("/summary")
-async def get_recommendation_quality_summary(session: Session = Depends(get_db_session)) -> dict[str, object]:
+def get_recommendation_quality_summary(session: Session = Depends(get_db_session)) -> dict[str, object]:
     return RecommendationQualitySummaryService(session).summarize()
