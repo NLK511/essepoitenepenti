@@ -1,6 +1,6 @@
 # Full project spec/code/test audit — 2026-05-10 post-watchlist refactor
 
-**Status:** current audit snapshot  
+**Status:** reference
 **Auditor:** Aurelio  
 **Scope:** active specs/docs, backend services/repositories/routes, frontend surfaces by type-check, test suite, architecture complexity, and autonomy readiness.
 

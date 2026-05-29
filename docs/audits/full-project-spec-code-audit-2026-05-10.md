@@ -1,6 +1,6 @@
 # Full project spec/code/test audit — 2026-05-10
 
-**Status:** current audit snapshot  
+**Status:** reference
 **Auditor:** Aurelio  
 **Scope:** product docs/specs, backend services/repositories/routes, frontend type-check, test suite, architecture complexity, and autonomy readiness.
 

@@ -1,5 +1,6 @@
 # Abstraction inventory
 
+**Status:** reference
 **Date:** 2026-05-09  
 **Purpose:** name the business question for each major abstraction and decide whether it should be kept, merged, or archived.
 

@@ -1,5 +1,6 @@
 # Full project spec/code audit
 
+**Status:** reference
 **Date:** 2026-05-09  
 **Scope:** product specs, implementation coherence, tests, missing features, weak points, and over-engineering risks.
 

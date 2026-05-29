@@ -1,10 +1,14 @@
 # Remediation plan for post-remediation full audit — 2026-05-29
 
-**Status:** active plan
+**Status:** current behavior
 **Source audit:** `full-project-spec-code-audit-2026-05-29-post-remediation.md`
 **Owner:** Aurelio
 
-This plan turns every issue from the post-remediation audit into concrete implementation tasks. Each phase must follow the project rule:
+## Implementation status
+
+Implemented in commits from `a90a96d` through `0ad231c`.
+
+This record turns every issue from the post-remediation audit into concrete implementation tasks. Each phase followed the project rule:
 
 1. update the relevant spec first
 2. translate the spec into focused tests
@@ -373,9 +377,9 @@ Remove stale active-plan ambiguity from docs and make completed records obvious.
 - [ ] Optional: `.venv/bin/pytest -q tests/test_routes.py::RouteTests::test_docs_page...` if docs browser route tests are affected.
 
 ### Done when
-- [ ] The latest active plan is this document.
-- [ ] Completed remediation docs read as completed records.
-- [ ] Active docs have allowed status labels only.
+- [x] This document is a completed implementation record, not an active plan.
+- [x] Completed remediation docs read as completed records.
+- [x] Active docs have allowed status labels only.
 
 ## Final full validation after all phases
 

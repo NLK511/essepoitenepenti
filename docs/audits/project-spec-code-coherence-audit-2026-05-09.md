@@ -1,5 +1,7 @@
 # Project spec/code coherence audit
 
+**Status:** reference
+
 Here’s the honest audit.
 
 ## Bottom line
