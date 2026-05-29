@@ -2,560 +2,224 @@
 
 **Status:** reference
 
-This guide explains what each main UI page is for and how to read the most important fields.
+Quick reference for navigating the app, reading main fields, and choosing the right page for an investigation. For terms use `glossary.md`; for payload detail use `raw-details-reference.md`; for methodology use `recommendation-methodology.md`.
 
-Use it when you want quick answers to questions like:
-- where should I start?
-- which page should I use for this investigation?
-- what do confidence, transmission, shortlist, and outcome fields mean?
+## Product map
 
-If you are new to the app, use this reading order:
-1. this guide for page orientation and UI/navigation principles
-2. `glossary.md` for shared terms such as cohort, slice, and calibration
-3. `recommendation-methodology.md` for the live recommendation path
-4. `raw-details-reference.md` only when you need payload detail
+Main page groups:
+- **Operate:** Dashboard, Jobs, Watchlists, Settings
+- **Review:** Recommendation plans, Ticker signals, Ticker drill-down
+- **Investigate:** Run debugger, Run detail, Broker Orders, Context review, Snapshot detail
+- **Research:** Research overview, calibration/baseline/evidence pages, signal-gating tuning, plan-generation tuning
 
-For payload-level storage details, see `raw-details-reference.md`.
+Simple mental model:
+- Dashboard = what to check next
+- Recommendation plans = actual trade plans
+- Ticker signals = why a ticker got attention
+- Run detail = how a workflow produced its outputs
+- Context review = reusable macro/industry backdrop
 
-## How to read the product
+## UI principles
 
-The UI is easiest to understand in four groups:
+Pages should support this journey: monitor → review → investigate → tune → administer.
 
-1. **Operate**
-   - Dashboard
-   - Jobs
-   - Watchlists
-   - Settings
-2. **Review**
-   - Ticker signals
-   - Recommendation plans
-   - Ticker drill-down
-3. **Investigate**
-   - Run debugger
-   - Run detail
-   - Broker Orders
-   - Context review
-   - Snapshot detail
-4. **Research**
-   - Research overview
-   - Calibration tab
-   - Advanced review: Decision samples
-   - Tuning: Signal gating tuning
-   - Tuning: Plan generation tuning
-
-A simple mental model:
-- **Dashboard** = what to check next
-- **Recommendation plans** = actual trade plans
-- **Ticker signals** = why a ticker got attention
-- **Run detail** = how the workflow got there
-- **Context review** = the broader market backdrop reused by the app
-
-## UI and navigation principles
-
-The workspace should make the main journey obvious:
-1. **Monitor** — check health, attention items, freshness, and recent activity.
-2. **Review** — inspect plans, signals, context, broker orders, or runs when something needs a decision.
-3. **Investigate** — drill into a single degraded, surprising, or suspicious item.
-4. **Tune** — use research pages when evaluating performance or changing thresholds/configs.
-5. **Administer** — use jobs, watchlists, settings, docs, and debugger tools for setup and maintenance.
-
-Page design should follow these rules:
-- one page, one primary question
+Rules:
+- one primary question per page
 - summary first, detail on demand
-- lightweight filters
-- progressive disclosure for raw diagnostics and secondary comparisons
+- filters should stay lightweight
+- raw diagnostics and secondary comparisons belong behind progressive disclosure
 - never hide warnings, degraded inputs, provenance, or evaluated-vs-resolved distinctions
+- mobile should use stacked cards/collapsible detail, not cramped desktop tables
 
-On mobile, pages should reshape rather than compress desktop tables: use stacked cards, fewer headline metrics, condensed rows, collapsible filters, and one primary action where possible.
+## Common concepts
 
-## Common concepts across pages
+- **Status:** common values include `queued`, `running`, `completed`, `completed_with_warnings`, `failed`, `fresh`, `stale`, `expired`.
+- **Direction:** signal bias such as `long`, `short`, neutral.
+- **Action:** plan state such as `long`, `short`, `watchlist`, `no_action`.
+- **Attention:** triage score for whether a ticker deserves deeper review; not plan confidence.
+- **Confidence:** evidence-weighted trust/actionability estimate; not a guarantee.
+- **Transmission:** how macro/industry context is believed to affect the ticker (`tailwind`, `headwind`, `mixed`, `unknown`).
+- **Warnings:** stale context, thin coverage, provider failures, and contradictions are decision-relevant.
+- **Time windows:** shared toggles are `1D`, `7D`, `1M`, `3M`, `6M`, `1Y`, `ALL`; `1D` starts at local midnight.
 
-### Status
-Common status values:
-- `queued`
-- `running`
-- `completed`
-- `completed_with_warnings`
-- `failed`
-- `fresh`
-- `stale` / `expired`
+Context confidence/saliency bands:
+- light: `<40` or `<0.40`
+- moderate: `40–64.9` or `0.40–0.64`
+- strong: `65–84.9` or `0.65–0.84`
+- dominant: `85+` or `0.85+`
 
-### Direction vs action
-- **Direction** = signal bias, usually `long`, `short`, or neutral
-- **Action** = plan state, such as `long`, `short`, `watchlist`, or `no_action`
+Research terms:
+- **cohort:** comparison group, e.g. setup family or confidence bucket
+- **segment:** subgroup by attribute, e.g. horizon or bias
+- **bucket:** numeric range, usually confidence band
+- **slice:** bounded cut of data, often a time window
+- **promotion gate:** whether a tuning candidate may become live
 
-A ticker can have direction without being tradeable enough for an actionable plan.
-
-### Confidence
-Confidence is an evidence-weighted trust and actionability estimate.
-
-Read it as:
-- higher = cleaner setup, stronger alignment
-- lower = weaker, thinner, or more conflicted evidence
-
-It is not a guarantee.
-
-For **macro context** and **industry context**, confidence is an operator trust score rather than a prediction probability.
-
-Context confidence bands:
-- `0.0–39.9` = light
-- `40.0–64.9` = moderate
-- `65.0–84.9` = strong
-- `85.0+` = dominant
-
-Context quality status:
-- `usable` = evidence is good enough to trust normally
-- `degraded` = keep it visible, but treat it cautiously
-- `blocked` = required evidence is missing
-
-### Time windows
-Several review pages share the same window toggle:
-- `1D`
-- `7D`
-- `1M`
-- `3M`
-- `6M`
-- `1Y`
-- `ALL`
-
-The pages default to `1D`.
-`1D` starts from midnight in the current local day.
-
-### Attention score
-Attention is a triage score used mainly on ticker signals.
-
-It answers:
-> does this ticker deserve deeper review?
-
-It is not the same as plan confidence.
-
-### Transmission
-Transmission describes how macro or industry context is believed to carry through to the ticker.
-
-Common reads:
-- `tailwind`
-- `headwind`
-- `mixed`
-- `unknown`
-
-### Warnings
-Warnings are part of the output.
-
-Treat stale context, thin coverage, provider failures, and contradiction warnings as decision-relevant information.
-
-### Research-page reading terms
-These terms appear often on calibration, baseline, evidence, replay, and tuning pages.
-
-- **Cohort** = a comparison group with a shared rule, such as one setup family, one confidence bucket, or one time window
-- **Segment** = a subgroup defined by a shared attribute, such as horizon or transmission bias
-- **Bucket** = a numeric range, usually a confidence band used for calibration review
-- **Slice** = one bounded cut of data, often a time window or one analytics breakdown
-- **Promotion gate** = the rule that decides whether a tuning candidate is allowed to become the live config
-
-Quick mental model:
+Research reads:
 - calibration asks whether confidence deserves trust
-- baselines ask whether the full workflow beats simpler alternatives
-- evidence asks where results are strongest or weakest
-- walk-forward validation asks whether a change still works on later data slices
-
-Current division of labor across research pages:
-- **Signal gating tuning** = upstream shortlist and threshold control
-- **Plan generation tuning** = downstream trade framing and actionable precision
-- **Recommendation quality / calibration / walk-forward** = trust, validation, and promotion discipline
-
-### Context saliency
-For macro and industry context, saliency measures how prominent the current top events or drivers are relative to the rest of the stored context evidence.
-
-It is a bounded `0.00–1.00` prominence score, not a probability.
-
-Context saliency bands:
-- `0.00–0.39` = light
-- `0.40–0.64` = moderate
-- `0.65–0.84` = strong
-- `0.85+` = dominant
+- baselines ask whether the workflow beats simpler alternatives
+- evidence asks where results are strongest/weakest
+- walk-forward asks whether a change still works later
 
 ## Page guide
 
-## 1. Dashboard
-
-**Use it for:** first-pass triage.
-
-Typical cards include:
-- plans waiting for review
-- recent runs
-- watchlists and jobs counts
-- macro and industry freshness
-- overall effective win rate and total profit, with broker win/P&L shown as detail
-- actionability gap between phantom and actionable outcomes
-- policy trust from the shared `PolicyTrustReport`: `edge_validation_gate` is authoritative, while `policy_health` is only a compact headline. Policy-selected evidence uses the effective confidence threshold and excludes low-confidence paper-exploration records even when paper order execution relaxes actionability.
-- attention items
-
-Use the trendlines toggle when you want to compare the dashboard metrics across the last 7 daily snapshots without keeping the long helper text visible. Trendlines are backed by persisted daily aggregates so the dashboard can open faster when you only need the headline view.
-
-Go here first. If freshness looks degraded, go to **Context review**. If recent runs look bad, go to **Run debugger**.
-
-## 2. Jobs
-
-**Use it for:** creating and scheduling workflows.
-
-Important fields:
-- **Name**
-- **Workflow type**
-- **Schedule**
-- **Manual tickers**
-- **Watchlist**
-- **Enabled**
-
-Typical workflow types:
-- `proposal_generation`
-- `recommendation_evaluation`
-- `plan_generation_tuning`
-- `macro_context_refresh`
-- `industry_context_refresh`
-
-The UI and docs describe these as macro/industry context refresh workflows, and the persisted job-type keys now match that naming.
-
-Prefer watchlist-backed proposal jobs over ad hoc ticker lists when possible.
-
-## 3. Watchlists
-
-**Use it for:** defining reusable universes.
-
-Important fields:
-- **Name**
-- **Region**
-- **Exchange**
-- **Timezone**
-- **Default horizon**
-- **Tickers**
-- **Allow shorts**
-- **Optimize evaluation timing**
-
-Read **Default horizon** as the base time assumption for plans sourced from the watchlist.
-
-## 4. Recommendation plans
-
-**Use it for:** primary trade review.
-
-This is the main operator decision page.
-
-Common filters:
-- ticker
-- action
-- run id
-- setup family
-- resolved / unresolved
-- specific outcome such as `win`, `loss`, `phantom_win`, `phantom_loss`, or `expired`
-- stats window such as day, week, month, or year
-
-Main page modes:
-- **Review queue**
-- **Advanced analytics**
-
-Advanced analytics tabs:
-- **Overview**
-- **Calibration**
-- **Baselines**
-- **Evidence**
-- **Setup families**
-
-Plain-English read:
-- **Calibration** = do higher-confidence plans actually behave better?
-- **Baselines** = does the live workflow beat simpler comparison groups?
-- **Evidence** = which cohorts look strongest or weakest right now?
-- **Setup families** = which trade archetypes are carrying or hurting measured performance?
-
-Most important fields:
-- **Action**
-- **Confidence**
-- **Entry / Stop / Take profit**
-- **Horizon**
-- **Thesis**
-- **Action reason**
-- **Setup family**
-- **Raw confidence / Calibrated confidence / Threshold**
-- **Context bias / Alignment / Expected transmission window**
-- **Latest outcome**
-- **Open plans / expired plans / overall win rate / actionable win rate / phantom win rate** stats for the current filter set
-- clicking a plan row should open the ticker drill-down page for that symbol
-
-Click the ticker to open the ticker drill-down page for that symbol.
-
-Important nuance:
-- non-shortlisted names now usually remain cheap-scan-only decision samples without a full recommendation plan row
-- shortlisted names may still end as `no_action` after deep analysis and policy gating
-- only those deep-analysis-derived rejected plans can later produce phantom outcomes, because they retain intended direction and trade levels
-- on the recommendation-plans page, non-shortlisted names are hidden by default so the main review queue stays focused on deeper-review candidates; operators can still reveal them with the filter toggle when they want full audit coverage
-
-Suggested review order:
-1. review the queue first
-2. open individual plan details only when needed
-3. switch to advanced analytics for calibration / baselines / evidence
-
-Important interpretation note:
-- `expired` means the plan passed its intended horizon without a terminal win/loss outcome
-- default win-rate surfaces exclude `expired` and other non-win/loss outcomes from the denominator
-- the recommendation-plans analytics pulse now shows overall effective win rate, actionable win rate, and phantom win rate side by side so you can tell real performance from skipped-performance
-- phantom outcomes (`phantom_win`, `phantom_loss`) are visible via outcome filters and remain important for tuning and actionability review
-- resolved/unresolved filters are broader lifecycle filters than the more granular outcome filter
-
-## 5. Ticker signals
-
-**Use it for:** shortlist and pre-plan triage.
-
-This page answers:
-> why did this ticker get attention?
-
-Important fields:
-- **Mode**: cheap scan vs deep analysis
-- **Attention score**
-- **Shortlisted**
-- **Shortlist rank**
-- **Selection lane**
-- **Shortlist reasons**
-- **Catalyst proxy**
-- **Alignment**
-- **Expected window**
-- **Warnings**
-
-Useful cheap-scan components:
-- trend score
-- momentum score
-- breakout score
-
-## 6. Run debugger
-
-**Use it for:** fast run triage.
-
-It shows recent runs with status, workflow type, timing, and summary counts.
-
-Use it to find failed or warning-heavy runs, then jump to **Run detail**.
-
-## 7. Run detail
-
-**Use it for:** full execution review for one run.
-
-Main tabs:
-- **Overview**
-- **Shortlist**
-- **Signals**
-- **Plans**
-- **Broker orders**
-- **Context**
-
-Important fields:
-- **Source kind**
-- **Execution path**
-- **Effective horizon**
-- **Watchlist policy**
-- **Shortlist limits and rejection reasons**
-- **Signal and plan counts**
-- **Created context objects**
-
-Use this page to answer questions like:
-- why did a run generate many `no_action` plans?
-- why was a ticker rejected before deep analysis?
-- did context contradictions affect gating?
-- which broker orders were created from the run, and were any manually canceled or resubmitted?
-
-## 8. Context review
-
-**Use it for:** checking reusable macro and industry backdrop.
-
-Main actions:
-- queue macro refresh
-- queue industry refresh
-- reload
-
-Important fields:
-- **Computed / Expires**
-- **Drivers**
-- **Coverage**
-- **Saliency**
-- **Confidence**
-- **State / Read badges**
-- **Actor badges** when a material trigger source is identified
-- **Diagnostics**
-
-Context badge quick guide:
-- **Saliency** measures prominence of the current stored events or drivers
-- **Confidence** measures how trustworthy the context read is given evidence quality, source mix, contradictions, and degradation
-- both badges are heuristic operator aids, not guarantees or prediction probabilities
-
-Saliency quick guide:
-- `0.00–0.39` light
-- `0.40–0.64` moderate
-- `0.65–0.84` strong
-- `0.85+` dominant
-
-Confidence quick guide:
-- `0.0–39.9` light
-- `40.0–64.9` moderate
-- `65.0–84.9` strong
-- `85.0+` dominant
-
-Use this page when plans look plausible but the market backdrop seems stale, thin, or wrong.
-
-Current context cards now try to show not just the top theme/driver, but also:
-- whether the current read looks escalating, easing, stabilizing, or mixed
-- whether the market read looks more like fear, relief, inflationary pressure, or growth support
-- the leading actor or trigger source when one is recoverable from the evidence
-
-## 9. Snapshot detail
-
-**Use it for:** auditing one shared snapshot.
-
-Typical sections:
-- header summary
-- primary drivers
-- evidence and warnings
-- source mix
-- ontology context for industry snapshots
-- diagnostics JSON
-
-Stored event rows on this page may now include:
-- persistence
-- transition
-- catalyst
-- interpretation
-- actor
-- actor role
-- actor source
-- short "why now" text grounded in top evidence
-
-Read this page as a lower-level storage-oriented view.
-
-Important fields:
-- **Coverage**
-- **Source breakdown**
-- **Ontology context**
-- **Diagnostics**
-
-Relationship read-throughs, governed labels, and transmission details may appear here and on newer review pages as readable labeled fields instead of raw internal keys.
-
-## 10. Broker Orders
-
-**Use it for:** auditing Alpaca paper submissions, raw request/response payloads, and manual resubmit/cancel actions.
-
-Important fields:
-- **Status**
-- **Run id / plan id**
-- **Entry / stop / take profit**
-- **Client order id / broker order id**
-- **Raw request / response payloads**
-- **Steering decision history** when the order is also part of the broker-steering flow
-- **Action buttons** for resubmit and cancel when available
-
-Use this page when you want the execution trail detached from the run detail context.
-
-## 11. Settings
-
-**Use it for:** setup, providers, ingestion controls, and advanced research controls.
-
-Key areas:
-- **System and providers**
-- **Summarization**
-- **News ingestion**
-- **Social/Nitter settings**
-- **Broker steering controls**
-- **Advanced research controls**
-
-Go here early when startup or run quality looks off.
-
-## 12. Ticker drill-down
-
-**Use it for:** reviewing one ticker over time.
-
-Open it by clicking a ticker from a plan row or by using `/tickers/{ticker}`.
-
-Important fields:
-- top summary: WR, total profit, plan count, order count, bar count
-- stored plans
-- actionable plans
-- wins / losses / open plans
-- average confidence
-- plan history with action, setup family, horizon, run link, latest outcome, and real/simulated resolution source
-- recommendation-quality entry-miss/actionability diagnostics are simulation-only and should be read as setup/entry debugging aids, not broker-preferred P&L evidence
-- price chart from stored 1m bars with entry / stop / take-profit / resolution overlays
-- plan selection toggles so you can hide or show overlays on the chart
-- standard time-window toggle (`1d` / `7d` / `1m` / `3m` / `6m` / `1y` / `all`)
-
-Use it to decide whether a ticker deserves repeated operator attention.
-
-## 13. In-app docs
-
-**Use it for:** reading methodology and reference material without leaving the app.
+### 1. Dashboard
+
+Use for first-pass triage: plans waiting for review, recent runs, watchlists/jobs, context freshness, policy trust, broker/effective performance, actionability gap, and attention items.
+
+Important nuance: `edge_validation_gate` is authoritative for autonomy; `policy_health` is only a compact headline. Policy-selected evidence uses the effective confidence threshold and excludes low-confidence paper-exploration records even if paper order execution relaxes actionability.
+
+Use trendlines for the last seven daily snapshots. If freshness is degraded, go to Context review. If runs look bad, go to Run debugger.
+
+### 2. Jobs
+
+Use for creating/scheduling workflows.
+
+Important fields: name, workflow type, schedule, manual tickers, watchlist, enabled.
+
+Common workflow types: `proposal_generation`, `recommendation_evaluation`, `plan_generation_tuning`, `macro_context_refresh`, `industry_context_refresh`.
+
+Prefer watchlist-backed proposal jobs over ad hoc ticker lists.
+
+### 3. Watchlists
+
+Use for reusable universes.
+
+Important fields: name, region, exchange, timezone, default horizon, tickers, allow shorts, optimize evaluation timing.
+
+Default horizon is the base time assumption for sourced plans.
+
+### 4. Recommendation plans
+
+Use for primary trade review.
+
+Filters: ticker, action, run id, setup family, resolved/unresolved, outcome, stats window.
+
+Main modes/tabs:
+- Review queue
+- Advanced analytics: Overview, Calibration, Baselines, Evidence, Setup families
+
+Read tabs as:
+- Calibration = do higher-confidence plans behave better?
+- Baselines = does workflow beat simpler comparisons?
+- Evidence = which cohorts are strongest/weakest?
+- Setup families = which trade archetypes carry or hurt results?
+
+Important fields: action, confidence, entry/stop/take-profit, horizon, thesis, action reason, setup family, raw/calibrated confidence and threshold, context bias/alignment/window, latest outcome, open/expired/win-rate stats.
+
+Nuances:
+- non-shortlisted names usually remain cheap-scan decision samples without full plan rows
+- shortlisted names may still become `no_action` after deep analysis/policy gating
+- only deep-analysis rejected plans with intended direction/levels can later produce phantom outcomes
+- non-shortlisted names are hidden by default but can be revealed for audit coverage
+- `expired` is horizon elapsed without terminal win/loss and is excluded from default win-rate denominators
+- phantom outcomes are tuning/actionability evidence, not realized broker P&L
+
+### 5. Ticker signals
+
+Use for shortlist and pre-plan triage: why did a ticker get attention?
+
+Important fields: mode, attention score, shortlisted, rank, lane, reasons, catalyst proxy, alignment, expected window, warnings.
+
+Cheap-scan components include trend, momentum, and breakout scores.
+
+### 6. Run debugger
+
+Use for fast run triage. It shows recent runs, status, workflow type, timing, and summary counts. Use it to find failed/warning-heavy runs before opening Run detail.
+
+### 7. Run detail
+
+Use for full execution review of one run.
+
+Tabs: Overview, Shortlist, Signals, Plans, Broker orders, Context.
+
+Important fields: source kind, execution path, effective horizon, watchlist policy, shortlist limits/rejection reasons, signal/plan counts, created context objects.
+
+Use it to answer why tickers/plans were rejected, whether context affected gating, and which broker orders were created/canceled/resubmitted.
+
+### 8. Context review
+
+Use to check reusable macro/industry backdrop.
+
+Actions: queue macro refresh, queue industry refresh, reload.
+
+Important fields: computed/expires, drivers, coverage, saliency, confidence, state/read badges, actor badges, diagnostics.
+
+Use it when plans look plausible but backdrop seems stale, thin, or wrong. Current cards may show top theme/driver, escalation/easing/stabilizing/mixed state, fear/relief/inflation/growth read, and leading actor/trigger when recoverable.
+
+### 9. Snapshot detail
+
+Use for auditing one stored context snapshot.
+
+Sections: summary, drivers, evidence/warnings, source mix, ontology context, diagnostics JSON.
+
+Stored event rows may include persistence, transition, catalyst, interpretation, actor/role/source, and grounded “why now” text. Read this as a lower-level storage view.
+
+### 10. Broker Orders
+
+Use for Alpaca paper submissions, raw request/response payloads, manual resubmit/cancel, and broker steering history.
+
+Important fields: status, run/plan id, entry/stop/take-profit, client/broker order ids, raw payloads, steering decision history, action buttons.
+
+### 11. Settings
+
+Use for setup, providers, ingestion controls, broker steering, and advanced research controls.
+
+Check early when startup, provider health, or run quality looks off.
+
+### 12. Ticker drill-down
+
+Use to review one ticker over time via `/tickers/{ticker}` or ticker links.
+
+Important fields: win rate, total profit, plan/order/bar counts, stored/actionable plans, wins/losses/open plans, average confidence, plan history, resolution source, and price chart overlays for entry/stop/take-profit/resolution.
+
+Recommendation-quality entry-miss/actionability diagnostics are simulation-only setup/entry debugging aids, not broker-preferred P&L evidence.
+
+Use the plan selection toggles and standard time windows (`1d`, `7d`, `1m`, `3m`, `6m`, `1y`, `all`).
+
+### 13. In-app docs
+
+Use for methodology and reference material inside the app.
 
 ## Which page should I use?
 
-### I just opened the app
-1. Dashboard
-2. Settings/preflight if health looks degraded
-3. Recommendation plans
-
-### I want repeatable workflows
-1. Watchlists
-2. Jobs
-3. Dashboard or Run debugger after execution
-
-### I want to know why a ticker was selected
-1. Ticker signals
-2. Run detail
-3. Recommendation plans if it became actionable
-
-### I want actual trade ideas
-1. Recommendation plans
-2. Ticker drill-down
-3. Run detail for execution context
-
-### I suspect stale or misleading backdrop
-1. Context review
-2. Snapshot detail
-3. Settings/preflight
-
-### I want to investigate a bad run
-1. Run debugger
-2. Run detail
-3. Settings/preflight if it looks systemic
-
-### I want to know whether confidence is trustworthy
-1. Recommendation plans → Calibration
-2. Recommendation plans → Baselines
-3. Recommendation plans → Evidence
-
-## Interpretation cautions
-
-- do not over-read one confidence number
-- do not confuse attention with actionability
-- do not ignore stale context
-- do not treat `watchlist` or `no_action` as failures
+- First open: Dashboard → Settings/preflight if degraded → Recommendation plans
+- Repeatable workflow: Watchlists → Jobs → Dashboard/Run debugger
+- Why selected: Ticker signals → Run detail → Recommendation plans
+- Trade ideas: Recommendation plans → Ticker drill-down → Run detail
+- Stale backdrop: Context review → Snapshot detail → Settings/preflight
+- Bad run: Run debugger → Run detail → Settings/preflight if systemic
+- Confidence trust: Recommendation plans → Calibration/Baselines/Evidence
 
 ## Practical playbooks
 
-### Daily loop
+Daily loop:
 1. Dashboard
-2. freshness and recent runs
+2. freshness/recent runs
 3. Recommendation plans
 4. Ticker signals for shortlist questions
 5. Run detail for deeper investigation
 6. queue evaluation later
 
-### Context-first loop
+Context-first loop:
 1. Context review
 2. refresh if stale
 3. Jobs
 4. review plans
 
-### Failure investigation loop
+Failure loop:
 1. Run debugger
 2. Run detail
 3. review warnings and persisted objects
 4. check Settings/preflight if broad
 
+## Interpretation cautions
+
+Do not over-read one confidence number, confuse attention with actionability, ignore stale context, or treat `watchlist`/`no_action` as failures.
+
 ## See also
+
 - `glossary.md`
 - `features-and-capabilities.md`
 - `recommendation-methodology.md`
 - `raw-details-reference.md`
-- `user-journeys.md`
-- `architecture.md`

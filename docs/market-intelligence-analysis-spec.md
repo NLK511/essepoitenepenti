@@ -2,168 +2,108 @@
 
 **Status:** current + target behavior
 
-## Problem
+Binding reference for the optional market-intelligence layer: event, options, and analyst evidence used by ticker analysis and plan framing.
 
-The analysis stack already uses:
-- market price history
-- technical features
-- news and social context
-- macro and industry context
-- transmission and calibration heuristics
+## Problem and goal
 
-But it still misses three high-value short-horizon inputs:
-- event calendar / corporate catalysts
-- options context / options flow pressure
-- analyst revisions and rating changes
+The current stack uses price history, technical features, news/social context, macro/industry context, transmission, and calibration. It still lacks structured short-horizon evidence from:
+- corporate/event calendars
+- options context or options-flow pressure
+- analyst revisions/rating/target changes
 
-Without those inputs, the system often has enough evidence to produce a plan, but not enough structured evidence to justify higher confidence. That contributes to many plans clustering below the 70% range.
+Goal: add a conservative, replay-safe evidence layer that answers:
+1. What event is active or imminent?
+2. What do options imply about expectation, pressure, and risk?
+3. What do analysts imply about direction or valuation?
+4. Does this strengthen or weaken the existing trade idea?
+
+This layer may modify confidence only when evidence is current, relevant, bounded, and aligned. It must warn or reduce confidence on stale/conflicting evidence.
 
 ## Current behavior
 
-The current analysis path already supports:
-- ticker technical features
-- news-backed context
-- macro and industry snapshots
-- transmission analysis
-- calibration review
-- diagnostic warnings and fallback behavior when inputs are missing
-
-A partial `MarketIntelligenceService` now exists. Current behavior is intentionally experimental:
-- it is disabled by default
-- disabled snapshots are marked `coverage_status=disabled` and contribute `0.0` confidence
-- enabled snapshots use yfinance-style data to infer limited event/options/analyst context
+A partial `MarketIntelligenceService` exists and is experimental:
+- disabled by default
+- disabled snapshots use `coverage_status=disabled`
+- disabled/unavailable snapshots contribute `0.0` confidence and no supporting/conflicting narrative strength
+- enabled snapshots use yfinance-style limited event/options/analyst context
 - ticker deep analysis can carry the payload for review
 - replay/as-of historical snapshots are unavailable without stored vendor snapshots and must not fetch live data for old dates
 - no canonical market-intelligence snapshot table exists yet
 - no Settings API/UI toggle exists yet
 
-Therefore market intelligence is not yet a production decision-grade input. It is a bounded, disabled-by-default evidence modifier until persistence, provider policy, and operator settings are shipped. Operator UI must distinguish disabled/unavailable snapshots from active evidence: disabled snapshots can be persisted as absence markers, but they must display as “Market intelligence disabled” and contribute no confidence or narrative strength.
-
-## Target behavior
-
-Add a canonical **market intelligence** layer that becomes part of ticker analysis and plan framing.
-
-It should answer four questions:
-1. **What event is active or imminent?**
-2. **What does the options market imply about expectation, pressure, and risk?**
-3. **What do analysts now imply about direction or valuation?**
-4. **Does this materially strengthen or weaken the trade idea already suggested by price/news/context?**
-
-This layer must be evidence-aware, replay-safe, and conservative. It should improve confidence only when the new data aligns with the existing setup; it should reduce confidence or emit warnings when it conflicts.
+Operator UI must display disabled snapshots as “Market intelligence disabled” rather than active evidence.
 
 ## Non-goals
 
-- Not a replacement for technical analysis.
-- Not a standalone prediction engine.
-- Not a requirement to add expensive premium vendors first.
-- Not a license to treat true options flow as equivalent to options chain data.
+Market intelligence is not:
+- a replacement for technical analysis
+- a standalone prediction engine
+- a reason to add premium vendors before value is proven
+- permission to call options-chain context “true flow”
 
-## Canonical design
+## Canonical model
 
-Use one canonical analysis layer named **market intelligence**, with three subdomains:
+Use one layer named **market intelligence** with three normalized subdomains:
 - **event intelligence**
 - **options intelligence**
 - **analyst intelligence**
 
-Each subdomain should be normalized into a comparable internal shape before scoring.
-
-### Canonical snapshot fields
-
-A ticker/as-of market-intelligence snapshot should minimally expose:
-- `ticker`
-- `as_of`
-- `source_set`
-- `coverage_status`
-- `freshness_status`
-- `event_intelligence`
-- `options_intelligence`
-- `analyst_intelligence`
+Canonical snapshot fields:
+- `ticker`, `as_of`, `source_set`
+- `coverage_status`, `freshness_status`
+- `event_intelligence`, `options_intelligence`, `analyst_intelligence`
 - `confidence_contribution`
-- `conflict_flags`
-- `warnings`
+- `conflict_flags`, `warnings`
 - `provider_diagnostics`
 - `raw_payload_refs`
 
-### Subdomain fields
+### Event intelligence
 
-#### Event intelligence
-Should capture:
-- earnings date and release timing
-- guidance / investor day / product event / conference event
-- split / dividend / merger / FDA / court / SEC filing / other catalyst class
-- event imminence window
-- whether the event is already past, pending, or stale
-- expected transmission window
-- event saliency / catalyst strength
+Capture earnings date/timing, guidance/investor/product/conference events, splits/dividends/M&A/FDA/court/SEC/other catalyst class, imminence window, past/pending/stale state, expected transmission window, and saliency/catalyst strength.
 
-#### Options intelligence
-Should capture:
-- chain coverage availability
-- implied volatility / IV rank / IV change
-- open interest changes
-- unusual volume / contract concentration
-- call-put skew / pressure
-- put-call ratio style pressure
-- liquidity quality / spread quality
-- expiry alignment with the thesis window
-- true flow fields when available (sweeps, blocks, repeated prints)
+### Options intelligence
 
-#### Analyst intelligence
-Should capture:
-- rating changes
-- price-target changes
-- estimate revisions
-- revision direction
-- consensus bias / dispersion
-- recency
-- coverage depth
-- whether the change is actionable or stale
+Capture chain coverage, IV/IV rank/IV change, open-interest changes, unusual volume/contract concentration, call-put/skew pressure, put-call pressure, liquidity/spread quality, expiry alignment, and true-flow fields only when an actual flow vendor is used.
+
+### Analyst intelligence
+
+Capture rating changes, price-target changes, estimate revisions, revision direction, consensus bias/dispersion, recency, coverage depth, and stale/actionable state.
 
 ## Data source policy
 
-### Event intelligence sources
-Preferred source order:
-1. **Finnhub** — earnings calendar and event-style coverage
-2. **Financial Modeling Prep (FMP)** — earnings, dividends, splits, corporate events
-3. **SEC EDGAR** — filings, 8-K, 10-Q, 10-K, insider forms, material event evidence
-4. **Company investor relations / exchange calendars** where available
+Preferred event sources:
+1. Finnhub
+2. Financial Modeling Prep
+3. SEC EDGAR
+4. company IR / exchange calendars
 
-### Options intelligence sources
-Preferred source order:
-1. **Polygon** — options chains, open interest, greeks, IV context
-2. **Tradier** — options chains and greeks
-3. **ORATS** — options analytics / volatility features
-4. **Intrinio** — options market data
-5. **True flow vendors** (for actual flow, not just chain context): Unusual Whales, FlowAlgo, Cheddar Flow, similar licensed feeds
+Preferred options sources:
+1. Polygon
+2. Tradier
+3. ORATS
+4. Intrinio
+5. true-flow vendors such as Unusual Whales, FlowAlgo, Cheddar Flow when licensed
 
-### Analyst intelligence sources
-Preferred source order:
-1. **Finnhub** — recommendations / analyst targets
-2. **FMP** — analyst estimates and revisions when available
-3. **Benzinga** — upgrades/downgrades / target changes
-4. **IEX Cloud** — supplemental analyst data
-5. **Premium institutional vendors** if already licensed later
+Preferred analyst sources:
+1. Finnhub
+2. Financial Modeling Prep
+3. Benzinga
+4. IEX Cloud
+5. premium institutional vendors if already licensed
 
-### Source selection rules
-- Prefer one strong source over multiple weak duplicates.
-- A source is not “better” just because it is premium; it must be usable, current, and licensable.
-- If a premium source is unavailable, fall back to normalized partial coverage instead of failing the whole analysis.
-- True options flow must not be implied when only options-chain context is available.
+Rules:
+- prefer one strong usable/licensed source over weak duplicates
+- premium does not automatically mean better
+- fall back to partial normalized coverage instead of failing full analysis
+- never imply true options flow from chain-only data
 
-## Integration with the rest of analysis
+## Integration contract
 
-The market-intelligence layer should feed into existing analysis surfaces, not create a separate parallel score system.
+Market intelligence feeds existing analysis, not a parallel score.
 
-### 1. Ticker deep analysis
-Add the layer to the ticker analysis payload so it can be reviewed alongside:
-- technical features
-- news/context
-- sentiment
-- transmission analysis
-- diagnostics
+Ticker deep analysis payload must expose it alongside technical features, news/context, sentiment, transmission, and diagnostics.
 
-### 2. Plan framing
-Use the layer as an evidence input to:
+Plan framing may use it in:
 - `confidence_components`
 - `transmission_summary`
 - `setup_family`
@@ -172,108 +112,73 @@ Use the layer as an evidence input to:
 - `warnings`
 - narrative/evidence summaries
 
-### 3. Confidence rules
-The layer should influence confidence only through bounded contributions.
+Confidence semantics:
+- event intelligence may lift/reduce confidence materially when catalyst timing matters
+- analyst intelligence may lift/reduce confidence moderately when recent and meaningful
+- options intelligence usually affects execution quality, pressure, and invalidation risk more than direction
+- do not double-count the same story across news/event/analyst/options
+- treat corroboration as confirmation, not additive repetition
+- conflicts lower confidence and add flags
 
-Recommended semantics:
-- **Event intelligence** can lift or reduce confidence materially because it affects catalyst timing.
-- **Analyst intelligence** can lift or reduce confidence moderately because it helps confirm direction or valuation pressure.
-- **Options intelligence** should mainly affect execution quality, pressure, and invalidation risk; it should usually be a smaller contributor to direction than event or price context.
+Transmission questions:
+- is there a concrete fresh/stale catalyst?
+- is the market already pricing it?
+- do options imply near-term pressure/decay?
+- do analyst changes support or challenge the direction?
 
-Important:
-- do not double-count the same catalyst through news + event + analyst + options
-- if multiple subdomains describe the same story, treat them as corroboration, not additive repetition
-- conflicting evidence should lower confidence and add conflict flags
+Setup-family use:
+- may sharpen, not invent, a family
+- stale event data must not create a catalyst family by itself
+- examples: earnings + positive response + supportive options may reinforce catalyst follow-through; downgrade + bearish pressure + weak technicals may reinforce mean reversion or no-action
 
-### 4. Transmission rules
-Use the market-intelligence layer to answer:
-- is there a concrete catalyst?
-- is the catalyst fresh or stale?
-- is the market already pricing the move?
-- does the options market imply near-term pressure or decay?
-- do analyst changes strengthen or weaken the same direction?
+## Confidence and safety caps
 
-### 5. Setup-family rules
-The layer may sharpen, but not invent, setup-family labels.
+Use bounded deltas only:
+- no subdomain can dominate total plan confidence alone
+- no subdomain can force actionability when technical/setup evidence is weak
+- missing coverage degrades gracefully
+- stale/conflicting evidence subtracts confidence or warns
+- disabled market intelligence contributes zero
 
-Examples:
-- earnings + positive price response + supportive options pressure may reinforce **catalyst follow-through**
-- downgrade + bearish options pressure + weak technicals may reinforce **mean reversion** or **no action**
-- stale event data should not create a catalyst family by itself
+Do not ship material confidence boosts until historical evaluation shows measurable lift.
 
-## Confidence integration model
+## Replay and staleness
 
-Use bounded deltas, not unconstrained scoring.
+All data must be as-of aware:
+- replay may use only snapshots available at or before replay timestamp
+- live analysis records provider as-of and freshness
+- future events/options/analyst changes must not leak into old decisions
+- event dates, option chains, and analyst revisions must be versioned enough to reconstruct decision state
 
-Suggested behavior:
-- event intelligence: larger effect when the event is imminent and the setup depends on it
-- options intelligence: moderate effect when expiry/IV/volume align with the expected move window
-- analyst intelligence: moderate effect when the revision is recent and the coverage is meaningful
-- coverage gaps, stale data, or conflicting evidence should subtract confidence or add warnings
+## Storage and payloads
 
-Suggested safety caps:
-- no single subdomain should dominate the full plan confidence alone
-- no subdomain should be able to force an actionable plan if the underlying technical/setup evidence is weak
-- if market intelligence is missing, the system should degrade gracefully rather than inventing confidence
+Persist normalized fields for scoring/review and raw provider references or trimmed payloads for audit/debugging. Keep raw vendor payloads out of summary rows but available in detail/debug views.
 
-## Replay and staleness rules
-
-All market-intelligence data must be as-of aware.
-
-Requirements:
-- historical replay must only use snapshots available at or before the replay timestamp
-- live analysis may use fresh provider data, but the snapshot must still record the as-of timestamp and provider freshness
-- future events must not leak into replay analyses
-- event dates, options chains, and analyst revisions must be versioned enough to reconstruct the decision state
-
-## Storage and payload expectations
-
-The system should persist both:
-- normalized fields for scoring and review
-- raw provider references or trimmed payloads for audit/debugging
-
-Prefer keeping raw vendor payloads out of summary rows, but make them available in detail views and debug payloads.
-
-Recommended persistence surfaces:
-- market-intelligence snapshot record(s)
+Recommended surfaces:
+- canonical market-intelligence snapshot records
 - `analysis_json`
 - `TickerSignalSnapshot.source_breakdown`
 - `TickerSignalSnapshot.diagnostics`
 - `RecommendationPlan.signal_breakdown`
 - `RecommendationPlan.evidence_summary`
-- run artifact payloads
+- run artifacts
 
-## Diagnostics and warnings
+## Diagnostics and UI
 
-The layer should surface explicit warnings for:
-- no event coverage
-- stale event coverage
-- no options coverage
-- thin options coverage
-- no analyst coverage
-- stale analyst revisions
-- conflicting signals across subdomains
+Warnings should cover:
+- no/stale event coverage
+- no/thin options coverage
+- no/stale analyst coverage
+- conflicting subdomain signals
 - source failures or provider exclusions
 
-A missing subdomain should usually be a warning, not a hard failure, unless the user explicitly requested that subdomain as mandatory.
+Missing subdomains are usually warnings, not hard failures, unless explicitly required by operator settings.
 
-## UI expectations
+Operator UI should show active/next event, options pressure/IV context, analyst revision bias, freshness/source coverage, and whether the layer helped or hurt confidence. It should appear in ticker/detail plan views and quality/calibration views where expected confidence is compared with outcomes.
 
-The operator should be able to see, at minimum:
-- active or next event
-- options pressure / IV context
-- analyst revision bias
-- freshness and source coverage
-- whether the layer helped or hurt confidence
+## Backtesting and promotion evidence
 
-This should appear in:
-- ticker detail / deep analysis views
-- plan detail views
-- any quality/calibration view that compares expected confidence to realized outcomes
-
-## Backtesting and evaluation
-
-Before the layer influences promotion decisions, the app should measure whether it improves:
+Before market intelligence influences promotion decisions, measure lift in:
 - win rate by setup family
 - realized return by confidence bucket
 - false-positive rate for high-confidence plans
@@ -281,56 +186,29 @@ Before the layer influences promotion decisions, the app should measure whether 
 - catalyst follow-through outcomes
 - replay consistency
 
-Validation should compare:
-- plans with market intelligence present vs absent
-- plans with event confirmation vs event conflict
-- plans with options confirmation vs options conflict
-- plans with analyst confirmation vs analyst conflict
+Compare present vs absent, event confirmation vs conflict, options confirmation vs conflict, and analyst confirmation vs conflict.
 
-Do not ship confidence boosts until the layer shows measurable lift on historical outcomes.
+If a source set cannot improve calibrated/backtested decision quality, keep it as diagnostics only.
 
 ## Implementation phases
 
-### Phase 1: event intelligence
-- ingest earnings and major scheduled catalysts
-- attach normalized event fields to ticker analysis
-- add replay-safe staleness checks
-- expose operator-visible diagnostics
-
-### Phase 2: options context
-- ingest chain/IV/OI context
-- derive pressure and decay signals
-- keep true flow separate from chain context
-- expose freshness and spread-quality warnings
-
-### Phase 3: analyst intelligence
-- ingest rating / target / estimate revisions
-- compute recency-weighted directional bias
-- integrate with confidence and setup-family review
-
-### Phase 4: calibrated fusion
-- add bounded scoring contributions
-- add conflict detection and de-duplication
-- measure effect in calibration and walk-forward tooling
-
-### Phase 5: UI and promotion gating
-- surface the new layer in detail pages and diagnostics
-- require positive evidence before using it to lift confidence materially
-- promote only after backtests show improvement
+1. **Event intelligence:** earnings/major scheduled catalysts, normalized fields, replay-safe staleness, diagnostics.
+2. **Options context:** chain/IV/OI context, pressure/decay signals, true-flow separation, spread/freshness warnings.
+3. **Analyst intelligence:** rating/target/estimate revisions and recency-weighted bias.
+4. **Calibrated fusion:** bounded contributions, conflict detection, de-duplication, calibration/walk-forward measurement.
+5. **UI and gating:** detail-page surfacing, positive-evidence requirement for lifts, promotion only after measured improvement.
 
 ## Test requirements
 
-The test suite should prove at least:
-- each subdomain can be missing without breaking the full analysis
-- replay analyses do not leak future events, option states, or analyst revisions
-- event, options, and analyst data each appear in the expected analysis payloads
-- conflicting evidence reduces confidence or adds warnings instead of double counting
-- stale coverage is reported explicitly
-- confidence contributions remain bounded
-- the layer does not manufacture actionable confidence from weak technical evidence
+Tests should prove:
+- each subdomain can be missing without breaking analysis
+- replay does not leak future events/options/analyst revisions
+- event/options/analyst data appears in expected payloads
+- conflicts warn or reduce confidence instead of double-counting
+- stale coverage is explicit
+- confidence contributions stay bounded
+- weak technical evidence cannot become actionable solely from market intelligence
 
 ## Decision rule
 
-If a source set cannot improve decision quality after calibration and backtesting, it should remain a diagnostic aid rather than a confidence driver.
-
-The target is better decisions, not more fields.
+Market intelligence exists to improve measured decisions, not to add fields. Until proven, it remains disabled-by-default, bounded, and diagnostic-first.

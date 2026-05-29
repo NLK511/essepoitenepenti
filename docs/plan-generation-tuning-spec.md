@@ -2,353 +2,164 @@
 
 **Status:** current + target behavior
 
-This document defines the required behavior for autonomous plan-generation tuning.
+Binding reference for recommendation plan-generation tuning. If implementation conflicts with this spec, update the spec first or change the implementation.
 
-Use it as the binding reference when implementing services, schema, jobs, APIs, UI, scheduling, and promotion behavior for recommendation-plan generation tuning.
+## Purpose and boundary
 
-If implementation conflicts with this document, this document wins unless it is explicitly amended.
+Plan-generation tuning improves **actionable recommendation plans after upstream signal gating**. It tunes trade framing and actionable precision, not broad ticker selection.
 
-## Read this spec in two layers
+It may tune parameters that materially affect:
+- actionable vs non-actionable decisions
+- entry, stop-loss, and take-profit construction
+- confidence/selectivity logic that directly changes plan actionability
+- setup-family, regime, direction, technical, volatility, or context adjustments used in plan framing
 
-This document serves two purposes at once:
-
-1. **current shipped phase-1 behavior**
-2. **authoritative target behavior** for the fuller autonomous tuning system
-
-When reading this spec, interpret it as follows:
-- sections that describe current UI pages, routes, persistence, and bounded candidate ranking reflect shipped behavior
-- sections that define stricter autonomous guardrails, promotion policy, and broader governance remain the required target unless and until implementation catches up
-
-## Current shipped phase-1 snapshot
-
-The app currently ships a **phase-1 bounded implementation** of plan-generation tuning.
-
-What is live now:
-- dedicated plan-generation tuning routes, persistence, runs, candidates, and config versions
-- a real research page for inspecting runs, grouped candidate experiments, per-campaign results, config promotion, the ranked exploration campaign plan, and run controls for manual, explore, and wide research
-- settings for active config selection and stored automation readiness flags
-- bounded parameter-schema-driven candidate generation using deterministic local perturbations around the live config, plus small deterministic refinement passes around the top initial seeds and the best key on the leading candidate when it already beats baseline
-- live family-aware entry offset, default-actionable confidence-floor (currently seeded at 60%), and volatility-normalized stop controls are part of the plan-generation config surface and are wired into both live framing and tuning evaluation
-- deterministic candidate ranking centered on win rate, then win count, then expected value, with explicit tie tolerances (`0.25 percentage points`, `1 win`, `0.02` expected-value units)
-- wide/explore runs are evaluated in batches and fail fast on high memory usage instead of letting the worker get killed by the kernel
-- guarded worker-backed run/apply behavior in the backend
-- live consumption of the active config during plan construction
-
-What is not yet fully implemented to the target standard in this spec:
-- the full autonomous daily evolution workflow
-- the full stricter promotion guardrail set described later in this document beyond the current validation/baseline/tie-tolerance checks
-- all target diversity, concentration, and stability protections
-- complete enforcement of the eventual autonomous promotion thresholds as the sole runtime policy
-
-### Interpretation of auto settings in the current build
-
-`auto_enabled` and `auto_promote_enabled` should currently be read as **stored readiness/configuration flags**.
-
-They express intended future autonomous behavior, but they should not be read as proof that the complete autonomous scheduler/promotion policy described later in this spec is already fully active.
-
-## Purpose
-
-The goal of plan-generation tuning is to improve the quality of **actionable recommendation plans** after signals have already passed upstream gating.
-
-This means plan-generation tuning is no longer the only optimization surface, and it should not be read that way. It sits between upstream shortlist control and downstream trust validation:
-- **signal gating tuning** controls what reaches serious consideration
-- **plan generation tuning** controls how candidate trades are framed once they are in scope
-- **recommendation-quality review and walk-forward validation** control whether those changes are trustworthy enough to keep or promote
-
-This tuning layer is responsible for improving the quality of:
-- entry price selection
-- stop-loss selection
-- take-profit selection
-- supporting confidence / threshold / weighting logic that materially affects whether a plan becomes actionable and how its prices are formed
-
-This is a **precision-oriented** optimization surface.
-
-Signal gating tuning remains a separate **recall-oriented** surface.
-
-## Product intent
-
-The system must support two modes:
-
-1. **Manual research mode**
-   - operators can inspect historical tuning runs, compare candidates, and manually promote or reject candidates
-
-2. **Automatic evolution mode**
-   - the app can run scheduled plan-generation tuning daily, evaluate new candidate settings on historical data, and automatically promote a winning candidate only when strict safety rules pass
-
-Automatic mode must be conservative.
-It exists to improve the live configuration gradually, not to chase noise.
-
-## Hard scope boundary
-
-This feature is about **plan generation**, not general optimization.
-
-It covers parameters that materially affect:
-- whether a generated proposal is actionable versus non-actionable
-- the exact entry, stop-loss, and take-profit values
-- plan-side context interpretation that influences those prices or their confidence
-- feature-weight interactions used to derive those values
-
-It does **not** cover:
-- market data ingestion changes
+It must not tune:
+- market-data ingestion/vendor policy
 - outcome-resolution semantics
-- execution engine changes beyond using the promoted plan-generation config
-- broad gating-threshold tuning already owned by signal-gating tuning
-- unrelated repository-wide weight optimization without direct plan-generation impact
+- broker execution/risk-management behavior
+- upstream signal-gating thresholds
+- unrelated model/UI settings
 
-## Canonical objective order
+Related division of labor:
+- **signal gating tuning** = upstream recall/shortlist control
+- **plan-generation tuning** = downstream trade framing/precision
+- **quality, calibration, baseline, and walk-forward reports** = trust and promotion evidence
 
-Candidates must be ranked using the following ordered objective:
+The legacy weight optimizer is retired. Do not revive its workflow, job type, active settings, or rollback path. `weights.json` may remain only as a normal scoring input where still needed.
 
-1. **maximize actionable win rate**
-2. **maximize actionable win count**
-3. **maximize actionable expected value**
+## Current implementation snapshot
 
-This ordering is strict.
+Live behavior includes:
+- dedicated routes, persistence, runs, candidates, config versions, and config promotion
+- research UI for runs, grouped candidates, campaign plan, config history, and manual controls
+- stored automation readiness flags (`auto_enabled`, `auto_promote_enabled`)
+- live consumption of the active plan-generation config during plan construction
+- bounded deterministic local perturbations around live config, plus small deterministic refinement passes
+- family-aware entry offsets, actionable confidence floor, and volatility-normalized stop controls
+- candidate ranking by win rate, win count, then expected value with explicit tie tolerances
+- batched wide/explore evaluation with memory guardrails
 
-Implementation must not collapse the three into an arbitrary single weighted score unless that score preserves this ordering as a lexicographic decision rule.
+Not fully autonomous yet:
+- the complete daily evolution workflow
+- all target diversity/concentration/stability protections as sole unattended promotion policy
+- unattended auto-promotion beyond current validation/baseline/tie checks
 
-### Required interpretation
+`auto_enabled` and `auto_promote_enabled` are stored readiness/configuration flags. They are not proof that unattended autonomous promotion is fully active.
 
-- A candidate with materially lower actionable win rate must not outrank one with higher actionable win rate just because it produces more trades.
-- If two candidates are effectively tied on win rate, prefer the one with higher actionable win count.
-- If both are effectively tied on win rate and win count, prefer the one with better expected value.
+## Product modes
 
-### Required tie handling
+The system supports:
+1. **Manual research** — inspect runs, compare candidates, manually promote or reject.
+2. **Automatic evolution** — scheduled dry-run/evaluation and conservative auto-promotion only when every safety rule passes.
 
-The implementation must define explicit tie tolerances to avoid unstable rank flips from tiny numeric differences.
+Automatic mode must default conservative and improve gradually, not chase noise.
 
-Initial required tolerances:
-- win-rate tie tolerance: `0.25 percentage points`
-- win-count tie tolerance: `1 win`
-- expected-value tie tolerance: `0.02R` or equivalent normalized return unit
+## Canonical objective and ranking
 
-If a different return unit is used, the equivalent tolerance must be documented in the implementation.
+Candidates rank lexicographically:
+1. maximize actionable win rate
+2. maximize actionable win count
+3. maximize actionable expected value
+4. if still tied, prefer closer-to-live config
+5. if still tied, prefer fewer changed parameters
 
-### Current implementation status
+Tie tolerances:
+- win rate: `0.25 percentage points`
+- win count: `1 win`
+- expected value: `0.02R` or the implementation's equivalent normalized unit
 
-- **implemented now:** candidate ranking and promotion eligibility use the documented win-rate, win-count, and expected-value tie tolerances.
-- **implemented now:** the current expected-value tolerance is applied to the tuning service's normalized expected-value unit.
-- **still target behavior:** the broader autonomous promotion standard must also include the edge-validation gate, diversity/concentration checks, and demotion/halt policy before unattended promotion can expand autonomy.
+A materially lower win-rate candidate must not outrank a higher win-rate candidate only because it trades more.
 
-### Current live knob set
+For exploration runs, ranking metrics must come from rolling walk-forward validation, not one tail split.
 
-These three controls are already wired into live plan construction and tuning evaluation:
-- a family-aware entry band multiplier so setup families can widen or narrow the global entry offset without adding combinatorics
-- an actionable confidence floor so low-conviction plans can be made explicitly non-actionable
-- a volatility-normalized stop multiplier driven by the stored volatility proxy so stop width can expand or contract with market noise
+## Parameter schema
 
-Implementation rule:
-- keep the knobs bounded, deterministic, and replayable
-- add parity tests for live plan framing and tuning scoring before widening the search surface
+Every tunable key must be registered before use. Candidate configs containing unknown keys must be rejected.
 
-## Relationship to existing tuning systems
+Required metadata per parameter:
+- `key`, `label`, `description`
+- `type`: `float`, `int`, `bool`, or `enum`
+- `scope`: `global`, `setup_family`, `regime`, `direction`, or a documented combination
+- `default_value`, `current_live_value`
+- `min_value`/`max_value` or enum options
+- numeric `step`
+- `exploration_mode`: `grid`, `mutation`, `baseline_only`, or `fixed`
+- `materiality_class`: `critical`, `secondary`, or `experimental`
 
-### Signal gating tuning
+Current live knob classes include:
+- family-aware entry band multiplier
+- actionable confidence floor
+- volatility-normalized stop multiplier
 
-Signal gating tuning is separate and must remain separate.
+Keep knobs bounded, deterministic, replayable, and covered by live-framing/tuning parity tests before widening the surface.
 
-- signal gating tuning optimizes upstream selection / recall
-- plan generation tuning optimizes downstream plan quality / precision
-- recommendation-quality review and walk-forward validation judge whether tuning changes deserve trust or promotion
+## Data eligibility and leakage policy
 
-The two systems may share infrastructure patterns, but they must not share the same active configuration object or promotion policy.
+Use all meaningful data only after strict eligibility checks.
 
-Practical division of labor:
-- use **signal gating tuning** when the shortlist is too strict, too loose, or mishandles degraded near-misses
-- use **plan generation tuning** when the system is already surfacing candidates but entry/stop/take-profit framing or actionable precision needs improvement
-- use **quality-summary, calibration, baseline, evidence, and walk-forward surfaces** to decide whether any tuning change should actually influence live behavior
-
-### Legacy weight optimization
-
-The old weight-optimization job is **retired**.
-
-Implementation rule:
-- do **not** revive or extend the legacy optimizer in-place
-- do **not** preserve compatibility for its job type, settings, or rollback workflow
-- keep `weights.json` only as a normal scoring input where live proposal/deep-analysis code still needs it
-
-Required implementation assumption:
-- use a **new dedicated plan-generation tuning framework**
-- reuse only generic helper patterns, not the legacy optimizer workflow or data model
-
-## Canonical tuning surface
-
-The tuning surface includes any parameter that materially contributes to:
-- entry derivation
-- stop-loss derivation
-- take-profit derivation
-- actionable/non-actionable plan transition
-- confidence or selectivity adjustments that materially affect the final actionable set
-- technical-indicator influence on price placement or confidence
-- context or regime influence on price placement or confidence
-- setup-family-specific pricing rules
-
-### Examples of admissible parameters
-
-These are in scope if they exist in the implementation:
-- ATR-based stop multipliers
-- risk-reward target multipliers
-- setup-family-specific entry offsets
-- breakout / pullback thresholds
-- technical-indicator weights used in confidence or price framing
-- context-bias adjustments that alter target/stop spacing
-- volatility-normalized stop multipliers driven by stored volatility proxies
-- actionable confidence floors that control whether a plan remains actionable
-- degraded-data penalties that alter plan selectivity or price aggressiveness
-- regime-specific overrides
-- family-specific confidence floors for actionable status
-
-### Examples of inadmissible parameters
-
-These are not in scope unless they directly alter plan generation:
-- API polling intervals
-- data vendor selection
-- watchlist seed definitions
-- unrelated UI defaults
-- general-purpose model settings not tied to plan generation
-
-## Guiding design principle
-
-The tuning system must tune the **full plan-generation scoring and price-construction pipeline**, but via a **structured parameter schema**.
-
-That means:
-- do not hardcode a few special-case knobs and call the system complete
-- do not allow arbitrary unbounded JSON mutation either
-- represent the tunable surface with named parameters, types, ranges, defaults, and optional family/regime scopes
-
-## Required parameter schema
-
-Every tunable parameter must be described by metadata that includes:
-- `key`
-- `label`
-- `type` (`float`, `int`, `bool`, `enum`)
-- `scope` (`global`, `setup_family`, `regime`, `direction`, or a combination if needed)
-- `default_value`
-- `current_live_value`
-- `min_value` / `max_value` or enum options
-- `step` for numeric exploration
-- `exploration_mode` (`grid`, `mutation`, `baseline_only`, `fixed`)
-- `materiality_class` (`critical`, `secondary`, `experimental`)
-- `description`
-
-Implementation must reject candidate configs containing keys not present in the registered parameter schema.
-
-## Data usage policy
-
-The system should use **all data that can meaningfully be used**, but only after severe eligibility checks.
-
-The tuning system must be deliberately strict about what counts as evaluable evidence.
-
-## Canonical data sources
-
-The tuning engine may use:
+Canonical sources:
 - `RecommendationPlan`
 - `RecommendationPlanOutcome`
 - `RecommendationDecisionSample`
-- context snapshots linked to plan generation
-- ticker-signal snapshots linked to plan generation
-- any derived replay/backtest artifacts that reproduce plan-generation inputs without leakage
+- linked context snapshots
+- linked ticker-signal snapshots
+- derived replay/backtest artifacts that reproduce plan-generation inputs without leakage
 
-## Data eligibility rules
+Eligible records need:
+- reproducible plan-generation inputs or sufficient stored artifacts
+- known generation timestamp
+- known directional/actionable interpretation
+- resolved or scoreable outcome for win/loss/EV metrics, including scoreable broker outcomes and `phantom_win`/`phantom_loss` for `no_action`/`watchlist` plans with `intended_action`
 
-A record is eligible only if all required conditions hold.
+Exclude records with unresolved required metrics, corrupted/missing features, uncertain reconstruction, future-data leakage, or unsafe backfill/recompute semantics.
 
-### Required minimum eligibility
+Evidence tiers:
+- **Tier A**: fully reproducible/resolved; allowed for ranking and promotion
+- **Tier B**: minor non-critical gaps; research summaries only
+- **Tier C**: weak/incomplete; diagnostics only
 
-A candidate evaluation record must have:
-- reproducible plan-generation inputs, or enough stored artifacts to reconstruct the relevant plan-generation features
-- a known plan-generation timestamp
-- a known directional/actionable interpretation
-- a resolved or otherwise scoreable outcome if it is being used for win/loss or expected-value scoring. This includes real `win`/`loss` outcomes as well as `phantom_win` and `phantom_loss` records from `no_action` or `watchlist` plans with an `intended_action`.
-- broker-resolved positions may also qualify when a broker outcome is present and the outcome can be scored from stored realized-return data even if simulation excursion fields are absent
+Auto-promotion must rely primarily on Tier A data.
 
-### Required exclusions
+Anti-leakage rules:
+- candidate scoring may use only generation-time inputs plus later labels for evaluation
+- outcome-period bars/post-generation metrics are evaluation-only unless explicitly allowed
+- replay baselines and thresholds must come from candidate config and admissible historical context
+- training/search windows must end before validation windows
 
-The implementation must exclude records when:
-- outcome is unresolved for a metric that requires resolution
-- required feature payloads are missing or corrupted
-- a plan cannot be reconstructed with confidence
-- there is known leakage from future data into the inputs
-- the record belongs to a backfill or recompute path that does not preserve original generation semantics and is not explicitly marked replay-safe
+## Replay and candidate generation
 
-### Recommended inclusion tiers
+Replay must deterministically answer, for each eligible record:
+- would the candidate produce an actionable plan?
+- what entry/stop/take-profit would it produce?
+- how would that plan resolve under canonical resolution semantics?
+- what opportunity was filtered out if non-actionable?
 
-The engine should classify records into tiers:
-- **Tier A**: fully reproducible, resolved, high-confidence records; safe for ranking and promotion decisions
-- **Tier B**: mostly reproducible records with minor non-critical gaps; safe for research summaries, not sufficient alone for auto-promotion
-- **Tier C**: incomplete or weakly reproducible records; visible for diagnostics only, excluded from promotion scoring
+Use `recommendation-plan-resolution-spec.md` as the outcome authority. Do not invent separate outcome semantics.
 
-Automatic promotion must rely primarily on Tier A data.
+Candidate generation must be deterministic and capped. Allowed sources:
+- live baseline config
+- small local perturbations around baseline
+- top promoted/non-promoted historical configs when safe
+- bounded mutations within schema limits
 
-## Anti-leakage rules
+Current simplified exploration policy:
+- include baseline plus deterministic local perturbations
+- optional small refinement around top seeds
+- optional targeted smaller-step probe around the leading candidate's best key when it already beats baseline
+- no random/history-heavy rescue paths
+- process eligible records in deterministic chunks and abort cleanly on memory guardrail breach
 
-The implementation must prevent using future knowledge.
+Default limits unless overridden:
+- scheduled/manual candidates: `17`
+- wide research candidates: `49`
+- internal eligible-record batch size: `250`
+- max changed keys per candidate: `1`
+- max step distance: manual `1`, explore `2`, wide `3`
 
-Required rules:
-- candidate scoring must only use information available at plan-generation time plus later outcome labels for evaluation
-- no feature field may be populated from outcome-period bars or post-generation derived metrics unless explicitly marked evaluation-only
-- calibration baselines and thresholds used inside a replay must be sourced from the candidate config and admissible historical context only
-- if time-split evaluation is implemented, training windows must end strictly before validation windows
+Initial exploration envelope:
 
-## Backtesting methodology
-
-The tuning engine must backtest candidates against historical records using deterministic replay rules.
-
-### Required replay behavior
-
-For each eligible record, candidate evaluation must attempt to answer:
-- would this candidate have produced an actionable plan?
-- if actionable, what entry/stop/take-profit would it have produced?
-- if those prices differ from the stored live plan, what would the resulting outcome have been under canonical resolution semantics?
-- if non-actionable, what opportunity was intentionally filtered out?
-
-### Resolution reference
-
-Outcome comparison must use the canonical rules in:
-- `recommendation-plan-resolution-spec.md`
-- `archive/implementation-plans/recommendation-plan-evaluation-recompute-notes.md`
-
-Plan-generation tuning must not invent a separate outcome semantics.
-
-### Determinism requirement
-
-Given the same candidate config, same eligible dataset, and same baseline code version, the tuning run must produce the same ranking result.
-
-Any stochastic exploration algorithm must still persist the random seed and full candidate list so the run is replayable.
-
-## Candidate generation rules
-
-The system must support ranked candidate generation while remaining inspectable.
-
-### Phase 1 required generation strategy
-
-The first implementation must generate candidates from:
-- current live baseline config
-- small local perturbations around the baseline
-- top historical promoted configs
-- top historical non-promoted but high-scoring configs
-- optional bounded mutations within parameter limits
-
-### Exploration and backtest workflow
-
-Manual research runs should support a broader exploration mode that is deterministic and replayable.
-
-Required exploration behavior:
-- evaluate the largest eligible replay-safe dataset available to the run
-- use rolling walk-forward validation over the eligible history, not just a single train/validation split
-- adapt the walk-forward window to the available history when the nominal window is too large, so short history still yields at least one full validation slice instead of an empty summary
-- rank exploration candidates from rolling walk-forward summary metrics instead of a single tail holdout slice
-- persist the exploration seed, candidate list, and full candidate metrics for replayability
-- include at least one baseline candidate plus deterministic local perturbations when the exploration mode is enabled; after the first sweep, a small refinement pass may probe the top seeds, and a second targeted pass may probe the leading candidate's best key with a smaller step when the leading candidate already beats baseline
-- keep the search bounded; exploration must remain auditable and capped
-- prefer the oldest eligible records for search/fit summaries only when a time split is required; validation must remain holdout-based
-- include broker-resolved records and phantom scoreable records in the eligible exploration set when they satisfy the replay rules above
-
-### First campaign exploration envelope
-
-The initial manual exploration campaign must stay inside the following exact parameter ranges. These ranges are narrower than the full schema limits and are meant to focus the search near plausible profit/risk trade-offs before widening the search space.
-
-| Parameter key | Exploration min | Exploration max |
+| Parameter key | Min | Max |
 | --- | ---: | ---: |
 | `global.entry_band_risk_fraction` | `0.00` | `0.25` |
 | `global.headwind_stop_multiplier` | `0.84` | `1.02` |
@@ -359,516 +170,150 @@ The initial manual exploration campaign must stay inside the following exact par
 | `setup_family.catalyst_follow_through.take_profit_distance_multiplier` | `1.05` | `1.50` |
 | `setup_family.macro_beneficiary_loser.take_profit_distance_multiplier` | `1.00` | `1.30` |
 
-Step-based local perturbations in exploration mode must be clamped to this envelope.
-The exploration generator should widen only by taking deeper local steps, not by adding random or historical reuse branches.
+Default first campaign budget: `16` perturbation candidates plus baseline before deduplication.
 
-### Ranked exploration campaign plan
+## Scoring outputs
 
-The first exploration campaign should allocate effort in this order:
-
-| Priority | Campaign | Primary knobs | Candidate budget |
-| --- | --- | --- | ---: |
-| 1 | Entry calibration | `global.entry_band_risk_fraction` | `2` |
-| 2 | Risk protection | `global.headwind_stop_multiplier`, `setup_family.breakout.stop_distance_multiplier`, `setup_family.mean_reversion.stop_distance_multiplier` | `6` |
-| 3 | Reward expansion | `setup_family.breakout.take_profit_distance_multiplier`, `setup_family.mean_reversion.take_profit_distance_multiplier`, `setup_family.catalyst_follow_through.take_profit_distance_multiplier`, `setup_family.macro_beneficiary_loser.take_profit_distance_multiplier` | `8` |
-
-This yields a default exploration budget of `16` perturbation candidates plus the baseline config per run before deduplication.
-
-### Candidate generation constraints
-
-- candidate count per run must be explicitly capped
-- the historical record window used to build eligible tuning records must be loaded in deterministic chunks so the full corpus can be processed without materializing it all at once
-- evaluation may happen in batches, but each candidate must still be fully materialized and stored before the run completes
-- wide/explore runs must abort cleanly if memory usage crosses the configured guardrail, instead of risking an OOM crash
-- candidates must declare which parameters differ from the baseline
-- large multi-dimensional blind searches are not allowed in the initial implementation
-
-### Initial default limits
-
-Unless explicitly overridden by config:
-- max candidates per scheduled automatic run: `17`
-- max candidates per manual research run: `17`
-- max candidates per wide research run: `49`
-- eligible records are loaded in deterministic batches of `250` rows internally; user-specified limits remain respected, and omitting a limit means the service processes all available eligible records
-- max changed parameters per candidate in all modes: `1`
-- max absolute step distance from live baseline in manual mode: `1 step`
-- max absolute step distance from live baseline in explore mode: `2 steps`
-- max absolute step distance from live baseline in wide mode: `3 steps`
-- wide research may use deeper local steps, but it must remain deterministic, capped, and replayable
-
-## Candidate scoring outputs
-
-Each candidate result must persist at least:
-- candidate rank
-- candidate config
+Persist for every candidate:
+- rank, status, promotion eligibility, rejection reasons
+- candidate config and changed keys
 - baseline delta summary
-- actionable count
-- actionable resolved count
-- actionable win count
-- actionable loss count
-- actionable win rate
-- actionable expected value
-- total filtered-out count
-- coverage rate relative to eligible records
-- setup-family breakdown
-- direction breakdown
-- regime breakdown if available
-- sample-size flags
-- promotion eligibility flag
-- rejection reasons
+- actionable count, resolved count, wins, losses, win rate, expected value
+- filtered-out count and coverage rate
+- setup-family, direction, and regime breakdowns where available
+- sample-size and validation flags
 
-## Candidate ranking rules
+## Promotion rules
 
-Ranking must be lexicographic with guardrails.
+A candidate is invalid for promotion if it:
+- lacks minimum sample quality
+- creates impossible/invalid price geometry
+- degrades protected secondary metrics beyond limits
+- uses unregistered schema keys
+- fails holdout/walk-forward validation
 
-### Ranking algorithm
+Minimum auto-promotion sample thresholds:
+- actionable resolved plans: `50`
+- wins: `20`
+- Tier A eligible records: `200`
+- distinct tuning dates: `20 market days`
+- distinct tickers: `20`
 
-1. exclude candidates that fail hard validity rules
-2. compare remaining candidates by actionable win rate
-3. if tied within tolerance, compare actionable win count
-4. if tied within tolerance, compare actionable expected value
-5. if still tied, prefer the candidate closer to the current live config
-6. if still tied, prefer the candidate with fewer changed parameters
+Protected secondary guardrails relative to baseline:
+- actionable count drop must not exceed `40%`
+- actionable resolved drop must not exceed `35%`
+- expected value drop must not exceed `0.10R`
+- any major setup family with at least `20` resolved actionables must not lose more than `15pp` win rate
+- top-1 ticker concentration must not exceed `25%` unless baseline already exceeds it and candidate improves concentration
 
-For exploration-mode runs, the actionable win rate / win count / expected value comparison must be derived from rolling walk-forward validation across the eligible history, not from a single contiguous tail split.
+Minimum improvement for auto-promotion:
+- actionable win rate improves by at least `1.0pp`, or
+- improves by at least `0.5pp` and actionable win count increases by at least `10%`
 
-### Hard validity rules
+Auto-promotion must pass both full-backtest and recent holdout/rolling validation. Default holdout split is oldest `80%` for search/aggregation and newest `20%` for validation; insufficient samples force research-only mode.
 
-A candidate must be marked invalid for auto-promotion if any of the following holds:
-- actionable resolved count is below the minimum threshold
-- effective sample quality is below the required threshold
-- candidate creates impossible or invalid price structures
-- candidate materially degrades a protected secondary metric beyond allowed limits
-- candidate depends on parameters outside the registered schema
-
-## Minimum sample requirements
-
-The system must not auto-promote on tiny samples.
-
-Initial required thresholds for auto-promotion:
-- minimum actionable resolved plans: `50`
-- minimum wins: `20`
-- minimum eligible Tier A records: `200`
-- minimum distinct tuning dates: `20 market days`
-- minimum distinct tickers: `20`
-
-These thresholds may be tightened later, but implementation must not go below them without an explicit spec update.
-
-Manual research runs may show lower-sample candidates, but those candidates must be visibly marked as not auto-promotable.
-
-## Protected secondary metrics
-
-Although ranking is driven by the canonical objective order, the following metrics must be treated as protection constraints:
-- actionable count collapse
-- expected value collapse
-- extreme concentration in one ticker or one setup family
-- excessive degradation in a major setup family
-- excessive reliance on degraded-input plans
-- large instability across recent time windows
-
-### Required default protection rules for auto-promotion
-
-A candidate must not auto-promote if it causes any of the following relative to the current live baseline on the same eligible sample:
-- actionable count drops by more than `40%`
-- actionable resolved count drops by more than `35%`
-- expected value drops by more than `0.10R`
-- any major setup family with at least `20` resolved actionable records loses more than `15 percentage points` of win rate
-- top-1 ticker concentration among actionable plans exceeds `25%` unless the baseline already exceeds it and the candidate improves the concentration
-
-These are safety guardrails, not ranking objectives.
-
-## Acceptance threshold for auto-promotion
-
-Automatic promotion must require a meaningful improvement over the current live baseline.
-
-Initial required minimum improvement:
-- actionable win rate must improve by at least `1.0 percentage point`
-- or by at least `0.5 percentage points` if the candidate also increases actionable win count by at least `10%`
-
-If those conditions are not met, the candidate may still be stored and ranked, but it must not auto-promote.
-
-## Time-split evaluation requirement
-
-To reduce overfitting, every auto-promotion decision must be based on at least two views:
-- **full eligible backtest view**
-- **recent holdout or rolling-window validation view**
-
-A candidate must pass both.
-
-### Initial required holdout behavior
-
-At minimum, the implementation must reserve the most recent eligible slice as a holdout validation window.
-
-Default rule:
-- oldest `80%` of eligible Tier A records for candidate search / score aggregation
-- most recent `20%` for validation gating
-
-If record counts are too small, the run must fall back to research-only and disable auto-promotion.
-
-## Promotion policy
-
-Promotion means making a candidate the live plan-generation configuration used by future plan generation.
-
-### Modes
-
-The system must support:
+Promotion modes:
 - `dry_run`
 - `manual_promote`
 - `auto_promote`
 - `rollback`
 
-### Promotion requirements
+Auto-promotion must fail closed unless the shared edge-validation gate has explicit passing baseline-comparison, drawdown, and loss-streak evidence, plus walk-forward, concentration, degraded-input, and broker-reconciliation inputs. Manual promotion may target any candidate passing promotion checks and does not require the autonomy edge gate.
 
-A candidate may be promoted if:
-- it passes hard validity rules
-- it passes sample-size thresholds
-- it passes holdout validation
-- it passes protected secondary metric guardrails
-- it exceeds the minimum improvement threshold
-- a full audit trail is persisted
+Rollback must persist source config, target config, reason, actor/mode, and timestamp.
 
-Auto-promotion still targets the rank-1 candidate by default, but manual promotion may target any candidate that passes the promotion checks. Manual promotion does not require the edge-validation autonomy gate; that gate is reserved for autonomous expansion and auto-promotion paths. Auto-promotion must fail closed unless the shared edge-validation gate has explicit passing baseline-comparison, drawdown, and loss-streak evidence in addition to walk-forward, concentration, degraded-input, and broker-reconciliation inputs.
+## Persistence and settings
 
-### Rollback requirements
-
-The system must support rollback to the previous live config.
-
-Rollback must persist:
-- source promoted config version
-- reverted-to config version
-- reason
-- actor or system mode
-- timestamp
-
-## Daily automatic evolution mode
-
-The system must support a scheduled daily run.
-
-### Required schedule behavior
-
-- at most one active scheduled plan-generation tuning run at a time
-- if a prior run is still active, skip the next scheduled run and record a skipped event
-- automatic mode must default to `dry_run` until explicit enablement is configured
-- auto-promotion must be independently toggleable from automatic scheduled evaluation
-
-### Daily run responsibilities
-
-Each scheduled run must:
-1. load the active live config
-2. load eligible historical data
-3. generate bounded candidates
-4. evaluate and rank candidates
-5. validate the winner against holdout rules
-6. auto-promote only if all requirements pass; manual promotion may proceed without the edge-validation autonomy gate
-7. persist a complete run summary and candidate list
-8. update the active state endpoint and UI history
-
-## Required persistence model
-
-The implementation must store first-class tuning entities.
-
-A single JSON blob is not sufficient for the full system.
-
-### Required entities
-
-At minimum, create dedicated persistence for:
+Required entities:
 - `plan_generation_tuning_runs`
 - `plan_generation_tuning_candidates`
 - `plan_generation_tuning_config_versions`
 - `plan_generation_tuning_events`
 
-Optional additional entities are allowed if they simplify implementation.
+Minimum run fields: status, mode, objective, promotion mode, timestamps, baseline/winner/promoted references, eligible/candidate/validation counts, summary/filter JSON, error, code version.
 
-### Required table semantics
+Minimum candidate fields: run, rank, status, baseline flag, promotion eligibility, config, changed keys, score/breakdown/sample/validation JSON, rejection reasons, created time.
 
-#### `plan_generation_tuning_runs`
-One row per tuning execution.
+Minimum config fields: version label, status, source, parent, source run/candidate, config JSON, schema version, create/activate/deactivate times.
 
-Must include at least:
-- `id`
-- `status`
-- `mode` (`manual`, `scheduled`, `explore`, `wide`)
-- `objective_name`
-- `promotion_mode` (`dry_run`, `manual_promote`, `auto_promote`, `rollback_only`)
-- `started_at`
-- `completed_at`
-- `failed_at`
-- `baseline_config_version_id`
-- `winning_candidate_id`
-- `promoted_config_version_id`
-- `eligible_record_count`
-- `eligible_tier_a_count`
-- `candidate_count`
-- `validation_record_count`
-- `summary_json`
-- `filters_json`
-- `error_message`
-- `code_version`
+Minimum event fields: event type, run/config/candidate references, actor, payload, created time.
 
-#### `plan_generation_tuning_candidates`
-One row per evaluated candidate within a run.
+Active config must be readable atomically without scanning history. Promotion must atomically switch the active reference. Live plan generation must read only the active plan-generation config.
 
-Must include at least:
-- `id`
-- `run_id`
-- `rank`
-- `status`
-- `is_baseline`
-- `promotion_eligible`
-- `config_json`
-- `changed_keys_json`
-- `score_summary_json`
-- `metric_breakdown_json`
-- `sample_breakdown_json`
-- `validation_summary_json`
-- `rejection_reasons_json`
-- `created_at`
+## API contract
 
-#### `plan_generation_tuning_config_versions`
-One row per versioned config available for live use or historical comparison.
-
-Must include at least:
-- `id`
-- `version_label`
-- `status` (`draft`, `active`, `superseded`, `rolled_back`, `rejected`)
-- `source` (`seed`, `manual`, `scheduled`, `promoted_candidate`, `rollback`)
-- `parent_config_version_id`
-- `source_run_id`
-- `source_candidate_id`
-- `config_json`
-- `parameter_schema_version`
-- `created_at`
-- `activated_at`
-- `deactivated_at`
-
-#### `plan_generation_tuning_events`
-Immutable audit log for operational changes.
-
-Must include at least:
-- `id`
-- `event_type`
-- `run_id`
-- `config_version_id`
-- `candidate_id`
-- `actor_type` (`system`, `user`)
-- `actor_identifier`
-- `payload_json`
-- `created_at`
-
-## Settings and active live config
-
-The system must expose the currently active live plan-generation tuning config separately from historical versions.
-
-Required behavior:
-- active config must be readable without scanning the entire version history
-- promotion must atomically switch the active config reference
-- live plan generation must read from the active plan-generation config only
-- if no dedicated active-config pointer exists yet, one must be added
-
-## API requirements
-
-The backend must provide explicit plan-generation tuning endpoints.
-
-### Required endpoints
-
+Required endpoints:
 - `GET /api/plan-generation-tuning`
-  - returns active config, latest run summary, scheduler state, and automatic-mode state
-
 - `GET /api/plan-generation-tuning/runs`
-  - paginated list of runs
-
 - `GET /api/plan-generation-tuning/runs/{run_id}`
-  - full run detail, including candidate summary list
-
 - `POST /api/plan-generation-tuning/run`
-  - manually start a run
-  - supports `dry_run` and `manual_promote`
-
 - `POST /api/plan-generation-tuning/configs/{config_version_id}/promote`
-  - manually promote a previously evaluated config version
-
 - `POST /api/plan-generation-tuning/configs/{config_version_id}/rollback`
-  - rollback to a prior config version if allowed by policy
-
 - `GET /api/plan-generation-tuning/configs`
-  - paginated list of config versions
-
 - `GET /api/plan-generation-tuning/configs/{config_version_id}`
-  - config detail with provenance
-
 - `GET /api/plan-generation-tuning/parameters`
-  - registered tunable parameter schema
-
 - `POST /api/plan-generation-tuning/settings`
-  - update scheduler and automatic-mode settings, not the candidate config itself
 
-### Optional endpoints
-
-These are allowed but not required initially:
-- candidate-detail endpoint
-- comparison endpoint for two configs
-- endpoint for skipped scheduled-run history
-
-## API response requirements
-
-Responses must be stable and explicit.
-
-Required principles:
+Response rules:
 - paginated endpoints return `{ items, total, limit, offset }`
-- run-detail responses include both baseline and winner references
-- config-detail responses include parent and source provenance
-- auto-promotion decisions include explicit rejection or promotion reasons
+- run details include baseline and winner references
+- config details include provenance
+- promotion decisions include explicit promotion/rejection reasons
 
-## Frontend requirements
+Optional endpoints may expose candidate detail, config comparison, or skipped scheduled-run history.
 
-The frontend must provide a dedicated plan-generation tuning workflow under research.
+## UI contract
 
-### Required pages
+Research UI must show:
+- active config, scheduler/automation state, latest run
+- run history with status/mode/date/promotion filters
+- run detail with baseline vs winner, candidate ranking, eligibility, guardrails, and manual promote actions
+- config history with active/superseded state and rollback where allowed
 
-1. **Plan generation tuning overview page**
-   - active config summary
-   - automatic-mode state
-   - latest run summary
-   - quick links to runs and config history
+Safety requirements:
+- distinguish `dry_run`, `manual_promote`, and `auto_promote`
+- label rankable-but-not-promotable candidates
+- default to eligible candidates, with blocked candidates behind a toggle
+- show guardrail failures and active config provenance
 
-2. **Tuning runs page**
-   - paginated list of runs
-   - filters for status, mode, date range, promotion outcome
+## Jobs, failures, and observability
 
-3. **Run detail page**
-   - baseline vs winner comparison
-   - eligible candidates shown first, with blocked candidates hidden behind an explicit toggle
-   - eligibility and validation summary
-   - guardrail pass/fail reasons
-   - manual promote action for any eligible candidate
+Scheduled/manual runs must use durable worker/job records and prevent concurrent active scheduled runs. Scheduled automatic mode defaults to dry-run; auto-promotion is separately toggleable.
 
-4. **Config history page**
-   - version history
-   - active/superseded status
-   - rollback affordance where allowed
+Each scheduled run loads active config, loads eligible data, generates/evaluates/ranks candidates, validates the winner, promotes only if all rules pass, and persists summary/history.
 
-### Required UI safety behavior
+Failure rules:
+- failed runs never partially activate configs
+- failed auto-promotion leaves active config unchanged
+- partial candidate evaluation is allowed only with no promotion and a partial marker
+- every failure persists a human-readable error
 
-- the UI must clearly distinguish `dry_run`, `manual_promote`, and `auto_promote`
-- the UI must clearly label candidates that are rankable but not promotion-eligible
-- the UI should default to showing only eligible candidates and let the operator reveal blocked rows on demand
-- the UI must show why a candidate failed promotion
-- the UI must show the currently active config version at all times
-
-## Job-system integration
-
-If the project already uses a worker-backed job model, plan-generation tuning must integrate with that model rather than bypassing it.
-
-Required behavior:
-- scheduled and manual runs must both create durable job/run records
-- active-run conflict prevention must exist
-- failure state and cancellation state must be visible
-- plan-generation tuning must have its own job type, not reuse a semantically different type unless the old type is renamed and repurposed cleanly
-
-## Migration rules
-
-Implementation must not silently repurpose legacy tables with different semantics.
-
-Required approach:
-- create new dedicated tables for plan-generation tuning
-- remove the legacy weight-optimization job from supported workflows
-- do not keep a parallel legacy optimizer path in the product surface
-
-## Failure handling
-
-The tuning system must fail safely.
-
-### Required failure behavior
-
-- a failed run must never partially activate a candidate config
-- a failed auto-promotion attempt must leave the active config unchanged
-- partial candidate evaluation is allowed only if the run is marked partial and no promotion occurs
-- every failure must persist a human-readable error summary
-
-## Observability requirements
-
-Each run must persist enough metadata to diagnose behavior.
-
-Required persisted metadata:
-- code version or git SHA if available
-- parameter schema version
-- eligible sample summary
-- holdout summary
-- baseline metrics
-- winning metrics
-- promotion decision explanation
-- skipped-reason explanation if no promotion occurred
+Persist observability metadata: code version, schema version, sample summary, holdout summary, baseline/winner metrics, promotion decision, and skipped/no-promotion reasons.
 
 ## Acceptance criteria
 
-The feature is complete only when all of the following are true.
+Complete behavior requires:
+- dedicated run/candidate/config/event persistence
+- atomic active-config loading by live plan generation
+- manual dry-run, manual promote, state, history, and config APIs
+- scheduled runs with conservative auto-promotion guardrails
+- deterministic/auditable candidate ranking
+- UI visibility into active config, runs, candidates, guardrails, and provenance
+- rollback support and audit trail
+- no automatic drift outside registered schema or sample/holdout/guardrail checks
 
-### Backend
+## Non-goals
 
-- dedicated persistence tables exist for runs, candidates, config versions, and events
-- active config can be read atomically by live plan generation
-- a manual dry-run endpoint exists
-- a manual promote endpoint exists
-- a state endpoint exists
-- scheduled daily runs are supported
-- auto-promotion obeys all guardrails in this spec
-- candidate ranking is deterministic and auditable
-
-### Frontend
-
-- operators can inspect active config, run history, candidate rankings, and promotion results
-- paginated views exist for runs and config history
-- guardrail failures and rejection reasons are visible
-- active config provenance is visible
-
-### Safety
-
-- automatic mode can run without supervision
-- automatic mode cannot drift outside registered parameter schema
-- automatic mode cannot promote candidates that fail sample-size, holdout, or guardrail checks
-- rollback is supported and audited
-
-## Explicit non-goals for the first implementation
-
-The first implementation does not need:
-- reinforcement learning
-- black-box Bayesian optimization
-- fully generic optimization across unrelated app domains
-- self-modifying parameter-schema generation
-- unsupervised mutation without bounded candidate limits
-
-These may be considered later only after the deterministic bounded system is stable.
-
-## Implementation order
-
-Implementation should proceed in this order:
-
-1. inspect the current legacy weight-optimization and plan-generation flow
-2. define the tunable parameter schema and active-config loading path
-3. add dedicated persistence tables and repositories
-4. implement deterministic candidate generation and replay scoring
-5. implement manual run and run-detail APIs
-6. implement config-version promotion and rollback
-7. wire live plan generation to the active config
-8. add scheduled daily runs with auto-promotion guardrails
-9. build the frontend review workflow
-10. add route, repository, service, and integration coverage
+Do not add reinforcement learning, black-box Bayesian optimization, self-mutating schemas, unrelated-domain tuning, or unbounded unsupervised mutation until the deterministic bounded system is proven stable and explicitly re-specified.
 
 ## Amendment rule
 
-Autonomous implementation must not broaden scope beyond this spec without an explicit user request if the change would affect:
-- optimization objective order
-- promotion policy
-- sample eligibility rules
-- parameter-schema boundaries
-- persistence model semantics
-- automatic-mode safety guarantees
+Update this spec before changing objective order, promotion policy, eligibility rules, schema boundaries, persistence semantics, or automatic-mode safety guarantees.
 
 ## Related docs
 
 - `recommendation-methodology.md`
 - `recommendation-plan-resolution-spec.md`
-- `archive/implementation-plans/recommendation-plan-evaluation-recompute-notes.md`
 - `decision-sample-tuning-guide.md`
 - `signal-gating-tuning-guide.md`
 - `raw-details-reference.md`

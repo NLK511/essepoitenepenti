@@ -2,409 +2,224 @@
 
 **Status:** current behavior
 
-This document answers one question:
-> how does the app produce recommendation outputs?
-
-It describes the live recommendation path.
-
-The goal is not to maximize signal count. The goal is to produce outputs that are:
-- reproducible
-- inspectable
-- explicit about degraded inputs
-
-Today this should be read as a decision-support and candidate-ranking system, not proof of broad predictive skill.
+Binding summary of how the app produces recommendation outputs. The current system is decision support and candidate ranking, not proven autonomous predictive skill.
 
 ## Core rule
 
-The methodology follows one main rule: signal integrity.
-
-That means:
-- missing or stale inputs become warnings or neutral values
-- degraded provider coverage stays visible in diagnostics
+Signal integrity wins:
+- missing/stale inputs become warnings or neutral values
+- degraded provider coverage stays visible
 - fallback behavior is not presented as equal to healthy input
+- outputs must be reproducible, inspectable, and explicit about degraded evidence
 
-## Pipeline overview
+## Pipeline
 
-The active proposal-generation path is a watchlist service slice coordinated through the `WatchlistOrchestrationService` facade. `WatchlistExecutionService` owns full-run coordination; `ShortlistSelectionService`, `WatchlistScanRunnerService`, `WatchlistSignalBuilder`, `WatchlistPlanFramingService`, `WatchlistPlanNarrativeService`, `WatchlistCalibrationReviewService`, `WatchlistTransmissionService`, and `WatchlistDecisionSampleService` own focused behavior underneath it.
+The active proposal path is watchlist-oriented and coordinated by `WatchlistOrchestrationService`. `WatchlistExecutionService` owns run coordination; focused services handle shortlist selection, scan execution, signal building, plan framing/narrative, calibration review, transmission, and decision samples.
 
-For each proposal run, the system:
-1. resolves the watchlist or manual ticker scope
-2. runs a cheap scan across candidates
-3. selects a shortlist using explicit rules
-4. runs `TickerDeepAnalysisService` for shortlisted names only
-5. fetches recent OHLC data through a live-first hybrid path: fresh remote bars first in live runs, bounded retries on transient remote failures, then persisted local-bar fallback; replay stays point-in-time consistent
-6. computes technical and context-enriched features with `pandas`
-7. loads the latest shared macro and industry context snapshots through the context-native resolver layer
-8. builds recommendation plans, diagnostics, narratives, calibration reviews, transmission summaries, and audit payloads through focused watchlist services
-9. persists ticker signals, decision samples, recommendation plans when downstream plan framing actually ran, run summaries, and artifacts
-10. emits explicit `no_action` plans when policy gates fail or evidence is too weak after shortlist/deep-analysis, while preserving cheap-scan-only rejections for non-shortlisted names as signal-plus-decision-sample audit records instead of full plans
+For each run:
+1. resolve watchlist/manual ticker scope
+2. run cheap scan across candidates
+3. select shortlist with explicit rules
+4. run `TickerDeepAnalysisService` for shortlisted names only
+5. fetch OHLC data through live-first hybrid logic with retry/fallback; replay remains point-in-time consistent
+6. compute technical/context features
+7. load latest macro/industry context snapshots
+8. build plans, diagnostics, narratives, calibration reviews, transmission summaries, and audit payloads
+9. persist signals, decision samples, plans when plan framing ran, run summaries, and artifacts
+10. emit explicit `no_action` plans only after shortlist/deep-analysis/policy gates; non-shortlisted names remain signal+decision-sample audit records, not full plans
 
-`ProposalService` still exists as a lower-level helper for price history, feature engineering, news/context enrichment, and diagnostics, but it is no longer the main run-execution path.
+`ProposalService` remains a lower-level helper for compatibility and shared feature/history/news/context work, not the main run executor.
 
-## Persisted redesign objects
+## Persisted objects
 
-The current redesign path persists:
+Current redesign objects:
 - `MacroContextSnapshot`
 - `IndustryContextSnapshot`
 - `TickerSignalSnapshot`
 - `RecommendationDecisionSample`
-- `RecommendationPlan` when the ticker actually reached downstream plan framing
+- `RecommendationPlan` for tickers that reached downstream plan framing
 - `RecommendationPlanOutcome`
 
-Watchlist-backed jobs follow this staged flow:
-1. scan
-2. shortlist
-3. deep analysis
-4. calibration-aware confidence and policy gating
-5. persistence of signals for all scanned names, decision samples for audit/tuning, and plans only for shortlisted names that actually entered plan framing
+Flow: scan → shortlist → deep analysis → calibration-aware confidence/policy gating → persist signals for scanned names, decision samples for audit/tuning, and plans only where plan framing ran.
 
-## How the research and tuning surfaces relate
+## Research and tuning layers
 
-The app now has multiple research surfaces, and they should be read as separate layers rather than one generic optimizer.
+- **Signal gating tuning:** upstream shortlist/threshold control
+- **Plan-generation tuning:** downstream trade framing and actionable precision
+- **Recommendation quality, calibration, baselines, evidence concentration, walk-forward:** trust and promotion review
 
-Current division of labor:
-- **signal gating tuning** = upstream shortlist and threshold control
-- **plan generation tuning** = downstream plan framing and actionable precision
-- **recommendation-quality summary, calibration, baseline comparisons, evidence concentration, and walk-forward validation** = trust and promotion review
+Use signal gating when selection is too strict/loose, plan-generation tuning when trade framing is weak, and quality/walk-forward reports before trusting changes.
 
-In practical terms:
-- if too many candidates are rejected too early or too much noise is entering deep analysis, inspect **signal gating tuning**
-- if candidates are reaching plan generation but the trade framing is weak, inspect **plan generation tuning**
-- if a change looks promising, use the **recommendation-quality and walk-forward surfaces** to decide whether it is actually credible on later data
+## Market data
 
-## Data layers used by the methodology
+Hybrid market data balances freshness, resilience, and replay consistency.
 
-### Market data
-**Implementation status:**
-- **implemented now:** live cheap-scan retry, live deep-analysis retry plus local fallback, replay-safe point-in-time behavior, and persisted fetch diagnostics in signal/plan/run detail payloads
-- **still in progress:** better freshness scoring and richer operator-facing rendering of these diagnostics in the UI
+Cheap scan:
+- prefers local `historical_market_bars`
+- prefers `1m` bars resampled to daily OHLCV
+- falls back to stored `1d` bars in replay
+- retries transient remote failures
+- scores from sufficient local data rather than rejecting for provider noise alone
+- persists successful remote fetches
+- requires at least 30 bars normally and 10 bars in replay
+- warns `cheap scan used limited lookback history` only below 50 bars
 
-The app uses a hybrid market-data strategy that balances freshness, resilience, and replay consistency.
+Deep analysis:
+- live runs try fresh remote bars, retry, then fall back to persisted local `1d` if sufficient
+- replay uses point-in-time persisted or replay-bounded data
+- fallback is recorded as degraded input
+- unavailable only after retry and fallback fail
 
-**Cheap scan**
-Cheap scan prefers local persistence first.
-- **Preferred Source: Local Database** — it first attempts to fetch bars from the `historical_market_bars` table.
-- **Timeframe Resolution:** it prefers `1m` bars and automatically resamples them to produce Daily OHLCV bars.
-- **Fallback Timeframe:** if `1m` bars are missing, it falls back to `1d` bars stored in the database in replay mode.
-- **Remote Fallback With Retry:** if local data is missing or insufficient, cheap scan retries transient remote fetch failures before giving up.
-- **Failure Policy:** if remote fetch still fails but local data is sufficient, the ticker is scored from local data instead of being rejected for provider noise alone.
-- **Lazy Hydration:** when a remote fetch succeeds, the system persists the retrieved bars back into the local database to accelerate future requests.
-- **Cheap-scan thresholds:** the scan requires at least 30 bars in normal runs and at least 10 bars in replay runs. It emits the warning `cheap scan used limited lookback history` only when fewer than 50 bars were available, because that means the SMA50-style trend context had to use a shortened window.
+Fetch diagnostics live in signal details, plan signal breakdown, and run artifacts; they should stay out of compact summary rows unless re-specified.
 
-**Deep analysis**
-Deep analysis prefers freshness in live runs without making freshness a hard dependency.
-- **Live Runs:** it tries fresh remote bars first, retries transient failures a bounded number of times, then falls back to persisted local `1d` bars if enough history exists.
-- **Replay Runs:** it stays point-in-time consistent by preferring persisted bars and only using replay-bounded remote windows when needed.
-- **Graceful Degradation:** fallback behavior is still recorded as degraded input rather than being treated as equal to a healthy remote fetch.
-- **Failure Policy:** only after remote retry and local fallback both fail should deep analysis surface as unavailable.
+Cheap-scan liquidity uses simple `close * volume` over 20 bars, so the warning is `low average traded value on cheap scan`, not FX-normalized dollar volume.
 
-**Where the fetch diagnostics are stored**
-- **signal details:** `TickerSignalSnapshot.source_breakdown` and `TickerSignalSnapshot.diagnostics`
-- **plan details:** `RecommendationPlan.signal_breakdown`
-- **run/job details:** `Run.artifact_json.ticker_generation`
-- **not included in summary rows:** these diagnostics should stay out of summary tables and compact list rows unless a later spec changes that
+## Macro and industry context
 
-The same hybrid persistence layer is also reused by later evaluation logic.
+Macro/industry context snapshots are canonical shared artifacts. Missing/stale artifacts fall back to neutral values and explicit warnings. Industry missing-snapshot handling is blocked rather than neutrally informative, and thin snapshots expose evidence/coverage states.
 
-Cheap-scan liquidity uses a simple `close * volume` notional measure over the last 20 bars. The operator-facing warning is therefore `low average traded value on cheap scan`, not "dollar volume", because the current implementation does not FX-normalize non-USD listings.
+The taxonomy layer provides ticker profiles, industries/sectors, relationship edges, and governed labels so the app can expose readable transmission/read-through fields.
 
-### Shared macro and industry context
-The app stores reusable macro and industry context and links recommendations back to the artifacts they used.
+Context scores:
+- **saliency:** prominence of active events/drivers
+- **confidence:** trustworthiness given evidence, source quality, contradictions, degradation
+- **quality:** usable/degraded/blocked after separating required vs optional evidence
 
-The taxonomy layer now provides:
-- ticker profiles
-- industry and sector definitions
-- relationship edges
-- governed vocabularies for themes, channels, and related labels
+These are review aids, not prediction probabilities. Industry context only adds positive support when usable evidence exists.
 
-That allows the system to:
-- build industry refreshes from richer definitions
-- surface ticker relationship read-throughs such as peers, suppliers, and customers
-- keep operator-facing transmission labels readable without relying on raw internal keys
+Current extraction is heuristic but preserves more short-horizon state than broad theme detection: persistence, transition, catalyst type, interpretation, trigger actor metadata, and why-now summary. Target context reads should include active driver, concrete catalyst, change vs prior snapshot, escalation/easing/stabilizing/mixed state, transmission mechanism, and explicit uncertainty.
 
-Macro and industry context now use context snapshots as the canonical shared-artifact layer for refresh, review, and proposal-time reuse.
+## News, sentiment, and market intelligence
 
-If macro or industry artifacts are missing or stale, the methodology falls back to neutral values and explicit warnings. For industry context specifically, missing-snapshot handling is now blocked rather than neutrally informative, and thin snapshots expose explicit evidence and coverage states.
+`NewsIngestionService` normalizes/deduplicates articles and records feed usage/failures. Preferred free sources are Google News RSS, Yahoo Finance, and Finnhub. NewsAPI is disabled by default on the free plan.
 
-Macro and industry context snapshots also carry operator-facing heuristic scores:
-- **saliency**: how prominent the active events or drivers look relative to the rest of the current evidence set
-- **confidence**: how trustworthy the context read looks given evidence volume, source quality, contradictions, and degradation
-- **context quality**: whether the snapshot is usable, degraded, or blocked after separating required evidence from optional fallback evidence
+Ticker sentiment comes from the available article set. Neutral sentiment can mean neutral coverage or weak coverage; transparency fields include keyword hits, coverage insights, feed errors, source counts, and item counts.
 
-These are bounded review aids, not prediction probabilities. Industry context only contributes positive support when it has usable evidence; empty-driver rows should not create false confidence.
+Market intelligence is disabled by default unless explicitly configured. Disabled snapshots are absence markers only: zero confidence contribution and no active supporting/conflicting narrative. See `market-intelligence-analysis-spec.md`.
 
-A current limitation is that context extraction is still not a fully mature event model, but it now does more than broad theme detection. Current macro and industry snapshots try to preserve short-horizon state through fields such as persistence state, state transition, catalyst type, market interpretation, trigger actor metadata, and a short why-now summary. That means the system is better than before at distinguishing cases like escalation versus de-escalation or guidance improvement versus guidance cuts, even though it still relies on heuristic extraction and imperfect evidence coverage.
-
-So the intended target state for context is not just "theme detected". It is:
-- the active theme or driver
-- the concrete catalyst behind the latest move
-- what changed versus the prior snapshot
-- whether the state is escalating, easing, stabilizing, or mixed
-- the main transmission mechanism into industries or tickers
-- explicit uncertainty when evidence conflicts
-
-Prompt quality matters here, but prompt wording alone is not enough. Better context quality also depends on better event definitions, more specific evidence triage, structured state fields that preserve short-horizon dynamics instead of compressing them away, and query generation that pulls more concrete industry evidence from ontology context.
-
-### News ingestion and ticker sentiment
-`NewsIngestionService` pulls and normalizes articles, deduplicates them, and records feed usage and failures.
-
-The app currently prefers near-real-time free sources first, especially:
-- Google News RSS
-- Yahoo Finance
-- Finnhub
-
-NewsAPI remains disabled by default on the free plan.
-
-Market intelligence is also disabled by default unless explicitly configured. Disabled market-intelligence snapshots are absence markers only: they contribute zero confidence and should not be narrated as active supporting/conflicting evidence.
-
-Ticker sentiment is derived from the available article set.
-
-Stored transparency fields include things like:
-- keyword hits
-- coverage insights
-- feed errors
-- source counts
-- item counts
-
-So a neutral score can mean either neutral coverage or weak coverage.
-
-### Optional summary enrichment
-The app stores digest-style summaries for news and context.
-
-Operators can optionally route that digest through:
-- `openai_api`
-- `pi_agent`
-- the built-in `news_digest` fallback
-
-The result is stored in `analysis_json.summary`. If enrichment fails, the fallback digest remains and the error is recorded.
-
-A future market-intelligence layer for event calendars, options context, and analyst revisions is specified in `market-intelligence-analysis-spec.md`. It should be treated as an evidence layer that feeds the same analysis and plan-framing path, not as a standalone scoring system.
+Optional digest summaries may use `openai_api`, `pi_agent`, or built-in `news_digest`; failures keep the fallback digest and record the error.
 
 ## Feature engineering
 
-The feature set includes market-derived inputs such as:
-- trend
-- momentum
-- volatility
-- mean-reversion signals
-- liquidity and volume context
-- relative-strength comparisons versus the broad market and the ticker's sector ETF
-- simple volume-confirmation measures such as current volume versus its recent baseline
+Features include trend, momentum, volatility, mean reversion, liquidity/volume, relative strength vs broad market/sector ETF, and volume confirmation. Raw and normalized values are persisted.
 
-The app persists both raw and normalized values.
-
-### Current implementation status
-- **implemented now:** broad-market relative strength (`SPY`) and sector-ETF relative strength over short and medium lookbacks, plus simple volume-ratio and dollar-volume-ratio confirmation features in ticker deep analysis
-- **implemented now:** ticker technical feature/context/normalization/aggregation logic lives in `TickerTechnicalFeatureService`; ticker analysis payload and diagnostics construction lives in `TickerAnalysisPayloadService`; `TickerDeepAnalysisService` coordinates the native deep-analysis run and keeps compatibility wrappers for existing callers/tests
-- **implemented now:** if benchmark or sector ETF data is missing, deep analysis falls back to neutral values and records the gap in diagnostics instead of failing the whole recommendation
-- **not implemented yet:** broader feature expansion such as full breadth, gap/overnight behavior, or more advanced chop/compression regime measures
+Current status:
+- broad-market (`SPY`) and sector-ETF relative strength over short/medium lookbacks are implemented
+- volume-ratio and notional-volume-ratio confirmation are implemented
+- feature/context/normalization/aggregation logic lives in `TickerTechnicalFeatureService`
+- payload/diagnostic construction lives in `TickerAnalysisPayloadService`
+- `TickerDeepAnalysisService` coordinates native deep analysis and compatibility wrappers
+- missing benchmark/sector ETF data falls back to neutral values with diagnostics
+- broader features such as breadth, gap/overnight behavior, and chop/compression regimes remain future work
 
 ## Scoring and confidence
 
-`weights.json` defines the relative influence of normalized features and aggregate signals.
+`weights.json` defines normalized feature/aggregate-signal influence.
 
-### Directional bias
-The system resolves a directional bias (`LONG`, `SHORT`, or `NEUTRAL`) from:
-- trend context such as price vs SMA200
-- momentum across multiple lookback windows
-- ticker, industry, and macro alignment
-- catalyst/news pressure when it is strong enough to move the aggregate score
+Directional bias (`LONG`, `SHORT`, `NEUTRAL`) comes from trend, momentum, ticker/industry/macro alignment, and strong catalyst/news pressure. It must follow the combined directional score, not SMA200 alone. Material divergence remains visible and can block actionability.
 
-The final direction should follow the combined directional score, not price-vs-SMA200 alone. If technical trend and catalyst evidence materially disagree, the divergence should remain visible in diagnostics and the plan may stay non-actionable when confidence does not clear the gating threshold.
+Plan confidence aggregates:
+- context confidence
+- directional confidence
+- catalyst confidence
+- technical clarity
+- execution clarity
 
-### Confidence
-Confidence is a weighted aggregation of normalized components:
-- **context confidence**
-- **directional confidence**
-- **catalyst confidence**
-- **technical clarity**
-- **execution clarity**
+Cheap-scan confidence is shortlist triage. After deep analysis, the recommendation-plan action gate uses deep-analysis confidence as raw plan confidence. If deep analysis is unavailable, it falls back to cheap-scan confidence and records degradation. Paper-account exploration may relax action gating to collect outcomes while preserving raw calibrated confidence.
 
-For watchlist proposal generation, cheap-scan confidence is a shortlist/triage score. Once `TickerDeepAnalysisService` completes, the final recommendation-plan action gate must use the deep-analysis recommendation confidence as the raw plan confidence. If deep analysis is unavailable, the gate falls back to the cheap-scan signal confidence and records the degraded state. In paper-account exploration mode, the action-confidence gate is intentionally relaxed so the app can collect more paper-trade outcomes for later calibration, while still recording the raw calibrated confidence for review. Plan diagnostics should preserve both cheap-scan and deep-analysis confidence so operators can inspect disagreements.
+Relative strength and volume confirmation can modestly support directional/technical/execution clarity, but they are not dominant drivers. Data-quality caps can reduce final confidence.
 
-Light feature wiring is now in place:
-- aligned relative strength versus `SPY` and sector can modestly lift directional confidence
-- stronger-than-normal volume participation can modestly lift technical and execution clarity
-- these features are used as supporting evidence, not as dominant drivers yet
+## Setup family
 
-A data-quality cap can reduce the final confidence when warnings, weak coverage, or feed errors are present.
+Plans are classified for behavior, evaluation, calibration, and explanation. Families include continuation, breakout, breakdown, mean reversion, catalyst follow-through, macro beneficiary/loser, and no-action/uncategorized states.
 
-### Setup family
-Each recommendation is classified into a setup family for later analysis and calibration, including:
-- continuation
-- breakout
-- breakdown
-- mean reversion
-- catalyst follow-through
-- macro beneficiary/loser
-- no action / uncategorized fallback states
+Family labels should change trade construction, invalidation, evaluation expectations, and operator explanation—not be cosmetic.
 
-A setup family is only useful if it changes behavior. It should affect trade construction, invalidation logic, evaluation expectations, and operator explanation rather than acting as a cosmetic tag.
+Guidance:
+- continuation: pullback/reclaim entries and trend-extension targets
+- breakout/breakdown: break/retest entries, failed-break stops, measured/next-level targets
+- mean reversion: exhaustion/reversal confirmation, stops beyond extremes, midpoint/MA targets
+- catalyst follow-through: fresh credible catalyst and confirmation; invalid if confirmation fades
+- macro beneficiary/loser: explicit non-stale exposure channel and transmission-based invalidation
 
-Family guidance:
-- **continuation:** favor pullback/reclaim entries, stops below/above pullback structure, and trend-extension targets
-- **breakout:** favor break-or-retest entries, stops around failed break levels, and measured-move or next-resistance targets
-- **breakdown:** favor support-failure or failed-retest entries, stops around reclaimed support, and next-support/measured downside targets
-- **mean reversion:** require exhaustion or reversal confirmation, stop beyond the extreme, and target range midpoint / moving-average retests
-- **catalyst follow-through:** require fresh credible catalysts, use post-catalyst continuation entries, and invalidate if confirmation fades
-- **macro beneficiary/loser:** require explicit exposure channels and active non-stale context, with invalidation tied to weakening transmission or sector sympathy
+Family-specific `no_action` is valid when structure exists but confidence, execution quality, calibration, or invalidation clarity is insufficient.
 
-Light feature wiring is also in place here:
-- strong relative strength plus above-baseline volume can help confirm a continuation or breakout-style label
-- when those confirming features are absent, the older momentum/RSI rules still remain the main path
+## Transmission analysis
 
-Family-specific `no_action` is valid when structure exists but execution quality, confidence, calibration, or invalidation clarity is insufficient.
+Transmission tracks how macro/industry context carries into a ticker. It should answer: active context, concrete catalyst/change, exposed industries/tickers, channels, supportive/hostile/mixed/negligible direction, and expected window.
 
-### Transmission analysis
-The methodology also tracks how well a trade idea is supported from macro or industry context down to the ticker.
+Transmission is a governed edge graph, not a flat label match. Edges can carry direction, mechanism, confidence/provenance, validity window, and relationship score.
 
-Transmission is not a generic sentiment overlay. It should answer:
-1. what active context is present?
-2. what concrete catalyst or state change is driving it now?
-3. which industries and tickers are exposed?
-4. through which channels?
-5. is the direction supportive, hostile, mixed, or negligible?
-6. over what window should it matter?
+Ticker-facing summaries should preserve context bias, alignment, drivers, industry/ticker channels, expected window, catalyst intensity, conflicts, and decay state.
 
-Transmission is now treated as a governed edge graph rather than a flat label match. Each edge can carry:
-- direction (`positive`, `negative`, `mixed`)
-- mechanism (`demand`, `valuation`, `supply_chain`, `pricing`, `regulation`, etc.)
-- confidence and provenance
-- validity windows when they are known
-- a lightweight relationship score used for ranking and inspection
+Scoring considers alignment, relevance, freshness, source quality, horizon fit, contradiction penalties, and edge strength. Severe direct conflicts can hard-block; timing/context-quality/mixed-context conflicts usually degrade and warn. Social-only polarity noise must not by itself raise contradiction flags.
 
-Ticker-facing transmission summaries should preserve fields such as:
-- `context_bias`
-- `alignment_percent`
-- `primary_drivers`
-- `industry_exposure_channels`
-- `ticker_exposure_channels`
-- `expected_transmission_window`
-- `catalyst_intensity_percent`
-- `conflict_flags`
-- `decay_state`
-
-In broad terms transmission scoring considers:
-- alignment across macro, industry, and ticker evidence
-- relevance of matched themes or events
-- freshness of supporting context
-- source quality and recency
-- horizon fit
-- contradiction penalties when major signals conflict
-- whether an edge is explicit, derived, or only a weak structural fallback
-
-Contradictions are not all hard vetoes. Timing conflicts, context-quality conflicts, or broad mixed-context contradictions should remain visible in diagnostics, but they should not automatically block an otherwise threshold-clearing plan. The hard contradiction gate is reserved for severe conflicts, such as explicit directional conflict or technical/context conflict, where the trade direction itself is challenged. Headwind context remains governed by the separate headwind gate.
-
-For macro/industry context, contradiction detection should prefer primary-news disagreement over social noise. Social-only polarity noise should not by itself raise a contradiction flag; the debugger should show the primary-match breakdown and the specific triggering evidence when a contradiction is raised.
-
-Context quality gating is intentionally tiered: a single weak backdrop layer should usually degrade the plan, not veto it. A hard block is reserved for cases where the backdrop is broadly broken (for example, macro and industry context are both blocked) or the dominant layer is missing critical evidence.
-
-The app stores intermediate vectors, aggregations, and weights so operators can inspect what influenced the result.
+Context quality gating is tiered: one weak layer usually degrades; broad broken backdrop or missing dominant evidence can block.
 
 ## Price levels and risk
 
-Entry, stop-loss, and take-profit are derived from the same technical and risk context as the rest of the recommendation.
-
-In broad terms:
+Entry, stop-loss, and take-profit derive from the same technical/risk context as the recommendation:
 - entry starts from current price context
-- stop-loss is volatility-sensitive
-- take-profit is derived from the same risk budget with reward-side adjustments
+- stop is volatility-sensitive
+- take-profit follows risk budget with reward-side adjustments
+
+Plan-generation tuning may adjust this framing through its registered active config.
 
 ## Outcome evaluation
 
-The app stores `RecommendationPlanOutcome` records for evaluated plans.
+`RecommendationPlanOutcome` records include entry touched, stop hit, target hit, fixed-horizon returns, favorable/adverse excursion, holding period, direction correctness, confidence bucket, setup family, transmission bias, and context-regime slices.
 
-Current evaluation records include fields such as:
-- entry touched
-- stop-loss hit
-- take-profit hit
-- fixed-horizon returns (`1d`, `3d`, `5d`)
-- maximum favorable and adverse excursion
-- realized holding period
-- direction correctness
-- confidence bucket
-- setup family
-- transmission-bias and context-regime slices used by downstream calibration summaries
+`watchlist` and `no_action` plans are first-class evaluated outcomes when they reached plan framing. If they retain intended direction and valid entry/stop/take-profit, the evaluator simulates phantom outcomes (`phantom_win`, `phantom_loss`, `phantom_no_entry`) against market data. Cheap-scan-only rejected names do not get synthetic plan rows or phantom outcomes.
 
-`watchlist` and `no_action` plans are also preserved as first-class evaluated outcomes. 
+Unresolved plans whose horizon elapsed resolve to `expired`. `expired` is terminal for lifecycle/filtering but not a win/loss by default.
 
-To enable recall optimization, the evaluation pipeline actively tracks **phantom trades** for skipped setups that still retain executable framing. If a `no_action` or `watchlist` plan carries an intended direction plus valid entry, stop, and take-profit levels, the evaluator simulates it against live market data and records phantom outcomes such as `phantom_win`, `phantom_loss`, or `phantom_no_entry`. Cheap-scan-only rejected names that never received full trade framing do not get synthetic plan rows or phantom outcomes; they remain signal-plus-decision-sample audit evidence. This preserves quota savings from shortlist gating while still letting tuning engines learn from genuine near-miss setups that actually reached downstream framing.
+Simulation-only diagnostics such as entry misses help tune setup/entry quality and are not broker-preferred realized P&L evidence.
 
-If a trade plan is still unresolved after its generated horizon has elapsed, the evaluator resolves it as `expired` so stale plans do not remain indefinitely open.
+## Decision samples
 
-`expired` is a terminal lifecycle outcome for audit and filtering purposes, but it is not treated as a `win` or `loss` by default.
+Every scanned ticker may create a `RecommendationDecisionSample` for tuning/review. It is not a final outcome.
 
-## Decision samples for tuning
+Current behavior:
+- shortlisted names produce plans and decision samples
+- cheap-scan-only rejected names produce decision samples linked to signal snapshots without plan rows
 
-Every scanned ticker may produce a `RecommendationDecisionSample` row.
+Stored context includes action/decision type, shortlist status/rank, confidence/calibrated confidence/threshold/gap, setup family, transmission bias, context regime, compact snapshots, and review priority.
 
-This is a tuning and review artifact, not a final outcome record.
-
-Implementation status:
-- **implemented now:** shortlisted names produce both plans and decision samples; cheap-scan-only rejected names still produce decision samples linked to their signal snapshot even when no plan row is created
-- **important boundary:** non-shortlisted decision samples are meant to explain shortlist behavior, not to pretend downstream trade framing happened
-
-It stores decision context such as:
-- action and decision type
-- shortlist status and rank
-- confidence, calibrated confidence, threshold, and gap
-- setup family, transmission bias, and context regime
-- compact decision, signal, and evidence snapshots
-- `review_priority` for borderline cases
-
-The research workflow now exposes richer filters for these samples, including shortlist state, setup family, transmission bias, context regime, and date ranges. The calibration report endpoint also surfaces confidence reliability bins with Brier score and expected calibration error so operators can compare predicted confidence against realized outcomes.
+Research filters include shortlist state, setup family, transmission bias, context regime, and dates. Calibration reports expose reliability bins, Brier score, and expected calibration error.
 
 ## Calibration governance
 
-Calibration must never hide sparse evidence behind precise-looking threshold changes. If evidence is weak, the app should say so and rely more on broader cohorts.
+Calibration must expose sparse evidence instead of hiding it behind precise thresholds. Broader cohorts dominate narrow slices unless sample size is adequate.
 
-Approved review slices are:
-- confidence bucket
-- setup family
-- horizon
-- transmission bias
-- context regime
-- horizon + setup family
+Approved slices: confidence bucket, setup family, horizon, transmission bias, context regime, and horizon+setup family.
 
-When applying calibration to action gating, broader cohorts should dominate narrow slices unless sample size is clearly adequate. Suggested minimum resolved counts before a slice materially influences gating are: horizon `12`, setup family `10`, confidence bucket `10`, transmission bias `10`, context regime `10`, and horizon + setup family `8`.
+Suggested minimum resolved counts before a slice materially influences gating:
+- horizon `12`
+- setup family `10`
+- confidence bucket `10`
+- transmission bias `10`
+- context regime `10`
+- horizon+setup family `8`
 
-Calibration may:
-- raise thresholds for underperforming cohorts
-- modestly relax thresholds for clearly stronger cohorts
-- flag extra operator review
-- explain why a plan was blocked despite decent raw confidence
+Calibration may raise/relax thresholds, flag review, and explain blocking. It must not auto-size positions, claim thin-sample probabilities, bypass conflicts, overrule broken structure, or treat sparse slices as statistically meaningful.
 
-Calibration must not:
-- auto-size positions
-- claim reliable probabilities from thin data
-- bypass explicit signal conflicts
-- overrule broken trade structure
-- treat small-sample slices as statistically meaningful
+Operator payloads should show raw/calibrated confidence, threshold adjustment, slices, sample status, resolved count, win rate, and reasons.
 
-Operator payloads should show raw confidence, calibrated confidence, threshold adjustment, contributing slices, sample status, resolved count, win rate, and readable reasons.
+## Limits
 
-See:
-- `decision-sample-tuning-guide.md`
-- `signal-gating-tuning-guide.md`
-
-## Methodology limits
-
-Current limits still matter:
-- recommendation quality depends on external market and news inputs
-- sentiment is inspectable, but not yet proven as measured edge
-- cheap scan is only a triage layer
-- context extraction is still heuristic
-- ticker deep analysis still reuses some older proposal internals for price history, news/context enrichment, and fallback compatibility
-- the shared context layer is context-native now, but its event extraction and scoring are still heuristic
-- calibration is active, but evidence depth is still growing
-
-Related references:
-- `recommendation-plan-resolution-spec.md`
-- `archive/implementation-plans/recommendation-plan-evaluation-recompute-notes.md`
+Current limits:
+- external data quality constrains recommendations
+- sentiment/context extraction remain heuristic
+- cheap scan is only triage
+- ticker deep analysis still uses compatibility internals in places
+- calibration and policy evidence are active but still accumulating depth
+- measured edge is not yet proven enough for unsupervised money-making claims
 
 ## See also
 
-- `features-and-capabilities.md` — what the app can do now
-- `raw-details-reference.md` — stored field and payload reference
-- `roadmap.md` — what still needs work
-- `archive/phase-2-app-native.md` — older phase history
+- `features-and-capabilities.md`
+- `raw-details-reference.md`
+- `recommendation-plan-resolution-spec.md`
+- `decision-sample-tuning-guide.md`
+- `signal-gating-tuning-guide.md`
+- `market-intelligence-analysis-spec.md`
