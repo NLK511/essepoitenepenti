@@ -109,6 +109,7 @@ The steering engine needs a compact state object per broker order/position:
 - current quantity and average entry price when filled
 - current stop-loss and take-profit order levels if available
 - latest tradable market price
+- current implementation may use the latest stored daily market bar close as a proxy when a live quote is unavailable
 - latest intraday/daily volatility proxy, preferably ATR or fallback percent move
 - latest ticker analysis summary
 - latest news/market-intelligence evidence summary

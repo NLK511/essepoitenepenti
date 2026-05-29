@@ -5,12 +5,13 @@ from datetime import datetime, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPosition, BrokerReconciliationSnapshot, RecommendationPlan
+from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPosition, BrokerReconciliationSnapshot, HistoricalMarketBar, RecommendationPlan
 from trade_proposer_app.persistence.models import Base, BrokerSteeringDecisionRecord, ObservabilityEventRecord
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.broker_reconciliation_snapshots import BrokerReconciliationSnapshotRepository
 from trade_proposer_app.repositories.broker_steering_decisions import BrokerSteeringDecisionRepository
+from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
@@ -302,6 +303,66 @@ def test_state_builder_uses_latest_reconciliation_snapshot_to_keep_broker_uncert
     assert state.broker_reconciliation_healthy is False
     assert decision.decision == "manual_review_required"
     assert "broker_uncertainty" in decision.reason_codes
+
+
+def test_state_builder_uses_latest_daily_market_bar_as_price_proxy() -> None:
+    session = create_session()
+    plans = RecommendationPlanRepository(session)
+    positions = BrokerPositionRepository(session)
+    market_data = HistoricalMarketDataRepository(session)
+    snapshots = BrokerReconciliationSnapshotRepository(session)
+
+    plan = plans.create_plan(_plan())
+    positions.create(
+        BrokerPosition(
+            broker_order_execution_id=1,
+            recommendation_plan_id=plan.id or 1,
+            recommendation_plan_ticker=plan.ticker,
+            ticker=plan.ticker,
+            action="long",
+            side="buy",
+            quantity=1,
+            current_quantity=1,
+            status="open",
+            entry_order_id="order-1",
+            entry_avg_price=100.0,
+            current_stop_loss=95.0,
+            exit_order_id=None,
+        )
+    )
+    snapshots.create(
+        BrokerReconciliationSnapshot(
+            broker="alpaca",
+            account_mode="paper",
+            snapshot_type="post_sync",
+            ticker=plan.ticker,
+            drift_severity="ok",
+            warnings=[],
+        )
+    )
+    market_data.upsert_bar(
+        HistoricalMarketBar(
+            ticker=plan.ticker,
+            timeframe="1d",
+            bar_time=NOW,
+            available_at=NOW,
+            open_price=99.0,
+            high_price=102.0,
+            low_price=98.5,
+            close_price=101.0,
+            volume=1000.0,
+            source="test",
+            source_tier="tier_a",
+        )
+    )
+
+    state = BrokerSteeringStateBuilder(session).list_states(now=NOW)[0]
+    decision = BrokerSteeringEngine().evaluate(state, BrokerSteeringConfig(enabled=True, dry_run=False))
+
+    assert state.current_price == 101.0
+    assert state.broker_reconciliation_healthy is True
+    assert decision.decision == "move_stop_to_breakeven_or_profit"
+    assert decision.proposed_stop_loss == 100.1
 
 
 def test_steering_service_persists_decisions_and_events() -> None:

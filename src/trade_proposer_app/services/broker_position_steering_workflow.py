@@ -12,6 +12,7 @@ from trade_proposer_app.repositories.broker_order_executions import BrokerOrderE
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.broker_reconciliation_snapshots import BrokerReconciliationSnapshotRepository
 from trade_proposer_app.repositories.broker_steering_decisions import BrokerSteeringDecisionRepository
+from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
@@ -36,11 +37,13 @@ class BrokerSteeringStateBuilder:
         price_lookup: Callable[[str], float | None] | None = None,
     ) -> None:
         self.session = session
-        self.price_lookup = price_lookup or (lambda _ticker: None)
+        self.price_lookup = price_lookup or self._default_price_lookup
         self.plans = RecommendationPlanRepository(session)
         self.orders = BrokerOrderExecutionRepository(session)
         self.positions = BrokerPositionRepository(session)
         self.snapshots = BrokerReconciliationSnapshotRepository(session)
+        self.market_data = HistoricalMarketDataRepository(session)
+        self._price_cache: dict[str, float | None] = {}
 
     def list_states(self, *, limit: int = 200, now: datetime | None = None) -> list[BrokerSteeringState]:
         order_map = self._active_orders_by_plan_id(limit=limit)
@@ -64,6 +67,17 @@ class BrokerSteeringStateBuilder:
     def _active_positions_by_plan_id(self, *, limit: int) -> dict[int, BrokerPosition]:
         positions = [position for position in self.positions.list_active(limit=limit) if position.recommendation_plan_id is not None]
         return {position.recommendation_plan_id: position for position in positions}
+
+    def _default_price_lookup(self, ticker: str) -> float | None:
+        normalized = ticker.strip().upper()
+        if not normalized:
+            return None
+        if normalized in self._price_cache:
+            return self._price_cache[normalized]
+        bars = self.market_data.list_bars(ticker=normalized, timeframe="1d", limit=1)
+        price = bars[-1].close_price if bars else None
+        self._price_cache[normalized] = price
+        return price
 
     def _build_state(
         self,
