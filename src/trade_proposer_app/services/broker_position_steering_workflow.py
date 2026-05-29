@@ -326,118 +326,179 @@ class BrokerSteeringService:
             )
             return "blocked"
 
-        broker_order_id = state.broker_order_id
-        broker_position_id = state.broker_position_id
         if decision.decision == "cancel_pending_order":
-            if not state.has_pending_order or broker_order_id is None:
-                self._block_unsupported_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now)
-                return "blocked"
-            if not self._cancel_pending_order_is_live_enabled(decision, reviewed_sample_counts):
-                self._block_threshold_decision(
-                    saved_decision_id,
-                    decision,
-                    reason="live_pending_invalidation_sample_threshold_unmet",
-                    run_id=run_id,
-                    job_id=job_id,
-                    correlation_id=correlation_id,
-                    normalized_now=normalized_now,
-                    payload={"broker_order_id": broker_order_id, "reviewed_sample_counts": reviewed_sample_counts},
-                )
-                return "blocked"
-            if "pending_expired" not in set(decision.reason_codes):
-                self.observability.record(
-                    event_type="steering_broker_mutation_attempted",
-                    message="Broker steering cancellation attempted after sample-threshold review",
-                    run_id=run_id,
-                    job_id=job_id,
-                    correlation_id=correlation_id,
-                    payload={"decision": decision.decision, "ticker": decision.ticker, "broker_order_id": broker_order_id},
-                )
-            else:
-                self.observability.record(
-                    event_type="steering_broker_mutation_attempted",
-                    message="Broker steering cancellation attempted",
-                    run_id=run_id,
-                    job_id=job_id,
-                    correlation_id=correlation_id,
-                    payload={"decision": decision.decision, "ticker": decision.ticker, "broker_order_id": broker_order_id},
-                )
-            try:
-                self.order_execution.cancel_execution(broker_order_id)
-            except Exception as exc:
-                self._fail_decision(saved_decision_id, decision, exc, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, payload={"broker_order_id": broker_order_id})
-                return "failed"
-            self._succeed_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, message="Broker steering cancellation succeeded", payload={"broker_order_id": broker_order_id})
-            return "succeeded"
+            return self._execute_cancel_pending_order(
+                saved_decision_id=saved_decision_id,
+                state=state,
+                decision=decision,
+                reviewed_sample_counts=reviewed_sample_counts,
+                run_id=run_id,
+                job_id=job_id,
+                correlation_id=correlation_id,
+                normalized_now=normalized_now,
+            )
 
         if decision.decision == "close_position_now":
-            if not state.has_open_position or broker_position_id is None:
-                self._block_unsupported_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now)
-                return "blocked"
-            if not self._close_now_is_live_enabled(reviewed_sample_counts):
-                self._block_threshold_decision(
-                    saved_decision_id,
-                    decision,
-                    reason="live_close_now_sample_threshold_unmet",
-                    run_id=run_id,
-                    job_id=job_id,
-                    correlation_id=correlation_id,
-                    normalized_now=normalized_now,
-                    payload={"broker_position_id": broker_position_id, "reviewed_sample_counts": reviewed_sample_counts},
-                )
-                return "blocked"
-            self.observability.record(
-                event_type="steering_broker_mutation_attempted",
-                message="Broker steering close-position attempted",
+            return self._execute_close_position_now(
+                saved_decision_id=saved_decision_id,
+                state=state,
+                decision=decision,
+                reviewed_sample_counts=reviewed_sample_counts,
                 run_id=run_id,
                 job_id=job_id,
                 correlation_id=correlation_id,
-                payload={"decision": decision.decision, "ticker": decision.ticker, "broker_position_id": broker_position_id},
+                normalized_now=normalized_now,
             )
-            try:
-                self.order_execution.close_position(state.ticker)
-            except Exception as exc:
-                self._fail_decision(saved_decision_id, decision, exc, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, payload={"broker_position_id": broker_position_id, "ticker": state.ticker})
-                return "failed"
-            self._succeed_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, message="Broker steering close-position succeeded", payload={"broker_position_id": broker_position_id, "ticker": state.ticker})
-            return "succeeded"
 
         if decision.decision in {"tighten_stop_loss", "move_stop_to_breakeven_or_profit", "lower_take_profit"}:
-            if not state.has_open_position or broker_order_id is None:
-                self._block_unsupported_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now)
-                return "blocked"
-            if not self._amendment_is_live_enabled(reviewed_sample_counts):
-                self._block_threshold_decision(
-                    saved_decision_id,
-                    decision,
-                    reason="live_amendment_sample_threshold_unmet",
-                    run_id=run_id,
-                    job_id=job_id,
-                    correlation_id=correlation_id,
-                    normalized_now=normalized_now,
-                    payload={"broker_order_id": broker_order_id, "reviewed_sample_counts": reviewed_sample_counts},
-                )
-                return "blocked"
-            amend_stop_loss = decision.proposed_stop_loss if decision.decision in {"tighten_stop_loss", "move_stop_to_breakeven_or_profit"} else None
-            amend_take_profit = decision.proposed_take_profit if decision.decision == "lower_take_profit" else None
-            self.observability.record(
-                event_type="steering_broker_mutation_attempted",
-                message="Broker steering amendment attempted",
+            return self._execute_exit_amendment(
+                saved_decision_id=saved_decision_id,
+                state=state,
+                decision=decision,
+                reviewed_sample_counts=reviewed_sample_counts,
                 run_id=run_id,
                 job_id=job_id,
                 correlation_id=correlation_id,
-                payload={"decision": decision.decision, "ticker": decision.ticker, "broker_order_id": broker_order_id, "stop_loss": amend_stop_loss, "take_profit": amend_take_profit},
+                normalized_now=normalized_now,
             )
-            try:
-                self.order_execution.amend_execution(broker_order_id, stop_loss=amend_stop_loss, take_profit=amend_take_profit)
-            except Exception as exc:
-                self._fail_decision(saved_decision_id, decision, exc, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, payload={"broker_order_id": broker_order_id, "stop_loss": amend_stop_loss, "take_profit": amend_take_profit})
-                return "failed"
-            self._succeed_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, message="Broker steering amendment succeeded", payload={"broker_order_id": broker_order_id, "stop_loss": amend_stop_loss, "take_profit": amend_take_profit})
-            return "succeeded"
 
         self._block_unsupported_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now)
         return "blocked"
+
+    def _execute_cancel_pending_order(
+        self,
+        *,
+        saved_decision_id: int,
+        state: BrokerSteeringState,
+        decision: BrokerSteeringDecision,
+        reviewed_sample_counts: dict[str, int],
+        run_id: int | None,
+        job_id: int | None,
+        correlation_id: str | None,
+        normalized_now: datetime,
+    ) -> str:
+        broker_order_id = state.broker_order_id
+        if not state.has_pending_order or broker_order_id is None:
+            self._block_unsupported_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now)
+            return "blocked"
+        if not self._cancel_pending_order_is_live_enabled(decision, reviewed_sample_counts):
+            self._block_threshold_decision(
+                saved_decision_id,
+                decision,
+                reason="live_pending_invalidation_sample_threshold_unmet",
+                run_id=run_id,
+                job_id=job_id,
+                correlation_id=correlation_id,
+                normalized_now=normalized_now,
+                payload={"broker_order_id": broker_order_id, "reviewed_sample_counts": reviewed_sample_counts},
+            )
+            return "blocked"
+        self.observability.record(
+            event_type="steering_broker_mutation_attempted",
+            message="Broker steering cancellation attempted" if "pending_expired" in set(decision.reason_codes) else "Broker steering cancellation attempted after sample-threshold review",
+            run_id=run_id,
+            job_id=job_id,
+            correlation_id=correlation_id,
+            payload={"decision": decision.decision, "ticker": decision.ticker, "broker_order_id": broker_order_id},
+        )
+        try:
+            self.order_execution.cancel_execution(broker_order_id)
+        except Exception as exc:
+            self._fail_decision(saved_decision_id, decision, exc, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, payload={"broker_order_id": broker_order_id})
+            return "failed"
+        self._succeed_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, message="Broker steering cancellation succeeded", payload={"broker_order_id": broker_order_id})
+        return "succeeded"
+
+    def _execute_close_position_now(
+        self,
+        *,
+        saved_decision_id: int,
+        state: BrokerSteeringState,
+        decision: BrokerSteeringDecision,
+        reviewed_sample_counts: dict[str, int],
+        run_id: int | None,
+        job_id: int | None,
+        correlation_id: str | None,
+        normalized_now: datetime,
+    ) -> str:
+        broker_position_id = state.broker_position_id
+        if not state.has_open_position or broker_position_id is None:
+            self._block_unsupported_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now)
+            return "blocked"
+        if not self._close_now_is_live_enabled(reviewed_sample_counts):
+            self._block_threshold_decision(
+                saved_decision_id,
+                decision,
+                reason="live_close_now_sample_threshold_unmet",
+                run_id=run_id,
+                job_id=job_id,
+                correlation_id=correlation_id,
+                normalized_now=normalized_now,
+                payload={"broker_position_id": broker_position_id, "reviewed_sample_counts": reviewed_sample_counts},
+            )
+            return "blocked"
+        self.observability.record(
+            event_type="steering_broker_mutation_attempted",
+            message="Broker steering close-position attempted",
+            run_id=run_id,
+            job_id=job_id,
+            correlation_id=correlation_id,
+            payload={"decision": decision.decision, "ticker": decision.ticker, "broker_position_id": broker_position_id},
+        )
+        try:
+            self.order_execution.close_position(state.ticker)
+        except Exception as exc:
+            self._fail_decision(saved_decision_id, decision, exc, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, payload={"broker_position_id": broker_position_id, "ticker": state.ticker})
+            return "failed"
+        self._succeed_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, message="Broker steering close-position succeeded", payload={"broker_position_id": broker_position_id, "ticker": state.ticker})
+        return "succeeded"
+
+    def _execute_exit_amendment(
+        self,
+        *,
+        saved_decision_id: int,
+        state: BrokerSteeringState,
+        decision: BrokerSteeringDecision,
+        reviewed_sample_counts: dict[str, int],
+        run_id: int | None,
+        job_id: int | None,
+        correlation_id: str | None,
+        normalized_now: datetime,
+    ) -> str:
+        broker_order_id = state.broker_order_id
+        if not state.has_open_position or broker_order_id is None:
+            self._block_unsupported_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now)
+            return "blocked"
+        if not self._amendment_is_live_enabled(reviewed_sample_counts):
+            self._block_threshold_decision(
+                saved_decision_id,
+                decision,
+                reason="live_amendment_sample_threshold_unmet",
+                run_id=run_id,
+                job_id=job_id,
+                correlation_id=correlation_id,
+                normalized_now=normalized_now,
+                payload={"broker_order_id": broker_order_id, "reviewed_sample_counts": reviewed_sample_counts},
+            )
+            return "blocked"
+        amend_stop_loss = decision.proposed_stop_loss if decision.decision in {"tighten_stop_loss", "move_stop_to_breakeven_or_profit"} else None
+        amend_take_profit = decision.proposed_take_profit if decision.decision == "lower_take_profit" else None
+        payload = {"decision": decision.decision, "ticker": decision.ticker, "broker_order_id": broker_order_id, "stop_loss": amend_stop_loss, "take_profit": amend_take_profit}
+        self.observability.record(
+            event_type="steering_broker_mutation_attempted",
+            message="Broker steering amendment attempted",
+            run_id=run_id,
+            job_id=job_id,
+            correlation_id=correlation_id,
+            payload=payload,
+        )
+        try:
+            self.order_execution.amend_execution(broker_order_id, stop_loss=amend_stop_loss, take_profit=amend_take_profit)
+        except Exception as exc:
+            self._fail_decision(saved_decision_id, decision, exc, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, payload={"broker_order_id": broker_order_id, "stop_loss": amend_stop_loss, "take_profit": amend_take_profit})
+            return "failed"
+        self._succeed_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, message="Broker steering amendment succeeded", payload={"broker_order_id": broker_order_id, "stop_loss": amend_stop_loss, "take_profit": amend_take_profit})
+        return "succeeded"
 
     @staticmethod
     def _aggregate_execution_status(statuses: list[str], *, dry_run: bool) -> str:

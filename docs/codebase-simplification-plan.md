@@ -28,8 +28,8 @@ Goal: reduce code complexity without changing product behavior, safety rules, da
    - Safe next step: extract common context payload utilities.
 
 4. **Broker steering execution handlers**
-   - Problem: workflow execution has multiple broker mutation branches in one method.
-   - Safe next step: split cancel, close, and amendment handlers while preserving safety gates.
+   - Problem: workflow execution had multiple broker mutation branches in one method.
+   - Done now: split cancel, close, and exit-amendment handlers while preserving safety gates and execution statuses.
 
 5. **Large test modules**
    - Problem: repository and route tests are hard to navigate.
