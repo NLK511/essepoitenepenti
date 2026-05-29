@@ -220,100 +220,21 @@ class PlanGenerationTuningService:
             )
         search_records, validation_records = self._split_records(records, min_validation=min_validation_resolved)
         exploration_seed = self._exploration_seed(active_config=active_config, records=records, mode=mode)
-        candidates = self._candidate_configs(active_config, mode=mode)
         walk_forward_service = PlanGenerationWalkForwardService(self)
         batch_size = int(mode_profile["batch_size"])
-        evaluations: list[CandidateEvaluation] = []
-        evaluation_batch_count = 0
-        total_batches = max(1, math.ceil(len(candidates) / batch_size))
-        logger.info(
-            "plan generation tuning candidate search prepared: mode=%s candidate_count=%s batch_size=%s total_batches=%s exploration_seed=%s",
-            mode,
-            len(candidates),
-            batch_size,
-            total_batches,
-            exploration_seed,
-        )
-        for batch in self._batched(candidates, batch_size):
-            evaluation_batch_count += 1
-            logger.info(
-                "plan generation tuning evaluating batch %s/%s: mode=%s batch_candidates=%s rss_mb=%s",
-                evaluation_batch_count,
-                total_batches,
-                mode,
-                len(batch),
-                round(self._current_rss_bytes() / 1024 / 1024, 1),
-            )
-            self._memory_guard(stage=f"{mode}-batch-{evaluation_batch_count}-start")
-            if explore_mode:
-                batch_evaluations = [
-                    self._evaluate_candidate_walk_forward(
-                        config,
-                        active_config,
-                        search_records,
-                        records,
-                        walk_forward_service,
-                        min_validation_resolved=min_validation_resolved,
-                    )
-                    for config in batch
-                ]
-            else:
-                batch_evaluations = [self._evaluate_candidate(config, active_config, search_records, validation_records) for config in batch]
-            evaluations.extend(batch_evaluations)
-            gc.collect()
-            self._memory_guard(stage=f"{mode}-batch-{evaluation_batch_count}-end")
-        evaluations.sort(key=cmp_to_key(self._candidate_compare))
-        baseline_eval = next(item for item in evaluations if item.changed_keys == [])
-        refinement_candidates = self._refinement_configs(
-            evaluations,
-            baseline_eval,
-            active_config,
+        evaluations, baseline_eval, refinement_candidates, refinement_seed_count, evaluation_batch_count = self._evaluate_candidate_search(
+            active_config=active_config,
+            records=records,
+            search_records=search_records,
+            validation_records=validation_records,
+            walk_forward_service=walk_forward_service,
             mode=mode,
+            explore_mode=explore_mode,
+            batch_size=batch_size,
             max_candidates=int(mode_profile["max_candidates"]),
+            min_validation_resolved=min_validation_resolved,
+            exploration_seed=exploration_seed,
         )
-        refinement_seed_count = 0
-        if refinement_candidates:
-            refinement_seed_count = min(2, len([item for item in evaluations if item.changed_keys]))
-            refinement_total_batches = max(1, math.ceil(len(refinement_candidates) / batch_size))
-            logger.info(
-                "plan generation tuning refinement search prepared: mode=%s seed_count=%s candidate_count=%s batch_size=%s total_batches=%s exploration_seed=%s",
-                mode,
-                refinement_seed_count,
-                len(refinement_candidates),
-                batch_size,
-                refinement_total_batches,
-                exploration_seed,
-            )
-            for batch in self._batched(refinement_candidates, batch_size):
-                evaluation_batch_count += 1
-                logger.info(
-                    "plan generation tuning evaluating refinement batch %s/%s: mode=%s batch_candidates=%s rss_mb=%s",
-                    evaluation_batch_count,
-                    total_batches + refinement_total_batches,
-                    mode,
-                    len(batch),
-                    round(self._current_rss_bytes() / 1024 / 1024, 1),
-                )
-                self._memory_guard(stage=f"{mode}-refinement-batch-{evaluation_batch_count}-start")
-                if explore_mode:
-                    batch_evaluations = [
-                        self._evaluate_candidate_walk_forward(
-                            config,
-                            active_config,
-                            search_records,
-                            records,
-                            walk_forward_service,
-                            min_validation_resolved=min_validation_resolved,
-                        )
-                        for config in batch
-                    ]
-                else:
-                    batch_evaluations = [self._evaluate_candidate(config, active_config, search_records, validation_records) for config in batch]
-                evaluations.extend(batch_evaluations)
-                gc.collect()
-                self._memory_guard(stage=f"{mode}-refinement-batch-{evaluation_batch_count}-end")
-        self._memory_guard(stage=f"{mode}-post-evaluation")
-        evaluations.sort(key=cmp_to_key(self._candidate_compare))
         winner = evaluations[0]
         logger.info(
             "plan generation tuning ranked candidates: mode=%s winner_rank=%s winner_validation_win_rate=%.2f winner_validation_win_count=%s winner_validation_expected_value=%.4f",
@@ -400,15 +321,61 @@ class PlanGenerationTuningService:
             )
         )
 
+        stored_candidates = self._store_candidate_evaluations(
+            run_id=run.id or 0,
+            evaluations=evaluations,
+            baseline_eval=baseline_eval,
+            min_validation_resolved=min_validation_resolved,
+        )
+        winner_candidate = stored_candidates[0]
+        promoted_config_version_id, promotion_applied, promotion_rejection_reasons, edge_gate_report = self._apply_winner_promotion(
+            apply=apply,
+            run=run,
+            winner_candidate=winner_candidate,
+            baseline_version=baseline_version,
+            walk_forward_validation=walk_forward_validation,
+        )
+
+        updated_run = self.repository.get_run(run.id or 0)
+        updated_run.winning_candidate_id = winner_candidate.id
+        updated_run.promoted_config_version_id = promoted_config_version_id
+        updated_run.summary["winner_candidate_id"] = winner_candidate.id
+        updated_run.summary["promoted_config_version_id"] = promoted_config_version_id
+        updated_run.summary["promotion_requested"] = apply
+        updated_run.summary["promotion_applied"] = promotion_applied
+        updated_run.summary["promotion_rejection_reasons"] = promotion_rejection_reasons
+        if apply:
+            updated_run.summary["edge_validation_gate"] = edge_gate_report
+        updated_run.summary["baseline_config_version_id"] = baseline_version.id
+        finished_run = self.repository.update_run(run.id or 0, updated_run)
+        logger.info(
+            "plan generation tuning finished: run_id=%s status=%s candidate_count=%s promoted_config_version_id=%s duration_seconds=%.3f",
+            finished_run.id,
+            finished_run.status,
+            finished_run.candidate_count,
+            finished_run.promoted_config_version_id,
+            (datetime.now(timezone.utc) - started_at).total_seconds(),
+        )
+        return finished_run
+
+    def _store_candidate_evaluations(
+        self,
+        *,
+        run_id: int,
+        evaluations: list[CandidateEvaluation],
+        baseline_eval: CandidateEvaluation,
+        min_validation_resolved: int,
+    ) -> list[PlanGenerationTuningCandidate]:
         stored_candidates: list[PlanGenerationTuningCandidate] = []
         for rank, evaluation in enumerate(evaluations, start=1):
+            promotion_eligible = self._promotion_eligible(evaluation, baseline_eval, min_validation_resolved=min_validation_resolved)
             candidate = self.repository.create_candidate(
                 PlanGenerationTuningCandidate(
-                    run_id=run.id,
+                    run_id=run_id,
                     rank=rank,
                     status="evaluated",
                     is_baseline=(evaluation.changed_keys == []),
-                    promotion_eligible=self._promotion_eligible(evaluation, baseline_eval, min_validation_resolved=min_validation_resolved),
+                    promotion_eligible=promotion_eligible,
                     config=evaluation.config,
                     changed_keys=evaluation.changed_keys,
                     score_summary={
@@ -436,91 +403,222 @@ class PlanGenerationTuningService:
                         "validation_average_win_rate_delta": evaluation.validation_average_win_rate_delta,
                         "validation_average_expected_value_delta": evaluation.validation_average_expected_value_delta,
                     },
-                    rejection_reasons=[] if self._promotion_eligible(evaluation, baseline_eval, min_validation_resolved=min_validation_resolved) else self._rejection_reasons(evaluation, baseline_eval, min_validation_resolved=min_validation_resolved),
+                    rejection_reasons=[] if promotion_eligible else self._rejection_reasons(evaluation, baseline_eval, min_validation_resolved=min_validation_resolved),
                 )
             )
             stored_candidates.append(candidate)
+        return stored_candidates
 
-        winner_candidate = stored_candidates[0]
-        promoted_config_version_id = None
-        promotion_applied = False
+    def _apply_winner_promotion(
+        self,
+        *,
+        apply: bool,
+        run: PlanGenerationTuningRun,
+        winner_candidate: PlanGenerationTuningCandidate,
+        baseline_version: PlanGenerationTuningConfigVersion,
+        walk_forward_validation: object,
+    ) -> tuple[int | None, bool, list[str], dict[str, object] | None]:
+        if not apply:
+            return None, False, [], None
+        logger.info(
+            "plan generation tuning apply requested: run_id=%s winner_candidate_id=%s promotion_eligible=%s",
+            run.id,
+            winner_candidate.id,
+            winner_candidate.promotion_eligible,
+        )
         promotion_rejection_reasons: list[str] = []
-        if apply:
-            logger.info(
-                "plan generation tuning apply requested: run_id=%s winner_candidate_id=%s promotion_eligible=%s",
-                run.id,
-                winner_candidate.id,
-                winner_candidate.promotion_eligible,
-            )
-            if not winner_candidate.promotion_eligible:
-                promotion_rejection_reasons.extend(winner_candidate.rejection_reasons or ["winning_candidate_not_promotion_eligible"])
-            if walk_forward_validation.qualified_slices >= 3 and not walk_forward_validation.promotion_recommended:
-                rationale = (walk_forward_validation.promotion_rationale or "walk_forward_validation_rejected").strip()
-                if rationale:
-                    promotion_rejection_reasons.append(rationale)
-            edge_gate_report = self._edge_validation_gate_report(walk_forward_validation=walk_forward_validation)
-            if edge_gate_report["label"] != "eligible_for_cautious_expansion":
-                promotion_rejection_reasons.append(f"edge_validation_gate_{edge_gate_report['label']}")
-            if not promotion_rejection_reasons:
-                promoted = self.repository.create_config_version(
-                    PlanGenerationTuningConfigVersion(
-                        version_label=f"run-{run.id}-winner",
-                        status="active",
-                        source="tuning_run",
-                        parent_config_version_id=baseline_version.id,
-                        source_run_id=run.id,
-                        source_candidate_id=winner_candidate.id,
-                        config=winner_candidate.config,
-                        parameter_schema_version=self.SCHEMA_VERSION,
-                    )
+        if not winner_candidate.promotion_eligible:
+            promotion_rejection_reasons.extend(winner_candidate.rejection_reasons or ["winning_candidate_not_promotion_eligible"])
+        if getattr(walk_forward_validation, "qualified_slices", 0) >= 3 and not getattr(walk_forward_validation, "promotion_recommended", False):
+            rationale = (getattr(walk_forward_validation, "promotion_rationale", None) or "walk_forward_validation_rejected").strip()
+            if rationale:
+                promotion_rejection_reasons.append(rationale)
+        edge_gate_report = self._edge_validation_gate_report(walk_forward_validation=walk_forward_validation)
+        if edge_gate_report["label"] != "eligible_for_cautious_expansion":
+            promotion_rejection_reasons.append(f"edge_validation_gate_{edge_gate_report['label']}")
+        if promotion_rejection_reasons:
+            self.repository.create_event(
+                PlanGenerationTuningEvent(
+                    event_type="config_promotion_skipped",
+                    run_id=run.id,
+                    candidate_id=winner_candidate.id,
+                    payload={
+                        "version_label": f"run-{run.id}-winner",
+                        "rejection_reasons": promotion_rejection_reasons,
+                        "edge_validation_gate": edge_gate_report,
+                    },
                 )
-                self.settings_mutations.set_plan_generation_active_config_version_id(promoted.id)
-                promoted_config_version_id = promoted.id
-                promotion_applied = True
-                self.repository.create_event(
-                    PlanGenerationTuningEvent(
-                        event_type="config_promoted",
-                        run_id=run.id,
-                        config_version_id=promoted.id,
-                        candidate_id=winner_candidate.id,
-                        payload={"version_label": promoted.version_label},
-                    )
+            )
+            return None, False, promotion_rejection_reasons, edge_gate_report
+        promoted = self.repository.create_config_version(
+            PlanGenerationTuningConfigVersion(
+                version_label=f"run-{run.id}-winner",
+                status="active",
+                source="tuning_run",
+                parent_config_version_id=baseline_version.id,
+                source_run_id=run.id,
+                source_candidate_id=winner_candidate.id,
+                config=winner_candidate.config,
+                parameter_schema_version=self.SCHEMA_VERSION,
+            )
+        )
+        self.settings_mutations.set_plan_generation_active_config_version_id(promoted.id)
+        self.repository.create_event(
+            PlanGenerationTuningEvent(
+                event_type="config_promoted",
+                run_id=run.id,
+                config_version_id=promoted.id,
+                candidate_id=winner_candidate.id,
+                payload={"version_label": promoted.version_label},
+            )
+        )
+        return promoted.id, True, [], edge_gate_report
+
+    def _evaluate_candidate_search(
+        self,
+        *,
+        active_config: dict[str, float],
+        records: list[EligibleTuningRecord],
+        search_records: list[EligibleTuningRecord],
+        validation_records: list[EligibleTuningRecord],
+        walk_forward_service: PlanGenerationWalkForwardService,
+        mode: str,
+        explore_mode: bool,
+        batch_size: int,
+        max_candidates: int,
+        min_validation_resolved: int,
+        exploration_seed: int,
+    ) -> tuple[list[CandidateEvaluation], CandidateEvaluation, list[dict[str, float]], int, int]:
+        candidates = self._candidate_configs(active_config, mode=mode)
+        evaluations: list[CandidateEvaluation] = []
+        evaluation_batch_count = self._evaluate_candidate_batches(
+            candidates,
+            evaluations,
+            active_config=active_config,
+            search_records=search_records,
+            validation_records=validation_records,
+            walk_forward_records=records,
+            walk_forward_service=walk_forward_service,
+            mode=mode,
+            explore_mode=explore_mode,
+            batch_size=batch_size,
+            min_validation_resolved=min_validation_resolved,
+            exploration_seed=exploration_seed,
+            phase="candidate",
+            starting_batch_count=0,
+        )
+        evaluations.sort(key=cmp_to_key(self._candidate_compare))
+        baseline_eval = next(item for item in evaluations if item.changed_keys == [])
+        refinement_candidates = self._refinement_configs(
+            evaluations,
+            baseline_eval,
+            active_config,
+            mode=mode,
+            max_candidates=max_candidates,
+        )
+        refinement_seed_count = 0
+        if refinement_candidates:
+            refinement_seed_count = min(2, len([item for item in evaluations if item.changed_keys]))
+            evaluation_batch_count = self._evaluate_candidate_batches(
+                refinement_candidates,
+                evaluations,
+                active_config=active_config,
+                search_records=search_records,
+                validation_records=validation_records,
+                walk_forward_records=records,
+                walk_forward_service=walk_forward_service,
+                mode=mode,
+                explore_mode=explore_mode,
+                batch_size=batch_size,
+                min_validation_resolved=min_validation_resolved,
+                exploration_seed=exploration_seed,
+                phase="refinement",
+                starting_batch_count=evaluation_batch_count,
+                seed_count=refinement_seed_count,
+            )
+        self._memory_guard(stage=f"{mode}-post-evaluation")
+        evaluations.sort(key=cmp_to_key(self._candidate_compare))
+        return evaluations, baseline_eval, refinement_candidates, refinement_seed_count, evaluation_batch_count
+
+    def _evaluate_candidate_batches(
+        self,
+        candidates: list[dict[str, float]],
+        evaluations: list[CandidateEvaluation],
+        *,
+        active_config: dict[str, float],
+        search_records: list[EligibleTuningRecord],
+        validation_records: list[EligibleTuningRecord],
+        walk_forward_records: list[EligibleTuningRecord],
+        walk_forward_service: PlanGenerationWalkForwardService,
+        mode: str,
+        explore_mode: bool,
+        batch_size: int,
+        min_validation_resolved: int,
+        exploration_seed: int,
+        phase: str,
+        starting_batch_count: int,
+        seed_count: int = 0,
+    ) -> int:
+        batch_count = starting_batch_count
+        phase_batches = max(1, math.ceil(len(candidates) / batch_size))
+        if phase == "candidate":
+            logger.info(
+                "plan generation tuning candidate search prepared: mode=%s candidate_count=%s batch_size=%s total_batches=%s exploration_seed=%s",
+                mode,
+                len(candidates),
+                batch_size,
+                phase_batches,
+                exploration_seed,
+            )
+        else:
+            logger.info(
+                "plan generation tuning refinement search prepared: mode=%s seed_count=%s candidate_count=%s batch_size=%s total_batches=%s exploration_seed=%s",
+                mode,
+                seed_count,
+                len(candidates),
+                batch_size,
+                phase_batches,
+                exploration_seed,
+            )
+        for batch_index, batch in enumerate(self._batched(candidates, batch_size), start=1):
+            batch_count += 1
+            if phase == "candidate":
+                logger.info(
+                    "plan generation tuning evaluating batch %s/%s: mode=%s batch_candidates=%s rss_mb=%s",
+                    batch_index,
+                    phase_batches,
+                    mode,
+                    len(batch),
+                    round(self._current_rss_bytes() / 1024 / 1024, 1),
                 )
             else:
-                self.repository.create_event(
-                    PlanGenerationTuningEvent(
-                        event_type="config_promotion_skipped",
-                        run_id=run.id,
-                        candidate_id=winner_candidate.id,
-                        payload={
-                            "version_label": f"run-{run.id}-winner",
-                            "rejection_reasons": promotion_rejection_reasons,
-                            "edge_validation_gate": edge_gate_report,
-                        },
-                    )
+                logger.info(
+                    "plan generation tuning evaluating refinement batch %s/%s: mode=%s batch_candidates=%s rss_mb=%s",
+                    batch_index,
+                    phase_batches,
+                    mode,
+                    len(batch),
+                    round(self._current_rss_bytes() / 1024 / 1024, 1),
                 )
-
-        updated_run = self.repository.get_run(run.id or 0)
-        updated_run.winning_candidate_id = winner_candidate.id
-        updated_run.promoted_config_version_id = promoted_config_version_id
-        updated_run.summary["winner_candidate_id"] = winner_candidate.id
-        updated_run.summary["promoted_config_version_id"] = promoted_config_version_id
-        updated_run.summary["promotion_requested"] = apply
-        updated_run.summary["promotion_applied"] = promotion_applied
-        updated_run.summary["promotion_rejection_reasons"] = promotion_rejection_reasons
-        if apply:
-            updated_run.summary["edge_validation_gate"] = edge_gate_report
-        updated_run.summary["baseline_config_version_id"] = baseline_version.id
-        finished_run = self.repository.update_run(run.id or 0, updated_run)
-        logger.info(
-            "plan generation tuning finished: run_id=%s status=%s candidate_count=%s promoted_config_version_id=%s duration_seconds=%.3f",
-            finished_run.id,
-            finished_run.status,
-            finished_run.candidate_count,
-            finished_run.promoted_config_version_id,
-            (datetime.now(timezone.utc) - started_at).total_seconds(),
-        )
-        return finished_run
+            self._memory_guard(stage=f"{mode}-{phase}-batch-{batch_count}-start")
+            if explore_mode:
+                batch_evaluations = [
+                    self._evaluate_candidate_walk_forward(
+                        config,
+                        active_config,
+                        search_records,
+                        walk_forward_records,
+                        walk_forward_service,
+                        min_validation_resolved=min_validation_resolved,
+                    )
+                    for config in batch
+                ]
+            else:
+                batch_evaluations = [self._evaluate_candidate(config, active_config, search_records, validation_records) for config in batch]
+            evaluations.extend(batch_evaluations)
+            gc.collect()
+            self._memory_guard(stage=f"{mode}-{phase}-batch-{batch_count}-end")
+        return batch_count
 
     def promote_config_version(self, config_version_id: int) -> PlanGenerationTuningConfigVersion:
         gate_report = self._edge_validation_gate_report()

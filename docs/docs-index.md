@@ -42,6 +42,7 @@ These define implemented product truth.
 - `operational-scripts-reference.md` — reference for maintenance, hydration, and compare tools
 - `observability-spec.md` — run correlation ids, structured observability events, health/debugger diagnostics, and cross-process log requirements
 - `lean-architecture-and-docs-reconciliation-plan.md` — remaining active plan to reduce over-engineering and reconcile the docs surface
+- `codebase-simplification-plan.md` — active behavior-preserving code refactor and dead-code audit plan
 - `audit-remediation-and-autonomy-readiness-plan.md` — umbrella active plan for audit findings, safety gates, migration confidence, and autonomy readiness
 - `audits/full-project-spec-code-audit-2026-05-29-post-remediation.md` — latest post-remediation full audit of spec/code/test coherence and autonomy readiness
 - `audits/full-project-spec-code-audit-2026-05-29-post-remediation-plan.md` — completed implementation record for the latest post-remediation audit findings

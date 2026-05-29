@@ -12,7 +12,7 @@ Signal integrity wins:
 - fallback behavior is not presented as equal to healthy input
 - outputs must be reproducible, inspectable, and explicit about degraded evidence
 
-## Pipeline
+## Pipeline overview
 
 The active proposal path is watchlist-oriented and coordinated by `WatchlistOrchestrationService`. `WatchlistExecutionService` owns run coordination; focused services handle shortlist selection, scan execution, signal building, plan framing/narrative, calibration review, transmission, and decision samples.
 
