@@ -1110,7 +1110,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(one_day_payload["dashboard_summary"]["total_profit"])
         self.assertIn("average_profit_percent", one_day_payload["dashboard_summary"])
         self.assertEqual(one_day_payload["dashboard_summary"]["overall_win_rate_percent"], one_day_payload["dashboard_summary"]["win_rate_percent"])
-        self.assertEqual(one_day_payload["dashboard_summary"]["total_profit"], one_day_payload["dashboard_summary"]["profit_percent"])
+        self.assertEqual(one_day_payload["dashboard_summary"]["average_profit_percent"], one_day_payload["dashboard_summary"]["profit_percent"])
         self.assertIsNotNone(one_day_payload["dashboard_summary"]["actionability_gap_percent"])
         self.assertIsNotNone(one_day_payload["dashboard_summary"]["actionable_win_rate_percent"])
         self.assertIsNotNone(one_day_payload["dashboard_summary"]["phantom_win_rate_percent"])

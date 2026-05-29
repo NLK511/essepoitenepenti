@@ -188,7 +188,7 @@ def _dashboard_window_metrics(
         "broker_average_profit_percent": broker_average_profit_percent,
         "simulated_average_profit_percent": simulated_average_profit_percent,
         "win_rate_percent": overall_win_rate_percent,
-        "profit_percent": total_profit,
+        "profit_percent": average_profit_percent,
         "win_rate_source": "effective",
         "profit_source": "effective",
         "actionability_gap_percent": actionability["actionability_gap_percent"],

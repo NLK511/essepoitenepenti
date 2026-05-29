@@ -104,7 +104,7 @@ class DashboardTrendService:
             "broker_average_profit_percent": broker_summary["average_return_percent"],
             "simulated_average_profit_percent": effective_summary["simulation_average_return_percent"],
             "win_rate_percent": effective_summary["win_rate_percent"],
-            "profit_percent": effective_summary["realized_pnl"],
+            "profit_percent": effective_summary["average_return_percent"],
             "win_rate_source": "effective",
             "profit_source": "effective",
             "actionability_gap_percent": actionability["actionability_gap_percent"],
