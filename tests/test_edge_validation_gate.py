@@ -34,11 +34,29 @@ def test_edge_validation_gate_allows_cautious_expansion_when_thresholds_pass() -
         evidence_concentration_ready_for_expansion=True,
         degraded_input_share_percent=5.0,
         broker_reconciliation_uncertain=False,
+        baseline_comparison_summary={"passed": True},
+        drawdown_summary={"breached": False},
+        loss_streak_summary={"breached": False},
     )
 
     assert report.label == "eligible_for_cautious_expansion"
     assert report.reasons == []
     assert report.broker_outcome_share_percent == 58.3
+
+
+def test_edge_validation_gate_requires_baseline_drawdown_and_loss_streak_inputs() -> None:
+    report = EdgeValidationGateService().evaluate(
+        _evaluation(),
+        walk_forward_validation={"qualified_slices": 3, "promotion_recommended": True},
+        evidence_concentration_ready_for_expansion=True,
+        degraded_input_share_percent=5.0,
+        broker_reconciliation_uncertain=False,
+    )
+
+    assert report.label == "watch"
+    assert "baseline_comparison_input_missing" in report.reasons
+    assert "drawdown_input_missing" in report.reasons
+    assert "loss_streak_input_missing" in report.reasons
 
 
 def test_edge_validation_gate_blocks_thin_simulation_heavy_evidence() -> None:

@@ -100,7 +100,7 @@ class PlanPolicyEvaluator:
             return False
         if not isinstance(outcome.confidence_percent, (int, float)):
             return False
-        return float(outcome.confidence_percent) >= policy.action_confidence_threshold()
+        return float(outcome.confidence_percent) >= policy.effective_confidence_threshold()
 
     @staticmethod
     def _resolved(outcomes: list[RecommendationPlanOutcome]) -> list[RecommendationPlanOutcome]:

@@ -61,6 +61,9 @@ Operator-facing consumers must not call the gate with silently omitted inputs. T
 - `evidence_concentration`: current concentration summary when available.
 - `degraded_input_summary`: degraded-input share and source when available.
 - `broker_reconciliation_summary`: broker certainty state used by the gate.
+- `baseline_comparison_summary`: selected-policy performance compared with a simple non-selected baseline.
+- `drawdown_summary`: selected-policy max drawdown and breach state.
+- `loss_streak_summary`: selected-policy recent/max loss-streak and breach state.
 - `missing_inputs`: machine-readable list of required inputs that were not available.
 
 Dashboard, recommendation-quality, research, and tuning promotion must use this read model instead of stitching trust labels independently.
@@ -126,6 +129,11 @@ The gate should return machine-readable reasons, including:
 - `concentration_input_missing`
 - `degraded_input_input_missing`
 - `broker_reconciliation_input_missing`
+- `baseline_comparison_input_missing`
+- `baseline_underperformance`
+- `drawdown_input_missing`
+- `drawdown_or_loss_streak_breach`
+- `loss_streak_input_missing`
 
 ## Operator stance labels
 

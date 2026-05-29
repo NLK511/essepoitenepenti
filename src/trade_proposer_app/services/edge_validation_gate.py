@@ -24,6 +24,9 @@ class EdgeValidationGateReport:
     walk_forward_promotion_recommended: bool | None
     evidence_concentration_ready_for_expansion: bool | None
     degraded_input_share_percent: float | None
+    baseline_comparison_summary: dict[str, Any] | None
+    drawdown_summary: dict[str, Any] | None
+    loss_streak_summary: dict[str, Any] | None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -42,6 +45,9 @@ class EdgeValidationGateReport:
             "walk_forward_promotion_recommended": self.walk_forward_promotion_recommended,
             "evidence_concentration_ready_for_expansion": self.evidence_concentration_ready_for_expansion,
             "degraded_input_share_percent": self.degraded_input_share_percent,
+            "baseline_comparison_summary": self.baseline_comparison_summary,
+            "drawdown_summary": self.drawdown_summary,
+            "loss_streak_summary": self.loss_streak_summary,
         }
 
 
@@ -64,6 +70,9 @@ class EdgeValidationGateService:
         broker_reconciliation_uncertain: bool | None = None,
         evidence_concentration_ready_for_expansion: bool | None = None,
         degraded_input_share_percent: float | None = None,
+        baseline_comparison_summary: dict[str, Any] | None = None,
+        drawdown_summary: dict[str, Any] | None = None,
+        loss_streak_summary: dict[str, Any] | None = None,
     ) -> EdgeValidationGateReport:
         reasons: list[str] = []
         broker_share = self._percentage(evaluation.broker_selected_outcomes, evaluation.selected_outcomes)
@@ -105,6 +114,18 @@ class EdgeValidationGateService:
             reasons.append("broker_reconciliation_input_missing")
         elif broker_reconciliation_uncertain:
             reasons.append("broker_reconciliation_uncertain")
+        if baseline_comparison_summary is None:
+            reasons.append("baseline_comparison_input_missing")
+        elif baseline_comparison_summary.get("passed") is False:
+            reasons.append("baseline_underperformance")
+        if drawdown_summary is None:
+            reasons.append("drawdown_input_missing")
+        elif drawdown_summary.get("breached") is True:
+            reasons.append("drawdown_or_loss_streak_breach")
+        if loss_streak_summary is None:
+            reasons.append("loss_streak_input_missing")
+        elif loss_streak_summary.get("breached") is True:
+            reasons.append("drawdown_or_loss_streak_breach")
 
         label = self._label(reasons, evaluation)
         return EdgeValidationGateReport(
@@ -123,6 +144,9 @@ class EdgeValidationGateService:
             walk_forward_promotion_recommended=promotion_recommended if isinstance(promotion_recommended, bool) else None,
             evidence_concentration_ready_for_expansion=evidence_concentration_ready_for_expansion,
             degraded_input_share_percent=degraded_input_share_percent,
+            baseline_comparison_summary=baseline_comparison_summary,
+            drawdown_summary=drawdown_summary,
+            loss_streak_summary=loss_streak_summary,
         )
 
     @staticmethod

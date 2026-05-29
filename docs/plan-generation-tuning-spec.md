@@ -527,7 +527,7 @@ A candidate may be promoted if:
 - it exceeds the minimum improvement threshold
 - a full audit trail is persisted
 
-Auto-promotion still targets the rank-1 candidate by default, but manual promotion may target any candidate that passes the promotion checks. Manual promotion does not require the edge-validation autonomy gate; that gate is reserved for autonomous expansion and auto-promotion paths.
+Auto-promotion still targets the rank-1 candidate by default, but manual promotion may target any candidate that passes the promotion checks. Manual promotion does not require the edge-validation autonomy gate; that gate is reserved for autonomous expansion and auto-promotion paths. Auto-promotion must fail closed unless the shared edge-validation gate has explicit passing baseline-comparison, drawdown, and loss-streak evidence in addition to walk-forward, concentration, degraded-input, and broker-reconciliation inputs.
 
 ### Rollback requirements
 

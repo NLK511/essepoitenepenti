@@ -4,11 +4,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from trade_proposer_app.domain.models import AccountRiskState, RecommendationWalkForwardSummary
+from trade_proposer_app.domain.models import AccountRiskState, RecommendationPlanOutcome, RecommendationWalkForwardSummary
+from trade_proposer_app.domain.statuses import OutcomeStatus, TradeOutcome
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.services.edge_validation_gate import EdgeValidationGateReport, EdgeValidationGateService
 from trade_proposer_app.services.recommendation_evidence_concentration import RecommendationEvidenceConcentrationService
-from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicyService
+from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicy, TradeDecisionPolicyService
 from trade_proposer_app.services.trade_policy_evaluation import PolicyHealthReport, TradePolicyEvaluationService, TradePolicyEvaluationSummary
 
 
@@ -24,6 +25,9 @@ class PolicyTrustReport:
     evidence_concentration: dict[str, object] | None
     degraded_input_summary: dict[str, object] | None
     broker_reconciliation_summary: dict[str, object]
+    baseline_comparison_summary: dict[str, object] | None
+    drawdown_summary: dict[str, object] | None
+    loss_streak_summary: dict[str, object] | None
     missing_inputs: list[str]
 
     def to_dict(self) -> dict[str, object]:
@@ -36,6 +40,9 @@ class PolicyTrustReport:
             "evidence_concentration": self.evidence_concentration,
             "degraded_input_summary": self.degraded_input_summary,
             "broker_reconciliation_summary": self.broker_reconciliation_summary,
+            "baseline_comparison_summary": self.baseline_comparison_summary,
+            "drawdown_summary": self.drawdown_summary,
+            "loss_streak_summary": self.loss_streak_summary,
             "missing_inputs": self.missing_inputs,
         }
 
@@ -70,12 +77,17 @@ class PolicyTrustReportService:
                 evaluated_before=evaluated_before,
                 limit=limit,
             )
+        policy = self.policy_service.active_policy()
+        outcomes = self.outcomes.list_outcomes(evaluated_after=evaluated_after, evaluated_before=evaluated_before, limit=limit)
         return self.build(
             policy_review,
             walk_forward_validation=walk_forward_validation,
             evidence_concentration=evidence_concentration,
             degraded_input_summary=degraded_input_summary,
             risk_state=risk_state,
+            baseline_comparison_summary=self._baseline_comparison_summary(outcomes, policy_review.policy_evaluation.win_rate_percent),
+            drawdown_summary=self._drawdown_summary(outcomes, policy),
+            loss_streak_summary=self._loss_streak_summary(outcomes, policy),
         )
 
     def build(
@@ -86,6 +98,9 @@ class PolicyTrustReportService:
         evidence_concentration: Any | None = None,
         degraded_input_summary: dict[str, object] | None = None,
         risk_state: AccountRiskState | dict[str, Any] | None = None,
+        baseline_comparison_summary: dict[str, object] | None = None,
+        drawdown_summary: dict[str, object] | None = None,
+        loss_streak_summary: dict[str, object] | None = None,
     ) -> PolicyTrustReport:
         broker_summary = self._broker_reconciliation_summary(risk_state)
         degraded_share = self._optional_float((degraded_input_summary or {}).get("degraded_input_share_percent")) if degraded_input_summary else None
@@ -95,6 +110,9 @@ class PolicyTrustReportService:
             evidence_concentration=evidence_concentration,
             degraded_input_summary=degraded_input_summary,
             broker_reconciliation_summary=broker_summary,
+            baseline_comparison_summary=baseline_comparison_summary,
+            drawdown_summary=drawdown_summary,
+            loss_streak_summary=loss_streak_summary,
         )
         gate = EdgeValidationGateService().evaluate(
             policy_review.policy_evaluation,
@@ -102,6 +120,9 @@ class PolicyTrustReportService:
             broker_reconciliation_uncertain=broker_summary["uncertain"],
             evidence_concentration_ready_for_expansion=concentration_ready,
             degraded_input_share_percent=degraded_share,
+            baseline_comparison_summary=baseline_comparison_summary,
+            drawdown_summary=drawdown_summary,
+            loss_streak_summary=loss_streak_summary,
         )
         headline = self._policy_health_headline(policy_review.policy_health, gate)
         return PolicyTrustReport(
@@ -113,6 +134,9 @@ class PolicyTrustReportService:
             evidence_concentration=self._model_or_dict(evidence_concentration),
             degraded_input_summary=degraded_input_summary,
             broker_reconciliation_summary=broker_summary,
+            baseline_comparison_summary=baseline_comparison_summary,
+            drawdown_summary=drawdown_summary,
+            loss_streak_summary=loss_streak_summary,
             missing_inputs=missing_inputs,
         )
 
@@ -123,6 +147,9 @@ class PolicyTrustReportService:
         evidence_concentration: object | None,
         degraded_input_summary: dict[str, object] | None,
         broker_reconciliation_summary: dict[str, object],
+        baseline_comparison_summary: dict[str, object] | None,
+        drawdown_summary: dict[str, object] | None,
+        loss_streak_summary: dict[str, object] | None,
     ) -> list[str]:
         missing: list[str] = []
         if walk_forward_validation is None:
@@ -133,7 +160,67 @@ class PolicyTrustReportService:
             missing.append("degraded_input_input_missing")
         if broker_reconciliation_summary.get("status") in {"missing", "not_checked"}:
             missing.append("broker_reconciliation_input_missing")
+        if baseline_comparison_summary is None:
+            missing.append("baseline_comparison_input_missing")
+        if drawdown_summary is None:
+            missing.append("drawdown_input_missing")
+        if loss_streak_summary is None:
+            missing.append("loss_streak_input_missing")
         return missing
+
+    @classmethod
+    def _baseline_comparison_summary(cls, outcomes: list[RecommendationPlanOutcome], selected_win_rate_percent: float | None) -> dict[str, object]:
+        resolved = [item for item in outcomes if item.status == OutcomeStatus.RESOLVED.value and item.outcome in {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}]
+        if not resolved or selected_win_rate_percent is None:
+            return {"passed": False, "reason": "baseline_sample_missing", "baseline_win_rate_percent": None, "selected_win_rate_percent": selected_win_rate_percent}
+        wins = sum(1 for item in resolved if item.outcome == TradeOutcome.WIN.value)
+        baseline_win_rate = round((wins / len(resolved)) * 100.0, 1)
+        delta = round(float(selected_win_rate_percent) - baseline_win_rate, 2)
+        return {
+            "passed": delta >= 5.0,
+            "baseline_win_rate_percent": baseline_win_rate,
+            "selected_win_rate_percent": selected_win_rate_percent,
+            "win_rate_delta_percent": delta,
+            "resolved_baseline_outcomes": len(resolved),
+        }
+
+    @classmethod
+    def _drawdown_summary(cls, outcomes: list[RecommendationPlanOutcome], policy: TradeDecisionPolicy) -> dict[str, object]:
+        selected = cls._selected_resolved_outcomes(outcomes, policy)
+        cumulative = 0.0
+        peak = 0.0
+        max_drawdown = 0.0
+        for item in sorted(selected, key=lambda row: row.evaluated_at):
+            cumulative += float(item.realized_pnl or 0.0)
+            peak = max(peak, cumulative)
+            max_drawdown = min(max_drawdown, cumulative - peak)
+        return {"breached": max_drawdown < 0 and abs(max_drawdown) > max(100.0, abs(peak) * 0.25), "max_drawdown": round(max_drawdown, 4), "selected_resolved_outcomes": len(selected)}
+
+    @classmethod
+    def _loss_streak_summary(cls, outcomes: list[RecommendationPlanOutcome], policy: TradeDecisionPolicy) -> dict[str, object]:
+        selected = cls._selected_resolved_outcomes(outcomes, policy)
+        current = 0
+        max_streak = 0
+        for item in sorted(selected, key=lambda row: row.evaluated_at):
+            if item.outcome == TradeOutcome.LOSS.value:
+                current += 1
+                max_streak = max(max_streak, current)
+            else:
+                current = 0
+        return {"breached": max_streak >= 5, "max_loss_streak": max_streak, "selected_resolved_outcomes": len(selected)}
+
+    @staticmethod
+    def _selected_resolved_outcomes(outcomes: list[RecommendationPlanOutcome], policy: TradeDecisionPolicy) -> list[RecommendationPlanOutcome]:
+        return [
+            item
+            for item in outcomes
+            if item.status == OutcomeStatus.RESOLVED.value
+            and item.outcome in {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}
+            and policy.action_allowed(item.action)
+            and policy.setup_family_allowed(item.setup_family)
+            and isinstance(item.confidence_percent, (int, float))
+            and float(item.confidence_percent) >= policy.effective_confidence_threshold()
+        ]
 
     @staticmethod
     def _broker_reconciliation_summary(risk_state: AccountRiskState | dict[str, Any] | None) -> dict[str, object]:

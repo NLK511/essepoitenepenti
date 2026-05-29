@@ -52,6 +52,9 @@ def test_policy_trust_report_records_missing_required_inputs() -> None:
     assert "walk_forward_input_missing" in report.missing_inputs
     assert "degraded_input_input_missing" in report.missing_inputs
     assert "broker_reconciliation_input_missing" in report.missing_inputs
+    assert "baseline_comparison_input_missing" in report.missing_inputs
+    assert "drawdown_input_missing" in report.missing_inputs
+    assert "loss_streak_input_missing" in report.missing_inputs
     assert "walk_forward_input_missing" in report.edge_validation_gate.reasons
     assert "concentration_input_missing" in report.edge_validation_gate.reasons
     assert "broker_reconciliation_input_missing" in report.edge_validation_gate.reasons
@@ -64,6 +67,9 @@ def test_policy_trust_report_can_pass_when_required_inputs_are_supplied() -> Non
         evidence_concentration={"ready_for_expansion": True},
         degraded_input_summary={"degraded_input_share_percent": 5.0},
         risk_state={"metrics": {"broker_drift_severity": "ok", "broker_snapshot_available": True}, "reasons": []},
+        baseline_comparison_summary={"passed": True},
+        drawdown_summary={"breached": False},
+        loss_streak_summary={"breached": False},
     )
 
     assert report.missing_inputs == []
@@ -78,6 +84,9 @@ def test_policy_trust_headline_cannot_contradict_blocked_gate() -> None:
         evidence_concentration={"ready_for_expansion": True},
         degraded_input_summary={"degraded_input_share_percent": 5.0},
         risk_state={"metrics": {"broker_drift_severity": "material", "broker_snapshot_available": True}, "reasons": ["broker_reconciliation_material"]},
+        baseline_comparison_summary={"passed": True},
+        drawdown_summary={"breached": False},
+        loss_streak_summary={"breached": False},
     )
 
     assert report.edge_validation_gate.label == "demote_or_halt"

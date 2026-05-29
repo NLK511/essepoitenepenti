@@ -25,7 +25,7 @@ A historical effective outcome is selected by the policy when:
 - its setup family is allowed by the policy
 - its confidence is at least the policy effective confidence threshold
 
-The effective confidence threshold is `TradeDecisionPolicy.effective_confidence_threshold()`.
+The effective confidence threshold is `TradeDecisionPolicy.effective_confidence_threshold()`. Policy evidence for autonomy/readiness always uses this effective threshold, even when the execution account mode is paper and `action_confidence_threshold()` is relaxed to `0.0` for paper exploration. Low-confidence paper-exploration actionability can be reported as a separate diagnostic cohort, but it is not selected policy evidence.
 
 ## Score fields
 The evaluator returns `PlanPolicyEvaluation` with:

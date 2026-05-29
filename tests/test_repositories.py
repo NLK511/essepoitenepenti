@@ -1079,6 +1079,46 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(evaluation.robustness_label, "insufficient")
         self.assertEqual(evaluation.selection_rate_percent, 75.0)
 
+    def test_plan_policy_evaluator_uses_effective_threshold_not_paper_action_threshold(self) -> None:
+        outcomes = [
+            RecommendationPlanOutcome(
+                recommendation_plan_id=1,
+                ticker="AAPL",
+                action="long",
+                outcome="win",
+                status="resolved",
+                confidence_percent=40.0,
+                setup_family="continuation",
+                outcome_source="simulation",
+            ),
+            RecommendationPlanOutcome(
+                recommendation_plan_id=2,
+                ticker="MSFT",
+                action="long",
+                outcome="loss",
+                status="resolved",
+                confidence_percent=70.0,
+                setup_family="continuation",
+                outcome_source="simulation",
+            ),
+        ]
+        policy = TradeDecisionPolicy(
+            policy_id="paper-policy",
+            confidence_threshold=65.0,
+            allow_longs=True,
+            allow_shorts=True,
+            allowed_setup_families=("continuation",),
+            order_execution_account_mode="paper",
+        )
+
+        self.assertEqual(policy.action_confidence_threshold(), 0.0)
+        evaluation = PlanPolicyEvaluator(StubEffectiveOutcomeRepository(outcomes)).evaluate(policy)
+
+        self.assertEqual(evaluation.selected_outcomes, 1)
+        self.assertEqual(evaluation.resolved_selected_outcomes, 1)
+        self.assertEqual(evaluation.win_count, 0)
+        self.assertEqual(evaluation.loss_count, 1)
+
     def test_trade_policy_evaluation_service_combines_policy_and_reliability_reports(self) -> None:
         outcomes = [
             RecommendationPlanOutcome(
