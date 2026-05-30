@@ -3,7 +3,7 @@ import { ChangeEvent, ReactNode, createElement, useEffect, useMemo, useRef, useS
 import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson } from "../api";
-import { Card, EmptyState, ErrorState, LoadingState, PageHeader } from "../components/ui";
+import { Card, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle } from "../components/ui";
 import type { DocDocument, DocsResponse } from "../types";
 
 interface DocGroupDefinition {
@@ -690,15 +690,33 @@ export function DocsPage() {
   return (
     <>
       <PageHeader
-        kicker="Documentation"
-        title="Operator docs"
-        subtitle="Search current specs, guides, and reference material without leaving the app."
+        kicker="Help"
+        title="Docs"
+        subtitle="Find the guide, spec, or reference page that answers the current operating question."
       />
       {error ? <ErrorState message={error} /> : null}
       {!documents && !error ? <LoadingState message="Loading docs…" /> : null}
       {documents ? (
-        <div className="docs-layout">
-          <Card className="docs-sidebar-panel">
+        <div className="stack-page">
+          <Card>
+            <SectionTitle kicker="Documentation map" title="What do you need to answer?" subtitle="Start with the operator guide for daily workflow, then jump to methodology or architecture only when investigating deeper behavior." />
+            <div className="card-grid top-gap-small">
+              <Link to="/docs?doc=operator-page-field-guide" className="data-card data-card-clickable">
+                <strong>Operate the app</strong>
+                <span className="helper-text">Daily page authority, failure playbooks, and where to investigate next.</span>
+              </Link>
+              <Link to="/docs?doc=recommendation-methodology" className="data-card data-card-clickable">
+                <strong>Understand recommendations</strong>
+                <span className="helper-text">How signals, plans, evidence, and evaluation should be interpreted.</span>
+              </Link>
+              <Link to="/docs?doc=edge-validation-standard" className="data-card data-card-clickable">
+                <strong>Validate edge</strong>
+                <span className="helper-text">Why the edge gate is authoritative and what evidence is still missing.</span>
+              </Link>
+            </div>
+          </Card>
+          <div className="docs-layout">
+            <Card className="docs-sidebar-panel">
             <label className="form-field docs-search-field">
               <span>Full-text search</span>
               <input
@@ -784,8 +802,8 @@ export function DocsPage() {
                 })}
               </div>
             )}
-          </Card>
-          <Card className="docs-content-panel">
+            </Card>
+            <Card className="docs-content-panel">
             {selectedDocument ? (
               <article ref={articleRef} className="docs-article markdown-viewer">
                 <div className="docs-article-header">
@@ -799,7 +817,8 @@ export function DocsPage() {
             ) : (
               <EmptyState message="Select a document to read." />
             )}
-          </Card>
+            </Card>
+          </div>
         </div>
       ) : null}
     </>

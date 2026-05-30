@@ -465,6 +465,29 @@ It audits clutter inside the pages before final navigation, merging, or deletion
 **Implementation notes:**
 - **Done now:** page chrome now uses Evidence & diagnostics language, first screen leads with the snapshot-evidence question, Context Review/Data Quality links are explicit, and summary provenance/source breakdown are collapsed as reference detail.
 
+### 18. Docs `/docs`
+
+**Primary question:** Which guide, spec, or reference page answers the current operating question?
+
+**Keep visible above the fold:**
+- Search and document navigation.
+- Fast links to the operator guide, recommendation methodology, and edge-validation standard.
+- Selected document content.
+
+**Demote/collapse:**
+- No removal of document tree or sections; docs browsing is the page's main job.
+
+**Remove/replace duplicates:**
+- Page chrome should use Help/Docs language, not imply operational authority.
+
+**Unique actions/data to preserve:**
+- Full-text search.
+- Grouped document tree and section navigation.
+- Markdown rendering, internal links, glossary tooltips, and Mermaid diagrams.
+
+**Implementation notes:**
+- **Done now:** Docs now opens with a documentation-map card for common operator questions while preserving full search/navigation and document rendering.
+
 ## Cross-page authority map
 
 - **Daily authority:** Dashboard.
@@ -495,6 +518,7 @@ It audits clutter inside the pages before final navigation, merging, or deletion
 13. Refocus ticker detail as a single-ticker diagnostic page. **Done:** ticker detail now leads with the single-ticker attention question, latest-plan/data availability signals, and links back to Trade Review/Quality & Edge; ticker-local performance and plan mix are collapsed as supporting context.
 14. Refocus run detail as the full selected-run chain review. **Done:** run detail now leads with status, warning/error, object, plan, and broker-order counts; timing/identity metadata is collapsed; links back to Run Debugger and Trade Review clarify ownership.
 15. Refocus context snapshot detail as one-snapshot evidence inspection. **Done:** context snapshot detail now leads with the freshness/coverage/evidence question, links back to Context Review and Data Quality, and collapses provenance/source breakdown as reference detail.
+16. Refocus Docs as Help navigation. **Done:** Docs now leads with common operator documentation questions and fast links while preserving full-text search, grouped navigation, section links, Markdown rendering, glossary tooltips, and Mermaid support.
 
 ## Completion criteria for Phase 0
 
