@@ -100,6 +100,10 @@ Do not delete until references and tests prove safe:
    - Problem: `ShortlistSelectionService.evaluate` mixed candidate ranking, eligibility rules, core selection, catalyst-lane relaxation, decision payloads, and rejection counting.
    - Done now: extracted ranking, eligibility, shortlist selection, catalyst-lane eligibility, and decision/rejection payload helpers while preserving shortlist rules and diagnostics.
 
+18. **Watchlist calibration review**
+   - Problem: `WatchlistCalibrationReviewService.calibration_review` mixed disabled fallback, bucket lookup, calibration curve handling, per-bucket adjustment, review scaling, and payload construction.
+   - Done now: extracted disabled review payload, bucket lookup, bucket adjustment accumulation, and reviewed-bucket specs while preserving calibration thresholds and reason payloads.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.
