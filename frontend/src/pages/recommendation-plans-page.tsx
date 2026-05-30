@@ -284,7 +284,7 @@ export function RecommendationPlansPage() {
     <>
       <PageHeader
         kicker="Review"
-        title="Recommendation plans"
+        title="Trade review"
         actions={
           <button
             type="button"
@@ -302,9 +302,10 @@ export function RecommendationPlansPage() {
       {evaluationMessage ? <Card><div className="helper-text">{evaluationMessage}</div></Card> : null}
       <Card className="top-gap">
         <SectionTitle
-          kicker="Global stats"
-          title="Recommendation plan review stats"
-          actions={<HelpHint tooltip="These headline numbers are global review stats, not just the current table filters. Use them as top-level posture checks before drilling into cohorts or individual plans." to={recommendationPlansDoc("recommendation-plans")} />}
+          kicker="Review context"
+          title="Plan queue, not system-performance authority"
+          subtitle="Use this page to choose and inspect plans. Use Quality & Edge for calibration, cohorts, baselines, and edge validation."
+          actions={<><HelpHint tooltip="This page is the plan review queue. The full trust verdict lives on Quality & Edge." to={recommendationPlansDoc("recommendation-plans")} /><Link to="/recommendation-quality" className="button-subtle">◈ Quality & Edge</Link></>}
         />
         <div className="top-gap-small">
           <SegmentedTabs
@@ -314,11 +315,9 @@ export function RecommendationPlansPage() {
           />
         </div>
         <section className="metrics-grid top-gap-small">
-          <StatCard label="Total plans" value={planStats?.total_plans ?? "—"} helper={`Broad posture check · ${reviewWindowLabel(analyticsWindow)}`} tooltip="The total number of stored recommendation plans in the selected broad review window, regardless of the current table filters." tooltipTo={recommendationPlansDoc("recommendation-plans")} />
+          <StatCard label="Total plans" value={planStats?.total_plans ?? "—"} helper={`Queue context · ${reviewWindowLabel(analyticsWindow)}`} tooltip="The total number of stored recommendation plans in the selected broad review window, regardless of the current table filters." tooltipTo={recommendationPlansDoc("recommendation-plans")} />
           <StatCard label="Open plans" value={planStats?.open_plans ?? "—"} helper="Unresolved plans across all recommendations" tooltip="Plans whose latest outcome is not yet resolved in the selected stats window. Closed outcomes, including expired, are excluded from this count." tooltipTo={recommendationPlansDoc("outcome-fields")} />
-          <StatCard label="Expired plans" value={planStats?.expired_plans ?? "—"} helper="Terminal expired outcomes across all recommendations" tooltip="Plans whose evaluation horizon elapsed without a terminal win or loss. Expired is operator-visible, but it is excluded from default win/loss scoring." tooltipTo={glossaryDoc("expired-plan")} />
-          <StatCard label="Win rate" value={planStats?.win_rate_percent !== null && planStats?.win_rate_percent !== undefined ? `${planStats.win_rate_percent}%` : "—"} helper={`Broad posture check · ${reviewWindowLabel(analyticsWindow)}`} tooltip="Overall win/loss rate in the selected broad review window. Treat this as a quick pulse, not as the full trust verdict." tooltipTo={recommendationPlansDoc("recommendation-plans")} />
-          <StatCard label="Where results look strongest" value={evidenceConcentration ? (evidenceConcentration.ready_for_expansion ? "some groups stand out" : "nothing clear yet") : "—"} helper="A plain-language read on the current filtered cohort" tooltip="This asks whether a few groups inside the current filtered cohort clearly look better than the rest. If they do, review can focus there first. If they do not, stay selective and cautious." tooltipTo={glossaryDoc("evidence-concentration")} />
+          <StatCard label="Expired plans" value={planStats?.expired_plans ?? "—"} helper="Terminal expired outcomes" tooltip="Plans whose evaluation horizon elapsed without a terminal win or loss. Expired is operator-visible, but it is excluded from default win/loss scoring." tooltipTo={glossaryDoc("expired-plan")} />
         </section>
       </Card>
 

@@ -399,7 +399,7 @@ It audits clutter inside the pages before final navigation, merging, or deletion
 ## Implementation sequence after this spec
 
 1. Refactor Dashboard content hierarchy first. **Done:** dashboard first screen now uses Safety, Performance, Inputs, and Work queue cards; secondary performance, warning/failure lists, and pipeline volume are collapsed as supporting diagnostics.
-2. Refactor Recommendation plans into Trade Review by removing duplicate analytics from the first screen.
+2. Refactor Recommendation plans into Trade Review by removing duplicate analytics from the first screen. **Done:** page title now reads Trade review, the first screen explains that it is a plan queue rather than system-performance authority, and duplicated win-rate/evidence-concentration analytics were removed from the top context card in favor of a Quality & Edge link.
 3. Refactor Recommendation quality into the single edge/performance authority.
 4. Refactor Broker orders into an action-required Execution & Risk page.
 5. Refactor Context review and Data quality separately, with cross-links but no merge.
