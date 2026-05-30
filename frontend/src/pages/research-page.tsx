@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { getJson, postForm } from "../api";
 import type { CalibrationSummary, PerformanceAssessmentResponse, PerformanceWindowAssessment } from "../types";
 import { cohortSampleStatusTone, formatDate, jobTypeLabel, normalizeReviewWindow, reviewWindowLabel, reviewWindowStartIso, REVIEW_WINDOW_OPTIONS, runTone } from "../utils";
-import { Badge, Card, DisclosureCard, HelpHint, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
+import { Badge, Card, DisclosureCard, ErrorState, HelpHint, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
 
 const assessmentWindows = REVIEW_WINDOW_OPTIONS;
 
@@ -234,416 +234,86 @@ export function ResearchPage() {
   return (
     <>
       <PageHeader
-        kicker="Research"
-        title="Evidence and tuning"
-        subtitle="Keep calibration, validation, and tuning separate from daily operations."
-        actions={<HelpHint tooltip="Research pages are secondary tools for advanced review, tuning, and performance assessment." to="/docs?doc=operator-page-field-guide" />}
+        kicker="Research Lab"
+        title="Advanced tools"
+        subtitle="Use this page as a launcher. The canonical performance verdict lives on Quality & Edge."
+        actions={<HelpHint tooltip="Research Lab keeps advanced review and tuning tools reachable without duplicating the daily performance surfaces." to="/docs?doc=operator-page-field-guide" />}
       />
 
       <div className="stack-page">
-        <div className="top-gap-small">
-          <SegmentedTabs
-            value={activeTab}
-            options={[
-              { value: "overview", label: "Overview" },
-              { value: "calibration", label: "Calibration" },
-              { value: "validation", label: "Validation" },
-              { value: "tuning", label: "Tuning" },
-            ]}
-            onChange={setActiveTab}
-          />
-        </div>
+        {error ? <ErrorState message={error} /> : null}
 
         <Card>
           <SectionTitle
-            kicker="Policy health"
-            title="Can the active selection policy be trusted?"
-            subtitle="This is the headline trust control. It combines selected outcome count, win rate, P&L, calibration gap, and broker-backed evidence share."
-            actions={<HelpHint tooltip="Policy health is the top-level operator answer for whether selection policy evidence is healthy enough to trust or expand." to="/docs?doc=audit-remediation-and-autonomy-readiness-plan" />}
+            kicker="Evidence status"
+            title="Start from Quality & Edge before tuning"
+            subtitle="This page should not be used as a second performance authority. Use it only to open a justified research workflow."
+            actions={<Link to="/recommendation-quality" className="button-secondary">◈ Quality & Edge</Link>}
           />
-          {loading ? <div className="helper-text">Loading policy health…</div> : null}
-          {!loading && !policyHealth ? <div className="helper-text">Policy health is unavailable.</div> : null}
-          {policyHealth ? (
-            <>
-              <div className="cluster top-gap-small">
-                <Badge tone={policyHealthTone(policyHealth.label)}>{policyHealth.label}</Badge>
-                <span className="helper-text">{policyHealthStance(policyHealth.label)}</span>
-              </div>
-              <section className="metrics-grid top-gap-medium">
-                <StatCard label="Selected resolved" value={policyHealth.resolved_selected_outcomes} helper="Resolved outcomes selected by the active policy" />
-                <StatCard label="Selected win rate" value={policyHealth.win_rate_percent === null ? "—" : `${policyHealth.win_rate_percent.toFixed(1)}%`} helper="Broker/effective selected cohort" />
-                <StatCard label="Selected P&L" value={`$${policyHealth.realized_pnl.toFixed(2)}`} helper="Realized broker/effective selected cohort" />
-                <StatCard label="Broker evidence share" value={policyHealth.broker_outcome_share_percent === null ? "—" : `${policyHealth.broker_outcome_share_percent.toFixed(1)}%`} helper="Higher is safer than simulation-heavy evidence" />
-              </section>
-              <div className="data-points top-gap-small">
-                <div className="data-point"><span className="data-point-label">calibration gap</span><span className="data-point-value">{policyHealth.calibration_gap_percent === null ? "—" : `${policyHealth.calibration_gap_percent.toFixed(1)}pp`}</span></div>
-                <div className="data-point"><span className="data-point-label">reasons</span><span className="data-point-value">{policyHealth.reasons.length > 0 ? policyHealth.reasons.join(" · ") : "none"}</span></div>
-              </div>
-              {edgeGate ? (
-                <div className="data-card top-gap-small">
-                  <div className="cluster cluster-tight"><span className="summary-label">Autonomy gate</span><Badge tone={policyHealthTone(edgeGate.label)}>{edgeGate.label}</Badge></div>
-                  <div className="helper-text top-gap-small">{edgeGate.reasons.length > 0 ? edgeGate.reasons.join(" · ") : "passes current edge-validation standard"}</div>
-                  <div className="data-points top-gap-small">
-                    <div className="data-point"><span className="data-point-label">broker selected</span><span className="data-point-value">{edgeGate.broker_selected_outcomes}</span></div>
-                    <div className="data-point"><span className="data-point-label">profit factor</span><span className="data-point-value">{edgeGate.profit_factor === null ? "—" : edgeGate.profit_factor.toFixed(2)}</span></div>
-                    <div className="data-point"><span className="data-point-label">walk-forward</span><span className="data-point-value">{edgeGate.walk_forward_qualified_slices ?? "—"} slices · {edgeGate.walk_forward_promotion_recommended === null ? "—" : edgeGate.walk_forward_promotion_recommended ? "recommended" : "not recommended"}</span></div>
-                  </div>
-                </div>
-              ) : null}
-            </>
+          {loading ? <div className="helper-text top-gap-small">Loading current research status…</div> : null}
+          {!loading ? (
+            <section className="metrics-grid top-gap-small">
+              <StatCard label="Edge gate" value={edgeGate?.label ?? "unknown"} helper={edgeGate?.reasons?.slice(0, 2).join(" · ") || "Open Quality & Edge for the authoritative gate detail"} />
+              <StatCard label="Policy health" value={policyHealth?.label ?? "unknown"} helper={policyHealth ? `${policyHealth.resolved_selected_outcomes} selected resolved` : "Policy health unavailable"} />
+              <StatCard label="Latest assessment" value={assessment?.latest_run?.status ?? "—"} helper={latestGeneratedAt ? `Generated ${formatDate(latestGeneratedAt)}` : "No latest assessment timestamp"} />
+              <StatCard label="Almost-entered cases" value={nearMissWinners.length} helper="Simulation-only entry-framing research candidates" />
+            </section>
           ) : null}
+          <div className="cluster top-gap-small">
+            <button type="button" className="button-secondary" onClick={() => void handleRunAssessment()} disabled={running}>{running ? "… Queueing assessment" : "▶ Run assessment"}</button>
+            <Link to="/jobs/recommendation-plans?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&page=1&limit=100" className="button-subtle">↗ Almost-entered plans</Link>
+          </div>
         </Card>
 
-        <Card>
-          <SectionTitle
-            kicker="Performance assessment"
-            title="Latest automated review"
-            actions={<button type="button" className="button-secondary" onClick={() => void handleRunAssessment()} disabled={running}>{running ? "… Queueing" : "▶ Run"}</button>}
-          />
-          {loading ? <div className="helper-text">Loading latest assessment…</div> : null}
-          {error ? <div className="helper-text">{error}</div> : null}
-          {!loading && !error ? (
-            <>
-              <div className="data-points top-gap-small">
-                <div className="data-point"><span className="data-point-label">workflow</span><span className="data-point-value">{assessment?.job ? jobTypeLabel(assessment.job.job_type) : "—"}</span></div>
-                <div className="data-point"><span className="data-point-label">schedule</span><span className="data-point-value">{assessment?.job?.cron ?? "—"}</span></div>
-                <div className="data-point"><span className="data-point-label">history kept</span><span className="data-point-value">{assessment?.history_count ?? 0}</span></div>
-                <div className="data-point"><span className="data-point-label">latest run</span><span className="data-point-value">{assessment?.latest_run?.status ? <Badge tone={runTone(assessment.latest_run.status)}>{assessment.latest_run.status}</Badge> : "—"}</span></div>
-                <div className="data-point"><span className="data-point-label">generated</span><span className="data-point-value">{formatDate(latestGeneratedAt)}</span></div>
-                <div className="data-point"><span className="data-point-label">backend</span><span className="data-point-value">{latestBackend} / {latestMethod}</span></div>
-              </div>
-              {latestError ? <div className="helper-text top-gap-small">Fallback note: {latestError}</div> : null}
-              {assessment?.broker_summary || assessment?.effective_summary ? (
-                <section className="metrics-grid top-gap-medium">
-                  <StatCard label="Broker closed" value={assessment.broker_summary?.closed_positions ?? "—"} helper="Authoritative broker-position outcomes" />
-                  <StatCard label="Broker win rate" value={assessment.broker_summary?.win_rate_percent === null || assessment.broker_summary?.win_rate_percent === undefined ? "—" : `${assessment.broker_summary.win_rate_percent}%`} helper={`${assessment.broker_summary?.wins ?? 0} wins · ${assessment.broker_summary?.losses ?? 0} losses`} />
-                  <StatCard label="Broker realized P&L" value={assessment.broker_summary?.realized_pnl === undefined ? "—" : `$${assessment.broker_summary.realized_pnl.toFixed(2)}`} helper="Closed broker-position ledger" />
-                  <StatCard label="Effective resolved" value={assessment.effective_summary?.resolved_outcomes ?? "—"} helper={`${assessment.effective_summary?.broker_outcomes ?? 0} broker · ${assessment.effective_summary?.simulation_outcomes ?? 0} simulation`} />
-                </section>
-              ) : null}
-              {reliabilityReport ? (
-                <Card className="top-gap-medium">
-                  <SectionTitle kicker="Broker/effective reliability" title="Confidence cohorts" subtitle="Broker-preferred reliability by confidence band. Positive calibration gap means the plan confidence was above realized win rate." />
-                  <div className="data-points top-gap-small">
-                    <div className="data-point"><span className="data-point-label">total outcomes</span><span className="data-point-value">{reliabilityReport.total_outcomes}</span></div>
-                    <div className="data-point"><span className="data-point-label">resolved</span><span className="data-point-value">{reliabilityReport.resolved_outcomes}</span></div>
-                    <div className="data-point"><span className="data-point-label">broker / simulation</span><span className="data-point-value">{reliabilityReport.broker_outcomes} / {reliabilityReport.simulation_outcomes}</span></div>
-                  </div>
-                  {topReliabilityBuckets.length > 0 ? (
-                    <div className="table-wrapper top-gap-small">
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>bucket</th>
-                            <th>sample</th>
-                            <th>W/L</th>
-                            <th>win rate</th>
-                            <th>avg conf</th>
-                            <th>gap</th>
-                            <th>P&L</th>
-                            <th>profit factor</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {topReliabilityBuckets.map((bucket) => (
-                            <tr key={bucket.key}>
-                              <td>{bucket.label}</td>
-                              <td><Badge tone={cohortSampleStatusTone(bucket.sample_status)}>{bucket.sample_status}</Badge> {bucket.resolved_count}/{bucket.total_count}</td>
-                              <td>{bucket.win_count}/{bucket.loss_count}</td>
-                              <td>{bucket.win_rate_percent !== null ? `${bucket.win_rate_percent.toFixed(1)}%` : "—"}</td>
-                              <td>{bucket.average_confidence_percent !== null ? `${bucket.average_confidence_percent.toFixed(1)}%` : "—"}</td>
-                              <td>{bucket.calibration_gap_percent !== null ? `${bucket.calibration_gap_percent.toFixed(1)}pp` : "—"}</td>
-                              <td>${bucket.realized_pnl.toFixed(2)}</td>
-                              <td>{bucket.profit_factor !== null ? bucket.profit_factor.toFixed(2) : "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : <div className="helper-text top-gap-small">No resolved confidence cohorts yet.</div>}
-                </Card>
-              ) : null}
-              {assessment?.entry_miss_diagnostics ? (
-                <Card className="top-gap-medium">
-                  <SectionTitle kicker="Entry quality" title="Almost entered, then moved" subtitle="Use this to spot plans that missed entry by a small amount but still followed the expected direction." />
-                  <div className="data-points top-gap-small">
-                    <div className="data-point"><span className="data-point-label">never entered</span><span className="data-point-value">{assessment.entry_miss_diagnostics.never_entered_count}</span></div>
-                    <div className="data-point"><span className="data-point-label">almost entered</span><span className="data-point-value">{assessment.entry_miss_diagnostics.near_entry_miss_count}</span></div>
-                    <div className="data-point"><span className="data-point-label">still moved right</span><span className="data-point-value">{assessment.entry_miss_diagnostics.direction_worked_without_entry_count}</span></div>
-                    <div className="data-point"><span className="data-point-label">almost entered + worked</span><span className="data-point-value">{assessment.entry_miss_diagnostics.near_entry_and_worked_count}</span></div>
-                    <div className="data-point"><span className="data-point-label">avg miss distance</span><span className="data-point-value">{assessment.entry_miss_diagnostics.average_entry_miss_distance_percent !== null ? `${assessment.entry_miss_diagnostics.average_entry_miss_distance_percent.toFixed(2)}%` : "—"}</span></div>
-                  </div>
-                </Card>
-              ) : null}
-              {windowedAssessments.length > 0 ? (
-                <Card className="top-gap-medium">
-                  <SectionTitle kicker="Rolling windows" title="Assessment snapshots" subtitle="Select a time window to inspect the matching performance-assessment summary." actions={<HelpHint tooltip="These windows summarize recent assessment posture without forcing you to scan every period at once." to="/docs?doc=glossary&section=walk-forward-validation" />} />
-                  <div className="top-gap-small">
-                    <SegmentedTabs
-                      value={selectedWindow}
-                      options={assessmentWindows.filter((window) => windowedAssessments.some((item) => normalizeReviewWindow(item.window, "1d") === window.value))}
-                      onChange={(value) => setSelectedWindow(normalizeReviewWindow(value, "1d"))}
-                    />
-                  </div>
-                  {selectedAssessmentWindow ? (
-                    <section className="card-grid top-gap-small">
-                      <Card>
-                        <SectionTitle kicker={`Window ${selectedAssessmentWindow.window}`} title={`${selectedAssessmentWindow.broker_closed_positions ?? 0} broker closed / ${selectedAssessmentWindow.simulated_resolved_outcomes ?? selectedAssessmentWindow.resolved_outcomes} simulated resolved`} subtitle={`Evaluated after ${formatDate(selectedAssessmentWindow.evaluated_after)}`} />
-                        <div className="data-points top-gap-small">
-                          <div className="data-point"><span className="data-point-label">broker win rate</span><span className="data-point-value">{selectedAssessmentWindow.broker_win_rate_percent !== null && selectedAssessmentWindow.broker_win_rate_percent !== undefined ? `${selectedAssessmentWindow.broker_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
-                          <div className="data-point"><span className="data-point-label">broker W/L</span><span className="data-point-value">{selectedAssessmentWindow.broker_wins ?? 0} / {selectedAssessmentWindow.broker_losses ?? 0}</span></div>
-                          <div className="data-point"><span className="data-point-label">broker realized P&L</span><span className="data-point-value">${selectedAssessmentWindow.broker_realized_pnl ?? 0}</span></div>
-                          <div className="data-point"><span className="data-point-label">broker avg return</span><span className="data-point-value">{selectedAssessmentWindow.broker_average_return_percent !== null && selectedAssessmentWindow.broker_average_return_percent !== undefined ? `${selectedAssessmentWindow.broker_average_return_percent.toFixed(2)}%` : "—"}</span></div>
-                          <div className="data-point"><span className="data-point-label">simulated win rate</span><span className="data-point-value">{selectedAssessmentWindow.simulated_overall_win_rate_percent !== null && selectedAssessmentWindow.simulated_overall_win_rate_percent !== undefined ? `${selectedAssessmentWindow.simulated_overall_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
-                          <div className="data-point"><span className="data-point-label">actionable win rate</span><span className="data-point-value">{selectedAssessmentWindow.actual_actionable_win_rate_percent !== null ? `${selectedAssessmentWindow.actual_actionable_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
-                          <div className="data-point"><span className="data-point-label">high-confidence win rate</span><span className="data-point-value">{selectedAssessmentWindow.high_confidence_win_rate_percent !== null ? `${selectedAssessmentWindow.high_confidence_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
-                          <div className="data-point"><span className="data-point-label">actionable return 5d</span><span className="data-point-value">{selectedAssessmentWindow.actual_actionable_average_return_5d !== null ? selectedAssessmentWindow.actual_actionable_average_return_5d.toFixed(3) : "—"}</span></div>
-                          <div className="data-point"><span className="data-point-label">confidence return 5d</span><span className="data-point-value">{selectedAssessmentWindow.high_confidence_average_return_5d !== null ? selectedAssessmentWindow.high_confidence_average_return_5d.toFixed(3) : "—"}</span></div>
-                          <div className="data-point"><span className="data-point-label">brier / ece</span><span className="data-point-value">{selectedAssessmentWindow.calibration_brier_score !== null ? selectedAssessmentWindow.calibration_brier_score.toFixed(4) : "—"} / {selectedAssessmentWindow.calibration_ece !== null ? selectedAssessmentWindow.calibration_ece.toFixed(4) : "—"}</span></div>
-                          <div className="data-point"><span className="data-point-label">family count</span><span className="data-point-value">{selectedAssessmentWindow.family_count}</span></div>
-                          <div className="data-point"><span className="data-point-label">clear bright spots?</span><span className="data-point-value">{selectedAssessmentWindow.ready_for_expansion ? "yes" : "no"}</span></div>
-                        </div>
-                      </Card>
-                    </section>
-                  ) : null}
-                </Card>
-              ) : null}
-              <DisclosureCard
-                kicker="Assessment narrative"
-                title="Latest performance assessment"
-                subtitle="Collapsed by default so the hub stays easier to scan on mobile."
-              >
-                {latestContent ? renderAssessment(latestContent) : <div className="helper-text">No assessment has been generated yet.</div>}
-              </DisclosureCard>
-            </>
-          ) : null}
-        </Card>
+        <section className="card-grid">
+          <Card>
+            <SectionTitle kicker="Performance authority" title="Quality & Edge" subtitle="Edge validation, effective outcomes, calibration, baselines, evidence concentration, and next actions." />
+            <div className="cluster top-gap-small">
+              <Link to="/recommendation-quality" className="button-secondary">◈ Open Quality & Edge</Link>
+              <Badge tone="info">canonical</Badge>
+            </div>
+          </Card>
 
-        {activeTab === "overview" ? (
-          <section className="card-grid">
-            <Card>
-              <SectionTitle kicker="Advanced review" title="Decision samples" subtitle="Review near-misses and borderline cases when you need deeper evidence review." />
-              <div className="cluster top-gap-small">
-                <Link to="/research/decision-samples" className="button-secondary">◉ Samples</Link>
-                <Badge tone="info">advanced review</Badge>
-              </div>
-            </Card>
-            <Card>
-              <SectionTitle kicker="Advanced review" title="Recommendation quality summary" subtitle="Use this for a consolidated view of confidence quality, simple baselines, where results look strongest, and walk-forward readiness." />
-              <div className="cluster top-gap-small">
-                <Link to="/recommendation-quality" className="button-secondary">◈ Quality</Link>
-                <Badge tone="info">advanced review</Badge>
-              </div>
-            </Card>
-            <Card>
-              <SectionTitle kicker="Tuning" title="Signal gating tuning" subtitle="Use this when shortlist recall is too strict or too loose." />
-              <div className="cluster top-gap-small">
-                <Link to="/research/signal-gating/gating-job" className="button-secondary">↯ Gating</Link>
-                <Badge tone="info">research</Badge>
-              </div>
-            </Card>
-            <Card>
-              <SectionTitle kicker="Advanced research" title="Almost entered, then still worked" subtitle="Review plans that never filled, came very close, and still moved in the planned direction." />
-              <div className="data-points top-gap-small">
-                <div className="data-point"><span className="data-point-label">matching plans</span><span className="data-point-value">{nearMissWinners.length}</span></div>
-                <div className="data-point"><span className="data-point-label">top setup family</span><span className="data-point-value">{nearMissFamilies[0]?.family ?? "—"}</span></div>
-              </div>
-              <div className="cluster top-gap-small">
-                <Link to="/jobs/recommendation-plans?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&page=1&limit=100" className="button-secondary">↗ Filtered plans</Link>
-                <Badge tone="info">advanced research</Badge>
-              </div>
-              <div className="top-gap-small">
-                <div className="helper-text">Setup-family breakdown</div>
-                {nearMissFamilies.length > 0 ? (
-                  <div className="table-wrapper top-gap-small">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>family</th>
-                          <th>count</th>
-                          <th>avg miss</th>
-                          <th>median miss</th>
-                          <th>min miss</th>
-                          <th>max miss</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {nearMissFamilies.slice(0, 8).map((item) => {
-                          const familyHref = `/jobs/recommendation-plans?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&setup_family=${encodeURIComponent(item.family)}&page=1&limit=100`;
-                          return (
-                            <tr key={item.family}>
-                              <td><Link to={familyHref}>{item.family}</Link></td>
-                              <td>{item.count}</td>
-                              <td>{item.averageMissDistance !== null ? `${item.averageMissDistance.toFixed(2)}%` : "—"}</td>
-                              <td>{item.medianMissDistance !== null ? `${item.medianMissDistance.toFixed(2)}%` : "—"}</td>
-                              <td>{item.minMissDistance !== null ? `${item.minMissDistance.toFixed(2)}%` : "—"}</td>
-                              <td>{item.maxMissDistance !== null ? `${item.maxMissDistance.toFixed(2)}%` : "—"}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : <div className="helper-text top-gap-small">No almost-entered directional wins found yet.</div>}
-              </div>
-              <div className="top-gap-small">
-                <div className="helper-text">Top tickers</div>
-                {nearMissTickers.length > 0 ? (
-                  <ul className="list-reset top-gap-small">
-                    {nearMissTickers.slice(0, 8).map((item) => {
-                      const tickerHref = `/jobs/recommendation-plans?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&ticker=${encodeURIComponent(item.ticker)}&page=1&limit=100`;
-                      return (
-                        <li key={item.ticker} className="list-item compact-item"><Link to={tickerHref}>{item.ticker}</Link> · {item.count}{item.averageMissDistance !== null ? ` · avg miss ${item.averageMissDistance.toFixed(2)}%` : ""}</li>
-                      );
-                    })}
-                  </ul>
-                ) : <div className="helper-text top-gap-small">No ticker pattern stands out yet.</div>}
-              </div>
-            </Card>
-            <Card>
-              <SectionTitle kicker="Tuning" title="Plan generation tuning" subtitle="Use this when actionable plan precision or trade framing needs work." />
-              <div className="cluster top-gap-small">
-                <Link to="/research/plan-generation-tuning" className="button-secondary">⚒ Plan tuning</Link>
-                <Badge tone="info">research</Badge>
-              </div>
-            </Card>
-          </section>
-        ) : null}
+          <Card>
+            <SectionTitle kicker="Upstream tuning" title="Signal gating tuning" subtitle="Use when Quality & Edge indicates shortlist recall is too strict or too loose." />
+            <div className="cluster top-gap-small">
+              <Link to="/research/signal-gating/gating-job" className="button-secondary">↯ Open gating tuning</Link>
+              <Badge tone="info">research</Badge>
+            </div>
+          </Card>
 
-        {activeTab === "validation" ? (
-          <>
-            {walkForward ? (
-              <>
-                <section className="card-grid">
-                  <StatCard label="Slices" value={walkForward.total_slices} helper="Rolling validation windows" tooltip="The total number of walk-forward slices. A slice is one bounded validation window used to test whether results hold across time instead of one pooled sample." tooltipTo="/docs?doc=glossary&section=slice" />
-                  <StatCard label="Lookback" value={`${walkForward.lookback_days}d`} helper="Historical span considered" tooltip="How much prior history each validation cycle can look back on before evaluating the later validation window." tooltipTo="/docs?doc=glossary&section=walk-forward-validation" />
-                  <StatCard label="Validation" value={`${walkForward.validation_days}d`} helper="Each window length" tooltip="The length of each held-out validation window used to measure later performance." tooltipTo="/docs?doc=glossary&section=walk-forward-validation" />
-                  <StatCard label="Step" value={`${walkForward.step_days}d`} helper="Window stride" tooltip="How far the rolling validation window moves forward between slices." tooltipTo="/docs?doc=glossary&section=walk-forward-validation" />
-                </section>
-                <section className="card-grid">
-                  {walkForward.slices.map((slice) => (
-                    <Card key={`${slice.slice_index}-${slice.window_label}`}>
-                      <SectionTitle kicker={`Slice ${slice.slice_index}`} title={slice.window_label} subtitle={`${slice.resolved_outcomes} resolved outcomes`} />
-                      <div className="data-points top-gap-small">
-                        <div className="data-point"><span className="data-point-label">overall win rate</span><span className="data-point-value">{slice.overall_win_rate_percent !== null ? `${slice.overall_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
-                        <div className="data-point"><span className="data-point-label">actual actionable</span><span className="data-point-value">{slice.actual_actionable_win_rate_percent !== null ? `${slice.actual_actionable_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
-                        <div className="data-point"><span className="data-point-label">high confidence</span><span className="data-point-value">{slice.high_confidence_win_rate_percent !== null ? `${slice.high_confidence_win_rate_percent.toFixed(1)}%` : "—"}</span></div>
-                        <div className="data-point"><span className="data-point-label">actionable return 5d</span><span className="data-point-value">{slice.actual_actionable_average_return_5d !== null ? slice.actual_actionable_average_return_5d.toFixed(3) : "—"}</span></div>
-                        <div className="data-point"><span className="data-point-label">confidence return 5d</span><span className="data-point-value">{slice.high_confidence_average_return_5d !== null ? slice.high_confidence_average_return_5d.toFixed(3) : "—"}</span></div>
-                        <div className="data-point"><span className="data-point-label">clear bright spots?</span><span className="data-point-value">{slice.ready_for_expansion ? "yes" : "no"}</span></div>
-                        <div className="data-point"><span className="data-point-label">brier / ece</span><span className="data-point-value">{slice.calibration_report?.brier_score !== null && slice.calibration_report?.brier_score !== undefined ? slice.calibration_report.brier_score.toFixed(4) : "—"} / {slice.calibration_report?.expected_calibration_error !== null && slice.calibration_report?.expected_calibration_error !== undefined ? slice.calibration_report.expected_calibration_error.toFixed(4) : "—"}</span></div>
-                      </div>
-                    </Card>
-                  ))}
-                </section>
-              </>
-            ) : null}
-          </>
-        ) : null}
+          <Card>
+            <SectionTitle kicker="Downstream tuning" title="Plan generation tuning" subtitle="Use when Quality & Edge indicates plan construction, entry framing, or reward/risk parameters need work." />
+            <div className="cluster top-gap-small">
+              <Link to="/research/plan-generation-tuning" className="button-secondary">⚒ Open plan tuning</Link>
+              <Badge tone="info">research</Badge>
+            </div>
+          </Card>
 
-        {activeTab === "tuning" ? (
-          <section className="card-grid">
-            <Card>
-              <SectionTitle kicker="Upstream" title="Signal gating tuning" subtitle="Recall-oriented shortlist tuning." />
-              <div className="cluster top-gap-small">
-                <Link to="/research/signal-gating/gating-job" className="button-secondary">↯ Gating</Link>
-              </div>
-            </Card>
-            <Card>
-              <SectionTitle kicker="Downstream" title="Plan generation tuning" subtitle="Precision-oriented plan-construction tuning." />
-              <div className="cluster top-gap-small">
-                <Link to="/research/plan-generation-tuning" className="button-secondary">⚒ Plan tuning</Link>
-              </div>
-            </Card>
-          </section>
-        ) : null}
+          <Card>
+            <SectionTitle kicker="Advanced review" title="Decision samples" subtitle="Inspect near-misses and discarded signals when tuning evidence requires sample-level review." />
+            <div className="cluster top-gap-small">
+              <Link to="/research/decision-samples" className="button-secondary">◉ Open samples</Link>
+              <Badge tone="info">advanced</Badge>
+            </div>
+          </Card>
+        </section>
 
-        {activeTab === "calibration" ? (
-          <>
-            <Card>
-              <SectionTitle kicker="Time window" title="Calibration review window" subtitle="Choose which rolling window the calibration tab should use." actions={<HelpHint tooltip="This selector changes the calibration cohort so you can compare recent versus broader confidence behavior." to="/docs?doc=glossary&section=confidence-bucket" />} />
-              <div className="top-gap-small">
-                <SegmentedTabs
-                  value={selectedWindow}
-                  options={assessmentWindows}
-                  onChange={(value) => setSelectedWindow(normalizeReviewWindow(value, "1d"))}
-                />
-              </div>
-            </Card>
+        <DisclosureCard kicker="Assessment narrative" title="Latest performance assessment" subtitle="Kept for reference only; Quality & Edge owns the metric verdict.">
+          {latestContent ? renderAssessment(latestContent) : <div className="helper-text">No assessment has been generated yet.</div>}
+          {latestError ? <div className="helper-text top-gap-small">Fallback note: {latestError}</div> : null}
+          <div className="helper-text top-gap-small">Backend {latestBackend} / {latestMethod}</div>
+        </DisclosureCard>
 
-            {calibrationSummary ? (
-              <section className="card-grid top-gap">
-                <StatCard label="Calibration method" value={calibrationReport?.method ?? "—"} helper={`${reviewWindowLabel(selectedWindow)} cohort`} tooltip="The current calibration report method used for this reviewed cohort or filtered comparison group." tooltipTo="/docs?doc=glossary&section=calibration" />
-                <StatCard label="Brier score" value={calibrationReport?.brier_score !== null && calibrationReport?.brier_score !== undefined ? calibrationReport.brier_score.toFixed(4) : "—"} helper="Lower is better" tooltip="A proper scoring measure of confidence quality. Lower generally means predicted confidence matched realized outcomes more closely." tooltipTo="/docs?doc=glossary&section=calibration" />
-                <StatCard label="ECE" value={calibrationReport?.expected_calibration_error !== null && calibrationReport?.expected_calibration_error !== undefined ? calibrationReport.expected_calibration_error.toFixed(4) : "—"} helper="Average confidence gap" tooltip="Expected calibration error: the average gap between displayed confidence and realized win rate across confidence buckets." tooltipTo="/docs?doc=glossary&section=confidence-bucket" />
-                <StatCard label="Resolved outcomes" value={calibrationReport?.resolved_count ?? calibrationSummary.resolved_outcomes} helper="Win/loss cases used for reliability" tooltip="The number of resolved win/loss outcomes contributing to the current calibration view. Thin samples should be read cautiously." tooltipTo="/docs?doc=glossary&section=outcome-evaluation" />
-              </section>
-            ) : null}
-
-            {calibrationBins.length > 0 ? (
-              <Card>
-                <SectionTitle kicker="Reliability curve" title="Confidence calibration bins" subtitle="Predicted probability versus realized win rate by confidence band." />
-                <div className="table-wrapper top-gap-small">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>bin</th>
-                        <th>samples</th>
-                        <th>predicted</th>
-                        <th>realized win rate</th>
-                        <th>brier</th>
-                        <th>calibration error</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {calibrationBins.map((bin) => (
-                        <tr key={bin.bin_key}>
-                          <td>{bin.bin_label}</td>
-                          <td>{bin.sample_count}</td>
-                          <td>{bin.predicted_probability !== null ? `${(bin.predicted_probability * 100).toFixed(1)}%` : "—"}</td>
-                          <td>{bin.realized_win_rate_percent !== null ? `${bin.realized_win_rate_percent.toFixed(1)}%` : "—"}</td>
-                          <td>{bin.brier_score !== null ? bin.brier_score.toFixed(4) : "—"}</td>
-                          <td>{bin.calibration_error !== null ? bin.calibration_error.toFixed(4) : "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            ) : null}
-            {calibrationSummary?.smoothed_calibration_report?.bins?.length ? (
-              <Card className="top-gap">
-                <SectionTitle kicker="Smoothed curve" title="Smoothed calibration bins" subtitle="Alternative reliability curve with a light Bayesian pull toward the overall rate." />
-                <div className="table-wrapper top-gap-small">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>bin</th>
-                        <th>samples</th>
-                        <th>predicted</th>
-                        <th>realized win rate</th>
-                        <th>brier</th>
-                        <th>calibration error</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {calibrationSummary.smoothed_calibration_report.bins.map((bin) => (
-                        <tr key={`smoothed-${bin.bin_key}`}>
-                          <td>{bin.bin_label}</td>
-                          <td>{bin.sample_count}</td>
-                          <td>{bin.predicted_probability !== null ? `${(bin.predicted_probability * 100).toFixed(1)}%` : "—"}</td>
-                          <td>{bin.realized_win_rate_percent !== null ? `${bin.realized_win_rate_percent.toFixed(1)}%` : "—"}</td>
-                          <td>{bin.brier_score !== null ? bin.brier_score.toFixed(4) : "—"}</td>
-                          <td>{bin.calibration_error !== null ? bin.calibration_error.toFixed(4) : "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            ) : null}
-          </>
-        ) : null}
+        <DisclosureCard kicker="Entry-framing research" title="Almost entered, then still worked" subtitle="Simulation-only diagnostic links for investigating entry thresholds without treating them as broker-backed evidence.">
+          <div className="data-points top-gap-small">
+            <div className="data-point"><span className="data-point-label">matching plans</span><span className="data-point-value">{nearMissWinners.length}</span></div>
+            <div className="data-point"><span className="data-point-label">top setup family</span><span className="data-point-value">{nearMissFamilies[0]?.family ?? "—"}</span></div>
+          </div>
+          <div className="cluster top-gap-small">
+            <Link to="/jobs/recommendation-plans?entry_touched=false&near_entry_miss=true&direction_worked_without_entry=true&page=1&limit=100" className="button-secondary">↗ Filtered plans</Link>
+          </div>
+        </DisclosureCard>
       </div>
     </>
   );
