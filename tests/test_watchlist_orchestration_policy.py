@@ -170,6 +170,53 @@ class WatchlistOrchestrationPolicyTests(unittest.TestCase):
         adj = self.service._transmission_confidence_adjustment(analysis, transmission_bias="headwind", alignment_score=40.0)
         self.assertEqual(adj, -2.4)
 
+    def test_transmission_confidence_adjustment_caps_positive_boost(self) -> None:
+        analysis = {
+            "ticker_deep_analysis": {
+                "transmission_analysis": {
+                    "contradiction_count": 0,
+                    "context_strength_percent": 100.0,
+                    "context_event_relevance_percent": 100.0,
+                    "context_quality_status": "usable",
+                    "macro_context_quality_status": "usable",
+                    "industry_context_quality_status": "usable",
+                    "decay_state": "fresh",
+                }
+            }
+        }
+        adj = self.service._transmission_confidence_adjustment(analysis, transmission_bias="tailwind", alignment_score=80.0)
+        self.assertEqual(adj, 2.0)
+
+    def test_transmission_confidence_adjustment_does_not_boost_degraded_or_contradictory_context(self) -> None:
+        degraded = {
+            "ticker_deep_analysis": {
+                "transmission_analysis": {
+                    "contradiction_count": 0,
+                    "context_strength_percent": 100.0,
+                    "context_event_relevance_percent": 100.0,
+                    "context_quality_status": "degraded",
+                    "macro_context_quality_status": "degraded",
+                    "industry_context_quality_status": "usable",
+                    "decay_state": "fresh",
+                }
+            }
+        }
+        contradictory = {
+            "ticker_deep_analysis": {
+                "transmission_analysis": {
+                    "contradiction_count": 1,
+                    "context_strength_percent": 100.0,
+                    "context_event_relevance_percent": 100.0,
+                    "context_quality_status": "usable",
+                    "macro_context_quality_status": "usable",
+                    "industry_context_quality_status": "usable",
+                    "decay_state": "fresh",
+                }
+            }
+        }
+        self.assertEqual(self.service._transmission_confidence_adjustment(degraded, transmission_bias="tailwind", alignment_score=80.0), 0.0)
+        self.assertEqual(self.service._transmission_confidence_adjustment(contradictory, transmission_bias="tailwind", alignment_score=80.0), -2.0)
+
     def test_shortlisted_candidate_with_deep_summary_fallback_marks_warning(self) -> None:
         watchlist = Watchlist(name="test", default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)
         candidate = _CheapScanCandidate("AAPL", "long", 80.0, 90.0, [], "")

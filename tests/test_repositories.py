@@ -2401,7 +2401,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertIsInstance(plan_map["AAPL"].signal_breakdown.get("transmission_summary"), RecommendationTransmissionSummary)
         self.assertEqual(plan_map["AAPL"].signal_breakdown["setup_family"], "breakout")
         self.assertEqual(plan_map["AAPL"].signal_breakdown["confidence_bucket"], "65_to_79")
-        self.assertAlmostEqual(plan_map["AAPL"].signal_breakdown["cheap_scan_confidence_percent"], 84.61)
+        self.assertAlmostEqual(plan_map["AAPL"].signal_breakdown["cheap_scan_confidence_percent"], 78.0)
         self.assertEqual(plan_map["AAPL"].signal_breakdown["deep_analysis_confidence_percent"], 78.0)
         self.assertEqual(plan_map["AAPL"].signal_breakdown["raw_plan_confidence_percent"], 78.0)
         self.assertIn("confidence_components", plan_map["AAPL"].signal_breakdown)

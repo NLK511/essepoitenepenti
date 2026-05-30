@@ -44,7 +44,17 @@ class WatchlistTransmissionService:
             market_intelligence_alignment = float(transmission.get("market_intelligence_alignment_percent", 0.0) or 0.0)
             market_intelligence_adjustment = max(-3.0, min(3.0, (market_intelligence_alignment - 50.0) * 0.04))
             adjustment += market_intelligence_adjustment
-        return round(max(-10.0, min(8.0, adjustment)), 2)
+        quality_status = self.trade_context_quality_status(
+            {
+                "context_quality_status": transmission.get("context_quality_status"),
+                "macro_context_quality_status": transmission.get("macro_context_quality_status"),
+                "industry_context_quality_status": transmission.get("industry_context_quality_status"),
+            }
+        )
+        positive_boost_allowed = transmission_bias == "tailwind" and contradiction_count == 0 and quality_status == "usable"
+        if adjustment > 0.0 and not positive_boost_allowed:
+            adjustment = -min(6.0, contradiction_count * 2.0) if contradiction_count > 0 else 0.0
+        return round(max(-10.0, min(2.0, adjustment)), 2)
 
     def signal_breakdown(
         self,

@@ -154,6 +154,8 @@ Ticker-facing summaries should preserve context bias, alignment, drivers, indust
 
 Scoring considers alignment, relevance, freshness, source quality, horizon fit, contradiction penalties, and edge strength. Severe direct conflicts can hard-block; timing/context-quality/mixed-context conflicts usually degrade and warn. Social-only polarity noise must not by itself raise contradiction flags.
 
+Current behavior: transmission may penalize confidence materially, but positive confidence boosts are conservative. Positive boost is capped at +2 points and only allowed for usable, non-contradictory tailwind context. Degraded, blocked, mixed, headwind, or contradictory context cannot raise confidence.
+
 Context quality gating is tiered: one weak layer usually degrades; broad broken backdrop or missing dominant evidence can block.
 
 ## Price levels and risk
