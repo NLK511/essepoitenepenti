@@ -167,6 +167,12 @@ Entry, stop-loss, and take-profit derive from the same technical/risk context as
 
 Plan-generation tuning may adjust this framing through its registered active config.
 
+## Fundamental snapshots
+
+Target behavior: monitored tickers should have monthly and event-aware point-in-time fundamental snapshots. Ticker analysis and plan generation should use the latest snapshot available at or before plan creation time, especially around earnings, shareholder meetings, investor days, dividends, and other material corporate events.
+
+Initial role is conservative: fundamentals may add warnings, setup labels, event-window context, or risk-filter/threshold pressure. They must not become positive confidence boosters until passive snapshots prove usefulness through broker-preferred outcome slices and walk-forward validation. See `fundamental-analysis-snapshot-spec.md`.
+
 ## Outcome evaluation
 
 `RecommendationPlanOutcome` records include entry touched, stop hit, target hit, fixed-horizon returns, favorable/adverse excursion, holding period, direction correctness, confidence bucket, setup family, transmission bias, and context-regime slices.
