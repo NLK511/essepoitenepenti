@@ -8,6 +8,22 @@ import { useToast } from "../components/toast";
 import type { Run, RunDetailResponse } from "../types";
 import { extractRunWarnings, formatDate, formatDuration, isCompletedWithWarningsRunStatus, isFailedRunStatus, isQueuedOrRunningRunStatus, jobTypeLabel, runTone } from "../utils";
 
+function runImportance(detail: RunDetailResponse | null, warnings: string[]): { label: string; tone: "ok" | "warning" | "danger" | "info"; message: string } {
+  if (!detail) {
+    return { label: "none selected", tone: "info", message: "Choose a run to inspect why it matters." };
+  }
+  if (isFailedRunStatus(detail.run.status)) {
+    return { label: "failed", tone: "danger", message: detail.run.error_message || "This run failed and should be inspected before trusting its downstream artifacts." };
+  }
+  if (warnings.length > 0 || isCompletedWithWarningsRunStatus(detail.run.status)) {
+    return { label: "warnings", tone: "warning", message: warnings.slice(0, 2).join(" · ") || "This run completed with warnings and may have degraded artifacts." };
+  }
+  if (isQueuedOrRunningRunStatus(detail.run.status)) {
+    return { label: "active", tone: "info", message: "This run is still queued or running; inspect worker logs if progress stalls." };
+  }
+  return { label: "clean", tone: "ok", message: "No failure or warning was detected for the selected run." };
+}
+
 const JOB_TYPE_FILTER_OPTIONS = [
   { value: "all", label: "All runs" },
   { value: "proposal_generation", label: "Proposal generation" },
@@ -119,6 +135,7 @@ export function DebuggerPage() {
   }
 
   const activeWarnings = useMemo<string[]>(() => extractRunWarnings(detail), [detail]);
+  const selectedRunImportance = useMemo(() => runImportance(detail, activeWarnings), [detail, activeWarnings]);
 
   return (
     <>
@@ -129,12 +146,15 @@ export function DebuggerPage() {
       />
       {error ? <ErrorState message={error} /> : null}
 
-      <section className="metrics-grid debugger-metrics-grid top-gap">
-        <StatCard className="stat-card-compact" label="Runs loaded" value={runStats.total} />
-        <StatCard className="stat-card-compact" label="Failed" value={runStats.failed} />
-        <StatCard className="stat-card-compact" label="Warnings" value={runStats.warnings} />
-        <StatCard className="stat-card-compact" label="Active" value={runStats.active} />
-      </section>
+      <Card className="top-gap">
+        <SectionTitle kicker="Run triage" title="What needs investigation?" subtitle="Start with failed, warning, or active runs; open full run detail only after the compact triage points to a real issue." />
+        <section className="metrics-grid debugger-metrics-grid top-gap-small">
+          <StatCard className="stat-card-compact" label="Runs loaded" value={runStats.total} />
+          <StatCard className="stat-card-compact" label="Failed" value={runStats.failed} />
+          <StatCard className="stat-card-compact" label="Warnings" value={runStats.warnings} />
+          <StatCard className="stat-card-compact" label="Active" value={runStats.active} />
+        </section>
+      </Card>
 
       <Card className="top-gap">
         <SectionTitle kicker="Filters" title="Run list filter" subtitle="Narrow the debugger to a specific workflow type." />
@@ -226,6 +246,21 @@ export function DebuggerPage() {
           ) : null}
           {detail ? (
             <>
+              <Card>
+                <SectionTitle kicker="Why this run matters" title={selectedRunImportance.message} actions={<Badge tone={selectedRunImportance.tone}>{selectedRunImportance.label}</Badge>} />
+                <div className="cluster top-gap-small">
+                  <Badge tone={runTone(detail.run.status)}>{detail.run.status}</Badge>
+                  <span className="helper-text">{jobTypeLabel(detail.run.job_type)} · job {detail.run.job_id}{detail.run.job_name ? ` · ${detail.run.job_name}` : ""}</span>
+                </div>
+                {activeWarnings.length > 0 ? (
+                  <div className="alert alert-warning top-gap-small">
+                    <ul className="bullet-list-compact">
+                      {activeWarnings.slice(0, 4).map((warning, index) => <li key={index}>{warning}</li>)}
+                    </ul>
+                  </div>
+                ) : null}
+              </Card>
+
               <Card className="debugger-summary-card">
                 <SectionTitle
                   kicker="Selected run"
@@ -247,19 +282,6 @@ export function DebuggerPage() {
                   <div className="helper-text">Completed {formatDate(detail.run.completed_at)}</div>
                 </div>
                 {detail.run.error_message ? <div className="alert alert-danger top-gap-small">{detail.run.error_message}</div> : null}
-                
-                {activeWarnings.length > 0 ? (
-                    <div className="top-gap-small">
-                        <div className="helper-text-label">Active warnings</div>
-                        <div className="alert alert-warning top-gap-tiny">
-                            <ul className="bullet-list-compact">
-                                {activeWarnings.map((warning, index) => (
-                                    <li key={index}>{warning}</li>
-                                ))}
-                            </ul>
-                        </div>
-                    </div>
-                ) : null}
               </Card>
 
               <DisclosureCard
