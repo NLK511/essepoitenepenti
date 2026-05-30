@@ -76,6 +76,10 @@ Do not delete until references and tests prove safe:
    - Problem: `WatchlistPlanFramingService.build_plan_from_signal` mixed framing context assembly, calibration thresholds, trade-level calculation, action gating, and plan construction.
    - Done now: extracted framing context, effective-threshold, trade-level, and action-resolution helpers while preserving parity-tested plan payloads.
 
+12. **Summary pi-agent execution path**
+   - Problem: `SummaryService._summarize_with_pi_prompt` mixed command construction, process lifecycle management, stream reading, timeout handling, output parsing, and fallback construction.
+   - Done now: extracted pi command/metadata construction plus CLI process, stream, wait, and stop helpers while preserving fallback semantics and summary payload metadata.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.

@@ -198,136 +198,31 @@ class SummaryService:
         fallback_summary: str,
         fallback_metadata: dict[str, object],
     ) -> SummaryResult:
-        cmd = [self.pi_command]
-        if self.pi_cli_args:
-            try:
-                cmd.extend(shlex.split(self.pi_cli_args))
-            except ValueError as exc:  # pragma: no cover - best effort
-                return self._fallback_result(
-                    fallback_summary,
-                    llm_error=f"invalid pi CLI args: {exc}",
-                    metadata=fallback_metadata,
-                )
-        cmd.extend([
-            "-p",
-            prompt,
-            "--mode",
-            "json",
-            "--no-session",
-            "--no-context-files",
-            "--no-tools",
-            "--no-extensions",
-            "--no-skills",
-            "--no-prompt-templates",
-            "--no-themes",
-        ])
-        prompt_diagnostics = self._prompt_diagnostics(prompt)
-        run_metadata = {
-            **fallback_metadata,
-            **prompt_diagnostics,
-            "pi_command": self.pi_command,
-            "pi_cli_args": self.pi_cli_args,
-            "pi_timeout_seconds": self.timeout,
-            "pi_working_directory": self.pi_agent_dir or None,
-        }
-        env = os.environ.copy()
-        if self.pi_agent_dir:
-            env["PI_CODING_AGENT_DIR"] = self.pi_agent_dir
-        start = perf_counter()
-        stdout_chunks: list[str] = []
-        stderr_chunks: list[str] = []
-        final_message_seen = threading.Event()
-        process: subprocess.Popen[str] | None = None
-
-        def read_stream(stream, chunks: list[str], *, detect_final_message: bool = False) -> None:
-            try:
-                for line in iter(stream.readline, ""):
-                    chunks.append(line)
-                    if detect_final_message and self._is_final_pi_message_line(line):
-                        final_message_seen.set()
-            finally:
-                try:
-                    stream.close()
-                except Exception:
-                    pass
-
-        def stop_process(force: bool = False) -> None:
-            if process is None:
-                return
-            if process.poll() is not None:
-                return
-            try:
-                process.terminate()
-            except Exception:
-                return
-            deadline = perf_counter() + (0.5 if force else 2.0)
-            while perf_counter() < deadline:
-                if process.poll() is not None:
-                    return
-                time.sleep(0.05)
-            try:
-                process.kill()
-            except Exception:
-                return
-
         try:
-            process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                env=env,
-                cwd=self.pi_agent_dir or None,
+            cmd = self._pi_command(prompt)
+        except ValueError as exc:  # pragma: no cover - best effort
+            return self._fallback_result(
+                fallback_summary,
+                llm_error=f"invalid pi CLI args: {exc}",
+                metadata=fallback_metadata,
             )
+        run_metadata = self._pi_run_metadata(prompt, fallback_metadata)
+        try:
+            completed_stdout, completed_stderr, duration, terminated_after_final_message, timed_out, returncode = self._run_pi_cli(cmd)
         except FileNotFoundError as exc:
-            duration = round(perf_counter() - start, 4)
             return self._fallback_result(
                 fallback_summary,
                 llm_error=f"pi_agent CLI command not found: {exc}",
                 metadata=run_metadata,
-                duration_seconds=duration,
+                duration_seconds=round(0.0, 4),
             )
         except OSError as exc:  # pragma: no cover - best effort
-            duration = round(perf_counter() - start, 4)
             return self._fallback_result(
                 fallback_summary,
                 llm_error=f"pi_agent CLI failed to start: {exc}",
                 metadata=run_metadata,
-                duration_seconds=duration,
+                duration_seconds=round(0.0, 4),
             )
-
-        stdout_thread = threading.Thread(
-            target=read_stream,
-            args=(process.stdout, stdout_chunks),
-            kwargs={"detect_final_message": True},
-            daemon=True,
-        )
-        stderr_thread = threading.Thread(target=read_stream, args=(process.stderr, stderr_chunks), daemon=True)
-        stdout_thread.start()
-        stderr_thread.start()
-
-        terminated_after_final_message = False
-        timed_out = False
-        while True:
-            if process.poll() is not None:
-                break
-            if final_message_seen.is_set():
-                terminated_after_final_message = True
-                stop_process(force=False)
-                break
-            if perf_counter() - start >= max(self.timeout, 1.0):
-                timed_out = True
-                stop_process(force=True)
-                break
-            time.sleep(0.05)
-
-        stdout_thread.join(timeout=1.0)
-        stderr_thread.join(timeout=1.0)
-        duration = round(perf_counter() - start, 4)
-        completed_stdout = "".join(stdout_chunks)
-        completed_stderr = "".join(stderr_chunks)
         if timed_out:
             timeout_metadata = {
                 **run_metadata,
@@ -342,8 +237,8 @@ class SummaryService:
                 metadata=timeout_metadata,
                 duration_seconds=duration,
             )
-        if process.returncode not in (0, None) and not terminated_after_final_message:
-            error_message = completed_stderr.strip() or f"return code {process.returncode}"
+        if returncode not in (0, None) and not terminated_after_final_message:
+            error_message = completed_stderr.strip() or f"return code {returncode}"
             return self._fallback_result(
                 fallback_summary,
                 llm_error=f"pi_agent CLI failed: {error_message}",
@@ -388,6 +283,120 @@ class SummaryService:
             },
             duration_seconds=duration,
         )
+
+    def _pi_command(self, prompt: str) -> list[str]:
+        cmd = [self.pi_command]
+        if self.pi_cli_args:
+            cmd.extend(shlex.split(self.pi_cli_args))
+        cmd.extend([
+            "-p",
+            prompt,
+            "--mode",
+            "json",
+            "--no-session",
+            "--no-context-files",
+            "--no-tools",
+            "--no-extensions",
+            "--no-skills",
+            "--no-prompt-templates",
+            "--no-themes",
+        ])
+        return cmd
+
+    def _pi_run_metadata(self, prompt: str, fallback_metadata: dict[str, object]) -> dict[str, object]:
+        return {
+            **fallback_metadata,
+            **self._prompt_diagnostics(prompt),
+            "pi_command": self.pi_command,
+            "pi_cli_args": self.pi_cli_args,
+            "pi_timeout_seconds": self.timeout,
+            "pi_working_directory": self.pi_agent_dir or None,
+        }
+
+    def _run_pi_cli(self, cmd: list[str]) -> tuple[str, str, float, bool, bool, int | None]:
+        env = os.environ.copy()
+        if self.pi_agent_dir:
+            env["PI_CODING_AGENT_DIR"] = self.pi_agent_dir
+        start = perf_counter()
+        stdout_chunks: list[str] = []
+        stderr_chunks: list[str] = []
+        final_message_seen = threading.Event()
+        process = subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            env=env,
+            cwd=self.pi_agent_dir or None,
+        )
+        stdout_thread = threading.Thread(
+            target=self._read_pi_stream,
+            args=(process.stdout, stdout_chunks),
+            kwargs={"final_message_seen": final_message_seen},
+            daemon=True,
+        )
+        stderr_thread = threading.Thread(target=self._read_pi_stream, args=(process.stderr, stderr_chunks), daemon=True)
+        stdout_thread.start()
+        stderr_thread.start()
+        terminated_after_final_message, timed_out = self._wait_for_pi_process(process, start, final_message_seen)
+        stdout_thread.join(timeout=1.0)
+        stderr_thread.join(timeout=1.0)
+        return (
+            "".join(stdout_chunks),
+            "".join(stderr_chunks),
+            round(perf_counter() - start, 4),
+            terminated_after_final_message,
+            timed_out,
+            process.returncode,
+        )
+
+    def _read_pi_stream(self, stream, chunks: list[str], *, final_message_seen: threading.Event | None = None) -> None:
+        try:
+            for line in iter(stream.readline, ""):
+                chunks.append(line)
+                if final_message_seen is not None and self._is_final_pi_message_line(line):
+                    final_message_seen.set()
+        finally:
+            try:
+                stream.close()
+            except Exception:
+                pass
+
+    def _wait_for_pi_process(self, process: subprocess.Popen[str], start: float, final_message_seen: threading.Event) -> tuple[bool, bool]:
+        terminated_after_final_message = False
+        timed_out = False
+        while True:
+            if process.poll() is not None:
+                break
+            if final_message_seen.is_set():
+                terminated_after_final_message = True
+                self._stop_pi_process(process, force=False)
+                break
+            if perf_counter() - start >= max(self.timeout, 1.0):
+                timed_out = True
+                self._stop_pi_process(process, force=True)
+                break
+            time.sleep(0.05)
+        return terminated_after_final_message, timed_out
+
+    def _stop_pi_process(self, process: subprocess.Popen[str], *, force: bool = False) -> None:
+        if process.poll() is not None:
+            return
+        try:
+            process.terminate()
+        except Exception:
+            return
+        deadline = perf_counter() + (0.5 if force else 2.0)
+        while perf_counter() < deadline:
+            if process.poll() is not None:
+                return
+            time.sleep(0.05)
+        try:
+            process.kill()
+        except Exception:
+            return
 
     def _is_final_pi_message_line(self, line: str) -> bool:
         try:
