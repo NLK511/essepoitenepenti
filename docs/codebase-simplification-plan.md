@@ -92,6 +92,10 @@ Do not delete until references and tests prove safe:
    - Problem: `NewsIngestionService.fetch_topic` mirrored ticker-fetch complexity with database prefill, provider-selection fallback, provider fetch/save/merge loops, diagnostics, observability, and cache writes inline.
    - Done now: extracted topic database prefill, no-provider finalization, provider fetch loop, and topic finalization helpers while preserving query diagnostics, cache behavior, and provider observability payloads.
 
+16. **Ticker analysis payload assembly**
+   - Problem: `TickerAnalysisPayloadService.build_analysis_payload` assembled every payload section inline, making summary/news/sentiment/proposal/technical/deep-analysis contracts hard to scan.
+   - Done now: extracted section builders while preserving all analysis payload keys and values.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.
