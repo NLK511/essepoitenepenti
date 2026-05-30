@@ -34,45 +34,43 @@ type NavSection = {
 
 const navSections: NavSection[] = [
   {
-    label: "Overview",
+    label: "Operate",
     items: [
       { to: "/", label: "Dashboard", shortLabel: "Dash", icon: "◌", end: true },
-      { to: "/jobs/watchlists", label: "Watchlists", shortLabel: "WL", icon: "◎" },
-      { to: "/jobs", label: "Jobs", shortLabel: "Jobs", icon: "▣", end: true },
+      { to: "/jobs/recommendation-plans", label: "Trade review", shortLabel: "Trades", icon: "↗" },
+      { to: "/recommendation-quality", label: "Quality & Edge", shortLabel: "Edge", icon: "◈" },
+      { to: "/broker-orders", label: "Execution & Risk", shortLabel: "Risk", icon: "⟐" },
     ],
   },
   {
-    label: "Daily review",
+    label: "Evidence & diagnostics",
     items: [
-      { to: "/jobs/recommendation-plans", label: "Recommendation plans", shortLabel: "Plans", icon: "↗" },
-      { to: "/recommendation-quality", label: "Quality summary", shortLabel: "Quality", icon: "◈" },
-      { to: "/jobs/ticker-signals", label: "Ticker signals", shortLabel: "Signals", icon: "≈" },
-      { to: "/broker-orders", label: "Broker orders", shortLabel: "Orders", icon: "⟐" },
-      { to: "/data-quality", label: "Data quality", shortLabel: "Data", icon: "◇" },
       { to: "/context", label: "Context review", shortLabel: "Context", icon: "◔" },
+      { to: "/data-quality", label: "Data quality", shortLabel: "Data", icon: "◇" },
       { to: "/jobs/debugger", label: "Run debugger", shortLabel: "Debug", icon: "⌘" },
     ],
   },
   {
-    label: "Research",
+    label: "Configure",
     items: [
-      { to: "/research", label: "Research home", shortLabel: "Hub", icon: "⌂", end: true },
-      { to: "/research/decision-samples", label: "Decision samples", shortLabel: "Samples", icon: "◉" },
-    ],
-    subsections: [
-      {
-        label: "Tuning",
-        items: [
-          { to: "/research/signal-gating/gating-job", label: "Signal gating tuning", shortLabel: "Gate", icon: "↯" },
-          { to: "/research/plan-generation-tuning", label: "Plan generation tuning", shortLabel: "Plan tune", icon: "↗" },
-        ],
-      },
+      { to: "/jobs/watchlists", label: "Watchlists", shortLabel: "WL", icon: "◎" },
+      { to: "/jobs", label: "Jobs", shortLabel: "Jobs", icon: "▣", end: true },
+      { to: "/settings", label: "Settings", shortLabel: "Set", icon: "⚙" },
     ],
   },
   {
-    label: "Reference",
+    label: "Research Lab",
     items: [
-      { to: "/settings", label: "Settings", shortLabel: "Set", icon: "⚙" },
+      { to: "/research", label: "Lab launcher", shortLabel: "Lab", icon: "⌂", end: true },
+      { to: "/research/signal-gating/gating-job", label: "Signal gating tuning", shortLabel: "Gate", icon: "↯" },
+      { to: "/research/plan-generation-tuning", label: "Plan generation tuning", shortLabel: "Plan tune", icon: "↗" },
+      { to: "/research/decision-samples", label: "Decision samples", shortLabel: "Samples", icon: "◉" },
+      { to: "/jobs/ticker-signals", label: "Candidate signals", shortLabel: "Signals", icon: "≈" },
+    ],
+  },
+  {
+    label: "Help",
+    items: [
       { to: "/docs", label: "Docs", shortLabel: "Docs", icon: "✦" },
     ],
   },
@@ -81,9 +79,9 @@ const navSections: NavSection[] = [
 const jobsSectionLinks = [
   { to: "/jobs", label: "Overview", end: true },
   { to: "/jobs/watchlists", label: "Watchlists" },
-  { to: "/jobs/ticker-signals", label: "Signals" },
-  { to: "/jobs/recommendation-plans", label: "Plans" },
+  { to: "/jobs/recommendation-plans", label: "Trade review" },
   { to: "/jobs/debugger", label: "Debugger" },
+  { to: "/jobs/ticker-signals", label: "Candidate signals" },
 ];
 
 function readInitialTheme(): Theme {
@@ -134,23 +132,23 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
   }
   if (pathname.startsWith("/jobs/ticker-signals")) {
     return {
-      eyebrow: "Review",
-      title: "Omens",
-      description: "Review candidates before they become action plans.",
+      eyebrow: "Research Lab",
+      title: "Candidate Signals",
+      description: "Inspect shortlisted, blocked, and deep-analysis candidate signals as an advanced diagnostic surface.",
     };
   }
   if (pathname.startsWith("/jobs/recommendation-plans")) {
     return {
-      eyebrow: "Review",
-      title: "Battle Plans",
-      description: "Review action plans first, with advanced analytics available when needed.",
+      eyebrow: "Operate",
+      title: "Trade Review",
+      description: "Review current plans and trade objects; use Quality & Edge for the system-performance verdict.",
     };
   }
   if (pathname.startsWith("/recommendation-quality")) {
     return {
-      eyebrow: "Advanced review",
-      title: "The Stoic Ledger",
-      description: "Review confidence quality, where results look strongest, and walk-forward readiness in one consolidated place.",
+      eyebrow: "Operate",
+      title: "Quality & Edge",
+      description: "Use the authoritative edge gate, effective outcomes, calibration, reliability, and evidence-backed next actions.",
     };
   }
   if (pathname.startsWith("/research/signal-gating/gating-job") || pathname.startsWith("/research/signal-gating")) {
@@ -169,9 +167,9 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
   }
   if (pathname.startsWith("/research")) {
     return {
-      eyebrow: "Research",
-      title: "The Academy",
-      description: "Review tuning, calibration, and backtesting work without mixing it into the operational workflow.",
+      eyebrow: "Research Lab",
+      title: "Advanced Tools",
+      description: "Open tuning and sample-review workflows after Quality & Edge justifies a research action.",
     };
   }
   if (pathname.startsWith("/jobs/debugger")) {
@@ -183,9 +181,9 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
   }
   if (pathname.startsWith("/broker-orders")) {
     return {
-      eyebrow: "Execution audit",
-      title: "The Tribute Ledger",
-      description: "Inspect Alpaca paper submissions, risk state, payloads, and statuses for plan-driven trades.",
+      eyebrow: "Operate",
+      title: "Execution & Risk",
+      description: "Review broker risk state, kill switch, exposure, reconciliation, and broker-order audit details.",
     };
   }
   if (pathname.startsWith("/data-quality")) {

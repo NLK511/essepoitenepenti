@@ -405,7 +405,7 @@ It audits clutter inside the pages before final navigation, merging, or deletion
 5. Refactor Context review and Data quality separately, with cross-links but no merge. **Done:** Context review now leads with a Context trust card and links to Data quality while keeping macro/industry workflows distinct; industry aggregate coverage is collapsed as supporting evidence. Data quality now leads with input-trust severity, blocker/degraded counts, and a Context review link; raw issue-type counts are collapsed.
 6. Refactor Run debugger while preserving it as a standalone diagnostics page. **Done:** debugger now starts with a run-triage card, preserves filters and the recent-run selector, and adds a selected-run `Why this run matters` summary before full run metadata; repeated warning display was removed from the lower summary card.
 7. Convert Research home into a launcher after Quality & Edge absorbs its useful performance content. **Done:** Research is now a Research Lab launcher with compact evidence status, direct links to Quality & Edge, signal-gating tuning, plan-generation tuning, and decision samples; the assessment narrative and simulation-only entry-framing research are collapsed as reference diagnostics.
-8. Re-evaluate nav/page topology only after steps 1-7.
+8. Re-evaluate nav/page topology only after steps 1-7. **Done:** navigation now groups pages by decision authority: Operate (Dashboard, Trade Review, Quality & Edge, Execution & Risk), Evidence & diagnostics (Context review, Data quality, Run debugger), Configure (Watchlists, Jobs, Settings), Research Lab (launcher, tuning, decision samples, candidate signals), and Help. No routes were removed.
 
 ## Completion criteria for Phase 0
 
