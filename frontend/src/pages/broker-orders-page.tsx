@@ -86,6 +86,10 @@ export function BrokerOrdersPage() {
     [orders, selectedOrderId],
   );
   const selectedPosition = selectedOrder?.id ? positionByOrderId.get(selectedOrder.id) ?? null : null;
+  const actionRequiredOrders = useMemo(
+    () => (orders ?? []).filter((order) => isBrokerExecutionFailed(order.status) || isBrokerExecutionResubmittable(order.status) || isBrokerExecutionCancelable(order.status)).slice(0, 5),
+    [orders],
+  );
 
   async function reloadOrders(nextSelectedOrderId?: number) {
     const params = new URLSearchParams({ limit: String(limit) });
@@ -163,8 +167,8 @@ export function BrokerOrdersPage() {
   return (
     <>
       <PageHeader
-        kicker="Execution audit"
-        title="Broker orders" 
+        kicker="Execution authority"
+        title="Execution & Risk"
         actions={
           <div className="cluster">
             <button type="button" className="button-secondary" onClick={() => void refreshVisibleOrders()}>⟳ Statuses</button>
@@ -178,12 +182,7 @@ export function BrokerOrdersPage() {
       <section className="metrics-grid top-gap">
         <StatCard label="Risk state" value={risk ? (risk.allowed ? "allowed" : "blocked") : "—"} helper={risk?.reasons.length ? risk.reasons.map(humanizeKey).join(", ") : "No active risk blocks"} />
         <StatCard label="Kill switch" value={risk?.halt_enabled ? "halted" : "clear"} helper={risk?.halt_reason || "Manual halt is not active"} />
-        <StatCard label="Today's broker P&L" value={risk ? `$${metricNumber(risk.metrics.today_realized_pnl_usd)}` : "—"} helper={risk ? `${risk.metrics.today_win_count ?? 0} wins · ${risk.metrics.today_loss_count ?? 0} losses` : "Broker-backed realized P&L"} />
-        <StatCard label="Open exposure" value={risk ? `$${metricNumber(risk.metrics.open_notional_usd)}` : "—"} helper={risk ? `${risk.metrics.open_position_count ?? 0} open/submitted positions` : "Broker lifecycle ledger"} />
-        <StatCard label="Orders loaded" value={stats.total} helper="Visible broker-order records" />
-        <StatCard label="Submitted" value={stats.submitted} helper="Accepted or filled orders" />
-        <StatCard label="Failed" value={stats.failed} helper="Broker or client errors" />
-        <StatCard label="Skipped" value={stats.skipped} helper="Missing levels or disabled execution" />
+        <StatCard label="Open exposure" value={risk ? `$${metricNumber(risk.metrics.open_notional_usd)}` : "—"} helper={risk ? `${risk.metrics.open_position_count ?? 0} open/submitted/closing positions` : "Broker lifecycle ledger"} />
         <StatCard
           label="Last broker sync"
           value={syncState?.last_at ? formatDate(syncState.last_at) : "Never"}
@@ -194,6 +193,39 @@ export function BrokerOrdersPage() {
           }
         />
       </section>
+
+      <Card className="top-gap">
+        <SectionTitle kicker="Action required" title="Orders and positions needing operator attention" subtitle="Failures, resubmittable orders, and cancelable live orders are shown before the raw order history." />
+        {!orders && !error ? <LoadingState message="Loading broker order actions…" /> : null}
+        {orders && actionRequiredOrders.length === 0 ? <EmptyState message="No broker orders currently require action." /> : null}
+        {actionRequiredOrders.length > 0 ? (
+          <div className="data-stack top-gap-small">
+            {actionRequiredOrders.map((order) => (
+              <button
+                key={order.id ?? order.client_order_id}
+                type="button"
+                className={`data-card link-button${String(order.id) === selectedOrderId ? " is-selected" : ""}`}
+                onClick={() => {
+                  const next = new URLSearchParams(searchParams);
+                  if (order.id) {
+                    next.set("order_id", String(order.id));
+                  }
+                  setSearchParams(next);
+                }}
+              >
+                <div className="data-card-header">
+                  <div>
+                    <div className="data-card-title">{order.ticker} · {order.action}</div>
+                    <div className="helper-text">plan #{order.recommendation_plan_id} · run {order.run_id ?? "—"} · qty {order.quantity}</div>
+                  </div>
+                  <Badge tone={brokerExecutionStatusTone(order.status)}>{order.status}</Badge>
+                </div>
+                {order.error_message ? <div className="helper-text top-gap-small">{order.error_message}</div> : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </Card>
 
       {risk ? (
         <DisclosureCard
@@ -243,6 +275,21 @@ export function BrokerOrdersPage() {
           ) : null}
         </DisclosureCard>
       ) : null}
+
+      <DisclosureCard
+        className="top-gap"
+        kicker="Supporting counts"
+        title="Order volume summary"
+        subtitle="Useful for audit context, but not the primary safety decision."
+      >
+        <section className="metrics-grid top-gap-small">
+          <StatCard label="Today's broker P&L" value={risk ? `$${metricNumber(risk.metrics.today_realized_pnl_usd)}` : "—"} helper={risk ? `${risk.metrics.today_win_count ?? 0} wins · ${risk.metrics.today_loss_count ?? 0} losses` : "Broker-backed realized P&L"} />
+          <StatCard label="Orders loaded" value={stats.total} helper="Visible broker-order records" />
+          <StatCard label="Submitted" value={stats.submitted} helper="Accepted or filled orders" />
+          <StatCard label="Failed" value={stats.failed} helper="Broker or client errors" />
+          <StatCard label="Skipped" value={stats.skipped} helper="Missing levels or disabled execution" />
+        </section>
+      </DisclosureCard>
 
       <section className="two-column top-gap">
         <DisclosureCard className="sticky-toolbar" kicker="Order list" title="Recent submissions" subtitle="If execution is enabled, actionable plans produce a row here after proposal generation finishes." defaultOpen actions={<HelpHint tooltip="If execution is enabled, actionable plans produce a row here after proposal generation finishes." to="/docs?doc=alpaca-paper-order-execution-spec" />}>
@@ -325,14 +372,12 @@ export function BrokerOrdersPage() {
                 ) : null}
               </div>
 
-              <Card>
-                <SectionTitle kicker="Request" title="Bracket order payload" subtitle="Exact JSON submitted to Alpaca paper trading." />
+              <DisclosureCard kicker="Request" title="Bracket order payload" subtitle="Exact JSON submitted to Alpaca paper trading.">
                 <pre className="code-block top-gap-small">{prettyPayload(selectedOrder.request_payload)}</pre>
-              </Card>
-              <Card>
-                <SectionTitle kicker="Response" title="Broker response" subtitle="Exact JSON returned by the broker client." />
+              </DisclosureCard>
+              <DisclosureCard kicker="Response" title="Broker response" subtitle="Exact JSON returned by the broker client.">
                 <pre className="code-block top-gap-small">{prettyPayload(selectedOrder.response_payload)}</pre>
-              </Card>
+              </DisclosureCard>
             </div>
           ) : null}
         </DisclosureCard>
