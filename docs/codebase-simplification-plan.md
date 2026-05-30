@@ -108,6 +108,10 @@ Do not delete until references and tests prove safe:
    - Problem: `JobExecutionService._execute_proposal_run` mixed watchlist orchestration, payload persistence, order submission, warning finalization, and timing handling.
    - Done now: extracted watchlist orchestration execution, orchestration payload persistence, and proposal order-submission helpers while preserving timing/status behavior.
 
+20. **Watchlist cheap-scan scoring**
+   - Problem: `CheapScanSignalService.score` mixed local/remote price-history loading, validation, indicator math, warning logic, diagnostics, and signal construction.
+   - Done now: extracted price-history loading/remote persistence, history validation, and cheap-scan metric calculation while preserving scoring formulas and diagnostics.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.

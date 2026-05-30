@@ -60,89 +60,32 @@ class CheapScanSignalService:
         from trade_proposer_app.services.watchlist_orchestration import logger
         logger.info(f"    [CheapScan] {normalized_ticker} as_of={as_of}")
         
-        history = pd.DataFrame()
-        history_source = "unavailable"
         is_replay = bool(as_of)
-        remote_attempt_count = 0
-        remote_errors: list[str] = []
-
-        # 1. Prefer local DB data
-        if self.repository:
-            history = self._fetch_from_db(normalized_ticker, as_of or datetime.now(timezone.utc), is_replay=is_replay)
-            if not history.empty:
-                history_source = "database"
-
-        # 2. Fallback to remote data if local is missing or insufficient for the live minimum feature set.
-        if history.empty or len(history) < self.REMOTE_FALLBACK_MIN_BARS:
-            remote_history, remote_attempt_count, remote_errors = self._fetch_remote_history_with_retry(normalized_ticker, period, as_of=as_of)
-            if not remote_history.empty:
-                # Use remote data if it's better/longer than what we have locally
-                if len(remote_history) > len(history):
-                    history = remote_history
-                    history_source = "yahoo"
-                    # 3. Take the opportunity to persist it locally
-                    if self.repository:
-                        try:
-                            self._persist_history(normalized_ticker, history)
-                        except Exception as e:
-                            logger.warning(f"    [CheapScan] failed to persist remote history for {normalized_ticker}: {e}")
-
-        if history.empty:
-            raise CheapScanError(f"no price history available for {normalized_ticker}")
-
-        min_history = self.MIN_HISTORY_BARS_REPLAY if is_replay else self.MIN_HISTORY_BARS_LIVE
-        if len(history) < min_history:
-            raise CheapScanError(f"insufficient price history for {normalized_ticker} (found {len(history)} bars)")
-
-        closes = self._series(history, "Close")
-        volumes = self._series(history, "Volume")
-        latest_close = float(closes.iloc[-1])
-        sma20 = float(closes.tail(20).mean())
-        sma50 = float(closes.tail(min(50, len(closes))).mean())
-        returns = closes.pct_change().dropna()
-        ret5 = self._pct_change(closes, 5)
-        ret20 = self._pct_change(closes, 20)
-        rolling_high_20 = float(closes.tail(20).max())
-        rolling_low_20 = float(closes.tail(20).min())
-        avg_traded_value_20 = float((closes * volumes).tail(20).mean())
-        realized_volatility_20 = float(returns.tail(20).std(ddof=0) * 100.0) if len(returns) >= 5 else 0.0
-
-        trend_component = self._clamp(((latest_close / sma20) - 1.0) * 8.0 + ((latest_close / sma50) - 1.0) * 6.0, -1.0, 1.0)
-        momentum_component = self._clamp((ret5 * 4.0) + (ret20 * 3.0), -1.0, 1.0)
-        breakout_component = self._breakout_component(latest_close, rolling_high_20, rolling_low_20)
-
-        directional_score = self._clamp(
-            0.45 * trend_component + 0.4 * momentum_component + 0.15 * breakout_component,
-            -1.0,
-            1.0,
+        history, history_source, remote_attempt_count, remote_errors = self._load_price_history_for_scan(
+            normalized_ticker,
+            period,
+            as_of=as_of,
+            is_replay=is_replay,
         )
-        directional_bias = "neutral"
-        if directional_score >= 0.12:
-            directional_bias = "long"
-        elif directional_score <= -0.12:
-            directional_bias = "short"
+        self._validate_history(normalized_ticker, history, is_replay=is_replay)
+        metrics = self._cheap_scan_metrics(history)
 
-        trend_score = round(self._scale_signed_to_percent(trend_component), 2)
-        momentum_score = round(self._scale_signed_to_percent(momentum_component), 2)
-        breakout_score = round(self._scale_signed_to_percent(breakout_component), 2)
-        volatility_score = round(self._scale_value(realized_volatility_20, 1.0, 6.0), 2)
-        liquidity_score = round(self._scale_value(avg_traded_value_20, 5_000_000.0, 150_000_000.0), 2)
-        confidence_percent = round(
-            self._clamp(
-                abs(directional_score) * 70.0 + liquidity_score * 0.15 + (100.0 - abs(50.0 - volatility_score)) * 0.15,
-                0.0,
-                100.0,
-            ),
-            2,
-        )
-        attention_score = round(
-            self._clamp(
-                abs(directional_score) * 45.0 + breakout_score * 0.2 + volatility_score * 0.15 + liquidity_score * 0.2,
-                0.0,
-                100.0,
-            ),
-            2,
-        )
+        latest_close = metrics["latest_close"]
+        sma20 = metrics["sma20"]
+        sma50 = metrics["sma50"]
+        ret5 = metrics["ret5"]
+        ret20 = metrics["ret20"]
+        avg_traded_value_20 = metrics["avg_traded_value_20"]
+        realized_volatility_20 = metrics["realized_volatility_20"]
+        trend_score = metrics["trend_score"]
+        momentum_score = metrics["momentum_score"]
+        breakout_score = metrics["breakout_score"]
+        volatility_score = metrics["volatility_score"]
+        liquidity_score = metrics["liquidity_score"]
+        directional_score = metrics["directional_score"]
+        directional_bias = metrics["directional_bias"]
+        confidence_percent = metrics["confidence_percent"]
+        attention_score = metrics["attention_score"]
 
         warnings: list[str] = []
         history_bar_count = len(history)
@@ -197,6 +140,87 @@ class CheapScanSignalService:
             },
             indicator_summary=" · ".join(summary_parts),
         )
+
+    def _load_price_history_for_scan(
+        self,
+        ticker: str,
+        period: str,
+        *,
+        as_of: datetime | None,
+        is_replay: bool,
+    ) -> tuple[pd.DataFrame, str, int, list[str]]:
+        from trade_proposer_app.services.watchlist_orchestration import logger
+
+        history = pd.DataFrame()
+        history_source = "unavailable"
+        remote_attempt_count = 0
+        remote_errors: list[str] = []
+        if self.repository:
+            history = self._fetch_from_db(ticker, as_of or datetime.now(timezone.utc), is_replay=is_replay)
+            if not history.empty:
+                history_source = "database"
+        if history.empty or len(history) < self.REMOTE_FALLBACK_MIN_BARS:
+            remote_history, remote_attempt_count, remote_errors = self._fetch_remote_history_with_retry(ticker, period, as_of=as_of)
+            if not remote_history.empty and len(remote_history) > len(history):
+                history = remote_history
+                history_source = "yahoo"
+                if self.repository:
+                    try:
+                        self._persist_history(ticker, history)
+                    except Exception as exc:
+                        logger.warning(f"    [CheapScan] failed to persist remote history for {ticker}: {exc}")
+        return history, history_source, remote_attempt_count, remote_errors
+
+    def _validate_history(self, ticker: str, history: pd.DataFrame, *, is_replay: bool) -> None:
+        if history.empty:
+            raise CheapScanError(f"no price history available for {ticker}")
+        min_history = self.MIN_HISTORY_BARS_REPLAY if is_replay else self.MIN_HISTORY_BARS_LIVE
+        if len(history) < min_history:
+            raise CheapScanError(f"insufficient price history for {ticker} (found {len(history)} bars)")
+
+    def _cheap_scan_metrics(self, history: pd.DataFrame) -> dict[str, float | str]:
+        closes = self._series(history, "Close")
+        volumes = self._series(history, "Volume")
+        latest_close = float(closes.iloc[-1])
+        sma20 = float(closes.tail(20).mean())
+        sma50 = float(closes.tail(min(50, len(closes))).mean())
+        returns = closes.pct_change().dropna()
+        ret5 = self._pct_change(closes, 5)
+        ret20 = self._pct_change(closes, 20)
+        rolling_high_20 = float(closes.tail(20).max())
+        rolling_low_20 = float(closes.tail(20).min())
+        avg_traded_value_20 = float((closes * volumes).tail(20).mean())
+        realized_volatility_20 = float(returns.tail(20).std(ddof=0) * 100.0) if len(returns) >= 5 else 0.0
+        trend_component = self._clamp(((latest_close / sma20) - 1.0) * 8.0 + ((latest_close / sma50) - 1.0) * 6.0, -1.0, 1.0)
+        momentum_component = self._clamp((ret5 * 4.0) + (ret20 * 3.0), -1.0, 1.0)
+        breakout_component = self._breakout_component(latest_close, rolling_high_20, rolling_low_20)
+        directional_score = self._clamp(0.45 * trend_component + 0.4 * momentum_component + 0.15 * breakout_component, -1.0, 1.0)
+        directional_bias = "long" if directional_score >= 0.12 else "short" if directional_score <= -0.12 else "neutral"
+        trend_score = round(self._scale_signed_to_percent(trend_component), 2)
+        momentum_score = round(self._scale_signed_to_percent(momentum_component), 2)
+        breakout_score = round(self._scale_signed_to_percent(breakout_component), 2)
+        volatility_score = round(self._scale_value(realized_volatility_20, 1.0, 6.0), 2)
+        liquidity_score = round(self._scale_value(avg_traded_value_20, 5_000_000.0, 150_000_000.0), 2)
+        confidence_percent = round(self._clamp(abs(directional_score) * 70.0 + liquidity_score * 0.15 + (100.0 - abs(50.0 - volatility_score)) * 0.15, 0.0, 100.0), 2)
+        attention_score = round(self._clamp(abs(directional_score) * 45.0 + breakout_score * 0.2 + volatility_score * 0.15 + liquidity_score * 0.2, 0.0, 100.0), 2)
+        return {
+            "latest_close": latest_close,
+            "sma20": sma20,
+            "sma50": sma50,
+            "ret5": ret5,
+            "ret20": ret20,
+            "avg_traded_value_20": avg_traded_value_20,
+            "realized_volatility_20": realized_volatility_20,
+            "directional_score": directional_score,
+            "directional_bias": directional_bias,
+            "trend_score": trend_score,
+            "momentum_score": momentum_score,
+            "breakout_score": breakout_score,
+            "volatility_score": volatility_score,
+            "liquidity_score": liquidity_score,
+            "confidence_percent": confidence_percent,
+            "attention_score": attention_score,
+        }
 
     def _fetch_from_db(self, ticker: str, as_of: datetime, is_replay: bool = True) -> pd.DataFrame:
         if self.repository is None:
