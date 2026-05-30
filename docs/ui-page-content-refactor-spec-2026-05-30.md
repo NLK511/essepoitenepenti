@@ -382,6 +382,7 @@ It audits clutter inside the pages before final navigation, merging, or deletion
 
 **Implementation notes:**
 - This is still the strongest demotion candidate after internal cleanup. It may become a Trade Review advanced `Candidates` tab or stay as a Research Lab/debug page.
+- **Done now:** page is titled Candidate signals under Research Lab, explicitly frames itself as a pre-plan diagnostic surface, and links to Trade Review and Signal gating tuning as the authoritative downstream destinations.
 
 ## Cross-page authority map
 

@@ -73,9 +73,9 @@ export function TickerSignalsPage() {
   return (
     <>
       <PageHeader
-        kicker="Review"
-        title="Ticker signals"
-        actions={<HelpHint tooltip="Ticker signals are candidate review, not final action review. Use them to understand shortlist decisions before opening recommendation plans." to="/docs?doc=operator-page-field-guide" />}
+        kicker="Research Lab"
+        title="Candidate signals"
+        actions={<HelpHint tooltip="Candidate signals are a diagnostic artifact, not final action review. Use them to understand shortlist decisions before opening Trade Review or signal-gating tuning." to="/docs?doc=operator-page-field-guide" />}
       />
       {error ? <ErrorState message={error} /> : null}
 
@@ -97,12 +97,20 @@ export function TickerSignalsPage() {
         }
       />
 
-      <section className="metrics-grid top-gap">
-        <StatCard label="Signals loaded" value={signals?.length ?? "—"} helper="Current result set under the active filters" />
-        <StatCard label="Shortlisted" value={summary.shortlisted} helper="Names promoted into deeper review lanes" />
-        <StatCard label="Deep analysis" value={summary.deepAnalysis} helper="Signals enriched beyond the cheap scan" />
-        <StatCard label="Tailwind context" value={summary.tailwind} helper="Signals currently tagged with context tailwinds" />
-      </section>
+      <Card className="top-gap">
+        <SectionTitle
+          kicker="Candidate flow"
+          title="Pre-plan diagnostic surface"
+          subtitle="Use this page to inspect shortlist decisions. Use Trade Review for actionable plans and Signal gating tuning when the upstream threshold needs evidence-backed adjustment."
+          actions={<><Link to="/jobs/recommendation-plans" className="button-subtle">↗ Trade Review</Link><Link to="/research/signal-gating/gating-job" className="button-subtle">↯ Gating tuning</Link></>}
+        />
+        <section className="metrics-grid top-gap-small">
+          <StatCard label="Signals loaded" value={signals?.length ?? "—"} helper="Current result set under the active filters" />
+          <StatCard label="Shortlisted" value={summary.shortlisted} helper="Names promoted into deeper review lanes" />
+          <StatCard label="Deep analysis" value={summary.deepAnalysis} helper="Signals enriched beyond the cheap scan" />
+          <StatCard label="Tailwind context" value={summary.tailwind} helper="Signals currently tagged with context tailwinds" />
+        </section>
+      </Card>
 
       <DisclosureCard className="sticky-toolbar" kicker="Filters" title="Find candidate signals" subtitle="Filter by ticker or run, then scan what was shortlisted, blocked, or sent into deeper analysis." defaultOpen>
         <form className="form-grid" onSubmit={handleSubmit}>
