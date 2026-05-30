@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
-import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import { planGenerationTuningConfigTone, runTone } from "../utils";
 import type {
   PlanGenerationTuningConfigVersion,
@@ -171,25 +172,32 @@ export function PlanGenerationTuningPage() {
   return (
     <>
       <PageHeader
-        kicker="Research"
+        kicker="Research Lab"
         title="Plan generation tuning"
-        subtitle="Inspect the search shape, ranked candidates, and promotion outcomes without reading raw JSON first."
+        subtitle="Change downstream plan construction only when Quality & Edge points to entry, risk, reward, or precision problems."
         actions={<HelpHint tooltip="This page shows the dedicated plan-generation tuning workflow: live config, ranked candidates, and guarded promotions." to={tuningSpecDoc} />}
       />
       {error ? <ErrorState message={error} /> : null}
       {!state || !runs || !configs ? <LoadingState message="Loading plan generation tuning…" /> : null}
       {state && runs && configs ? (
         <div className="stack-page">
-          <section className="metrics-grid">
-            <StatCard label="Active config" value={String(state.state.active_config_version_id ?? "baseline")} helper="Current live config version" tooltip="The parameter set that is currently live for plan generation. New tuning runs compare candidates against this active baseline." tooltipTo={tuningSpecDoc} />
-            <StatCard label="Auto mode" value={state.state.auto_enabled ? "on" : "off"} helper="Scheduled autonomous tuning" tooltip="Whether this tuning workflow can run on its own schedule instead of only when an operator starts it manually." tooltipTo={tuningSpecDoc} />
-            <StatCard label="Auto promote" value={state.state.auto_promote_enabled ? "on" : "off"} helper="Whether winners can be promoted automatically" tooltip="Whether a winning candidate can become the live configuration automatically after it passes the promotion gate." tooltipTo={glossaryDoc("promotion-gate")} />
-            <StatCard label="Latest run" value={String(state.state.latest_run?.id ?? "—")} helper="Most recent tuning execution" tooltip="The most recent stored tuning run, including its ranked candidates and any promotion outcome." tooltipTo={tuningSpecDoc} />
-          </section>
+          <Card>
+            <SectionTitle
+              kicker="Downstream construction"
+              title="Should plan framing parameters change?"
+              subtitle="Start with validation and promotion safety. Process details and raw configs stay below as supporting evidence."
+              actions={<Link to="/recommendation-quality" className="button-subtle">◈ Quality & Edge</Link>}
+            />
+            <section className="metrics-grid top-gap-small">
+              <StatCard label="Active config" value={String(state.state.active_config_version_id ?? "baseline")} helper="Current live config version" tooltip="The parameter set that is currently live for plan generation. New tuning runs compare candidates against this active baseline." tooltipTo={tuningSpecDoc} />
+              <StatCard label="Auto promote" value={state.state.auto_promote_enabled ? "on" : "off"} helper="Whether winners can be promoted automatically" tooltip="Whether a winning candidate can become the live configuration automatically after it passes the promotion gate." tooltipTo={glossaryDoc("promotion-gate")} />
+              <StatCard label="Latest run" value={String(state.state.latest_run?.id ?? "—")} helper="Most recent tuning execution" tooltip="The most recent stored tuning run, including its ranked candidates and any promotion outcome." tooltipTo={tuningSpecDoc} />
+              <StatCard label="Auto mode" value={state.state.auto_enabled ? "on" : "off"} helper="Scheduled autonomous tuning" tooltip="Whether this tuning workflow can run on its own schedule instead of only when an operator starts it manually." tooltipTo={tuningSpecDoc} />
+            </section>
+          </Card>
 
           <section className="card-grid">
-            <Card>
-              <SectionTitle kicker="How it works" title="Process overview" subtitle="A short, readable explanation of the tuning flow before you inspect the raw results." actions={<HelpHint tooltip="This explains the order of operations so the results below are easier to interpret." to={tuningSpecDoc} />} />
+            <DisclosureCard kicker="Process" title="How it works" subtitle="Reference explanation of the tuning flow; collapse it once the workflow is familiar." actions={<HelpHint tooltip="This explains the order of operations so the results below are easier to interpret." to={tuningSpecDoc} />}>
               <div className="data-stack top-gap-small">
                 <article className="data-card">
                   <div className="data-card-header">
@@ -210,7 +218,7 @@ export function PlanGenerationTuningPage() {
                   <div className="helper-text top-gap-small">Candidates are ranked lexicographically by validation win rate, then validation win count, then validation expected value. Search metrics are shown to help explain why a candidate looked promising.</div>
                 </article>
               </div>
-            </Card>
+            </DisclosureCard>
 
             <Card>
               <SectionTitle kicker="Controls" title="Queue plan generation tuning" subtitle="Queue a worker-backed dry run or guarded promotion so the run appears in the debugger and worker logs." actions={<HelpHint tooltip="The run is queued to a worker. Dry runs rank candidates without changing the live config. Apply mode promotes only if the winner passes backend guardrails." to={tuningSpecDoc} />} />
@@ -242,8 +250,7 @@ export function PlanGenerationTuningPage() {
             </Card>
           </section>
 
-          <Card>
-            <SectionTitle kicker="Exploration" title="Search shape" subtitle="The backend exposes the three deterministic phases and their budgets." actions={<HelpHint tooltip="This plan keeps exploration ordered: entry first, then risk, then reward." to={tuningSpecDoc} />} />
+          <DisclosureCard kicker="Exploration" title="Search shape" subtitle="Supporting detail: deterministic phases and budgets used by the backend." actions={<HelpHint tooltip="This plan keeps exploration ordered: entry first, then risk, then reward." to={tuningSpecDoc} />}>
             <div className="table-wrapper top-gap-small">
               <table className="data-table">
                 <thead>
@@ -269,7 +276,7 @@ export function PlanGenerationTuningPage() {
               </table>
             </div>
             <div className="helper-text top-gap-small">Base sweep starts with the live baseline plus bounded local perturbations; a small refinement pass may add a few more around the top seeds.</div>
-          </Card>
+          </DisclosureCard>
 
           {validation ? (
             <Card>
@@ -332,8 +339,7 @@ export function PlanGenerationTuningPage() {
                   </Card>
                 </section>
 
-                <Card>
-                  <SectionTitle kicker="Candidates" title="Ranked table" subtitle="Read rows from top to bottom. Baseline stays pinned for comparison." actions={<button className="button-secondary" type="button" onClick={() => setShowAllCandidates((current) => !current)}>{showAllCandidates ? "Show eligible only" : "Show all candidates"}</button>} />
+                <DisclosureCard kicker="Candidates" title="Ranked table" subtitle="Read rows from top to bottom. Baseline stays pinned for comparison." actions={<button className="button-secondary" type="button" onClick={() => setShowAllCandidates((current) => !current)}>{showAllCandidates ? "Show eligible only" : "Show all candidates"}</button>}>
                   {selectedRunMetricSpread && selectedRunMetricSpread.searchWinRateCount === 1 && selectedRunMetricSpread.validationWinRateCount === 1 ? (
                     <div className="alert alert-warning top-gap-small">
                       This run is tie-heavy: most rows share the same search and validation win rates, so expected value and changed keys matter more here.
@@ -383,7 +389,7 @@ export function PlanGenerationTuningPage() {
                   ) : (
                     <EmptyState message={showAllCandidates ? "No candidates available." : "No eligible candidates available in this run."} />
                   )}
-                </Card>
+                </DisclosureCard>
 
                 <details className="top-gap-small">
                   <summary className="helper-text">Show raw candidate breakdown JSON</summary>
@@ -395,8 +401,7 @@ export function PlanGenerationTuningPage() {
             )}
           </Card>
 
-          <Card>
-            <SectionTitle kicker="Configs" title="Config versions" subtitle="Promote a stored version to become the live plan-generation configuration." actions={<HelpHint tooltip="Config versions capture baseline and promoted parameter sets so live plan construction stays auditable." to={tuningSpecDoc} />} />
+          <DisclosureCard kicker="Configs" title="Config versions" subtitle="Promote a stored version to become the live plan-generation configuration only after validation supports it." actions={<HelpHint tooltip="Config versions capture baseline and promoted parameter sets so live plan construction stays auditable." to={tuningSpecDoc} />}>
             {configs.length === 0 ? (
               <EmptyState message="No config versions available yet." />
             ) : (
@@ -420,7 +425,7 @@ export function PlanGenerationTuningPage() {
                 ))}
               </div>
             )}
-          </Card>
+          </DisclosureCard>
         </div>
       ) : null}
     </>
