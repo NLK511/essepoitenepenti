@@ -79,6 +79,7 @@ These are useful, but they are not the main current-state entry point. They must
 - `plan-generation-tuning-spec.md` — current phase-1 behavior plus target autonomous plan-generation tuning conformance rules
 - `market-intelligence-analysis-spec.md` — current + target behavior for event calendar, options, and analyst-data integration into ticker analysis
 - `fundamental-analysis-snapshot-spec.md` — target monthly and event-aware point-in-time fundamental snapshots for monitored tickers
+- `fundamental-analysis-snapshot-implementation-plan.md` — active implementation plan for persistence, refresh jobs, plan integration, UI, and validation
 - `alpaca-paper-order-execution-spec.md` — first automated broker-execution spec for Alpaca paper trading, including audit UI and manual resubmit/cancel controls
 - `broker-position-lifecycle-spec.md` — broker-backed position state and realized P&L ledger for app-submitted bracket orders
 - `broker-risk-management-spec.md` — broker-backed pre-trade risk limits and manual kill switch
