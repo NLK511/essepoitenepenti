@@ -1129,26 +1129,56 @@ class ProposalService:
             return self._apply_no_news_service_context(context)
         bundle = self.news_service.fetch(ticker, start_at=start_at, end_at=effective_now, request_mode=request_mode)
         sentiment = self.sentiment_analyzer.analyze(bundle)
-        feeds = list(dict.fromkeys(bundle.feeds_used))
         news_items = sentiment.get("news_items") or sentiment.get("news_points", [])
         digest = self._build_news_summary(news_items or bundle.articles)
         technical_snapshot = self._build_technical_snapshot(context)
+        summary_result, summary_text, summary_method = self._summarize_news_context(ticker, news_items, technical_snapshot, digest)
+        hierarchical = self._news_hierarchical_context(
+            ticker,
+            sentiment=sentiment,
+            news_items=news_items,
+            social_scope_breakdown=social_scope_breakdown,
+            as_of=as_of,
+        )
+        self._apply_news_sentiment_payload(
+            context,
+            bundle=bundle,
+            sentiment=sentiment,
+            news_items=news_items,
+            digest=digest,
+            summary_result=summary_result,
+            summary_text=summary_text,
+            summary_method=summary_method,
+            technical_snapshot=technical_snapshot,
+            hierarchical=hierarchical,
+        )
+        return context
+
+    def _summarize_news_context(
+        self,
+        ticker: str,
+        news_items: list[Any],
+        technical_snapshot: TechnicalSnapshot,
+        digest: str,
+    ):
         summary_result = self.summary_service.summarize(
-            SummaryRequest(
-                ticker=ticker,
-                news_items=news_items,
-                technical_snapshot=technical_snapshot,
-            )
+            SummaryRequest(ticker=ticker, news_items=news_items, technical_snapshot=technical_snapshot)
         )
         if summary_result.summary:
-            summary_text = summary_result.summary
-            summary_method = summary_result.method
-        else:
-            summary_text = digest or ""
-            summary_method = SUMMARY_METHOD_NEWS_DIGEST if digest else DEFAULT_SUMMARY_METHOD
-        news_sentiment_score = sentiment.get("score", 0.0)
+            return summary_result, summary_result.summary, summary_result.method
+        return summary_result, digest or "", SUMMARY_METHOD_NEWS_DIGEST if digest else DEFAULT_SUMMARY_METHOD
+
+    def _news_hierarchical_context(
+        self,
+        ticker: str,
+        *,
+        sentiment: dict[str, Any],
+        news_items: list[Any],
+        social_scope_breakdown: dict[str, Any],
+        as_of: datetime | None,
+    ) -> dict[str, Any]:
         hierarchical = self._compute_hierarchical_sentiment(
-            news_sentiment_score=news_sentiment_score,
+            news_sentiment_score=sentiment.get("score", 0.0),
             news_item_count=len(news_items),
             social_breakdown=social_scope_breakdown,
             context_flags=sentiment.get("context_flags", {}),
@@ -1159,21 +1189,31 @@ class ProposalService:
         industry_snapshot = self.snapshot_resolver.resolve_industry_snapshot(ticker, as_of=as_of) if self.snapshot_resolver is not None else None
         if industry_snapshot is not None:
             hierarchical.update(industry_snapshot_context_fields(industry_snapshot, hierarchical.get("industry_coverage_insights", [])))
+        return hierarchical
+
+    def _apply_news_sentiment_payload(
+        self,
+        context: dict[str, Any],
+        *,
+        bundle,
+        sentiment: dict[str, Any],
+        news_items: list[Any],
+        digest: str,
+        summary_result,
+        summary_text: str,
+        summary_method: str,
+        technical_snapshot: TechnicalSnapshot,
+        hierarchical: dict[str, Any],
+    ) -> None:
+        feeds = list(dict.fromkeys(bundle.feeds_used))
         ticker_sentiment_score = float(hierarchical.get("ticker_sentiment_score", 0.0) or 0.0)
-        ticker_sentiment_label = hierarchical.get("ticker_sentiment_label")
         overall_base_score = self._clamp_value(
             (float(hierarchical.get("macro_context_score", hierarchical.get("macro_sentiment_score", 0.0))) * 0.2)
             + (float(hierarchical.get("industry_context_score", hierarchical.get("industry_sentiment_score", 0.0))) * 0.3)
             + (ticker_sentiment_score * 0.5)
         )
-        enhanced = self._compute_enhanced_sentiment(
-            base_score=overall_base_score,
-            summary_text=summary_text,
-            snapshot=technical_snapshot,
-        )
+        enhanced = self._compute_enhanced_sentiment(base_score=overall_base_score, summary_text=summary_text, snapshot=technical_snapshot)
         use_enhanced = summary_method.startswith("llm_summary") and summary_result.llm_error is None and bool(summary_result.summary)
-        final_score = enhanced["score"] if use_enhanced else overall_base_score
-        final_label = enhanced["label"] if use_enhanced else self._label_sentiment(overall_base_score)
         context.update(
             {
                 "news_feeds_used": feeds,
@@ -1187,12 +1227,12 @@ class ProposalService:
                 "polarity_trend": sentiment.get("polarity_trend", 0.0),
                 "sentiment_volatility": sentiment.get("sentiment_volatility", 0.0),
                 "sentiment_keyword_hits": sentiment.get("keyword_hits", 0),
-                "sentiment_score": final_score,
-                "sentiment_label": final_label,
+                "sentiment_score": enhanced["score"] if use_enhanced else overall_base_score,
+                "sentiment_label": enhanced["label"] if use_enhanced else self._label_sentiment(overall_base_score),
                 "sentiment_sources": sentiment.get("sources") or feeds,
                 "sentiment_coverage_insights": list(dict.fromkeys(sentiment.get("coverage_insights", []) + context.get("social_coverage_insights", []))),
                 "news_digest": digest,
-                "news_sentiment_score": news_sentiment_score,
+                "news_sentiment_score": sentiment.get("score", 0.0),
                 "summary_text": summary_text or DEFAULT_SUMMARY_TEXT,
                 "summary_method": summary_method,
                 "summary_backend": summary_result.backend,
@@ -1208,22 +1248,13 @@ class ProposalService:
                 **hierarchical,
             }
         )
-        context_flags = sentiment.get("context_flags", {})
-        for tag, value in context_flags.items():
+        for tag, value in sentiment.get("context_flags", {}).items():
             context[tag] = value
-        merged_problems = list(
-            dict.fromkeys(
-                context.get("problems", [])
-                + sentiment.get("problems", [])
-                + context.get("signal_feed_errors", [])
-            )
-        )
-        summary_problem = summary_result.llm_error
-        if summary_problem:
-            merged_problems.append(summary_problem)
-            merged_problems.append(summary_fallback_warning("plan context", summary_problem))
+        merged_problems = list(dict.fromkeys(context.get("problems", []) + sentiment.get("problems", []) + context.get("signal_feed_errors", [])))
+        if summary_result.llm_error:
+            merged_problems.append(summary_result.llm_error)
+            merged_problems.append(summary_fallback_warning("plan context", summary_result.llm_error))
         context["problems"] = list(dict.fromkeys(merged_problems))
-        return context
 
     @staticmethod
     def _news_context_window(as_of: datetime | None) -> tuple[datetime, datetime, str]:
