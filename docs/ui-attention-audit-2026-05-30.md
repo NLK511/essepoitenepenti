@@ -8,6 +8,7 @@ The answer today is: not cleanly enough. The app has valuable evidence, but it s
 
 ## Non-negotiable constraints
 
+- Do not finalize page removal, nav demotion, or page merging before auditing and refactoring the content inside the affected pages; page boundaries may change once clutter is removed.
 - Do not remove backend data, repositories, diagnostics, audit records, or research capabilities just because their current page is noisy.
 - Daily UI must lead with performance, risk, freshness, and current trade-review work.
 - Research/tuning tools must remain reachable, but they should not compete with daily operating pages.
@@ -111,14 +112,46 @@ The answer today is: not cleanly enough. The app has valuable evidence, but it s
 - Decision sample detail/list if retained
 - Ticker signals if not folded into Trade Review
 
+## Planning correction: page internals come before final page topology
+
+The page-level verdicts above are provisional. The actual remediation must start by simplifying what each important page contains. Once each page has one clear job and a cleaner information hierarchy, the final navigation/page-removal decisions may change.
+
+This matters because a page that looks redundant today may become valuable after it is narrowed, while a page that looks essential today may become unnecessary after its only useful panels move to a better parent page.
+
 ## Remediation plan
+
+### Phase 0 — Per-page clutter audit and content refactor spec
+
+Before changing routes or deleting/demoting pages, audit the retained pages internally.
+
+For each page, define:
+- the one operator question it must answer;
+- the above-the-fold decision signals;
+- the sections that should stay visible;
+- the sections that should move behind details/advanced disclosure;
+- duplicate metrics that should link to the authoritative page instead of being repeated;
+- unique actions/data that must be preserved if the page is later merged or demoted.
+
+Priority order:
+1. Dashboard
+2. Recommendation plans / Trade Review
+3. Recommendation quality / Quality & Edge
+4. Broker orders / Execution & Risk
+5. Context review
+6. Data quality
+7. Run debugger
+8. Jobs / Watchlists / Settings
+9. Research home and tuning pages
+10. Ticker signals
+
+Acceptance: a written per-page content spec exists before route/nav changes; no page is removed based only on the current cluttered version of that page.
 
 ### Phase 1 — Make authority explicit without deleting capability
 
-- Update `operator-page-field-guide.md` and route labels so Dashboard, Trade Review, Quality & Edge, and Execution & Risk are the only daily pages.
-- Demote Docs, Settings, Watchlists, Jobs, tuning, debugger, and diagnostics into utility/advanced groups.
+- Update `operator-page-field-guide.md` and route labels so Dashboard, Trade Review, Quality & Edge, and Execution & Risk are the only daily pages, after Phase 0 confirms those boundaries still hold.
+- Demote Docs, Settings, Watchlists, Jobs, tuning, debugger, and diagnostics into utility/advanced groups only where the per-page audit says they are not daily decision surfaces.
 - Add page-level notices where a page is no longer authoritative, e.g. Research home points to Quality & Edge.
-- Acceptance: no route removed yet; no data loss; primary nav clearly answers daily performance questions.
+- Acceptance: no route removed yet; no data loss; primary nav clearly answers daily performance questions and reflects the page-internal refactor findings.
 
 ### Phase 2 — Collapse duplicate performance surfaces
 
