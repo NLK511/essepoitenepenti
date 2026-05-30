@@ -43,6 +43,7 @@ These define implemented product truth.
 - `observability-spec.md` — run correlation ids, structured observability events, health/debugger diagnostics, and cross-process log requirements
 - `lean-architecture-and-docs-reconciliation-plan.md` — remaining active plan to reduce over-engineering and reconcile the docs surface
 - `codebase-simplification-plan.md` — active behavior-preserving code refactor and dead-code audit plan
+- `ui-attention-audit-2026-05-30.md` — active plan to reduce UI attention waste while preserving performance, safety, and research capabilities
 - `dead-code-audit-2026-05-29.md` — latest compatibility/dead-code audit decisions
 - `audit-remediation-and-autonomy-readiness-plan.md` — umbrella active plan for audit findings, safety gates, migration confidence, and autonomy readiness
 - `audits/full-project-spec-code-audit-2026-05-29-post-remediation.md` — latest post-remediation full audit of spec/code/test coherence and autonomy readiness
