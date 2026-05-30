@@ -154,76 +154,24 @@ class RecommendationSignalGatingTuningService:
         strategy_settings = self.settings_domains.strategy_settings()
         threshold_before = strategy_settings.confidence_threshold
         active_tuning = strategy_settings.signal_gating
-        effective_created_after, sample_window_mode, latest_applied_run = self._effective_created_after(
-            created_after=created_after,
-            run_id=run_id,
-        )
-        samples = self.samples.list_samples(
+        effective_created_after, sample_window_mode, latest_applied_run = self._effective_created_after(created_after=created_after, run_id=run_id)
+        samples, plan_scored_samples, benchmark_scored_samples, benchmark_summary, scored_samples = self._scored_sample_window(
             ticker=ticker,
             run_id=run_id,
-            decision_type=decision_type,
-            review_priority=review_priority,
-            shortlisted=shortlisted,
             setup_family=setup_family,
             transmission_bias=transmission_bias,
             context_regime=context_regime,
+            review_priority=review_priority,
+            decision_type=decision_type,
+            shortlisted=shortlisted,
             created_after=effective_created_after,
             created_before=created_before,
             limit=limit,
+            sample_window_mode=sample_window_mode,
+            latest_applied_run=latest_applied_run,
         )
-        samples = self._filter_samples(
-            samples,
-            setup_family=setup_family,
-            transmission_bias=transmission_bias,
-            context_regime=context_regime,
-            created_after=effective_created_after,
-            created_before=created_before,
-        )
-        if not samples:
-            raise RecommendationSignalGatingTuningError("no decision samples available for signal gating tuning")
-
-        outcomes = self.outcomes.get_simulated_outcomes_by_plan_ids([sample.recommendation_plan_id for sample in samples if sample.recommendation_plan_id is not None])
-        plan_scored_samples = self._plan_scored_samples(samples, outcomes)
-        benchmark_scored_samples, benchmark_summary = self._benchmark_scored_samples(samples, plan_scored_samples)
-        scored_samples = [*plan_scored_samples, *benchmark_scored_samples]
-        if not scored_samples:
-            if sample_window_mode == "since_latest_applied" and latest_applied_run is not None:
-                boundary = latest_applied_run.completed_at or latest_applied_run.created_at
-                boundary_label = boundary.isoformat() if boundary is not None else "the latest applied tuning run"
-                raise RecommendationSignalGatingTuningError(
-                    f"no scoreable win/loss outcomes or benchmark follow-through found for signal gating tuning since {boundary_label}; try widening the date window or setting a larger manual limit"
-                )
-            raise RecommendationSignalGatingTuningError(
-                "no scoreable win/loss outcomes or benchmark follow-through found for the selected signal gating tuning sample window"
-            )
-
-        evaluated_candidates = [self._evaluate_candidate(scored_samples, config, threshold_before) for config in self._candidate_configs(active_tuning)]
-        evaluated_candidates.sort(
-            key=lambda item: (item.score, item.win_count, -item.false_positive_count, item.threshold),
-            reverse=True,
-        )
-        winner = evaluated_candidates[0]
-        baseline_config = SignalGatingTuningConfig(
-            threshold_offset=0.0,
-            confidence_adjustment=active_tuning["confidence_adjustment"],
-            near_miss_gap_cutoff=active_tuning["near_miss_gap_cutoff"],
-            shortlist_aggressiveness=active_tuning["shortlist_aggressiveness"],
-            degraded_penalty=active_tuning["degraded_penalty"],
-        )
-        baseline = self._evaluate_candidate(scored_samples, baseline_config, threshold_before)
-
-        applied_threshold = None
-        applied_config = None
-        if apply:
-            applied_threshold = round(winner.threshold, 2)
-            applied_config = self.settings_mutations.set_signal_gating_tuning_settings(
-                threshold_offset=str(winner.config.threshold_offset),
-                confidence_adjustment=str(winner.config.confidence_adjustment),
-                near_miss_gap_cutoff=str(winner.config.near_miss_gap_cutoff),
-                shortlist_aggressiveness=str(winner.config.shortlist_aggressiveness),
-                degraded_penalty=str(winner.config.degraded_penalty),
-            )["signal_gating_tuning"]
-            self.settings_mutations.set_confidence_threshold(str(applied_threshold))
+        evaluated_candidates, winner, baseline = self._rank_signal_gating_candidates(scored_samples, active_tuning, threshold_before)
+        applied_threshold, applied_config = self._apply_winning_signal_gating_config(winner, apply=apply)
 
         completed_at = datetime.now(timezone.utc)
         winner_dict = winner.to_dict()
@@ -308,6 +256,93 @@ class RecommendationSignalGatingTuningService:
             completed_at=completed_at,
         )
         return self.runs.create_run(run)
+
+    def _scored_sample_window(
+        self,
+        *,
+        ticker: str | None,
+        run_id: int | None,
+        setup_family: str | None,
+        transmission_bias: str | None,
+        context_regime: str | None,
+        review_priority: str | None,
+        decision_type: str | None,
+        shortlisted: bool | None,
+        created_after: datetime | None,
+        created_before: datetime | None,
+        limit: int | None,
+        sample_window_mode: str,
+        latest_applied_run: RecommendationSignalGatingTuningRun | None,
+    ):
+        samples = self.samples.list_samples(
+            ticker=ticker,
+            run_id=run_id,
+            decision_type=decision_type,
+            review_priority=review_priority,
+            shortlisted=shortlisted,
+            setup_family=setup_family,
+            transmission_bias=transmission_bias,
+            context_regime=context_regime,
+            created_after=created_after,
+            created_before=created_before,
+            limit=limit,
+        )
+        samples = self._filter_samples(
+            samples,
+            setup_family=setup_family,
+            transmission_bias=transmission_bias,
+            context_regime=context_regime,
+            created_after=created_after,
+            created_before=created_before,
+        )
+        if not samples:
+            raise RecommendationSignalGatingTuningError("no decision samples available for signal gating tuning")
+        outcomes = self.outcomes.get_simulated_outcomes_by_plan_ids([sample.recommendation_plan_id for sample in samples if sample.recommendation_plan_id is not None])
+        plan_scored_samples = self._plan_scored_samples(samples, outcomes)
+        benchmark_scored_samples, benchmark_summary = self._benchmark_scored_samples(samples, plan_scored_samples)
+        scored_samples = [*plan_scored_samples, *benchmark_scored_samples]
+        if scored_samples:
+            return samples, plan_scored_samples, benchmark_scored_samples, benchmark_summary, scored_samples
+        if sample_window_mode == "since_latest_applied" and latest_applied_run is not None:
+            boundary = latest_applied_run.completed_at or latest_applied_run.created_at
+            boundary_label = boundary.isoformat() if boundary is not None else "the latest applied tuning run"
+            raise RecommendationSignalGatingTuningError(
+                f"no scoreable win/loss outcomes or benchmark follow-through found for signal gating tuning since {boundary_label}; try widening the date window or setting a larger manual limit"
+            )
+        raise RecommendationSignalGatingTuningError(
+            "no scoreable win/loss outcomes or benchmark follow-through found for the selected signal gating tuning sample window"
+        )
+
+    def _rank_signal_gating_candidates(
+        self,
+        scored_samples,
+        active_tuning: dict[str, float],
+        threshold_before: float,
+    ):
+        evaluated_candidates = [self._evaluate_candidate(scored_samples, config, threshold_before) for config in self._candidate_configs(active_tuning)]
+        evaluated_candidates.sort(key=lambda item: (item.score, item.win_count, -item.false_positive_count, item.threshold), reverse=True)
+        baseline_config = SignalGatingTuningConfig(
+            threshold_offset=0.0,
+            confidence_adjustment=active_tuning["confidence_adjustment"],
+            near_miss_gap_cutoff=active_tuning["near_miss_gap_cutoff"],
+            shortlist_aggressiveness=active_tuning["shortlist_aggressiveness"],
+            degraded_penalty=active_tuning["degraded_penalty"],
+        )
+        return evaluated_candidates, evaluated_candidates[0], self._evaluate_candidate(scored_samples, baseline_config, threshold_before)
+
+    def _apply_winning_signal_gating_config(self, winner: SignalGatingCandidateResult, *, apply: bool):
+        if not apply:
+            return None, None
+        applied_threshold = round(winner.threshold, 2)
+        applied_config = self.settings_mutations.set_signal_gating_tuning_settings(
+            threshold_offset=str(winner.config.threshold_offset),
+            confidence_adjustment=str(winner.config.confidence_adjustment),
+            near_miss_gap_cutoff=str(winner.config.near_miss_gap_cutoff),
+            shortlist_aggressiveness=str(winner.config.shortlist_aggressiveness),
+            degraded_penalty=str(winner.config.degraded_penalty),
+        )["signal_gating_tuning"]
+        self.settings_mutations.set_confidence_threshold(str(applied_threshold))
+        return applied_threshold, applied_config
 
     def describe(self) -> dict[str, object]:
         latest = self.runs.get_latest_run()
