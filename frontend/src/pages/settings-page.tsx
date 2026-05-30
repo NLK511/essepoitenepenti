@@ -263,22 +263,26 @@ export function SettingsPage() {
   return (
     <>
       <PageHeader
-        kicker="Reference"
+        kicker="Configure"
         title="Settings"
-        subtitle="System setup, data ingestion, execution controls, and advanced research flags."
-        actions={<HelpHint tooltip="Settings is split into system setup, data ingestion, and advanced research controls." to="/docs?doc=operator-page-field-guide" />}
+        subtitle="System credentials, execution safety, provider controls, and advanced defaults."
+        actions={<HelpHint tooltip="Settings is for configuration, not performance review. Use Execution & Risk for broker audit and Quality & Edge for performance." to="/docs?doc=operator-page-field-guide" />}
       />
       {error ? <ErrorState message={error} /> : null}
       {notice ? <Card><div className="helper-text">{notice}</div></Card> : null}
       {!data && !error ? <LoadingState message="Loading settings…" /> : null}
       {data ? (
         <div className="stack-page">
-          <section className="metrics-grid">
-            <StatCard label="Pipeline health" value={data.preflight.status} helper="Current preflight status" />
-            <StatCard label="Summarization" value={settingMap.summary_backend ?? "news_digest"} helper="Active summary backend" />
-            <StatCard label="Advanced tuning automation" value={data.planGenerationTuning.settings.auto_enabled ? "on" : "off"} helper="Stored readiness flag for plan tuning" />
-            <StatCard label="Live tuning profile" value={data.planGenerationTuning.settings.active_config_version_id ?? "baseline"} helper="Current plan-generation config" />
-          </section>
+          <Card>
+            <SectionTitle kicker="Configuration status" title="What setup or safety control needs attention?" subtitle="The first screen shows required setup and execution safety only; research knobs stay lower on the page." />
+            <section className="metrics-grid top-gap-small">
+              <StatCard label="Pipeline health" value={data.preflight.status} helper="Current preflight status" />
+              <StatCard label="Broker execution" value={data.orderExecution.enabled ? "enabled" : "disabled"} helper={`${data.orderExecution.broker} · ${data.orderExecution.account_mode}`} />
+              <StatCard label="Risk manager" value={data.riskManagement.enabled ? (data.riskManagement.halt_enabled ? "halted" : "enabled") : "disabled"} helper={data.riskManagement.halt_reason || "Kill switch state and broker limits"} />
+              <StatCard label="Provider credentials" value={`${data.providers.filter((provider) => provider.api_key).length}/${data.providers.length}`} helper="Configured provider keys" />
+              <StatCard label="Summarization" value={settingMap.summary_backend ?? "news_digest"} helper="Active summary backend" />
+            </section>
+          </Card>
 
           <section className="card-grid">
             <DisclosureCard kicker="Summarization" title="Summary engine" subtitle="System and providers: choose the backend and local Pi CLI settings used for summaries before touching advanced controls." defaultOpen actions={<HelpHint tooltip="Summarization controls which backend and prompt shape context summaries." to="/docs?doc=operator-page-field-guide" />}>
@@ -377,7 +381,7 @@ export function SettingsPage() {
               </form>
             </DisclosureCard>
 
-            <DisclosureCard kicker="Execution audit" title="Recent broker orders" subtitle="Inspect the latest broker submissions, statuses, and per-order quantities." >
+            <DisclosureCard kicker="Execution audit" title="Recent broker orders" subtitle="Reference only. Use Execution & Risk for the authoritative broker audit and action-required queue." actions={<HelpHint tooltip="Execution & Risk owns broker exposure, order action queues, and full broker audit details." to="/docs?doc=alpaca-paper-order-execution-spec" />}>
               {data.brokerOrders.length === 0 ? (
                 <div className="helper-text top-gap-small">No broker orders recorded yet.</div>
               ) : (
@@ -410,7 +414,7 @@ export function SettingsPage() {
           </section>
 
           <section className="card-grid">
-            <DisclosureCard kicker="News ingestion" title="News fetch limits" subtitle="Data ingestion: adjust article limits for macro, industry, and ticker summarization paths before review pages render summaries." defaultOpen actions={<HelpHint tooltip="Article limits cap how much raw source material feeds each summarization path." to="/docs?doc=operator-page-field-guide" />}>
+            <DisclosureCard kicker="News ingestion" title="News fetch limits" subtitle="Data ingestion: adjust article limits for macro, industry, and ticker summarization paths before review pages render summaries." actions={<HelpHint tooltip="Article limits cap how much raw source material feeds each summarization path." to="/docs?doc=operator-page-field-guide" />}>
               <form className="stack-form" onSubmit={(event) => void saveNewsSettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span>Macro article limit</span><input name="macro_article_limit" defaultValue={settingMap.news_macro_article_limit ?? "12"} /></label>
@@ -439,7 +443,7 @@ export function SettingsPage() {
           </section>
 
           <section className="card-grid">
-            <DisclosureCard kicker="Evaluation realism" title="Slippage and friction" subtitle="Control the buffer and fees subtracted during trade evaluation to simulate real-world conditions." defaultOpen actions={<HelpHint tooltip="Realism buffers subtract slippage and fees to produce conservative, trustable backtest results." to="/docs?doc=operator-page-field-guide" />}>
+            <DisclosureCard kicker="Evaluation realism" title="Slippage and friction" subtitle="Control the buffer and fees subtracted during trade evaluation to simulate real-world conditions." actions={<HelpHint tooltip="Realism buffers subtract slippage and fees to produce conservative, trustable backtest results." to="/docs?doc=operator-page-field-guide" />}>
               <form className="stack-form" onSubmit={(event) => void saveEvaluationRealismSettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span>Stop loss buffer %</span><input name="stop_buffer_pct" type="number" step="0.001" defaultValue={String(data.evaluationRealism.stop_buffer_pct)} /></label>
