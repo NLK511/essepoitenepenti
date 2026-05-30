@@ -432,6 +432,22 @@ class RecommendationPlanRecord(Base, TimestampMixin):
     run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
 
 
+class FundamentalAnalysisSnapshotRecord(Base, TimestampMixin):
+    __tablename__ = "fundamental_analysis_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticker: Mapped[str] = mapped_column(String(32), index=True)
+    as_of: Mapped[datetime] = mapped_column(DateTime, index=True)
+    source_set_json: Mapped[str] = mapped_column(Text, default="[]")
+    coverage_status: Mapped[str] = mapped_column(String(32), default="degraded", index=True)
+    freshness_status: Mapped[str] = mapped_column(String(32), default="unknown", index=True)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    warnings_json: Mapped[str] = mapped_column(Text, default="[]")
+    missing_inputs_json: Mapped[str] = mapped_column(Text, default="[]")
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
+    run_id: Mapped[int | None] = mapped_column(ForeignKey("runs.id"), nullable=True, index=True)
+
+
 class RecommendationOutcomeRecord(Base, TimestampMixin):
     __tablename__ = "recommendation_outcomes"
     __table_args__ = (UniqueConstraint("recommendation_plan_id", name="uq_recommendation_outcomes_plan_id"),)

@@ -17,7 +17,7 @@ Success means:
 
 ## Phase 0 — design and fixtures
 
-Status: started. Target-behavior contract tests now live in `tests/test_fundamental_analysis_snapshots.py` and are marked strict xfail until implementation phases make them pass.
+Status: implemented for the initial backend slice. Contract tests live in `tests/test_fundamental_analysis_snapshots.py` and now pass for persistence, monitored ticker discovery, service normalization, event windows, refresh behavior, plan-context integration, validation-slice skeletons, and schedulable job type.
 
 Deliverables:
 - finalize normalized snapshot payload keys

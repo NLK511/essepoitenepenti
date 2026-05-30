@@ -63,7 +63,7 @@ def normalize_job_type(job_type: str | None) -> JobType:
             detail=(
                 "invalid job_type: use proposal_generation, recommendation_evaluation, "
                 "plan_generation_tuning, performance_assessment, "
-                "macro_context_refresh, industry_context_refresh, historical_replay, bars_data_refresh, or broker_steering"
+                "macro_context_refresh, industry_context_refresh, historical_replay, bars_data_refresh, broker_steering, or fundamental_analysis_refresh"
             ),
         ) from exc
 

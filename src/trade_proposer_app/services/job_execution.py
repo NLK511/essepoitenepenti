@@ -15,6 +15,7 @@ from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.bars_refresh import BarsRefreshService
 from trade_proposer_app.services.broker_position_steering_workflow import BrokerSteeringService
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
+from trade_proposer_app.services.fundamental_analysis_refresh import FundamentalAnalysisRefreshService
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
 from trade_proposer_app.services.macro_context_refresh import MacroContextRefreshService
@@ -50,6 +51,7 @@ class JobExecutionService:
         order_execution: OrderExecutionService | None = None,
         historical_replay: HistoricalReplayService | None = None,
         bars_refresh: BarsRefreshService | None = None,
+        fundamental_analysis_refresh: FundamentalAnalysisRefreshService | None = None,
     ) -> None:
         self.jobs = jobs
         self.runs = runs
@@ -65,6 +67,7 @@ class JobExecutionService:
         self.order_execution = order_execution
         self.historical_replay = historical_replay
         self.bars_refresh = bars_refresh
+        self.fundamental_analysis_refresh = fundamental_analysis_refresh
         self.observability = ObservabilityEventRepository(self.runs.session) if getattr(self.runs, "session", None) is not None else None
         if self.order_execution is None and getattr(self.runs, "session", None) is not None:
             from trade_proposer_app.services.builders import create_order_execution_service
@@ -140,6 +143,8 @@ class JobExecutionService:
             return self._execute_bars_data_refresh_run(run)
         if run.job_type == JobType.BROKER_STEERING:
             return self._execute_broker_steering_run(run)
+        if run.job_type == JobType.FUNDAMENTAL_ANALYSIS_REFRESH:
+            return self._execute_fundamental_analysis_refresh_run(run)
         raise RuntimeError(f"unsupported job_type execution: {run.job_type.value}")
 
     def _execute_proposal_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
@@ -700,6 +705,37 @@ class JobExecutionService:
         )
         timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
         self._finalize_success(run.id or 0, RunStatus.COMPLETED.value, timing, execution_started)
+        return [], timing
+
+    def _execute_fundamental_analysis_refresh_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
+        if self.fundamental_analysis_refresh is None:
+            if getattr(self.runs, "session", None) is None:
+                raise RuntimeError("fundamental analysis refresh service is not configured")
+            self.fundamental_analysis_refresh = FundamentalAnalysisRefreshService(self.runs.session)
+        execution_started = perf_counter()
+        timing: dict[str, object] = {
+            "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
+            "fundamental_analysis_refresh_seconds": 0.0,
+            "persistence_seconds": 0.0,
+            "finalize_seconds": 0.0,
+            "total_execution_seconds": 0.0,
+        }
+        refresh_started = perf_counter()
+        summary = self.fundamental_analysis_refresh.refresh_due_monitored_tickers(run_id=run.id, job_id=run.job_id)
+        timing["fundamental_analysis_refresh_seconds"] = round(perf_counter() - refresh_started, 6)
+        persistence_started = perf_counter()
+        run_summary = {
+            "mode": "fundamental_analysis_refresh",
+            "monitored_count": summary.get("monitored_count", 0),
+            "refreshed_count": summary.get("refreshed_count", 0),
+            "skipped_fresh_count": summary.get("skipped_fresh_count", 0),
+            "failed_count": summary.get("failed_count", 0),
+        }
+        self.runs.set_summary(run.id or 0, run_summary)
+        self.runs.set_artifact(run.id or 0, {"fundamental_analysis_refresh": summary})
+        timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
+        status = RunStatus.COMPLETED_WITH_WARNINGS.value if int(summary.get("failed_count", 0) or 0) else RunStatus.COMPLETED.value
+        self._finalize_success(run.id or 0, status, timing, execution_started)
         return [], timing
 
     def _execute_bars_data_refresh_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:

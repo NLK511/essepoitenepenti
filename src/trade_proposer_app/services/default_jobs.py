@@ -30,6 +30,12 @@ DEFAULT_BROKER_STEERING_JOB_SPEC = {
     "schedule_rationale": "Runs a conservative dry-run steering pass periodically so decision audits stay fresh before live enablement.",
 }
 
+DEFAULT_FUNDAMENTAL_ANALYSIS_JOB_SPEC = {
+    "name": "Auto: Fundamental Analysis Monthly",
+    "cron": "15 07 1 * *",
+    "schedule_rationale": "Refreshes point-in-time fundamental snapshots for monitored tickers monthly; event-aware refresh logic can refresh due event-window tickers earlier when the job runs.",
+}
+
 
 def ensure_default_recommendation_evaluation_jobs(session) -> list[dict[str, str]]:
     job_repo = JobRepository(session)
@@ -48,6 +54,18 @@ def ensure_default_broker_steering_job(session) -> dict[str, str]:
         JobType.BROKER_STEERING,
     )
     return DEFAULT_BROKER_STEERING_JOB_SPEC
+
+
+def ensure_default_fundamental_analysis_job(session) -> dict[str, str]:
+    job_repo = JobRepository(session)
+    _ensure_job(
+        job_repo,
+        session,
+        DEFAULT_FUNDAMENTAL_ANALYSIS_JOB_SPEC["name"],
+        DEFAULT_FUNDAMENTAL_ANALYSIS_JOB_SPEC["cron"],
+        JobType.FUNDAMENTAL_ANALYSIS_REFRESH,
+    )
+    return DEFAULT_FUNDAMENTAL_ANALYSIS_JOB_SPEC
 
 
 def _ensure_job(repo: JobRepository, session, job_name: str, cron: str, job_type: JobType) -> None:

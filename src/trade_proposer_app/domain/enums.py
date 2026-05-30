@@ -22,6 +22,7 @@ class JobType(StrEnum):
     HISTORICAL_REPLAY = "historical_replay"
     BARS_DATA_REFRESH = "bars_data_refresh"
     BROKER_STEERING = "broker_steering"
+    FUNDAMENTAL_ANALYSIS_REFRESH = "fundamental_analysis_refresh"
 
     @classmethod
     def parse(cls, value: str | "JobType") -> "JobType":

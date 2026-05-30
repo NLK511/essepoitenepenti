@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -57,7 +56,6 @@ def _full_provider_payload() -> dict[str, object]:
     }
 
 
-@pytest.mark.xfail(strict=True, reason="fundamental snapshot persistence target behavior is not implemented yet")
 def test_fundamental_snapshot_repository_round_trips_immutable_point_in_time_records() -> None:
     from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
 
@@ -98,7 +96,6 @@ def test_fundamental_snapshot_repository_round_trips_immutable_point_in_time_rec
     assert second["warnings"] == ["price target unavailable"]
 
 
-@pytest.mark.xfail(strict=True, reason="monitored ticker discovery target behavior is not implemented yet")
 def test_monitored_ticker_discovery_merges_watchlists_and_active_broker_exposure() -> None:
     from trade_proposer_app.services.monitored_tickers import MonitoredTickerService
 
@@ -109,25 +106,27 @@ def test_monitored_ticker_discovery_merges_watchlists_and_active_broker_exposure
     positions.create(
         BrokerPosition(
             ticker="AAPL",
+            broker_order_execution_id=1,
             recommendation_plan_id=1,
-            broker_position_id="pos-aapl",
+            action="long",
             side="long",
             status="closing",
             quantity=1,
             current_quantity=1,
-            average_entry_price=100.0,
+            entry_avg_price=100.0,
         )
     )
     positions.create(
         BrokerPosition(
             ticker="NVDA",
+            broker_order_execution_id=2,
             recommendation_plan_id=2,
-            broker_position_id="pos-nvda",
+            action="long",
             side="long",
             status="open",
             quantity=1,
             current_quantity=1,
-            average_entry_price=100.0,
+            entry_avg_price=100.0,
         )
     )
 
@@ -140,7 +139,6 @@ def test_monitored_ticker_discovery_merges_watchlists_and_active_broker_exposure
     assert provenance["NVDA"] == {"broker_position"}
 
 
-@pytest.mark.xfail(strict=True, reason="fundamental analysis service target behavior is not implemented yet")
 def test_fundamental_analysis_service_normalizes_provider_payload_without_positive_confidence() -> None:
     from trade_proposer_app.services.fundamental_analysis import FundamentalAnalysisService
 
@@ -163,7 +161,6 @@ def test_fundamental_analysis_service_normalizes_provider_payload_without_positi
     assert snapshot.payload.get("confidence_contribution", {}).get("positive_boost", 0.0) == 0.0
 
 
-@pytest.mark.xfail(strict=True, reason="event-aware fundamental refresh target behavior is not implemented yet")
 def test_fundamental_analysis_service_classifies_event_windows() -> None:
     from trade_proposer_app.services.fundamental_analysis import FundamentalAnalysisService
 
@@ -177,7 +174,6 @@ def test_fundamental_analysis_service_classifies_event_windows() -> None:
     assert service.event_regime(payload, as_of=earnings_at + timedelta(days=7)) == "post_event"
 
 
-@pytest.mark.xfail(strict=True, reason="fundamental refresh job target behavior is not implemented yet")
 def test_fundamental_refresh_job_refreshes_due_and_event_window_tickers_only() -> None:
     from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
     from trade_proposer_app.services.fundamental_analysis_refresh import FundamentalAnalysisRefreshService
@@ -200,7 +196,6 @@ def test_fundamental_refresh_job_refreshes_due_and_event_window_tickers_only() -
     assert summary["skipped_fresh_count"] == 1
 
 
-@pytest.mark.xfail(strict=True, reason="fundamental snapshot plan integration target behavior is not implemented yet")
 def test_plan_generation_uses_latest_fundamental_snapshot_at_or_before_plan_time_without_boosting_confidence() -> None:
     from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
     from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
@@ -221,7 +216,6 @@ def test_plan_generation_uses_latest_fundamental_snapshot_at_or_before_plan_time
     assert context["confidence"] == 70.0
 
 
-@pytest.mark.xfail(strict=True, reason="fundamental validation slices target behavior is not implemented yet")
 def test_fundamental_validation_slices_report_sparse_counts_and_effective_outcomes() -> None:
     from trade_proposer_app.services.fundamental_validation_slices import FundamentalValidationSliceService
 
@@ -248,13 +242,12 @@ def test_fundamental_validation_slices_report_sparse_counts_and_effective_outcom
         assert slice_payload["uses_effective_outcomes"] is True
 
 
-@pytest.mark.xfail(strict=True, reason="fundamental job type target behavior is not implemented yet")
 def test_fundamental_refresh_job_type_is_schedulable() -> None:
     session = create_session()
     jobs = JobRepository(session)
     runs = RunRepository(session)
 
-    job = jobs.create("Auto: Fundamental Analysis Monthly", [], None, job_type=JobType.FUNDAMENTAL_ANALYSIS_REFRESH, schedule="15 07 1 * *", enabled=True)
+    job = jobs.create("Auto: Fundamental Analysis Monthly", [], "15 07 1 * *", job_type=JobType.FUNDAMENTAL_ANALYSIS_REFRESH, enabled=True)
     run = runs.enqueue(job.id or 0)
 
     assert job.job_type == JobType.FUNDAMENTAL_ANALYSIS_REFRESH

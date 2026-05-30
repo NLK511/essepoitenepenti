@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Any
 
 import math
@@ -9,6 +10,7 @@ import pandas as pd
 
 from trade_proposer_app.domain.enums import RecommendationDirection, RecommendationState, StrategyHorizon
 from trade_proposer_app.domain.models import Recommendation, RunDiagnostics, RunOutput
+from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
 from trade_proposer_app.services.market_intelligence import MarketIntelligenceService
 from trade_proposer_app.services.payload_utils import sanitize_for_json
 from trade_proposer_app.services.proposals import ProposalExecutionError, ProposalService
@@ -28,6 +30,7 @@ class TickerDeepAnalysisService:
         *,
         taxonomy_service: TickerTaxonomyService | None = None,
         market_intelligence_service: MarketIntelligenceService | None = None,
+        fundamental_snapshots: FundamentalAnalysisSnapshotRepository | None = None,
         model_name: str = "ticker_deep_analysis_v2",
     ) -> None:
         self.proposal_service = proposal_service
@@ -35,6 +38,7 @@ class TickerDeepAnalysisService:
         self.model_name = model_name
         self.technical_features = TickerTechnicalFeatureService()
         self.market_intelligence_service = market_intelligence_service or MarketIntelligenceService()
+        self.fundamental_snapshots = fundamental_snapshots
         self.analysis_payloads = TickerAnalysisPayloadService(
             macro_context_score=self._macro_context_score,
             macro_context_label=self._macro_context_label,
@@ -57,6 +61,7 @@ class TickerDeepAnalysisService:
             context["price_history_diagnostics"] = dict(getattr(self.proposal_service, "_last_price_history_fetch_diagnostics", {}) or {})
             context = self._apply_context_enrichment(context, normalized_ticker, as_of=as_of)
             context = self._apply_market_intelligence(context, normalized_ticker, as_of=as_of, horizon=horizon)
+            context = self._apply_fundamental_snapshot(context, normalized_ticker, as_of=as_of, horizon=horizon)
             context = self._apply_support_aliases(context)
             context = self._apply_taxonomy_profile(context, normalized_ticker)
             context.update(self._build_reference_features(normalized_ticker, history, context.get("ticker_profile", {}), as_of=as_of))
@@ -153,6 +158,39 @@ class TickerDeepAnalysisService:
         if callable(apply_news_context):
             return apply_news_context(context, ticker, as_of=as_of)
         return context
+
+    def _apply_fundamental_snapshot(self, context: dict[str, Any], ticker: str, *, as_of: datetime | None = None, horizon: StrategyHorizon | None = None) -> dict[str, Any]:
+        if self.fundamental_snapshots is None:
+            return context
+        snapshot = self.fundamental_snapshots.get_latest_at_or_before(ticker, as_of or datetime.now(timezone.utc))
+        enriched = dict(context)
+        problems = list(enriched.get("problems", []) or []) if isinstance(enriched.get("problems", []), list) else []
+        if snapshot is None:
+            problems.append("fundamental snapshot missing")
+            enriched["problems"] = list(dict.fromkeys(problems))
+            enriched["fundamental_snapshot_missing"] = True
+            return enriched
+        payload = snapshot.get("payload") if isinstance(snapshot.get("payload"), dict) else {}
+        feature_buckets = payload.get("feature_buckets") if isinstance(payload.get("feature_buckets"), dict) else {}
+        enriched["fundamental_snapshot"] = {
+            "id": snapshot.get("id"),
+            "ticker": snapshot.get("ticker"),
+            "as_of": snapshot.get("as_of").isoformat() if hasattr(snapshot.get("as_of"), "isoformat") else snapshot.get("as_of"),
+            "coverage_status": snapshot.get("coverage_status"),
+            "freshness_status": snapshot.get("freshness_status"),
+            "payload": payload,
+        }
+        enriched["fundamental_snapshot_id"] = snapshot.get("id")
+        enriched["fundamental_snapshot_as_of"] = enriched["fundamental_snapshot"]["as_of"]
+        enriched["fundamental_coverage_status"] = snapshot.get("coverage_status")
+        enriched["fundamental_feature_buckets"] = feature_buckets
+        warnings = snapshot.get("warnings") if isinstance(snapshot.get("warnings"), list) else []
+        for warning in warnings:
+            problems.append(f"fundamental: {warning}")
+        if snapshot.get("coverage_status") in {"degraded", "blocked"}:
+            problems.append(f"fundamental snapshot coverage is {snapshot.get('coverage_status')}")
+        enriched["problems"] = list(dict.fromkeys([str(item) for item in problems if item]))
+        return enriched
 
     def _apply_market_intelligence(self, context: dict[str, Any], ticker: str, *, as_of: datetime | None = None, horizon: StrategyHorizon | None = None) -> dict[str, Any]:
         if self.market_intelligence_service is None:
