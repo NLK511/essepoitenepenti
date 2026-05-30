@@ -40,110 +40,136 @@ class PlanResolutionEngine:
         effective_action = intended_action if plan.action in {"no_action", "watchlist"} and intended_action in {"long", "short"} else plan.action
 
         if effective_action not in {"long", "short"}:
-            return RecommendationPlanOutcome(
-                recommendation_plan_id=plan.id or 0,
-                ticker=plan.ticker,
-                action=plan.action,
-                outcome=plan.action,
-                status="resolved",
-                evaluated_at=datetime.now(timezone.utc),
-                confidence_bucket=confidence_bucket,
-                setup_family=setup_family,
-                notes="Non-trade action preserved as a first-class evaluated outcome.",
-                run_id=run_id,
-            )
+            return self._non_trade_outcome(plan, setup_family=setup_family, confidence_bucket=confidence_bucket, run_id=run_id)
         if price_data is None or price_data.empty:
-            return RecommendationPlanOutcome(
-                recommendation_plan_id=plan.id or 0,
-                ticker=plan.ticker,
-                action=plan.action,
-                outcome="pending",
-                status="open",
-                evaluated_at=datetime.now(timezone.utc),
-                confidence_bucket=confidence_bucket,
+            return self._pending_outcome(
+                plan,
                 setup_family=setup_family,
-                notes="No price history available for evaluation.",
+                confidence_bucket=confidence_bucket,
                 run_id=run_id,
+                notes="No price history available for evaluation.",
             )
 
         sliced = self.rows_on_or_after(price_data, plan.computed_at, intraday_only=intraday_only)
         if sliced.empty:
-            return RecommendationPlanOutcome(
-                recommendation_plan_id=plan.id or 0,
-                ticker=plan.ticker,
-                action=plan.action,
-                outcome="pending",
-                status="open",
-                evaluated_at=datetime.now(timezone.utc),
-                confidence_bucket=confidence_bucket,
+            return self._pending_outcome(
+                plan,
                 setup_family=setup_family,
-                notes="No post-plan price bars available yet.",
+                confidence_bucket=confidence_bucket,
                 run_id=run_id,
+                notes="No post-plan price bars available yet.",
             )
 
         entry_reference = self.entry_reference(plan)
         entry_index = self.find_entry_index(plan, sliced)
         if entry_index is None:
-            horizon_1d = self.horizon_return(effective_action, sliced, 1, entry_reference)
-            horizon_3d = self.horizon_return(effective_action, sliced, 3, entry_reference)
-            horizon_5d = self.horizon_return(effective_action, sliced, 5, entry_reference)
-            direction_worked = self.direction_correct_from_horizons(horizon_1d, horizon_3d, horizon_5d)
-            entry_miss_distance_percent = self.entry_miss_distance_percent(plan, sliced, entry_reference)
-            near_entry_miss = (
-                entry_miss_distance_percent is not None
-                and entry_miss_distance_percent <= self.config.near_entry_miss_threshold_percent
-            )
-            notes = "Entry zone has not been touched yet."
-            if near_entry_miss and direction_worked:
-                notes += " Price came very close to entry and still moved in the forecasted direction."
-            elif near_entry_miss:
-                notes += " Price came very close to entry without filling."
-            return RecommendationPlanOutcome(
-                recommendation_plan_id=plan.id or 0,
-                ticker=plan.ticker,
-                action=plan.action,
-                outcome="phantom_no_entry" if plan.action in {"no_action", "watchlist"} else "no_entry",
-                status="open",
-                evaluated_at=self.last_timestamp(sliced) or datetime.now(timezone.utc),
-                entry_touched=False,
-                horizon_return_1d=horizon_1d,
-                horizon_return_3d=horizon_3d,
-                horizon_return_5d=horizon_5d,
-                entry_miss_distance_percent=entry_miss_distance_percent,
-                near_entry_miss=near_entry_miss,
-                direction_worked_without_entry=direction_worked,
-                direction_correct=direction_worked,
+            return self._no_entry_outcome(
+                plan,
+                effective_action=effective_action,
+                sliced=sliced,
+                entry_reference=entry_reference,
                 confidence_bucket=confidence_bucket,
                 setup_family=setup_family,
-                notes=notes,
                 run_id=run_id,
             )
 
-        active = sliced.iloc[entry_index:]
+        return self._entered_outcome(
+            plan,
+            effective_action=effective_action,
+            active=sliced.iloc[entry_index:],
+            entry_reference=entry_reference,
+            confidence_bucket=confidence_bucket,
+            setup_family=setup_family,
+            run_id=run_id,
+        )
+
+    def _non_trade_outcome(self, plan: RecommendationPlan, *, setup_family: str, confidence_bucket: str, run_id: int | None) -> RecommendationPlanOutcome:
+        return RecommendationPlanOutcome(
+            recommendation_plan_id=plan.id or 0,
+            ticker=plan.ticker,
+            action=plan.action,
+            outcome=plan.action,
+            status="resolved",
+            evaluated_at=datetime.now(timezone.utc),
+            confidence_bucket=confidence_bucket,
+            setup_family=setup_family,
+            notes="Non-trade action preserved as a first-class evaluated outcome.",
+            run_id=run_id,
+        )
+
+    def _pending_outcome(self, plan: RecommendationPlan, *, setup_family: str, confidence_bucket: str, run_id: int | None, notes: str) -> RecommendationPlanOutcome:
+        return RecommendationPlanOutcome(
+            recommendation_plan_id=plan.id or 0,
+            ticker=plan.ticker,
+            action=plan.action,
+            outcome="pending",
+            status="open",
+            evaluated_at=datetime.now(timezone.utc),
+            confidence_bucket=confidence_bucket,
+            setup_family=setup_family,
+            notes=notes,
+            run_id=run_id,
+        )
+
+    def _no_entry_outcome(
+        self,
+        plan: RecommendationPlan,
+        *,
+        effective_action: str,
+        sliced: pd.DataFrame,
+        entry_reference: float,
+        confidence_bucket: str,
+        setup_family: str,
+        run_id: int | None,
+    ) -> RecommendationPlanOutcome:
+        horizon_1d = self.horizon_return(effective_action, sliced, 1, entry_reference)
+        horizon_3d = self.horizon_return(effective_action, sliced, 3, entry_reference)
+        horizon_5d = self.horizon_return(effective_action, sliced, 5, entry_reference)
+        direction_worked = self.direction_correct_from_horizons(horizon_1d, horizon_3d, horizon_5d)
+        entry_miss_distance_percent = self.entry_miss_distance_percent(plan, sliced, entry_reference)
+        near_entry_miss = entry_miss_distance_percent is not None and entry_miss_distance_percent <= self.config.near_entry_miss_threshold_percent
+        notes = "Entry zone has not been touched yet."
+        if near_entry_miss and direction_worked:
+            notes += " Price came very close to entry and still moved in the forecasted direction."
+        elif near_entry_miss:
+            notes += " Price came very close to entry without filling."
+        return RecommendationPlanOutcome(
+            recommendation_plan_id=plan.id or 0,
+            ticker=plan.ticker,
+            action=plan.action,
+            outcome="phantom_no_entry" if plan.action in {"no_action", "watchlist"} else "no_entry",
+            status="open",
+            evaluated_at=self.last_timestamp(sliced) or datetime.now(timezone.utc),
+            entry_touched=False,
+            horizon_return_1d=horizon_1d,
+            horizon_return_3d=horizon_3d,
+            horizon_return_5d=horizon_5d,
+            entry_miss_distance_percent=entry_miss_distance_percent,
+            near_entry_miss=near_entry_miss,
+            direction_worked_without_entry=direction_worked,
+            direction_correct=direction_worked,
+            confidence_bucket=confidence_bucket,
+            setup_family=setup_family,
+            notes=notes,
+            run_id=run_id,
+        )
+
+    def _entered_outcome(
+        self,
+        plan: RecommendationPlan,
+        *,
+        effective_action: str,
+        active: pd.DataFrame,
+        entry_reference: float,
+        confidence_bucket: str,
+        setup_family: str,
+        run_id: int | None,
+    ) -> RecommendationPlanOutcome:
         first_stop_hit, first_take_hit, decisive_timestamp = self.resolve_exit(effective_action, plan, active)
-        realized_holding = self.realized_holding_days(plan.computed_at, decisive_timestamp or self.last_timestamp(active))
-        mfe = self.max_favorable_excursion(effective_action, active, entry_reference)
-        mae = self.max_adverse_excursion(effective_action, active, entry_reference)
         horizon_1d = self.horizon_return(effective_action, active, 1, entry_reference)
         horizon_3d = self.horizon_return(effective_action, active, 3, entry_reference)
         horizon_5d = self.horizon_return(effective_action, active, 5, entry_reference)
-        direction_correct = self.direction_correct_from_horizons(horizon_1d, horizon_3d, horizon_5d)
-        outcome = "phantom_pending" if plan.action in {"no_action", "watchlist"} else "open"
-        status = "open"
-        notes = "Entry touched; waiting for stop, take, or more bars."
-        if first_take_hit and not first_stop_hit:
-            outcome = "phantom_win" if plan.action in {"no_action", "watchlist"} else "win"
-            status = "resolved"
-            notes = "Take profit was reached before stop loss."
-        elif first_stop_hit and not first_take_hit:
-            outcome = "phantom_loss" if plan.action in {"no_action", "watchlist"} else "loss"
-            status = "resolved"
-            notes = "Stop loss was reached before take profit."
-        elif first_stop_hit and first_take_hit:
-            outcome = "phantom_loss" if plan.action in {"no_action", "watchlist"} else "loss"
-            status = "resolved"
-            notes = "Stop loss and take profit were both touched on the same bar; conservative resolution marked as loss."
-
+        outcome, status, notes = self._entered_outcome_state(plan, first_stop_hit=first_stop_hit, first_take_hit=first_take_hit)
         return RecommendationPlanOutcome(
             recommendation_plan_id=plan.id or 0,
             ticker=plan.ticker,
@@ -157,15 +183,26 @@ class PlanResolutionEngine:
             horizon_return_1d=horizon_1d,
             horizon_return_3d=horizon_3d,
             horizon_return_5d=horizon_5d,
-            max_favorable_excursion=mfe,
-            max_adverse_excursion=mae,
-            realized_holding_period_days=realized_holding,
-            direction_correct=direction_correct,
+            max_favorable_excursion=self.max_favorable_excursion(effective_action, active, entry_reference),
+            max_adverse_excursion=self.max_adverse_excursion(effective_action, active, entry_reference),
+            realized_holding_period_days=self.realized_holding_days(plan.computed_at, decisive_timestamp or self.last_timestamp(active)),
+            direction_correct=self.direction_correct_from_horizons(horizon_1d, horizon_3d, horizon_5d),
             confidence_bucket=confidence_bucket,
             setup_family=setup_family,
             notes=notes,
             run_id=run_id,
         )
+
+    @staticmethod
+    def _entered_outcome_state(plan: RecommendationPlan, *, first_stop_hit: bool, first_take_hit: bool) -> tuple[str, str, str]:
+        phantom = plan.action in {"no_action", "watchlist"}
+        if first_take_hit and not first_stop_hit:
+            return ("phantom_win" if phantom else "win", "resolved", "Take profit was reached before stop loss.")
+        if first_stop_hit and not first_take_hit:
+            return ("phantom_loss" if phantom else "loss", "resolved", "Stop loss was reached before take profit.")
+        if first_stop_hit and first_take_hit:
+            return ("phantom_loss" if phantom else "loss", "resolved", "Stop loss and take profit were both touched on the same bar; conservative resolution marked as loss.")
+        return ("phantom_pending" if phantom else "open", "open", "Entry touched; waiting for stop, take, or more bars.")
 
     def resolve_exit(self, effective_action: str, plan: RecommendationPlan, data: pd.DataFrame) -> tuple[bool, bool, datetime | None]:
         stop_buffer = self.config.stop_buffer_pct / 100.0

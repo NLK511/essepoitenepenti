@@ -56,6 +56,10 @@ Do not delete until references and tests prove safe:
 - legacy provider observability compatibility events
 - legacy proposal helper paths still imported by tests/compatibility callers
 
+7. **Plan resolution engine**
+   - Problem: `PlanResolutionEngine.evaluate_plan` mixed setup classification, missing-data handling, no-entry diagnostics, entered-position resolution, and outcome construction.
+   - Done now: extracted non-trade, pending, no-entry, entered, and entered-state outcome builders while preserving canonical resolution semantics.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.
