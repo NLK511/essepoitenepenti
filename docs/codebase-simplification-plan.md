@@ -120,6 +120,10 @@ Do not delete until references and tests prove safe:
    - Problem: `TickerDeepAnalysisService._build_transmission_analysis` mixed context extraction, catalyst intensity, event relevance, alignment math, bias classification, driver/tag/channel selection, and payload construction.
    - Done now: extracted transmission inputs, catalyst intensity, event strengths, alignment-percent math, and bias classification while preserving payload fields and scoring formulas.
 
+23. **Ticker relationship taxonomy assembly**
+   - Problem: `TickerTaxonomyService.get_ticker_relationships` mixed dedupe/effectivity handling, peer/supplier/customer edges, classification edges, and macro-channel edges inline.
+   - Done now: extracted relationship insertion/dedupe plus peer, classification, and macro relationship builders while preserving relationship payloads and scores.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.

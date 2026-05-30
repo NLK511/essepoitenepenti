@@ -977,23 +977,36 @@ class TickerTaxonomyService:
         industry_profile = self.get_industry_profile(ticker)
         relationships: list[dict[str, Any]] = []
         seen: set[tuple[str, str, str, str, str]] = set()
+        for relationship in self._ticker_peer_relationships(profile):
+            self._add_ticker_relationship(relationships, seen, as_of, relationship)
+        for relationship in self._ticker_classification_relationships(profile, industry_profile):
+            self._add_ticker_relationship(relationships, seen, as_of, relationship)
+        for relationship in self._ticker_macro_relationships(profile, industry_profile):
+            self._add_ticker_relationship(relationships, seen, as_of, relationship)
+        return relationships
 
-        def add_relationship(relationship: dict[str, Any]) -> None:
-            key = (
-                str(relationship.get("source", "")),
-                str(relationship.get("type", "")),
-                str(relationship.get("target_kind", "")),
-                str(relationship.get("target", "")),
-                str(relationship.get("channel", "")),
-            )
-            if key in seen:
-                return
-            if not self._relationship_is_effective(relationship, as_of):
-                return
-            seen.add(key)
-            relationship["relationship_score"] = self._relationship_score(relationship)
-            relationships.append(relationship)
+    def _add_ticker_relationship(
+        self,
+        relationships: list[dict[str, Any]],
+        seen: set[tuple[str, str, str, str, str]],
+        as_of: object | None,
+        relationship: dict[str, Any],
+    ) -> None:
+        key = (
+            str(relationship.get("source", "")),
+            str(relationship.get("type", "")),
+            str(relationship.get("target_kind", "")),
+            str(relationship.get("target", "")),
+            str(relationship.get("channel", "")),
+        )
+        if key in seen or not self._relationship_is_effective(relationship, as_of):
+            return
+        seen.add(key)
+        relationship["relationship_score"] = self._relationship_score(relationship)
+        relationships.append(relationship)
 
+    def _ticker_peer_relationships(self, profile: dict[str, Any]) -> list[dict[str, Any]]:
+        relationships: list[dict[str, Any]] = []
         mapping = (
             ("peers", "peer_of", "competitive_position", "peer read-through and competitive positioning"),
             ("suppliers", "supplier_to", "supply_chain", "supplier and component dependency"),
@@ -1002,121 +1015,68 @@ class TickerTaxonomyService:
         for field, relation_type, channel, note in mapping:
             for target in self._normalize_ticker_list(profile.get(field)):
                 target_profile = self.get_ticker_profile(target)
-                add_relationship(
-                    {
-                        "source": profile["ticker"],
-                        "source_label": profile.get("company_name", profile["ticker"]),
-                        "type": relation_type,
-                        "type_label": self.get_relationship_type_definition(relation_type).get("label", relation_type.replace("_", " ")),
-                        "target": target,
-                        "target_kind": "ticker",
-                        "target_kind_label": self.get_relationship_target_kind_definition("ticker").get("label", "ticker"),
-                        "target_label": target_profile.get("company_name", target),
-                        "target_industry": target_profile.get("industry", ""),
-                        "channel": channel,
-                        "channel_label": self.get_transmission_channel_definition(channel).get("label", channel.replace("_", " ")),
-                        "direction": "mixed",
-                        "mechanism": channel,
-                        "confidence": "medium",
-                        "confidence_score": 0.65,
-                        "provenance": "curated",
-                        "valid_from": "",
-                        "valid_to": "",
-                        "state_condition": "",
-                        "strength": "medium",
-                        "note": note,
-                    }
-                )
+                relationships.append({
+                    "source": profile["ticker"],
+                    "source_label": profile.get("company_name", profile["ticker"]),
+                    "type": relation_type,
+                    "type_label": self.get_relationship_type_definition(relation_type).get("label", relation_type.replace("_", " ")),
+                    "target": target,
+                    "target_kind": "ticker",
+                    "target_kind_label": self.get_relationship_target_kind_definition("ticker").get("label", "ticker"),
+                    "target_label": target_profile.get("company_name", target),
+                    "target_industry": target_profile.get("industry", ""),
+                    "channel": channel,
+                    "channel_label": self.get_transmission_channel_definition(channel).get("label", channel.replace("_", " ")),
+                    "direction": "mixed",
+                    "mechanism": channel,
+                    "confidence": "medium",
+                    "confidence_score": 0.65,
+                    "provenance": "curated",
+                    "valid_from": "",
+                    "valid_to": "",
+                    "state_condition": "",
+                    "strength": "medium",
+                    "note": note,
+                })
+        return relationships
 
+    def _ticker_classification_relationships(self, profile: dict[str, Any], industry_profile: dict[str, Any]) -> list[dict[str, Any]]:
+        relationships: list[dict[str, Any]] = []
         industry_key = self._subject_key_for_input(str(profile.get("industry", "")))
         if industry_key in self._industries:
-            add_relationship(
-                {
-                    "source": profile["ticker"],
-                    "source_label": profile.get("company_name", profile["ticker"]),
-                    "type": "belongs_to_industry",
-                    "type_label": self.get_relationship_type_definition("belongs_to_industry").get("label", "belongs to industry"),
-                    "target": industry_key,
-                    "target_kind": "industry",
-                    "target_kind_label": self.get_relationship_target_kind_definition("industry").get("label", "industry"),
-                    "target_label": industry_profile.get("subject_label") or industry_profile.get("industry") or industry_key.replace("_", " "),
-                    "channel": "",
-                    "channel_label": "",
-                    "direction": "mixed",
-                    "mechanism": "classification",
-                    "confidence": "high",
-                    "confidence_score": 0.9,
-                    "provenance": "curated",
-                    "valid_from": "",
-                    "valid_to": "",
-                    "state_condition": "",
-                    "strength": "structural",
-                    "note": "ticker industry classification edge",
-                }
-            )
-
+            relationships.append({
+                "source": profile["ticker"], "source_label": profile.get("company_name", profile["ticker"]), "type": "belongs_to_industry",
+                "type_label": self.get_relationship_type_definition("belongs_to_industry").get("label", "belongs to industry"), "target": industry_key,
+                "target_kind": "industry", "target_kind_label": self.get_relationship_target_kind_definition("industry").get("label", "industry"),
+                "target_label": industry_profile.get("subject_label") or industry_profile.get("industry") or industry_key.replace("_", " "), "channel": "", "channel_label": "",
+                "direction": "mixed", "mechanism": "classification", "confidence": "high", "confidence_score": 0.9, "provenance": "curated", "valid_from": "", "valid_to": "", "state_condition": "", "strength": "structural", "note": "ticker industry classification edge",
+            })
         sector_key = str(industry_profile.get("sector_definition", {}).get("key", "")).strip()
         if sector_key in self._sectors:
-            add_relationship(
-                {
-                    "source": profile["ticker"],
-                    "source_label": profile.get("company_name", profile["ticker"]),
-                    "type": "belongs_to_sector",
-                    "type_label": self.get_relationship_type_definition("belongs_to_sector").get("label", "belongs to sector"),
-                    "target": sector_key,
-                    "target_kind": "sector",
-                    "target_kind_label": self.get_relationship_target_kind_definition("sector").get("label", "sector"),
-                    "target_label": industry_profile.get("sector_definition", {}).get("label") or sector_key.replace("_", " "),
-                    "channel": "",
-                    "channel_label": "",
-                    "direction": "mixed",
-                    "mechanism": "classification",
-                    "confidence": "high",
-                    "confidence_score": 0.9,
-                    "provenance": "curated",
-                    "valid_from": "",
-                    "valid_to": "",
-                    "state_condition": "",
-                    "strength": "structural",
-                    "note": "ticker sector classification edge",
-                }
-            )
+            relationships.append({
+                "source": profile["ticker"], "source_label": profile.get("company_name", profile["ticker"]), "type": "belongs_to_sector",
+                "type_label": self.get_relationship_type_definition("belongs_to_sector").get("label", "belongs to sector"), "target": sector_key,
+                "target_kind": "sector", "target_kind_label": self.get_relationship_target_kind_definition("sector").get("label", "sector"),
+                "target_label": industry_profile.get("sector_definition", {}).get("label") or sector_key.replace("_", " "), "channel": "", "channel_label": "",
+                "direction": "mixed", "mechanism": "classification", "confidence": "high", "confidence_score": 0.9, "provenance": "curated", "valid_from": "", "valid_to": "", "state_condition": "", "strength": "structural", "note": "ticker sector classification edge",
+            })
+        return relationships
 
-        macro_terms = list(
-            dict.fromkeys(
-                self._normalize_macro_channel_values(profile.get("macro_sensitivity"))
-                + self._normalize_macro_channel_values(industry_profile.get("macro_sensitivity"))
-            )
-        )
+    def _ticker_macro_relationships(self, profile: dict[str, Any], industry_profile: dict[str, Any]) -> list[dict[str, Any]]:
+        relationships: list[dict[str, Any]] = []
+        macro_terms = list(dict.fromkeys(self._normalize_macro_channel_values(profile.get("macro_sensitivity")) + self._normalize_macro_channel_values(industry_profile.get("macro_sensitivity"))))
         for raw_macro in macro_terms:
             macro_definition = self.get_macro_channel_definition(raw_macro)
             macro_key = str(macro_definition.get("key", "")).strip()
             if not macro_key or macro_key == "unknown":
                 continue
-            add_relationship(
-                {
-                    "source": profile["ticker"],
-                    "source_label": profile.get("company_name", profile["ticker"]),
-                    "type": "linked_macro_channel",
-                    "type_label": self.get_relationship_type_definition("linked_macro_channel").get("label", "linked macro channel"),
-                    "target": macro_key,
-                    "target_kind": "macro_channel",
-                    "target_kind_label": self.get_relationship_target_kind_definition("macro_channel").get("label", "macro channel"),
-                    "target_label": macro_definition.get("label") or macro_key.replace("_", " "),
-                    "channel": "macro_channel",
-                    "channel_label": self.get_transmission_channel_definition("macro_channel").get("label", "macro channel"),
-                    "direction": "mixed",
-                    "mechanism": "macro_transmission",
-                    "confidence": "medium",
-                    "confidence_score": 0.65,
-                    "provenance": "derived",
-                    "valid_from": "",
-                    "valid_to": "",
-                    "state_condition": "",
-                    "strength": "structural",
-                    "note": "ticker macro sensitivity mapping",
-                }
-            )
+            relationships.append({
+                "source": profile["ticker"], "source_label": profile.get("company_name", profile["ticker"]), "type": "linked_macro_channel",
+                "type_label": self.get_relationship_type_definition("linked_macro_channel").get("label", "linked macro channel"), "target": macro_key,
+                "target_kind": "macro_channel", "target_kind_label": self.get_relationship_target_kind_definition("macro_channel").get("label", "macro channel"),
+                "target_label": macro_definition.get("label") or macro_key.replace("_", " "), "channel": "macro_channel", "channel_label": self.get_transmission_channel_definition("macro_channel").get("label", "macro channel"),
+                "direction": "mixed", "mechanism": "macro_transmission", "confidence": "medium", "confidence_score": 0.65, "provenance": "derived", "valid_from": "", "valid_to": "", "state_condition": "", "strength": "structural", "note": "ticker macro sensitivity mapping",
+            })
         return relationships
 
     def taxonomy_overview(self) -> dict[str, Any]:
