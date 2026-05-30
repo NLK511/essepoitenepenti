@@ -155,7 +155,7 @@ Acceptance: a written per-page content spec exists before route/nav changes; no 
 - Add page-level notices where a page is no longer authoritative, e.g. Research home points to Quality & Edge.
 - Acceptance: no route removed yet; no data loss; primary nav clearly answers daily performance questions and reflects the page-internal refactor findings.
 
-**Implemented:** primary navigation now uses Operate, Evidence & diagnostics, Configure, Research Lab, and Help groups. Dashboard, Trade Review, Quality & Edge, and Execution & Risk are the operating authority pages. Context review and Run debugger remain distinct pages, Worker logs remain unchanged, and no routes were removed.
+**Implemented:** primary navigation now uses Operate, Evidence & diagnostics, Configure, Research Lab, and Help groups. Dashboard, Trade Review, Quality & Edge, and Execution & Risk are the operating authority pages. Context review and Run debugger remain distinct pages, Worker logs remain unchanged, and no routes were removed. `operator-page-field-guide.md` was reconciled to the new authority map and playbooks.
 
 ### Phase 2 — Collapse duplicate performance surfaces
 
