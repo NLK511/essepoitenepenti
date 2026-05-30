@@ -409,6 +409,33 @@ It audits clutter inside the pages before final navigation, merging, or deletion
 **Implementation notes:**
 - **Done now:** page chrome now uses Evidence & diagnostics language, first screen leads with the ticker-attention question and latest-plan/data availability, links to Trade Review and Quality & Edge, and demotes ticker-local performance into a disclosure.
 
+### 16. Run detail `/runs/:runId`
+
+**Primary question:** What did this run produce, and where did the execution chain degrade?
+
+**Keep visible above the fold:**
+- Run status and warning/error headline.
+- Counts for objects written, plans, and broker orders.
+- Links back to Run Debugger and Trade Review.
+- Section tabs for the full scan/shortlist/signal/plan/broker/context chain.
+
+**Demote/collapse:**
+- Timing, scheduling, identity, and support-artifact metadata.
+- Long tables inside their selected chain section only.
+
+**Remove/replace duplicates:**
+- Run Debugger owns run triage/search; Run Detail owns full selected-run chain review.
+- Trade Review owns current plan queue decisions.
+
+**Unique actions/data to preserve:**
+- Full chain sections.
+- Delete run action.
+- Broker order resubmit/cancel actions.
+- Workflow result rendering for non-proposal runs.
+
+**Implementation notes:**
+- **Done now:** page chrome now uses Evidence & diagnostics language, first screen leads with run production/degradation signals, Run Debugger/Trade Review links are explicit, and timing/identity metadata is collapsed.
+
 ## Cross-page authority map
 
 - **Daily authority:** Dashboard.
@@ -437,6 +464,7 @@ It audits clutter inside the pages before final navigation, merging, or deletion
 11. Refocus decision samples as sample-level research evidence. **Done:** Decision samples now live under Research Lab language, lead with the question of which discarded/borderline signals deserve review, keep high-priority samples as the main path, and collapse the full archive plus usage guidance as reference detail.
 12. Reconcile route chrome language. **Done:** layout route titles/descriptions now use direct authority labels instead of metaphorical page names, matching the new nav and operator guide.
 13. Refocus ticker detail as a single-ticker diagnostic page. **Done:** ticker detail now leads with the single-ticker attention question, latest-plan/data availability signals, and links back to Trade Review/Quality & Edge; ticker-local performance and plan mix are collapsed as supporting context.
+14. Refocus run detail as the full selected-run chain review. **Done:** run detail now leads with status, warning/error, object, plan, and broker-order counts; timing/identity metadata is collapsed; links back to Run Debugger and Trade Review clarify ownership.
 
 ## Completion criteria for Phase 0
 

@@ -167,16 +167,29 @@ export function RunDetailPage() {
     : isRecord(runArtifact?.manual_job_defaults)
       ? runArtifact.manual_job_defaults
       : null;
+  const producedObjectCount = detail
+    ? detail.ticker_signal_snapshots.length
+      + detail.recommendation_plans.length
+      + detail.broker_order_executions.length
+      + detail.macro_context_snapshots.length
+      + detail.industry_context_snapshots.length
+    : 0;
+  const runWarningCount = detail
+    ? (detail.run.status === "completed_with_warnings" ? 1 : 0)
+      + detail.ticker_signal_snapshots.reduce((total, item) => total + item.warnings.length, 0)
+      + detail.recommendation_plans.reduce((total, item) => total + item.warnings.length, 0)
+    : 0;
 
   return (
     <>
       <PageHeader
-        kicker="Execution review"
+        kicker="Evidence & diagnostics"
         title={detail ? `Run #${detail.run.id}` : "Run detail"}
+        subtitle="Use this full chain view after Run Debugger identifies a run worth investigating."
         actions={
           <>
-            <Link to="/jobs/debugger" className="button-secondary">← Debugger</Link>
-            <Link to="/jobs/recommendation-plans" className="button-subtle">↗ Plans</Link>
+            <Link to="/jobs/debugger" className="button-secondary">← Run Debugger</Link>
+            <Link to="/jobs/recommendation-plans" className="button-subtle">↗ Trade Review</Link>
             {detail ? (
               <button
                 type="button"
@@ -196,14 +209,18 @@ export function RunDetailPage() {
       {!detail && !error ? <LoadingState message="Loading run detail…" /> : null}
       {detail ? (
         <div className="stack-page">
-          <section className="metrics-grid">
-            <StatCard label="Run status" value={detail.run.status} helper="Execution health for this workflow run" />
-            <StatCard label="Signals written" value={detail.ticker_signal_snapshots.length} helper="Ticker signal snapshots captured by the run" />
-            <StatCard label="Plans written" value={detail.recommendation_plans.length} helper="Recommendation plans produced by this run" />
-            <StatCard label="Context objects" value={detail.macro_context_snapshots.length + detail.industry_context_snapshots.length} helper="Macro and industry context snapshots stored here" />
-          </section>
-
           <Card>
+            <SectionTitle kicker="Run chain" title="What did this run produce, and did it degrade?" subtitle="Start here, then use the section tabs for the full scan → shortlist → signal → plan → broker/context chain." />
+            <section className="metrics-grid top-gap-small">
+              <StatCard label="Run status" value={detail.run.status} helper="Execution health for this workflow run" />
+              <StatCard label="Warnings/errors" value={detail.run.error_message ? "error" : runWarningCount} helper={detail.run.error_message ? "Run error message present" : "Warning-like signals found"} />
+              <StatCard label="Objects written" value={producedObjectCount} helper="Signals, plans, broker orders, and context objects" />
+              <StatCard label="Plans written" value={detail.recommendation_plans.length} helper="Recommendation plans produced by this run" />
+              <StatCard label="Broker orders" value={detail.broker_order_executions.length} helper="Broker order executions created by this run" />
+            </section>
+          </Card>
+
+          <DisclosureCard title="Run timing and identity" subtitle="Reference metadata for this run; keep collapsed when reviewing the output chain.">
             <div className="cluster">
               <Badge tone={runTone(detail.run.status)}>{detail.run.status}</Badge>
               <Badge>Job {detail.run.job_id}</Badge>
@@ -230,7 +247,7 @@ export function RunDetailPage() {
                 ))}
               </div>
             ) : null}
-          </Card>
+          </DisclosureCard>
 
           {detail.ticker_signal_snapshots.length > 0 || detail.recommendation_plans.length > 0 || detail.broker_order_executions.length > 0 || detail.macro_context_snapshots.length > 0 || detail.industry_context_snapshots.length > 0 ? (
             <Card>
