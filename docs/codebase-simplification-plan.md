@@ -88,6 +88,10 @@ Do not delete until references and tests prove safe:
    - Problem: `PlanGenerationWalkForwardService.summarize_records` mixed window normalization, record ordering, slice construction, candidate/baseline comparison, aggregate deltas, promotion, and summary construction.
    - Done now: extracted window input normalization, window preparation, slice construction, per-slice comparison, win-rate delta, and average-delta helpers while preserving walk-forward math and promotion gates.
 
+15. **Topic news fetch orchestration**
+   - Problem: `NewsIngestionService.fetch_topic` mirrored ticker-fetch complexity with database prefill, provider-selection fallback, provider fetch/save/merge loops, diagnostics, observability, and cache writes inline.
+   - Done now: extracted topic database prefill, no-provider finalization, provider fetch loop, and topic finalization helpers while preserving query diagnostics, cache behavior, and provider observability payloads.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.
