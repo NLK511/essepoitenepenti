@@ -67,37 +67,14 @@ class OrderExecutionService:
     ) -> OrderExecutionOutcome:
         config = SettingsDomainService(repository=self.settings).execution_settings().broker_order_execution
         warnings: list[str] = []
-        summary: dict[str, object] = {
-            "enabled": config["enabled"],
-            "broker": config["broker"],
-            "account_mode": config["account_mode"],
-            "notional_per_plan": config["notional_per_plan"],
-            "plan_count": len(plans),
-            "actionable_plan_count": 0,
-            "submitted_order_count": 0,
-            "skipped_order_count": 0,
-            "failed_order_count": 0,
-            "duplicate_order_count": 0,
-            "warnings_found": False,
-            "skips": [],
-            "orders": [],
-        }
+        summary = self._initial_execution_summary(config, plan_count=len(plans))
 
         if not config["enabled"]:
-            summary["skips"] = [{"reason": "order_execution_disabled", "count": len(plans)}]
-            summary["skipped_order_count"] = len(plans)
-            return OrderExecutionOutcome(summary=summary, orders=[])
+            return self._skipped_execution_outcome(summary, reason="order_execution_disabled", count=len(plans))
 
-        alpaca_credential = self.settings.get_provider_credential_map().get("alpaca")
-        if self.client is None:
-            if alpaca_credential is None:
-                warnings.append("alpaca provider credential is missing")
-                summary["warnings_found"] = True
-                summary["skips"] = [{"reason": "missing_alpaca_credential", "count": len(plans)}]
-                summary["skipped_order_count"] = len(plans)
-                summary["warnings"] = warnings
-                return OrderExecutionOutcome(summary=summary, orders=[])
-            self.client = AlpacaPaperClient(api_key=alpaca_credential.api_key, api_secret=alpaca_credential.api_secret)
+        missing_client_outcome = self._ensure_execution_client(summary, warnings, plan_count=len(plans))
+        if missing_client_outcome is not None:
+            return missing_client_outcome
 
         ordered_results: list[BrokerOrderExecution] = []
         skip_reasons: dict[str, int] = {}
@@ -213,12 +190,65 @@ class OrderExecutionService:
             else:
                 summary["failed_order_count"] = int(summary["failed_order_count"]) + 1
 
+        self._finalize_execution_summary(summary, orders=ordered_results, skip_reasons=skip_reasons, warnings=warnings)
+        return OrderExecutionOutcome(summary=summary, orders=ordered_results)
+
+    @staticmethod
+    def _initial_execution_summary(config: dict[str, object], *, plan_count: int) -> dict[str, object]:
+        return {
+            "enabled": config["enabled"],
+            "broker": config["broker"],
+            "account_mode": config["account_mode"],
+            "notional_per_plan": config["notional_per_plan"],
+            "plan_count": plan_count,
+            "actionable_plan_count": 0,
+            "submitted_order_count": 0,
+            "skipped_order_count": 0,
+            "failed_order_count": 0,
+            "duplicate_order_count": 0,
+            "warnings_found": False,
+            "skips": [],
+            "orders": [],
+        }
+
+    @staticmethod
+    def _skipped_execution_outcome(summary: dict[str, object], *, reason: str, count: int) -> OrderExecutionOutcome:
+        summary["skips"] = [{"reason": reason, "count": count}]
+        summary["skipped_order_count"] = count
+        return OrderExecutionOutcome(summary=summary, orders=[])
+
+    def _ensure_execution_client(
+        self,
+        summary: dict[str, object],
+        warnings: list[str],
+        *,
+        plan_count: int,
+    ) -> OrderExecutionOutcome | None:
+        if self.client is not None:
+            return None
+        alpaca_credential = self.settings.get_provider_credential_map().get("alpaca")
+        if alpaca_credential is None:
+            warnings.append("alpaca provider credential is missing")
+            outcome = self._skipped_execution_outcome(summary, reason="missing_alpaca_credential", count=plan_count)
+            summary["warnings"] = warnings
+            summary["warnings_found"] = True
+            return outcome
+        self.client = AlpacaPaperClient(api_key=alpaca_credential.api_key, api_secret=alpaca_credential.api_secret)
+        return None
+
+    @staticmethod
+    def _finalize_execution_summary(
+        summary: dict[str, object],
+        *,
+        orders: list[BrokerOrderExecution],
+        skip_reasons: dict[str, int],
+        warnings: list[str],
+    ) -> None:
         summary["skipped_order_count"] = sum(skip_reasons.values())
         summary["skips"] = [{"reason": reason, "count": count} for reason, count in sorted(skip_reasons.items())]
-        summary["orders"] = [order.model_dump(mode="json") for order in ordered_results]
+        summary["orders"] = [order.model_dump(mode="json") for order in orders]
         summary["warnings"] = warnings
         summary["warnings_found"] = bool(warnings or skip_reasons)
-        return OrderExecutionOutcome(summary=summary, orders=ordered_results)
 
     def resubmit_execution(self, execution_id: int) -> BrokerOrderExecution:
         existing = self.executions.get(execution_id)

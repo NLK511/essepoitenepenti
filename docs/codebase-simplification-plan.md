@@ -36,7 +36,12 @@ Goal: reduce code complexity without changing product behavior, safety rules, da
    - Problem: workflow execution had multiple broker mutation branches in one method.
    - Done now: split cancel, close, and exit-amendment handlers while preserving safety gates and execution statuses.
 
-5. **Large test modules**
+5. **Order execution orchestration**
+   - Problem: `OrderExecutionService.execute_plans` mixed summary setup, client bootstrapping, per-plan execution, and summary finalization.
+   - Done now: extracted summary initialization, missing-client handling, skipped-outcome creation, and final summary assembly.
+   - Safe next step: extract per-plan candidate/risk/submission handling once broker execution behavior is fully covered by focused tests.
+
+6. **Large test modules**
    - Problem: repository and route tests are hard to navigate.
    - Safe next step: split by domain with no assertion changes.
 
