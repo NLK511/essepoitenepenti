@@ -96,6 +96,10 @@ Do not delete until references and tests prove safe:
    - Problem: `TickerAnalysisPayloadService.build_analysis_payload` assembled every payload section inline, making summary/news/sentiment/proposal/technical/deep-analysis contracts hard to scan.
    - Done now: extracted section builders while preserving all analysis payload keys and values.
 
+17. **Watchlist shortlist selection**
+   - Problem: `ShortlistSelectionService.evaluate` mixed candidate ranking, eligibility rules, core selection, catalyst-lane relaxation, decision payloads, and rejection counting.
+   - Done now: extracted ranking, eligibility, shortlist selection, catalyst-lane eligibility, and decision/rejection payload helpers while preserving shortlist rules and diagnostics.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.

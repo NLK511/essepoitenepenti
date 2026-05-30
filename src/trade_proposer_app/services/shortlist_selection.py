@@ -49,9 +49,53 @@ class ShortlistSelectionService:
         limit = self.shortlist_limit(watchlist.default_horizon, ticker_count)
         minimum_confidence = self.minimum_shortlist_confidence(watchlist.default_horizon, ticker_count)
         minimum_attention = self.minimum_shortlist_attention(watchlist.default_horizon, ticker_count)
-        catalyst_lane_limit = ticker_count
         core_limit = ticker_count
-        ranked = sorted(
+        catalyst_threshold = self.minimum_catalyst_proxy_score(watchlist.default_horizon, ticker_count)
+        ranked = self._rank_candidates(candidates, watchlist)
+        eligibility = self._eligibility_by_ticker(
+            ranked,
+            watchlist,
+            minimum_confidence=minimum_confidence,
+            minimum_attention=minimum_attention,
+        )
+        shortlist, selection_lane = self._select_shortlist(
+            ranked,
+            watchlist,
+            eligibility=eligibility,
+            limit=limit,
+            core_limit=core_limit,
+            catalyst_lane_limit=ticker_count,
+            minimum_confidence=minimum_confidence,
+            minimum_attention=minimum_attention,
+            catalyst_threshold=catalyst_threshold,
+        )
+        decisions, rejection_counts = self._decision_payloads(
+            ranked,
+            shortlist=shortlist,
+            selection_lane=selection_lane,
+            eligibility=eligibility,
+            catalyst_threshold=catalyst_threshold,
+        )
+        return {
+            "shortlist": shortlist,
+            "rules": {
+                "horizon": watchlist.default_horizon.value,
+                "watchlist_size": ticker_count,
+                "allow_shorts": watchlist.allow_shorts,
+                "limit": limit,
+                "core_limit": core_limit,
+                "catalyst_lane_limit": ticker_count,
+                "minimum_confidence_percent": minimum_confidence,
+                "minimum_attention_score": minimum_attention,
+                "minimum_catalyst_proxy_score": catalyst_threshold,
+            },
+            "decisions": decisions,
+            "rejection_counts": rejection_counts,
+        }
+
+    @staticmethod
+    def _rank_candidates(candidates: list[ShortlistCandidate], watchlist: Watchlist) -> list[ShortlistCandidate]:
+        return sorted(
             candidates,
             key=lambda item: (
                 0 if item.error_message else 1,
@@ -61,6 +105,15 @@ class ShortlistSelectionService:
             ),
             reverse=True,
         )
+
+    @staticmethod
+    def _eligibility_by_ticker(
+        ranked: list[ShortlistCandidate],
+        watchlist: Watchlist,
+        *,
+        minimum_confidence: float,
+        minimum_attention: float,
+    ) -> dict[str, tuple[bool, list[str]]]:
         eligibility: dict[str, tuple[bool, list[str]]] = {}
         for candidate in ranked:
             reasons: list[str] = []
@@ -78,7 +131,21 @@ class ShortlistSelectionService:
                 reasons.append("below_attention_threshold")
                 eligible = False
             eligibility[candidate.ticker] = (eligible, reasons)
+        return eligibility
 
+    def _select_shortlist(
+        self,
+        ranked: list[ShortlistCandidate],
+        watchlist: Watchlist,
+        *,
+        eligibility: dict[str, tuple[bool, list[str]]],
+        limit: int,
+        core_limit: int,
+        catalyst_lane_limit: int,
+        minimum_confidence: float,
+        minimum_attention: float,
+        catalyst_threshold: float,
+    ) -> tuple[list[str], dict[str, str]]:
         shortlist: list[str] = []
         selection_lane: dict[str, str] = {}
         for candidate in ranked:
@@ -86,34 +153,59 @@ class ShortlistSelectionService:
             if eligible and len(shortlist) < core_limit:
                 shortlist.append(candidate.ticker)
                 selection_lane[candidate.ticker] = "technical"
-
-        catalyst_threshold = self.minimum_catalyst_proxy_score(watchlist.default_horizon, ticker_count)
-        catalyst_ranked = sorted(
-            [candidate for candidate in ranked if candidate.ticker not in shortlist],
-            key=self.catalyst_shortlist_score,
-            reverse=True,
-        )
+        catalyst_ranked = sorted([candidate for candidate in ranked if candidate.ticker not in shortlist], key=self.catalyst_shortlist_score, reverse=True)
         for candidate in catalyst_ranked:
             if catalyst_lane_limit <= 0 or len(shortlist) >= limit:
                 break
             eligible, reasons = eligibility[candidate.ticker]
-            catalyst_score = self.catalyst_shortlist_score(candidate)
-            relaxed_confidence_floor = max(40.0, minimum_confidence - 8.0)
-            relaxed_attention_floor = max(55.0, minimum_attention)
-            catalyst_eligible = (
-                not candidate.error_message
-                and not (candidate.direction == "short" and not watchlist.allow_shorts)
-                and candidate.confidence_percent >= relaxed_confidence_floor
-                and candidate.attention_score >= relaxed_attention_floor
-                and catalyst_score >= catalyst_threshold
-            )
             if candidate.ticker in shortlist:
                 continue
-            if catalyst_eligible and (eligible or "below_confidence_threshold" in reasons or "below_attention_threshold" in reasons):
+            if self._catalyst_lane_eligible(
+                candidate,
+                watchlist,
+                eligible=eligible,
+                reasons=reasons,
+                minimum_confidence=minimum_confidence,
+                minimum_attention=minimum_attention,
+                catalyst_threshold=catalyst_threshold,
+            ):
                 shortlist.append(candidate.ticker)
                 selection_lane[candidate.ticker] = "catalyst"
                 catalyst_lane_limit -= 1
+        return shortlist, selection_lane
 
+    def _catalyst_lane_eligible(
+        self,
+        candidate: ShortlistCandidate,
+        watchlist: Watchlist,
+        *,
+        eligible: bool,
+        reasons: list[str],
+        minimum_confidence: float,
+        minimum_attention: float,
+        catalyst_threshold: float,
+    ) -> bool:
+        catalyst_score = self.catalyst_shortlist_score(candidate)
+        relaxed_confidence_floor = max(40.0, minimum_confidence - 8.0)
+        relaxed_attention_floor = max(55.0, minimum_attention)
+        return (
+            not candidate.error_message
+            and not (candidate.direction == "short" and not watchlist.allow_shorts)
+            and candidate.confidence_percent >= relaxed_confidence_floor
+            and candidate.attention_score >= relaxed_attention_floor
+            and catalyst_score >= catalyst_threshold
+            and (eligible or "below_confidence_threshold" in reasons or "below_attention_threshold" in reasons)
+        )
+
+    def _decision_payloads(
+        self,
+        ranked: list[ShortlistCandidate],
+        *,
+        shortlist: list[str],
+        selection_lane: dict[str, str],
+        eligibility: dict[str, tuple[bool, list[str]]],
+        catalyst_threshold: float,
+    ) -> tuple[list[dict[str, object]], dict[str, int]]:
         decisions: list[dict[str, object]] = []
         rejection_counts: dict[str, int] = {}
         for rank, candidate in enumerate(ranked, start=1):
@@ -145,22 +237,7 @@ class ShortlistSelectionService:
                     "error_message": candidate.error_message,
                 }
             )
-        return {
-            "shortlist": shortlist,
-            "rules": {
-                "horizon": watchlist.default_horizon.value,
-                "watchlist_size": ticker_count,
-                "allow_shorts": watchlist.allow_shorts,
-                "limit": limit,
-                "core_limit": core_limit,
-                "catalyst_lane_limit": ticker_count,
-                "minimum_confidence_percent": minimum_confidence,
-                "minimum_attention_score": minimum_attention,
-                "minimum_catalyst_proxy_score": catalyst_threshold,
-            },
-            "decisions": decisions,
-            "rejection_counts": rejection_counts,
-        }
+        return decisions, rejection_counts
 
     @staticmethod
     def shortlist_limit(_horizon: StrategyHorizon, ticker_count: int) -> int:
