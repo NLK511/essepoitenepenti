@@ -84,6 +84,10 @@ Do not delete until references and tests prove safe:
    - Problem: `NewsIngestionService.fetch` mixed database prefill/skip logic, provider-selection fallback, provider fetch/save/merge loops, diagnostics, observability, and cache writes.
    - Done now: extracted database prefill, no-provider finalization, provider fetch loop, ticker finalization, database article counting, and cache-write helpers while preserving query diagnostics and provider observability payloads.
 
+14. **Plan-generation walk-forward slicing**
+   - Problem: `PlanGenerationWalkForwardService.summarize_records` mixed window normalization, record ordering, slice construction, candidate/baseline comparison, aggregate deltas, promotion, and summary construction.
+   - Done now: extracted window input normalization, window preparation, slice construction, per-slice comparison, win-rate delta, and average-delta helpers while preserving walk-forward math and promotion gates.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.
