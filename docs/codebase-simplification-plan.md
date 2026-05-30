@@ -132,6 +132,10 @@ Do not delete until references and tests prove safe:
    - Problem: `RecommendationSignalGatingTuningService.run` still assembled filters, summary, artifact, and persistence model inline after earlier orchestration extraction.
    - Done now: extracted summary payload, artifact payload, and tuning-run model construction helpers while preserving persisted fields.
 
+26. **Derived taxonomy relationship assembly**
+   - Problem: `TickerTaxonomyService._derived_relationships` mixed all-subject recursion, industry-derived edges, sector-derived edges, theme edges, and deduplication inline.
+   - Done now: extracted industry, sector, theme, and deduplication helpers while preserving derived relationship payloads.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.

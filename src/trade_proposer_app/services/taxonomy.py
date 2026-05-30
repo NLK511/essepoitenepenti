@@ -747,118 +747,58 @@ class TickerTaxonomyService:
                 derived.extend(self._derived_relationships(key))
             return derived
         normalized = self._normalize_subject_key(subject_key)
-        derived: list[dict[str, Any]] = []
         if normalized in self._industries:
-            definition = self.get_industry_definition(normalized)
-            sector_key = self._resolve_sector_key(str(definition.get("sector", "")))
-            if sector_key and sector_key not in {"", "unknown"} and sector_key in self._sectors:
-                derived.append(
-                    {
-                        "source": normalized,
-                        "target": sector_key,
-                        "type": "belongs_to_sector",
-                        "target_kind": "sector",
-                        "channel": "",
-                        "strength": "structural",
-                        "note": "industry classification edge",
-                    }
-                )
-            for raw_macro in self._normalize_string_list(definition.get("macro_sensitivity")):
-                macro_definition = self.get_macro_channel_definition(raw_macro)
-                macro_key = str(macro_definition.get("key", "")).strip()
-                if macro_key and macro_key != "unknown":
-                    derived.append(
-                        {
-                            "source": normalized,
-                            "target": macro_key,
-                            "type": "linked_macro_channel",
-                            "target_kind": "macro_channel",
-                            "channel": "",
-                            "strength": "structural",
-                            "note": "industry macro sensitivity mapping",
-                        }
-                    )
-            for raw_theme in self._normalize_string_list(definition.get("themes")):
-                theme_definition = self.get_theme_definition(raw_theme)
-                theme_key = str(theme_definition.get("key", "")).strip()
-                if theme_key and theme_key != "unknown":
-                    derived.append(
-                        {
-                            "source": normalized,
-                            "target": theme_key,
-                            "type": "exposed_to_theme",
-                            "target_kind": "theme",
-                            "channel": "theme",
-                            "direction": "mixed",
-                            "mechanism": "theme_exposure",
-                            "confidence": "low",
-                            "confidence_score": 0.45,
-                            "provenance": "derived",
-                            "valid_from": "",
-                            "valid_to": "",
-                            "state_condition": "",
-                            "strength": "structural",
-                            "note": "industry theme exposure mapping",
-                        }
-                    )
-        elif normalized in self._sectors:
-            definition = self.get_sector_definition(normalized)
-            for raw_macro in self._normalize_string_list(definition.get("macro_sensitivity")):
-                macro_definition = self.get_macro_channel_definition(raw_macro)
-                macro_key = str(macro_definition.get("key", "")).strip()
-                if macro_key and macro_key != "unknown":
-                    derived.append(
-                        {
-                            "source": normalized,
-                            "target": macro_key,
-                            "type": "linked_macro_channel",
-                            "target_kind": "macro_channel",
-                            "channel": "macro_channel",
-                            "direction": "mixed",
-                            "mechanism": "macro_transmission",
-                            "confidence": "low",
-                            "confidence_score": 0.45,
-                            "provenance": "derived",
-                            "valid_from": "",
-                            "valid_to": "",
-                            "state_condition": "",
-                            "strength": "structural",
-                            "note": "sector macro sensitivity mapping",
-                        }
-                    )
-            for raw_theme in self._normalize_string_list(definition.get("themes")):
-                theme_definition = self.get_theme_definition(raw_theme)
-                theme_key = str(theme_definition.get("key", "")).strip()
-                if theme_key and theme_key != "unknown":
-                    derived.append(
-                        {
-                            "source": normalized,
-                            "target": theme_key,
-                            "type": "exposed_to_theme",
-                            "target_kind": "theme",
-                            "channel": "theme",
-                            "direction": "mixed",
-                            "mechanism": "theme_exposure",
-                            "confidence": "low",
-                            "confidence_score": 0.45,
-                            "provenance": "derived",
-                            "valid_from": "",
-                            "valid_to": "",
-                            "state_condition": "",
-                            "strength": "structural",
-                            "note": "sector theme exposure mapping",
-                        }
-                    )
+            return self._dedupe_derived_relationships(self._derived_industry_relationships(normalized))
+        if normalized in self._sectors:
+            return self._dedupe_derived_relationships(self._derived_sector_relationships(normalized))
+        return []
+
+    def _derived_industry_relationships(self, normalized: str) -> list[dict[str, Any]]:
+        definition = self.get_industry_definition(normalized)
+        derived: list[dict[str, Any]] = []
+        sector_key = self._resolve_sector_key(str(definition.get("sector", "")))
+        if sector_key and sector_key not in {"", "unknown"} and sector_key in self._sectors:
+            derived.append({"source": normalized, "target": sector_key, "type": "belongs_to_sector", "target_kind": "sector", "channel": "", "strength": "structural", "note": "industry classification edge"})
+        for raw_macro in self._normalize_string_list(definition.get("macro_sensitivity")):
+            macro_definition = self.get_macro_channel_definition(raw_macro)
+            macro_key = str(macro_definition.get("key", "")).strip()
+            if macro_key and macro_key != "unknown":
+                derived.append({"source": normalized, "target": macro_key, "type": "linked_macro_channel", "target_kind": "macro_channel", "channel": "", "strength": "structural", "note": "industry macro sensitivity mapping"})
+        derived.extend(self._derived_theme_relationships(normalized, definition, note="industry theme exposure mapping"))
+        return derived
+
+    def _derived_sector_relationships(self, normalized: str) -> list[dict[str, Any]]:
+        definition = self.get_sector_definition(normalized)
+        derived: list[dict[str, Any]] = []
+        for raw_macro in self._normalize_string_list(definition.get("macro_sensitivity")):
+            macro_definition = self.get_macro_channel_definition(raw_macro)
+            macro_key = str(macro_definition.get("key", "")).strip()
+            if macro_key and macro_key != "unknown":
+                derived.append({
+                    "source": normalized, "target": macro_key, "type": "linked_macro_channel", "target_kind": "macro_channel", "channel": "macro_channel",
+                    "direction": "mixed", "mechanism": "macro_transmission", "confidence": "low", "confidence_score": 0.45, "provenance": "derived", "valid_from": "", "valid_to": "", "state_condition": "", "strength": "structural", "note": "sector macro sensitivity mapping",
+                })
+        derived.extend(self._derived_theme_relationships(normalized, definition, note="sector theme exposure mapping"))
+        return derived
+
+    def _derived_theme_relationships(self, source: str, definition: dict[str, Any], *, note: str) -> list[dict[str, Any]]:
+        relationships: list[dict[str, Any]] = []
+        for raw_theme in self._normalize_string_list(definition.get("themes")):
+            theme_definition = self.get_theme_definition(raw_theme)
+            theme_key = str(theme_definition.get("key", "")).strip()
+            if theme_key and theme_key != "unknown":
+                relationships.append({
+                    "source": source, "target": theme_key, "type": "exposed_to_theme", "target_kind": "theme", "channel": "theme",
+                    "direction": "mixed", "mechanism": "theme_exposure", "confidence": "low", "confidence_score": 0.45, "provenance": "derived", "valid_from": "", "valid_to": "", "state_condition": "", "strength": "structural", "note": note,
+                })
+        return relationships
+
+    @staticmethod
+    def _dedupe_derived_relationships(derived: list[dict[str, Any]]) -> list[dict[str, Any]]:
         deduped: list[dict[str, Any]] = []
         seen: set[tuple[str, str, str, str, str]] = set()
         for item in derived:
-            key = (
-                str(item.get("source", "")),
-                str(item.get("type", "")),
-                str(item.get("target_kind", "")),
-                str(item.get("target", "")),
-                str(item.get("channel", "")),
-            )
+            key = (str(item.get("source", "")), str(item.get("type", "")), str(item.get("target_kind", "")), str(item.get("target", "")), str(item.get("channel", "")))
             if key in seen:
                 continue
             seen.add(key)
