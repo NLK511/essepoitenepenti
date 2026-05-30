@@ -128,6 +128,10 @@ Do not delete until references and tests prove safe:
    - Problem: `WatchlistSignalBuilder.build_signal_snapshot` still embedded source-breakdown and diagnostics payload construction after the transmission-field extraction.
    - Done now: extracted source-breakdown, diagnostics, and cheap-scan component score helpers while preserving signal snapshot payload keys.
 
+25. **Signal-gating tuning run payloads**
+   - Problem: `RecommendationSignalGatingTuningService.run` still assembled filters, summary, artifact, and persistence model inline after earlier orchestration extraction.
+   - Done now: extracted summary payload, artifact payload, and tuning-run model construction helpers while preserving persisted fields.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.

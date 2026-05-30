@@ -174,27 +174,84 @@ class RecommendationSignalGatingTuningService:
         applied_threshold, applied_config = self._apply_winning_signal_gating_config(winner, apply=apply)
 
         completed_at = datetime.now(timezone.utc)
+        filters = self._filters_payload(
+            ticker=ticker,
+            run_id=run_id,
+            setup_family=setup_family,
+            transmission_bias=transmission_bias,
+            context_regime=context_regime,
+            review_priority=review_priority,
+            decision_type=decision_type,
+            shortlisted=shortlisted,
+            created_after=effective_created_after,
+            created_before=created_before,
+            limit=limit,
+            apply=apply,
+            sample_window_mode=sample_window_mode,
+            latest_applied_run_completed_at=latest_applied_run.completed_at if latest_applied_run is not None else None,
+        )
+        summary = self._run_summary_payload(
+            filters=filters,
+            samples=samples,
+            plan_scored_samples=plan_scored_samples,
+            scored_samples=scored_samples,
+            evaluated_candidates=evaluated_candidates,
+            baseline=baseline,
+            winner=winner,
+            threshold_before=threshold_before,
+            benchmark_summary=benchmark_summary,
+            apply=apply,
+            applied_threshold=applied_threshold,
+            applied_config=applied_config,
+        )
+        artifact = self._run_artifact_payload(
+            evaluated_candidates=evaluated_candidates,
+            plan_scored_samples=plan_scored_samples,
+            benchmark_scored_samples=benchmark_scored_samples,
+            threshold_before=threshold_before,
+            applied_threshold=applied_threshold,
+            active_tuning=active_tuning,
+            benchmark_summary=benchmark_summary,
+        )
+        run = self._tuning_run_model(
+            filters=filters,
+            samples=samples,
+            plan_scored_samples=plan_scored_samples,
+            scored_samples=scored_samples,
+            evaluated_candidates=evaluated_candidates,
+            baseline=baseline,
+            winner=winner,
+            benchmark_summary=benchmark_summary,
+            apply=apply,
+            summary=summary,
+            artifact=artifact,
+            started_at=started_at,
+            completed_at=completed_at,
+        )
+        return self.runs.create_run(run)
+
+    def _run_summary_payload(
+        self,
+        *,
+        filters: dict[str, object],
+        samples,
+        plan_scored_samples,
+        scored_samples,
+        evaluated_candidates,
+        baseline: SignalGatingCandidateResult,
+        winner: SignalGatingCandidateResult,
+        threshold_before: float,
+        benchmark_summary: dict[str, object],
+        apply: bool,
+        applied_threshold: float | None,
+        applied_config: dict[str, object] | None,
+    ) -> dict[str, object]:
         winner_dict = winner.to_dict()
         baseline_dict = baseline.to_dict()
-        summary = {
+        return {
             "status": "completed",
             "objective_name": self.OBJECTIVE_NAME,
-            "filters": self._filters_payload(
-                ticker=ticker,
-                run_id=run_id,
-                setup_family=setup_family,
-                transmission_bias=transmission_bias,
-                context_regime=context_regime,
-                review_priority=review_priority,
-                decision_type=decision_type,
-                shortlisted=shortlisted,
-                created_after=effective_created_after,
-                created_before=created_before,
-                limit=limit,
-                apply=apply,
-                sample_window_mode=sample_window_mode,
-                latest_applied_run_completed_at=latest_applied_run.completed_at if latest_applied_run is not None else None,
-            ),
+            "filters": filters,
             "sample_count": len(samples),
             "resolved_sample_count": len(plan_scored_samples),
             "benchmark_sample_count": benchmark_summary["benchmark_sample_count"],
@@ -224,7 +281,19 @@ class RecommendationSignalGatingTuningService:
             "selection_rate_percent": winner_dict["selection_rate_percent"],
             "best_config": winner.config.to_dict(),
         }
-        artifact = {
+
+    def _run_artifact_payload(
+        self,
+        *,
+        evaluated_candidates,
+        plan_scored_samples,
+        benchmark_scored_samples,
+        threshold_before: float,
+        applied_threshold: float | None,
+        active_tuning: dict[str, float],
+        benchmark_summary: dict[str, object],
+    ) -> dict[str, object]:
+        return {
             "objective_name": self.OBJECTIVE_NAME,
             "candidates": [candidate.to_dict() for candidate in evaluated_candidates],
             "sample_plan_ids": [sample.recommendation_plan_id for sample, _ in plan_scored_samples if sample.recommendation_plan_id is not None],
@@ -234,17 +303,35 @@ class RecommendationSignalGatingTuningService:
             "active_tuning": active_tuning,
             "benchmark_summary": benchmark_summary,
         }
-        run = RecommendationSignalGatingTuningRun(
+
+    def _tuning_run_model(
+        self,
+        *,
+        filters: dict[str, object],
+        samples,
+        plan_scored_samples,
+        scored_samples,
+        evaluated_candidates,
+        baseline: SignalGatingCandidateResult,
+        winner: SignalGatingCandidateResult,
+        benchmark_summary: dict[str, object],
+        apply: bool,
+        summary: dict[str, object],
+        artifact: dict[str, object],
+        started_at: datetime,
+        completed_at: datetime,
+    ) -> RecommendationSignalGatingTuningRun:
+        return RecommendationSignalGatingTuningRun(
             objective_name=self.OBJECTIVE_NAME,
             status="completed",
             applied=apply,
-            filters=summary["filters"],
+            filters=filters,
             sample_count=len(samples),
             resolved_sample_count=len(plan_scored_samples),
             benchmark_sample_count=benchmark_summary["benchmark_sample_count"],
             scoreable_sample_count=len(scored_samples),
             candidate_count=len(evaluated_candidates),
-            baseline_threshold=round(threshold_before, 2),
+            baseline_threshold=round(baseline.threshold, 2),
             baseline_score=round(baseline.score, 3),
             best_threshold=round(winner.threshold, 2),
             best_score=round(winner.score, 3),
@@ -255,7 +342,6 @@ class RecommendationSignalGatingTuningService:
             started_at=started_at,
             completed_at=completed_at,
         )
-        return self.runs.create_run(run)
 
     def _scored_sample_window(
         self,
