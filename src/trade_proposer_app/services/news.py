@@ -881,48 +881,18 @@ class NewsIngestionService:
 
         seen_links: set[str] = set()
         provider_results: list[dict[str, object]] = []
-        if self.historical_news and (start_at or end_at):
-            local_articles = self.historical_news.list_news(
-                ticker=ticker,
-                start_at=start_at,
-                end_at=end_at,
-                limit=self.max_articles,
-            )
-            if local_articles:
-                self._merge_articles(bundle, local_articles, seen_links)
-                bundle.feeds_used.append("database")
-                provider_results.append(
-                    {
-                        "provider": "database",
-                        "status": "success",
-                        "article_count": len(local_articles),
-                        "attempt_count": 1,
-                        "error": None,
-                    }
-                )
-            if len(local_articles) >= 3:
-                bundle.query_diagnostics = {
-                    "query_type": "ticker",
-                    "request_mode": request_mode,
-                    "provider_results": provider_results,
-                    "successful_providers": ["database"],
-                    "failed_providers": [],
-                    "unsupported_providers": [],
-                    "feeds_used": ["database"],
-                    "fallback_used": False,
-                    "fallback_succeeded": False,
-                    "successful_provider_count": 1,
-                    "failed_provider_count": 0,
-                    "unsupported_provider_count": 0,
-                    "article_count": len(bundle.articles),
-                    "database_article_count": len(local_articles),
-                    "provider_fetch_skipped": True,
-                    "provider_fetch_skip_reason": "database coverage satisfied minimum",
-                }
-                self._record_provider_observability(subject=ticker, query_type="ticker", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)
-                if cache_key is not None:
-                    self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
-                return bundle
+        database_bundle = self._prefill_ticker_database_news(
+            bundle,
+            ticker,
+            start_at=start_at,
+            end_at=end_at,
+            request_mode=request_mode,
+            provider_results=provider_results,
+            seen_links=seen_links,
+            cache_key=cache_key,
+        )
+        if database_bundle is not None:
+            return database_bundle
 
         providers, selection_errors = self._providers_for_request(
             query_type="ticker",
@@ -932,71 +902,140 @@ class NewsIngestionService:
             end_at=end_at,
         )
         if not providers:
-            bundle.feed_errors.extend(selection_errors)
-            bundle.query_diagnostics = self._build_ticker_query_diagnostics(
+            return self._finalize_ticker_no_provider_bundle(
+                bundle,
+                ticker,
                 request_mode=request_mode,
                 provider_results=provider_results,
-                feeds_used=bundle.feeds_used,
-                article_count=len(bundle.articles),
+                selection_errors=selection_errors,
+                cache_key=cache_key,
             )
-            if any(result.get("provider") == "database" for result in provider_results):
-                bundle.query_diagnostics["database_article_count"] = sum(
-                    int(result.get("article_count") or 0)
-                    for result in provider_results
-                    if result.get("provider") == "database"
-                )
-                bundle.query_diagnostics["provider_fetch_skipped"] = True
-                bundle.query_diagnostics["provider_fetch_skip_reason"] = "no eligible providers"
-            self._record_provider_observability(subject=ticker, query_type="ticker", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)
-            if cache_key is not None:
-                self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
-            return bundle
+        self._fetch_ticker_provider_news(
+            bundle,
+            ticker,
+            providers,
+            start_at=start_at,
+            end_at=end_at,
+            provider_results=provider_results,
+            seen_links=seen_links,
+        )
+        return self._finalize_ticker_bundle(
+            bundle,
+            ticker,
+            request_mode=request_mode,
+            provider_results=provider_results,
+            cache_key=cache_key,
+        )
+
+    def _prefill_ticker_database_news(
+        self,
+        bundle: NewsBundle,
+        ticker: str,
+        *,
+        start_at: datetime | None,
+        end_at: datetime | None,
+        request_mode: NewsRequestMode,
+        provider_results: list[dict[str, object]],
+        seen_links: set[str],
+        cache_key: tuple[object, ...] | None,
+    ) -> NewsBundle | None:
+        if not self.historical_news or not (start_at or end_at):
+            return None
+        local_articles = self.historical_news.list_news(ticker=ticker, start_at=start_at, end_at=end_at, limit=self.max_articles)
+        if local_articles:
+            self._merge_articles(bundle, local_articles, seen_links)
+            bundle.feeds_used.append("database")
+            provider_results.append({"provider": "database", "status": "success", "article_count": len(local_articles), "attempt_count": 1, "error": None})
+        if len(local_articles) < 3:
+            return None
+        bundle.query_diagnostics = {
+            "query_type": "ticker",
+            "request_mode": request_mode,
+            "provider_results": provider_results,
+            "successful_providers": ["database"],
+            "failed_providers": [],
+            "unsupported_providers": [],
+            "feeds_used": ["database"],
+            "fallback_used": False,
+            "fallback_succeeded": False,
+            "successful_provider_count": 1,
+            "failed_provider_count": 0,
+            "unsupported_provider_count": 0,
+            "article_count": len(bundle.articles),
+            "database_article_count": len(local_articles),
+            "provider_fetch_skipped": True,
+            "provider_fetch_skip_reason": "database coverage satisfied minimum",
+        }
+        self._record_provider_observability(subject=ticker, query_type="ticker", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)
+        self._cache_windowed_bundle(cache_key, bundle)
+        return bundle
+
+    def _finalize_ticker_no_provider_bundle(
+        self,
+        bundle: NewsBundle,
+        ticker: str,
+        *,
+        request_mode: NewsRequestMode,
+        provider_results: list[dict[str, object]],
+        selection_errors: list[str],
+        cache_key: tuple[object, ...] | None,
+    ) -> NewsBundle:
+        bundle.feed_errors.extend(selection_errors)
+        bundle.query_diagnostics = self._build_ticker_query_diagnostics(
+            request_mode=request_mode,
+            provider_results=provider_results,
+            feeds_used=bundle.feeds_used,
+            article_count=len(bundle.articles),
+        )
+        if any(result.get("provider") == "database" for result in provider_results):
+            bundle.query_diagnostics["database_article_count"] = self._database_article_count(provider_results)
+            bundle.query_diagnostics["provider_fetch_skipped"] = True
+            bundle.query_diagnostics["provider_fetch_skip_reason"] = "no eligible providers"
+        self._record_provider_observability(subject=ticker, query_type="ticker", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)
+        self._cache_windowed_bundle(cache_key, bundle)
+        return bundle
+
+    def _fetch_ticker_provider_news(
+        self,
+        bundle: NewsBundle,
+        ticker: str,
+        providers: list[NewsProvider],
+        *,
+        start_at: datetime | None,
+        end_at: datetime | None,
+        provider_results: list[dict[str, object]],
+        seen_links: set[str],
+    ) -> None:
         for provider in providers:
             try:
                 articles = provider.fetch(ticker, self.max_articles, start_at=start_at, end_at=end_at)
             except UnsupportedMarketError as exc:
-                provider_results.append(
-                    {
-                        "provider": provider.name,
-                        "status": "unsupported_market",
-                        "article_count": 0,
-                        "attempt_count": self._provider_attempt_count(provider, exc),
-                        "error": str(exc),
-                    }
-                )
+                provider_results.append({"provider": provider.name, "status": "unsupported_market", "article_count": 0, "attempt_count": self._provider_attempt_count(provider, exc), "error": str(exc)})
                 continue
             except Exception as exc:  # noqa: BLE001
                 bundle.feed_errors.append(f"{provider.name}: {exc}")
-                provider_results.append(
-                    {
-                        "provider": provider.name,
-                        "status": "error",
-                        "article_count": 0,
-                        "attempt_count": self._provider_attempt_count(provider, exc),
-                        "error": str(exc),
-                    }
-                )
+                provider_results.append({"provider": provider.name, "status": "error", "article_count": 0, "attempt_count": self._provider_attempt_count(provider, exc), "error": str(exc)})
                 continue
             filtered_articles = self._filter_articles_for_window(articles, start_at=start_at, end_at=end_at)
-
             if self.historical_news and filtered_articles:
                 try:
                     self.historical_news.save_news(ticker, provider.provider_key, filtered_articles)
                 except Exception:
                     pass
-
             self._merge_articles(bundle, filtered_articles, seen_links)
-            provider_results.append(
-                {
-                    "provider": provider.name,
-                    "status": "success" if filtered_articles else "empty",
-                    "article_count": len(filtered_articles),
-                    "attempt_count": 1,
-                    "error": None,
-                }
-            )
+            provider_results.append({"provider": provider.name, "status": "success" if filtered_articles else "empty", "article_count": len(filtered_articles), "attempt_count": 1, "error": None})
             if filtered_articles:
                 bundle.feeds_used.append(provider.name)
+
+    def _finalize_ticker_bundle(
+        self,
+        bundle: NewsBundle,
+        ticker: str,
+        *,
+        request_mode: NewsRequestMode,
+        provider_results: list[dict[str, object]],
+        cache_key: tuple[object, ...] | None,
+    ) -> NewsBundle:
         bundle.articles = bundle.articles[: self.max_articles]
         bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
         bundle.query_diagnostics = self._build_ticker_query_diagnostics(
@@ -1006,20 +1045,22 @@ class NewsIngestionService:
             article_count=len(bundle.articles),
         )
         if any(result.get("provider") == "database" for result in provider_results):
-            bundle.query_diagnostics["database_article_count"] = sum(
-                int(result.get("article_count") or 0)
-                for result in provider_results
-                if result.get("provider") == "database"
-            )
+            bundle.query_diagnostics["database_article_count"] = self._database_article_count(provider_results)
             bundle.query_diagnostics["provider_fetch_skipped"] = False
         fallback_note = self._build_ticker_fallback_note(bundle.query_diagnostics)
         if fallback_note:
             bundle.feed_errors.append(fallback_note)
             bundle.feed_errors = list(dict.fromkeys(bundle.feed_errors))
         self._record_provider_observability(subject=ticker, query_type="ticker", diagnostics=bundle.query_diagnostics, feed_errors=bundle.feed_errors)
+        self._cache_windowed_bundle(cache_key, bundle)
+        return bundle
+
+    def _database_article_count(self, provider_results: list[dict[str, object]]) -> int:
+        return sum(int(result.get("article_count") or 0) for result in provider_results if result.get("provider") == "database")
+
+    def _cache_windowed_bundle(self, cache_key: tuple[object, ...] | None, bundle: NewsBundle) -> None:
         if cache_key is not None:
             self._windowed_query_cache[cache_key] = self._clone_bundle(bundle)
-        return bundle
 
     def _record_provider_observability(self, *, subject: str, query_type: NewsQueryType, diagnostics: dict[str, object], feed_errors: list[str]) -> None:
         if self.observability is None:

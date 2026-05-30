@@ -80,6 +80,10 @@ Do not delete until references and tests prove safe:
    - Problem: `SummaryService._summarize_with_pi_prompt` mixed command construction, process lifecycle management, stream reading, timeout handling, output parsing, and fallback construction.
    - Done now: extracted pi command/metadata construction plus CLI process, stream, wait, and stop helpers while preserving fallback semantics and summary payload metadata.
 
+13. **Ticker news fetch orchestration**
+   - Problem: `NewsIngestionService.fetch` mixed database prefill/skip logic, provider-selection fallback, provider fetch/save/merge loops, diagnostics, observability, and cache writes.
+   - Done now: extracted database prefill, no-provider finalization, provider fetch loop, ticker finalization, database article counting, and cache-write helpers while preserving query diagnostics and provider observability payloads.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.
