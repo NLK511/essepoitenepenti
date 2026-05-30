@@ -198,52 +198,18 @@ class JobExecutionService:
             # Use scheduled_for as the 'as_of' time if provided (for replays/simulations)
             as_of = self._normalize_datetime(run.scheduled_for)
             
-            orchestration = self.watchlist_orchestration.execute(
-                watchlist,
-                tickers,
-                job_id=run.job_id,
-                run_id=run.id,
-                as_of=as_of,
-            )
-            logger.info(
-                "job execution proposal orchestration finished: run_id=%s job_id=%s warnings_found=%s",
-                run.id,
-                run.job_id,
-                bool(orchestration.get("warnings_found")),
-            )
-            logger.debug(
-                "job execution proposal orchestration payload: run_id=%s keys=%s summary_keys=%s artifact_keys=%s",
-                run.id,
-                sorted(orchestration.keys()),
-                sorted(orchestration.get("summary", {}).keys()) if isinstance(orchestration.get("summary"), dict) else None,
-                sorted(orchestration.get("artifact", {}).keys()) if isinstance(orchestration.get("artifact"), dict) else None,
-            )
+            orchestration = self._execute_watchlist_orchestration(run, watchlist, tickers, as_of=as_of)
             ticker_generation.extend(orchestration.get("ticker_generation", []))
             warnings_found = bool(orchestration.get("warnings_found"))
             summary = orchestration.get("summary")
             artifact = orchestration.get("artifact")
-            if isinstance(summary, dict):
-                self._annotate_orchestration_payload(summary, watchlist, job)
-                self.runs.set_summary(run.id or 0, summary)
-            if isinstance(artifact, dict):
-                self._annotate_orchestration_payload(artifact, watchlist, job)
-                self.runs.set_artifact(run.id or 0, artifact)
+            self._persist_orchestration_payloads(run, watchlist, job, summary=summary, artifact=artifact)
             timing["recommendation_generation_seconds"] = round(perf_counter() - generation_started, 6)
 
             order_execution_started = perf_counter()
-            order_execution_summary: dict[str, object] | None = None
-            if self.order_execution is not None and self.recommendation_plans is not None:
-                actionable_plans = self.recommendation_plans.list_plans(run_id=run.id or 0, limit=1000)
-                actionable_plans = [plan for plan in actionable_plans if plan.action in {"long", "short"}]
-                order_execution_result = self.order_execution.execute_plans(actionable_plans, run_id=run.id, job_id=run.job_id)
-                order_execution_summary = order_execution_result.summary
+            order_execution_summary = self._execute_proposal_order_submission(run, summary=summary, artifact=artifact)
+            if order_execution_summary is not None:
                 warnings_found = warnings_found or bool(order_execution_summary.get("warnings_found"))
-                if isinstance(summary, dict):
-                    summary["order_execution"] = order_execution_summary
-                    self.runs.set_summary(run.id or 0, summary)
-                if isinstance(artifact, dict):
-                    artifact["order_execution"] = order_execution_summary
-                    self.runs.set_artifact(run.id or 0, artifact)
             timing["order_execution_seconds"] = round(perf_counter() - order_execution_started, 6)
             if isinstance(summary, dict):
                 source_kind = str(summary.get("source_kind") or "").strip().lower()
@@ -287,6 +253,54 @@ class JobExecutionService:
             timing,
         )
         return stored, timing
+
+    def _execute_watchlist_orchestration(self, run: Run, watchlist: object, tickers: list[str], *, as_of: datetime | None) -> dict[str, object]:
+        if self.watchlist_orchestration is None:
+            raise RuntimeError("proposal_generation runs require the redesign watchlist orchestration service")
+        orchestration = self.watchlist_orchestration.execute(
+            watchlist,
+            tickers,
+            job_id=run.job_id,
+            run_id=run.id,
+            as_of=as_of,
+        )
+        logger.info(
+            "job execution proposal orchestration finished: run_id=%s job_id=%s warnings_found=%s",
+            run.id,
+            run.job_id,
+            bool(orchestration.get("warnings_found")),
+        )
+        logger.debug(
+            "job execution proposal orchestration payload: run_id=%s keys=%s summary_keys=%s artifact_keys=%s",
+            run.id,
+            sorted(orchestration.keys()),
+            sorted(orchestration.get("summary", {}).keys()) if isinstance(orchestration.get("summary"), dict) else None,
+            sorted(orchestration.get("artifact", {}).keys()) if isinstance(orchestration.get("artifact"), dict) else None,
+        )
+        return orchestration
+
+    def _persist_orchestration_payloads(self, run: Run, watchlist: object, job: object, *, summary: object, artifact: object) -> None:
+        if isinstance(summary, dict):
+            self._annotate_orchestration_payload(summary, watchlist, job)
+            self.runs.set_summary(run.id or 0, summary)
+        if isinstance(artifact, dict):
+            self._annotate_orchestration_payload(artifact, watchlist, job)
+            self.runs.set_artifact(run.id or 0, artifact)
+
+    def _execute_proposal_order_submission(self, run: Run, *, summary: object, artifact: object) -> dict[str, object] | None:
+        if self.order_execution is None or self.recommendation_plans is None:
+            return None
+        actionable_plans = self.recommendation_plans.list_plans(run_id=run.id or 0, limit=1000)
+        actionable_plans = [plan for plan in actionable_plans if plan.action in {"long", "short"}]
+        order_execution_result = self.order_execution.execute_plans(actionable_plans, run_id=run.id, job_id=run.job_id)
+        order_execution_summary = order_execution_result.summary
+        if isinstance(summary, dict):
+            summary["order_execution"] = order_execution_summary
+            self.runs.set_summary(run.id or 0, summary)
+        if isinstance(artifact, dict):
+            artifact["order_execution"] = order_execution_summary
+            self.runs.set_artifact(run.id or 0, artifact)
+        return order_execution_summary
 
     def _execute_evaluation_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
         if self.evaluations is None:

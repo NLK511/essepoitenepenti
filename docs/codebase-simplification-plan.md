@@ -104,6 +104,10 @@ Do not delete until references and tests prove safe:
    - Problem: `WatchlistCalibrationReviewService.calibration_review` mixed disabled fallback, bucket lookup, calibration curve handling, per-bucket adjustment, review scaling, and payload construction.
    - Done now: extracted disabled review payload, bucket lookup, bucket adjustment accumulation, and reviewed-bucket specs while preserving calibration thresholds and reason payloads.
 
+19. **Proposal job execution orchestration**
+   - Problem: `JobExecutionService._execute_proposal_run` mixed watchlist orchestration, payload persistence, order submission, warning finalization, and timing handling.
+   - Done now: extracted watchlist orchestration execution, orchestration payload persistence, and proposal order-submission helpers while preserving timing/status behavior.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.
