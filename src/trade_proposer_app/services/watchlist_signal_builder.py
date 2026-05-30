@@ -40,61 +40,32 @@ class WatchlistSignalBuilder:
         industry_alignment_score = o._sentiment_score_to_percent(o._pluck(analysis, "sentiment", "industry", "score"))
         expected_move_score = o._expected_move_score(deep_recommendation)
         execution_quality_score = o._execution_quality_score(deep_recommendation)
-        warnings = list(candidate.warnings)
-        if deep_output is not None:
-            warnings.extend(deep_output.diagnostics.warnings)
-        if candidate.direction == "short" and not watchlist.allow_shorts:
-            warnings.append("watchlist does not allow shorts")
-        if deep_error:
-            warnings.append(deep_error)
-        transmission_alignment_score = o._transmission_alignment_score(analysis)
-        transmission_bias = o._transmission_bias(analysis)
-        if transmission_bias == "unknown":
-            transmission_alignment_score = round((macro_exposure_score * 0.45) + (industry_alignment_score * 0.55), 2)
-            transmission_bias = o._bias_from_alignment(transmission_alignment_score)
-        primary_drivers = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "primary_drivers") or []
-        primary_driver_details = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "primary_driver_details") or []
-        expected_transmission_window = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "expected_transmission_window") or o._fallback_transmission_window_placeholder(watchlist.default_horizon)
-        expected_transmission_window_detail = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "expected_transmission_window_detail") or o._transmission_window_detail(expected_transmission_window)
-        market_intelligence = o._pluck(analysis, "ticker_deep_analysis", "market_intelligence") or o._pluck(analysis, "market_intelligence") or {}
-        market_intelligence_summary = o._pluck(analysis, "ticker_deep_analysis", "market_intelligence_summary") or o._pluck(analysis, "market_intelligence_summary")
-        conflict_flags = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "conflict_flags") or []
-        conflict_flag_details = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "conflict_flag_details") or []
-        transmission_tags = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "transmission_tags") or []
-        transmission_tag_details = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "transmission_tag_details") or []
-        industry_exposure_channels = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "industry_exposure_channels") or []
-        industry_exposure_channel_details = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "industry_exposure_channel_details") or []
-        ticker_exposure_channels = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "ticker_exposure_channels") or []
-        ticker_exposure_channel_details = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "ticker_exposure_channel_details") or []
-        transmission_effect = o._transmission_confidence_adjustment(analysis, transmission_bias=transmission_bias, alignment_score=transmission_alignment_score)
+        warnings = self._warnings(watchlist, candidate, deep_output=deep_output, deep_error=deep_error)
+        transmission = self._transmission_fields(
+            analysis,
+            watchlist,
+            macro_exposure_score=macro_exposure_score,
+            industry_alignment_score=industry_alignment_score,
+        )
+        transmission_alignment_score = transmission["transmission_alignment_score"]
+        transmission_bias = transmission["transmission_bias"]
+        primary_drivers = transmission["primary_drivers"]
+        primary_driver_details = transmission["primary_driver_details"]
+        expected_transmission_window = transmission["expected_transmission_window"]
+        expected_transmission_window_detail = transmission["expected_transmission_window_detail"]
+        market_intelligence = transmission["market_intelligence"]
+        market_intelligence_summary = transmission["market_intelligence_summary"]
+        conflict_flags = transmission["conflict_flags"]
+        conflict_flag_details = transmission["conflict_flag_details"]
+        transmission_tags = transmission["transmission_tags"]
+        transmission_tag_details = transmission["transmission_tag_details"]
+        industry_exposure_channels = transmission["industry_exposure_channels"]
+        industry_exposure_channel_details = transmission["industry_exposure_channel_details"]
+        ticker_exposure_channels = transmission["ticker_exposure_channels"]
+        ticker_exposure_channel_details = transmission["ticker_exposure_channel_details"]
+        transmission_effect = transmission["transmission_effect"]
         base_confidence = round(float(deep_recommendation.confidence if deep_recommendation is not None else candidate.confidence_percent), 2)
         adjusted_confidence = round(max(0.0, min(95.0, base_confidence + transmission_effect)), 2)
-        if not isinstance(primary_drivers, list) or not primary_drivers:
-            primary_drivers = [
-                item for item in [
-                    "industry_context_support" if transmission_bias != "headwind" else "industry_context_headwind",
-                    "macro_context_support" if transmission_bias != "headwind" else "macro_context_headwind",
-                    "fresh_catalyst_pressure" if o._catalyst_score(analysis) >= 45.0 else None,
-                ] if isinstance(item, str)
-            ]
-        if not isinstance(primary_driver_details, list) or not primary_driver_details:
-            primary_driver_details = o._detail_fallback(primary_drivers)
-        if not isinstance(conflict_flags, list):
-            conflict_flags = []
-        if not isinstance(conflict_flag_details, list) or not conflict_flag_details:
-            conflict_flag_details = o._detail_fallback(conflict_flags)
-        if not isinstance(transmission_tags, list):
-            transmission_tags = []
-        if not isinstance(transmission_tag_details, list) or not transmission_tag_details:
-            transmission_tag_details = o._detail_fallback(transmission_tags)
-        if not isinstance(industry_exposure_channels, list):
-            industry_exposure_channels = []
-        if not isinstance(industry_exposure_channel_details, list) or not industry_exposure_channel_details:
-            industry_exposure_channel_details = o._channel_detail_fallback(industry_exposure_channels)
-        if not isinstance(ticker_exposure_channels, list):
-            ticker_exposure_channels = []
-        if not isinstance(ticker_exposure_channel_details, list) or not ticker_exposure_channel_details:
-            ticker_exposure_channel_details = o._channel_detail_fallback(ticker_exposure_channels)
         return TickerSignalSnapshot(
             ticker=candidate.ticker,
             horizon=watchlist.default_horizon,
@@ -183,3 +154,78 @@ class WatchlistSignalBuilder:
             job_id=job_id,
             run_id=run_id,
         )
+
+    def _warnings(self, watchlist: Watchlist, candidate: Any, *, deep_output: RunOutput | None, deep_error: str | None) -> list[str]:
+        warnings = list(candidate.warnings)
+        if deep_output is not None:
+            warnings.extend(deep_output.diagnostics.warnings)
+        if candidate.direction == "short" and not watchlist.allow_shorts:
+            warnings.append("watchlist does not allow shorts")
+        if deep_error:
+            warnings.append(deep_error)
+        return warnings
+
+    def _transmission_fields(
+        self,
+        analysis: dict[str, Any],
+        watchlist: Watchlist,
+        *,
+        macro_exposure_score: float,
+        industry_alignment_score: float,
+    ) -> dict[str, Any]:
+        o = self._orchestration
+        alignment_score = o._transmission_alignment_score(analysis)
+        bias = o._transmission_bias(analysis)
+        if bias == "unknown":
+            alignment_score = round((macro_exposure_score * 0.45) + (industry_alignment_score * 0.55), 2)
+            bias = o._bias_from_alignment(alignment_score)
+        primary_drivers = self._primary_drivers(analysis, bias)
+        conflict_flags = self._list_field(analysis, "conflict_flags")
+        transmission_tags = self._list_field(analysis, "transmission_tags")
+        industry_channels = self._list_field(analysis, "industry_exposure_channels")
+        ticker_channels = self._list_field(analysis, "ticker_exposure_channels")
+        expected_window = o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "expected_transmission_window") or o._fallback_transmission_window_placeholder(watchlist.default_horizon)
+        return {
+            "transmission_alignment_score": alignment_score,
+            "transmission_bias": bias,
+            "primary_drivers": primary_drivers,
+            "primary_driver_details": self._detail_field(analysis, "primary_driver_details", primary_drivers),
+            "expected_transmission_window": expected_window,
+            "expected_transmission_window_detail": o._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", "expected_transmission_window_detail") or o._transmission_window_detail(expected_window),
+            "market_intelligence": o._pluck(analysis, "ticker_deep_analysis", "market_intelligence") or o._pluck(analysis, "market_intelligence") or {},
+            "market_intelligence_summary": o._pluck(analysis, "ticker_deep_analysis", "market_intelligence_summary") or o._pluck(analysis, "market_intelligence_summary"),
+            "conflict_flags": conflict_flags,
+            "conflict_flag_details": self._detail_field(analysis, "conflict_flag_details", conflict_flags),
+            "transmission_tags": transmission_tags,
+            "transmission_tag_details": self._detail_field(analysis, "transmission_tag_details", transmission_tags),
+            "industry_exposure_channels": industry_channels,
+            "industry_exposure_channel_details": self._channel_detail_field(analysis, "industry_exposure_channel_details", industry_channels),
+            "ticker_exposure_channels": ticker_channels,
+            "ticker_exposure_channel_details": self._channel_detail_field(analysis, "ticker_exposure_channel_details", ticker_channels),
+            "transmission_effect": o._transmission_confidence_adjustment(analysis, transmission_bias=bias, alignment_score=alignment_score),
+        }
+
+    def _primary_drivers(self, analysis: dict[str, Any], transmission_bias: str) -> list[object]:
+        o = self._orchestration
+        value = self._list_field(analysis, "primary_drivers")
+        if value:
+            return value
+        return [
+            item for item in [
+                "industry_context_support" if transmission_bias != "headwind" else "industry_context_headwind",
+                "macro_context_support" if transmission_bias != "headwind" else "macro_context_headwind",
+                "fresh_catalyst_pressure" if o._catalyst_score(analysis) >= 45.0 else None,
+            ] if isinstance(item, str)
+        ]
+
+    def _list_field(self, analysis: dict[str, Any], key: str) -> list[object]:
+        value = self._orchestration._pluck(analysis, "ticker_deep_analysis", "transmission_analysis", key) or []
+        return value if isinstance(value, list) else []
+
+    def _detail_field(self, analysis: dict[str, Any], key: str, fallback_values: list[object]) -> list[object]:
+        value = self._list_field(analysis, key)
+        return value or self._orchestration._detail_fallback(fallback_values)
+
+    def _channel_detail_field(self, analysis: dict[str, Any], key: str, fallback_values: list[object]) -> list[object]:
+        value = self._list_field(analysis, key)
+        return value or self._orchestration._channel_detail_fallback(fallback_values)
