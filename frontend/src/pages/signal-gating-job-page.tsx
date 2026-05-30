@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
-import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { SignalGatingTuningResponse, SignalGatingTuningRun, SignalGatingTuningRunsResponse, SignalGatingTuningState } from "../types";
 import { runTone } from "../utils";
 
@@ -103,7 +103,7 @@ export function SignalGatingJobPage() {
   return (
     <>
       <PageHeader
-        kicker="Research"
+        kicker="Research Lab"
         title="Signal gating tuning"
         actions={
           <>
@@ -119,19 +119,26 @@ export function SignalGatingJobPage() {
 
       {tuningState && runs ? (
         <div className="stack-page">
-          <section className="metrics-grid">
-            <StatCard label="Current threshold" value={formatValue(tuningState.current_confidence_threshold)} helper="Live confidence threshold" tooltip="The base live confidence threshold currently used for signal gating before any tuning offset is applied." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
-            <StatCard label="Active offset" value={formatValue(tuningState.active_tuning.threshold_offset)} helper="Tuning offset in effect" tooltip="The active tuning adjustment added to or subtracted from the base threshold to change shortlist strictness." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
-            <StatCard label="Latest best" value={formatValue(tuningState.latest_run?.best_threshold)} helper="Winning candidate threshold" tooltip="The best threshold found in the most recent tuning run according to the selected objective." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
-            <StatCard label="Latest score" value={formatValue(tuningState.latest_run?.best_score, 3)} helper="Winning candidate score" tooltip="The objective score of the best candidate from the most recent tuning run." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
-          </section>
-
           <Card>
             <SectionTitle
-              kicker="Configuration"
-              title="Signal gating controls"
-              actions={<HelpHint tooltip="These controls tune shortlist selection and threshold behavior before downstream plan generation." to="/docs?doc=signal-gating-tuning-guide" />}
+              kicker="Upstream selection"
+              title="Should shortlist thresholds change?"
+              subtitle="Use this only when Quality & Edge shows an upstream recall or precision problem. Dry runs should come before applied changes."
+              actions={<Link to="/recommendation-quality" className="button-subtle">◈ Quality & Edge</Link>}
             />
+            <section className="metrics-grid top-gap-small">
+              <StatCard label="Current threshold" value={formatValue(tuningState.current_confidence_threshold)} helper="Live confidence threshold" tooltip="The base live confidence threshold currently used for signal gating before any tuning offset is applied." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
+              <StatCard label="Active offset" value={formatValue(tuningState.active_tuning.threshold_offset)} helper="Tuning offset in effect" tooltip="The active tuning adjustment added to or subtracted from the base threshold to change shortlist strictness." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
+              <StatCard label="Latest best" value={formatValue(tuningState.latest_run?.best_threshold)} helper="Winning candidate threshold" tooltip="The best threshold found in the most recent tuning run according to the selected objective." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
+              <StatCard label="Latest score" value={formatValue(tuningState.latest_run?.best_score, 3)} helper="Winning candidate score" tooltip="The objective score of the best candidate from the most recent tuning run." tooltipTo="/docs?doc=signal-gating-tuning-guide" />
+            </section>
+            <div className="cluster top-gap-small">
+              <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(false)}>{saving === "run" ? "… Running" : "▶ Dry-run tune"}</button>
+              <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(true)}>{saving === "apply" ? "… Applying" : "▶ Apply tune"}</button>
+            </div>
+          </Card>
+
+          <DisclosureCard kicker="Advanced controls" title="Manual signal gating settings" subtitle="Manual parameter edits are advanced. Prefer a dry-run tuning result before applying changes." actions={<HelpHint tooltip="These controls tune shortlist selection and threshold behavior before downstream plan generation." to="/docs?doc=signal-gating-tuning-guide" />}>
             <form className="stack-form" onSubmit={(event) => void saveSignalGatingSettings(event)}>
               <div className="form-grid">
                 <label className="form-field"><span>Confidence threshold</span><input name="confidence_threshold" defaultValue={String(tuningState.current_confidence_threshold)} /></label>
@@ -144,11 +151,9 @@ export function SignalGatingJobPage() {
               <div className="helper-text">Zeroed settings preserve baseline behavior. The effective live threshold combines the base confidence threshold with the tuning offset.</div>
               <div className="cluster top-gap-small">
                 <button className="button" type="submit" disabled={saving !== null}>{saving === "config" ? "… Saving" : "✓ Save gates"}</button>
-                <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(false)}>{saving === "run" ? "… Running" : "▶ Tune"}</button>
-                <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(true)}>{saving === "apply" ? "… Applying" : "▶ Apply tune"}</button>
               </div>
             </form>
-          </Card>
+          </DisclosureCard>
 
           <Card>
             <SectionTitle
@@ -169,9 +174,11 @@ export function SignalGatingJobPage() {
                 <div className="helper-text">Objective: {selectedRun.objective_name} · Best threshold: {formatValue(selectedRun.best_threshold)} · Best score: {formatValue(selectedRun.best_score, 3)}</div>
                 <div className="helper-text">Baseline threshold: {formatValue(selectedRun.baseline_threshold)} · Baseline score: {formatValue(selectedRun.baseline_score, 3)}</div>
                 {selectedRun.summary && Object.keys(selectedRun.summary).length > 0 ? (
-                  <pre className="code-block top-gap-small">{JSON.stringify(selectedRun.summary, null, 2)}</pre>
+                  <DisclosureCard kicker="Run summary" title="Stored tuning summary" subtitle="Raw summary stays available for audit without dominating the tuning decision.">
+                    <pre className="code-block top-gap-small">{JSON.stringify(selectedRun.summary, null, 2)}</pre>
+                  </DisclosureCard>
                 ) : null}
-                <SectionTitle kicker="Candidates" title="Run candidate results" subtitle="Sorted from best to worst by the tuning job." />
+                <SectionTitle kicker="Candidates" title="Top candidate results" subtitle="Sorted from best to worst by the tuning job; deeper raw settings stay in each candidate card." />
                 {selectedRun.candidate_results.length === 0 ? (
                   <EmptyState message="No candidate results recorded for this run." />
                 ) : (
