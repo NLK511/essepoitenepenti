@@ -124,6 +124,10 @@ Do not delete until references and tests prove safe:
    - Problem: `TickerTaxonomyService.get_ticker_relationships` mixed dedupe/effectivity handling, peer/supplier/customer edges, classification edges, and macro-channel edges inline.
    - Done now: extracted relationship insertion/dedupe plus peer, classification, and macro relationship builders while preserving relationship payloads and scores.
 
+24. **Watchlist signal payload sections**
+   - Problem: `WatchlistSignalBuilder.build_signal_snapshot` still embedded source-breakdown and diagnostics payload construction after the transmission-field extraction.
+   - Done now: extracted source-breakdown, diagnostics, and cheap-scan component score helpers while preserving signal snapshot payload keys.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.
