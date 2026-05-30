@@ -436,6 +436,35 @@ It audits clutter inside the pages before final navigation, merging, or deletion
 **Implementation notes:**
 - **Done now:** page chrome now uses Evidence & diagnostics language, first screen leads with run production/degradation signals, Run Debugger/Trade Review links are explicit, and timing/identity metadata is collapsed.
 
+### 17. Context snapshot detail `/context/:scope/:snapshotId`
+
+**Primary question:** Is this stored context snapshot fresh, covered, and supported by evidence?
+
+**Keep visible above the fold:**
+- Context score summary: confidence, saliency, coverage, freshness, and status.
+- Snapshot summary text.
+- Scope/status/id/industry badges.
+- Links back to Context Review, Data Quality, and source run when available.
+
+**Demote/collapse:**
+- Summary provenance metadata.
+- Source breakdown/provider mix.
+- Ontology/raw JSON detail.
+
+**Remove/replace duplicates:**
+- Context Review owns the current backdrop verdict; this page owns one-snapshot evidence inspection.
+- Data Quality owns provider/input failure follow-up.
+
+**Unique actions/data to preserve:**
+- Industry selector.
+- Top events/drivers.
+- Triaged primary evidence.
+- Warnings/missing inputs.
+- Raw metadata JSON.
+
+**Implementation notes:**
+- **Done now:** page chrome now uses Evidence & diagnostics language, first screen leads with the snapshot-evidence question, Context Review/Data Quality links are explicit, and summary provenance/source breakdown are collapsed as reference detail.
+
 ## Cross-page authority map
 
 - **Daily authority:** Dashboard.
@@ -465,6 +494,7 @@ It audits clutter inside the pages before final navigation, merging, or deletion
 12. Reconcile route chrome language. **Done:** layout route titles/descriptions now use direct authority labels instead of metaphorical page names, matching the new nav and operator guide.
 13. Refocus ticker detail as a single-ticker diagnostic page. **Done:** ticker detail now leads with the single-ticker attention question, latest-plan/data availability signals, and links back to Trade Review/Quality & Edge; ticker-local performance and plan mix are collapsed as supporting context.
 14. Refocus run detail as the full selected-run chain review. **Done:** run detail now leads with status, warning/error, object, plan, and broker-order counts; timing/identity metadata is collapsed; links back to Run Debugger and Trade Review clarify ownership.
+15. Refocus context snapshot detail as one-snapshot evidence inspection. **Done:** context snapshot detail now leads with the freshness/coverage/evidence question, links back to Context Review and Data Quality, and collapses provenance/source breakdown as reference detail.
 
 ## Completion criteria for Phase 0
 

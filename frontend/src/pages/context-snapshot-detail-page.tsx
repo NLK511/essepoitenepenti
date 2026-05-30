@@ -161,11 +161,13 @@ export function ContextSnapshotDetailPage() {
   return (
     <>
       <PageHeader
-        kicker="Context detail"
+        kicker="Evidence & diagnostics"
         title={title}
+        subtitle="Inspect the evidence behind one stored context snapshot. Context Review owns the current backdrop verdict."
         actions={
           <>
-            <Link to="/context" className="button-secondary">← Context</Link>
+            <Link to="/context" className="button-secondary">← Context Review</Link>
+            <Link to="/data-quality" className="button-subtle">△ Data Quality</Link>
             {snapshot?.run_id ? <Link to={`/runs/${snapshot.run_id}`} className="button-subtle">↗ Source run</Link> : null}
           </>
         }
@@ -189,15 +191,18 @@ export function ContextSnapshotDetailPage() {
           ) : null}
 
           <Card>
-            <ContextScoreSummary
+            <SectionTitle kicker="Snapshot evidence" title="Is this stored context snapshot fresh, covered, and supported?" subtitle="Use this detail page for evidence inspection after Context Review flags a specific macro or industry snapshot." />
+            <div className="top-gap-small">
+              <ContextScoreSummary
               confidence={snapshot.confidence_percent}
               saliency={snapshot.saliency_score}
               coverage={isIndustrySnapshot(snapshot) ? snapshot.active_drivers.length : snapshot.active_themes.length}
               coverageLabel={isIndustrySnapshot(snapshot) ? undefined : "Themes"}
               coverageTooltip={isIndustrySnapshot(snapshot) ? undefined : "Number of active macro themes selected for the snapshot."}
               freshness={formatDate(snapshot.computed_at)}
-              tone={contextSnapshotTone(snapshot)}
-            />
+                tone={contextSnapshotTone(snapshot)}
+              />
+            </div>
             <div className="cluster top-gap-small">
               <Badge tone="info">{scope}</Badge>
               <Badge tone={contextSnapshotTone(snapshot)}>{snapshot.status}</Badge>
@@ -212,7 +217,7 @@ export function ContextSnapshotDetailPage() {
           </Card>
 
           <section className="card-grid">
-            <DisclosureCard kicker="Summary provenance" title="How the summary was generated" defaultOpen>
+            <DisclosureCard kicker="Summary provenance" title="How the summary was generated" subtitle="Reference metadata for debugging summary quality.">
               <ProvenanceStrip method={contextSummaryMethod(snapshot.metadata)} backend={contextSummaryBackend(snapshot.metadata)} model={contextSummaryModel(snapshot.metadata)} error={contextSummaryError(snapshot.metadata)} />
               <div className="helper-text top-gap-small">Duration {summaryDuration !== null ? `${summaryDuration.toFixed(2)}s` : "—"}</div>
               <details className="top-gap-small">
@@ -324,7 +329,7 @@ export function ContextSnapshotDetailPage() {
           </section>
 
           <section className="card-grid">
-            <DisclosureCard title="Source breakdown" subtitle="Stored source mix and linked macro themes." defaultOpen>
+            <DisclosureCard title="Source breakdown" subtitle="Stored source mix and linked macro themes.">
               <div className="summary-grid">
                 <div className="summary-item"><span className="summary-label">Primary news items</span><span className="summary-value">{String(snapshot.source_breakdown?.primary_news_item_count ?? 0)}</span></div>
                 <div className="summary-item"><span className="summary-label">Supporting social items</span><span className="summary-value">{String(snapshot.source_breakdown?.supporting_social_item_count ?? 0)}</span></div>
