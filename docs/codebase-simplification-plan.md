@@ -112,6 +112,10 @@ Do not delete until references and tests prove safe:
    - Problem: `CheapScanSignalService.score` mixed local/remote price-history loading, validation, indicator math, warning logic, diagnostics, and signal construction.
    - Done now: extracted price-history loading/remote persistence, history validation, and cheap-scan metric calculation while preserving scoring formulas and diagnostics.
 
+21. **Ticker technical context assembly**
+   - Problem: `TickerTechnicalFeatureService.build_context` mixed latest-row extraction, bias-count scoring, data-quality problems, and large context construction.
+   - Done now: extracted latest technical value normalization, short/medium bias counting, and technical problem detection while preserving context payload keys.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.

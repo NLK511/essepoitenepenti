@@ -76,53 +76,22 @@ class TickerTechnicalFeatureService:
 
     def build_context(self, df: pd.DataFrame) -> dict[str, Any]:
         latest = df.iloc[-1]
-        price = float(latest.get("Close", 0.0) or 0.0)
-        sma20 = float(latest.get("SMA_20") or 0.0)
-        sma50 = float(latest.get("SMA_50") or 0.0)
-        sma200 = float(latest.get("SMA_200") or 0.0)
-        rsi = float(latest.get("RSI_14") or 50.0)
-        atr = float(latest.get("ATR_14") or 0.0)
-        atr_pct = float(latest.get("atr_pct") or 0.0)
-        momentum_short = float(latest.get("momentum_short") or 0.0)
-        momentum_medium = float(latest.get("momentum_medium") or 0.0)
-        momentum_long = float(latest.get("momentum_long") or 0.0)
+        technical = self._latest_technical_values(latest)
+        price = technical["price"]
+        sma20 = technical["sma20"]
+        sma50 = technical["sma50"]
+        sma200 = technical["sma200"]
+        rsi = technical["rsi"]
+        atr = technical["atr"]
+        atr_pct = technical["atr_pct"]
+        momentum_short = technical["momentum_short"]
+        momentum_medium = technical["momentum_medium"]
+        momentum_long = technical["momentum_long"]
         price_above_sma50 = 1 if price > sma50 else 0
         price_above_sma200 = 1 if price > sma200 else 0
         direction = "LONG" if price > sma200 else "SHORT"
-
-        short_bullish = 0.0
-        short_bearish = 0.0
-        if price > sma20:
-            short_bullish += 1.0
-        else:
-            short_bearish += 1.0
-        if rsi < 30:
-            short_bullish += 1.0
-        elif rsi > 70:
-            short_bearish += 1.0
-        if price_above_sma50:
-            short_bullish += 1.0
-        else:
-            short_bearish += 1.0
-
-        medium_bullish = 0.0
-        medium_bearish = 0.0
-        if price > sma50:
-            medium_bullish += 1.0
-        else:
-            medium_bearish += 1.0
-        if price > sma200:
-            medium_bullish += 1.0
-        else:
-            medium_bearish += 1.0
-        if price_above_sma200:
-            medium_bullish += 1.0
-        else:
-            medium_bearish += 1.0
-
-        problems: list[str] = []
-        if sma200 == 0.0:
-            problems.append("history: insufficient data for SMA200")
+        bias_counts = self._bias_counts(price=price, sma20=sma20, sma50=sma50, sma200=sma200, rsi=rsi, price_above_sma50=price_above_sma50, price_above_sma200=price_above_sma200)
+        problems = self._technical_context_problems(sma200=sma200)
 
         context = {
             "price": price,
@@ -160,10 +129,10 @@ class TickerTechnicalFeatureService:
             "volume_ratio_20": 1.0,
             "dollar_volume_ratio_20": 1.0,
             "reference_features": {"benchmark_symbol": "SPY", "sector_etf_symbol": None, "benchmark_available": False, "sector_available": False, "notes": []},
-            "short_bullish": short_bullish,
-            "short_bearish": short_bearish,
-            "medium_bullish": medium_bullish,
-            "medium_bearish": medium_bearish,
+            "short_bullish": bias_counts["short_bullish"],
+            "short_bearish": bias_counts["short_bearish"],
+            "medium_bullish": bias_counts["medium_bullish"],
+            "medium_bearish": bias_counts["medium_bearish"],
             "direction": direction,
             "sentiment_score": 0.0,
             "sentiment_label": "PRICE_ONLY",
@@ -213,6 +182,61 @@ class TickerTechnicalFeatureService:
             "context_tag_general": 0.0,
         }
         return context
+
+    @staticmethod
+    def _latest_technical_values(latest: pd.Series) -> dict[str, float]:
+        return {
+            "price": float(latest.get("Close", 0.0) or 0.0),
+            "sma20": float(latest.get("SMA_20") or 0.0),
+            "sma50": float(latest.get("SMA_50") or 0.0),
+            "sma200": float(latest.get("SMA_200") or 0.0),
+            "rsi": float(latest.get("RSI_14") or 50.0),
+            "atr": float(latest.get("ATR_14") or 0.0),
+            "atr_pct": float(latest.get("atr_pct") or 0.0),
+            "momentum_short": float(latest.get("momentum_short") or 0.0),
+            "momentum_medium": float(latest.get("momentum_medium") or 0.0),
+            "momentum_long": float(latest.get("momentum_long") or 0.0),
+        }
+
+    @staticmethod
+    def _bias_counts(
+        *,
+        price: float,
+        sma20: float,
+        sma50: float,
+        sma200: float,
+        rsi: float,
+        price_above_sma50: int,
+        price_above_sma200: int,
+    ) -> dict[str, float]:
+        short_bullish = 0.0
+        short_bearish = 0.0
+        short_bullish += 1.0 if price > sma20 else 0.0
+        short_bearish += 0.0 if price > sma20 else 1.0
+        if rsi < 30:
+            short_bullish += 1.0
+        elif rsi > 70:
+            short_bearish += 1.0
+        short_bullish += 1.0 if price_above_sma50 else 0.0
+        short_bearish += 0.0 if price_above_sma50 else 1.0
+        medium_bullish = 0.0
+        medium_bearish = 0.0
+        medium_bullish += 1.0 if price > sma50 else 0.0
+        medium_bearish += 0.0 if price > sma50 else 1.0
+        medium_bullish += 1.0 if price > sma200 else 0.0
+        medium_bearish += 0.0 if price > sma200 else 1.0
+        medium_bullish += 1.0 if price_above_sma200 else 0.0
+        medium_bearish += 0.0 if price_above_sma200 else 1.0
+        return {
+            "short_bullish": short_bullish,
+            "short_bearish": short_bearish,
+            "medium_bullish": medium_bullish,
+            "medium_bearish": medium_bearish,
+        }
+
+    @staticmethod
+    def _technical_context_problems(*, sma200: float) -> list[str]:
+        return ["history: insufficient data for SMA200"] if sma200 == 0.0 else []
 
     @staticmethod
     def compute_column_ranges(df: pd.DataFrame) -> dict[str, tuple[float, float]]:
