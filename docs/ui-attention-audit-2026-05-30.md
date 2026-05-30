@@ -146,6 +146,8 @@ Priority order:
 
 Acceptance: a written per-page content spec exists before route/nav changes; no page is removed based only on the current cluttered version of that page.
 
+**Phase 0 output:** `ui-page-content-refactor-spec-2026-05-30.md` now defines the per-page one-question mandates, above-the-fold signals, demotions, duplicate removals, preservation requirements, cross-page authority map, and implementation sequence.
+
 ### Phase 1 — Make authority explicit without deleting capability
 
 - Update `operator-page-field-guide.md` and route labels so Dashboard, Trade Review, Quality & Edge, and Execution & Risk are the only daily pages, after Phase 0 confirms those boundaries still hold.
