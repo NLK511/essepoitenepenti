@@ -225,9 +225,9 @@ export function JobsPage() {
   return (
     <>
       <PageHeader
-        kicker="Automation"
-        title="Workflows"
-        subtitle="Launch repeatable proposal, refresh, evaluation, and research jobs by goal."
+        kicker="Configure"
+        title="Jobs"
+        subtitle="Create, schedule, and manually queue repeatable workflows. Use Run debugger to investigate executions."
         actions={
           <>
             <HelpHint tooltip="Jobs are grouped into core, research, and maintenance workflows." to={jobsDoc} />
@@ -238,14 +238,17 @@ export function JobsPage() {
         }
       />
       {error ? <ErrorState message={error} /> : null}
-      <section className="metrics-grid top-gap">
-        <StatCard label="Jobs" value={data?.jobs.length ?? "—"} helper="Saved workflows" />
-        <StatCard label="Core workflows" value={data?.jobs.filter((job) => jobCategory(job.job_type) === "core").length ?? "—"} helper="Generation and evaluation" />
-        <StatCard label="Research workflows" value={data?.jobs.filter((job) => jobCategory(job.job_type) === "research").length ?? "—"} helper="Tuning and assessment" />
-        <StatCard label="Maintenance workflows" value={data?.jobs.filter((job) => jobCategory(job.job_type) === "maintenance").length ?? "—"} helper="Context refresh" />
-      </section>
+      <Card className="top-gap">
+        <SectionTitle kicker="Workflow configuration" title="What can be queued or scheduled?" subtitle="Core workflows should dominate daily operations; research and maintenance workflows stay grouped below." />
+        <section className="metrics-grid top-gap-small">
+          <StatCard label="Jobs" value={data?.jobs.length ?? "—"} helper="Saved workflows" />
+          <StatCard label="Core workflows" value={data?.jobs.filter((job) => jobCategory(job.job_type) === "core").length ?? "—"} helper="Generation and evaluation" />
+          <StatCard label="Research workflows" value={data?.jobs.filter((job) => jobCategory(job.job_type) === "research").length ?? "—"} helper="Tuning and assessment" />
+          <StatCard label="Maintenance workflows" value={data?.jobs.filter((job) => jobCategory(job.job_type) === "maintenance").length ?? "—"} helper="Context refresh" />
+        </section>
+      </Card>
       <section className="two-column top-gap">
-        <DisclosureCard className="sticky-toolbar" kicker="Create" title="New workflow" subtitle="Choose the workflow goal first. Only proposal generation needs a watchlist or manual tickers." defaultOpen actions={<HelpHint tooltip="Proposal generation uses watchlists or tickers. Evaluation, tuning, and refresh workflows use stored data instead." to={jobsDoc} />}>
+        <DisclosureCard className="sticky-toolbar" kicker="Create" title="New workflow" subtitle="Choose the workflow goal first. Only proposal generation needs a watchlist or manual tickers." defaultOpen={Boolean(data && data.jobs.length === 0)} actions={<HelpHint tooltip="Proposal generation uses watchlists or tickers. Evaluation, tuning, and refresh workflows use stored data instead." to={jobsDoc} />}>
           <form className="stack-form" onSubmit={handleCreateJob}>
             <div className="form-grid">
               <label className="form-field">

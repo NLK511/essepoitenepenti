@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import { getJson, postForm, deleteJson } from "../api";
-import { DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, Badge, StatCard } from "../components/ui";
+import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { Watchlist, WatchlistEvaluationPolicy } from "../types";
 import { tickerTone } from "../utils";
 
@@ -80,19 +80,22 @@ export function WatchlistsPage() {
   return (
     <>
       <PageHeader
-        kicker="Automation"
+        kicker="Configure"
         title="Watchlists"
         actions={<HelpHint tooltip="Watchlists define reusable ticker universes plus the scheduling and evaluation assumptions that follow them into jobs and review pages." to="/docs?doc=default-watchlists" />}
       />
       {error ? <ErrorState message={error} /> : null}
-      <section className="metrics-grid top-gap">
-        <StatCard label="Watchlists" value={watchlists?.length ?? "—"} helper="Reusable universes currently stored" />
-        <StatCard label="Tickers tracked" value={watchlists ? watchlists.reduce((count, item) => count + item.tickers.length, 0) : "—"} helper="Total ticker slots across all watchlists" />
-        <StatCard label="Shorts enabled" value={watchlists ? watchlists.filter((item) => item.allow_shorts).length : "—"} helper="Watchlists that allow short recommendations" />
-        <StatCard label="Timing optimized" value={watchlists ? watchlists.filter((item) => item.optimize_evaluation_timing).length : "—"} helper="Watchlists using evaluation-timing optimization" />
-      </section>
+      <Card className="top-gap">
+        <SectionTitle kicker="Universe configuration" title="Which ticker universes feed plan generation?" subtitle="Watchlists define monitored tickers and the default scheduling/evaluation assumptions inherited by jobs." />
+        <section className="metrics-grid top-gap-small">
+          <StatCard label="Watchlists" value={watchlists?.length ?? "—"} helper="Reusable universes currently stored" />
+          <StatCard label="Tickers tracked" value={watchlists ? watchlists.reduce((count, item) => count + item.tickers.length, 0) : "—"} helper="Total ticker slots across all watchlists" />
+          <StatCard label="Shorts enabled" value={watchlists ? watchlists.filter((item) => item.allow_shorts).length : "—"} helper="Watchlists that allow short recommendations" />
+          <StatCard label="Timing optimized" value={watchlists ? watchlists.filter((item) => item.optimize_evaluation_timing).length : "—"} helper="Watchlists using evaluation-timing optimization" />
+        </section>
+      </Card>
       <section className="two-column top-gap">
-        <DisclosureCard className="sticky-toolbar" kicker="Create" title="New watchlist" subtitle="Keep the metadata practical: only enter region, exchange, and timezone details that actually improve scheduling or review quality." defaultOpen actions={<HelpHint tooltip="A watchlist should capture only the metadata that improves scheduling, evaluation timing, or operator interpretation later." to="/docs?doc=default-watchlists" />}>
+        <DisclosureCard className="sticky-toolbar" kicker="Create" title="New watchlist" subtitle="Keep the metadata practical: only enter region, exchange, and timezone details that actually improve scheduling or review quality." defaultOpen={Boolean(watchlists && watchlists.length === 0)} actions={<HelpHint tooltip="A watchlist should capture only the metadata that improves scheduling, evaluation timing, or operator interpretation later." to="/docs?doc=default-watchlists" />}>
           <form className="stack-form" onSubmit={handleSubmit}>
             <label className="form-field">
               <span>Name</span>
