@@ -9,6 +9,22 @@ import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingS
 const glossaryDoc = (section: string) => `/docs?doc=glossary&section=${section}`;
 const recommendationQualityDoc = "/docs?doc=recommendation-quality-improvement-plan";
 
+function percent(value: number | null | undefined): string {
+  return value === null || value === undefined ? "—" : `${value.toFixed(1)}%`;
+}
+
+function currency(value: number | null | undefined): string {
+  return value === null || value === undefined ? "—" : `$${value.toFixed(2)}`;
+}
+
+function trustTone(label: string | null | undefined): "ok" | "warning" | "danger" | "neutral" | "info" {
+  const normalized = (label ?? "").trim().toLowerCase();
+  if (normalized === "healthy" || normalized === "eligible_for_cautious_expansion") return "ok";
+  if (normalized === "watch" || normalized === "research_only" || normalized === "insufficient") return "warning";
+  if (normalized === "degraded" || normalized === "demote_or_halt" || normalized === "blocked") return "danger";
+  return "info";
+}
+
 export function RecommendationQualityPage() {
   const [data, setData] = useState<RecommendationQualityResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,22 +68,57 @@ export function RecommendationQualityPage() {
   return (
     <>
       <PageHeader
-        kicker="Advanced review"
-        title="Recommendation quality summary"
-        actions={<HelpHint tooltip="This page combines the metrics that matter for recommendation quality into one review surface." to="/docs?doc=recommendation-quality-improvement-plan" />}
+        kicker="Performance authority"
+        title="Quality & Edge"
+        actions={<HelpHint tooltip="This is the canonical page for edge validation, effective outcomes, calibration, baselines, reliability, and evidence-backed improvement actions." to="/docs?doc=recommendation-quality-improvement-plan" />}
       />
       {error ? <ErrorState message={error} /> : null}
       {!data && !error ? <LoadingState message="Loading recommendation quality summary…" /> : null}
       {data && selectedSummary ? (
         <div className="stack-page">
-          <section className="metrics-grid">
-            <StatCard label="Quality status" value={selectedSummary.status} helper={`${selectedSummary.window_label ?? "current"} window · ${selectedSummary.status_reason || `Updated ${formatDate(selectedSummary.generated_at)}`}`} tooltip="Overall recommendation-quality posture from confidence quality, baseline comparisons, where results look strongest, and walk-forward checks." tooltipTo={recommendationQualityDoc} />
-            <StatCard label="Resolved outcomes" value={selectedSummary.resolved_outcomes} helper="Current outcome sample" tooltip="The number of stored outcomes that have resolved strongly enough to contribute to current review metrics." tooltipTo={glossaryDoc("outcome-evaluation")} />
-            <StatCard label="Win rate" value={selectedSummary.overall_win_rate_percent !== null ? `${selectedSummary.overall_win_rate_percent.toFixed(1)}%` : "—"} helper="Overall resolved win rate" tooltip="Overall win/loss rate across the currently reviewed resolved outcome set. This is useful, but it should be read alongside calibration and return metrics." tooltipTo={recommendationQualityDoc} />
-            <StatCard label="Where it works best" value={selectedSummary.ready_for_expansion ? "some groups stand out" : "nothing clear yet"} helper="Checks whether a few groups clearly beat the average" tooltip="This asks a simple question: do a few types of recommendations clearly look better than the rest? If yes, trust can expand there first. If not, stay selective and cautious." tooltipTo={glossaryDoc("evidence-concentration")} />
-            <StatCard label="Simulated almost entered" value={entryDiagnostics?.near_entry_miss_count ?? "—"} helper={(entryDiagnostics?.near_entry_and_worked_count ?? 0) > 0 ? `${entryDiagnostics?.near_entry_and_worked_count} then still worked` : "Simulation-only unfilled plans that came very close"} tooltip="Simulation-only diagnostic: counts plans that never entered but came within the fixed near-miss threshold. This is not broker-preferred P&L evidence." tooltipTo={glossaryDoc("entry-stop-take-profit")} />
-            <StatCard label="Walk-forward" value={data.summary.walk_forward_promotion_recommended ? "recommended" : data.summary.walk_forward_error ? "error" : "watch"} helper="Active tuning gate status" tooltip="Shows whether later time-slice validation supports promotion. Walk-forward validation checks whether a change still looks good on later data instead of only one pooled sample." tooltipTo={glossaryDoc("walk-forward-validation")} />
-            <StatCard label="Families" value={selectedSummary.family_count} helper="Setup families reviewed" tooltip="The number of setup families included in the current review surfaces. Family-level checks help show whether one trade archetype is carrying or hurting results." tooltipTo={glossaryDoc("setup-family")} />
+          <section className="insight-grid">
+            <Card>
+              <SectionTitle kicker="Edge gate" title="Can this policy be trusted?" subtitle="This is the authoritative autonomy gate. Policy health is only a compact headline." />
+              <div className="data-stack top-gap-small">
+                <div className="operator-status-item">
+                  <div className="operator-status-head"><span className="summary-label">edge validation</span><Badge tone={trustTone(data.summary.edge_validation_gate?.label)}>{data.summary.edge_validation_gate?.label ?? "unknown"}</Badge></div>
+                  <div className="operator-status-value">{data.summary.edge_validation_gate?.broker_selected_outcomes ?? "—"} broker selected outcomes</div>
+                  <div className="helper-text">{data.summary.edge_validation_gate?.reasons?.slice(0, 3).join(" · ") || "No edge-gate reasons reported"}</div>
+                </div>
+                <div className="operator-status-item">
+                  <div className="operator-status-head"><span className="summary-label">policy health</span><Badge tone={trustTone(data.summary.policy_health?.label)}>{data.summary.policy_health?.label ?? "unknown"}</Badge></div>
+                  <div className="operator-status-value">{data.summary.policy_health?.resolved_selected_outcomes ?? "—"} selected resolved</div>
+                  <div className="helper-text">{data.summary.policy_health?.reasons?.slice(0, 3).join(" · ") || "No policy-health reasons reported"}</div>
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Effective outcomes" title="What actually happened?" subtitle={`${selectedSummary.window_label ?? "current"} window · ${selectedSummary.status_reason || `Updated ${formatDate(selectedSummary.generated_at)}`}`} />
+              <div className="data-stack top-gap-small">
+                <StatCard label="Quality status" value={selectedSummary.status} helper="Current quality posture" tooltip="Overall recommendation-quality posture from confidence quality, baseline comparisons, where results look strongest, and walk-forward checks." tooltipTo={recommendationQualityDoc} />
+                <StatCard label="Resolved outcomes" value={selectedSummary.resolved_outcomes} helper="Broker/effective current outcome sample" tooltip="The number of stored outcomes that have resolved strongly enough to contribute to current review metrics." tooltipTo={glossaryDoc("outcome-evaluation")} />
+                <StatCard label="Win rate" value={percent(selectedSummary.overall_win_rate_percent)} helper={`Policy P&L ${currency(data.summary.policy_health?.realized_pnl)}`} tooltip="Overall win/loss rate across the currently reviewed resolved outcome set. This is useful, but it should be read alongside calibration and return metrics." tooltipTo={recommendationQualityDoc} />
+              </div>
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Reliability" title="Where is the evidence strong?" subtitle="Use these as evidence concentration and calibration headlines; details stay lower on the page." />
+              <div className="data-stack top-gap-small">
+                <StatCard label="Where it works best" value={selectedSummary.ready_for_expansion ? "some groups stand out" : "nothing clear yet"} helper={`${selectedSummary.strongest_positive_count} stronger · ${selectedSummary.weakest_count} weaker`} tooltip="This asks whether a few groups inside the current cohort clearly look better than the rest." tooltipTo={glossaryDoc("evidence-concentration")} />
+                <StatCard label="Calibration ECE" value={selectedSummary.calibration_report?.expected_calibration_error !== null && selectedSummary.calibration_report?.expected_calibration_error !== undefined ? selectedSummary.calibration_report.expected_calibration_error.toFixed(4) : "—"} helper="Average confidence gap" tooltip="Expected calibration error: the average gap between displayed confidence and realized win rate across confidence buckets." tooltipTo={glossaryDoc("confidence-bucket")} />
+                <StatCard label="Families" value={selectedSummary.family_count} helper="Setup families reviewed" tooltip="The number of setup families included in the current review surfaces." tooltipTo={glossaryDoc("setup-family")} />
+              </div>
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Next action" title="What should change?" subtitle="Only act when the evidence points to a specific improvement path." />
+              {data.next_actions.length === 0 ? <EmptyState message="No next actions generated." /> : <ul className="list-reset top-gap-small">{data.next_actions.slice(0, 3).map((item) => <li key={item} className="list-item compact-item">{item}</li>)}</ul>}
+              <div className="cluster top-gap-small">
+                <Badge tone={data.summary.walk_forward_promotion_recommended ? "ok" : data.summary.walk_forward_error ? "danger" : "warning"}>walk-forward {data.summary.walk_forward_promotion_recommended ? "recommended" : data.summary.walk_forward_error ? "error" : "watch"}</Badge>
+                <Link to="/research" className="button-subtle">⌂ Research Lab</Link>
+              </div>
+            </Card>
           </section>
 
           <section className="card-grid">
@@ -102,8 +153,7 @@ export function RecommendationQualityPage() {
               )}
             </Card>
 
-            <Card>
-              <SectionTitle kicker="Current tuning" title="Live thresholds and guardrails" subtitle="Record the active settings before changing anything." actions={<HelpHint tooltip="These are the live thresholds and safeguards now affecting recommendation generation and promotion decisions." to={recommendationQualityDoc} />} />
+            <DisclosureCard kicker="Current tuning" title="Live thresholds and guardrails" subtitle="Advanced reference: record the active settings before changing anything." actions={<HelpHint tooltip="These are the live thresholds and safeguards now affecting recommendation generation and promotion decisions." to={recommendationQualityDoc} />}>
               <div className="data-points top-gap-small">
                 <div className="data-point"><span className="data-point-label">confidence threshold</span><span className="data-point-value">{data.summary.tuning_settings.confidence_threshold.toFixed(1)}</span></div>
                 <div className="data-point"><span className="data-point-label">shortlist aggressiveness</span><span className="data-point-value">{data.summary.tuning_settings.signal_gating.shortlist_aggressiveness.toFixed(2)}</span></div>
@@ -120,7 +170,7 @@ export function RecommendationQualityPage() {
                   <div className="data-point"><span className="data-point-label">policy robustness</span><span className="data-point-value"><Badge tone={data.summary.active_policy_evaluation.robustness_label === "strong" || data.summary.active_policy_evaluation.robustness_label === "usable" ? "ok" : data.summary.active_policy_evaluation.robustness_label === "limited" ? "warning" : "neutral"}>{data.summary.active_policy_evaluation.robustness_label}</Badge></span></div>
                 </div>
               ) : null}
-            </Card>
+            </DisclosureCard>
           </section>
 
           <section className="card-grid">
@@ -178,8 +228,7 @@ export function RecommendationQualityPage() {
               </div>
             </Card>
 
-            <Card>
-              <SectionTitle kicker="Simulation-only entry quality" title="Almost entered, then moved" actions={<HelpHint tooltip="These simulation-only numbers highlight plans that never filled, but came very close to entry. They are useful diagnostics, not broker-preferred outcome evidence." to={glossaryDoc("entry-stop-take-profit")} />} />
+            <DisclosureCard kicker="Simulation-only entry quality" title="Almost entered, then moved" subtitle="Diagnostic only: useful for entry-framing research, not broker-preferred outcome evidence." actions={<HelpHint tooltip="These simulation-only numbers highlight plans that never filled, but came very close to entry. They are useful diagnostics, not broker-preferred outcome evidence." to={glossaryDoc("entry-stop-take-profit")} />}>
               <div className="data-points top-gap-small">
                 <div className="data-point"><span className="data-point-label">never entered</span><span className="data-point-value">{entryDiagnostics?.never_entered_count ?? "—"}</span></div>
                 <div className="data-point"><span className="data-point-label">almost entered</span><span className="data-point-value">{entryDiagnostics?.near_entry_miss_count ?? "—"}</span></div>
@@ -188,7 +237,7 @@ export function RecommendationQualityPage() {
                 <div className="data-point"><span className="data-point-label">almost-entered rate</span><span className="data-point-value">{entryDiagnostics?.near_entry_miss_rate_percent !== null && entryDiagnostics?.near_entry_miss_rate_percent !== undefined ? `${entryDiagnostics.near_entry_miss_rate_percent.toFixed(1)}%` : "—"}</span></div>
                 <div className="data-point"><span className="data-point-label">avg miss distance</span><span className="data-point-value">{entryDiagnostics?.average_entry_miss_distance_percent !== null && entryDiagnostics?.average_entry_miss_distance_percent !== undefined ? `${entryDiagnostics.average_entry_miss_distance_percent.toFixed(2)}%` : "—"}</span></div>
               </div>
-            </Card>
+            </DisclosureCard>
 
             <Card>
               <SectionTitle kicker="Walk-forward" title="Promotion gate" actions={<HelpHint tooltip="The promotion gate decides whether a tuning change is allowed to become live. It uses walk-forward validation and sample thresholds so thin evidence does not auto-promote a change." to={glossaryDoc("promotion-gate")} />} />

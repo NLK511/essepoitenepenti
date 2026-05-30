@@ -449,6 +449,9 @@ export interface RecommendationQualitySummary extends RecommendationQualityWindo
   };
   latest_assessment: Record<string, unknown>;
   active_policy_evaluation?: PlanPolicyEvaluation;
+  edge_validation_gate?: EdgeValidationGateReport | null;
+  policy_health?: PolicyHealthReport | null;
+  policy_trust?: Record<string, unknown> | null;
 }
 
 export interface RecommendationQualityResponse {
