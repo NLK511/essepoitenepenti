@@ -111,23 +111,23 @@ function isSectionActive(section: NavSection, pathname: string): boolean {
 function routeMeta(pathname: string): { eyebrow: string; title: string; description: string } {
   if (pathname === "/") {
     return {
-      eyebrow: "Workspace overview",
-      title: "Aurelio’s Forum",
-      description: "Track runs, context, watchlists, and recommendation plans from one place.",
+      eyebrow: "Operate",
+      title: "Dashboard",
+      description: "Check safety, performance, inputs, and the current work queue from one place.",
     };
   }
   if (pathname === "/jobs") {
     return {
-      eyebrow: "Automation",
-      title: "Orders of the Empire",
-      description: "Create repeatable workflows, queue runs, and monitor operational health.",
+      eyebrow: "Configure",
+      title: "Jobs",
+      description: "Create, schedule, and manually queue repeatable workflows.",
     };
   }
   if (pathname.startsWith("/jobs/watchlists")) {
     return {
-      eyebrow: "Automation",
-      title: "Legions",
-      description: "Define the universes, default horizons, and scheduling assumptions that shape plan generation.",
+      eyebrow: "Configure",
+      title: "Watchlists",
+      description: "Define monitored ticker universes and the assumptions inherited by proposal jobs.",
     };
   }
   if (pathname.startsWith("/jobs/ticker-signals")) {
@@ -153,16 +153,16 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
   }
   if (pathname.startsWith("/research/signal-gating/gating-job") || pathname.startsWith("/research/signal-gating")) {
     return {
-      eyebrow: "Research",
-      title: "Cato’s Gate",
-      description: "Adjust upstream selection controls, launch tuning runs, and inspect candidate results without a separate hub page.",
+      eyebrow: "Research Lab",
+      title: "Signal Gating Tuning",
+      description: "Adjust upstream shortlist thresholds only when evidence supports a gating change.",
     };
   }
   if (pathname.startsWith("/research/plan-generation-tuning")) {
     return {
-      eyebrow: "Research",
-      title: "The Forge of Plans",
-      description: "Inspect active plan-generation configs, ranked backtest candidates, and guarded promotions.",
+      eyebrow: "Research Lab",
+      title: "Plan Generation Tuning",
+      description: "Inspect downstream plan-framing candidates, validation, and guarded promotions.",
     };
   }
   if (pathname.startsWith("/research")) {
@@ -174,9 +174,9 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
   }
   if (pathname.startsWith("/jobs/debugger")) {
     return {
-      eyebrow: "Review",
-      title: "The Tribunal",
-      description: "Trace what each run scanned, shortlisted, persisted, and warned about.",
+      eyebrow: "Evidence & diagnostics",
+      title: "Run Debugger",
+      description: "Triage failed, warning-heavy, or active runs before opening full run detail.",
     };
   }
   if (pathname.startsWith("/broker-orders")) {
@@ -188,56 +188,56 @@ function routeMeta(pathname: string): { eyebrow: string; title: string; descript
   }
   if (pathname.startsWith("/data-quality")) {
     return {
-      eyebrow: "Diagnostics",
-      title: "The Supply Lines",
-      description: "Audit no-bars, no-news, stale coverage, and broker-reject tickers before they distort calibration.",
+      eyebrow: "Evidence & diagnostics",
+      title: "Data Quality",
+      description: "Audit no-bars, no-news, stale coverage, and broker-reject ticker issues.",
     };
   }
   if (pathname.startsWith("/runs/")) {
     return {
-      eyebrow: "Execution detail",
-      title: "After-Action Scroll",
-      description: "Follow the full execution path from cheap scan to context objects, signals, and plans.",
+      eyebrow: "Evidence & diagnostics",
+      title: "Run Detail",
+      description: "Follow the full execution path from cheap scan to context objects, signals, plans, and broker orders.",
     };
   }
   if (pathname.startsWith("/workers/")) {
     return {
-      eyebrow: "Worker diagnostics",
-      title: "The Scriptorium",
+      eyebrow: "Evidence & diagnostics",
+      title: "Worker Logs",
       description: "Inspect live worker output and follow a running worker’s progress in real time.",
     };
   }
   if (pathname.startsWith("/tickers/")) {
     return {
-      eyebrow: "Ticker review",
-      title: "The Scroll of One Ticker",
+      eyebrow: "Evidence & diagnostics",
+      title: "Ticker Detail",
       description: "Inspect a ticker’s recent plans, outcomes, and supporting context.",
     };
   }
   if (pathname.startsWith("/context") || pathname.startsWith("/sentiment")) {
     return {
-      eyebrow: "Context",
-      title: "The Agora",
+      eyebrow: "Evidence & diagnostics",
+      title: "Context Review",
       description: "Review the shared macro and industry backdrop behind current plans and signals.",
     };
   }
   if (pathname.startsWith("/settings")) {
     return {
-      eyebrow: "Reference",
-      title: "The Villa of Keys",
-      description: "Configure providers, credentials, execution toggles, and operational defaults.",
+      eyebrow: "Configure",
+      title: "Settings",
+      description: "Configure providers, credentials, execution toggles, safety limits, and operational defaults.",
     };
   }
   if (pathname.startsWith("/docs")) {
     return {
-      eyebrow: "Reference",
-      title: "The Codex",
-      description: "Read product, redesign, and operator guidance without leaving the app.",
+      eyebrow: "Help",
+      title: "Docs",
+      description: "Read product, methodology, operator, and reference guidance without leaving the app.",
     };
   }
   return {
     eyebrow: "Trade proposer app",
-    title: "The Atrium",
+    title: "Not found",
     description: "Navigate the recommendation workflow, supporting context, and system settings.",
   };
 }
