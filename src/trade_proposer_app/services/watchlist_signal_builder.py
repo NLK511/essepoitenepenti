@@ -130,6 +130,7 @@ class WatchlistSignalBuilder:
             "expected_transmission_window_detail": transmission["expected_transmission_window_detail"],
             "market_intelligence": transmission["market_intelligence"],
             "market_intelligence_summary": transmission["market_intelligence_summary"],
+            **self._fundamental_payload(analysis),
             "conflict_flags": transmission["conflict_flags"],
             "conflict_flag_details": transmission["conflict_flag_details"],
             "base_confidence_percent": base_confidence,
@@ -175,6 +176,7 @@ class WatchlistSignalBuilder:
             "primary_driver_details": transmission["primary_driver_details"],
             "market_intelligence": transmission["market_intelligence"],
             "market_intelligence_summary": transmission["market_intelligence_summary"],
+            **self._fundamental_payload(analysis),
             "industry_exposure_channels": transmission["industry_exposure_channels"],
             "industry_exposure_channel_details": transmission["industry_exposure_channel_details"],
             "ticker_exposure_channels": transmission["ticker_exposure_channels"],
@@ -183,6 +185,19 @@ class WatchlistSignalBuilder:
             "expected_transmission_window_detail": transmission["expected_transmission_window_detail"],
             "conflict_flags": transmission["conflict_flags"],
             "conflict_flag_details": transmission["conflict_flag_details"],
+        }
+
+    def _fundamental_payload(self, analysis: dict[str, Any]) -> dict[str, Any]:
+        o = self._orchestration
+        snapshot = o._pluck(analysis, "ticker_deep_analysis", "fundamental_snapshot") or o._pluck(analysis, "fundamental_snapshot") or {}
+        buckets = o._pluck(analysis, "ticker_deep_analysis", "fundamental_feature_buckets") or o._pluck(analysis, "fundamental_feature_buckets") or {}
+        coverage = o._pluck(analysis, "ticker_deep_analysis", "fundamental_coverage_status")
+        if coverage is None and isinstance(snapshot, dict):
+            coverage = snapshot.get("coverage_status")
+        return {
+            "fundamental_snapshot": snapshot if isinstance(snapshot, dict) else {},
+            "fundamental_feature_buckets": buckets if isinstance(buckets, dict) else {},
+            "fundamental_coverage_status": coverage,
         }
 
     @staticmethod

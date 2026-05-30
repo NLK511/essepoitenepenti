@@ -208,6 +208,23 @@ Typical stored fields include:
 
 The decision payload is the operator/audit trail for steering, not a live broker mutation record.
 
+### `FundamentalAnalysisSnapshotRecord`
+The persisted fundamental snapshot stores an immutable point-in-time view for a monitored ticker.
+
+Typical stored fields include:
+- `ticker`
+- `as_of`
+- `source_set_json`
+- `coverage_status`
+- `freshness_status`
+- `payload_json`
+- `warnings_json`
+- `missing_inputs_json`
+- `job_id`, `run_id`
+- `created_at`, `updated_at`
+
+The payload uses compact sections: business profile, valuation, profitability/quality, growth, balance-sheet risk, cash flow, analyst context, event calendar, feature buckets, provider diagnostics, and raw payload references. Plan analysis must use the latest snapshot at or before plan time.
+
 ## Retired support snapshot records
 
 Older builds introduced `SupportSnapshot` records during context refresh workflows, but active builds persist context snapshots directly.

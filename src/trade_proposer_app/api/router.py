@@ -6,6 +6,7 @@ from trade_proposer_app.api.routes.dashboard import router as dashboard_router
 from trade_proposer_app.api.routes.data_quality import router as data_quality_router
 from trade_proposer_app.api.routes.docs import router as docs_router
 from trade_proposer_app.api.routes.effective_plan_outcomes import router as effective_plan_outcomes_router
+from trade_proposer_app.api.routes.fundamentals import router as fundamentals_router
 from trade_proposer_app.api.routes.health import router as health_router
 from trade_proposer_app.api.routes.historical_replay import router as historical_replay_router
 from trade_proposer_app.api.routes.jobs import router as jobs_router
@@ -35,6 +36,7 @@ router.include_router(dashboard_router)
 router.include_router(data_quality_router)
 router.include_router(docs_router)
 router.include_router(effective_plan_outcomes_router)
+router.include_router(fundamentals_router)
 router.include_router(context_router)
 router.include_router(historical_replay_router)
 router.include_router(observability_router)

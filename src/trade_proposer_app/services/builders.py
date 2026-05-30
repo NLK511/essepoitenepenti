@@ -5,6 +5,7 @@ from trade_proposer_app.repositories.broker_positions import BrokerPositionRepos
 from trade_proposer_app.repositories.broker_reconciliation_snapshots import BrokerReconciliationSnapshotRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
+from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
@@ -89,7 +90,10 @@ def create_ticker_deep_analysis_service(
     session: Session,
     proposal_service: ProposalService | None = None,
 ) -> TickerDeepAnalysisService:
-    return TickerDeepAnalysisService(proposal_service or create_proposal_service(session))
+    return TickerDeepAnalysisService(
+        proposal_service or create_proposal_service(session),
+        fundamental_snapshots=FundamentalAnalysisSnapshotRepository(session),
+    )
 
 
 def create_watchlist_orchestration_service(

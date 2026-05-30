@@ -723,6 +723,9 @@ export interface RecommendationPlanSignalBreakdown {
   transmission_summary?: RecommendationTransmissionSummary;
   market_intelligence?: Record<string, unknown>;
   market_intelligence_summary?: string | null;
+  fundamental_snapshot?: Record<string, unknown>;
+  fundamental_feature_buckets?: Record<string, unknown>;
+  fundamental_coverage_status?: string | null;
   mode?: string;
   shortlisted?: boolean;
   shortlist_rank?: number | null;
@@ -742,6 +745,9 @@ export interface TickerSignalDiagnostics extends RecommendationTransmissionSumma
   cheap_scan_directional_score?: number;
   catalyst_proxy_score?: number;
   cheap_scan_component_scores?: Record<string, unknown>;
+  fundamental_snapshot?: Record<string, unknown>;
+  fundamental_feature_buckets?: Record<string, unknown>;
+  fundamental_coverage_status?: string | null;
   [key: string]: unknown;
 }
 
@@ -754,6 +760,9 @@ export interface TickerSignalSourceBreakdown extends RecommendationTransmissionS
   base_confidence_percent?: number;
   market_intelligence?: Record<string, unknown>;
   market_intelligence_summary?: string | null;
+  fundamental_snapshot?: Record<string, unknown>;
+  fundamental_feature_buckets?: Record<string, unknown>;
+  fundamental_coverage_status?: string | null;
   [key: string]: unknown;
 }
 

@@ -39,6 +39,18 @@ function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(parsed);
 }
 
+function fundamentalLabel(plan: { signal_breakdown?: Record<string, unknown> }): string {
+  const signal = plan.signal_breakdown ?? {};
+  const buckets = typeof signal.fundamental_feature_buckets === "object" && signal.fundamental_feature_buckets !== null ? signal.fundamental_feature_buckets as Record<string, unknown> : {};
+  const coverage = typeof signal.fundamental_coverage_status === "string" ? signal.fundamental_coverage_status : null;
+  const eventRegime = typeof buckets.event_regime === "string" ? buckets.event_regime.replace(/_/g, " ") : null;
+  const valuation = typeof buckets.valuation === "string" ? buckets.valuation : null;
+  if (!coverage && !eventRegime && !valuation) {
+    return "snapshot missing";
+  }
+  return [coverage, eventRegime ? `event ${eventRegime}` : null, valuation ? `valuation ${valuation}` : null].filter(Boolean).join(" · ");
+}
+
 function marketIntelligenceLabel(plan: { signal_breakdown?: Record<string, unknown>; evidence_summary?: Record<string, unknown> }): string {
   const signal = plan.signal_breakdown ?? {};
   const market = typeof signal.market_intelligence === "object" && signal.market_intelligence !== null ? signal.market_intelligence as Record<string, unknown> : null;
@@ -472,6 +484,7 @@ export function TickerPage() {
                     <div className="helper-text">{latestPlan.thesis_summary || latestPlan.rationale_summary || "No thesis summary stored."}</div>
                     <div className="helper-text">Entry {latestPlan.entry_price_low ?? latestPlan.entry_price_high ?? "—"} · Stop {latestPlan.stop_loss ?? "—"} · Take {latestPlan.take_profit ?? "—"}</div>
                     <div className="helper-text">Market intelligence {marketIntelligenceLabel(latestPlan)}</div>
+                    <div className="helper-text">Fundamentals {fundamentalLabel(latestPlan)}</div>
                     <div className="helper-text">Relationships {relationshipSummary(latestPlan ?? {})} · Bias {latestOutcomeBias} · Regime {latestOutcomeRegime}</div>
                     <RecommendationPlanEvaluationSummary plan={latestPlan} />
                     {latestPlan.latest_outcome?.entry_touched === false ? (
@@ -543,6 +556,7 @@ export function TickerPage() {
                         </div>
                         <div className="helper-text">{item.thesis_summary || item.rationale_summary || "No thesis summary stored."}</div>
                         <div className="helper-text top-gap-small">market intelligence {marketIntelligenceLabel(item)}</div>
+                        <div className="helper-text">fundamentals {fundamentalLabel(item)}</div>
                         <div className="helper-text top-gap-small">relationships {relationshipSummary(item)} · entry {item.entry_price_low ?? item.entry_price_high ?? "—"}{item.entry_price_high && item.entry_price_low && item.entry_price_high !== item.entry_price_low ? ` to ${item.entry_price_high}` : ""} · stop {item.stop_loss ?? "—"} · take {item.take_profit ?? "—"}</div>
                         <div className="helper-text">outcome {item.effective_evaluation_source === "broker" ? item.effective_evaluation_detail || "broker evaluation" : item.effective_evaluation_source === "missing" ? item.effective_evaluation_detail || "broker evaluation missing" : item.latest_outcome?.notes || (item.warnings.length > 0 ? `${item.warnings.length} warning(s)` : "—")} · analytics {item.latest_outcome ? `${outcomeBias} · ${outcomeRegime}` : "—"}</div>
                         {item.latest_outcome?.entry_touched === false ? (

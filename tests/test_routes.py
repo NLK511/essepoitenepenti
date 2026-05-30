@@ -34,6 +34,7 @@ from trade_proposer_app.persistence.models import Base, DashboardTrendSnapshotRe
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
+from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
 from trade_proposer_app.repositories.jobs import JobRepository
@@ -146,6 +147,43 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
             StubAppPreflightService,
         )
         self.health_preflight_patcher.start()
+
+    async def test_fundamental_snapshot_latest_route_returns_point_in_time_snapshot(self) -> None:
+        session = Session(bind=self.engine)
+        try:
+            repo = FundamentalAnalysisSnapshotRepository(session)
+            older = repo.create_snapshot(
+                ticker="AAPL",
+                as_of=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                source_set=["fake"],
+                coverage_status="ok",
+                freshness_status="fresh",
+                payload={"feature_buckets": {"valuation": "high"}},
+                warnings=[],
+                missing_inputs=[],
+            )
+            repo.create_snapshot(
+                ticker="AAPL",
+                as_of=datetime(2026, 2, 1, tzinfo=timezone.utc),
+                source_set=["fake"],
+                coverage_status="ok",
+                freshness_status="fresh",
+                payload={"feature_buckets": {"valuation": "medium"}},
+                warnings=[],
+                missing_inputs=[],
+            )
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/api/fundamentals/snapshots/aapl/latest?as_of=2026-01-15T00:00:00Z")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["ticker"], "AAPL")
+        self.assertEqual(payload["snapshot"]["id"], older["id"])
+        self.assertEqual(payload["snapshot"]["payload"]["feature_buckets"]["valuation"], "high")
 
     async def test_observability_events_endpoint_filters_by_run(self) -> None:
         session = Session(bind=self.engine)

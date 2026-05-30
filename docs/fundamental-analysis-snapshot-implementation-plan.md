@@ -137,6 +137,8 @@ Tests:
 
 ## Phase 4 — refresh job
 
+Status: implemented for backend scheduled/manual execution. API endpoints exist for latest snapshot lookup, specific ticker refresh, due monitored ticker refresh, monitored ticker listing, and validation-slice summary.
+
 Add job type: `fundamental_analysis_refresh`.
 
 Default schedule:
@@ -162,6 +164,8 @@ Tests:
 - run artifact contains per-ticker statuses
 
 ## Phase 5 — analysis and plan integration
+
+Status: implemented for ticker deep-analysis context, analysis payloads, watchlist signal diagnostics/source breakdown, and recommendation-plan signal breakdown. Fundamentals remain non-boosting.
 
 Inject latest point-in-time snapshot into:
 - `TickerDeepAnalysisService` context
@@ -195,6 +199,8 @@ Tests:
 
 ## Phase 6 — UI and observability
 
+Status: partially implemented. Ticker page plan cards show compact fundamental coverage/event/valuation labels. Dedicated stale-coverage UI and observability events remain follow-up work.
+
 UI surfaces:
 - ticker page: latest snapshot card
 - recommendation plan raw/details: compact fundamental context
@@ -212,6 +218,8 @@ Tests:
 - UI typecheck updated types
 
 ## Phase 7 — validation and research slices
+
+Status: initial API summary implemented using broker-preferred effective outcomes and persisted plan signal-breakdown fundamental buckets. Expected value/drawdown extensions remain follow-up work.
 
 Add fundamental slices to reliability/research summaries after snapshots exist in plan payloads.
 

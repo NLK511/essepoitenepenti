@@ -52,6 +52,8 @@ class TickerAnalysisPayloadService:
             "summary": self._summary_section(context),
             "news": self._news_section(context),
             "market_intelligence": context.get("market_intelligence", {}),
+            "fundamental_snapshot": context.get("fundamental_snapshot", {}),
+            "fundamental_feature_buckets": context.get("fundamental_feature_buckets", {}),
             "sentiment": self._sentiment_section(context),
             "proposal": self._proposal_section(
                 ticker=ticker,
@@ -195,6 +197,9 @@ class TickerAnalysisPayloadService:
             "transmission_analysis": transmission_analysis,
             "market_intelligence": context.get("market_intelligence", {}),
             "market_intelligence_summary": context.get("market_intelligence_summary"),
+            "fundamental_snapshot": context.get("fundamental_snapshot", {}),
+            "fundamental_feature_buckets": context.get("fundamental_feature_buckets", {}),
+            "fundamental_coverage_status": context.get("fundamental_coverage_status"),
             "context_quality": {
                 "status": self._context_quality_status(context),
                 "macro": {
