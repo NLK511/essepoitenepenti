@@ -399,11 +399,13 @@ export function TickerPage() {
   return (
     <>
       <PageHeader
-        kicker="Ticker drill-down"
-        title={data ? `${data.ticker} review` : "Ticker analysis"}
+        kicker="Evidence & diagnostics"
+        title={data ? `${data.ticker} detail` : "Ticker detail"}
+        subtitle="Inspect one ticker only when a plan, run, or data issue needs ticker-specific context. Quality & Edge remains the system-performance authority."
         actions={
           <>
-            <Link to="/jobs/recommendation-plans" className="button-secondary">← Plans</Link>
+            <Link to="/jobs/recommendation-plans" className="button-secondary">← Trade Review</Link>
+            <Link to="/recommendation-quality" className="button-subtle">◈ Quality & Edge</Link>
             {data ? <a href={`/api/tickers/${data.ticker}`} className="button-subtle" target="_blank" rel="noreferrer">{} JSON</a> : null}
           </>
         }
@@ -412,14 +414,16 @@ export function TickerPage() {
       {!data && !error ? <LoadingState message="Loading ticker analysis…" /> : null}
       {data ? (
         <div className="stack-page">
-          <section className="metrics-grid">
-            <StatCard label="WR" value={data.summary.win_rate_percent !== null ? `${data.summary.win_rate_percent}%` : "—"} helper="Resolved plan win rate" />
-            <StatCard label="Profit" value={data.summary.total_profit !== null ? formatPrice(data.summary.total_profit) : "—"} helper="Total realized + simulated profit" />
-            <StatCard label="Plans" value={data.summary.plan_count} helper="Stored plans in the selected window" />
-            <StatCard label="Orders" value={data.summary.broker_order_count} helper="Broker order executions" />
-            <StatCard label="Bars" value={data.summary.bar_count} helper="Stored 1m bars in the selected window" />
-            <StatCard label="Avg confidence" value={data.performance.average_confidence !== null ? `${data.performance.average_confidence}%` : "—"} helper="Mean stored plan confidence" />
-          </section>
+          <Card>
+            <SectionTitle kicker="Ticker question" title="Why does this ticker need attention?" subtitle="Use the latest plan, broker/order linkage, and bar availability to decide whether to inspect the chart or plan history." />
+            <section className="metrics-grid top-gap-small">
+              <StatCard label="Latest plan" value={latestPlan ? latestPlan.action : "—"} helper={latestPlan ? `${latestPlan.horizon} · ${formatDate(latestPlan.computed_at)}` : "No stored plans"} />
+              <StatCard label="Latest confidence" value={latestPlan ? `${latestPlan.confidence_percent}%` : "—"} helper={latestPlan ? "Most recent stored plan" : "No stored plans"} />
+              <StatCard label="Plans" value={data.summary.plan_count} helper="Stored plans in the selected window" />
+              <StatCard label="Orders" value={data.summary.broker_order_count} helper="Broker order executions" />
+              <StatCard label="Bars" value={data.summary.bar_count} helper="Stored 1m bars in the selected window" />
+            </section>
+          </Card>
 
           <div ref={chartSectionRef}>
             <Card>
@@ -468,8 +472,11 @@ export function TickerPage() {
                   <li>Use the chart to inspect whether entries, stops, and exits line up with actual price movement.</li>
                 </ul>
               </DisclosureCard>
-              <DisclosureCard title="Plan mix" subtitle="The current distribution is still visible, but not forced into the first screen.">
+              <DisclosureCard title="Plan mix and local performance" subtitle="Ticker-local performance is supporting context only; use Quality & Edge for system-level edge conclusions.">
                 <div className="data-points top-gap-small">
+                  <div className="data-point"><span className="data-point-label">win rate</span><span className="data-point-value">{data.summary.win_rate_percent !== null ? `${data.summary.win_rate_percent}%` : "—"}</span></div>
+                  <div className="data-point"><span className="data-point-label">profit</span><span className="data-point-value">{data.summary.total_profit !== null ? formatPrice(data.summary.total_profit) : "—"}</span></div>
+                  <div className="data-point"><span className="data-point-label">avg confidence</span><span className="data-point-value">{data.performance.average_confidence !== null ? `${data.performance.average_confidence}%` : "—"}</span></div>
                   <div className="data-point"><span className="data-point-label">long</span><span className="data-point-value">{data.performance.long_plan_count}</span></div>
                   <div className="data-point"><span className="data-point-label">short</span><span className="data-point-value">{data.performance.short_plan_count}</span></div>
                   <div className="data-point"><span className="data-point-label">no_action</span><span className="data-point-value">{data.performance.no_action_plan_count}</span></div>

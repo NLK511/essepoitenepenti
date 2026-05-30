@@ -384,6 +384,31 @@ It audits clutter inside the pages before final navigation, merging, or deletion
 - This is still the strongest demotion candidate after internal cleanup. It may become a Trade Review advanced `Candidates` tab or stay as a Research Lab/debug page.
 - **Done now:** page is titled Candidate signals under Research Lab, explicitly frames itself as a pre-plan diagnostic surface, and links to Trade Review and Signal gating tuning as the authoritative downstream destinations.
 
+### 15. Ticker detail `/tickers/:ticker`
+
+**Primary question:** Why does this single ticker need attention, and what ticker-specific context explains its latest plans?
+
+**Keep visible above the fold:**
+- Latest plan action/confidence and selected-window plan/order/bar availability.
+- Price chart with actionable plan overlays.
+- Links back to Trade Review and Quality & Edge.
+
+**Demote/collapse:**
+- Ticker-local win rate, profit, average confidence, and plan mix.
+- Relationship and plan-history detail unless the operator opens overview/plans.
+
+**Remove/replace duplicates:**
+- Do not imply ticker-local performance is system edge; Quality & Edge remains authoritative.
+
+**Unique actions/data to preserve:**
+- Chart plan toggles.
+- Latest plan context.
+- Full ticker plan history.
+- Raw ticker JSON link.
+
+**Implementation notes:**
+- **Done now:** page chrome now uses Evidence & diagnostics language, first screen leads with the ticker-attention question and latest-plan/data availability, links to Trade Review and Quality & Edge, and demotes ticker-local performance into a disclosure.
+
 ## Cross-page authority map
 
 - **Daily authority:** Dashboard.
@@ -411,6 +436,7 @@ It audits clutter inside the pages before final navigation, merging, or deletion
 10. Refocus tuning pages around evidence-backed action. **Done:** Signal gating tuning now leads with the upstream-selection question, links back to Quality & Edge, puts dry-run/apply controls in the first decision card, demotes manual parameter edits behind an advanced disclosure, and collapses stored run summary JSON. Plan generation tuning now leads with the downstream plan-framing question and Quality & Edge link; process overview, search shape, ranked candidate table, and config versions are collapsed as supporting evidence/audit detail.
 11. Refocus decision samples as sample-level research evidence. **Done:** Decision samples now live under Research Lab language, lead with the question of which discarded/borderline signals deserve review, keep high-priority samples as the main path, and collapse the full archive plus usage guidance as reference detail.
 12. Reconcile route chrome language. **Done:** layout route titles/descriptions now use direct authority labels instead of metaphorical page names, matching the new nav and operator guide.
+13. Refocus ticker detail as a single-ticker diagnostic page. **Done:** ticker detail now leads with the single-ticker attention question, latest-plan/data availability signals, and links back to Trade Review/Quality & Edge; ticker-local performance and plan mix are collapsed as supporting context.
 
 ## Completion criteria for Phase 0
 
