@@ -235,6 +235,7 @@ export function ContextReviewPage() {
             <button type="button" className="button" onClick={() => void enqueueRefresh(activeScope)} disabled={busyAction !== null}>
               {busyAction === activeScope ? `… Queueing ${activeScope}` : `⟳ ${activeScope} context`}
             </button>
+            <Link to="/data-quality" className="button-subtle">◇ Data quality</Link>
             <button type="button" className="button-subtle" onClick={() => void load()} disabled={loading || busyAction !== null}>
               ⟳ Reload
             </button>
@@ -247,15 +248,23 @@ export function ContextReviewPage() {
 
       {!loading ? (
         <div className="stack-page">
-          <section className="metrics-grid">
-            {headerMetrics.map((item) => (
-              <Card key={item.label}>
-                <div className="metric-label">{item.label}</div>
-                <div className="metric-value">{item.value}</div>
-                <div className="helper-text">{item.helper}</div>
-              </Card>
-            ))}
-          </section>
+          <Card>
+            <SectionTitle
+              kicker="Context trust"
+              title="Is the shared backdrop usable?"
+              subtitle="Macro and industry context remain distinct from data-quality audits; use this page for evidence freshness and backdrop usefulness."
+              actions={<HelpHint tooltip="Context review answers whether the shared macro and industry backdrop is fresh, evidence-backed, and useful for current plans. Use Data quality for bars/news/provider gaps." to={contextReviewDoc("context-review")} />}
+            />
+            <section className="metrics-grid top-gap-small">
+              {headerMetrics.map((item) => (
+                <Card key={item.label}>
+                  <div className="metric-label">{item.label}</div>
+                  <div className="metric-value">{item.value}</div>
+                  <div className="helper-text">{item.helper}</div>
+                </Card>
+              ))}
+            </section>
+          </Card>
 
           <div className="top-gap-small">
             <SegmentedTabs
@@ -269,28 +278,30 @@ export function ContextReviewPage() {
           </div>
 
           {activeTab === "industry" && industrySummary ? (
-            <section className="metrics-grid">
-              <Card>
-                <div className="metric-label">Industry snapshots</div>
-                <div className="metric-value">{industrySummary.total_count}</div>
-                <div className="helper-text">Stored industry context rows</div>
-              </Card>
-              <Card>
-                <div className="metric-label">Usable rate</div>
-                <div className="metric-value">{industrySummary.usable_rate_percent.toFixed(1)}%</div>
-                <div className="helper-text">Rows marked usable</div>
-              </Card>
-              <Card>
-                <div className="metric-label">Active-driver rate</div>
-                <div className="metric-value">{industrySummary.active_driver_rate_percent.toFixed(1)}%</div>
-                <div className="helper-text">Rows with at least one driver</div>
-              </Card>
-              <Card>
-                <div className="metric-label">Zero-confidence rows</div>
-                <div className="metric-value">{industrySummary.zero_confidence_count}</div>
-                <div className="helper-text">Rows that resolved to neutral</div>
-              </Card>
-            </section>
+            <DisclosureCard kicker="Industry coverage" title="Stored industry-context coverage" subtitle="Collapsed because current industry context is the decision surface; aggregate coverage is supporting evidence.">
+              <section className="metrics-grid top-gap-small">
+                <Card>
+                  <div className="metric-label">Industry snapshots</div>
+                  <div className="metric-value">{industrySummary.total_count}</div>
+                  <div className="helper-text">Stored industry context rows</div>
+                </Card>
+                <Card>
+                  <div className="metric-label">Usable rate</div>
+                  <div className="metric-value">{industrySummary.usable_rate_percent.toFixed(1)}%</div>
+                  <div className="helper-text">Rows marked usable</div>
+                </Card>
+                <Card>
+                  <div className="metric-label">Active-driver rate</div>
+                  <div className="metric-value">{industrySummary.active_driver_rate_percent.toFixed(1)}%</div>
+                  <div className="helper-text">Rows with at least one driver</div>
+                </Card>
+                <Card>
+                  <div className="metric-label">Zero-confidence rows</div>
+                  <div className="metric-value">{industrySummary.zero_confidence_count}</div>
+                  <div className="helper-text">Rows that resolved to neutral</div>
+                </Card>
+              </section>
+            </DisclosureCard>
           ) : null}
 
           {activeTab === "macro" ? (

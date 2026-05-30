@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { getJson } from "../api";
-import { Badge, Card, EmptyState, ErrorState, LoadingState } from "../components/ui";
+import { Badge, Card, DisclosureCard, EmptyState, ErrorState, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 
 type DataQualityAuditItem = {
   ticker: string;
@@ -41,6 +42,11 @@ function issueTone(issue: string): "danger" | "warning" | "neutral" {
   return "neutral";
 }
 
+function issueCount(payload: DataQualityAuditResponse | null, issues: string[]): number {
+  if (!payload) return 0;
+  return issues.reduce((total, issue) => total + (payload.issue_counts[issue] ?? 0), 0);
+}
+
 export function DataQualityPage() {
   const [payload, setPayload] = useState<DataQualityAuditResponse | null>(null);
   const [ticker, setTicker] = useState("");
@@ -75,17 +81,24 @@ export function DataQualityPage() {
     };
   }, [query]);
 
+  const blockingIssueCount = issueCount(payload, ["broker_rejected", "no_bars"]);
+  const degradedIssueCount = issueCount(payload, ["no_news", "stale_bars", "stale_news", "stale_coverage"]);
+
   return (
     <div className="page-stack">
+      <PageHeader
+        kicker="Input authority"
+        title="Data quality"
+        actions={<Link to="/context" className="button-subtle">◔ Context review</Link>}
+      />
+
       <Card>
-        <div className="section-header">
-          <div>
-            <div className="kicker">Coverage audit</div>
-            <h2>Data quality</h2>
-            <p className="muted">Find repeated no-bars, no-news, stale-coverage, and broker-reject ticker issues without mixing coverage gaps with broker tradability.</p>
-          </div>
-        </div>
-        <div className="form-grid compact">
+        <SectionTitle
+          kicker="Input trust"
+          title="Are provider or ticker issues invalidating results?"
+          subtitle="Find repeated no-bars, no-news, stale-coverage, and broker-reject ticker issues. Use Context review for macro/industry backdrop freshness."
+        />
+        <div className="form-grid compact top-gap-small">
           <label>
             <span>Ticker filter</span>
             <input value={ticker} onChange={(event) => setTicker(event.target.value)} placeholder="Optional, e.g. AAPL" />
@@ -102,15 +115,24 @@ export function DataQualityPage() {
 
       {!loading && payload && (
         <>
-          <div className="metric-grid">
-            <Card><div className="metric-label">Tickers checked</div><div className="metric-value">{payload.ticker_count}</div></Card>
-            <Card><div className="metric-label">Tickers with issues</div><div className="metric-value">{payload.issue_ticker_count}</div></Card>
-            {Object.entries(payload.issue_counts).map(([issue, count]) => (
-              <Card key={issue}><div className="metric-label">{issueLabel(issue)}</div><div className="metric-value">{count}</div></Card>
-            ))}
-          </div>
+          <section className="metrics-grid">
+            <StatCard label="Input status" value={blockingIssueCount > 0 ? "blocking" : payload.issue_ticker_count > 0 ? "degraded" : "clear"} helper={blockingIssueCount > 0 ? "No-bars or broker rejects present" : payload.issue_ticker_count > 0 ? "Non-blocking input issues present" : "No persisted audit issues found"} />
+            <StatCard label="Tickers checked" value={payload.ticker_count} helper="Ticker universe audited" />
+            <StatCard label="Tickers with issues" value={payload.issue_ticker_count} helper="Affected ticker count" />
+            <StatCard label="Blocking issues" value={blockingIssueCount} helper="Broker rejects or no-bars" />
+            <StatCard label="Degraded issues" value={degradedIssueCount} helper="No-news or stale coverage" />
+          </section>
+
+          <DisclosureCard kicker="Issue counts" title="Issue-type breakdown" subtitle="Supporting counts by raw audit issue type.">
+            <section className="metrics-grid top-gap-small">
+              {Object.entries(payload.issue_counts).map(([issue, count]) => (
+                <Card key={issue}><div className="metric-label">{issueLabel(issue)}</div><div className="metric-value">{count}</div></Card>
+              ))}
+            </section>
+          </DisclosureCard>
 
           <Card>
+            <SectionTitle kicker="Affected tickers" title="Ticker-level audit results" subtitle="Prioritized list of tickers whose missing, stale, or rejected inputs may distort scans and evaluation." />
             {payload.items.length === 0 ? (
               <EmptyState message="No data-quality issues found. The selected ticker set has recent bars/news and no broker rejects in the persisted audit sources." />
             ) : (
