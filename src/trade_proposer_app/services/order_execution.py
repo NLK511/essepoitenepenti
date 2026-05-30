@@ -82,85 +82,87 @@ class OrderExecutionService:
         broker_name = str(config["broker"])
 
         for plan in plans:
-            if plan.ticker.upper() not in forced_tickers and self.executions.has_known_unavailable_ticker(broker_name, plan.ticker):
-                self._bump(skip_reasons, "broker_symbol_unavailable")
-                ordered_results.append(
-                    self._store_skip(
-                        plan,
-                        run_id=run_id,
-                        job_id=job_id,
-                        reason="broker_symbol_unavailable",
-                        config=config,
-                    )
-                )
-                continue
-            candidate_result = self.candidate_builder.build(plan, notional_per_plan=float(config["notional_per_plan"]), run_id=run_id)
-            if candidate_result.skip_reason == "non_actionable":
-                skip_reasons["non_actionable"] = skip_reasons.get("non_actionable", 0) + 1
-                continue
-            if candidate_result.candidate is None:
-                reason = candidate_result.skip_reason or "invalid_execution_candidate"
-                self._bump(skip_reasons, reason)
-                ordered_results.append(
-                    self._store_skip(
-                        plan,
-                        run_id=run_id,
-                        job_id=job_id,
-                        reason=reason,
-                        config=config,
-                        entry_price=candidate_result.entry_price,
-                        stop_loss=candidate_result.stop_loss,
-                        take_profit=candidate_result.take_profit,
-                    )
-                )
-                continue
-
-            summary["actionable_plan_count"] = int(summary["actionable_plan_count"]) + 1
-            candidate = candidate_result.candidate
-            entry_price = candidate.entry_price
-            stop_loss = candidate.stop_loss
-            take_profit = candidate.take_profit
-            quantity = candidate.quantity
-            client_order_id = candidate.client_order_id
-            existing = self.executions.get_by_client_order_id(config["broker"], client_order_id)
-            if existing is not None:
-                summary["duplicate_order_count"] = int(summary["duplicate_order_count"]) + 1
-                ordered_results.append(existing)
-                continue
-
-            request_payload = self._build_order_payload(
-                ticker=plan.ticker,
-                action=plan.action,
-                entry_price=entry_price,
-                stop_loss=stop_loss,
-                take_profit=take_profit,
-                quantity=quantity,
-                client_order_id=client_order_id,
+            stored_order = self._execute_single_plan(
+                plan,
+                config=config,
+                broker_name=broker_name,
+                forced_tickers=forced_tickers,
+                summary=summary,
+                skip_reasons=skip_reasons,
+                warnings=warnings,
+                run_id=run_id,
+                job_id=job_id,
             )
-            notional_amount = round(quantity * entry_price, 4)
-            risk_assessment = self._risk_manager().assess(
-                TradeCandidate(ticker=plan.ticker, notional_amount=notional_amount),
-                live_broker_snapshot=self._live_broker_snapshot(run_id=run_id, job_id=job_id, ticker=plan.ticker),
-            )
-            if not risk_assessment.allowed:
-                risk_reason = "risk_" + "_".join(risk_assessment.reasons or ["blocked"])
-                warnings.append(f"{plan.ticker} broker execution blocked by risk manager: {', '.join(risk_assessment.reasons)}")
-                self._bump(skip_reasons, risk_reason)
-                ordered_results.append(
-                    self._store_skip(
-                        plan,
-                        run_id=run_id,
-                        job_id=job_id,
-                        reason=risk_reason,
-                        config=config,
-                        entry_price=entry_price,
-                        stop_loss=stop_loss,
-                        take_profit=take_profit,
-                    )
-                )
-                continue
+            if stored_order is not None:
+                ordered_results.append(stored_order)
 
-            stored_order = BrokerOrderExecution(
+        self._finalize_execution_summary(summary, orders=ordered_results, skip_reasons=skip_reasons, warnings=warnings)
+        return OrderExecutionOutcome(summary=summary, orders=ordered_results)
+
+    def _execute_single_plan(
+        self,
+        plan: RecommendationPlan,
+        *,
+        config: dict[str, object],
+        broker_name: str,
+        forced_tickers: set[str],
+        summary: dict[str, object],
+        skip_reasons: dict[str, int],
+        warnings: list[str],
+        run_id: int | None,
+        job_id: int | None,
+    ) -> BrokerOrderExecution | None:
+        if plan.ticker.upper() not in forced_tickers and self.executions.has_known_unavailable_ticker(broker_name, plan.ticker):
+            self._bump(skip_reasons, "broker_symbol_unavailable")
+            return self._store_skip(plan, run_id=run_id, job_id=job_id, reason="broker_symbol_unavailable", config=config)
+
+        candidate_result = self.candidate_builder.build(plan, notional_per_plan=float(config["notional_per_plan"]), run_id=run_id)
+        if candidate_result.skip_reason == "non_actionable":
+            self._bump(skip_reasons, "non_actionable")
+            return None
+        if candidate_result.candidate is None:
+            reason = candidate_result.skip_reason or "invalid_execution_candidate"
+            self._bump(skip_reasons, reason)
+            return self._store_skip(
+                plan,
+                run_id=run_id,
+                job_id=job_id,
+                reason=reason,
+                config=config,
+                entry_price=candidate_result.entry_price,
+                stop_loss=candidate_result.stop_loss,
+                take_profit=candidate_result.take_profit,
+            )
+
+        summary["actionable_plan_count"] = int(summary["actionable_plan_count"]) + 1
+        candidate = candidate_result.candidate
+        existing = self.executions.get_by_client_order_id(config["broker"], candidate.client_order_id)
+        if existing is not None:
+            summary["duplicate_order_count"] = int(summary["duplicate_order_count"]) + 1
+            return existing
+
+        notional_amount = round(candidate.quantity * candidate.entry_price, 4)
+        risk_assessment = self._risk_manager().assess(
+            TradeCandidate(ticker=plan.ticker, notional_amount=notional_amount),
+            live_broker_snapshot=self._live_broker_snapshot(run_id=run_id, job_id=job_id, ticker=plan.ticker),
+        )
+        if not risk_assessment.allowed:
+            risk_reason = "risk_" + "_".join(risk_assessment.reasons or ["blocked"])
+            warnings.append(f"{plan.ticker} broker execution blocked by risk manager: {', '.join(risk_assessment.reasons)}")
+            self._bump(skip_reasons, risk_reason)
+            return self._store_skip(
+                plan,
+                run_id=run_id,
+                job_id=job_id,
+                reason=risk_reason,
+                config=config,
+                entry_price=candidate.entry_price,
+                stop_loss=candidate.stop_loss,
+                take_profit=candidate.take_profit,
+            )
+
+        submitted_order = self._submit_candidate(
+            BrokerOrderExecution(
                 broker=str(config["broker"]),
                 account_mode=str(config["account_mode"]),
                 recommendation_plan_id=plan.id or 0,
@@ -172,26 +174,40 @@ class OrderExecutionService:
                 side="buy" if plan.action == "long" else "sell",
                 order_type="limit",
                 time_in_force="gtc",
-                quantity=quantity,
+                quantity=candidate.quantity,
                 notional_amount=notional_amount,
-                entry_price=entry_price,
-                stop_loss=stop_loss,
-                take_profit=take_profit,
+                entry_price=candidate.entry_price,
+                stop_loss=candidate.stop_loss,
+                take_profit=candidate.take_profit,
                 status="queued",
-                client_order_id=client_order_id,
-                request_payload=request_payload,
+                client_order_id=candidate.client_order_id,
+                request_payload=self._build_order_payload(
+                    ticker=plan.ticker,
+                    action=plan.action,
+                    entry_price=candidate.entry_price,
+                    stop_loss=candidate.stop_loss,
+                    take_profit=candidate.take_profit,
+                    quantity=candidate.quantity,
+                    client_order_id=candidate.client_order_id,
+                ),
             )
-            ordered_results.append(self._submit_candidate(stored_order))
-            latest_order = ordered_results[-1]
-            if latest_order.status in {ExecutionStatus.ACCEPTED.value, ExecutionStatus.FILLED.value, ExecutionStatus.SUBMITTED.value}:
-                summary["submitted_order_count"] = int(summary["submitted_order_count"]) + 1
-            elif latest_order.status == ExecutionStatus.SKIPPED.value:
-                self._bump(skip_reasons, latest_order.error_message or "broker_symbol_unavailable")
-            else:
-                summary["failed_order_count"] = int(summary["failed_order_count"]) + 1
+        )
+        self._count_submitted_order_status(submitted_order, summary=summary, skip_reasons=skip_reasons)
+        return submitted_order
 
-        self._finalize_execution_summary(summary, orders=ordered_results, skip_reasons=skip_reasons, warnings=warnings)
-        return OrderExecutionOutcome(summary=summary, orders=ordered_results)
+    @staticmethod
+    def _count_submitted_order_status(
+        order: BrokerOrderExecution,
+        *,
+        summary: dict[str, object],
+        skip_reasons: dict[str, int],
+    ) -> None:
+        if order.status in {ExecutionStatus.ACCEPTED.value, ExecutionStatus.FILLED.value, ExecutionStatus.SUBMITTED.value}:
+            summary["submitted_order_count"] = int(summary["submitted_order_count"]) + 1
+        elif order.status == ExecutionStatus.SKIPPED.value:
+            OrderExecutionService._bump(skip_reasons, order.error_message or "broker_symbol_unavailable")
+        else:
+            summary["failed_order_count"] = int(summary["failed_order_count"]) + 1
 
     @staticmethod
     def _initial_execution_summary(config: dict[str, object], *, plan_count: int) -> dict[str, object]:

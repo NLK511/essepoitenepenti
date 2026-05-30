@@ -39,7 +39,8 @@ Goal: reduce code complexity without changing product behavior, safety rules, da
 5. **Order execution orchestration**
    - Problem: `OrderExecutionService.execute_plans` mixed summary setup, client bootstrapping, per-plan execution, and summary finalization.
    - Done now: extracted summary initialization, missing-client handling, skipped-outcome creation, and final summary assembly.
-   - Safe next step: extract per-plan candidate/risk/submission handling once broker execution behavior is fully covered by focused tests.
+   - Done now: extracted per-plan candidate/risk/submission handling and submitted-order status counting.
+   - Safe next step: split `_execute_single_plan` only if more broker execution branches are added.
 
 6. **Large test modules**
    - Problem: repository and route tests are hard to navigate.
