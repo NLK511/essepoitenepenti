@@ -24,17 +24,19 @@ The answer today is: not cleanly enough. The app has valuable evidence, but it s
    - Dashboard, Recommendation plans, Recommendation quality, Research home, Decision samples, and tuning pages all present pieces of quality/performance.
    - Impact: the user can cherry-pick a favorable page or miss the authoritative edge-validation gate.
 
-3. **Diagnostics pages are over-promoted.**
-   - Run debugger, Worker logs, Context detail, Decision samples, Data quality, and Ticker signals are useful when investigating a problem, but most do not deserve daily nav slots.
-   - Impact: attention is wasted on raw artifacts before the UI explains whether there is a performance or safety problem.
+3. **Diagnostics pages are over-promoted, but some should remain standalone tools.**
+   - Run debugger, Worker logs, Context detail, Decision samples, Data quality, and Ticker signals are useful when investigating a problem.
+   - Operator preference: keep Run debugger as its own page, keep Context review as its own page, and leave Worker logs behavior as it is today.
+   - Impact: attention is wasted only when these tools compete with daily performance authority, not because the tools exist.
 
 4. **The Jobs area mixes operations, configuration, and review.**
    - Watchlists, job scheduling, run history/debugging, ticker signals, and recommendation plans sit under one bucket.
    - Impact: the operator sees workflow plumbing instead of a clear daily loop.
 
-5. **Context and data health are separate despite answering the same question.**
-   - Context review and Data quality both answer whether inputs are trustworthy.
-   - Impact: stale/noisy data can be missed because the user checked only one health page.
+5. **Context and data health are related but should not be forcibly merged.**
+   - Context review answers whether shared macro/industry backdrop is fresh and evidence-backed.
+   - Data quality answers whether providers, bars, news, stale coverage, and broker-reject patterns are distorting the system.
+   - Impact: stale/noisy data can still be missed unless Dashboard cross-links both surfaces when either one blocks trust.
 
 6. **Research home overlaps the actual research pages.**
    - It repeats performance-workbench material that already belongs in Recommendation quality and tuning-specific pages.
@@ -58,12 +60,12 @@ The answer today is: not cleanly enough. The app has valuable evidence, but it s
 | Watchlists `/jobs/watchlists` | Needed to define monitored universes. | **Keep as configuration, not daily review.** | Move under Configure/Lab; dashboard should show only watchlist health/actions. |
 | Jobs `/jobs` | Queue/schedule operation; overlaps Watchlists and Run debugger. | **Merge/demote.** | Fold run/job controls into Watchlists or Dashboard actions. Remove from primary daily nav. |
 | Ticker signals `/jobs/ticker-signals` | Useful artifact for shortlisted/cheap-scan candidates. | **Hide from primary nav.** | Link from plans, runs, and tuning diagnostics. Consider folding into Trade Review as an advanced Candidates tab. |
-| Run debugger `/jobs/debugger` | Useful when a run fails/degrades. | **Replace top-level page with link-driven run detail.** | Keep Run detail; use a small recent-runs panel on Dashboard/Trade Review. |
+| Run debugger `/jobs/debugger` | Useful when a run fails/degrades; operator values it as a distinct workflow. | **Keep as distinct diagnostics page.** | Keep page and route. Demote from daily performance authority if needed, but preserve direct access and current workflow. |
 | Run detail `/runs/:runId` | Necessary investigation page. | **Keep deep link only.** | Do not show as nav; ensure all warnings/plans link here. |
-| Worker logs `/workers/:workerId` | Operational debugging only. | **Keep deep link only.** | Link from worker health/status, not nav. |
-| Context review `/context` | Useful for macro/industry freshness and evidence. | **Merge with Data quality.** | Create one Evidence Health page with context freshness, provider reliability, stale/no-bars/no-news, and coverage warnings. |
-| Context detail `/context/:scope/:snapshotId` | Useful evidence drilldown. | **Keep deep link only.** | Link from Evidence Health, ticker, plan, and run detail. |
-| Data quality `/data-quality` | Critical input-health diagnostics. | **Keep capability, merge page.** | Merge into Evidence Health. Dashboard should summarize blocking input problems. |
+| Worker logs `/workers/:workerId` | Operational debugging that is already useful as-is. | **Keep as-is.** | Preserve current behavior and access pattern. |
+| Context review `/context` | Useful for macro/industry freshness and evidence; operator wants it distinct. | **Keep as distinct evidence page.** | Do not merge into Data quality. Cross-link provider/data issues where they explain context degradation. |
+| Context detail `/context/:scope/:snapshotId` | Useful evidence drilldown. | **Keep deep link only.** | Link from Context review, ticker, plan, and run detail. |
+| Data quality `/data-quality` | Critical input-health diagnostics. | **Keep distinct or create only a lightweight bridge.** | Do not merge away Context review. Dashboard should summarize blocking input problems and link to both Data quality and Context review as appropriate. |
 | Ticker page `/tickers/:ticker` | Useful investigation by symbol. | **Keep deep link/search result only.** | Link from plans/signals/context; do not put in main nav. |
 | Research home `/research` | Broad workbench, overlaps Quality and tuning. | **Drop as standalone source of truth.** | Redirect to Recommendation quality or replace with a minimal Research Lab index that only links to tools. |
 | Decision samples `/research/decision-samples` | Useful for gating/tuning audits. | **Hide under tuning/debug.** | Link from Signal gating tuning and Quality diagnostics. |
@@ -95,7 +97,7 @@ The answer today is: not cleanly enough. The app has valuable evidence, but it s
 
 ### Secondary utility area
 
-- **Evidence Health**: merged Context review + Data quality + provider reliability. It is important, but it supports the primary decisions.
+- **Evidence Health / Inputs**: keep Context review and Data quality as distinct pages, with Dashboard cross-links and shared status language. Do not collapse Context review into Data quality.
 - **Configure**: Settings, Watchlists, Jobs/schedules.
 - **Research Lab**: Signal gating tuning, Plan generation tuning, Decision samples; reachable from Quality and utility nav, not daily nav.
 - **Help**: Docs.
@@ -103,7 +105,7 @@ The answer today is: not cleanly enough. The app has valuable evidence, but it s
 ### Deep-link pages only
 
 - Run detail
-- Worker logs
+- Worker logs remain as currently implemented and reachable from worker health/status.
 - Context snapshot detail
 - Ticker detail
 - Decision sample detail/list if retained
@@ -125,19 +127,21 @@ The answer today is: not cleanly enough. The app has valuable evidence, but it s
 - Remove duplicate high-level analytics from Recommendation plans where they distract from plan review; keep compact badges and links to Quality.
 - Acceptance: edge gate, calibration, setup-family, concentration, walk-forward, and tuning recommendations have one primary page.
 
-### Phase 3 — Merge input-health pages
+### Phase 3 — Cross-link input and context health without merging them
 
-- Create Evidence Health page by combining Data quality and Context review.
+- Keep Context review as a distinct page for macro/industry backdrop, freshness, snapshots, and context evidence.
+- Keep Data quality as a distinct page for no-bars, no-news, stale coverage, provider failures, and broker-reject patterns.
+- Add shared Dashboard status language so blocking provider/data/context issues point to the right page.
 - Preserve context snapshot detail pages as drilldowns.
-- Dashboard shows only blocking input/provider/context warnings and links to Evidence Health.
-- Acceptance: no-bars/no-news/stale coverage/provider failures/context freshness are visible in one place.
+- Acceptance: no-bars/no-news/stale coverage/provider failures/context freshness are easy to find, but Context review remains its own workflow.
 
-### Phase 4 — Replace artifact pages with drilldowns
+### Phase 4 — Reduce artifact noise while preserving valued diagnostics
 
-- Remove Ticker signals and Run debugger from primary nav.
-- Add recent/degraded runs panel to Dashboard or Trade Review with direct links to Run detail.
-- Link ticker signals from run detail, ticker detail, and tuning diagnostics; optionally fold signal list into Trade Review advanced tab.
-- Acceptance: every debug artifact remains reachable from the object that caused the investigation.
+- Keep Run debugger as a distinct diagnostics page and preserve its current workflow.
+- Keep Worker logs as they are today.
+- Remove only Ticker signals from primary nav if it remains a transitional artifact; link it from run detail, ticker detail, and tuning diagnostics, or fold it into Trade Review advanced mode.
+- Add recent/degraded runs panel to Dashboard or Trade Review with direct links to Run debugger and Run detail.
+- Acceptance: valued debug tools remain available, while daily performance authority stays on Dashboard, Trade Review, Quality & Edge, and Execution & Risk.
 
 ### Phase 5 — Simplify configuration and research entry points
 
