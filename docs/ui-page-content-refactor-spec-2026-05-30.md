@@ -398,7 +398,7 @@ It audits clutter inside the pages before final navigation, merging, or deletion
 
 ## Implementation sequence after this spec
 
-1. Refactor Dashboard content hierarchy first.
+1. Refactor Dashboard content hierarchy first. **Done:** dashboard first screen now uses Safety, Performance, Inputs, and Work queue cards; secondary performance, warning/failure lists, and pipeline volume are collapsed as supporting diagnostics.
 2. Refactor Recommendation plans into Trade Review by removing duplicate analytics from the first screen.
 3. Refactor Recommendation quality into the single edge/performance authority.
 4. Refactor Broker orders into an action-required Execution & Risk page.

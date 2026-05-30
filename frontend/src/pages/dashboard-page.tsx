@@ -51,6 +51,11 @@ function formatCurrency(value: number | null | undefined): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value);
 }
 
+function metricNumber(metrics: Record<string, unknown> | undefined, key: string): number | null {
+  const value = metrics?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 function normalizeWindow(value: string | null): DashboardWindow {
   return normalizeReviewWindow(value, "1d") as DashboardWindow;
 }
@@ -293,55 +298,44 @@ export function DashboardPage() {
             {showTrendlines ? <div className="helper-text top-gap-small">Trendlines sweep the dashboard windows from 1D through 1Y and ALL so each metric can be compared without opening another page.</div> : null}
           </Card>
 
-          <Card>
-            <SectionTitle
-              kicker="Board verdict"
-              title={quality ? `Status: ${quality.status}` : "Status unavailable"}
-              subtitle={quality?.status_reason || "No quality summary available yet."}
-            />
-            <div className="cluster top-gap-small">
-              <Badge tone={dashboardBoardTone(quality?.status)}>{quality?.status ?? "unknown"}</Badge>
-              <Badge tone={dashboardBoardTone(quality?.status)}>{quality?.status === "healthy" ? "green" : quality?.status === "needs_attention" ? "red" : "yellow"}</Badge>
-              <span className="helper-text">Updated {lastLoadedAt ? formatDate(lastLoadedAt.toISOString()) : quality?.generated_at ? formatDate(quality.generated_at) : "—"} · resolved outcomes {quality?.resolved_outcomes ?? "—"}</span>
-            </div>
-          </Card>
-
-          <Card>
-            <SectionTitle
-              kicker="Operator status"
-              title="Trust, autonomy, risk, and data gates"
-              subtitle="One compact strip for the checks that should stop risk expansion before deeper review."
-              actions={<Link to="/research" className="button-subtle">⌂ Research</Link>}
-            />
-            {operatorStatusError ? <div className="helper-text top-gap-small">{operatorStatusError}</div> : null}
-            <div className="operator-status-grid top-gap-small">
-              <div className="operator-status-item">
-                <div className="operator-status-head"><span className="summary-label">policy health</span><Badge tone={policyHealthTone(operatorStatus?.policyHealth?.label)}>{operatorStatus?.policyHealth?.label ?? "unknown"}</Badge></div>
-                <div className="operator-status-value">{operatorStatus?.policyHealth?.resolved_selected_outcomes ?? "—"} selected resolved</div>
-                <div className="helper-text">{formatReasons(operatorStatus?.policyHealth?.reasons, "No policy-health reasons reported")}</div>
-              </div>
-              <div className="operator-status-item">
-                <div className="operator-status-head"><span className="summary-label">autonomy gate</span><Badge tone={policyHealthTone(operatorStatus?.edgeGate?.label)}>{operatorStatus?.edgeGate?.label ?? "unknown"}</Badge></div>
-                <div className="operator-status-value">{operatorStatus?.edgeGate?.broker_selected_outcomes ?? "—"} broker selected</div>
-                <div className="helper-text">{formatReasons(operatorStatus?.edgeGate?.reasons, "No autonomy-gate reasons reported")}</div>
-              </div>
-              <div className="operator-status-item">
-                <div className="operator-status-head"><span className="summary-label">broker risk</span><Badge tone={riskTone(operatorStatus?.risk ?? null)}>{operatorStatus?.risk ? operatorStatus.risk.allowed ? "allowed" : "blocked" : "unknown"}</Badge></div>
-                <div className="operator-status-value">{operatorStatus?.risk?.halt_enabled ? "halt active" : operatorStatus?.risk?.enabled ? "risk enabled" : "risk disabled"}</div>
-                <div className="helper-text">{operatorStatus?.risk?.halt_reason || formatReasons(operatorStatus?.risk?.reasons, "No broker-risk reasons reported")}</div>
-              </div>
-              <div className="operator-status-item">
-                <div className="operator-status-head"><span className="summary-label">data quality</span><Badge tone={dataQualityTone(operatorStatus?.dataQuality ?? null)}>{operatorStatus?.dataQuality ? `${operatorStatus.dataQuality.issue_ticker_count} issue tickers` : "unknown"}</Badge></div>
-                <div className="operator-status-value">{operatorStatus?.dataQuality?.ticker_count ?? "—"} tickers audited</div>
-                <div className="helper-text">{operatorStatus?.dataQuality ? Object.entries(operatorStatus.dataQuality.issue_counts).slice(0, 3).map(([key, count]) => `${key.replace(/_/g, " ")}: ${count}`).join(" · ") || "No data-quality issues reported" : "Audit unavailable"}</div>
-              </div>
-            </div>
-          </Card>
-
           <section className="insight-grid">
             <Card>
-              <SectionTitle kicker="Green" title="Edge" subtitle="The only numbers that matter when deciding whether the system is improving." />
+              <SectionTitle
+                kicker="Safety"
+                title="Can we operate right now?"
+                subtitle="Broker risk and autonomy evidence should block expansion before any plan-level review."
+                actions={<Link to="/broker-orders" className="button-subtle">⟐ Execution</Link>}
+              />
               <div className="data-stack top-gap-small">
+                <div className="operator-status-item">
+                  <div className="operator-status-head"><span className="summary-label">autonomy gate</span><Badge tone={policyHealthTone(operatorStatus?.edgeGate?.label)}>{operatorStatus?.edgeGate?.label ?? "unknown"}</Badge></div>
+                  <div className="operator-status-value">{operatorStatus?.edgeGate?.broker_selected_outcomes ?? "—"} broker selected outcomes</div>
+                  <div className="helper-text">{formatReasons(operatorStatus?.edgeGate?.reasons, "No autonomy-gate reasons reported")}</div>
+                </div>
+                <div className="operator-status-item">
+                  <div className="operator-status-head"><span className="summary-label">broker risk</span><Badge tone={riskTone(operatorStatus?.risk ?? null)}>{operatorStatus?.risk ? operatorStatus.risk.allowed ? "allowed" : "blocked" : "unknown"}</Badge></div>
+                  <div className="operator-status-value">{operatorStatus?.risk?.halt_enabled ? "halt active" : operatorStatus?.risk?.enabled ? "risk enabled" : "risk disabled"}</div>
+                  <div className="helper-text">{operatorStatus?.risk?.halt_reason || formatReasons(operatorStatus?.risk?.reasons, "No broker-risk reasons reported")}</div>
+                </div>
+                <div className="cluster">
+                  <Badge tone="neutral">Open exposure {formatCurrency(metricNumber(operatorStatus?.risk?.metrics, "open_notional_usd"))}</Badge>
+                  <Badge tone="neutral">Positions {metricNumber(operatorStatus?.risk?.metrics, "open_position_count") ?? "—"}</Badge>
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <SectionTitle
+                kicker="Performance"
+                title={quality ? `Quality: ${quality.status}` : "Quality unavailable"}
+                subtitle={quality?.status_reason || "No quality summary available yet."}
+                actions={<Link to="/recommendation-quality" className="button-subtle">◈ Quality & Edge</Link>}
+              />
+              <div className="data-stack top-gap-small">
+                <div className="cluster">
+                  <Badge tone={dashboardBoardTone(quality?.status)}>{quality?.status ?? "unknown"}</Badge>
+                  <span className="helper-text">{windowLabel} · resolved outcomes {quality?.resolved_outcomes ?? "—"} · updated {lastLoadedAt ? formatDate(lastLoadedAt.toISOString()) : quality?.generated_at ? formatDate(quality.generated_at) : "—"}</span>
+                </div>
                 <StatCard
                   className={showTrendlines ? "stat-card-compact" : undefined}
                   label="Overall win rate"
@@ -358,139 +352,182 @@ export function DashboardPage() {
                 />
                 <StatCard
                   className={showTrendlines ? "stat-card-compact" : undefined}
-                  label="Avg profit"
-                  value={formatSignedPercent(summary?.average_profit_percent)}
-                  trend={showTrendlines ? <MetricSparkline label="Avg profit" series={trendSeriesMap.get("average_profit_percent")} windows={trendWindows} /> : null}
-                  helper={`Broker: ${formatSignedPercent(summary?.broker_average_profit_percent)} · Simulated: ${formatSignedPercent(summary?.simulated_average_profit_percent)}`}
-                />
-                <StatCard
-                  className={showTrendlines ? "stat-card-compact" : undefined}
-                  label="Shortlist rate"
-                  value={formatPercent(summary?.shortlist_rate_percent)}
-                  trend={showTrendlines ? <MetricSparkline label="Shortlist rate" series={trendSeriesMap.get("shortlist_rate_percent")} windows={trendWindows} /> : null}
-                  helper={showTrendlines ? undefined : `${summary?.plan_amount ?? 0} plans / ${summary?.signals_amount ?? 0} signals`}
-                />
-                <StatCard
-                  className={showTrendlines ? "stat-card-compact" : undefined}
-                  label="Actionable rate"
-                  value={formatPercent(summary?.actionable_rate_percent)}
-                  trend={showTrendlines ? <MetricSparkline label="Actionable rate" series={trendSeriesMap.get("actionable_rate_percent")} windows={trendWindows} /> : null}
-                  helper={showTrendlines ? undefined : `${summary?.actionable_plans ?? 0} actionable / ${summary?.plan_amount ?? 0} plans`}
-                />
-                <StatCard
-                  className={showTrendlines ? "stat-card-compact" : undefined}
                   label="Actionability gap"
                   value={formatSignedPercent(summary?.actionability_gap_percent)}
                   trend={showTrendlines ? <MetricSparkline label="Actionability gap" series={trendSeriesMap.get("actionability_gap_percent")} windows={trendWindows} /> : null}
-                  helper={showTrendlines ? undefined : `${summary?.phantom_win_outcomes ?? 0} phantom wins / ${summary?.phantom_resolved_outcomes ?? 0} phantom resolved · ${summary?.actionable_win_outcomes ?? 0} actionable wins / ${summary?.actionable_resolved_outcomes ?? 0} actionable resolved · positive means skipped setups are outperforming acted-on setups`}
+                  helper={showTrendlines ? undefined : "Positive means skipped setups are outperforming acted-on setups"}
                 />
               </div>
             </Card>
 
-            <DisclosureCard
-              kicker="Supporting diagnostics"
-              title="Warnings, failures, and pipeline volume"
-              subtitle="Collapsed by default so the board stays readable on small screens."
-            >
-              <div className="stack-page top-gap-small">
-                <Card>
-                  <SectionTitle kicker="Yellow" title="Warnings" subtitle="Recurring problems that may not be fatal yet, but deserve operator attention." />
-                  {distinctWarnings.length === 0 ? (
-                    <EmptyState message="No warning patterns collected in the current dashboard window." />
-                  ) : (
-                    <div className="data-stack top-gap-small">
-                      {distinctWarnings.slice(0, 6).map((warning) => (
-                        <details key={warning.label} className="data-card">
-                          <summary className="data-card-header" style={{ cursor: "pointer" }}>
-                            <div>
-                              <div className="data-card-title">{warning.label}</div>
-                              <div className="helper-text">Open to see sources</div>
-                            </div>
-                            <Badge tone={warning.count >= 3 ? "danger" : warning.count === 2 ? "warning" : "neutral"}>{warning.count}</Badge>
-                          </summary>
-                          <div className="helper-text top-gap-small">{warning.tickers.length > 0 ? `Tickers: ${warning.tickers.join(" · ")}` : "Tickers: —"} · Sources: {warning.sources.length > 0 ? warning.sources.join(" · ") : "—"}</div>
-                        </details>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-
-                <Card>
-                  <SectionTitle kicker="Red" title="Failures" subtitle="Only the broken items that should change your behavior right now." />
-                  {majorFailures.length === 0 ? (
-                    <EmptyState message="No major failures in the current dashboard window." />
-                  ) : (
-                    <div className="data-stack top-gap-small">
-                      {majorFailures.map((failure) => (
-                        <article key={`${failure.source}-${failure.label}-${failure.run_id ?? failure.created_at ?? failure.detail}`} className="data-card">
-                          <div className="data-card-header">
-                            <div>
-                              <div className="cluster">
-                                <Badge tone={dashboardFailureTone(failure.status)}>{failure.status.replace(/_/g, " ")}</Badge>
-                                <Badge>{failure.source}</Badge>
-                              </div>
-                              <div className="data-card-title top-gap-small">{failure.label}</div>
-                            </div>
-                            {failure.run_id ? <Link to={`/runs/${failure.run_id}`} className="button-subtle">↗ Run</Link> : null}
-                          </div>
-                          <div className="helper-text top-gap-small">{failure.detail}</div>
-                          <div className="helper-text">{failure.created_at ? formatDate(failure.created_at) : "—"}</div>
-                        </article>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-
-                <Card>
-                  <SectionTitle kicker="Technical" title="Pipeline volume" subtitle="Selected-window volume of the main data feeds and execution layer." />
-                  <div className="data-stack top-gap-small">
-                    <StatCard
-                      className={showTrendlines ? "stat-card-compact" : undefined}
-                      label="News processed"
-                      value={String(technical?.news_processed ?? 0)}
-                      trend={showTrendlines ? <MetricSparkline label="News processed" series={trendSeriesMap.get("news_processed")} windows={trendWindows} /> : null}
-                      helper={showTrendlines ? undefined : "Historical news items"}
-                    />
-                    <StatCard
-                      className={showTrendlines ? "stat-card-compact" : undefined}
-                      label="Tweets processed"
-                      value={String(technical?.tweets_processed ?? 0)}
-                      trend={showTrendlines ? <MetricSparkline label="Tweets processed" series={trendSeriesMap.get("tweets_processed")} windows={trendWindows} /> : null}
-                      helper={showTrendlines ? undefined : "Social items used by plans"}
-                    />
-                    <StatCard
-                      className={showTrendlines ? "stat-card-compact" : undefined}
-                      label="Bars stored"
-                      value={String(technical?.bars_stored ?? 0)}
-                      trend={showTrendlines ? <MetricSparkline label="Bars stored" series={trendSeriesMap.get("bars_stored")} windows={trendWindows} /> : null}
-                      helper={showTrendlines ? undefined : "Historical market bars"}
-                    />
-                    <StatCard
-                      className={showTrendlines ? "stat-card-compact" : undefined}
-                      label="Orders placed"
-                      value={String(technical?.orders_placed ?? 0)}
-                      trend={showTrendlines ? <MetricSparkline label="Orders placed" series={trendSeriesMap.get("orders_placed")} windows={trendWindows} /> : null}
-                      helper={showTrendlines ? undefined : "Broker executions"}
-                    />
-                    <StatCard
-                      className={showTrendlines ? "stat-card-compact" : undefined}
-                      label="Broker closed"
-                      value={String(technical?.broker_closed_positions ?? 0)}
-                      trend={showTrendlines ? <MetricSparkline label="Broker closed" series={trendSeriesMap.get("broker_closed_positions")} windows={trendWindows} /> : null}
-                      helper={showTrendlines ? undefined : `${technical?.broker_wins ?? 0} wins / ${technical?.broker_losses ?? 0} losses`}
-                    />
-                    <StatCard
-                      className={showTrendlines ? "stat-card-compact" : undefined}
-                      label="Broker realized P&L"
-                      value={`$${technical?.broker_realized_pnl ?? 0}`}
-                      trend={showTrendlines ? <MetricSparkline label="Broker realized P&L" series={trendSeriesMap.get("broker_realized_pnl")} windows={trendWindows} /> : null}
-                      helper={showTrendlines ? undefined : "Closed broker positions in selected window"}
-                    />
-                  </div>
-                </Card>
+            <Card>
+              <SectionTitle
+                kicker="Inputs"
+                title="Are inputs blocking trust?"
+                subtitle="Data quality and context stay distinct, but the cockpit should flag blockers quickly."
+                actions={<><Link to="/data-quality" className="button-subtle">◇ Data</Link><Link to="/context" className="button-subtle">◔ Context</Link></>}
+              />
+              {operatorStatusError ? <div className="helper-text top-gap-small">{operatorStatusError}</div> : null}
+              <div className="data-stack top-gap-small">
+                <div className="operator-status-item">
+                  <div className="operator-status-head"><span className="summary-label">data quality</span><Badge tone={dataQualityTone(operatorStatus?.dataQuality ?? null)}>{operatorStatus?.dataQuality ? `${operatorStatus.dataQuality.issue_ticker_count} issue tickers` : "unknown"}</Badge></div>
+                  <div className="operator-status-value">{operatorStatus?.dataQuality?.ticker_count ?? "—"} tickers audited</div>
+                  <div className="helper-text">{operatorStatus?.dataQuality ? Object.entries(operatorStatus.dataQuality.issue_counts).slice(0, 3).map(([key, count]) => `${key.replace(/_/g, " ")}: ${count}`).join(" · ") || "No data-quality issues reported" : "Audit unavailable"}</div>
+                </div>
+                <div className="operator-status-item">
+                  <div className="operator-status-head"><span className="summary-label">policy health</span><Badge tone={policyHealthTone(operatorStatus?.policyHealth?.label)}>{operatorStatus?.policyHealth?.label ?? "unknown"}</Badge></div>
+                  <div className="operator-status-value">{operatorStatus?.policyHealth?.resolved_selected_outcomes ?? "—"} selected resolved</div>
+                  <div className="helper-text">{formatReasons(operatorStatus?.policyHealth?.reasons, "No policy-health reasons reported")}</div>
+                </div>
               </div>
-            </DisclosureCard>
+            </Card>
+
+            <Card>
+              <SectionTitle
+                kicker="Work queue"
+                title="What needs review?"
+                subtitle="Open plans and degraded runs are the next places to spend attention."
+                actions={<><Link to="/jobs/recommendation-plans" className="button-subtle">↗ Plans</Link><Link to="/jobs/debugger" className="button-subtle">⌘ Debugger</Link></>}
+              />
+              <div className="data-stack top-gap-small">
+                <StatCard label="Plans loaded" value={String(data.recommendation_plans.length)} helper="Latest recommendation-plan rows on the dashboard" />
+                <StatCard label="Recent runs" value={String(data.recent_runs.length)} helper="Recent run records available for triage" />
+                <StatCard label="Major failures" value={String(majorFailures.length)} helper="Failures that should change operator behavior now" />
+                <StatCard label="Warning patterns" value={String(distinctWarnings.length)} helper="Recurring warning groups in the selected window" />
+              </div>
+            </Card>
           </section>
+
+          <DisclosureCard
+            kicker="Supporting diagnostics"
+            title="Warnings, failures, pipeline volume, and secondary performance metrics"
+            subtitle="Collapsed by default so the dashboard keeps one clear first screen."
+          >
+            <div className="stack-page top-gap-small">
+              <Card>
+                <SectionTitle kicker="Secondary performance" title="Signal and actionability volume" subtitle="Useful for debugging the funnel, not the primary trust verdict." />
+                <div className="data-stack top-gap-small">
+                  <StatCard
+                    className={showTrendlines ? "stat-card-compact" : undefined}
+                    label="Avg profit"
+                    value={formatSignedPercent(summary?.average_profit_percent)}
+                    trend={showTrendlines ? <MetricSparkline label="Avg profit" series={trendSeriesMap.get("average_profit_percent")} windows={trendWindows} /> : null}
+                    helper={`Broker: ${formatSignedPercent(summary?.broker_average_profit_percent)} · Simulated: ${formatSignedPercent(summary?.simulated_average_profit_percent)}`}
+                  />
+                  <StatCard
+                    className={showTrendlines ? "stat-card-compact" : undefined}
+                    label="Shortlist rate"
+                    value={formatPercent(summary?.shortlist_rate_percent)}
+                    trend={showTrendlines ? <MetricSparkline label="Shortlist rate" series={trendSeriesMap.get("shortlist_rate_percent")} windows={trendWindows} /> : null}
+                    helper={showTrendlines ? undefined : `${summary?.plan_amount ?? 0} plans / ${summary?.signals_amount ?? 0} signals`}
+                  />
+                  <StatCard
+                    className={showTrendlines ? "stat-card-compact" : undefined}
+                    label="Actionable rate"
+                    value={formatPercent(summary?.actionable_rate_percent)}
+                    trend={showTrendlines ? <MetricSparkline label="Actionable rate" series={trendSeriesMap.get("actionable_rate_percent")} windows={trendWindows} /> : null}
+                    helper={showTrendlines ? undefined : `${summary?.actionable_plans ?? 0} actionable / ${summary?.plan_amount ?? 0} plans`}
+                  />
+                </div>
+              </Card>
+
+              <Card>
+                <SectionTitle kicker="Yellow" title="Warnings" subtitle="Recurring problems that may not be fatal yet, but deserve operator attention." />
+                {distinctWarnings.length === 0 ? (
+                  <EmptyState message="No warning patterns collected in the current dashboard window." />
+                ) : (
+                  <div className="data-stack top-gap-small">
+                    {distinctWarnings.slice(0, 6).map((warning) => (
+                      <details key={warning.label} className="data-card">
+                        <summary className="data-card-header" style={{ cursor: "pointer" }}>
+                          <div>
+                            <div className="data-card-title">{warning.label}</div>
+                            <div className="helper-text">Open to see sources</div>
+                          </div>
+                          <Badge tone={warning.count >= 3 ? "danger" : warning.count === 2 ? "warning" : "neutral"}>{warning.count}</Badge>
+                        </summary>
+                        <div className="helper-text top-gap-small">{warning.tickers.length > 0 ? `Tickers: ${warning.tickers.join(" · ")}` : "Tickers: —"} · Sources: {warning.sources.length > 0 ? warning.sources.join(" · ") : "—"}</div>
+                      </details>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
+              <Card>
+                <SectionTitle kicker="Red" title="Failures" subtitle="Only the broken items that should change your behavior right now." />
+                {majorFailures.length === 0 ? (
+                  <EmptyState message="No major failures in the current dashboard window." />
+                ) : (
+                  <div className="data-stack top-gap-small">
+                    {majorFailures.map((failure) => (
+                      <article key={`${failure.source}-${failure.label}-${failure.run_id ?? failure.created_at ?? failure.detail}`} className="data-card">
+                        <div className="data-card-header">
+                          <div>
+                            <div className="cluster">
+                              <Badge tone={dashboardFailureTone(failure.status)}>{failure.status.replace(/_/g, " ")}</Badge>
+                              <Badge>{failure.source}</Badge>
+                            </div>
+                            <div className="data-card-title top-gap-small">{failure.label}</div>
+                          </div>
+                          {failure.run_id ? <Link to={`/runs/${failure.run_id}`} className="button-subtle">↗ Run</Link> : null}
+                        </div>
+                        <div className="helper-text top-gap-small">{failure.detail}</div>
+                        <div className="helper-text">{failure.created_at ? formatDate(failure.created_at) : "—"}</div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
+              <Card>
+                <SectionTitle kicker="Technical" title="Pipeline volume" subtitle="Selected-window volume of the main data feeds and execution layer." />
+                <div className="data-stack top-gap-small">
+                  <StatCard
+                    className={showTrendlines ? "stat-card-compact" : undefined}
+                    label="News processed"
+                    value={String(technical?.news_processed ?? 0)}
+                    trend={showTrendlines ? <MetricSparkline label="News processed" series={trendSeriesMap.get("news_processed")} windows={trendWindows} /> : null}
+                    helper={showTrendlines ? undefined : "Historical news items"}
+                  />
+                  <StatCard
+                    className={showTrendlines ? "stat-card-compact" : undefined}
+                    label="Tweets processed"
+                    value={String(technical?.tweets_processed ?? 0)}
+                    trend={showTrendlines ? <MetricSparkline label="Tweets processed" series={trendSeriesMap.get("tweets_processed")} windows={trendWindows} /> : null}
+                    helper={showTrendlines ? undefined : "Social items used by plans"}
+                  />
+                  <StatCard
+                    className={showTrendlines ? "stat-card-compact" : undefined}
+                    label="Bars stored"
+                    value={String(technical?.bars_stored ?? 0)}
+                    trend={showTrendlines ? <MetricSparkline label="Bars stored" series={trendSeriesMap.get("bars_stored")} windows={trendWindows} /> : null}
+                    helper={showTrendlines ? undefined : "Historical market bars"}
+                  />
+                  <StatCard
+                    className={showTrendlines ? "stat-card-compact" : undefined}
+                    label="Orders placed"
+                    value={String(technical?.orders_placed ?? 0)}
+                    trend={showTrendlines ? <MetricSparkline label="Orders placed" series={trendSeriesMap.get("orders_placed")} windows={trendWindows} /> : null}
+                    helper={showTrendlines ? undefined : "Broker executions"}
+                  />
+                  <StatCard
+                    className={showTrendlines ? "stat-card-compact" : undefined}
+                    label="Broker closed"
+                    value={String(technical?.broker_closed_positions ?? 0)}
+                    trend={showTrendlines ? <MetricSparkline label="Broker closed" series={trendSeriesMap.get("broker_closed_positions")} windows={trendWindows} /> : null}
+                    helper={showTrendlines ? undefined : `${technical?.broker_wins ?? 0} wins / ${technical?.broker_losses ?? 0} losses`}
+                  />
+                  <StatCard
+                    className={showTrendlines ? "stat-card-compact" : undefined}
+                    label="Broker realized P&L"
+                    value={`$${technical?.broker_realized_pnl ?? 0}`}
+                    trend={showTrendlines ? <MetricSparkline label="Broker realized P&L" series={trendSeriesMap.get("broker_realized_pnl")} windows={trendWindows} /> : null}
+                    helper={showTrendlines ? undefined : "Closed broker positions in selected window"}
+                  />
+                </div>
+              </Card>
+            </div>
+          </DisclosureCard>
         </div>
       ) : null}
     </>
