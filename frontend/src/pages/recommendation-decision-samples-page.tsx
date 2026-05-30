@@ -2,7 +2,7 @@ import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson } from "../api";
-import { Badge, Card, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
+import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import type { RecommendationDecisionSampleListResponse } from "../types";
 import { formatDate, recommendationBenchmarkTone, recommendationDecisionTone, recommendationReviewPriorityTone, yahooFinanceUrl } from "../utils";
 
@@ -112,7 +112,7 @@ export function RecommendationDecisionSamplesPage() {
   return (
     <>
       <PageHeader
-        kicker="Research"
+        kicker="Research Lab"
         title="Decision samples"
         actions={
           <>
@@ -148,16 +148,16 @@ export function RecommendationDecisionSamplesPage() {
             </div>
             <div className="helper-text top-gap-small">Current filter: {benchmarkResult || "all"}</div>
           </Card>
-          <section className="metrics-grid">
-            <StatCard label="Samples on page" value={summary.total} helper={`Showing ${summary.total} of ${totalSamples} filtered samples`} tooltip="The number of decision samples shown on the current page after filters are applied." tooltipTo="/docs?doc=glossary&section=recommendation-decision-sample" />
-            <StatCard label="Actionable on page" value={summary.actionable} helper="Long and short decisions" tooltip="Samples whose final decision was actionable, usually long or short." tooltipTo="/docs?doc=glossary&section=actionable-plan" />
-            <StatCard label="Near misses on page" value={summary.nearMiss} helper="High-signal no-action plans" tooltip="Borderline no-action cases that looked close to passing the gate and are often the most useful samples for tuning review." tooltipTo="/docs?doc=decision-sample-tuning-guide" />
-            <StatCard label="High priority on page" value={summary.highPriority} helper="Review these first" tooltip="Samples marked as most informative for operator review because they are borderline, degraded, contradictory, or otherwise tuning-relevant." tooltipTo="/docs?doc=decision-sample-tuning-guide" />
-            <StatCard label="Benchmarked on page" value={summary.benchmarked} helper="Discarded signals graded by follow-through" tooltip="Samples that were not primarily plan-linked and now carry a benchmark follow-through label." tooltipTo="/docs?doc=signal-gating-benchmark-spec" />
-            <StatCard label="Benchmark hits" value={summary.benchmarkHits} helper="Likely missed opportunities" tooltip="Benchmarked samples whose later price movement satisfied the follow-through target in the signal direction." tooltipTo="/docs?doc=signal-gating-benchmark-spec" />
-            <StatCard label="Benchmark misses" value={summary.benchmarkMisses} helper="Likely good rejects" tooltip="Benchmarked samples whose later price movement did not satisfy the follow-through target." tooltipTo="/docs?doc=signal-gating-benchmark-spec" />
-            <StatCard label="Degraded on page" value={summary.degraded} helper="Plans produced with missing or failed deep analysis" tooltip="Samples carrying degraded evidence, such as missing or failed deep-analysis inputs, and therefore deserving more caution during review." tooltipTo="/docs?doc=glossary&section=degraded" />
-          </section>
+          <Card>
+            <SectionTitle kicker="Sample-level evidence" title="Which discarded or borderline signals deserve review?" subtitle="Use this page after Quality & Edge or signal-gating tuning points to upstream selection evidence. It is not a daily performance authority." />
+            <section className="metrics-grid top-gap-small">
+              <StatCard label="Samples on page" value={summary.total} helper={`Showing ${summary.total} of ${totalSamples} filtered samples`} tooltip="The number of decision samples shown on the current page after filters are applied." tooltipTo="/docs?doc=glossary&section=recommendation-decision-sample" />
+              <StatCard label="Near misses on page" value={summary.nearMiss} helper="High-signal no-action plans" tooltip="Borderline no-action cases that looked close to passing the gate and are often the most useful samples for tuning review." tooltipTo="/docs?doc=decision-sample-tuning-guide" />
+              <StatCard label="High priority on page" value={summary.highPriority} helper="Review these first" tooltip="Samples marked as most informative for operator review because they are borderline, degraded, contradictory, or otherwise tuning-relevant." tooltipTo="/docs?doc=decision-sample-tuning-guide" />
+              <StatCard label="Benchmark hits" value={summary.benchmarkHits} helper="Likely missed opportunities" tooltip="Benchmarked samples whose later price movement satisfied the follow-through target in the signal direction." tooltipTo="/docs?doc=signal-gating-benchmark-spec" />
+              <StatCard label="Benchmark misses" value={summary.benchmarkMisses} helper="Likely good rejects" tooltip="Benchmarked samples whose later price movement did not satisfy the follow-through target." tooltipTo="/docs?doc=signal-gating-benchmark-spec" />
+            </section>
+          </Card>
 
           <Card>
             <SectionTitle
@@ -237,11 +237,7 @@ export function RecommendationDecisionSamplesPage() {
             </button>
           </div>
 
-          <Card>
-            <SectionTitle
-              kicker="All samples"
-              title="Decision sample archive"
-            />
+          <DisclosureCard kicker="All samples" title="Decision sample archive" subtitle="Full archive is collapsed so high-priority samples remain the main review path.">
             {allSamples.length === 0 ? (
               <EmptyState message="No decision samples available yet." />
             ) : (
@@ -291,13 +287,9 @@ export function RecommendationDecisionSamplesPage() {
                 ))}
               </div>
             )}
-          </Card>
+          </DisclosureCard>
 
-          <Card>
-            <SectionTitle
-              kicker="Research"
-              title="How to use the samples"
-            />
+          <DisclosureCard kicker="Research" title="How to use the samples" subtitle="Reference guidance for sample-level tuning review.">
             <ul className="checklist">
               <li>Start with high-priority near misses before changing thresholds.</li>
               <li>Compare actionable samples with rejected samples at similar confidence.</li>
@@ -305,7 +297,7 @@ export function RecommendationDecisionSamplesPage() {
               <li>Look at the confidence gap, shortlist decision payload, and benchmark follow-through to understand why a sample missed escalation or likely was a good reject.</li>
               <li>Use the plan button when downstream framing exists; otherwise open the linked signal record to inspect shortlist, cheap-scan, and benchmark context.</li>
             </ul>
-          </Card>
+          </DisclosureCard>
         </div>
       ) : null}
     </>
