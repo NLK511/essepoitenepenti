@@ -72,6 +72,10 @@ Do not delete until references and tests prove safe:
    - Problem: `WatchlistSignalBuilder.build_signal_snapshot` mixed warning collection, transmission field normalization/fallbacks, and snapshot construction.
    - Done now: extracted warning collection and transmission field normalization helpers.
 
+11. **Watchlist plan framing**
+   - Problem: `WatchlistPlanFramingService.build_plan_from_signal` mixed framing context assembly, calibration thresholds, trade-level calculation, action gating, and plan construction.
+   - Done now: extracted framing context, effective-threshold, trade-level, and action-resolution helpers while preserving parity-tested plan payloads.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.
