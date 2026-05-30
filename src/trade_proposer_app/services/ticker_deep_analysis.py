@@ -541,58 +541,32 @@ class TickerDeepAnalysisService:
         context: dict[str, Any],
         direction: RecommendationDirection,
     ) -> dict[str, Any]:
-        macro_score = TickerDeepAnalysisService._macro_context_score(context)
-        industry_score = TickerDeepAnalysisService._industry_context_score(context)
-        ticker_score = float(context.get("ticker_sentiment_score", 0.0) or 0.0)
-        market_intelligence = self._market_intelligence_snapshot(context)
-        profile = context.get("ticker_profile") if isinstance(context.get("ticker_profile"), dict) else {}
-        macro_events = TickerDeepAnalysisService._context_events(context.get("macro_context_events") or context.get("macro_context_active_themes"))
-        industry_events = TickerDeepAnalysisService._context_events(context.get("industry_context_events") or context.get("industry_context_active_drivers"))
-        directional_multiplier = 1.0 if direction == RecommendationDirection.LONG else -1.0
-        score_alignment = ((macro_score * 0.35) + (industry_score * 0.4) + (ticker_score * 0.25)) * directional_multiplier
-        base_alignment_percent = max(0.0, min(100.0, 50.0 + (score_alignment * 50.0)))
-        catalyst_intensity = max(
-            0.0,
-            min(
-                100.0,
-                (
-                    min(1.0, float(context.get("news_item_count", 0.0) or 0.0) / 5.0) * 65.0
-                    + min(1.0, float(context.get("context_count", 0.0) or 0.0) / 3.0) * 35.0
-                ),
-            ),
-        )
-        macro_event_strength = TickerDeepAnalysisService._event_relevance_strength(
-            macro_events,
-            profile,
-            keywords=TickerDeepAnalysisService._profile_macro_keywords(profile),
-        )
-        industry_event_strength = TickerDeepAnalysisService._event_relevance_strength(
-            industry_events,
-            profile,
-            keywords=TickerDeepAnalysisService._profile_industry_keywords(profile),
-        )
+        inputs = self._transmission_inputs(context)
+        macro_score = inputs["macro_score"]
+        industry_score = inputs["industry_score"]
+        ticker_score = inputs["ticker_score"]
+        market_intelligence = inputs["market_intelligence"]
+        profile = inputs["profile"]
+        macro_events = inputs["macro_events"]
+        industry_events = inputs["industry_events"]
+        catalyst_intensity = self._catalyst_intensity(context)
+        macro_event_strength, industry_event_strength = self._event_strengths(macro_events, industry_events, profile)
         contradiction_count = TickerDeepAnalysisService._context_contradiction_count(context, macro_events, industry_events)
         matched_ticker_relationships = TickerDeepAnalysisService._matched_ticker_relationships(context, profile, macro_events, industry_events)
         market_intelligence_support = TickerDeepAnalysisService._market_intelligence_support(context, direction)
-        freshness_bonus = TickerDeepAnalysisService._freshness_bonus(macro_events, industry_events)
-        contradiction_penalty = min(12.0, contradiction_count * 4.0)
-        alignment_percent = max(
-            0.0,
-            min(
-                100.0,
-                base_alignment_percent
-                + ((macro_event_strength * 0.4) + (industry_event_strength * 0.6)) * (0.1 if base_alignment_percent >= 50.0 else -0.1)
-                + market_intelligence_support * 0.12
-                + freshness_bonus
-                - contradiction_penalty,
-            ),
+        base_alignment_percent, alignment_percent = self._alignment_percents(
+            direction,
+            macro_score=macro_score,
+            industry_score=industry_score,
+            ticker_score=ticker_score,
+            macro_event_strength=macro_event_strength,
+            industry_event_strength=industry_event_strength,
+            market_intelligence_support=market_intelligence_support,
+            contradiction_count=contradiction_count,
+            macro_events=macro_events,
+            industry_events=industry_events,
         )
-        if alignment_percent >= 62.0:
-            bias = "tailwind"
-        elif alignment_percent <= 42.0:
-            bias = "headwind"
-        else:
-            bias = "mixed"
+        bias = self._context_bias(alignment_percent)
         transmission_tags = self._transmission_tags(
             macro_score=macro_score,
             industry_score=industry_score,
@@ -666,6 +640,87 @@ class TickerDeepAnalysisService:
             "macro_event_keys": [str(item.get("key", "")) for item in macro_events if str(item.get("key", "")).strip()][:5],
             "industry_event_keys": [str(item.get("key", "")) for item in industry_events if str(item.get("key", "")).strip()][:5],
         }
+
+    def _transmission_inputs(self, context: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "macro_score": TickerDeepAnalysisService._macro_context_score(context),
+            "industry_score": TickerDeepAnalysisService._industry_context_score(context),
+            "ticker_score": float(context.get("ticker_sentiment_score", 0.0) or 0.0),
+            "market_intelligence": self._market_intelligence_snapshot(context),
+            "profile": context.get("ticker_profile") if isinstance(context.get("ticker_profile"), dict) else {},
+            "macro_events": TickerDeepAnalysisService._context_events(context.get("macro_context_events") or context.get("macro_context_active_themes")),
+            "industry_events": TickerDeepAnalysisService._context_events(context.get("industry_context_events") or context.get("industry_context_active_drivers")),
+        }
+
+    @staticmethod
+    def _catalyst_intensity(context: dict[str, Any]) -> float:
+        return max(
+            0.0,
+            min(
+                100.0,
+                min(1.0, float(context.get("news_item_count", 0.0) or 0.0) / 5.0) * 65.0
+                + min(1.0, float(context.get("context_count", 0.0) or 0.0) / 3.0) * 35.0,
+            ),
+        )
+
+    @staticmethod
+    def _event_strengths(
+        macro_events: list[dict[str, Any]],
+        industry_events: list[dict[str, Any]],
+        profile: dict[str, Any],
+    ) -> tuple[float, float]:
+        return (
+            TickerDeepAnalysisService._event_relevance_strength(
+                macro_events,
+                profile,
+                keywords=TickerDeepAnalysisService._profile_macro_keywords(profile),
+            ),
+            TickerDeepAnalysisService._event_relevance_strength(
+                industry_events,
+                profile,
+                keywords=TickerDeepAnalysisService._profile_industry_keywords(profile),
+            ),
+        )
+
+    @staticmethod
+    def _alignment_percents(
+        direction: RecommendationDirection,
+        *,
+        macro_score: float,
+        industry_score: float,
+        ticker_score: float,
+        macro_event_strength: float,
+        industry_event_strength: float,
+        market_intelligence_support: float,
+        contradiction_count: int,
+        macro_events: list[dict[str, Any]],
+        industry_events: list[dict[str, Any]],
+    ) -> tuple[float, float]:
+        directional_multiplier = 1.0 if direction == RecommendationDirection.LONG else -1.0
+        score_alignment = ((macro_score * 0.35) + (industry_score * 0.4) + (ticker_score * 0.25)) * directional_multiplier
+        base_alignment_percent = max(0.0, min(100.0, 50.0 + (score_alignment * 50.0)))
+        freshness_bonus = TickerDeepAnalysisService._freshness_bonus(macro_events, industry_events)
+        contradiction_penalty = min(12.0, contradiction_count * 4.0)
+        alignment_percent = max(
+            0.0,
+            min(
+                100.0,
+                base_alignment_percent
+                + ((macro_event_strength * 0.4) + (industry_event_strength * 0.6)) * (0.1 if base_alignment_percent >= 50.0 else -0.1)
+                + market_intelligence_support * 0.12
+                + freshness_bonus
+                - contradiction_penalty,
+            ),
+        )
+        return base_alignment_percent, alignment_percent
+
+    @staticmethod
+    def _context_bias(alignment_percent: float) -> str:
+        if alignment_percent >= 62.0:
+            return "tailwind"
+        if alignment_percent <= 42.0:
+            return "headwind"
+        return "mixed"
 
     @staticmethod
     def _context_events(raw: object) -> list[dict[str, Any]]:

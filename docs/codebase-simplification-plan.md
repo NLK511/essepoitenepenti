@@ -116,6 +116,10 @@ Do not delete until references and tests prove safe:
    - Problem: `TickerTechnicalFeatureService.build_context` mixed latest-row extraction, bias-count scoring, data-quality problems, and large context construction.
    - Done now: extracted latest technical value normalization, short/medium bias counting, and technical problem detection while preserving context payload keys.
 
+22. **Ticker transmission analysis**
+   - Problem: `TickerDeepAnalysisService._build_transmission_analysis` mixed context extraction, catalyst intensity, event relevance, alignment math, bias classification, driver/tag/channel selection, and payload construction.
+   - Done now: extracted transmission inputs, catalyst intensity, event strengths, alignment-percent math, and bias classification while preserving payload fields and scoring formulas.
+
 ## Acceptance criteria for each refactor
 
 - Same API payload keys unless spec says otherwise.
