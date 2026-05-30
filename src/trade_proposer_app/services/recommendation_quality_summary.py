@@ -45,76 +45,19 @@ class RecommendationQualitySummaryService:
         current_config = normalize_plan_generation_tuning_config(current_version.config)
         baseline_config = normalize_plan_generation_tuning_config(baseline_version.config)
         policy_review = self.policy_evaluation.summarize_active_policy(limit=self.METRIC_SAMPLE_LIMIT)
-        walk_forward: dict[str, object] | None = None
-        walk_forward_error: str | None = None
-        try:
-            walk_forward = PlanGenerationWalkForwardService(self.tuning).summarize(
-                candidate_config=current_config,
-                baseline_config=baseline_config,
-                candidate_label=current_version.version_label,
-                baseline_label=baseline_version.version_label,
-                limit=self.METRIC_SAMPLE_LIMIT,
-                lookback_days=365,
-                validation_days=90,
-                step_days=30,
-                min_validation_resolved=int(self.settings_domains.strategy_settings().plan_generation_tuning["min_validation_resolved"]),
-            ).model_dump(mode="json")
-        except Exception as exc:  # pragma: no cover
-            walk_forward_error = str(exc)
-
-        windowed_summaries: list[dict[str, object]] = []
-        summary: dict[str, object] | None = None
-        calibration = None
-        baselines = None
-        evidence = None
-        family_review = None
-        for label in self.WINDOW_DEFINITIONS:
-            computed_after = review_window_start(label, now)
-            evaluated_after = computed_after
-            calibration_window = RecommendationPlanCalibrationService(self.effective_outcomes).summarize(
-                limit=self.METRIC_SAMPLE_LIMIT,
-                evaluated_after=evaluated_after,
-            )
-            baselines_window = RecommendationPlanBaselineService(self.plans).summarize(
-                limit=self.METRIC_SAMPLE_LIMIT,
-                computed_after=computed_after,
-            )
-            evidence_window = RecommendationEvidenceConcentrationService(self.effective_outcomes).summarize(
-                limit=self.METRIC_SAMPLE_LIMIT,
-                evaluated_after=evaluated_after,
-            )
-            family_review_window = RecommendationSetupFamilyReviewService(self.effective_outcomes).summarize(
-                limit=self.METRIC_SAMPLE_LIMIT,
-                evaluated_after=evaluated_after,
-            )
-            entry_miss_window = self.outcomes.summarize_entry_miss_diagnostics(
-                evaluated_after=evaluated_after,
-                evaluated_before=now,
-            )
-            window_summary = self._summary_payload(
-                calibration_window,
-                baselines_window,
-                evidence_window,
-                family_review_window,
-                entry_miss_window,
-                walk_forward=None,
-                walk_forward_error=None,
-                window_label=review_window_label(label),
-                computed_after=computed_after or (now - timedelta(days=3650)),
-                computed_before=now,
-                evaluated_after=evaluated_after or (now - timedelta(days=3650)),
-                evaluated_before=now,
-            )
-            windowed_summaries.append(window_summary)
-            if label == self.DEFAULT_SUMMARY_WINDOW:
-                summary = window_summary
-                calibration = calibration_window
-                baselines = baselines_window
-                evidence = evidence_window
-                family_review = family_review_window
-
-        if summary is None or calibration is None or baselines is None or evidence is None or family_review is None:
-            raise RuntimeError("failed to build default recommendation-quality summary window")
+        walk_forward, walk_forward_error = self._walk_forward_summary(
+            current_config=current_config,
+            baseline_config=baseline_config,
+            current_label=current_version.version_label,
+            baseline_label=baseline_version.version_label,
+        )
+        window_bundle = self._windowed_quality_summaries(now)
+        summary = window_bundle["summary"]
+        calibration = window_bundle["calibration"]
+        baselines = window_bundle["baselines"]
+        evidence = window_bundle["evidence"]
+        family_review = window_bundle["family_review"]
+        windowed_summaries = window_bundle["windowed_summaries"]
 
         policy_trust = PolicyTrustReportService(self.effective_outcomes).build(
             policy_review,
@@ -156,6 +99,78 @@ class RecommendationQualitySummaryService:
             "reliability_report": policy_review.reliability_report.to_dict(),
             "walk_forward_validation": walk_forward,
             "next_actions": next_actions,
+        }
+
+    def _walk_forward_summary(
+        self,
+        *,
+        current_config: dict[str, float],
+        baseline_config: dict[str, float],
+        current_label: str,
+        baseline_label: str,
+    ) -> tuple[dict[str, object] | None, str | None]:
+        try:
+            return (
+                PlanGenerationWalkForwardService(self.tuning).summarize(
+                    candidate_config=current_config,
+                    baseline_config=baseline_config,
+                    candidate_label=current_label,
+                    baseline_label=baseline_label,
+                    limit=self.METRIC_SAMPLE_LIMIT,
+                    lookback_days=365,
+                    validation_days=90,
+                    step_days=30,
+                    min_validation_resolved=int(self.settings_domains.strategy_settings().plan_generation_tuning["min_validation_resolved"]),
+                ).model_dump(mode="json"),
+                None,
+            )
+        except Exception as exc:  # pragma: no cover
+            return None, str(exc)
+
+    def _windowed_quality_summaries(self, now: datetime) -> dict[str, object]:
+        windowed_summaries: list[dict[str, object]] = []
+        default_payload: dict[str, object] | None = None
+        default_calibration = None
+        default_baselines = None
+        default_evidence = None
+        default_family_review = None
+        for label in self.WINDOW_DEFINITIONS:
+            computed_after = review_window_start(label, now)
+            evaluated_after = computed_after
+            calibration = RecommendationPlanCalibrationService(self.effective_outcomes).summarize(limit=self.METRIC_SAMPLE_LIMIT, evaluated_after=evaluated_after)
+            baselines = RecommendationPlanBaselineService(self.plans).summarize(limit=self.METRIC_SAMPLE_LIMIT, computed_after=computed_after)
+            evidence = RecommendationEvidenceConcentrationService(self.effective_outcomes).summarize(limit=self.METRIC_SAMPLE_LIMIT, evaluated_after=evaluated_after)
+            family_review = RecommendationSetupFamilyReviewService(self.effective_outcomes).summarize(limit=self.METRIC_SAMPLE_LIMIT, evaluated_after=evaluated_after)
+            window_summary = self._summary_payload(
+                calibration,
+                baselines,
+                evidence,
+                family_review,
+                self.outcomes.summarize_entry_miss_diagnostics(evaluated_after=evaluated_after, evaluated_before=now),
+                walk_forward=None,
+                walk_forward_error=None,
+                window_label=review_window_label(label),
+                computed_after=computed_after or (now - timedelta(days=3650)),
+                computed_before=now,
+                evaluated_after=evaluated_after or (now - timedelta(days=3650)),
+                evaluated_before=now,
+            )
+            windowed_summaries.append(window_summary)
+            if label == self.DEFAULT_SUMMARY_WINDOW:
+                default_payload = window_summary
+                default_calibration = calibration
+                default_baselines = baselines
+                default_evidence = evidence
+                default_family_review = family_review
+        if default_payload is None or default_calibration is None or default_baselines is None or default_evidence is None or default_family_review is None:
+            raise RuntimeError("failed to build default recommendation-quality summary window")
+        return {
+            "summary": default_payload,
+            "calibration": default_calibration,
+            "baselines": default_baselines,
+            "evidence": default_evidence,
+            "family_review": default_family_review,
+            "windowed_summaries": windowed_summaries,
         }
 
     def _summary_payload(

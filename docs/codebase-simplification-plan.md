@@ -60,7 +60,11 @@ Do not delete until references and tests prove safe:
    - Problem: `RecommendationSignalGatingTuningService.run` mixed sample-window loading, scoreability checks, candidate ranking, apply behavior, and run construction.
    - Done now: extracted scored sample-window loading, candidate ranking, and winning-config application helpers.
 
-8. **Plan resolution engine**
+8. **Recommendation-quality summary orchestration**
+   - Problem: `RecommendationQualitySummaryService.summarize` mixed active config loading, walk-forward validation, rolling-window metric assembly, policy trust, and response construction.
+   - Done now: extracted walk-forward summary and rolling-window/default-window assembly helpers.
+
+9. **Plan resolution engine**
    - Problem: `PlanResolutionEngine.evaluate_plan` mixed setup classification, missing-data handling, no-entry diagnostics, entered-position resolution, and outcome construction.
    - Done now: extracted non-trade, pending, no-entry, entered, and entered-state outcome builders while preserving canonical resolution semantics.
 
