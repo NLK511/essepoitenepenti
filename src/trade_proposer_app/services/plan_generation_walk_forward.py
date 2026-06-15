@@ -33,6 +33,12 @@ class _WalkForwardStats:
     ties: int
     win_rate_deltas: list[float]
     expected_value_deltas: list[float]
+    actionable_ratios: list[float]
+    ev_candidate_wins: int = 0
+    ev_baseline_wins: int = 0
+    ev_ties: int = 0
+    severe_win_rate_regressions: int = 0
+    severe_ev_regressions: int = 0
 
 
 class _RecordWindow(Sequence):
@@ -137,6 +143,8 @@ class PlanGenerationWalkForwardService:
         )
         average_win_rate_delta = self._average_delta(stats.win_rate_deltas, precision=2)
         average_expected_value_delta = self._average_delta(stats.expected_value_deltas, precision=4)
+        average_actionable_ratio = self._average_delta(stats.actionable_ratios, precision=4)
+        max_actionable_ratio = round(max(stats.actionable_ratios), 4) if stats.actionable_ratios else None
         promotion_recommended = self._promotion_recommended(
             qualified_slices=stats.qualified_slices,
             candidate_wins=stats.candidate_wins,
@@ -155,6 +163,31 @@ class PlanGenerationWalkForwardService:
             average_expected_value_delta=average_expected_value_delta,
             promotion_recommended=promotion_recommended,
         )
+        ev_expansion_recommended = self._ev_expansion_recommended(
+            qualified_slices=stats.qualified_slices,
+            ev_candidate_wins=stats.ev_candidate_wins,
+            ev_baseline_wins=stats.ev_baseline_wins,
+            ev_ties=stats.ev_ties,
+            average_win_rate_delta=average_win_rate_delta,
+            average_expected_value_delta=average_expected_value_delta,
+            average_actionable_ratio=average_actionable_ratio,
+            max_actionable_ratio=max_actionable_ratio,
+            severe_win_rate_regressions=stats.severe_win_rate_regressions,
+            severe_ev_regressions=stats.severe_ev_regressions,
+        )
+        ev_expansion_rationale = self._ev_expansion_rationale(
+            qualified_slices=stats.qualified_slices,
+            ev_candidate_wins=stats.ev_candidate_wins,
+            ev_baseline_wins=stats.ev_baseline_wins,
+            ev_ties=stats.ev_ties,
+            average_win_rate_delta=average_win_rate_delta,
+            average_expected_value_delta=average_expected_value_delta,
+            average_actionable_ratio=average_actionable_ratio,
+            max_actionable_ratio=max_actionable_ratio,
+            severe_win_rate_regressions=stats.severe_win_rate_regressions,
+            severe_ev_regressions=stats.severe_ev_regressions,
+            ev_expansion_recommended=ev_expansion_recommended,
+        )
         return PlanGenerationWalkForwardSummary(
             total_slices=len(stats.slices),
             lookback_days=lookback_days,
@@ -169,6 +202,15 @@ class PlanGenerationWalkForwardService:
             ties=stats.ties,
             average_win_rate_delta=average_win_rate_delta,
             average_expected_value_delta=average_expected_value_delta,
+            ev_candidate_wins=stats.ev_candidate_wins,
+            ev_baseline_wins=stats.ev_baseline_wins,
+            ev_ties=stats.ev_ties,
+            average_actionable_ratio=average_actionable_ratio,
+            max_actionable_ratio=max_actionable_ratio,
+            severe_win_rate_regressions=stats.severe_win_rate_regressions,
+            severe_ev_regressions=stats.severe_ev_regressions,
+            ev_expansion_recommended=ev_expansion_recommended,
+            ev_expansion_rationale=ev_expansion_rationale,
             promotion_recommended=promotion_recommended,
             promotion_rationale=rationale,
             slices=stats.slices,
@@ -226,7 +268,7 @@ class PlanGenerationWalkForwardService:
         step_days: int,
         min_validation_resolved: int,
     ) -> _WalkForwardStats:
-        stats = _WalkForwardStats([], 0, 0, 0, 0, [], [])
+        stats = _WalkForwardStats([], 0, 0, 0, 0, [], [], [])
         current = start_time
         index = 0
         window_start_index = 0
@@ -313,6 +355,20 @@ class PlanGenerationWalkForwardService:
                 stats.ties += 1
         delta_ev = round(candidate_eval.expected_value - baseline_eval.expected_value, 4)
         stats.expected_value_deltas.append(delta_ev)
+        if delta_ev > 0:
+            stats.ev_candidate_wins += 1
+        elif delta_ev < 0:
+            stats.ev_baseline_wins += 1
+        else:
+            stats.ev_ties += 1
+        if baseline_eval.actionable_count > 0:
+            stats.actionable_ratios.append(
+                round(candidate_eval.actionable_count / baseline_eval.actionable_count, 4)
+            )
+        if delta_win is not None and delta_win < -5.0:
+            stats.severe_win_rate_regressions += 1
+        if delta_ev < -0.05:
+            stats.severe_ev_regressions += 1
         return delta_win, delta_ev, True
 
     @staticmethod
@@ -393,6 +449,68 @@ class PlanGenerationWalkForwardService:
             )
         ]
         return len(severe_regressions) <= 1
+
+    @staticmethod
+    def _ev_expansion_recommended(
+        *,
+        qualified_slices: int,
+        ev_candidate_wins: int,
+        ev_baseline_wins: int,
+        ev_ties: int,
+        average_win_rate_delta: float | None,
+        average_expected_value_delta: float | None,
+        average_actionable_ratio: float | None,
+        max_actionable_ratio: float | None,
+        severe_win_rate_regressions: int,
+        severe_ev_regressions: int,
+    ) -> bool:
+        if qualified_slices < 3:
+            return False
+        if average_expected_value_delta is None or average_expected_value_delta <= 0.0:
+            return False
+        if ev_candidate_wins + ev_ties < ev_baseline_wins:
+            return False
+        if ev_candidate_wins < max(2, qualified_slices // 2):
+            return False
+        if average_win_rate_delta is not None and average_win_rate_delta < -12.0:
+            return False
+        if severe_win_rate_regressions > max(1, qualified_slices // 3):
+            return False
+        if severe_ev_regressions > 0:
+            return False
+        if average_actionable_ratio is not None and average_actionable_ratio > 4.0:
+            return False
+        if max_actionable_ratio is not None and max_actionable_ratio > 6.0:
+            return False
+        return True
+
+    @staticmethod
+    def _ev_expansion_rationale(
+        *,
+        qualified_slices: int,
+        ev_candidate_wins: int,
+        ev_baseline_wins: int,
+        ev_ties: int,
+        average_win_rate_delta: float | None,
+        average_expected_value_delta: float | None,
+        average_actionable_ratio: float | None,
+        max_actionable_ratio: float | None,
+        severe_win_rate_regressions: int,
+        severe_ev_regressions: int,
+        ev_expansion_recommended: bool,
+    ) -> str:
+        if qualified_slices < 3:
+            return "Not enough qualified slices to evaluate EV-expansion stability."
+        prefix = "EV-expansion candidate" if ev_expansion_recommended else "EV-expansion rejected"
+        return (
+            f"{prefix}: EV ahead on {ev_candidate_wins} of {qualified_slices} qualified slices "
+            f"with {ev_ties} ties and {ev_baseline_wins} baseline EV wins; average EV delta "
+            f"{average_expected_value_delta if average_expected_value_delta is not None else 'n/a'}, "
+            f"average win-rate delta {average_win_rate_delta if average_win_rate_delta is not None else 'n/a'}, "
+            f"average actionable ratio {average_actionable_ratio if average_actionable_ratio is not None else 'n/a'}, "
+            f"max actionable ratio {max_actionable_ratio if max_actionable_ratio is not None else 'n/a'}, "
+            f"severe WR regressions {severe_win_rate_regressions}, severe EV regressions {severe_ev_regressions}."
+        )
 
     @staticmethod
     def _rationale(

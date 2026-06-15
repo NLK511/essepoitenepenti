@@ -217,6 +217,65 @@ class PlanGenerationWalkForwardServiceTests(unittest.TestCase):
         self.assertGreater(summary.average_win_rate_delta, 0)
         self.assertGreater(summary.average_expected_value_delta, 0)
 
+    def test_ev_expansion_path_allows_bounded_win_rate_tradeoff(self) -> None:
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        records = self._make_records(120, start)
+        self.tuning_service._eligible_records.return_value = records
+
+        def score_side_effect(recs, config):
+            is_cand = config.get("name") == "candidate"
+            if is_cand:
+                return (30, 14, 1.2, 0)
+            return (20, 10, 0.5, 0)
+
+        self.tuning_service._score_records.side_effect = score_side_effect
+
+        with patch.object(
+            PlanGenerationWalkForwardService, "_adapt_window_sizes", return_value=(20, 20)
+        ):
+            summary = self.service.summarize(
+                candidate_config={"name": "candidate"},
+                baseline_config={"name": "baseline"},
+                validation_days=20,
+                step_days=20,
+                min_validation_resolved=10,
+            )
+
+        self.assertFalse(summary.promotion_recommended)
+        self.assertTrue(summary.ev_expansion_recommended)
+        self.assertEqual(summary.ev_candidate_wins, 5)
+        self.assertEqual(summary.ev_baseline_wins, 0)
+        self.assertEqual(summary.average_actionable_ratio, 1.5)
+
+    def test_ev_expansion_path_rejects_large_win_rate_regression(self) -> None:
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        records = self._make_records(120, start)
+        self.tuning_service._eligible_records.return_value = records
+
+        def score_side_effect(recs, config):
+            is_cand = config.get("name") == "candidate"
+            if is_cand:
+                return (30, 9, 1.2, 0)
+            return (20, 10, 0.5, 0)
+
+        self.tuning_service._score_records.side_effect = score_side_effect
+
+        with patch.object(
+            PlanGenerationWalkForwardService, "_adapt_window_sizes", return_value=(20, 20)
+        ):
+            summary = self.service.summarize(
+                candidate_config={"name": "candidate"},
+                baseline_config={"name": "baseline"},
+                validation_days=20,
+                step_days=20,
+                min_validation_resolved=10,
+            )
+
+        self.assertFalse(summary.promotion_recommended)
+        self.assertFalse(summary.ev_expansion_recommended)
+        self.assertLess(summary.average_win_rate_delta, -12.0)
+        self.assertGreater(summary.severe_win_rate_regressions, 1)
+
     def test_calculates_exact_average_deltas(self) -> None:
         """
         Verify the arithmetic for average deltas across 3 qualified slices.

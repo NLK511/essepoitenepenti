@@ -1129,6 +1129,15 @@ class PlanGenerationWalkForwardSummary(BaseModel):
     ties: int = 0
     average_win_rate_delta: float | None = None
     average_expected_value_delta: float | None = None
+    ev_candidate_wins: int = 0
+    ev_baseline_wins: int = 0
+    ev_ties: int = 0
+    average_actionable_ratio: float | None = None
+    max_actionable_ratio: float | None = None
+    severe_win_rate_regressions: int = 0
+    severe_ev_regressions: int = 0
+    ev_expansion_recommended: bool = False
+    ev_expansion_rationale: str = ""
     promotion_recommended: bool = False
     promotion_rationale: str = ""
     slices: list[PlanGenerationWalkForwardSlice] = Field(default_factory=list)
