@@ -57,9 +57,29 @@ class PlanGenerationTuningError(Exception):
 
 
 @dataclass(slots=True)
+class TuningPlanSnapshot:
+    id: int
+    computed_at: datetime | None
+    action: str
+    confidence_percent: float
+    entry_price_low: float | None
+    entry_price_high: float | None
+    stop_loss: float | None
+    take_profit: float | None
+    signal_breakdown: dict[str, object]
+
+
+@dataclass(slots=True)
+class TuningOutcomeSnapshot:
+    max_favorable_excursion: float | None
+    max_adverse_excursion: float | None
+    horizon_return_5d: float | None
+
+
+@dataclass(slots=True)
 class EligibleTuningRecord:
-    plan: RecommendationPlan
-    outcome: RecommendationPlanOutcome
+    plan: RecommendationPlan | TuningPlanSnapshot
+    outcome: RecommendationPlanOutcome | TuningOutcomeSnapshot
     sample: RecommendationDecisionSample | None
     setup_family: str
     context_bias: str | None
@@ -805,7 +825,7 @@ class PlanGenerationTuningService:
                 if normalized_setup_family and features.setup_family != normalized_setup_family:
                     continue
                 eligible.append(
-                    EligibleTuningRecord(
+                    self._compact_eligible_record(
                         plan=plan,
                         outcome=outcome,
                         sample=sample,
@@ -820,6 +840,53 @@ class PlanGenerationTuningService:
                 break
         eligible.sort(key=lambda item: item.plan.computed_at)
         return eligible
+
+    @staticmethod
+    def _compact_eligible_record(
+        *,
+        plan: RecommendationPlan,
+        outcome: RecommendationPlanOutcome,
+        sample: RecommendationDecisionSample | None,
+        setup_family: str,
+        context_bias: str | None,
+    ) -> EligibleTuningRecord:
+        signal_breakdown = PlanGenerationTuningService._plan_signal_breakdown(plan)
+        compact_signal_breakdown = {
+            key: signal_breakdown[key]
+            for key in ("intended_action", "cheap_scan_volatility_score")
+            if key in signal_breakdown
+        }
+        return EligibleTuningRecord(
+            plan=TuningPlanSnapshot(
+                id=int(plan.id or 0),
+                computed_at=plan.computed_at,
+                action=plan.action,
+                confidence_percent=float(plan.confidence_percent),
+                entry_price_low=float(plan.entry_price_low)
+                if plan.entry_price_low is not None
+                else None,
+                entry_price_high=float(plan.entry_price_high)
+                if plan.entry_price_high is not None
+                else None,
+                stop_loss=float(plan.stop_loss) if plan.stop_loss is not None else None,
+                take_profit=float(plan.take_profit) if plan.take_profit is not None else None,
+                signal_breakdown=compact_signal_breakdown,
+            ),
+            outcome=TuningOutcomeSnapshot(
+                max_favorable_excursion=float(outcome.max_favorable_excursion)
+                if outcome.max_favorable_excursion is not None
+                else None,
+                max_adverse_excursion=float(outcome.max_adverse_excursion)
+                if outcome.max_adverse_excursion is not None
+                else None,
+                horizon_return_5d=float(outcome.horizon_return_5d)
+                if outcome.horizon_return_5d is not None
+                else None,
+            ),
+            sample=None,
+            setup_family=setup_family,
+            context_bias=context_bias,
+        )
 
     @staticmethod
     def _split_records(
