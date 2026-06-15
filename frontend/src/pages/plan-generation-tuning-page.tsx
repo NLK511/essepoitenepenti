@@ -66,6 +66,8 @@ export function PlanGenerationTuningPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [runMode, setRunMode] = useState<"manual" | "explore" | "wide">("manual");
+  const [largeCoarseCandidates, setLargeCoarseCandidates] = useState(20000);
+  const [largeFineCandidates, setLargeFineCandidates] = useState(5000);
   const [showAllCandidates, setShowAllCandidates] = useState(false);
 
   async function loadData() {
@@ -136,6 +138,25 @@ export function PlanGenerationTuningPage() {
       await loadData();
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : "Failed to run plan generation tuning");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function runLargeSearch() {
+    try {
+      setSaving("run-large");
+      setError(null);
+      const query = new URLSearchParams({
+        coarse_candidates: String(largeCoarseCandidates),
+        fine_candidates: String(largeFineCandidates),
+        top_k: "100",
+        fine_seeds: "20",
+      });
+      await postForm<unknown>(`/api/plan-generation-tuning/large-search/run?${query.toString()}`, {});
+      await loadData();
+    } catch (runError) {
+      setError(runError instanceof Error ? runError.message : "Failed to queue large tuning search");
     } finally {
       setSaving(null);
     }
@@ -221,26 +242,49 @@ export function PlanGenerationTuningPage() {
             </DisclosureCard>
 
             <Card>
-              <SectionTitle kicker="Controls" title="Queue plan generation tuning" subtitle="Queue a worker-backed dry run or guarded promotion so the run appears in the debugger and worker logs." actions={<HelpHint tooltip="The run is queued to a worker. Dry runs rank candidates without changing the live config. Apply mode promotes only if the winner passes backend guardrails." to={tuningSpecDoc} />} />
+              <SectionTitle kicker="Controls" title="Queue plan generation tuning" subtitle="Queue a worker-backed dry run, guarded promotion, or research-only large search so the run appears in the debugger and worker logs." actions={<HelpHint tooltip="The run is queued to a worker. Dry runs rank candidates without changing the live config. Apply mode promotes only if the winner passes backend guardrails. Large tuning search is research-only and cannot promote." to={tuningSpecDoc} />} />
               <div className="data-stack top-gap-small">
                 <label className="form-field">
                   <span>Run mode</span>
                   <select value={runMode} onChange={(event) => setRunMode(event.target.value as "manual" | "explore" | "wide") }>
-                    <option value="manual">Manual</option>
-                    <option value="explore">Explore</option>
-                    <option value="wide">Wide research</option>
+                    <option value="manual">Standard tuning search</option>
+                    <option value="explore">Exploratory tuning search</option>
+                    <option value="wide">Wide tuning search</option>
                   </select>
                 </label>
                 <div className="helper-text">
                   {runMode === "manual"
-                    ? "Manual runs use the narrower default candidate pool."
+                    ? "Standard tuning search uses the narrower default candidate pool."
                     : runMode === "explore"
-                      ? "Explore mode widens the step size and validation view a bit."
-                      : "Wide research uses the broadest deterministic sweep and rolling walk-forward validation."}
+                      ? "Exploratory tuning search widens the step size and validation view a bit."
+                      : "Wide tuning search uses the broadest built-in deterministic sweep and rolling walk-forward validation. The large parameter search is a separate non-schedulable research tuning search."}
                 </div>
                 <div className="cluster">
-                  <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(runMode, false)}>{saving === `run-${runMode}` ? "… Queueing" : `▶ ${runMode === "manual" ? "Dry run" : runMode}`}</button>
-                  <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(runMode, true)}>{saving === `apply-${runMode}` ? "… Applying" : `↑ ${runMode === "manual" ? "Promote if eligible" : `${runMode} promote`}`}</button>
+                  <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(runMode, false)}>{saving === `run-${runMode}` ? "… Queueing" : `▶ ${runMode === "manual" ? "Standard dry run" : `${runMode} dry run`}`}</button>
+                  <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(runMode, true)}>{saving === `apply-${runMode}` ? "… Applying" : `↑ ${runMode === "manual" ? "Promote standard winner if eligible" : `${runMode} promote if eligible`}`}</button>
+                </div>
+              </div>
+              <div className="data-card top-gap-medium">
+                <div className="data-card-header">
+                  <div>
+                    <div className="data-card-title">Plan Generation Large Tuning Search</div>
+                    <div className="helper-text">Research-only, non-schedulable coarse/fine search. It writes a resumable cache and never promotes config. Increase counts manually for multi-hour searches.</div>
+                  </div>
+                  <Badge tone="warning">large</Badge>
+                </div>
+                <div className="cluster top-gap-small">
+                  <label className="form-field compact-field">
+                    <span>Coarse candidates</span>
+                    <input type="number" min="1" max="1000000" value={largeCoarseCandidates} onChange={(event) => setLargeCoarseCandidates(Number(event.target.value || 1))} />
+                  </label>
+                  <label className="form-field compact-field">
+                    <span>Fine candidates</span>
+                    <input type="number" min="0" max="500000" value={largeFineCandidates} onChange={(event) => setLargeFineCandidates(Number(event.target.value || 0))} />
+                  </label>
+                </div>
+                <div className="cluster top-gap-small">
+                  <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runLargeSearch()}>{saving === "run-large" ? "… Queueing" : "▶ Queue large tuning search"}</button>
+                  <span className="helper-text">Use the run/debugger page for progress. This can take hours.</span>
                 </div>
               </div>
               <details className="top-gap-small">

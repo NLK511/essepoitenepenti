@@ -65,6 +65,7 @@ Group intent:
 Schedules are staggered by region and group so they do not overlap.
 
 Proposal-generation jobs stay near local opening windows and are spaced by **10 minutes**.
+The U.S. default deployment also adds a second midday proposal-generation pass for the same five U.S. watchlists. This midday pass is an evidence-gathering freshness experiment: it should remain subject to broker duplicate-position/order controls and dry-run review before any extra autonomous execution is trusted.
 The default deployment also adds three shared-context refresh jobs:
 - two macro refreshes per day
 - one industry refresh in the midday gap
@@ -76,7 +77,8 @@ It additionally adds three recommendation-evaluation jobs that run a few minutes
 Regional schedule blocks:
 - **Asia/Pacific:** `00:00` to `00:40` UTC
 - **Europe:** `07:00` to `07:40` UTC
-- **United States:** `13:00` to `13:40` UTC
+- **United States open pass:** `13:00` to `13:40` UTC
+- **United States midday pass:** `16:00` to `16:40` UTC
 
 Why this matters:
 - avoids multiple seeded jobs firing at once
@@ -103,6 +105,11 @@ Why this matters:
 | `US-Health` | United States | Health | `13:20` |
 | `US-Cons` | United States | Cons | `13:30` |
 | `US-Cyc` | United States | Cyc | `13:40` |
+| `US-Tech-Midday` | United States | Tech | `16:00` |
+| `US-Fin-Midday` | United States | Fin | `16:10` |
+| `US-Health-Midday` | United States | Health | `16:20` |
+| `US-Cons-Midday` | United States | Cons | `16:30` |
+| `US-Cyc-Midday` | United States | Cyc | `16:40` |
 
 Shared-context refresh jobs:
 
@@ -124,8 +131,8 @@ Post-close recommendation evaluation jobs:
 
 The default script seeds:
 - **15 watchlists**
-- **21 scheduled jobs**
-  - 15 proposal jobs
+- **26 scheduled jobs**
+  - 20 proposal jobs: 15 regional open-pass jobs plus 5 U.S. midday-pass jobs
   - 2 macro refresh jobs
   - 1 industry refresh job
   - 3 recommendation evaluation jobs
@@ -153,7 +160,8 @@ The script:
 
 ## Maintenance rule
 
-If the default watchlists change:
+If the default watchlists or default schedules change:
 - update `scripts/deploy_watchlists.py`
 - keep the rationale here in sync
 - preserve compact naming and non-overlapping schedule discipline unless there is a strong operational reason not to
+- treat extra intraday generation passes as separately reviewable cohorts, not automatic proof of better trading edge

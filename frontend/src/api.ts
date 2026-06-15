@@ -86,3 +86,11 @@ export async function postForm<T>(path: string, values: Record<string, FormValue
   }
   return request<T>(path, { method: "POST", body: formData });
 }
+
+export async function postJson<T>(path: string, values: JsonObject): Promise<T> {
+  return request<T>(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(values),
+  });
+}

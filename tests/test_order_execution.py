@@ -7,17 +7,33 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import JobType, StrategyHorizon
-from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPosition, RecommendationPlan
+from trade_proposer_app.domain.models import (
+    BrokerOrderExecution,
+    BrokerPosition,
+    RecommendationPlan,
+)
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
-from trade_proposer_app.repositories.broker_reconciliation_snapshots import BrokerReconciliationSnapshotRepository
+from trade_proposer_app.repositories.broker_reconciliation_snapshots import (
+    BrokerReconciliationSnapshotRepository,
+)
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.services.alpaca_paper_client import AlpacaOrderSubmissionResult, AlpacaPaperClient, AlpacaPaperClientError
+from trade_proposer_app.services.alpaca_paper_client import (
+    AlpacaOrderSubmissionResult,
+    AlpacaPaperClient,
+    AlpacaPaperClientError,
+)
+from trade_proposer_app.services.brokers import (
+    BrokerAdapterResultStatus,
+    BrokerCapabilities,
+    BrokerOrderResult,
+    FakeBrokerAdapter,
+)
 from trade_proposer_app.services.job_execution import JobExecutionService
 from trade_proposer_app.services.order_execution import OrderExecutionService
 from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
@@ -56,7 +72,14 @@ class StubAlpacaClient:
         self.get_requests.append(order_id)
         return AlpacaOrderSubmissionResult(
             status_code=200,
-            payload={"id": order_id, "status": "filled", "order_class": "bracket", "filled_at": "2026-04-22T15:00:00Z", "submitted_at": "2026-04-22T14:30:00Z", "legs": []},
+            payload={
+                "id": order_id,
+                "status": "filled",
+                "order_class": "bracket",
+                "filled_at": "2026-04-22T15:00:00Z",
+                "submitted_at": "2026-04-22T14:30:00Z",
+                "legs": [],
+            },
         )
 
     def cancel_order(self, order_id: str) -> AlpacaOrderSubmissionResult:
@@ -96,7 +119,14 @@ class FakeHttpxClient:
         self.responses = responses
         self.calls: list[tuple[str, str, object | None]] = []
 
-    def request(self, method: str, url: str, content: object | None = None, headers: object | None = None, timeout: float | None = None):
+    def request(
+        self,
+        method: str,
+        url: str,
+        content: object | None = None,
+        headers: object | None = None,
+        timeout: float | None = None,
+    ):
         self.calls.append((method, url, content))
         if not self.responses:
             raise AssertionError("no fake response queued")
@@ -123,7 +153,11 @@ class StubOrderExecutionService:
             "OrderExecutionOutcome",
             (),
             {
-                "summary": {"enabled": True, "warnings_found": False, "submitted_order_count": len(plans)},
+                "summary": {
+                    "enabled": True,
+                    "warnings_found": False,
+                    "submitted_order_count": len(plans),
+                },
                 "orders": [],
             },
         )()
@@ -176,7 +210,11 @@ class OrderExecutionTests(unittest.TestCase):
             events = observability.list_events(limit=10)
             self.assertEqual(
                 [event["event_type"] for event in reversed(events)],
-                ["broker.reconciliation_snapshot_recorded", "broker.order_submit_started", "broker.order_submit_finished"],
+                [
+                    "broker.reconciliation_snapshot_recorded",
+                    "broker.order_submit_started",
+                    "broker.order_submit_finished",
+                ],
             )
             snapshots = BrokerReconciliationSnapshotRepository(session).list_latest(limit=10)
             self.assertEqual(len(snapshots), 1)
@@ -188,7 +226,9 @@ class OrderExecutionTests(unittest.TestCase):
         finally:
             session.close()
 
-    def test_order_execution_service_resubmits_failed_order_with_fresh_client_order_id(self) -> None:
+    def test_order_execution_service_resubmits_failed_order_with_fresh_client_order_id(
+        self,
+    ) -> None:
         session = create_session()
         try:
             settings = SettingsRepository(session)
@@ -215,7 +255,12 @@ class OrderExecutionTests(unittest.TestCase):
                     take_profit=110.0,
                     status="failed",
                     client_order_id="tp-run-10-plan-1-aapl",
-                    request_payload={"symbol": "AAPL", "qty": 10, "limit_price": 100.0, "client_order_id": "tp-run-10-plan-1-aapl"},
+                    request_payload={
+                        "symbol": "AAPL",
+                        "qty": 10,
+                        "limit_price": 100.0,
+                        "client_order_id": "tp-run-10-plan-1-aapl",
+                    },
                     response_payload={"id": "alpaca-order-1", "status": "rejected"},
                     error_message="reject",
                 )
@@ -299,7 +344,12 @@ class OrderExecutionTests(unittest.TestCase):
                     broker_order_id="alpaca-order-2",
                     client_order_id="tp-run-10-plan-1-aapl-live",
                     submitted_at=datetime.now(timezone.utc),
-                    request_payload={"symbol": "AAPL", "qty": 10, "limit_price": 100.0, "client_order_id": "tp-run-10-plan-1-aapl-live"},
+                    request_payload={
+                        "symbol": "AAPL",
+                        "qty": 10,
+                        "limit_price": 100.0,
+                        "client_order_id": "tp-run-10-plan-1-aapl-live",
+                    },
                     response_payload={"id": "alpaca-order-2", "status": "accepted"},
                 )
             )
@@ -325,7 +375,12 @@ class OrderExecutionTests(unittest.TestCase):
                     broker_order_id="alpaca-order-3",
                     client_order_id="tp-run-10-plan-2-msft-live",
                     submitted_at=datetime.now(timezone.utc),
-                    request_payload={"symbol": "MSFT", "qty": 10, "limit_price": 200.0, "client_order_id": "tp-run-10-plan-2-msft-live"},
+                    request_payload={
+                        "symbol": "MSFT",
+                        "qty": 10,
+                        "limit_price": 200.0,
+                        "client_order_id": "tp-run-10-plan-2-msft-live",
+                    },
                     response_payload={"id": "alpaca-order-3", "status": "accepted"},
                 )
             )
@@ -354,7 +409,9 @@ class OrderExecutionTests(unittest.TestCase):
 
             def get_order(self, order_id: str) -> AlpacaOrderSubmissionResult:
                 self.get_requests.append(order_id)
-                return AlpacaOrderSubmissionResult(status_code=200, payload={"id": order_id, **self.payload})
+                return AlpacaOrderSubmissionResult(
+                    status_code=200, payload={"id": order_id, **self.payload}
+                )
 
         for leg_type, expected_status in (("limit", "win"), ("stop", "loss")):
             session = create_session()
@@ -398,7 +455,9 @@ class OrderExecutionTests(unittest.TestCase):
                         ],
                     }
                 )
-                service = OrderExecutionService(settings=settings, executions=repository, client=client)
+                service = OrderExecutionService(
+                    settings=settings, executions=repository, client=client
+                )
 
                 refreshed = service.refresh_execution(stored.id or 0)
 
@@ -406,6 +465,88 @@ class OrderExecutionTests(unittest.TestCase):
                 self.assertIsNotNone(refreshed.filled_at)
             finally:
                 session.close()
+
+    def test_order_execution_service_persists_open_protective_order_leg_evidence(self) -> None:
+        class OpenBracketClient(StubAlpacaClient):
+            def get_order(self, order_id: str) -> AlpacaOrderSubmissionResult:
+                self.get_requests.append(order_id)
+                return AlpacaOrderSubmissionResult(
+                    status_code=200,
+                    payload={
+                        "id": order_id,
+                        "status": "filled",
+                        "filled_qty": "10",
+                        "filled_avg_price": "100.00",
+                        "filled_at": "2026-04-22T14:30:00Z",
+                        "order_class": "bracket",
+                        "legs": [
+                            {
+                                "id": "take-profit-leg-open",
+                                "type": "limit",
+                                "status": "new",
+                                "limit_price": "110.00",
+                            },
+                            {
+                                "id": "stop-loss-leg-open",
+                                "type": "stop",
+                                "status": "new",
+                                "stop_price": "95.00",
+                            },
+                        ],
+                    },
+                )
+
+        session = create_session()
+        try:
+            settings = SettingsRepository(session)
+            settings.upsert_provider_credential("alpaca", "paper-key", "paper-secret")
+            orders = BrokerOrderExecutionRepository(session)
+            positions = BrokerPositionRepository(session)
+            stored = orders.create(
+                BrokerOrderExecution(
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=1,
+                    recommendation_plan_ticker="AAPL",
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    quantity=10,
+                    notional_amount=1000.0,
+                    entry_price=100.0,
+                    stop_loss=95.0,
+                    take_profit=110.0,
+                    status="open",
+                    broker_order_id="alpaca-order-open-protected",
+                    client_order_id="tp-run-10-plan-1-aapl-open-protected",
+                    request_payload={"symbol": "AAPL"},
+                    response_payload={"id": "alpaca-order-open-protected", "status": "filled"},
+                )
+            )
+            service = OrderExecutionService(
+                settings=settings,
+                executions=orders,
+                positions=positions,
+                client=OpenBracketClient(),
+            )
+
+            refreshed = service.refresh_execution(stored.id or 0)
+            position = positions.get_by_order_execution_id(refreshed.id or 0)
+
+            self.assertIsNotNone(position)
+            self.assertEqual(position.status, "open")
+            self.assertIsNone(position.exit_order_id)
+            self.assertEqual(position.stop_loss_order_id, "stop-loss-leg-open")
+            self.assertEqual(position.stop_loss_order_status, "new")
+            self.assertEqual(position.stop_loss_order_price, 95.0)
+            self.assertEqual(position.take_profit_order_id, "take-profit-leg-open")
+            self.assertEqual(position.take_profit_order_status, "new")
+            self.assertEqual(position.take_profit_order_price, 110.0)
+            self.assertEqual(position.protective_orders_source, "broker_order_legs")
+            self.assertIsNotNone(position.protective_orders_verified_at)
+        finally:
+            session.close()
 
     def test_order_execution_service_persists_position_lifecycle_and_realized_pnl(self) -> None:
         class ExitLegClient(StubAlpacaClient):
@@ -461,7 +602,9 @@ class OrderExecutionTests(unittest.TestCase):
                     response_payload={"id": "alpaca-order-win", "status": "filled"},
                 )
             )
-            service = OrderExecutionService(settings=settings, executions=orders, positions=positions, client=ExitLegClient())
+            service = OrderExecutionService(
+                settings=settings, executions=orders, positions=positions, client=ExitLegClient()
+            )
 
             refreshed = service.refresh_execution(stored.id or 0)
             position = positions.get_by_order_execution_id(refreshed.id or 0)
@@ -481,8 +624,22 @@ class OrderExecutionTests(unittest.TestCase):
         session = create_session()
         try:
             plans = RecommendationPlanRepository(session)
-            first_plan = plans.create_plan(RecommendationPlan(ticker="AAPL", action="long", confidence_percent=70.0, thesis_summary="Broker winner"))
-            second_plan = plans.create_plan(RecommendationPlan(ticker="MSFT", action="long", confidence_percent=60.0, thesis_summary="Broker loser"))
+            first_plan = plans.create_plan(
+                RecommendationPlan(
+                    ticker="AAPL",
+                    action="long",
+                    confidence_percent=70.0,
+                    thesis_summary="Broker winner",
+                )
+            )
+            second_plan = plans.create_plan(
+                RecommendationPlan(
+                    ticker="MSFT",
+                    action="long",
+                    confidence_percent=60.0,
+                    thesis_summary="Broker loser",
+                )
+            )
             BrokerPositionRepository(session).create(
                 BrokerPosition(
                     broker_order_execution_id=1,
@@ -564,7 +721,12 @@ class OrderExecutionTests(unittest.TestCase):
                     broker_order_id="alpaca-order-2",
                     client_order_id="tp-run-10-plan-1-aapl-live",
                     submitted_at=datetime.now(timezone.utc),
-                    request_payload={"symbol": "AAPL", "qty": 10, "limit_price": 100.0, "client_order_id": "tp-run-10-plan-1-aapl-live"},
+                    request_payload={
+                        "symbol": "AAPL",
+                        "qty": 10,
+                        "limit_price": 100.0,
+                        "client_order_id": "tp-run-10-plan-1-aapl-live",
+                    },
                     response_payload={"id": "alpaca-order-2", "status": "filled"},
                 )
             )
@@ -591,20 +753,30 @@ class OrderExecutionTests(unittest.TestCase):
                     client_order_id="tp-run-10-plan-2-msft-live",
                     submitted_at=datetime.now(timezone.utc),
                     canceled_at=datetime.now(timezone.utc),
-                    request_payload={"symbol": "MSFT", "qty": 10, "limit_price": 200.0, "client_order_id": "tp-run-10-plan-2-msft-live"},
+                    request_payload={
+                        "symbol": "MSFT",
+                        "qty": 10,
+                        "limit_price": 200.0,
+                        "client_order_id": "tp-run-10-plan-2-msft-live",
+                    },
                     response_payload={"id": "alpaca-order-3", "status": "canceled"},
                 )
             )
             client = StubAlpacaClient()
             observability = ObservabilityEventRepository(session)
-            service = OrderExecutionService(settings=settings, executions=repository, client=client, observability=observability)
+            service = OrderExecutionService(
+                settings=settings, executions=repository, client=client, observability=observability
+            )
 
             outcome = service.sync_open_executions()
 
             self.assertEqual(outcome.summary["synced_count"], 1)
             self.assertEqual(outcome.summary["skipped_count"], 1)
             self.assertEqual(client.get_requests, ["alpaca-order-2"])
-            self.assertEqual(repository.get_by_client_order_id("alpaca", "tp-run-10-plan-1-aapl-live").status, "open")
+            self.assertEqual(
+                repository.get_by_client_order_id("alpaca", "tp-run-10-plan-1-aapl-live").status,
+                "open",
+            )
             events = observability.list_events(limit=10)
             self.assertEqual(
                 [event["event_type"] for event in reversed(events)],
@@ -615,7 +787,9 @@ class OrderExecutionTests(unittest.TestCase):
                     "broker.order_sync_finished",
                 ],
             )
-            refresh_started = next(event for event in events if event["event_type"] == "broker.order_refresh_started")
+            refresh_started = next(
+                event for event in events if event["event_type"] == "broker.order_refresh_started"
+            )
             self.assertEqual(refresh_started["run_id"], 10)
             self.assertEqual(refresh_started["job_id"], 11)
         finally:
@@ -667,6 +841,59 @@ class OrderExecutionTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_order_execution_service_amends_through_broker_adapter_contract(self) -> None:
+        session = create_session()
+        try:
+            settings = SettingsRepository(session)
+            repository = BrokerOrderExecutionRepository(session)
+            stored = repository.create(
+                BrokerOrderExecution(
+                    broker="fake",
+                    account_mode="paper",
+                    recommendation_plan_id=1,
+                    recommendation_plan_ticker="AAPL",
+                    ticker="AAPL",
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    time_in_force="gtc",
+                    quantity=10,
+                    notional_amount=1000.0,
+                    entry_price=100.0,
+                    stop_loss=95.0,
+                    take_profit=110.0,
+                    status="submitted",
+                    broker_order_id="fake-order-9",
+                    client_order_id="tp-run-10-plan-1-aapl-open",
+                    request_payload={"order_class": "bracket"},
+                    response_payload={"id": "fake-order-9", "status": "accepted"},
+                )
+            )
+            adapter = FakeBrokerAdapter(
+                capabilities=BrokerCapabilities(
+                    broker="fake", account_mode="paper", supports_amend_protection=True
+                )
+            )
+            adapter.orders["fake-order-9"] = BrokerOrderResult(
+                status=BrokerAdapterResultStatus.SUCCESS,
+                operation="lookup_order",
+                client_request_id="fake-order-9",
+                broker_order_id="fake-order-9",
+                broker_status="accepted",
+                payload={"id": "fake-order-9", "status": "accepted", "order_class": "bracket"},
+            )
+            service = OrderExecutionService(
+                settings=settings, executions=repository, adapter=adapter
+            )
+
+            amended = service.amend_execution(stored.id or 0, stop_loss=97.5, take_profit=108.5)
+
+            self.assertEqual(amended.stop_loss, 97.5)
+            self.assertEqual(amended.take_profit, 108.5)
+            self.assertEqual(amended.response_payload["status"], "accepted")
+        finally:
+            session.close()
+
     def test_order_execution_service_rejects_non_bracket_amendments(self) -> None:
         session = create_session()
         try:
@@ -703,9 +930,13 @@ class OrderExecutionTests(unittest.TestCase):
             class NonBracketAmendClient(StubAlpacaClient):
                 def get_order(self, order_id: str) -> AlpacaOrderSubmissionResult:
                     self.get_requests.append(order_id)
-                    return AlpacaOrderSubmissionResult(status_code=200, payload={"id": order_id, "status": "accepted"})
+                    return AlpacaOrderSubmissionResult(
+                        status_code=200, payload={"id": order_id, "status": "accepted"}
+                    )
 
-            service = OrderExecutionService(settings=settings, executions=repository, client=NonBracketAmendClient())
+            service = OrderExecutionService(
+                settings=settings, executions=repository, client=NonBracketAmendClient()
+            )
 
             with self.assertRaises(ValueError):
                 service.amend_execution(stored.id or 0, stop_loss=97.5)
@@ -757,7 +988,12 @@ class OrderExecutionTests(unittest.TestCase):
                     status="submitted",
                     client_order_id="tp-run-10-plan-1-aapl-open",
                     broker_order_id="alpaca-order-3",
-                    request_payload={"symbol": "AAPL", "qty": 10, "limit_price": 100.0, "client_order_id": "tp-run-10-plan-1-aapl-open"},
+                    request_payload={
+                        "symbol": "AAPL",
+                        "qty": 10,
+                        "limit_price": 100.0,
+                        "client_order_id": "tp-run-10-plan-1-aapl-open",
+                    },
                     response_payload={"id": "alpaca-order-3", "status": "accepted"},
                 )
             )
@@ -801,7 +1037,12 @@ class OrderExecutionTests(unittest.TestCase):
                     status="canceled",
                     broker_order_id="alpaca-order-4",
                     client_order_id="tp-run-10-plan-1-aapl-canceled",
-                    request_payload={"symbol": "AAPL", "qty": 10, "limit_price": 100.0, "client_order_id": "tp-run-10-plan-1-aapl-canceled"},
+                    request_payload={
+                        "symbol": "AAPL",
+                        "qty": 10,
+                        "limit_price": 100.0,
+                        "client_order_id": "tp-run-10-plan-1-aapl-canceled",
+                    },
                     response_payload={"id": "alpaca-order-4", "status": "canceled"},
                 )
             )
@@ -823,7 +1064,12 @@ class OrderExecutionTests(unittest.TestCase):
                     status="filled",
                     broker_order_id="alpaca-order-5",
                     client_order_id="tp-run-10-plan-1-aapl-filled",
-                    request_payload={"symbol": "AAPL", "qty": 10, "limit_price": 100.0, "client_order_id": "tp-run-10-plan-1-aapl-filled"},
+                    request_payload={
+                        "symbol": "AAPL",
+                        "qty": 10,
+                        "limit_price": 100.0,
+                        "client_order_id": "tp-run-10-plan-1-aapl-filled",
+                    },
                     response_payload={"id": "alpaca-order-5", "status": "filled"},
                 )
             )
@@ -844,11 +1090,18 @@ class OrderExecutionTests(unittest.TestCase):
                     notional_amount=1000.0,
                     status="submitted",
                     client_order_id="tp-run-10-plan-1-aapl-no-id",
-                    request_payload={"symbol": "AAPL", "qty": 10, "limit_price": 100.0, "client_order_id": "tp-run-10-plan-1-aapl-no-id"},
+                    request_payload={
+                        "symbol": "AAPL",
+                        "qty": 10,
+                        "limit_price": 100.0,
+                        "client_order_id": "tp-run-10-plan-1-aapl-no-id",
+                    },
                     response_payload={"id": "alpaca-order-6", "status": "accepted"},
                 )
             )
-            service = OrderExecutionService(settings=settings, executions=repository, client=StubAlpacaClient())
+            service = OrderExecutionService(
+                settings=settings, executions=repository, client=StubAlpacaClient()
+            )
 
             with self.assertRaises(ValueError):
                 service.resubmit_execution(submitted.id or 0)
@@ -870,7 +1123,11 @@ class OrderExecutionTests(unittest.TestCase):
         try:
             settings = SettingsRepository(session)
             settings.set_order_execution_config(enabled=False, notional_per_plan=1000.0)
-            service = OrderExecutionService(settings=settings, executions=BrokerOrderExecutionRepository(session), client=StubAlpacaClient())
+            service = OrderExecutionService(
+                settings=settings,
+                executions=BrokerOrderExecutionRepository(session),
+                client=StubAlpacaClient(),
+            )
             plan = RecommendationPlan(
                 id=1,
                 ticker="AAPL",
@@ -945,7 +1202,9 @@ class OrderExecutionTests(unittest.TestCase):
             settings = SettingsRepository(session)
             settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
             settings.get_provider_credential_map = lambda: {}  # type: ignore[method-assign]
-            service = OrderExecutionService(settings=settings, executions=BrokerOrderExecutionRepository(session))
+            service = OrderExecutionService(
+                settings=settings, executions=BrokerOrderExecutionRepository(session)
+            )
             plan = RecommendationPlan(
                 id=1,
                 ticker="AAPL",
@@ -1046,12 +1305,18 @@ class OrderExecutionTests(unittest.TestCase):
                 try:
                     settings = SettingsRepository(session)
                     settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
-                    service = OrderExecutionService(settings=settings, executions=BrokerOrderExecutionRepository(session), client=StubAlpacaClient())
+                    service = OrderExecutionService(
+                        settings=settings,
+                        executions=BrokerOrderExecutionRepository(session),
+                        client=StubAlpacaClient(),
+                    )
 
                     outcome = service.execute_plans([plan])
 
                     self.assertEqual(outcome.summary["skipped_order_count"], 1)
-                    self.assertIn(expected_reason, {item["reason"] for item in outcome.summary["skips"]})
+                    self.assertIn(
+                        expected_reason, {item["reason"] for item in outcome.summary["skips"]}
+                    )
                 finally:
                     session.close()
 
@@ -1081,7 +1346,12 @@ class OrderExecutionTests(unittest.TestCase):
                     status="submitted",
                     broker_order_id="alpaca-order-dup",
                     client_order_id="tp-run-none-plan-99-aapl",
-                    request_payload={"symbol": "AAPL", "qty": 10, "limit_price": 100.0, "client_order_id": "tp-run-none-plan-99-aapl"},
+                    request_payload={
+                        "symbol": "AAPL",
+                        "qty": 10,
+                        "limit_price": 100.0,
+                        "client_order_id": "tp-run-none-plan-99-aapl",
+                    },
                     response_payload={"id": "alpaca-order-dup", "status": "accepted"},
                 )
             )
@@ -1097,7 +1367,9 @@ class OrderExecutionTests(unittest.TestCase):
                 take_profit=110.0,
                 computed_at=datetime.now(timezone.utc),
             )
-            service = OrderExecutionService(settings=settings, executions=repository, client=StubAlpacaClient())
+            service = OrderExecutionService(
+                settings=settings, executions=repository, client=StubAlpacaClient()
+            )
 
             outcome = service.execute_plans([duplicate_plan])
 
@@ -1144,7 +1416,9 @@ class OrderExecutionTests(unittest.TestCase):
                 )
             )
             client = StubAlpacaClient()
-            service = OrderExecutionService(settings=settings, executions=executions, positions=positions, client=client)
+            service = OrderExecutionService(
+                settings=settings, executions=executions, positions=positions, client=client
+            )
 
             service.close_position("AAPL")
 
@@ -1153,7 +1427,9 @@ class OrderExecutionTests(unittest.TestCase):
             self.assertEqual(updated.exit_reason, "steering_close_submitted")
             self.assertEqual(updated.current_quantity, 10)
             self.assertIsNone(updated.realized_pnl)
-            self.assertEqual(updated.raw_broker_payload["close_position_response"]["status"], "closed")
+            self.assertEqual(
+                updated.raw_broker_payload["close_position_response"]["status"], "closed"
+            )
             self.assertEqual(client.close_requests, ["AAPL"])
         finally:
             session.close()
@@ -1196,10 +1472,19 @@ class OrderExecutionTests(unittest.TestCase):
             class RejectedCloseClient(StubAlpacaClient):
                 def close_position(self, symbol: str) -> AlpacaOrderSubmissionResult:
                     self.close_requests.append(symbol)
-                    return AlpacaOrderSubmissionResult(status_code=200, payload={"symbol": symbol, "status": "rejected", "reason": "no close accepted"})
+                    return AlpacaOrderSubmissionResult(
+                        status_code=200,
+                        payload={
+                            "symbol": symbol,
+                            "status": "rejected",
+                            "reason": "no close accepted",
+                        },
+                    )
 
             client = RejectedCloseClient()
-            service = OrderExecutionService(settings=settings, executions=executions, positions=positions, client=client)
+            service = OrderExecutionService(
+                settings=settings, executions=executions, positions=positions, client=client
+            )
 
             service.close_position("AAPL")
 
@@ -1232,7 +1517,9 @@ class OrderExecutionTests(unittest.TestCase):
         self.assertEqual(canceled.broker_status, "canceled")
         self.assertEqual(amended.broker_status, "accepted")
         self.assertEqual(closed.broker_status, "closed")
-        self.assertEqual([call[0] for call in client.calls], ["POST", "GET", "DELETE", "PATCH", "DELETE"])
+        self.assertEqual(
+            [call[0] for call in client.calls], ["POST", "GET", "DELETE", "PATCH", "DELETE"]
+        )
         self.assertTrue(str(client.calls[1][1]).endswith("/v2/orders/alpaca-order-1?nested=true"))
 
     def test_alpaca_paper_client_raises_on_http_error_and_non_object_payload(self) -> None:
@@ -1257,7 +1544,11 @@ class OrderExecutionTests(unittest.TestCase):
         try:
             settings = SettingsRepository(session)
             settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
-            service = OrderExecutionService(settings=settings, executions=BrokerOrderExecutionRepository(session), client=StubAlpacaClient())
+            service = OrderExecutionService(
+                settings=settings,
+                executions=BrokerOrderExecutionRepository(session),
+                client=StubAlpacaClient(),
+            )
             plan = RecommendationPlan(
                 id=7,
                 ticker="TSLA",
@@ -1283,14 +1574,19 @@ class OrderExecutionTests(unittest.TestCase):
     def test_order_execution_service_records_failed_submission_when_broker_rejects(self) -> None:
         class RejectingClient:
             def submit_order(self, payload: dict[str, object]) -> AlpacaOrderSubmissionResult:
-                return AlpacaOrderSubmissionResult(status_code=200, payload={"id": "alpaca-order-reject", "status": "rejected"})
-
+                return AlpacaOrderSubmissionResult(
+                    status_code=200, payload={"id": "alpaca-order-reject", "status": "rejected"}
+                )
 
         session = create_session()
         try:
             settings = SettingsRepository(session)
             settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
-            service = OrderExecutionService(settings=settings, executions=BrokerOrderExecutionRepository(session), client=RejectingClient())
+            service = OrderExecutionService(
+                settings=settings,
+                executions=BrokerOrderExecutionRepository(session),
+                client=RejectingClient(),
+            )
             plan = RecommendationPlan(
                 id=8,
                 ticker="AAPL",
@@ -1312,7 +1608,9 @@ class OrderExecutionTests(unittest.TestCase):
         finally:
             session.close()
 
-    def test_order_execution_service_caches_broker_unavailable_tickers_and_allows_forced_retry(self) -> None:
+    def test_order_execution_service_caches_broker_unavailable_tickers_and_allows_forced_retry(
+        self,
+    ) -> None:
         class UnavailableTickerClient:
             def __init__(self) -> None:
                 self.requests: list[dict[str, object]] = []
@@ -1347,7 +1645,9 @@ class OrderExecutionTests(unittest.TestCase):
 
             first_outcome = service.execute_plans([plan], run_id=21, job_id=22)
             second_outcome = service.execute_plans([plan], run_id=23, job_id=24)
-            forced_outcome = service.execute_plans([plan], run_id=25, job_id=26, force_tickers={"AAPL"})
+            forced_outcome = service.execute_plans(
+                [plan], run_id=25, job_id=26, force_tickers={"AAPL"}
+            )
 
             self.assertEqual(len(client.requests), 2)
             self.assertEqual(first_outcome.summary["skipped_order_count"], 1)
@@ -1361,14 +1661,73 @@ class OrderExecutionTests(unittest.TestCase):
         finally:
             session.close()
 
-    def test_order_execution_service_uses_instantiated_alpaca_client_when_not_provided(self) -> None:
+    def test_order_execution_service_builds_live_snapshot_through_broker_adapter(self) -> None:
+        session = create_session()
+        try:
+            settings = SettingsRepository(session)
+            service = OrderExecutionService(
+                settings=settings,
+                executions=BrokerOrderExecutionRepository(session),
+                adapter=FakeBrokerAdapter(),
+                reconciliation_snapshots=BrokerReconciliationSnapshotRepository(session),
+            )
+
+            snapshot = service._live_broker_snapshot(run_id=1, job_id=2, ticker="AAPL")
+
+            self.assertIsNotNone(snapshot)
+            self.assertEqual(snapshot.account["equity"], 100000.0)
+            stored = BrokerReconciliationSnapshotRepository(session).list_latest(limit=1)[0]
+            self.assertEqual(stored.broker_account_id, "alpaca-paper-default")
+            self.assertEqual(stored.snapshot_type, "pre_submit")
+        finally:
+            session.close()
+
+    def test_order_execution_service_can_submit_through_broker_adapter_without_raw_client(
+        self,
+    ) -> None:
+        session = create_session()
+        try:
+            settings = SettingsRepository(session)
+            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            repository = BrokerOrderExecutionRepository(session)
+            service = OrderExecutionService(
+                settings=settings,
+                executions=repository,
+                adapter=FakeBrokerAdapter(),
+            )
+            plan = RecommendationPlan(
+                id=10,
+                ticker="AAPL",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=77.0,
+                entry_price_low=99.0,
+                entry_price_high=101.0,
+                stop_loss=95.0,
+                take_profit=110.0,
+                computed_at=datetime.now(timezone.utc),
+            )
+
+            outcome = service.execute_plans([plan], run_id=21, job_id=22)
+
+            self.assertEqual(outcome.summary["submitted_order_count"], 1)
+            self.assertEqual(outcome.orders[0].broker_order_id, "fake-1")
+            self.assertEqual(outcome.orders[0].status, "accepted")
+        finally:
+            session.close()
+
+    def test_order_execution_service_uses_instantiated_alpaca_client_when_not_provided(
+        self,
+    ) -> None:
         class PatchedClient:
             def __init__(self, *args, **kwargs) -> None:
                 self.requests: list[dict[str, object]] = []
 
             def submit_order(self, payload: dict[str, object]) -> AlpacaOrderSubmissionResult:
                 self.requests.append(payload)
-                return AlpacaOrderSubmissionResult(status_code=200, payload={"id": "alpaca-order-patched", "status": "accepted"})
+                return AlpacaOrderSubmissionResult(
+                    status_code=200, payload={"id": "alpaca-order-patched", "status": "accepted"}
+                )
 
         session = create_session()
         try:
@@ -1388,7 +1747,9 @@ class OrderExecutionTests(unittest.TestCase):
                 take_profit=110.0,
                 computed_at=datetime.now(timezone.utc),
             )
-            with unittest.mock.patch("trade_proposer_app.services.order_execution.AlpacaPaperClient", PatchedClient):
+            with unittest.mock.patch(
+                "trade_proposer_app.services.order_execution.AlpacaPaperClient", PatchedClient
+            ):
                 service = OrderExecutionService(settings=settings, executions=repository)
                 outcome = service.execute_plans([plan], run_id=21, job_id=22)
 

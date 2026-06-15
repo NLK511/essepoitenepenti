@@ -2,7 +2,7 @@
 
 **Status:** current behavior
 
-This document defines the app-owned lifecycle and performance ledger for positions opened through broker orders submitted by Trade Proposer App.
+This document defines the current app-owned lifecycle and performance ledger for positions opened through broker orders submitted by Trade Proposer App. It is Alpaca-bracket-order centered. Target multi-broker/eToro lifecycle extensions are specified in `multi-broker-execution-risk-spec.md` and `etoro-live-trading-integration-spec.md`.
 
 ## Goal
 
@@ -16,7 +16,7 @@ The first implementation must:
 
 - create one broker-position lifecycle record per app-submitted broker order execution
 - derive lifecycle state from Alpaca bracket order snapshots returned by order refresh/sync
-- persist entry fill price/time, exit fill price/time, realized P&L, realized return percentage, and realized R multiple where available
+- persist entry fill price/time, normalized protective stop-loss/take-profit child order evidence, exit fill price/time, realized P&L, realized return percentage, and realized R multiple where available
 - mark positions as:
   - `submitted` before entry fill
   - `open` after entry fill and before exit fill
@@ -46,7 +46,7 @@ Given a `BrokerOrderExecution` and the latest Alpaca order payload:
 
 1. If the app order has no broker order id or was skipped, no position is created.
 2. If the parent order is not filled and has no filled quantity, position status is `submitted` unless the order is canceled/rejected/failed.
-3. If the parent entry filled and neither exit leg is filled, position status is `open`.
+3. If the parent entry filled and neither exit leg is filled, position status is `open`; active protective child leg ids/statuses/prices must still be persisted separately from the final filled `exit_order_id`.
 4. If the bracket take-profit leg (`type=limit`, close side) filled, position status is `win`.
 5. If the bracket stop-loss leg (`type=stop` or `stop_limit`, close side) filled, position status is `loss`.
 6. If both exit legs appear filled, position status is `needs_review`.
@@ -82,6 +82,7 @@ The app must store, at minimum:
 - ticker / action / side
 - quantity and current quantity
 - entry order id, entry average price, entry filled at
+- protective stop-loss order id/status/price and take-profit order id/status/price, plus verification timestamp/source
 - exit order id, exit reason, exit average price, exit filled at
 - lifecycle status
 - realized P&L, realized return percentage, realized R multiple

@@ -26,15 +26,24 @@ from trade_proposer_app.domain.models import (
     RecommendationPlanOutcome,
 )
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
-from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
+from trade_proposer_app.repositories.recommendation_decision_samples import (
+    RecommendationDecisionSampleRepository,
+)
 from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.policy_trust_report import PolicyTrustReportService
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
-from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_BY_KEY, exploration_campaigns, normalize_plan_generation_tuning_config, parameter_definitions
-from trade_proposer_app.services.plan_generation_walk_forward import PlanGenerationWalkForwardService
+from trade_proposer_app.services.plan_generation_tuning_parameters import (
+    PARAMETER_BY_KEY,
+    exploration_campaigns,
+    normalize_plan_generation_tuning_config,
+    parameter_definitions,
+)
+from trade_proposer_app.services.plan_generation_walk_forward import (
+    PlanGenerationWalkForwardService,
+)
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.settings_mutations import SettingsMutationService
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicyService
@@ -111,14 +120,24 @@ class PlanGenerationTuningService:
     def describe(self) -> dict[str, object]:
         baseline = self.ensure_baseline_config_version()
         active_version_id = self._active_config_version_id() or baseline.id
-        active_version = self.repository.get_config_version(active_version_id) if active_version_id is not None else baseline
+        active_version = (
+            self.repository.get_config_version(active_version_id)
+            if active_version_id is not None
+            else baseline
+        )
         latest_run = self.repository.get_latest_run()
         state = PlanGenerationTuningState(
             objective_name=self.OBJECTIVE_NAME,
             active_config_version_id=active_version.id,
             active_config=normalize_plan_generation_tuning_config(active_version.config),
-            auto_enabled=bool(self.settings_domains.strategy_settings().plan_generation_tuning["auto_enabled"]),
-            auto_promote_enabled=bool(self.settings_domains.strategy_settings().plan_generation_tuning["auto_promote_enabled"]),
+            auto_enabled=bool(
+                self.settings_domains.strategy_settings().plan_generation_tuning["auto_enabled"]
+            ),
+            auto_promote_enabled=bool(
+                self.settings_domains.strategy_settings().plan_generation_tuning[
+                    "auto_promote_enabled"
+                ]
+            ),
             latest_run=latest_run,
         )
         return {
@@ -134,7 +153,10 @@ class PlanGenerationTuningService:
         for version in versions:
             if version.source == "seed" and version.version_label == "baseline-v1":
                 normalized = normalize_plan_generation_tuning_config(version.config)
-                if float(normalized.get("global.actionable_confidence_floor_percent", 0.0) or 0.0) >= 60.0:
+                if (
+                    float(normalized.get("global.actionable_confidence_floor_percent", 0.0) or 0.0)
+                    >= 60.0
+                ):
                     return version
                 active_id = self._active_config_version_id()
                 if active_id is not None and active_id != version.id:
@@ -154,7 +176,10 @@ class PlanGenerationTuningService:
                     PlanGenerationTuningEvent(
                         event_type="baseline_reseeded",
                         config_version_id=upgraded.id,
-                        payload={"version_label": upgraded.version_label, "parent_version_id": version.id},
+                        payload={
+                            "version_label": upgraded.version_label,
+                            "parent_version_id": version.id,
+                        },
                     )
                 )
                 return upgraded
@@ -163,7 +188,10 @@ class PlanGenerationTuningService:
                 version_label="baseline-v1",
                 status="active",
                 source="seed",
-                config={**normalize_plan_generation_tuning_config(None), "global.actionable_confidence_floor_percent": 60.0},
+                config={
+                    **normalize_plan_generation_tuning_config(None),
+                    "global.actionable_confidence_floor_percent": 60.0,
+                },
                 parameter_schema_version=self.SCHEMA_VERSION,
             )
         )
@@ -202,7 +230,9 @@ class PlanGenerationTuningService:
         explore_mode = bool(mode_profile["explore_like"])
         wide_mode = mode_profile["name"] == "wide"
         effective_limit = None if limit is None else max(1, int(limit))
-        records = self._eligible_records(ticker=ticker, setup_family=setup_family, limit=effective_limit)
+        records = self._eligible_records(
+            ticker=ticker, setup_family=setup_family, limit=effective_limit
+        )
         logger.info(
             "plan generation tuning eligibility: mode=%s explore=%s wide=%s eligible_records=%s effective_limit=%s",
             mode,
@@ -218,11 +248,21 @@ class PlanGenerationTuningService:
             raise PlanGenerationTuningError(
                 f"insufficient eligible records for plan generation tuning: {len(records)} available, minimum is {min_actionable_resolved}"
             )
-        search_records, validation_records = self._split_records(records, min_validation=min_validation_resolved)
-        exploration_seed = self._exploration_seed(active_config=active_config, records=records, mode=mode)
+        search_records, validation_records = self._split_records(
+            records, min_validation=min_validation_resolved
+        )
+        exploration_seed = self._exploration_seed(
+            active_config=active_config, records=records, mode=mode
+        )
         walk_forward_service = PlanGenerationWalkForwardService(self)
         batch_size = int(mode_profile["batch_size"])
-        evaluations, baseline_eval, refinement_candidates, refinement_seed_count, evaluation_batch_count = self._evaluate_candidate_search(
+        (
+            evaluations,
+            baseline_eval,
+            refinement_candidates,
+            refinement_seed_count,
+            evaluation_batch_count,
+        ) = self._evaluate_candidate_search(
             active_config=active_config,
             records=records,
             search_records=search_records,
@@ -247,32 +287,16 @@ class PlanGenerationTuningService:
         history_span_days = self._history_span_days(records)
         validation_days = 120 if wide_mode else 90
         step_days = 14 if wide_mode else 30
-        walk_forward_validation = (
-            walk_forward_service.summarize_records(
-                records=records,
-                candidate_config=winner.config,
-                baseline_config=active_config,
-                candidate_label=f"run-{mode}-winner" if mode else "candidate",
-                baseline_label="active-baseline",
-                lookback_days=history_span_days,
-                validation_days=validation_days,
-                step_days=step_days,
-                min_validation_resolved=min_validation_resolved,
-            )
-            if explore_mode
-            else walk_forward_service.summarize(
-                candidate_config=winner.config,
-                baseline_config=active_config,
-                candidate_label=f"run-{mode}-winner" if mode else "candidate",
-                baseline_label="active-baseline",
-                ticker=ticker,
-                setup_family=setup_family,
-                limit=effective_limit,
-                lookback_days=history_span_days,
-                validation_days=validation_days,
-                step_days=step_days,
-                min_validation_resolved=min_validation_resolved,
-            )
+        walk_forward_validation = walk_forward_service.summarize_records(
+            records=records,
+            candidate_config=winner.config,
+            baseline_config=active_config,
+            candidate_label=f"run-{mode}-winner" if mode else "candidate",
+            baseline_label="active-baseline",
+            lookback_days=history_span_days,
+            validation_days=validation_days,
+            step_days=step_days,
+            min_validation_resolved=min_validation_resolved,
         )
 
         run = self.repository.create_run(
@@ -297,7 +321,9 @@ class PlanGenerationTuningService:
                     "search_record_count": len(search_records),
                     "validation_record_count": len(validation_records),
                     "validation_mode": "rolling_walk_forward" if explore_mode else "single_holdout",
-                    "validation_slice_count": walk_forward_validation.total_slices if explore_mode else len(validation_records),
+                    "validation_slice_count": walk_forward_validation.total_slices
+                    if explore_mode
+                    else len(validation_records),
                     "history_span_days": history_span_days,
                     "requested_limit": limit,
                     "effective_limit": effective_limit,
@@ -328,7 +354,12 @@ class PlanGenerationTuningService:
             min_validation_resolved=min_validation_resolved,
         )
         winner_candidate = stored_candidates[0]
-        promoted_config_version_id, promotion_applied, promotion_rejection_reasons, edge_gate_report = self._apply_winner_promotion(
+        (
+            promoted_config_version_id,
+            promotion_applied,
+            promotion_rejection_reasons,
+            edge_gate_report,
+        ) = self._apply_winner_promotion(
             apply=apply,
             run=run,
             winner_candidate=winner_candidate,
@@ -368,7 +399,9 @@ class PlanGenerationTuningService:
     ) -> list[PlanGenerationTuningCandidate]:
         stored_candidates: list[PlanGenerationTuningCandidate] = []
         for rank, evaluation in enumerate(evaluations, start=1):
-            promotion_eligible = self._promotion_eligible(evaluation, baseline_eval, min_validation_resolved=min_validation_resolved)
+            promotion_eligible = self._promotion_eligible(
+                evaluation, baseline_eval, min_validation_resolved=min_validation_resolved
+            )
             candidate = self.repository.create_candidate(
                 PlanGenerationTuningCandidate(
                     run_id=run_id,
@@ -395,7 +428,9 @@ class PlanGenerationTuningService:
                         "validation_slice_count": evaluation.validation_slice_count,
                     },
                     validation_summary={
-                        "validation_win_rate_percent": round(evaluation.validation_win_rate * 100.0, 2),
+                        "validation_win_rate_percent": round(
+                            evaluation.validation_win_rate * 100.0, 2
+                        ),
                         "validation_actionable_count": evaluation.validation_actionable_count,
                         "validation_slice_count": evaluation.validation_slice_count,
                         "validation_baseline_win_count": evaluation.validation_baseline_win_count,
@@ -403,7 +438,11 @@ class PlanGenerationTuningService:
                         "validation_average_win_rate_delta": evaluation.validation_average_win_rate_delta,
                         "validation_average_expected_value_delta": evaluation.validation_average_expected_value_delta,
                     },
-                    rejection_reasons=[] if promotion_eligible else self._rejection_reasons(evaluation, baseline_eval, min_validation_resolved=min_validation_resolved),
+                    rejection_reasons=[]
+                    if promotion_eligible
+                    else self._rejection_reasons(
+                        evaluation, baseline_eval, min_validation_resolved=min_validation_resolved
+                    ),
                 )
             )
             stored_candidates.append(candidate)
@@ -428,12 +467,21 @@ class PlanGenerationTuningService:
         )
         promotion_rejection_reasons: list[str] = []
         if not winner_candidate.promotion_eligible:
-            promotion_rejection_reasons.extend(winner_candidate.rejection_reasons or ["winning_candidate_not_promotion_eligible"])
-        if getattr(walk_forward_validation, "qualified_slices", 0) >= 3 and not getattr(walk_forward_validation, "promotion_recommended", False):
-            rationale = (getattr(walk_forward_validation, "promotion_rationale", None) or "walk_forward_validation_rejected").strip()
+            promotion_rejection_reasons.extend(
+                winner_candidate.rejection_reasons or ["winning_candidate_not_promotion_eligible"]
+            )
+        if getattr(walk_forward_validation, "qualified_slices", 0) >= 3 and not getattr(
+            walk_forward_validation, "promotion_recommended", False
+        ):
+            rationale = (
+                getattr(walk_forward_validation, "promotion_rationale", None)
+                or "walk_forward_validation_rejected"
+            ).strip()
             if rationale:
                 promotion_rejection_reasons.append(rationale)
-        edge_gate_report = self._edge_validation_gate_report(walk_forward_validation=walk_forward_validation)
+        edge_gate_report = self._edge_validation_gate_report(
+            walk_forward_validation=walk_forward_validation
+        )
         if edge_gate_report["label"] != "eligible_for_cautious_expansion":
             promotion_rejection_reasons.append(f"edge_validation_gate_{edge_gate_report['label']}")
         if promotion_rejection_reasons:
@@ -538,7 +586,13 @@ class PlanGenerationTuningService:
             )
         self._memory_guard(stage=f"{mode}-post-evaluation")
         evaluations.sort(key=cmp_to_key(self._candidate_compare))
-        return evaluations, baseline_eval, refinement_candidates, refinement_seed_count, evaluation_batch_count
+        return (
+            evaluations,
+            baseline_eval,
+            refinement_candidates,
+            refinement_seed_count,
+            evaluation_batch_count,
+        )
 
     def _evaluate_candidate_batches(
         self,
@@ -614,7 +668,12 @@ class PlanGenerationTuningService:
                     for config in batch
                 ]
             else:
-                batch_evaluations = [self._evaluate_candidate(config, active_config, search_records, validation_records) for config in batch]
+                batch_evaluations = [
+                    self._evaluate_candidate(
+                        config, active_config, search_records, validation_records
+                    )
+                    for config in batch
+                ]
             evaluations.extend(batch_evaluations)
             gc.collect()
             self._memory_guard(stage=f"{mode}-{phase}-batch-{batch_count}-end")
@@ -628,17 +687,24 @@ class PlanGenerationTuningService:
             PlanGenerationTuningEvent(
                 event_type="config_promoted_manual",
                 config_version_id=version.id,
-                payload={"version_label": version.version_label, "edge_validation_gate": gate_report},
+                payload={
+                    "version_label": version.version_label,
+                    "edge_validation_gate": gate_report,
+                },
             )
         )
         return version
 
-    def promote_candidate(self, run_id: int, candidate_id: int) -> PlanGenerationTuningConfigVersion:
+    def promote_candidate(
+        self, run_id: int, candidate_id: int
+    ) -> PlanGenerationTuningConfigVersion:
         gate_report = self._edge_validation_gate_report()
         run = self.repository.get_run(run_id)
         candidate = self.repository.get_candidate(candidate_id)
         if candidate.run_id != run.id:
-            raise PlanGenerationTuningError(f"candidate {candidate_id} does not belong to run {run_id}")
+            raise PlanGenerationTuningError(
+                f"candidate {candidate_id} does not belong to run {run_id}"
+            )
         if not candidate.promotion_eligible:
             raise PlanGenerationTuningError(f"candidate {candidate_id} is not promotion eligible")
         version_label = f"run-{run.id}-candidate-{candidate.rank or candidate.id}"
@@ -671,15 +737,21 @@ class PlanGenerationTuningService:
         )
         return version
 
-    def _edge_validation_gate_report(self, *, walk_forward_validation: object | None = None) -> dict[str, object]:
-        return PolicyTrustReportService(
-            self.outcomes,
-            policy_service=TradeDecisionPolicyService(self.session),
-        ).summarize_active_policy(
-            walk_forward_validation=walk_forward_validation,
-            degraded_input_summary=None,
-            risk_state=None,
-        ).edge_validation_gate.to_dict()
+    def _edge_validation_gate_report(
+        self, *, walk_forward_validation: object | None = None
+    ) -> dict[str, object]:
+        return (
+            PolicyTrustReportService(
+                self.outcomes,
+                policy_service=TradeDecisionPolicyService(self.session),
+            )
+            .summarize_active_policy(
+                walk_forward_validation=walk_forward_validation,
+                degraded_input_summary=None,
+                risk_state=None,
+            )
+            .edge_validation_gate.to_dict()
+        )
 
     def _resolve_active_config_version(self) -> PlanGenerationTuningConfigVersion:
         baseline = self.ensure_baseline_config_version()
@@ -693,10 +765,14 @@ class PlanGenerationTuningService:
             return baseline
 
     def _active_config_version_id(self) -> int | None:
-        value = self.settings_domains.strategy_settings().plan_generation_tuning.get("active_config_version_id")
+        value = self.settings_domains.strategy_settings().plan_generation_tuning.get(
+            "active_config_version_id"
+        )
         return value if isinstance(value, int) else None
 
-    def _eligible_records(self, *, ticker: str | None, setup_family: str | None, limit: int | None) -> list[EligibleTuningRecord]:
+    def _eligible_records(
+        self, *, ticker: str | None, setup_family: str | None, limit: int | None
+    ) -> list[EligibleTuningRecord]:
         normalized_limit = None if limit is None else max(1, int(limit))
         eligible: list[EligibleTuningRecord] = []
         normalized_setup_family = str(setup_family or "").strip().lower() or None
@@ -708,7 +784,9 @@ class PlanGenerationTuningService:
                 if remaining <= 0:
                     break
                 batch_limit = min(batch_limit, remaining)
-            plans = self.plans.list_plans(ticker=ticker, action=None, limit=batch_limit, offset=offset)
+            plans = self.plans.list_plans(
+                ticker=ticker, action=None, limit=batch_limit, offset=offset
+            )
             if not plans:
                 break
             plan_ids = [plan.id for plan in plans if plan.id is not None]
@@ -736,13 +814,17 @@ class PlanGenerationTuningService:
                     )
                 )
             offset += len(plans)
+            self.session.expunge_all()
+            gc.collect()
             if len(plans) < batch_limit:
                 break
         eligible.sort(key=lambda item: item.plan.computed_at)
         return eligible
 
     @staticmethod
-    def _split_records(records: list[EligibleTuningRecord], *, min_validation: int) -> tuple[list[EligibleTuningRecord], list[EligibleTuningRecord]]:
+    def _split_records(
+        records: list[EligibleTuningRecord], *, min_validation: int
+    ) -> tuple[list[EligibleTuningRecord], list[EligibleTuningRecord]]:
         if len(records) <= min_validation:
             return records, []
         validation_count = max(min_validation, int(math.ceil(len(records) * 0.2)))
@@ -759,7 +841,9 @@ class PlanGenerationTuningService:
         *,
         min_validation_resolved: int,
     ) -> CandidateEvaluation:
-        search_actionable_count, search_win_count, search_expected_value, search_ambiguous_count = self._score_records(search_records, config)
+        search_actionable_count, search_win_count, search_expected_value, search_ambiguous_count = (
+            self._score_records(search_records, config)
+        )
         history_span_days = self._history_span_days(records)
         summary = walk_forward_service.summarize_records(
             records=records,
@@ -772,7 +856,11 @@ class PlanGenerationTuningService:
             step_days=30,
             min_validation_resolved=min_validation_resolved,
         )
-        changed_keys = [key for key, value in config.items() if round(float(value), 4) != round(float(baseline_config.get(key, value)), 4)]
+        changed_keys = [
+            key
+            for key, value in config.items()
+            if round(float(value), 4) != round(float(baseline_config.get(key, value)), 4)
+        ]
         validation_actionable_count = int(summary.qualified_slices)
         validation_win_count = int(summary.candidate_wins)
         validation_expected_value = float(summary.average_expected_value_delta or 0.0)
@@ -795,7 +883,9 @@ class PlanGenerationTuningService:
             validation_average_expected_value_delta=summary.average_expected_value_delta,
         )
 
-    def _candidate_configs(self, active_config: dict[str, float], *, mode: str) -> list[dict[str, float]]:
+    def _candidate_configs(
+        self, active_config: dict[str, float], *, mode: str
+    ) -> list[dict[str, float]]:
         mode_profile = self._mode_profile(mode)
         step_counts = mode_profile["step_counts"]
         explore_mode = bool(mode_profile["explore_like"])
@@ -835,7 +925,9 @@ class PlanGenerationTuningService:
                 for step_count in step_counts:
                     mutated = dict(active_config)
                     candidate = base_value + (definition.step * step_count)
-                    mutated[key] = self._campaign_bounded_value(definition, candidate, explore_mode=explore_mode)
+                    mutated[key] = self._campaign_bounded_value(
+                        definition, candidate, explore_mode=explore_mode
+                    )
                     configs.append(mutated)
         deduped: list[dict[str, float]] = []
         fingerprints: set[tuple[tuple[str, float], ...]] = set()
@@ -868,10 +960,15 @@ class PlanGenerationTuningService:
         mode_profile = self._mode_profile(mode)
         explore_mode = bool(mode_profile["explore_like"])
         seeds = [item for item in initial_evaluations if item.changed_keys][:2]
-        seen = {tuple(sorted(normalize_plan_generation_tuning_config(item.config).items())) for item in initial_evaluations}
+        seen = {
+            tuple(sorted(normalize_plan_generation_tuning_config(item.config).items()))
+            for item in initial_evaluations
+        }
         refined: list[dict[str, float]] = []
 
-        def add_refinement(source: CandidateEvaluation, key: str, *, step_scale: float, limit: int) -> None:
+        def add_refinement(
+            source: CandidateEvaluation, key: str, *, step_scale: float, limit: int
+        ) -> None:
             nonlocal refined
             if limit <= 0:
                 return
@@ -886,7 +983,9 @@ class PlanGenerationTuningService:
                 if len(refined) >= limit:
                     return
                 mutated = dict(source.config)
-                mutated[key] = self._campaign_bounded_value(definition, candidate_value, explore_mode=explore_mode)
+                mutated[key] = self._campaign_bounded_value(
+                    definition, candidate_value, explore_mode=explore_mode
+                )
                 normalized = normalize_plan_generation_tuning_config(mutated)
                 fingerprint = tuple(sorted(normalized.items()))
                 if fingerprint in seen:
@@ -912,21 +1011,31 @@ class PlanGenerationTuningService:
         return refined
 
     @staticmethod
-    def _refinement_target_key(source: CandidateEvaluation, active_config: dict[str, float]) -> str | None:
+    def _refinement_target_key(
+        source: CandidateEvaluation, active_config: dict[str, float]
+    ) -> str | None:
         if not source.changed_keys:
             return None
         return max(
             source.changed_keys,
-            key=lambda key: abs(float(source.config[key]) - float(active_config.get(key, source.config[key]))),
+            key=lambda key: abs(
+                float(source.config[key]) - float(active_config.get(key, source.config[key]))
+            ),
         )
 
-    def _exploration_seed(self, *, active_config: dict[str, float], records: list[EligibleTuningRecord], mode: str) -> int:
+    def _exploration_seed(
+        self, *, active_config: dict[str, float], records: list[EligibleTuningRecord], mode: str
+    ) -> int:
         fingerprint_source = {
             "mode": mode,
             "active_config": active_config,
             "eligible_count": len(records),
-            "first_computed_at": records[0].plan.computed_at.isoformat() if records and records[0].plan.computed_at else None,
-            "last_computed_at": records[-1].plan.computed_at.isoformat() if records and records[-1].plan.computed_at else None,
+            "first_computed_at": records[0].plan.computed_at.isoformat()
+            if records and records[0].plan.computed_at
+            else None,
+            "last_computed_at": records[-1].plan.computed_at.isoformat()
+            if records and records[-1].plan.computed_at
+            else None,
         }
         payload = repr(sorted(fingerprint_source.items())).encode("utf-8")
         digest = hashlib.sha256(payload).hexdigest()
@@ -983,9 +1092,20 @@ class PlanGenerationTuningService:
         search_records: list[EligibleTuningRecord],
         validation_records: list[EligibleTuningRecord],
     ) -> CandidateEvaluation:
-        changed_keys = [key for key, value in config.items() if round(float(value), 4) != round(float(baseline_config.get(key, value)), 4)]
-        search_actionable_count, search_win_count, search_expected_value, search_ambiguous_count = self._score_records(search_records, config)
-        validation_actionable_count, validation_win_count, validation_expected_value, validation_ambiguous_count = self._score_records(validation_records, config)
+        changed_keys = [
+            key
+            for key, value in config.items()
+            if round(float(value), 4) != round(float(baseline_config.get(key, value)), 4)
+        ]
+        search_actionable_count, search_win_count, search_expected_value, search_ambiguous_count = (
+            self._score_records(search_records, config)
+        )
+        (
+            validation_actionable_count,
+            validation_win_count,
+            validation_expected_value,
+            validation_ambiguous_count,
+        ) = self._score_records(validation_records, config)
         return CandidateEvaluation(
             config=config,
             changed_keys=changed_keys,
@@ -999,7 +1119,9 @@ class PlanGenerationTuningService:
             validation_ambiguous_count=validation_ambiguous_count,
         )
 
-    def _score_records(self, records: list[EligibleTuningRecord], config: dict[str, float]) -> tuple[int, int, float, int]:
+    def _score_records(
+        self, records: list[EligibleTuningRecord], config: dict[str, float]
+    ) -> tuple[int, int, float, int]:
         actionable_count = 0
         win_count = 0
         expected_value = 0.0
@@ -1018,19 +1140,33 @@ class PlanGenerationTuningService:
                 expected_value -= risk_pct
         return actionable_count, win_count, round(expected_value, 4), ambiguous_count
 
-    def _candidate_resolution(self, record: EligibleTuningRecord, config: dict[str, float]) -> tuple[str, float, float] | None:
+    def _candidate_resolution(
+        self, record: EligibleTuningRecord, config: dict[str, float]
+    ) -> tuple[str, float, float] | None:
         entry = self._entry_reference(record.plan)
-        if entry is None or entry <= 0 or record.plan.stop_loss is None or record.plan.take_profit is None:
+        if (
+            entry is None
+            or entry <= 0
+            or record.plan.stop_loss is None
+            or record.plan.take_profit is None
+        ):
             return None
-            
+
         signal_breakdown = self._plan_signal_breakdown(record.plan)
         intended_action = str(signal_breakdown.get("intended_action") or "").strip().lower() or None
-        effective_action = intended_action if record.plan.action in {"no_action", "watchlist"} and intended_action in {"long", "short"} else record.plan.action
+        effective_action = (
+            intended_action
+            if record.plan.action in {"no_action", "watchlist"}
+            and intended_action in {"long", "short"}
+            else record.plan.action
+        )
 
         if effective_action not in {"long", "short"}:
             return None
 
-        confidence_floor = float(config.get("global.actionable_confidence_floor_percent", 60.0) or 60.0)
+        confidence_floor = float(
+            config.get("global.actionable_confidence_floor_percent", 60.0) or 60.0
+        )
         if float(record.plan.confidence_percent) < confidence_floor:
             return None
 
@@ -1042,7 +1178,9 @@ class PlanGenerationTuningService:
             setup_family=record.setup_family,
             action=effective_action,
             transmission_context_bias=record.context_bias,
-            volatility_score=float(volatility_score) if isinstance(volatility_score, (int, float)) else None,
+            volatility_score=float(volatility_score)
+            if isinstance(volatility_score, (int, float))
+            else None,
             tuning_config=config,
         )
         candidate_entry = (entry_low + entry_high) / 2.0
@@ -1191,13 +1329,29 @@ class PlanGenerationTuningService:
         changed = set(changed_keys)
         if not changed:
             return "baseline"
-        if changed.issubset({"global.entry_band_risk_fraction", "setup_family.entry_band_multiplier"}):
+        if changed.issubset(
+            {"global.entry_band_risk_fraction", "setup_family.entry_band_multiplier"}
+        ):
             return "entry_calibration"
         if changed.issubset({"global.actionable_confidence_floor_percent"}):
             return "selectivity"
-        if changed.issubset({"global.headwind_stop_multiplier", "global.volatility_stop_multiplier", "setup_family.breakout.stop_distance_multiplier", "setup_family.mean_reversion.stop_distance_multiplier"}):
+        if changed.issubset(
+            {
+                "global.headwind_stop_multiplier",
+                "global.volatility_stop_multiplier",
+                "setup_family.breakout.stop_distance_multiplier",
+                "setup_family.mean_reversion.stop_distance_multiplier",
+            }
+        ):
             return "risk_protection"
-        if changed.issubset({"setup_family.breakout.take_profit_distance_multiplier", "setup_family.mean_reversion.take_profit_distance_multiplier", "setup_family.catalyst_follow_through.take_profit_distance_multiplier", "setup_family.macro_beneficiary_loser.take_profit_distance_multiplier"}):
+        if changed.issubset(
+            {
+                "setup_family.breakout.take_profit_distance_multiplier",
+                "setup_family.mean_reversion.take_profit_distance_multiplier",
+                "setup_family.catalyst_follow_through.take_profit_distance_multiplier",
+                "setup_family.macro_beneficiary_loser.take_profit_distance_multiplier",
+            }
+        ):
             return "reward_expansion"
         return "other"
 
@@ -1225,22 +1379,43 @@ class PlanGenerationTuningService:
         }
 
     @classmethod
-    def _promotion_eligible(cls, candidate: CandidateEvaluation, baseline: CandidateEvaluation, *, min_validation_resolved: int) -> bool:
+    def _promotion_eligible(
+        cls,
+        candidate: CandidateEvaluation,
+        baseline: CandidateEvaluation,
+        *,
+        min_validation_resolved: int,
+    ) -> bool:
         if candidate.validation_actionable_count < min_validation_resolved:
             return False
         win_rate_delta = candidate.validation_win_rate - baseline.validation_win_rate
         if win_rate_delta < -cls.WIN_RATE_TIE_TOLERANCE:
             return False
         win_count_delta = candidate.validation_win_count - baseline.validation_win_count
-        if abs(win_rate_delta) <= cls.WIN_RATE_TIE_TOLERANCE and win_count_delta < -cls.WIN_COUNT_TIE_TOLERANCE:
+        if (
+            abs(win_rate_delta) <= cls.WIN_RATE_TIE_TOLERANCE
+            and win_count_delta < -cls.WIN_COUNT_TIE_TOLERANCE
+        ):
             return False
-        expected_value_delta = candidate.validation_expected_value - baseline.validation_expected_value
-        if abs(win_rate_delta) <= cls.WIN_RATE_TIE_TOLERANCE and abs(win_count_delta) <= cls.WIN_COUNT_TIE_TOLERANCE and expected_value_delta < -cls.EXPECTED_VALUE_TIE_TOLERANCE:
+        expected_value_delta = (
+            candidate.validation_expected_value - baseline.validation_expected_value
+        )
+        if (
+            abs(win_rate_delta) <= cls.WIN_RATE_TIE_TOLERANCE
+            and abs(win_count_delta) <= cls.WIN_COUNT_TIE_TOLERANCE
+            and expected_value_delta < -cls.EXPECTED_VALUE_TIE_TOLERANCE
+        ):
             return False
         return True
 
     @classmethod
-    def _rejection_reasons(cls, candidate: CandidateEvaluation, baseline: CandidateEvaluation, *, min_validation_resolved: int) -> list[str]:
+    def _rejection_reasons(
+        cls,
+        candidate: CandidateEvaluation,
+        baseline: CandidateEvaluation,
+        *,
+        min_validation_resolved: int,
+    ) -> list[str]:
         reasons: list[str] = []
         if candidate.validation_actionable_count < min_validation_resolved:
             reasons.append("insufficient_validation_actionable_records")
@@ -1248,9 +1423,18 @@ class PlanGenerationTuningService:
         if win_rate_delta < -cls.WIN_RATE_TIE_TOLERANCE:
             reasons.append("validation_win_rate_below_baseline")
         win_count_delta = candidate.validation_win_count - baseline.validation_win_count
-        if abs(win_rate_delta) <= cls.WIN_RATE_TIE_TOLERANCE and win_count_delta < -cls.WIN_COUNT_TIE_TOLERANCE:
+        if (
+            abs(win_rate_delta) <= cls.WIN_RATE_TIE_TOLERANCE
+            and win_count_delta < -cls.WIN_COUNT_TIE_TOLERANCE
+        ):
             reasons.append("validation_win_count_below_baseline")
-        expected_value_delta = candidate.validation_expected_value - baseline.validation_expected_value
-        if abs(win_rate_delta) <= cls.WIN_RATE_TIE_TOLERANCE and abs(win_count_delta) <= cls.WIN_COUNT_TIE_TOLERANCE and expected_value_delta < -cls.EXPECTED_VALUE_TIE_TOLERANCE:
+        expected_value_delta = (
+            candidate.validation_expected_value - baseline.validation_expected_value
+        )
+        if (
+            abs(win_rate_delta) <= cls.WIN_RATE_TIE_TOLERANCE
+            and abs(win_count_delta) <= cls.WIN_COUNT_TIE_TOLERANCE
+            and expected_value_delta < -cls.EXPECTED_VALUE_TIE_TOLERANCE
+        ):
             reasons.append("validation_expected_value_below_baseline")
         return reasons

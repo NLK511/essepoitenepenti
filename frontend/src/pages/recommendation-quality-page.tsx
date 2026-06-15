@@ -17,6 +17,14 @@ function currency(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : `$${value.toFixed(2)}`;
 }
 
+function gatingSeverityTone(severity: string | null | undefined): "ok" | "warning" | "danger" | "neutral" | "info" {
+  const normalized = (severity ?? "").trim().toLowerCase();
+  if (normalized === "critical") return "danger";
+  if (normalized === "warning") return "warning";
+  if (normalized === "info") return "ok";
+  return "neutral";
+}
+
 function trustTone(label: string | null | undefined): "ok" | "warning" | "danger" | "neutral" | "info" {
   const normalized = (label ?? "").trim().toLowerCase();
   if (normalized === "healthy" || normalized === "eligible_for_cautious_expansion") return "ok";
@@ -64,6 +72,7 @@ export function RecommendationQualityPage() {
   const actionBucket = reliabilityReport?.by_action[0] ?? null;
   const planGenerationSettings = data?.summary.tuning_settings.plan_generation_tuning ?? data?.summary.tuning_settings.plan_generation ?? null;
   const entryDiagnostics = selectedSummary?.simulated_entry_miss_diagnostics ?? selectedSummary?.entry_miss_diagnostics ?? null;
+  const gatingAlert = data?.gating_severity_alert ?? null;
 
   return (
     <>
@@ -89,6 +98,11 @@ export function RecommendationQualityPage() {
                   <div className="operator-status-head"><span className="summary-label">policy health</span><Badge tone={trustTone(data.summary.policy_health?.label)}>{data.summary.policy_health?.label ?? "unknown"}</Badge></div>
                   <div className="operator-status-value">{data.summary.policy_health?.resolved_selected_outcomes ?? "—"} selected resolved</div>
                   <div className="helper-text">{data.summary.policy_health?.reasons?.slice(0, 3).join(" · ") || "No policy-health reasons reported"}</div>
+                </div>
+                <div className="operator-status-item">
+                  <div className="operator-status-head"><span className="summary-label">gating severity</span><Badge tone={gatingSeverityTone(gatingAlert?.severity)}>{gatingAlert?.severity ?? "unknown"}</Badge></div>
+                  <div className="operator-status-value">{gatingAlert?.metrics?.near_miss_non_shortlisted ?? "—"} non-shortlisted near misses</div>
+                  <div className="helper-text">{gatingAlert?.reasons?.slice(0, 3).join(" · ") || "No gating-severity check recorded"}</div>
                 </div>
               </div>
             </Card>
@@ -151,6 +165,31 @@ export function RecommendationQualityPage() {
                   </article>
                 </>
               )}
+            </Card>
+
+            <Card>
+              <SectionTitle kicker="Gating alert" title="Is shortlist gating too severe?" subtitle={gatingAlert?.interpretation ?? "Weekly diagnostic; do not lower gates without benchmark and walk-forward evidence."} />
+              {gatingAlert ? (
+                <div className="data-stack top-gap-small">
+                  <div className="cluster">
+                    <Badge tone={gatingSeverityTone(gatingAlert.severity)}>{gatingAlert.severity}</Badge>
+                    <Badge tone="neutral">{gatingAlert.window_days ?? "—"}d window</Badge>
+                    <span className="helper-text">checked {gatingAlert.created_at ? formatDate(gatingAlert.created_at) : "—"}</span>
+                  </div>
+                  <div className="data-points">
+                    <div className="data-point"><span className="data-point-label">samples</span><span className="data-point-value">{gatingAlert.metrics?.total_samples ?? "—"}</span></div>
+                    <div className="data-point"><span className="data-point-label">shortlist rate</span><span className="data-point-value">{percent(gatingAlert.metrics?.shortlist_rate_percent)}</span></div>
+                    <div className="data-point"><span className="data-point-label">near misses rejected</span><span className="data-point-value">{gatingAlert.metrics?.near_miss_non_shortlisted ?? "—"}</span></div>
+                    <div className="data-point"><span className="data-point-label">high priority rejected</span><span className="data-point-value">{gatingAlert.metrics?.high_priority_non_shortlisted ?? "—"}</span></div>
+                    <div className="data-point"><span className="data-point-label">positive-gap rejected</span><span className="data-point-value">{gatingAlert.metrics?.positive_gap_non_shortlisted ?? "—"}</span></div>
+                    <div className="data-point"><span className="data-point-label">positive-gap rate</span><span className="data-point-value">{percent(gatingAlert.metrics?.positive_gap_non_shortlisted_rate_percent)}</span></div>
+                    <div className="data-point"><span className="data-point-label">benchmark coverage</span><span className="data-point-value">{percent(gatingAlert.metrics?.benchmark_coverage_non_shortlisted_percent)}</span></div>
+                    <div className="data-point"><span className="data-point-label">actionable plans</span><span className="data-point-value">{gatingAlert.metrics?.actionable_plans ?? "—"}</span></div>
+                  </div>
+                  <div className="helper-text">Reasons: {gatingAlert.reasons?.join(" · ") || "—"}</div>
+                  <div className="helper-text">Window: {gatingAlert.window_start ? formatDate(gatingAlert.window_start) : "—"} → {gatingAlert.window_end ? formatDate(gatingAlert.window_end) : "—"}</div>
+                </div>
+              ) : <EmptyState message="No gating-severity check has been recorded yet." />}
             </Card>
 
             <DisclosureCard kicker="Current tuning" title="Live thresholds and guardrails" subtitle="Advanced reference: record the active settings before changing anything." actions={<HelpHint tooltip="These are the live thresholds and safeguards now affecting recommendation generation and promotion decisions." to={recommendationQualityDoc} />}>

@@ -1,22 +1,34 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Callable
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.enums import StrategyHorizon
-from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPosition, RecommendationPlan
+from trade_proposer_app.domain.models import (
+    BrokerOrderExecution,
+    BrokerPosition,
+    RecommendationPlan,
+)
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
-from trade_proposer_app.repositories.broker_reconciliation_snapshots import BrokerReconciliationSnapshotRepository
-from trade_proposer_app.repositories.broker_steering_decisions import BrokerSteeringDecisionRepository
+from trade_proposer_app.repositories.broker_reconciliation_snapshots import (
+    BrokerReconciliationSnapshotRepository,
+)
+from trade_proposer_app.repositories.broker_steering_decisions import (
+    BrokerSteeringDecisionRepository,
+)
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.services.broker_position_steering import BrokerSteeringConfig, BrokerSteeringDecision, BrokerSteeringEngine, BrokerSteeringState
+from trade_proposer_app.services.broker_position_steering import (
+    BrokerSteeringConfig,
+    BrokerSteeringDecision,
+    BrokerSteeringEngine,
+    BrokerSteeringState,
+)
 from trade_proposer_app.services.broker_steering_evidence import BrokerSteeringEvidenceBuilder
 
 
@@ -47,7 +59,9 @@ class BrokerSteeringStateBuilder:
         self.evidence_builder = BrokerSteeringEvidenceBuilder()
         self._price_cache: dict[str, float | None] = {}
 
-    def list_states(self, *, limit: int = 200, now: datetime | None = None) -> list[BrokerSteeringState]:
+    def list_states(
+        self, *, limit: int = 200, now: datetime | None = None
+    ) -> list[BrokerSteeringState]:
         order_map = self._active_orders_by_plan_id(limit=limit)
         position_map = self._active_positions_by_plan_id(limit=limit)
         plan_ids = sorted({*order_map.keys(), *position_map.keys()})
@@ -63,11 +77,21 @@ class BrokerSteeringStateBuilder:
         return states
 
     def _active_orders_by_plan_id(self, *, limit: int) -> dict[int, BrokerOrderExecution]:
-        orders = [order for order in self.orders.list_active(limit=limit) if order.recommendation_plan_id is not None]
+        orders = [
+            order
+            for order in self.orders.list_active(limit=limit)
+            if order.recommendation_plan_id is not None
+        ]
         return {order.recommendation_plan_id: order for order in orders}
 
     def _active_positions_by_plan_id(self, *, limit: int) -> dict[int, BrokerPosition]:
-        positions = [position for position in self.positions.list_active(limit=limit) if position.recommendation_plan_id is not None]
+        positions = [
+            position
+            for position in self.positions.list_active(limit=limit)
+            if position.recommendation_plan_id is not None
+            and position.current_quantity > 0
+            and str(position.status or "").strip().lower() in {"open", "closing"}
+        ]
         return {position.recommendation_plan_id: position for position in positions}
 
     def _default_price_lookup(self, ticker: str) -> float | None:
@@ -91,19 +115,29 @@ class BrokerSteeringStateBuilder:
     ) -> BrokerSteeringState:
         is_position = position is not None
         current_price = self.price_lookup(plan.ticker)
-        entry_price = plan.entry_price_high if plan.entry_price_high is not None else plan.entry_price_low
+        entry_price = (
+            plan.entry_price_high if plan.entry_price_high is not None else plan.entry_price_low
+        )
         if plan.entry_price_low is not None and plan.entry_price_high is not None:
             entry_price = (float(plan.entry_price_low) + float(plan.entry_price_high)) / 2.0
         current_stop_loss = order.stop_loss if order is not None else plan.stop_loss
         current_take_profit = order.take_profit if order is not None else plan.take_profit
         broker_order_status = order.status if order is not None else None
         broker_position_status = position.status if position is not None else None
-        broker_side = position.side if position is not None else (order.side if order is not None else None)
+        broker_side = (
+            position.side if position is not None else (order.side if order is not None else None)
+        )
         direction = self._direction_for_plan(plan)
         expiration_at = None
         if plan.computed_at and plan.holding_period_days is not None:
             expiration_at = plan.computed_at + timedelta(days=max(1, int(plan.holding_period_days)))
-        broker_reconciliation_healthy = self._broker_reconciliation_healthy(plan.ticker)
+        normalized_now = now or datetime.now(UTC)
+        position_holding_period_expired = bool(
+            position is not None and expiration_at is not None and expiration_at < normalized_now
+        )
+        broker_reconciliation_healthy, broker_reconciliation_age_minutes = (
+            self._broker_reconciliation_health(plan.ticker, now=normalized_now)
+        )
         steering_evidence = self.evidence_builder.build(plan, now=now)
         return BrokerSteeringState(
             recommendation_plan_id=plan.id or 0,
@@ -121,21 +155,58 @@ class BrokerSteeringStateBuilder:
             calibrated_confidence_percent=self._calibrated_confidence(plan),
             actionability=plan.action,
             analysis_direction=plan.action if direction in {"long", "short"} else None,
-            severe_negative_news=self._has_severe_negative_news(plan, now=now, evidence=steering_evidence),
+            severe_negative_news=self._has_severe_negative_news(
+                plan, now=now, evidence=steering_evidence
+            ),
             price_chase_percent=None,
             volatility_percent=None,
             has_pending_order=order is not None and not is_position,
             has_open_position=is_position,
             broker_order_status=broker_order_status,
             broker_position_status=broker_position_status,
-            broker_quantity=position.current_quantity if position is not None else (order.quantity if order is not None else None),
+            broker_quantity=position.current_quantity
+            if position is not None
+            else (order.quantity if order is not None else None),
             broker_side=broker_side,
             broker_ownership_known=bool(order is not None or position is not None),
             broker_reconciliation_healthy=broker_reconciliation_healthy,
-            linked_exit_orders_missing=bool(position is not None and not position.exit_order_id and position.current_quantity > 0),
+            broker_reconciliation_age_minutes=broker_reconciliation_age_minutes,
+            linked_exit_orders_missing=self._linked_protective_orders_missing(position),
+            position_holding_period_expired=position_holding_period_expired,
             expiration_at=expiration_at,
             now=now,
         )
+
+    @classmethod
+    def _linked_protective_orders_missing(cls, position: BrokerPosition | None) -> bool:
+        if position is None or position.current_quantity <= 0:
+            return False
+        stop_required = position.stop_loss_order_price is not None
+        take_profit_required = position.take_profit_order_price is not None
+        if stop_required and not cls._protective_order_active(
+            position.stop_loss_order_id, position.stop_loss_order_status
+        ):
+            return True
+        if take_profit_required and not cls._protective_order_active(
+            position.take_profit_order_id, position.take_profit_order_status
+        ):
+            return True
+        return not stop_required and not take_profit_required
+
+    @staticmethod
+    def _protective_order_active(order_id: str | None, status: str | None) -> bool:
+        if not order_id:
+            return False
+        normalized = str(status or "").strip().lower()
+        return normalized not in {
+            "",
+            "filled",
+            "canceled",
+            "cancelled",
+            "expired",
+            "rejected",
+            "failed",
+        }
 
     @staticmethod
     def _direction_for_plan(plan: RecommendationPlan) -> str:
@@ -146,26 +217,49 @@ class BrokerSteeringStateBuilder:
             return "long"
         return "unknown"
 
-    def _broker_reconciliation_healthy(self, ticker: str) -> bool:
+    def _broker_reconciliation_health(
+        self, ticker: str, *, now: datetime
+    ) -> tuple[bool, float | None]:
         snapshots = self.snapshots.list_latest_for_ticker(ticker, limit=1)
         if not snapshots:
-            return False
+            return False, None
         latest = snapshots[0]
+        age_minutes = max(0.0, (now - latest.created_at).total_seconds() / 60.0)
         if latest.warnings:
-            return False
-        return str(latest.drift_severity or "").strip().lower() == "ok"
+            return False, age_minutes
+        return str(latest.drift_severity or "").strip().lower() == "ok", age_minutes
 
     @classmethod
-    def _has_severe_negative_news(cls, plan: RecommendationPlan, *, now: datetime | None, evidence: dict[str, object] | None = None) -> bool:
+    def _has_severe_negative_news(
+        cls,
+        plan: RecommendationPlan,
+        *,
+        now: datetime | None,
+        evidence: dict[str, object] | None = None,
+    ) -> bool:
         if evidence is not None and BrokerSteeringEvidenceBuilder.has_severe_invalidation(evidence):
             return True
-        evidence = plan.signal_breakdown.get("steering_evidence") if hasattr(plan.signal_breakdown, "get") else None
+        evidence = (
+            plan.signal_breakdown.get("steering_evidence")
+            if hasattr(plan.signal_breakdown, "get")
+            else None
+        )
         if isinstance(evidence, dict) and cls._fresh_steering_evidence(evidence, now=now):
-            warnings = evidence.get("warnings") if isinstance(evidence.get("warnings"), list) else []
-            conflict_flags = evidence.get("market_intelligence_conflict_flags") if isinstance(evidence.get("market_intelligence_conflict_flags"), list) else []
+            warnings = (
+                evidence.get("warnings") if isinstance(evidence.get("warnings"), list) else []
+            )
+            conflict_flags = (
+                evidence.get("market_intelligence_conflict_flags")
+                if isinstance(evidence.get("market_intelligence_conflict_flags"), list)
+                else []
+            )
             for value in [*warnings, *conflict_flags]:
                 normalized = str(value or "").strip().lower().replace(" ", "_")
-                if "severe_negative_news" in normalized or "severe_negative_event" in normalized or "thesis_invalidated" in normalized:
+                if (
+                    "severe_negative_news" in normalized
+                    or "severe_negative_event" in normalized
+                    or "thesis_invalidated" in normalized
+                ):
                     return True
         for warning in plan.warnings:
             normalized = str(warning or "").strip().lower().replace(" ", "_")
@@ -185,15 +279,19 @@ class BrokerSteeringStateBuilder:
         except ValueError:
             return False
         if computed_at.tzinfo is None:
-            computed_at = computed_at.replace(tzinfo=timezone.utc)
-        reference = now or datetime.now(timezone.utc)
+            computed_at = computed_at.replace(tzinfo=UTC)
+        reference = now or datetime.now(UTC)
         if reference.tzinfo is None:
-            reference = reference.replace(tzinfo=timezone.utc)
-        return computed_at.astimezone(timezone.utc) >= reference.astimezone(timezone.utc) - timedelta(days=1)
+            reference = reference.replace(tzinfo=UTC)
+        return computed_at.astimezone(UTC) >= reference.astimezone(UTC) - timedelta(days=1)
 
     @staticmethod
     def _calibrated_confidence(plan: RecommendationPlan) -> float | None:
-        review = plan.signal_breakdown.get("calibration_review") if hasattr(plan.signal_breakdown, "get") else None
+        review = (
+            plan.signal_breakdown.get("calibration_review")
+            if hasattr(plan.signal_breakdown, "get")
+            else None
+        )
         if isinstance(review, dict):
             value = review.get("calibrated_confidence_percent")
             if isinstance(value, (int, float)):
@@ -238,21 +336,29 @@ class BrokerSteeringService:
         job_id: int | None = None,
         correlation_id: str | None = None,
     ) -> BrokerSteeringRunSummary:
-        normalized_now = now or datetime.now(timezone.utc)
+        normalized_now = now or datetime.now(UTC)
         config = BrokerSteeringConfig(**self.settings)
         states = self.builder.list_states(limit=limit, now=normalized_now)
-        reviewed_sample_counts = self._reviewed_sample_counts() if config.enabled and not config.dry_run else None
+        reviewed_sample_counts = (
+            self._reviewed_sample_counts() if config.enabled and not config.dry_run else None
+        )
         self.observability.record(
             event_type="steering_run_started",
             message="Broker steering run started",
             run_id=run_id,
             job_id=job_id,
             correlation_id=correlation_id,
-            payload={"candidate_count": len(states), "dry_run": config.dry_run, "enabled": config.enabled},
+            payload={
+                "candidate_count": len(states),
+                "dry_run": config.dry_run,
+                "enabled": config.enabled,
+            },
         )
         counts: dict[str, int] = {}
         decision_execution_statuses: list[str] = []
-        initial_execution_status = "dry_run" if config.dry_run else "submitted" if config.enabled else "blocked"
+        initial_execution_status = (
+            "dry_run" if config.dry_run else "submitted" if config.enabled else "blocked"
+        )
         for state in states:
             decision = self.engine.evaluate(state, config)
             counts[decision.decision] = counts.get(decision.decision, 0) + 1
@@ -271,19 +377,26 @@ class BrokerSteeringService:
                 run_id=run_id,
                 job_id=job_id,
                 correlation_id=correlation_id,
-                payload={"decision": decision.decision, "ticker": decision.ticker, "reason_codes": decision.reason_codes, "recommendation_plan_id": decision.recommendation_plan_id},
+                payload={
+                    "decision": decision.decision,
+                    "ticker": decision.ticker,
+                    "reason_codes": decision.reason_codes,
+                    "recommendation_plan_id": decision.recommendation_plan_id,
+                },
             )
             if config.enabled and not config.dry_run:
-                decision_execution_statuses.append(self._execute_decision_if_supported(
-                    saved_decision_id=int(saved_decision.get("id") or 0),
-                    state=state,
-                    decision=decision,
-                    reviewed_sample_counts=reviewed_sample_counts or {},
-                    run_id=run_id,
-                    job_id=job_id,
-                    correlation_id=correlation_id,
-                    normalized_now=normalized_now,
-                ))
+                decision_execution_statuses.append(
+                    self._execute_decision_if_supported(
+                        saved_decision_id=int(saved_decision.get("id") or 0),
+                        state=state,
+                        decision=decision,
+                        reviewed_sample_counts=reviewed_sample_counts or {},
+                        run_id=run_id,
+                        job_id=job_id,
+                        correlation_id=correlation_id,
+                        normalized_now=normalized_now,
+                    )
+                )
             else:
                 decision_execution_statuses.append(initial_execution_status)
         self.observability.record(
@@ -292,9 +405,22 @@ class BrokerSteeringService:
             run_id=run_id,
             job_id=job_id,
             correlation_id=correlation_id,
-            payload={"candidate_count": len(states), "decisions": counts, "dry_run": config.dry_run, "execution_status": self._aggregate_execution_status(decision_execution_statuses, dry_run=config.dry_run)},
+            payload={
+                "candidate_count": len(states),
+                "decisions": counts,
+                "dry_run": config.dry_run,
+                "execution_status": self._aggregate_execution_status(
+                    decision_execution_statuses, dry_run=config.dry_run
+                ),
+            },
         )
-        return BrokerSteeringRunSummary(total_candidates=len(states), decisions=counts, execution_status=self._aggregate_execution_status(decision_execution_statuses, dry_run=config.dry_run))
+        return BrokerSteeringRunSummary(
+            total_candidates=len(states),
+            decisions=counts,
+            execution_status=self._aggregate_execution_status(
+                decision_execution_statuses, dry_run=config.dry_run
+            ),
+        )
 
     def _execute_decision_if_supported(
         self,
@@ -322,7 +448,11 @@ class BrokerSteeringService:
                 run_id=run_id,
                 job_id=job_id,
                 correlation_id=correlation_id,
-                payload={"decision": decision.decision, "ticker": decision.ticker, "reason_codes": decision.reason_codes},
+                payload={
+                    "decision": decision.decision,
+                    "ticker": decision.ticker,
+                    "reason_codes": decision.reason_codes,
+                },
             )
             return "blocked"
 
@@ -350,7 +480,11 @@ class BrokerSteeringService:
                 normalized_now=normalized_now,
             )
 
-        if decision.decision in {"tighten_stop_loss", "move_stop_to_breakeven_or_profit", "lower_take_profit"}:
+        if decision.decision in {
+            "tighten_stop_loss",
+            "move_stop_to_breakeven_or_profit",
+            "lower_take_profit",
+        }:
             return self._execute_exit_amendment(
                 saved_decision_id=saved_decision_id,
                 state=state,
@@ -362,7 +496,14 @@ class BrokerSteeringService:
                 normalized_now=normalized_now,
             )
 
-        self._block_unsupported_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now)
+        self._block_unsupported_decision(
+            saved_decision_id,
+            decision,
+            run_id=run_id,
+            job_id=job_id,
+            correlation_id=correlation_id,
+            normalized_now=normalized_now,
+        )
         return "blocked"
 
     def _execute_cancel_pending_order(
@@ -379,7 +520,14 @@ class BrokerSteeringService:
     ) -> str:
         broker_order_id = state.broker_order_id
         if not state.has_pending_order or broker_order_id is None:
-            self._block_unsupported_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now)
+            self._block_unsupported_decision(
+                saved_decision_id,
+                decision,
+                run_id=run_id,
+                job_id=job_id,
+                correlation_id=correlation_id,
+                normalized_now=normalized_now,
+            )
             return "blocked"
         if not self._cancel_pending_order_is_live_enabled(decision, reviewed_sample_counts):
             self._block_threshold_decision(
@@ -390,23 +538,50 @@ class BrokerSteeringService:
                 job_id=job_id,
                 correlation_id=correlation_id,
                 normalized_now=normalized_now,
-                payload={"broker_order_id": broker_order_id, "reviewed_sample_counts": reviewed_sample_counts},
+                payload={
+                    "broker_order_id": broker_order_id,
+                    "reviewed_sample_counts": reviewed_sample_counts,
+                },
             )
             return "blocked"
         self.observability.record(
             event_type="steering_broker_mutation_attempted",
-            message="Broker steering cancellation attempted" if "pending_expired" in set(decision.reason_codes) else "Broker steering cancellation attempted after sample-threshold review",
+            message="Broker steering cancellation attempted"
+            if "pending_expired" in set(decision.reason_codes)
+            else "Broker steering cancellation attempted after sample-threshold review",
             run_id=run_id,
             job_id=job_id,
             correlation_id=correlation_id,
-            payload={"decision": decision.decision, "ticker": decision.ticker, "broker_order_id": broker_order_id},
+            payload={
+                "decision": decision.decision,
+                "ticker": decision.ticker,
+                "broker_order_id": broker_order_id,
+            },
         )
         try:
             self.order_execution.cancel_execution(broker_order_id)
         except Exception as exc:
-            self._fail_decision(saved_decision_id, decision, exc, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, payload={"broker_order_id": broker_order_id})
+            self._fail_decision(
+                saved_decision_id,
+                decision,
+                exc,
+                run_id=run_id,
+                job_id=job_id,
+                correlation_id=correlation_id,
+                normalized_now=normalized_now,
+                payload={"broker_order_id": broker_order_id},
+            )
             return "failed"
-        self._succeed_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, message="Broker steering cancellation succeeded", payload={"broker_order_id": broker_order_id})
+        self._succeed_decision(
+            saved_decision_id,
+            decision,
+            run_id=run_id,
+            job_id=job_id,
+            correlation_id=correlation_id,
+            normalized_now=normalized_now,
+            message="Broker steering cancellation succeeded",
+            payload={"broker_order_id": broker_order_id},
+        )
         return "succeeded"
 
     def _execute_close_position_now(
@@ -423,7 +598,14 @@ class BrokerSteeringService:
     ) -> str:
         broker_position_id = state.broker_position_id
         if not state.has_open_position or broker_position_id is None:
-            self._block_unsupported_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now)
+            self._block_unsupported_decision(
+                saved_decision_id,
+                decision,
+                run_id=run_id,
+                job_id=job_id,
+                correlation_id=correlation_id,
+                normalized_now=normalized_now,
+            )
             return "blocked"
         if not self._close_now_is_live_enabled(reviewed_sample_counts):
             self._block_threshold_decision(
@@ -434,7 +616,10 @@ class BrokerSteeringService:
                 job_id=job_id,
                 correlation_id=correlation_id,
                 normalized_now=normalized_now,
-                payload={"broker_position_id": broker_position_id, "reviewed_sample_counts": reviewed_sample_counts},
+                payload={
+                    "broker_position_id": broker_position_id,
+                    "reviewed_sample_counts": reviewed_sample_counts,
+                },
             )
             return "blocked"
         self.observability.record(
@@ -443,14 +628,36 @@ class BrokerSteeringService:
             run_id=run_id,
             job_id=job_id,
             correlation_id=correlation_id,
-            payload={"decision": decision.decision, "ticker": decision.ticker, "broker_position_id": broker_position_id},
+            payload={
+                "decision": decision.decision,
+                "ticker": decision.ticker,
+                "broker_position_id": broker_position_id,
+            },
         )
         try:
             self.order_execution.close_position(state.ticker)
         except Exception as exc:
-            self._fail_decision(saved_decision_id, decision, exc, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, payload={"broker_position_id": broker_position_id, "ticker": state.ticker})
+            self._fail_decision(
+                saved_decision_id,
+                decision,
+                exc,
+                run_id=run_id,
+                job_id=job_id,
+                correlation_id=correlation_id,
+                normalized_now=normalized_now,
+                payload={"broker_position_id": broker_position_id, "ticker": state.ticker},
+            )
             return "failed"
-        self._succeed_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, message="Broker steering close-position succeeded", payload={"broker_position_id": broker_position_id, "ticker": state.ticker})
+        self._succeed_decision(
+            saved_decision_id,
+            decision,
+            run_id=run_id,
+            job_id=job_id,
+            correlation_id=correlation_id,
+            normalized_now=normalized_now,
+            message="Broker steering close-position succeeded",
+            payload={"broker_position_id": broker_position_id, "ticker": state.ticker},
+        )
         return "succeeded"
 
     def _execute_exit_amendment(
@@ -467,7 +674,14 @@ class BrokerSteeringService:
     ) -> str:
         broker_order_id = state.broker_order_id
         if not state.has_open_position or broker_order_id is None:
-            self._block_unsupported_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now)
+            self._block_unsupported_decision(
+                saved_decision_id,
+                decision,
+                run_id=run_id,
+                job_id=job_id,
+                correlation_id=correlation_id,
+                normalized_now=normalized_now,
+            )
             return "blocked"
         if not self._amendment_is_live_enabled(reviewed_sample_counts):
             self._block_threshold_decision(
@@ -478,12 +692,27 @@ class BrokerSteeringService:
                 job_id=job_id,
                 correlation_id=correlation_id,
                 normalized_now=normalized_now,
-                payload={"broker_order_id": broker_order_id, "reviewed_sample_counts": reviewed_sample_counts},
+                payload={
+                    "broker_order_id": broker_order_id,
+                    "reviewed_sample_counts": reviewed_sample_counts,
+                },
             )
             return "blocked"
-        amend_stop_loss = decision.proposed_stop_loss if decision.decision in {"tighten_stop_loss", "move_stop_to_breakeven_or_profit"} else None
-        amend_take_profit = decision.proposed_take_profit if decision.decision == "lower_take_profit" else None
-        payload = {"decision": decision.decision, "ticker": decision.ticker, "broker_order_id": broker_order_id, "stop_loss": amend_stop_loss, "take_profit": amend_take_profit}
+        amend_stop_loss = (
+            decision.proposed_stop_loss
+            if decision.decision in {"tighten_stop_loss", "move_stop_to_breakeven_or_profit"}
+            else None
+        )
+        amend_take_profit = (
+            decision.proposed_take_profit if decision.decision == "lower_take_profit" else None
+        )
+        payload = {
+            "decision": decision.decision,
+            "ticker": decision.ticker,
+            "broker_order_id": broker_order_id,
+            "stop_loss": amend_stop_loss,
+            "take_profit": amend_take_profit,
+        }
         self.observability.record(
             event_type="steering_broker_mutation_attempted",
             message="Broker steering amendment attempted",
@@ -493,11 +722,39 @@ class BrokerSteeringService:
             payload=payload,
         )
         try:
-            self.order_execution.amend_execution(broker_order_id, stop_loss=amend_stop_loss, take_profit=amend_take_profit)
+            self.order_execution.amend_execution(
+                broker_order_id, stop_loss=amend_stop_loss, take_profit=amend_take_profit
+            )
         except Exception as exc:
-            self._fail_decision(saved_decision_id, decision, exc, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, payload={"broker_order_id": broker_order_id, "stop_loss": amend_stop_loss, "take_profit": amend_take_profit})
+            self._fail_decision(
+                saved_decision_id,
+                decision,
+                exc,
+                run_id=run_id,
+                job_id=job_id,
+                correlation_id=correlation_id,
+                normalized_now=normalized_now,
+                payload={
+                    "broker_order_id": broker_order_id,
+                    "stop_loss": amend_stop_loss,
+                    "take_profit": amend_take_profit,
+                },
+            )
             return "failed"
-        self._succeed_decision(saved_decision_id, decision, run_id=run_id, job_id=job_id, correlation_id=correlation_id, normalized_now=normalized_now, message="Broker steering amendment succeeded", payload={"broker_order_id": broker_order_id, "stop_loss": amend_stop_loss, "take_profit": amend_take_profit})
+        self._succeed_decision(
+            saved_decision_id,
+            decision,
+            run_id=run_id,
+            job_id=job_id,
+            correlation_id=correlation_id,
+            normalized_now=normalized_now,
+            message="Broker steering amendment succeeded",
+            payload={
+                "broker_order_id": broker_order_id,
+                "stop_loss": amend_stop_loss,
+                "take_profit": amend_take_profit,
+            },
+        )
         return "succeeded"
 
     @staticmethod
@@ -525,7 +782,11 @@ class BrokerSteeringService:
         total_dry_run = self.decision_repository.count(execution_status="dry_run")
         amendment_dry_run = self.decision_repository.count(
             execution_status="dry_run",
-            decisions=["tighten_stop_loss", "move_stop_to_breakeven_or_profit", "lower_take_profit"],
+            decisions=[
+                "tighten_stop_loss",
+                "move_stop_to_breakeven_or_profit",
+                "lower_take_profit",
+            ],
         )
         close_now_dry_run = self.decision_repository.count(
             execution_status="dry_run",
@@ -537,21 +798,30 @@ class BrokerSteeringService:
             "close_now_dry_run": close_now_dry_run,
         }
 
-    def _cancel_pending_order_is_live_enabled(self, decision: BrokerSteeringDecision, reviewed_sample_counts: dict[str, int]) -> bool:
+    def _cancel_pending_order_is_live_enabled(
+        self, decision: BrokerSteeringDecision, reviewed_sample_counts: dict[str, int]
+    ) -> bool:
         if "pending_expired" in set(decision.reason_codes):
             return True
-        return reviewed_sample_counts.get("total_dry_run", 0) >= self.settings["min_reviewed_dry_run_decisions_before_enable"]
+        return (
+            reviewed_sample_counts.get("total_dry_run", 0)
+            >= self.settings["min_reviewed_dry_run_decisions_before_enable"]
+        )
 
     def _amendment_is_live_enabled(self, reviewed_sample_counts: dict[str, int]) -> bool:
         return (
-            reviewed_sample_counts.get("total_dry_run", 0) >= self.settings["min_reviewed_dry_run_decisions_before_enable"]
-            and reviewed_sample_counts.get("amendment_dry_run", 0) >= self.settings["min_reviewed_dry_run_amendments_before_enable"]
+            reviewed_sample_counts.get("total_dry_run", 0)
+            >= self.settings["min_reviewed_dry_run_decisions_before_enable"]
+            and reviewed_sample_counts.get("amendment_dry_run", 0)
+            >= self.settings["min_reviewed_dry_run_amendments_before_enable"]
         )
 
     def _close_now_is_live_enabled(self, reviewed_sample_counts: dict[str, int]) -> bool:
         return (
-            reviewed_sample_counts.get("total_dry_run", 0) >= self.settings["min_reviewed_dry_run_decisions_before_enable"]
-            and reviewed_sample_counts.get("close_now_dry_run", 0) >= self.settings["min_reviewed_dry_run_close_now_before_enable"]
+            reviewed_sample_counts.get("total_dry_run", 0)
+            >= self.settings["min_reviewed_dry_run_decisions_before_enable"]
+            and reviewed_sample_counts.get("close_now_dry_run", 0)
+            >= self.settings["min_reviewed_dry_run_close_now_before_enable"]
         )
 
     def _block_unsupported_decision(
@@ -604,7 +874,12 @@ class BrokerSteeringService:
             run_id=run_id,
             job_id=job_id,
             correlation_id=correlation_id,
-            payload={"decision": decision.decision, "ticker": decision.ticker, "reason_codes": decision.reason_codes, **payload},
+            payload={
+                "decision": decision.decision,
+                "ticker": decision.ticker,
+                "reason_codes": decision.reason_codes,
+                **payload,
+            },
         )
 
     def _fail_decision(

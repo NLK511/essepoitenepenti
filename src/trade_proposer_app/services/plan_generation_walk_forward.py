@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import gc
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any
-
-from trade_proposer_app.domain.models import PlanGenerationWalkForwardSlice, PlanGenerationWalkForwardSummary
-from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
-from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
+from trade_proposer_app.domain.models import (
+    PlanGenerationWalkForwardSlice,
+    PlanGenerationWalkForwardSummary,
+)
 
 
 @dataclass(slots=True)
@@ -32,6 +33,30 @@ class _WalkForwardStats:
     ties: int
     win_rate_deltas: list[float]
     expected_value_deltas: list[float]
+
+
+class _RecordWindow(Sequence):
+    def __init__(self, records: Sequence, start_index: int, end_index: int) -> None:
+        self.records = records
+        self.start_index = max(0, start_index)
+        self.end_index = max(self.start_index, end_index)
+
+    def __len__(self) -> int:
+        return self.end_index - self.start_index
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            start, stop, step = index.indices(len(self))
+            return [self.records[self.start_index + offset] for offset in range(start, stop, step)]
+        if index < 0:
+            index += len(self)
+        if index < 0 or index >= len(self):
+            raise IndexError(index)
+        return self.records[self.start_index + index]
+
+    def __iter__(self) -> Iterator:
+        for index in range(self.start_index, self.end_index):
+            yield self.records[index]
 
 
 class PlanGenerationWalkForwardService:
@@ -80,19 +105,25 @@ class PlanGenerationWalkForwardService:
         min_validation_resolved: int = 8,
     ) -> PlanGenerationWalkForwardSummary:
         if not records:
-            raise ValueError("no eligible records available for plan-generation walk-forward validation")
+            raise ValueError(
+                "no eligible records available for plan-generation walk-forward validation"
+            )
 
-        lookback_days, validation_days, step_days, min_validation_resolved = self._normalized_window_inputs(
-            lookback_days=lookback_days,
-            validation_days=validation_days,
-            step_days=step_days,
-            min_validation_resolved=min_validation_resolved,
+        lookback_days, validation_days, step_days, min_validation_resolved = (
+            self._normalized_window_inputs(
+                lookback_days=lookback_days,
+                validation_days=validation_days,
+                step_days=step_days,
+                min_validation_resolved=min_validation_resolved,
+            )
         )
-        records, start_time, end_time, validation_days, step_days = self._prepare_walk_forward_window(
-            records,
-            lookback_days=lookback_days,
-            validation_days=validation_days,
-            step_days=step_days,
+        records, start_time, end_time, validation_days, step_days = (
+            self._prepare_walk_forward_window(
+                records,
+                lookback_days=lookback_days,
+                validation_days=validation_days,
+                step_days=step_days,
+            )
         )
         stats = self._build_walk_forward_slices(
             records,
@@ -166,10 +197,15 @@ class PlanGenerationWalkForwardService:
         validation_days: int,
         step_days: int,
     ) -> tuple[list, datetime, datetime, int, int]:
-        sorted_records = list(records)
+        sorted_records = records if isinstance(records, list) else list(records)
         sorted_records.sort(key=lambda item: item.plan.computed_at)
-        end_time = self._normalize_datetime(sorted_records[-1].plan.computed_at) or datetime.now(timezone.utc)
-        start_time = max(self._normalize_datetime(sorted_records[0].plan.computed_at) or end_time, end_time - timedelta(days=lookback_days))
+        end_time = self._normalize_datetime(sorted_records[-1].plan.computed_at) or datetime.now(
+            timezone.utc
+        )
+        start_time = max(
+            self._normalize_datetime(sorted_records[0].plan.computed_at) or end_time,
+            end_time - timedelta(days=lookback_days),
+        )
         validation_days, step_days = self._adapt_window_sizes(
             start_time=start_time,
             end_time=end_time,
@@ -193,10 +229,29 @@ class PlanGenerationWalkForwardService:
         stats = _WalkForwardStats([], 0, 0, 0, 0, [], [])
         current = start_time
         index = 0
+        window_start_index = 0
+        window_end_index = 0
+        record_count = len(records)
         while current + timedelta(days=validation_days) <= end_time:
             index += 1
             window_end = current + timedelta(days=validation_days)
-            slice_records = [record for record in records if current <= self._normalize_datetime(record.plan.computed_at) < window_end]
+            while window_start_index < record_count:
+                record_time = self._normalize_datetime(
+                    records[window_start_index].plan.computed_at
+                ) or current
+                if record_time >= current:
+                    break
+                window_start_index += 1
+            if window_end_index < window_start_index:
+                window_end_index = window_start_index
+            while window_end_index < record_count:
+                record_time = self._normalize_datetime(
+                    records[window_end_index].plan.computed_at
+                ) or window_end
+                if record_time >= window_end:
+                    break
+                window_end_index += 1
+            slice_records = _RecordWindow(records, window_start_index, window_end_index)
             baseline_eval = self._score_slice(slice_records, baseline_config)
             candidate_eval = self._score_slice(slice_records, candidate_config)
             delta_win, delta_ev, is_qualified = self._record_slice_comparison(
@@ -228,6 +283,8 @@ class PlanGenerationWalkForwardService:
                 )
             )
             current += timedelta(days=step_days)
+            del slice_records
+            gc.collect()
         return stats
 
     def _record_slice_comparison(
@@ -238,7 +295,10 @@ class PlanGenerationWalkForwardService:
         candidate_eval: _SliceEvaluation,
         min_validation_resolved: int,
     ) -> tuple[float | None, float | None, bool]:
-        is_qualified = candidate_eval.actionable_count >= min_validation_resolved and baseline_eval.actionable_count >= min_validation_resolved
+        is_qualified = (
+            candidate_eval.actionable_count >= min_validation_resolved
+            and baseline_eval.actionable_count >= min_validation_resolved
+        )
         if not is_qualified:
             return None, None, False
         stats.qualified_slices += 1
@@ -256,7 +316,9 @@ class PlanGenerationWalkForwardService:
         return delta_win, delta_ev, True
 
     @staticmethod
-    def _slice_win_rate_delta(candidate_eval: _SliceEvaluation, baseline_eval: _SliceEvaluation) -> float | None:
+    def _slice_win_rate_delta(
+        candidate_eval: _SliceEvaluation, baseline_eval: _SliceEvaluation
+    ) -> float | None:
         if candidate_eval.win_rate_percent is None or baseline_eval.win_rate_percent is None:
             return None
         return round(candidate_eval.win_rate_percent - baseline_eval.win_rate_percent, 2)
@@ -266,10 +328,14 @@ class PlanGenerationWalkForwardService:
         return round(sum(values) / len(values), precision) if values else None
 
     def _eligible_records(self, *, ticker: str | None, setup_family: str | None, limit: int | None):
-        return self.tuning_service._eligible_records(ticker=ticker, setup_family=setup_family, limit=limit)
+        return self.tuning_service._eligible_records(
+            ticker=ticker, setup_family=setup_family, limit=limit
+        )
 
     @staticmethod
-    def _adapt_window_sizes(*, start_time: datetime, end_time: datetime, validation_days: int, step_days: int) -> tuple[int, int]:
+    def _adapt_window_sizes(
+        *, start_time: datetime, end_time: datetime, validation_days: int, step_days: int
+    ) -> tuple[int, int]:
         available_days = max(1, int((end_time - start_time).total_seconds() // 86400))
         effective_validation_days = max(1, min(int(validation_days), max(1, available_days // 3)))
         effective_step_days = max(1, min(int(step_days), max(1, effective_validation_days // 3)))
@@ -284,7 +350,9 @@ class PlanGenerationWalkForwardService:
         return value.astimezone(timezone.utc)
 
     def _score_slice(self, records, config: dict[str, float]) -> _SliceEvaluation:
-        actionable_count, win_count, expected_value, ambiguous_count = self.tuning_service._score_records(records, config)
+        actionable_count, win_count, expected_value, ambiguous_count = (
+            self.tuning_service._score_records(records, config)
+        )
         return _SliceEvaluation(
             actionable_count=actionable_count,
             win_count=win_count,
@@ -315,7 +383,15 @@ class PlanGenerationWalkForwardService:
             return False
         if average_expected_value_delta <= 0.0:
             return False
-        severe_regressions = [slice_row for slice_row in slices if slice_row.sample_status == "qualified" and ((slice_row.win_rate_delta or 0.0) < -5.0 or (slice_row.expected_value_delta or 0.0) < -0.05)]
+        severe_regressions = [
+            slice_row
+            for slice_row in slices
+            if slice_row.sample_status == "qualified"
+            and (
+                (slice_row.win_rate_delta or 0.0) < -5.0
+                or (slice_row.expected_value_delta or 0.0) < -0.05
+            )
+        ]
         return len(severe_regressions) <= 1
 
     @staticmethod

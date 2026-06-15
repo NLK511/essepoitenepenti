@@ -5,7 +5,7 @@ import sys
 import unittest
 from pathlib import Path
 
-from scripts.deploy_watchlists import WATCHLIST_SPECS
+from scripts.deploy_watchlists import US_MIDDAY_PROPOSAL_JOB_SPECS, WATCHLIST_SPECS
 from trade_proposer_app.services.default_jobs import DEFAULT_RECOMMENDATION_EVALUATION_JOB_SPECS
 from trade_proposer_app.services.taxonomy import (
     EVENT_VOCAB_PATH,
@@ -57,6 +57,20 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
 
         self.assertEqual([], missing)
         self.assertEqual(750, len(default_tickers))
+
+    def test_default_watchlists_include_us_midday_proposal_jobs(self) -> None:
+        self.assertEqual(
+            [spec["name"] for spec in US_MIDDAY_PROPOSAL_JOB_SPECS],
+            ["US-Tech-Midday", "US-Fin-Midday", "US-Health-Midday", "US-Cons-Midday", "US-Cyc-Midday"],
+        )
+        self.assertEqual(
+            [spec["source_watchlist"] for spec in US_MIDDAY_PROPOSAL_JOB_SPECS],
+            ["US-Tech", "US-Fin", "US-Health", "US-Cons", "US-Cyc"],
+        )
+        self.assertEqual(
+            [spec["cron"] for spec in US_MIDDAY_PROPOSAL_JOB_SPECS],
+            ["00 16 * * MON-FRI", "10 16 * * MON-FRI", "20 16 * * MON-FRI", "30 16 * * MON-FRI", "40 16 * * MON-FRI"],
+        )
 
     def test_default_watchlists_include_post_close_recommendation_evaluation_jobs(self) -> None:
         self.assertEqual([spec["name"] for spec in DEFAULT_RECOMMENDATION_EVALUATION_JOB_SPECS], [

@@ -23,6 +23,7 @@ class JobType(StrEnum):
     BARS_DATA_REFRESH = "bars_data_refresh"
     BROKER_STEERING = "broker_steering"
     FUNDAMENTAL_ANALYSIS_REFRESH = "fundamental_analysis_refresh"
+    GATING_SEVERITY_CHECK = "gating_severity_check"
 
     @classmethod
     def parse(cls, value: str | "JobType") -> "JobType":

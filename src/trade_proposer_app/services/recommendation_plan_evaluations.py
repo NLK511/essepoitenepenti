@@ -12,14 +12,22 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import StrategyHorizon
-from trade_proposer_app.domain.models import EvaluationRunResult, HistoricalMarketBar, RecommendationPlan, RecommendationPlanOutcome
+from trade_proposer_app.domain.models import (
+    EvaluationRunResult,
+    HistoricalMarketBar,
+    RecommendationPlan,
+    RecommendationPlanOutcome,
+)
 from trade_proposer_app.domain.statuses import OutcomeStatus
 from trade_proposer_app.persistence.models import RecommendationPlanRecord
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.services.plan_resolution_engine import PlanResolutionConfig, PlanResolutionEngine
+from trade_proposer_app.services.plan_resolution_engine import (
+    PlanResolutionConfig,
+    PlanResolutionEngine,
+)
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 
@@ -96,7 +104,9 @@ class RecommendationPlanEvaluationService:
         price_history_cache, price_errors = self._prepare_price_histories(plans, as_of=as_of)
         if price_errors:
             logger.warning("recommendation evaluation history errors: %s", price_errors)
-        logger.debug("recommendation evaluation history cache keys: %s", sorted(price_history_cache.keys()))
+        logger.debug(
+            "recommendation evaluation history cache keys: %s", sorted(price_history_cache.keys())
+        )
         processed = 0
         synced = 0
         detail_lines: list[str] = []
@@ -144,11 +154,17 @@ class RecommendationPlanEvaluationService:
         return EvaluationRunResult(
             evaluated_recommendation_plans=processed,
             synced_recommendation_plan_outcomes=synced,
-            pending_recommendation_plan_outcomes=sum(1 for value in outcome_labels if value in {"open", "pending", "no_entry"}),
+            pending_recommendation_plan_outcomes=sum(
+                1 for value in outcome_labels if value in {"open", "pending", "no_entry"}
+            ),
             win_recommendation_plan_outcomes=sum(1 for value in outcome_labels if value == "win"),
             loss_recommendation_plan_outcomes=sum(1 for value in outcome_labels if value == "loss"),
-            no_action_recommendation_plan_outcomes=sum(1 for value in outcome_labels if value == "no_action"),
-            watchlist_recommendation_plan_outcomes=sum(1 for value in outcome_labels if value == "watchlist"),
+            no_action_recommendation_plan_outcomes=sum(
+                1 for value in outcome_labels if value == "no_action"
+            ),
+            watchlist_recommendation_plan_outcomes=sum(
+                1 for value in outcome_labels if value == "watchlist"
+            ),
             output=output,
         )
 
@@ -158,12 +174,17 @@ class RecommendationPlanEvaluationService:
             query = query.where(RecommendationPlanRecord.id.in_(recommendation_plan_ids))
         rows = list(self.session.scalars(query).all())
         if not recommendation_plan_ids:
-            rows = [row for row in rows if row.action in {"long", "short", "no_action", "watchlist"}]
-            outcome_map = self.outcomes.get_simulated_outcomes_by_plan_ids([row.id for row in rows if row.id is not None])
+            rows = [
+                row for row in rows if row.action in {"long", "short", "no_action", "watchlist"}
+            ]
+            outcome_map = self.outcomes.get_simulated_outcomes_by_plan_ids(
+                [row.id for row in rows if row.id is not None]
+            )
             rows = [
                 row
                 for row in rows
-                if outcome_map.get(row.id or 0) is None or outcome_map[row.id or 0].status != OutcomeStatus.RESOLVED.value
+                if outcome_map.get(row.id or 0) is None
+                or outcome_map[row.id or 0].status != OutcomeStatus.RESOLVED.value
             ]
         return [self.plans._to_model(row) for row in rows]
 
@@ -190,7 +211,10 @@ class RecommendationPlanEvaluationService:
                 continue
             earliest = min(normalized_times)
             start_time = earliest - timedelta(days=2)
-            needs_history = any(plan.action in {"long", "short"} for plan in grouped_plans)
+            needs_history = any(
+                plan.action in {"long", "short"} or self._phantom_intended_action(plan) is not None
+                for plan in grouped_plans
+            )
             logger.debug(
                 "price history group: ticker=%s plan_ids=%s earliest=%s start=%s needs_history=%s",
                 ticker,
@@ -209,13 +233,25 @@ class RecommendationPlanEvaluationService:
                         require_full_coverage=as_of is not None,
                         plan_ids=[plan.id for plan in grouped_plans if plan.id is not None],
                     )
-                    cache[(ticker, False)] = daily_data.sort_index() if daily_data is not None and not daily_data.empty else None
+                    cache[(ticker, False)] = (
+                        daily_data.sort_index()
+                        if daily_data is not None and not daily_data.empty
+                        else None
+                    )
                     logger.debug(
                         "price history loaded: ticker=%s mode=daily rows=%s first=%s last=%s",
                         ticker,
                         0 if cache[(ticker, False)] is None else len(cache[(ticker, False)]),
-                        self._format_datetime(None if cache[(ticker, False)] is None or cache[(ticker, False)].empty else cache[(ticker, False)].index[0]),
-                        self._format_datetime(None if cache[(ticker, False)] is None or cache[(ticker, False)].empty else self._last_timestamp(cache[(ticker, False)])),
+                        self._format_datetime(
+                            None
+                            if cache[(ticker, False)] is None or cache[(ticker, False)].empty
+                            else cache[(ticker, False)].index[0]
+                        ),
+                        self._format_datetime(
+                            None
+                            if cache[(ticker, False)] is None or cache[(ticker, False)].empty
+                            else self._last_timestamp(cache[(ticker, False)])
+                        ),
                     )
                     if cache[(ticker, False)] is None:
                         errors.append(f"{ticker}: daily price history is unavailable")
@@ -227,13 +263,25 @@ class RecommendationPlanEvaluationService:
                         require_full_coverage=as_of is not None,
                         plan_ids=[plan.id for plan in grouped_plans if plan.id is not None],
                     )
-                    cache[(ticker, True)] = intraday_data.sort_index() if intraday_data is not None and not intraday_data.empty else None
+                    cache[(ticker, True)] = (
+                        intraday_data.sort_index()
+                        if intraday_data is not None and not intraday_data.empty
+                        else None
+                    )
                     logger.debug(
                         "price history loaded: ticker=%s mode=intraday rows=%s first=%s last=%s",
                         ticker,
                         0 if cache[(ticker, True)] is None else len(cache[(ticker, True)]),
-                        self._format_datetime(None if cache[(ticker, True)] is None or cache[(ticker, True)].empty else cache[(ticker, True)].index[0]),
-                        self._format_datetime(None if cache[(ticker, True)] is None or cache[(ticker, True)].empty else self._last_timestamp(cache[(ticker, True)])),
+                        self._format_datetime(
+                            None
+                            if cache[(ticker, True)] is None or cache[(ticker, True)].empty
+                            else cache[(ticker, True)].index[0]
+                        ),
+                        self._format_datetime(
+                            None
+                            if cache[(ticker, True)] is None or cache[(ticker, True)].empty
+                            else self._last_timestamp(cache[(ticker, True)])
+                        ),
                     )
                     if cache[(ticker, True)] is None:
                         errors.append(f"{ticker}: intraday price history is unavailable")
@@ -244,7 +292,9 @@ class RecommendationPlanEvaluationService:
         return cache, errors
 
     @staticmethod
-    def _group_by_ticker(plans: Iterable[RecommendationPlan]) -> dict[str, list[RecommendationPlan]]:
+    def _group_by_ticker(
+        plans: Iterable[RecommendationPlan],
+    ) -> dict[str, list[RecommendationPlan]]:
         groups: dict[str, list[RecommendationPlan]] = defaultdict(list)
         for plan in plans:
             groups[(plan.ticker or "").strip().upper()].append(plan)
@@ -295,8 +345,16 @@ class RecommendationPlanEvaluationService:
         return high or low or 0.0
 
     def _find_entry_index(self, plan: RecommendationPlan, data: pd.DataFrame) -> int | None:
-        low = float(plan.entry_price_low if plan.entry_price_low is not None else plan.entry_price_high or 0.0)
-        high = float(plan.entry_price_high if plan.entry_price_high is not None else plan.entry_price_low or 0.0)
+        low = float(
+            plan.entry_price_low
+            if plan.entry_price_low is not None
+            else plan.entry_price_high or 0.0
+        )
+        high = float(
+            plan.entry_price_high
+            if plan.entry_price_high is not None
+            else plan.entry_price_low or 0.0
+        )
         if high < low:
             low, high = high, low
         for index, (_, row) in enumerate(data.iterrows()):
@@ -308,7 +366,9 @@ class RecommendationPlanEvaluationService:
                 return index
         return None
 
-    def _resolve_exit(self, effective_action: str, plan: RecommendationPlan, data: pd.DataFrame) -> tuple[bool, bool, datetime | None]:
+    def _resolve_exit(
+        self, effective_action: str, plan: RecommendationPlan, data: pd.DataFrame
+    ) -> tuple[bool, bool, datetime | None]:
         realism = self.settings_domains.execution_settings().evaluation_realism
         stop_buffer = realism["stop_buffer_pct"] / 100.0
         take_buffer = realism["take_profit_buffer_pct"] / 100.0
@@ -318,17 +378,23 @@ class RecommendationPlanEvaluationService:
             row_low = self._float_or_none(row.get("Low"))
             if row_high is None or row_low is None:
                 continue
-            
+
             # Use dynamic realism buffers
-            stop_hit = self._check_stop_with_buffer(effective_action, row_high, row_low, plan.stop_loss, stop_buffer)
-            take_hit = self._check_take_with_buffer(effective_action, row_high, row_low, plan.take_profit, take_buffer)
-            
+            stop_hit = self._check_stop_with_buffer(
+                effective_action, row_high, row_low, plan.stop_loss, stop_buffer
+            )
+            take_hit = self._check_take_with_buffer(
+                effective_action, row_high, row_low, plan.take_profit, take_buffer
+            )
+
             if stop_hit or take_hit:
                 return stop_hit, take_hit, self._normalize_datetime(timestamp)
         return False, False, None
 
     @staticmethod
-    def _check_stop_with_buffer(action: str, high: float, low: float, stop_loss: float | None, buffer_pct: float) -> bool:
+    def _check_stop_with_buffer(
+        action: str, high: float, low: float, stop_loss: float | None, buffer_pct: float
+    ) -> bool:
         if stop_loss is None:
             return False
         buffer = stop_loss * buffer_pct
@@ -339,7 +405,9 @@ class RecommendationPlanEvaluationService:
         return False
 
     @staticmethod
-    def _check_take_with_buffer(action: str, high: float, low: float, take_profit: float | None, buffer_pct: float) -> bool:
+    def _check_take_with_buffer(
+        action: str, high: float, low: float, take_profit: float | None, buffer_pct: float
+    ) -> bool:
         if take_profit is None:
             return False
         buffer = take_profit * buffer_pct
@@ -351,7 +419,7 @@ class RecommendationPlanEvaluationService:
 
     @staticmethod
     def _check_stop(action: str, high: float, low: float, stop_loss: float | None) -> bool:
-        # Legacy method maintained for unit test compatibility if needed, 
+        # Legacy method maintained for unit test compatibility if needed,
         # but _resolve_exit now uses _check_stop_with_buffer.
         if stop_loss is None:
             return False
@@ -384,19 +452,21 @@ class RecommendationPlanEvaluationService:
         close_value = self._float_or_none(data.iloc[close_index].get("Close"))
         if close_value is None:
             return None
-        
+
         # Gross Return
         raw_return = ((close_value - entry_reference) / entry_reference) * 100.0
-        
+
         # Realism Buffer: Use dynamic friction from settings
         realism = self.settings_domains.execution_settings().evaluation_realism
         friction_pct = realism["friction_pct"]
-        
+
         if effective_action == "short":
             return round(-raw_return - friction_pct, 4)
         return round(raw_return - friction_pct, 4)
 
-    def _max_favorable_excursion(self, effective_action: str, data: pd.DataFrame, entry_reference: float) -> float | None:
+    def _max_favorable_excursion(
+        self, effective_action: str, data: pd.DataFrame, entry_reference: float
+    ) -> float | None:
         if data.empty or entry_reference <= 0:
             return None
         if effective_action == "short":
@@ -413,7 +483,9 @@ class RecommendationPlanEvaluationService:
         candidate = max(numeric_highs)
         return round(((candidate - entry_reference) / entry_reference) * 100.0, 4)
 
-    def _max_adverse_excursion(self, effective_action: str, data: pd.DataFrame, entry_reference: float) -> float | None:
+    def _max_adverse_excursion(
+        self, effective_action: str, data: pd.DataFrame, entry_reference: float
+    ) -> float | None:
         if data.empty or entry_reference <= 0:
             return None
         if effective_action == "short":
@@ -432,8 +504,16 @@ class RecommendationPlanEvaluationService:
 
     @staticmethod
     def _entry_zone_bounds(plan: RecommendationPlan) -> tuple[float, float] | None:
-        low = float(plan.entry_price_low if plan.entry_price_low is not None else plan.entry_price_high or 0.0)
-        high = float(plan.entry_price_high if plan.entry_price_high is not None else plan.entry_price_low or 0.0)
+        low = float(
+            plan.entry_price_low
+            if plan.entry_price_low is not None
+            else plan.entry_price_high or 0.0
+        )
+        high = float(
+            plan.entry_price_high
+            if plan.entry_price_high is not None
+            else plan.entry_price_low or 0.0
+        )
         if low <= 0.0 and high <= 0.0:
             return None
         if high < low:
@@ -489,7 +569,9 @@ class RecommendationPlanEvaluationService:
         if data.empty:
             return None
         if "available_at" in data.columns:
-            available = RecommendationPlanEvaluationService._normalize_datetime(data.iloc[-1].get("available_at"))
+            available = RecommendationPlanEvaluationService._normalize_datetime(
+                data.iloc[-1].get("available_at")
+            )
             if available is not None:
                 return available
         return RecommendationPlanEvaluationService._normalize_datetime(data.index[-1])
@@ -520,15 +602,23 @@ class RecommendationPlanEvaluationService:
             return pd.DataFrame(columns=data.columns)
 
         if "available_at" in data.columns:
-            normalized_available = data["available_at"].apply(RecommendationPlanEvaluationService._normalize_datetime)
-            mask = normalized_available.map(lambda value: value is not None and value >= normalized_start)
+            normalized_available = data["available_at"].apply(
+                RecommendationPlanEvaluationService._normalize_datetime
+            )
+            mask = normalized_available.map(
+                lambda value: value is not None and value >= normalized_start
+            )
             rows = data.loc[mask]
             if not rows.empty:
                 return rows
             if not intraday_only:
                 date_mask = data.index.map(
                     lambda timestamp: (
-                        (normalized_timestamp := RecommendationPlanEvaluationService._normalize_datetime(timestamp)) is not None
+                        (
+                            normalized_timestamp
+                            := RecommendationPlanEvaluationService._normalize_datetime(timestamp)
+                        )
+                        is not None
                         and normalized_timestamp.date() >= normalized_start.date()
                     )
                 )
@@ -540,15 +630,21 @@ class RecommendationPlanEvaluationService:
                         ticker,
                         RecommendationPlanEvaluationService._format_datetime(normalized_start),
                         len(fallback_rows),
-                        RecommendationPlanEvaluationService._format_datetime(fallback_rows.iloc[0].get("available_at")),
-                        RecommendationPlanEvaluationService._format_datetime(fallback_rows.iloc[-1].get("available_at")),
+                        RecommendationPlanEvaluationService._format_datetime(
+                            fallback_rows.iloc[0].get("available_at")
+                        ),
+                        RecommendationPlanEvaluationService._format_datetime(
+                            fallback_rows.iloc[-1].get("available_at")
+                        ),
                     )
                     return fallback_rows
             return pd.DataFrame(columns=data.columns)
 
         rows = []
         for timestamp, row in data.iterrows():
-            normalized_timestamp = RecommendationPlanEvaluationService._normalize_datetime(timestamp)
+            normalized_timestamp = RecommendationPlanEvaluationService._normalize_datetime(
+                timestamp
+            )
             if normalized_timestamp is None or normalized_timestamp < normalized_start:
                 continue
             rows.append((timestamp, row))
@@ -622,7 +718,9 @@ class RecommendationPlanEvaluationService:
     ) -> tuple[RecommendationPlanOutcome, str]:
         intended_action = self._phantom_intended_action(plan)
         if plan.action in {"no_action", "watchlist"} and intended_action is None:
-            outcome = self._evaluate_plan(plan, None, run_id=run_id, as_of=as_of, intraday_only=False)
+            outcome = self._evaluate_plan(
+                plan, None, run_id=run_id, as_of=as_of, intraday_only=False
+            )
             return self._finalize_outcome(plan, outcome, as_of=as_of), "none"
 
         return self._resolve_trade_like_outcome(
@@ -646,10 +744,24 @@ class RecommendationPlanEvaluationService:
     ) -> tuple[RecommendationPlanOutcome, str]:
         daily_outcome: RecommendationPlanOutcome | None = None
         if daily_data is not None and not daily_data.empty:
-            daily_outcome = self._evaluate_plan(plan, daily_data, intended_action=intended_action, run_id=run_id, as_of=as_of, intraday_only=False)
+            daily_outcome = self._evaluate_plan(
+                plan,
+                daily_data,
+                intended_action=intended_action,
+                run_id=run_id,
+                as_of=as_of,
+                intraday_only=False,
+            )
 
         if intraday_data is not None and not intraday_data.empty:
-            intraday_outcome = self._evaluate_plan(plan, intraday_data, intended_action=intended_action, run_id=run_id, as_of=as_of, intraday_only=True)
+            intraday_outcome = self._evaluate_plan(
+                plan,
+                intraday_data,
+                intended_action=intended_action,
+                run_id=run_id,
+                as_of=as_of,
+                intraday_only=True,
+            )
             # Preserve daily horizon returns; intraday horizon metrics are skewed by bar frequency.
             if daily_outcome is not None:
                 intraday_outcome.horizon_return_1d = daily_outcome.horizon_return_1d
@@ -667,7 +779,9 @@ class RecommendationPlanEvaluationService:
                 setup_family=self._setup_family(plan),
                 notes="Intraday price history is required for final resolution but is unavailable.",
             )
-            return self._finalize_outcome(plan, pending_outcome, as_of=as_of), "pending_intraday_required"
+            return self._finalize_outcome(
+                plan, pending_outcome, as_of=as_of
+            ), "pending_intraday_required"
 
         pending_outcome = self._pending_resolution_outcome(
             plan,
@@ -683,7 +797,9 @@ class RecommendationPlanEvaluationService:
         if plan.action not in {"no_action", "watchlist"}:
             return None
         signal_breakdown = plan.signal_breakdown if hasattr(plan.signal_breakdown, "get") else {}
-        intended_action = signal_breakdown.get("intended_action") if hasattr(signal_breakdown, "get") else None
+        intended_action = (
+            signal_breakdown.get("intended_action") if hasattr(signal_breakdown, "get") else None
+        )
         if intended_action not in {"long", "short"}:
             return None
         if plan.entry_price_low is None and plan.entry_price_high is None:
@@ -730,7 +846,9 @@ class RecommendationPlanEvaluationService:
         while remaining_sessions > 0:
             session_date = self._next_business_day(session_date)
             remaining_sessions -= 1
-        return datetime.combine(session_date, self._market_close_time, tzinfo=market_tz).astimezone(timezone.utc)
+        return datetime.combine(session_date, self._market_close_time, tzinfo=market_tz).astimezone(
+            timezone.utc
+        )
 
     @staticmethod
     def _next_business_day(current: date) -> date:
@@ -788,9 +906,13 @@ class RecommendationPlanEvaluationService:
             self._format_datetime(start_date),
             self._format_datetime(end_date),
         )
-        persisted = self._load_persisted_price_history(ticker, start_date, end_date, intraday_only=intraday_only)
+        persisted = self._load_persisted_price_history(
+            ticker, start_date, end_date, intraday_only=intraday_only
+        )
         if persisted is not None and not persisted.empty:
-            if not require_full_coverage or self._persisted_history_covers_window(persisted, end_date=end_date, intraday_only=intraday_only):
+            if not require_full_coverage or self._persisted_history_covers_window(
+                persisted, end_date=end_date, intraday_only=intraday_only
+            ):
                 logger.debug(
                     "load_price_history source=persisted ticker=%s intraday_only=%s rows=%s first=%s last=%s",
                     ticker,
@@ -815,12 +937,16 @@ class RecommendationPlanEvaluationService:
             ticker,
             intraday_only,
         )
-        downloaded = self._download_price_history(ticker, start_date, end_date, intraday_only=intraday_only)
+        downloaded = self._download_price_history(
+            ticker, start_date, end_date, intraday_only=intraday_only
+        )
         if not downloaded.empty:
             self._persist_downloaded_bars(ticker, downloaded, intraday_only=intraday_only)
         return downloaded
 
-    def _persist_downloaded_bars(self, ticker: str, data: pd.DataFrame, *, intraday_only: bool) -> None:
+    def _persist_downloaded_bars(
+        self, ticker: str, data: pd.DataFrame, *, intraday_only: bool
+    ) -> None:
         """Save downloaded bars to the local historical_market_bars table."""
         timeframe = self._intraday_interval if intraday_only else "1d"
         bars = []
@@ -876,13 +1002,17 @@ class RecommendationPlanEvaluationService:
         return None
 
     @staticmethod
-    def _persisted_history_covers_window(data: pd.DataFrame, *, end_date: datetime, intraday_only: bool) -> bool:
+    def _persisted_history_covers_window(
+        data: pd.DataFrame, *, end_date: datetime, intraday_only: bool
+    ) -> bool:
         if data.empty:
             return False
         normalized_end = RecommendationPlanEvaluationService._normalize_datetime(end_date)
         if normalized_end is None:
             return False
-        last_available = RecommendationPlanEvaluationService._normalize_datetime(data.iloc[-1].get("available_at"))
+        last_available = RecommendationPlanEvaluationService._normalize_datetime(
+            data.iloc[-1].get("available_at")
+        )
         if last_available is None:
             last_available = RecommendationPlanEvaluationService._normalize_datetime(data.index[-1])
         if last_available is None:
@@ -892,13 +1022,17 @@ class RecommendationPlanEvaluationService:
         return last_available.date() >= normalized_end.date()
 
     @staticmethod
-    def _bars_to_frame(bars: list[HistoricalMarketBar], *, start_date: datetime) -> pd.DataFrame | None:
+    def _bars_to_frame(
+        bars: list[HistoricalMarketBar], *, start_date: datetime
+    ) -> pd.DataFrame | None:
         records: list[dict[str, object]] = []
         normalized_start = RecommendationPlanEvaluationService._normalize_datetime(start_date)
         if normalized_start is None:
             return None
         for bar in bars:
-            available_at = RecommendationPlanEvaluationService._normalize_datetime(bar.available_at or bar.bar_time)
+            available_at = RecommendationPlanEvaluationService._normalize_datetime(
+                bar.available_at or bar.bar_time
+            )
             bar_time = RecommendationPlanEvaluationService._normalize_datetime(bar.bar_time)
             if available_at is None or bar_time is None:
                 continue
@@ -967,9 +1101,13 @@ class RecommendationPlanEvaluationService:
                     frame = frame.xs(ticker, axis=1, level=ticker_level)
                 except Exception:
                     # Fall back to the first ticker slice for single-ticker downloads.
-                    frame = frame.xs(frame.columns.levels[ticker_level][0], axis=1, level=ticker_level)
+                    frame = frame.xs(
+                        frame.columns.levels[ticker_level][0], axis=1, level=ticker_level
+                    )
             if isinstance(frame.columns, pd.MultiIndex):
-                frame.columns = [column[0] if isinstance(column, tuple) else column for column in frame.columns]
+                frame.columns = [
+                    column[0] if isinstance(column, tuple) else column for column in frame.columns
+                ]
         normalized_index = pd.to_datetime(frame.index, utc=True)
         frame.index = normalized_index
         if intraday_only:
@@ -977,7 +1115,10 @@ class RecommendationPlanEvaluationService:
             frame["available_at"] = [ts + bar_delta for ts in normalized_index]
         else:
             frame["available_at"] = [
-                datetime.combine(ts.date(), datetime.max.time().replace(microsecond=0), tzinfo=timezone.utc) for ts in normalized_index
+                datetime.combine(
+                    ts.date(), datetime.max.time().replace(microsecond=0), tzinfo=timezone.utc
+                )
+                for ts in normalized_index
             ]
         return frame
 
@@ -985,7 +1126,9 @@ class RecommendationPlanEvaluationService:
     def _build_output(processed: int, details: list[str], errors: list[str]) -> str:
         parts: list[str] = []
         if processed:
-            parts.append(f"Processed {processed} recommendation plan{'s' if processed != 1 else ''}.")
+            parts.append(
+                f"Processed {processed} recommendation plan{'s' if processed != 1 else ''}."
+            )
         parts.extend(errors)
         parts.extend(details)
         return " ".join(parts) if parts else "no recommendation plans were evaluated"

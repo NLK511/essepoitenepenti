@@ -38,13 +38,16 @@ from trade_proposer_app.services.recommendation_plan_evaluations import (
 
 # ─── helpers ──────────────────────────────────────────────────────────────────
 
+
 def _make_session() -> Session:
     engine = create_engine("sqlite:///:memory:", future=True)
     Base.metadata.create_all(bind=engine)
     return Session(bind=engine)
 
 
-def _daily_frame(rows: list[tuple[str, float, float, float]], *, available_offset_hours: int = 8) -> pd.DataFrame:
+def _daily_frame(
+    rows: list[tuple[str, float, float, float]], *, available_offset_hours: int = 8
+) -> pd.DataFrame:
     """Build a daily OHLC DataFrame with sensible available_at stamps.
 
     rows: list of (iso_date, high, low, close)
@@ -62,7 +65,9 @@ def _daily_frame(rows: list[tuple[str, float, float, float]], *, available_offse
     )
 
 
-def _intraday_frame(rows: list[tuple[str, float, float, float]], *, bar_minutes: int = 5) -> pd.DataFrame:
+def _intraday_frame(
+    rows: list[tuple[str, float, float, float]], *, bar_minutes: int = 5
+) -> pd.DataFrame:
     """Build an intraday OHLC DataFrame where available_at = bar_time + bar_minutes."""
     timestamps = pd.to_datetime([r[0] for r in rows], utc=True)
     available_at = timestamps + pd.Timedelta(minutes=bar_minutes)
@@ -96,6 +101,7 @@ def _plan(**kwargs: Any) -> RecommendationPlan:
 
 # ─── base class ───────────────────────────────────────────────────────────────
 
+
 class EvalTestBase(unittest.TestCase):
     def setUp(self) -> None:
         self.session = _make_session()
@@ -103,12 +109,10 @@ class EvalTestBase(unittest.TestCase):
         self.outcomes = RecommendationOutcomeRepository(self.session)
         self.market_data = HistoricalMarketDataRepository(self.session)
         self.settings = SettingsRepository(self.session)
-        
+
         # Disable realism buffer by default for precise numerical tests
         self.settings.set_evaluation_realism_config(
-            stop_buffer_pct=0.0,
-            take_profit_buffer_pct=0.0,
-            friction_pct=0.0
+            stop_buffer_pct=0.0, take_profit_buffer_pct=0.0, friction_pct=0.0
         )
 
     def tearDown(self) -> None:
@@ -144,13 +148,16 @@ class EvalTestBase(unittest.TestCase):
 
     def _get(self, ticker: str) -> RecommendationPlanOutcome:
         items = self.outcomes.list_outcomes(ticker=ticker)
-        self.assertEqual(len(items), 1, f"Expected exactly one outcome for {ticker}, got {len(items)}")
+        self.assertEqual(
+            len(items), 1, f"Expected exactly one outcome for {ticker}, got {len(items)}"
+        )
         return items[0]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 1. STATIC / PURE HELPER METHODS
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class ConfidenceBucketTests(EvalTestBase):
     """_confidence_bucket maps float → string tier exactly."""
@@ -436,7 +443,7 @@ class RealizedHoldingDaysTests(EvalTestBase):
 
     def test_naive_datetimes_treated_as_utc(self) -> None:
         start = datetime(2026, 1, 1, 0, 0)  # naive
-        end = datetime(2026, 1, 2, 0, 0)    # naive
+        end = datetime(2026, 1, 2, 0, 0)  # naive
         self.assertAlmostEqual(self.svc._realized_holding_days(start, end), 1.0, places=4)
 
 
@@ -445,13 +452,20 @@ class RowsOnOrAfterTests(EvalTestBase):
 
     svc = RecommendationPlanEvaluationService
 
-    def _frame_with_available_at(self, dates: list[str], available_offsets_hours: list[int]) -> pd.DataFrame:
+    def _frame_with_available_at(
+        self, dates: list[str], available_offsets_hours: list[int]
+    ) -> pd.DataFrame:
         bar_times = pd.to_datetime(dates, utc=True)
-        avail = pd.to_datetime(
-            [d for d in dates], utc=True
-        ) + pd.to_timedelta([f"{h}h" for h in available_offsets_hours])
+        avail = pd.to_datetime([d for d in dates], utc=True) + pd.to_timedelta(
+            [f"{h}h" for h in available_offsets_hours]
+        )
         return pd.DataFrame(
-            {"Close": [100.0] * len(dates), "High": [100.0] * len(dates), "Low": [100.0] * len(dates), "available_at": avail},
+            {
+                "Close": [100.0] * len(dates),
+                "High": [100.0] * len(dates),
+                "Low": [100.0] * len(dates),
+                "available_at": avail,
+            },
             index=bar_times,
         )
 
@@ -460,7 +474,10 @@ class RowsOnOrAfterTests(EvalTestBase):
         f = pd.DataFrame(
             {
                 "Close": [1.0, 2.0, 3.0],
-                "available_at": pd.to_datetime(["2026-01-01T08:00:00Z", "2026-01-02T08:00:00Z", "2026-01-03T00:00:00Z"], utc=True),
+                "available_at": pd.to_datetime(
+                    ["2026-01-01T08:00:00Z", "2026-01-02T08:00:00Z", "2026-01-03T00:00:00Z"],
+                    utc=True,
+                ),
             },
             index=pd.to_datetime(["2026-01-01", "2026-01-02", "2026-01-03"], utc=True),
         )
@@ -473,7 +490,9 @@ class RowsOnOrAfterTests(EvalTestBase):
         f = pd.DataFrame(
             {
                 "Close": [1.0, 2.0],
-                "available_at": pd.to_datetime(["2026-01-01T08:00:00Z", "2026-01-02T08:00:00Z"], utc=True),
+                "available_at": pd.to_datetime(
+                    ["2026-01-01T08:00:00Z", "2026-01-02T08:00:00Z"], utc=True
+                ),
             },
             index=pd.to_datetime(["2026-01-01", "2026-01-02"], utc=True),
         )
@@ -539,7 +558,10 @@ class PlanHorizonCutoffTests(EvalTestBase):
         # 1w = 5 sessions; remaining = max(5-1, 0) = 4 increments
         # Mon Jan 5 → +1→Tue Jan 6 → +2→Wed Jan 7 → +3→Thu Jan 8 → +4→Fri Jan 9
         # cutoff = Fri 2026-01-09 16:00 ET = 21:00 UTC
-        plan = _plan(horizon=StrategyHorizon.ONE_WEEK, computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc))
+        plan = _plan(
+            horizon=StrategyHorizon.ONE_WEEK,
+            computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
+        )
         cutoff = self._svc()._plan_horizon_cutoff(plan)
         self.assertIsNotNone(cutoff)
         self.assertEqual(cutoff.date(), date(2026, 1, 9))
@@ -548,7 +570,10 @@ class PlanHorizonCutoffTests(EvalTestBase):
         # Monday 2026-01-05 14:00 UTC = 09:00 ET (before open)
         # 1d = 1 session; session_date = Mon Jan 5; remaining = max(1-1, 0) = 0
         # No increments → cutoff = Mon 2026-01-05 16:00 ET = 21:00 UTC
-        plan = _plan(horizon=StrategyHorizon.ONE_DAY, computed_at=datetime(2026, 1, 5, 14, 0, tzinfo=timezone.utc))
+        plan = _plan(
+            horizon=StrategyHorizon.ONE_DAY,
+            computed_at=datetime(2026, 1, 5, 14, 0, tzinfo=timezone.utc),
+        )
         cutoff = self._svc()._plan_horizon_cutoff(plan)
         self.assertIsNotNone(cutoff)
         self.assertEqual(cutoff.date(), date(2026, 1, 5))
@@ -556,7 +581,10 @@ class PlanHorizonCutoffTests(EvalTestBase):
     def test_weekend_plan_starts_counting_from_next_monday(self) -> None:
         # Saturday 2026-01-10 → next business day is Mon 2026-01-12
         # 1d plan: session_date = Mon Jan 12; remaining = 0 → cutoff = Mon Jan 12
-        plan = _plan(horizon=StrategyHorizon.ONE_DAY, computed_at=datetime(2026, 1, 10, 12, 0, tzinfo=timezone.utc))
+        plan = _plan(
+            horizon=StrategyHorizon.ONE_DAY,
+            computed_at=datetime(2026, 1, 10, 12, 0, tzinfo=timezone.utc),
+        )
         cutoff = self._svc()._plan_horizon_cutoff(plan)
         self.assertIsNotNone(cutoff)
         self.assertEqual(cutoff.date(), date(2026, 1, 12))
@@ -695,6 +723,7 @@ class SetupFamilyTests(EvalTestBase):
 # 2. _evaluate_plan — OUTCOME ROUTING MATRIX
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class EvaluatePlanOutcomeMatrixTests(EvalTestBase):
     """Every possible outcome from _evaluate_plan for long and short actions."""
 
@@ -710,7 +739,9 @@ class EvaluatePlanOutcomeMatrixTests(EvalTestBase):
             index=ts,
         )
 
-    def _plan_with(self, action: str, entry: float, stop: float | None, take: float | None) -> RecommendationPlan:
+    def _plan_with(
+        self, action: str, entry: float, stop: float | None, take: float | None
+    ) -> RecommendationPlan:
         return _plan(
             action=action,
             entry_price_low=entry,
@@ -901,6 +932,7 @@ class EvaluatePlanOutcomeMatrixTests(EvalTestBase):
 # 3. EXACT NUMERICAL METRICS (end-to-end via run_evaluation)
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class ExactReturnMetricsLongTests(EvalTestBase):
     """Exact numerical verification of horizon returns, MFE, MAE, holding period for long."""
 
@@ -938,9 +970,9 @@ class ExactReturnMetricsLongTests(EvalTestBase):
         avail = dates + pd.Timedelta(hours=1)
         frame = pd.DataFrame(
             {
-                "High":  [100.0, 102.0, 105.0, 108.0, 111.0, 112.0, 115.0],
-                "Low":   [99.0,  100.0, 102.0, 104.0, 107.0, 108.0, 109.0],
-                "Close": [99.5,  101.5, 104.5, 107.5, 110.5, 111.0, 110.0],
+                "High": [100.0, 102.0, 105.0, 108.0, 111.0, 112.0, 115.0],
+                "Low": [99.0, 100.0, 102.0, 104.0, 107.0, 108.0, 109.0],
+                "Close": [99.5, 101.5, 104.5, 107.5, 110.5, 111.0, 110.0],
                 "available_at": avail,
             },
             index=dates,
@@ -975,7 +1007,10 @@ class ExactReturnMetricsLongTests(EvalTestBase):
 
         # holding period: computed_at=2026-01-01T14:00Z to Day4 bar_time=2026-01-05T15:00Z
         # Note: _resolve_exit returns the index timestamp (bar_time), not available_at.
-        expected_holding = (datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc) - datetime(2026, 1, 1, 14, 0, tzinfo=timezone.utc)).total_seconds() / 86400.0
+        expected_holding = (
+            datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc)
+            - datetime(2026, 1, 1, 14, 0, tzinfo=timezone.utc)
+        ).total_seconds() / 86400.0
         self.assertAlmostEqual(out.realized_holding_period_days, expected_holding, places=4)
 
 
@@ -1010,8 +1045,8 @@ class ExactReturnMetricsShortTests(EvalTestBase):
         avail = dates + pd.Timedelta(hours=1)
         frame = pd.DataFrame(
             {
-                "High":  [205.0, 195.0, 190.0, 185.0, 175.0, 170.0, 160.0],
-                "Low":   [199.0, 188.0, 182.0, 181.0, 170.0, 165.0, 155.0],
+                "High": [205.0, 195.0, 190.0, 185.0, 175.0, 170.0, 160.0],
+                "Low": [199.0, 188.0, 182.0, 181.0, 170.0, 165.0, 155.0],
                 "Close": [201.0, 189.0, 185.0, 182.0, 172.0, 168.0, 158.0],
                 "available_at": avail,
             },
@@ -1049,11 +1084,21 @@ class DirectionCorrectTests(EvalTestBase):
         dates = pd.date_range("2026-01-06T15:00:00Z", periods=5, freq="D")
         avail = dates + pd.Timedelta(hours=1)
         frame = pd.DataFrame(
-            {"High": [101.0]*5, "Low": [99.0]*5, "Close": [101.0, 102.0, 103.0, 104.0, 105.0], "available_at": avail},
+            {
+                "High": [101.0] * 5,
+                "Low": [99.0] * 5,
+                "Close": [101.0, 102.0, 103.0, 104.0, 105.0],
+                "available_at": avail,
+            },
             index=dates,
         )
-        self._create(ticker="X", action="long", stop_loss=None, take_profit=None,
-                     computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc))
+        self._create(
+            ticker="X",
+            action="long",
+            stop_loss=None,
+            take_profit=None,
+            computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
+        )
         self._eval(frame, as_of=datetime(2026, 1, 20, tzinfo=timezone.utc))
         out = self._get("X")
         # close[4]=105 > entry=100 → direction correct for long
@@ -1066,8 +1111,13 @@ class DirectionCorrectTests(EvalTestBase):
             {"High": [101.0], "Low": [99.0], "Close": [98.0], "available_at": avail},
             index=dates,
         )
-        self._create(ticker="Y", action="long", stop_loss=None, take_profit=None,
-                     computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc))
+        self._create(
+            ticker="Y",
+            action="long",
+            stop_loss=None,
+            take_profit=None,
+            computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
+        )
         self._eval(frame, as_of=datetime(2026, 1, 20, tzinfo=timezone.utc))
         out = self._get("Y")
         # close[0]=98 < entry=100 → direction wrong
@@ -1077,6 +1127,7 @@ class DirectionCorrectTests(EvalTestBase):
 # ══════════════════════════════════════════════════════════════════════════════
 # 4. PHANTOM TRADE LOGIC (end-to-end)
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class IntradayTruthDispatchTests(EvalTestBase):
     def test_intraday_data_is_used_even_when_daily_prefilter_says_no_entry(self) -> None:
@@ -1090,10 +1141,12 @@ class IntradayTruthDispatchTests(EvalTestBase):
             computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
         )
         daily = _daily_frame([("2026-01-06", 99.0, 95.0, 98.0)])
-        intraday = _intraday_frame([
-            ("2026-01-06T15:00:00Z", 100.5, 99.5, 100.2),
-            ("2026-01-06T15:05:00Z", 111.0, 100.0, 110.5),
-        ])
+        intraday = _intraday_frame(
+            [
+                ("2026-01-06T15:00:00Z", 100.5, 99.5, 100.2),
+                ("2026-01-06T15:05:00Z", 111.0, 100.0, 110.5),
+            ]
+        )
 
         self._eval_dispatch(daily, intraday, as_of=datetime(2026, 1, 7, tzinfo=timezone.utc))
 
@@ -1105,18 +1158,11 @@ class IntradayTruthDispatchTests(EvalTestBase):
 
 
 class PhantomTradeEndToEndTests(EvalTestBase):
-    """Phantom outcomes wire from signal_breakdown through to persisted outcome.
+    """Phantom outcomes wire from signal_breakdown through to persisted outcome."""
 
-    Design note: _prepare_price_histories only fetches price data when at least one
-    plan for a ticker has action in {long, short}.  For no_action/watchlist-only
-    tickers, no data is fetched, so phantom evaluation cannot fire end-to-end via
-    the normal batch path.  These tests therefore patch _prepare_price_histories
-    directly — the same approach used in test_repositories.py — to inject both daily
-    and intraday price caches.  This is the correct way to test phantom resolution
-    without also requiring a real long/short plan in the same batch.
-    """
-
-    def _phantom_cache(self, highs: list[float], lows: list[float], closes: list[float], ticker: str) -> dict:
+    def _phantom_cache(
+        self, highs: list[float], lows: list[float], closes: list[float], ticker: str
+    ) -> dict:
         """Build a price cache that provides BOTH daily and intraday frames.
 
         _resolve_trade_like_outcome only returns a terminal outcome from daily
@@ -1141,13 +1187,40 @@ class PhantomTradeEndToEndTests(EvalTestBase):
         with patch.object(svc, "_prepare_price_histories", return_value=(cache, [])):
             svc.run_evaluation([plan.id or 0], as_of=as_of)
 
+    def test_phantom_capable_no_action_loads_price_history_without_real_trade_plan(self) -> None:
+        self._create(
+            ticker="NFLX",
+            action="no_action",
+            signal_breakdown={"intended_action": "long"},
+            entry_price_low=100.0,
+            entry_price_high=100.0,
+            stop_loss=90.0,
+            take_profit=110.0,
+            computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
+        )
+        daily = _daily_frame([("2026-01-06", 100.5, 99.0, 100.2)])
+        intraday = _intraday_frame(
+            [
+                ("2026-01-06T15:00:00Z", 100.5, 99.0, 100.2),
+                ("2026-01-06T15:05:00Z", 111.0, 100.0, 110.5),
+            ]
+        )
+
+        self._eval_dispatch(daily, intraday, as_of=datetime(2026, 1, 7, tzinfo=timezone.utc))
+
+        out = self._get("NFLX")
+        self.assertEqual(out.outcome, "phantom_win")
+        self.assertTrue(out.entry_touched)
+
     def test_phantom_win_for_no_action_long_when_take_profit_reached(self) -> None:
         plan = self._create(
             ticker="NFLX",
             action="no_action",
             signal_breakdown={"intended_action": "long"},
-            entry_price_low=100.0, entry_price_high=100.0,
-            stop_loss=90.0, take_profit=110.0,
+            entry_price_low=100.0,
+            entry_price_high=100.0,
+            stop_loss=90.0,
+            take_profit=110.0,
             computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
         )
         cache = self._phantom_cache([100.5, 111.0], [99.0, 109.0], [100.2, 110.5], "NFLX")
@@ -1164,8 +1237,10 @@ class PhantomTradeEndToEndTests(EvalTestBase):
             ticker="NFLX",
             action="no_action",
             signal_breakdown={"intended_action": "long"},
-            entry_price_low=100.0, entry_price_high=100.0,
-            stop_loss=90.0, take_profit=110.0,
+            entry_price_low=100.0,
+            entry_price_high=100.0,
+            stop_loss=90.0,
+            take_profit=110.0,
             computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
         )
         cache = self._phantom_cache([100.5, 89.0], [99.0, 85.0], [100.2, 87.0], "NFLX")
@@ -1184,8 +1259,10 @@ class PhantomTradeEndToEndTests(EvalTestBase):
             ticker="AMD",
             action="watchlist",
             signal_breakdown={"intended_action": "long"},
-            entry_price_low=100.0, entry_price_high=100.0,
-            stop_loss=90.0, take_profit=120.0,
+            entry_price_low=100.0,
+            entry_price_high=100.0,
+            stop_loss=90.0,
+            take_profit=120.0,
             computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
         )
         cache = self._phantom_cache([115.0, 112.0], [105.0, 108.0], [112.0, 110.0], "AMD")
@@ -1203,8 +1280,10 @@ class PhantomTradeEndToEndTests(EvalTestBase):
             ticker="AMD2",
             action="watchlist",
             signal_breakdown={"intended_action": "long"},
-            entry_price_low=100.0, entry_price_high=100.0,
-            stop_loss=90.0, take_profit=120.0,
+            entry_price_low=100.0,
+            entry_price_high=100.0,
+            stop_loss=90.0,
+            take_profit=120.0,
             computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
         )
         cache = self._phantom_cache([100.24, 112.0], [100.02, 108.0], [111.5, 110.0], "AMD2")
@@ -1221,8 +1300,10 @@ class PhantomTradeEndToEndTests(EvalTestBase):
             ticker="SBUX",
             action="watchlist",
             signal_breakdown={"intended_action": "short"},
-            entry_price_low=100.0, entry_price_high=100.0,
-            stop_loss=110.0, take_profit=90.0,
+            entry_price_low=100.0,
+            entry_price_high=100.0,
+            stop_loss=110.0,
+            take_profit=90.0,
             computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
         )
         cache = self._phantom_cache([100.5, 89.0], [99.0, 88.0], [100.0, 88.5], "SBUX")
@@ -1236,8 +1317,10 @@ class PhantomTradeEndToEndTests(EvalTestBase):
             ticker="INTC",
             action="no_action",
             signal_breakdown={},
-            entry_price_low=100.0, entry_price_high=100.0,
-            stop_loss=90.0, take_profit=110.0,
+            entry_price_low=100.0,
+            entry_price_high=100.0,
+            stop_loss=90.0,
+            take_profit=110.0,
             computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
         )
         cache = self._phantom_cache([100.5, 111.0], [99.0, 109.0], [100.2, 110.5], "INTC")
@@ -1251,8 +1334,9 @@ class PhantomTradeEndToEndTests(EvalTestBase):
             ticker="CSCO",
             action="no_action",
             signal_breakdown={"intended_action": "long"},
-            entry_price_low=100.0, entry_price_high=100.0,
-            stop_loss=None,       # missing stop → phantom disqualified
+            entry_price_low=100.0,
+            entry_price_high=100.0,
+            stop_loss=None,  # missing stop → phantom disqualified
             take_profit=110.0,
             computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
         )
@@ -1266,8 +1350,10 @@ class PhantomTradeEndToEndTests(EvalTestBase):
             ticker="ORCL",
             action="no_action",
             signal_breakdown={"intended_action": "long"},
-            entry_price_low=None, entry_price_high=None,  # no entry → phantom disqualified
-            stop_loss=90.0, take_profit=110.0,
+            entry_price_low=None,
+            entry_price_high=None,  # no entry → phantom disqualified
+            stop_loss=90.0,
+            take_profit=110.0,
             computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
         )
         cache = self._phantom_cache([100.5, 111.0], [99.0, 109.0], [100.2, 110.5], "ORCL")
@@ -1280,8 +1366,10 @@ class PhantomTradeEndToEndTests(EvalTestBase):
             ticker="IBM",
             action="watchlist",
             signal_breakdown={},
-            entry_price_low=100.0, entry_price_high=100.0,
-            stop_loss=90.0, take_profit=110.0,
+            entry_price_low=100.0,
+            entry_price_high=100.0,
+            stop_loss=90.0,
+            take_profit=110.0,
             computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
         )
         cache = self._phantom_cache([100.5, 111.0], [99.0, 109.0], [100.2, 110.5], "IBM")
@@ -1295,8 +1383,10 @@ class PhantomTradeEndToEndTests(EvalTestBase):
             ticker="AMZN",
             action="no_action",
             signal_breakdown={"intended_action": "long"},
-            entry_price_low=100.0, entry_price_high=100.0,
-            stop_loss=90.0, take_profit=110.0,
+            entry_price_low=100.0,
+            entry_price_high=100.0,
+            stop_loss=90.0,
+            take_profit=110.0,
             computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
         )
         cache = self._phantom_cache([112.0], [88.0], [100.0], "AMZN")
@@ -1310,6 +1400,7 @@ class PhantomTradeEndToEndTests(EvalTestBase):
 # ══════════════════════════════════════════════════════════════════════════════
 # 5. EXPIRY AND HORIZON CUTOFF
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class ExpiryTests(EvalTestBase):
     """Plans past horizon cutoff expire; plans before cutoff stay open."""
@@ -1343,16 +1434,29 @@ class ExpiryTests(EvalTestBase):
 
     def test_already_resolved_outcome_is_never_expired(self) -> None:
         # Even if as_of is way past the horizon, a resolved outcome stays resolved
-        plan = self._create(ticker="EOG", action="long",
-                            computed_at=datetime(2026, 1, 1, 15, 0, tzinfo=timezone.utc))
-        self.outcomes.upsert_outcome(RecommendationPlanOutcome(
-            recommendation_plan_id=plan.id or 0,
-            ticker="EOG", action="long", outcome="win", status="resolved",
-            confidence_bucket="65_to_79", setup_family="breakout",
-        ))
+        plan = self._create(
+            ticker="EOG",
+            action="long",
+            computed_at=datetime(2026, 1, 1, 15, 0, tzinfo=timezone.utc),
+        )
+        self.outcomes.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=plan.id or 0,
+                ticker="EOG",
+                action="long",
+                outcome="win",
+                status="resolved",
+                confidence_bucket="65_to_79",
+                setup_family="breakout",
+            )
+        )
         # run_evaluation with explicit plan_id always re-evaluates, but batch skips resolved
         # batch mode (no plan_ids) → skip since resolved
-        with patch.object(RecommendationPlanEvaluationService, "_download_price_history", return_value=pd.DataFrame()):
+        with patch.object(
+            RecommendationPlanEvaluationService,
+            "_download_price_history",
+            return_value=pd.DataFrame(),
+        ):
             result = RecommendationPlanEvaluationService(self.session).run_evaluation(
                 as_of=datetime(2030, 1, 1, tzinfo=timezone.utc)
             )
@@ -1377,16 +1481,23 @@ class ExpiryTests(EvalTestBase):
 # 6. BATCH FILTERING AND PLAN LISTING
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class BatchFilteringTests(EvalTestBase):
     """_list_plans respects batch-skip and explicit-override rules."""
 
     def test_batch_skips_resolved_plan(self) -> None:
         plan = self._create(ticker="AAPL", action="long")
-        self.outcomes.upsert_outcome(RecommendationPlanOutcome(
-            recommendation_plan_id=plan.id or 0,
-            ticker="AAPL", action="long", outcome="win", status="resolved",
-            confidence_bucket="80_plus", setup_family="breakout",
-        ))
+        self.outcomes.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=plan.id or 0,
+                ticker="AAPL",
+                action="long",
+                outcome="win",
+                status="resolved",
+                confidence_bucket="80_plus",
+                setup_family="breakout",
+            )
+        )
         svc = RecommendationPlanEvaluationService(self.session)
         listed = svc._list_plans(None)
         self.assertNotIn(plan.id, {p.id for p in listed})
@@ -1399,11 +1510,17 @@ class BatchFilteringTests(EvalTestBase):
 
     def test_explicit_plan_ids_override_resolved_filter(self) -> None:
         plan = self._create(ticker="GOOG", action="long")
-        self.outcomes.upsert_outcome(RecommendationPlanOutcome(
-            recommendation_plan_id=plan.id or 0,
-            ticker="GOOG", action="long", outcome="loss", status="resolved",
-            confidence_bucket="65_to_79", setup_family="breakout",
-        ))
+        self.outcomes.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=plan.id or 0,
+                ticker="GOOG",
+                action="long",
+                outcome="loss",
+                status="resolved",
+                confidence_bucket="65_to_79",
+                setup_family="breakout",
+            )
+        )
         svc = RecommendationPlanEvaluationService(self.session)
         listed = svc._list_plans([plan.id or 0])
         self.assertEqual([p.id for p in listed], [plan.id])
@@ -1422,11 +1539,18 @@ class BatchFilteringTests(EvalTestBase):
         self.assertIn(p3.id, plan_ids)
 
     def test_multiple_open_plans_same_ticker_both_evaluated(self) -> None:
-        p1 = self._create(ticker="NVDA", action="long",
-                          computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc))
-        p2 = self._create(ticker="NVDA", action="short",
-                          computed_at=datetime(2026, 1, 6, 15, 0, tzinfo=timezone.utc),
-                          stop_loss=110.0, take_profit=90.0)
+        p1 = self._create(
+            ticker="NVDA",
+            action="long",
+            computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
+        )
+        p2 = self._create(
+            ticker="NVDA",
+            action="short",
+            computed_at=datetime(2026, 1, 6, 15, 0, tzinfo=timezone.utc),
+            stop_loss=110.0,
+            take_profit=90.0,
+        )
         svc = RecommendationPlanEvaluationService(self.session)
         listed = svc._list_plans(None)
         plan_ids = {p.id for p in listed}
@@ -1438,29 +1562,51 @@ class BatchFilteringTests(EvalTestBase):
 # 7. PRICE DATA SOURCE RESOLUTION
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class PriceDataSourceTests(EvalTestBase):
     """Persisted data is preferred; yfinance is only used as fallback."""
 
     def test_persisted_intraday_bars_used_without_downloading(self) -> None:
-        self._create(ticker="EOG", action="long",
-                     entry_price_low=100.0, entry_price_high=101.0,
-                     stop_loss=96.0, take_profit=106.0,
-                     computed_at=datetime(2024, 1, 1, 15, 0, tzinfo=timezone.utc))
+        self._create(
+            ticker="EOG",
+            action="long",
+            entry_price_low=100.0,
+            entry_price_high=101.0,
+            stop_loss=96.0,
+            take_profit=106.0,
+            computed_at=datetime(2024, 1, 1, 15, 0, tzinfo=timezone.utc),
+        )
         # Insert two persisted intraday bars: first touches entry, second hits stop
         for bar_time, avail, high, low, close in [
-            (datetime(2024, 1, 1, 15, 30, tzinfo=timezone.utc),
-             datetime(2024, 1, 1, 15, 30, tzinfo=timezone.utc),
-             101.5, 99.8, 101.0),
-            (datetime(2024, 1, 1, 16, 30, tzinfo=timezone.utc),
-             datetime(2024, 1, 1, 16, 30, tzinfo=timezone.utc),
-             102.0, 95.5, 96.0),
+            (
+                datetime(2024, 1, 1, 15, 30, tzinfo=timezone.utc),
+                datetime(2024, 1, 1, 15, 30, tzinfo=timezone.utc),
+                101.5,
+                99.8,
+                101.0,
+            ),
+            (
+                datetime(2024, 1, 1, 16, 30, tzinfo=timezone.utc),
+                datetime(2024, 1, 1, 16, 30, tzinfo=timezone.utc),
+                102.0,
+                95.5,
+                96.0,
+            ),
         ]:
-            self.market_data.upsert_bar(HistoricalMarketBar(
-                ticker="EOG", timeframe="1h",
-                bar_time=bar_time, available_at=avail,
-                open_price=100.0, high_price=high, low_price=low, close_price=close,
-                volume=1000, source="fixture",
-            ))
+            self.market_data.upsert_bar(
+                HistoricalMarketBar(
+                    ticker="EOG",
+                    timeframe="1h",
+                    bar_time=bar_time,
+                    available_at=avail,
+                    open_price=100.0,
+                    high_price=high,
+                    low_price=low,
+                    close_price=close,
+                    volume=1000,
+                    source="fixture",
+                )
+            )
 
         with patch.object(
             RecommendationPlanEvaluationService,
@@ -1474,25 +1620,44 @@ class PriceDataSourceTests(EvalTestBase):
         self.assertTrue(out.stop_loss_hit)
 
     def test_yfinance_fallback_used_when_persisted_daily_incomplete(self) -> None:
-        self._create(ticker="EOG", action="long",
-                     entry_price_low=151.89, entry_price_high=151.89,
-                     stop_loss=149.09, take_profit=156.21,
-                     computed_at=datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc))
+        self._create(
+            ticker="EOG",
+            action="long",
+            entry_price_low=151.89,
+            entry_price_high=151.89,
+            stop_loss=149.09,
+            take_profit=156.21,
+            computed_at=datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc),
+        )
         persisted = pd.DataFrame(
-            {"High": [152.18], "Low": [148.75], "Close": [150.98],
-             "available_at": pd.to_datetime(["2026-03-30T23:59:59Z"], utc=True)},
+            {
+                "High": [152.18],
+                "Low": [148.75],
+                "Close": [150.98],
+                "available_at": pd.to_datetime(["2026-03-30T23:59:59Z"], utc=True),
+            },
             index=pd.to_datetime(["2026-03-30T00:00:00Z"], utc=True),
         )
         # as_of is 2026-03-31 → persisted only covers 3-30, so it's incomplete
         downloaded = pd.DataFrame(
-            {"High": [152.18], "Low": [148.75], "Close": [150.98],
-             "available_at": pd.to_datetime(["2026-03-31T23:59:59Z"], utc=True)},
+            {
+                "High": [152.18],
+                "Low": [148.75],
+                "Close": [150.98],
+                "available_at": pd.to_datetime(["2026-03-31T23:59:59Z"], utc=True),
+            },
             index=pd.to_datetime(["2026-03-31T00:00:00Z"], utc=True),
         )
-        with patch.object(RecommendationPlanEvaluationService, "_load_persisted_price_history",
-                          return_value=persisted) as mock_persisted:
-            with patch.object(RecommendationPlanEvaluationService, "_download_price_history",
-                              return_value=downloaded) as mock_download:
+        with patch.object(
+            RecommendationPlanEvaluationService,
+            "_load_persisted_price_history",
+            return_value=persisted,
+        ) as mock_persisted:
+            with patch.object(
+                RecommendationPlanEvaluationService,
+                "_download_price_history",
+                return_value=downloaded,
+            ) as mock_download:
                 RecommendationPlanEvaluationService(self.session).run_evaluation(
                     as_of=datetime(2026, 3, 31, 21, 0, tzinfo=timezone.utc)
                 )
@@ -1500,45 +1665,61 @@ class PriceDataSourceTests(EvalTestBase):
         self.assertEqual(mock_persisted.call_count, 2)
 
     def test_as_of_is_passed_as_upper_bound_to_price_history(self) -> None:
-        self._create(ticker="EOG", action="long",
-                     computed_at=datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc))
+        self._create(
+            ticker="EOG",
+            action="long",
+            computed_at=datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc),
+        )
         captured_ends: list[datetime] = []
 
-        def _fake_load(ticker, start, end, *, intraday_only=False, require_full_coverage=False,
-                       plan_ids=None) -> pd.DataFrame:
+        def _fake_load(
+            ticker, start, end, *, intraday_only=False, require_full_coverage=False, plan_ids=None
+        ) -> pd.DataFrame:
             captured_ends.append(end)
             return pd.DataFrame(
-                {"High": [152.18], "Low": [148.75], "Close": [150.98],
-                 "available_at": pd.to_datetime(["2026-03-30T23:59:59Z"], utc=True)},
+                {
+                    "High": [152.18],
+                    "Low": [148.75],
+                    "Close": [150.98],
+                    "available_at": pd.to_datetime(["2026-03-30T23:59:59Z"], utc=True),
+                },
                 index=pd.to_datetime(["2026-03-30T00:00:00Z"], utc=True),
             )
 
         as_of = datetime(2026, 3, 30, 21, 30, tzinfo=timezone.utc)
-        with patch.object(RecommendationPlanEvaluationService, "_load_price_history",
-                          side_effect=_fake_load):
+        with patch.object(
+            RecommendationPlanEvaluationService, "_load_price_history", side_effect=_fake_load
+        ):
             RecommendationPlanEvaluationService(self.session).run_evaluation(as_of=as_of)
 
         self.assertTrue(all(end == as_of for end in captured_ends))
 
     def test_multiindex_yfinance_columns_are_flattened_before_evaluation(self) -> None:
-        self._create(ticker="EOG", action="long",
-                     entry_price_low=151.89, entry_price_high=151.89,
-                     stop_loss=149.09, take_profit=156.21,
-                     computed_at=datetime(2026, 3, 30, 21, 0, tzinfo=timezone.utc))
+        self._create(
+            ticker="EOG",
+            action="long",
+            entry_price_low=151.89,
+            entry_price_high=151.89,
+            stop_loss=149.09,
+            take_profit=156.21,
+            computed_at=datetime(2026, 3, 30, 21, 0, tzinfo=timezone.utc),
+        )
         mi_df = pd.DataFrame(
             {
                 ("High", "EOG"): [152.0, 151.28],
-                ("Low", "EOG"):  [149.39, 141.75],
+                ("Low", "EOG"): [149.39, 141.75],
                 ("Close", "EOG"): [149.89, 143.37],
-                ("Open", "EOG"):  [151.03, 149.0],
+                ("Open", "EOG"): [151.03, 149.0],
                 ("Volume", "EOG"): [1234567, 2345678],
             },
             index=pd.to_datetime(["2026-03-30T00:00:00Z", "2026-03-31T00:00:00Z"], utc=True),
         )
         mi_df.columns = pd.MultiIndex.from_tuples(mi_df.columns, names=["Price", "Ticker"])
 
-        with patch("trade_proposer_app.services.recommendation_plan_evaluations.yf.download",
-                   return_value=mi_df):
+        with patch(
+            "trade_proposer_app.services.recommendation_plan_evaluations.yf.download",
+            return_value=mi_df,
+        ):
             RecommendationPlanEvaluationService(self.session).run_evaluation(
                 as_of=datetime(2026, 3, 31, 21, 0, tzinfo=timezone.utc)
             )
@@ -1559,18 +1740,25 @@ class IntradayVsDailyResolutionTests(EvalTestBase):
         horizon return metrics from the daily evaluation.
         """
         # Plan computed at 14:00 UTC
-        plan = self._create(ticker="SKEW", action="long", entry_price_low=100.0,
-                            stop_loss=95.0, take_profit=110.0,
-                            computed_at=datetime(2026, 1, 5, 14, 0, tzinfo=timezone.utc))
+        plan = self._create(
+            ticker="SKEW",
+            action="long",
+            entry_price_low=100.0,
+            stop_loss=95.0,
+            take_profit=110.0,
+            computed_at=datetime(2026, 1, 5, 14, 0, tzinfo=timezone.utc),
+        )
 
         # Daily data shows Close=105 on Day 1 (+5.0% return)
         daily = _daily_frame([("2026-01-05T00:00:00Z", 106.0, 94.0, 105.0)])
 
         # Intraday data shows stop hit at 15:00 UTC
-        intraday = _intraday_frame([
-            ("2026-01-05T14:30:00Z", 101.0, 99.0, 100.5), # bar 0: entry touched
-            ("2026-01-05T15:00:00Z", 98.0, 94.0, 94.5),   # bar 1: stop hit
-        ])
+        intraday = _intraday_frame(
+            [
+                ("2026-01-05T14:30:00Z", 101.0, 99.0, 100.5),  # bar 0: entry touched
+                ("2026-01-05T15:00:00Z", 98.0, 94.0, 94.5),  # bar 1: stop hit
+            ]
+        )
 
         self._eval_dispatch(daily, intraday, as_of=datetime(2026, 1, 6, tzinfo=timezone.utc))
         out = self._get("SKEW")
@@ -1586,41 +1774,71 @@ class IntradayVsDailyResolutionTests(EvalTestBase):
         # Daily bar: entry touched + stop hit → outcome would be "loss"
         # Intraday bar: entry not touched → outcome "no_entry"
         # Service should prefer intraday result
-        self._create(ticker="EOG", action="long",
-                     entry_price_low=151.18, entry_price_high=151.18,
-                     stop_loss=148.48, take_profit=155.37,
-                     computed_at=datetime(2026, 3, 31, 15, 0, tzinfo=timezone.utc))
+        self._create(
+            ticker="EOG",
+            action="long",
+            entry_price_low=151.18,
+            entry_price_high=151.18,
+            stop_loss=148.48,
+            take_profit=155.37,
+            computed_at=datetime(2026, 3, 31, 15, 0, tzinfo=timezone.utc),
+        )
 
         daily = pd.DataFrame(
-            {"High": [152.18], "Low": [148.0], "Close": [150.98],
-             "available_at": pd.to_datetime(["2026-03-31T23:59:59Z"], utc=True)},
+            {
+                "High": [152.18],
+                "Low": [148.0],
+                "Close": [150.98],
+                "available_at": pd.to_datetime(["2026-03-31T23:59:59Z"], utc=True),
+            },
             index=pd.to_datetime(["2026-03-31T00:00:00Z"], utc=True),
         )
         intraday = pd.DataFrame(
-            {"High": [150.78, 150.73, 150.57], "Low": [150.52, 150.32, 150.01],
-             "Close": [150.57, 150.52, 150.12],
-             "available_at": pd.to_datetime(
-                 ["2026-03-31T15:05:00Z", "2026-03-31T15:10:00Z", "2026-03-31T15:15:00Z"], utc=True)},
+            {
+                "High": [150.78, 150.73, 150.57],
+                "Low": [150.52, 150.32, 150.01],
+                "Close": [150.57, 150.52, 150.12],
+                "available_at": pd.to_datetime(
+                    ["2026-03-31T15:05:00Z", "2026-03-31T15:10:00Z", "2026-03-31T15:15:00Z"],
+                    utc=True,
+                ),
+            },
             index=pd.to_datetime(
-                ["2026-03-31T15:00:00Z", "2026-03-31T15:05:00Z", "2026-03-31T15:10:00Z"], utc=True),
+                ["2026-03-31T15:00:00Z", "2026-03-31T15:05:00Z", "2026-03-31T15:10:00Z"], utc=True
+            ),
         )
-        self._eval_dispatch(daily, intraday, as_of=datetime(2026, 3, 31, 15, 30, tzinfo=timezone.utc))
+        self._eval_dispatch(
+            daily, intraday, as_of=datetime(2026, 3, 31, 15, 30, tzinfo=timezone.utc)
+        )
         out = self._get("EOG")
         # Intraday bars never touch 151.18 → no_entry from intraday path
         self.assertEqual(out.outcome, "no_entry")
 
     def test_missing_intraday_history_leaves_daily_no_entry_open(self) -> None:
-        self._create(ticker="EOG", action="long",
-                     entry_price_low=151.89, entry_price_high=151.89,
-                     stop_loss=149.09, take_profit=156.21,
-                     computed_at=datetime(2026, 3, 31, 15, 0, tzinfo=timezone.utc))
+        self._create(
+            ticker="EOG",
+            action="long",
+            entry_price_low=151.89,
+            entry_price_high=151.89,
+            stop_loss=149.09,
+            take_profit=156.21,
+            computed_at=datetime(2026, 3, 31, 15, 0, tzinfo=timezone.utc),
+        )
         daily = pd.DataFrame(
-            {"High": [152.18, 151.28], "Low": [148.75, 141.75], "Close": [150.98, 143.37],
-             "available_at": pd.to_datetime(["2026-03-30T23:59:59Z", "2026-03-31T23:59:59Z"], utc=True)},
+            {
+                "High": [152.18, 151.28],
+                "Low": [148.75, 141.75],
+                "Close": [150.98, 143.37],
+                "available_at": pd.to_datetime(
+                    ["2026-03-30T23:59:59Z", "2026-03-31T23:59:59Z"], utc=True
+                ),
+            },
             index=pd.to_datetime(["2026-03-30T00:00:00Z", "2026-03-31T00:00:00Z"], utc=True),
         )
         empty_intraday = pd.DataFrame(columns=["High", "Low", "Close", "available_at"])
-        self._eval_dispatch(daily, empty_intraday, as_of=datetime(2026, 3, 31, 15, 30, tzinfo=timezone.utc))
+        self._eval_dispatch(
+            daily, empty_intraday, as_of=datetime(2026, 3, 31, 15, 30, tzinfo=timezone.utc)
+        )
         out = self._get("EOG")
         # Daily sees 148.75 < 149.09 → stop would fire, but no_entry comes first
         # plan time=15:00, daily available_at=23:59 Mar 30 → bar not in scope for Mar 31 plan
@@ -1631,13 +1849,17 @@ class IntradayVsDailyResolutionTests(EvalTestBase):
 # 8. NON-TRADE PLAN HANDLING
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class NonTradePlanTests(EvalTestBase):
     """no_action and watchlist plans without phantom qualification resolve without price data."""
 
     def test_no_action_plan_resolves_without_price_lookup(self) -> None:
         self._create(ticker="MSFT", action="no_action", signal_breakdown={})
-        with patch.object(RecommendationPlanEvaluationService, "_download_price_history",
-                          side_effect=AssertionError("should not call download for pure no_action")):
+        with patch.object(
+            RecommendationPlanEvaluationService,
+            "_download_price_history",
+            side_effect=AssertionError("should not call download for pure no_action"),
+        ):
             RecommendationPlanEvaluationService(self.session).run_evaluation()
         out = self._get("MSFT")
         self.assertEqual(out.outcome, "no_action")
@@ -1645,16 +1867,22 @@ class NonTradePlanTests(EvalTestBase):
 
     def test_watchlist_plan_resolves_without_price_lookup(self) -> None:
         self._create(ticker="AMZN", action="watchlist", signal_breakdown={})
-        with patch.object(RecommendationPlanEvaluationService, "_download_price_history",
-                          side_effect=AssertionError("should not call download for pure watchlist")):
+        with patch.object(
+            RecommendationPlanEvaluationService,
+            "_download_price_history",
+            side_effect=AssertionError("should not call download for pure watchlist"),
+        ):
             RecommendationPlanEvaluationService(self.session).run_evaluation()
         out = self._get("AMZN")
         self.assertEqual(out.outcome, "watchlist")
 
     def test_no_action_run_result_counts_correctly(self) -> None:
         self._create(ticker="TSLA", action="no_action", signal_breakdown={})
-        with patch.object(RecommendationPlanEvaluationService, "_download_price_history",
-                          return_value=pd.DataFrame()):
+        with patch.object(
+            RecommendationPlanEvaluationService,
+            "_download_price_history",
+            return_value=pd.DataFrame(),
+        ):
             result = RecommendationPlanEvaluationService(self.session).run_evaluation()
         self.assertEqual(result.no_action_recommendation_plan_outcomes, 1)
         self.assertEqual(result.win_recommendation_plan_outcomes, 0)
@@ -1664,28 +1892,47 @@ class NonTradePlanTests(EvalTestBase):
 # 9. OUTCOME UPSERT — RECOMPUTE AND PERSISTENCE
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class OutcomeUpsertTests(EvalTestBase):
     """Outcomes are upserted (updated on re-evaluation), not duplicated."""
 
     def test_recomputed_outcome_overwrites_prior(self) -> None:
-        plan = self._create(ticker="EOG", action="long",
-                            entry_price_low=160.0, entry_price_high=160.0,
-                            stop_loss=158.0, take_profit=165.0,
-                            computed_at=datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc))
+        plan = self._create(
+            ticker="EOG",
+            action="long",
+            entry_price_low=160.0,
+            entry_price_high=160.0,
+            stop_loss=158.0,
+            take_profit=165.0,
+            computed_at=datetime(2026, 3, 30, 15, 0, tzinfo=timezone.utc),
+        )
         # Seed a win outcome
-        self.outcomes.upsert_outcome(RecommendationPlanOutcome(
-            recommendation_plan_id=plan.id or 0,
-            ticker="EOG", action="long", outcome="win", status="resolved",
-            confidence_bucket="65_to_79", setup_family="breakout",
-        ))
+        self.outcomes.upsert_outcome(
+            RecommendationPlanOutcome(
+                recommendation_plan_id=plan.id or 0,
+                ticker="EOG",
+                action="long",
+                outcome="win",
+                status="resolved",
+                confidence_bucket="65_to_79",
+                setup_family="breakout",
+            )
+        )
         # Re-evaluate with price data showing no_entry
         new_data = pd.DataFrame(
-            {"High": [151.87, 151.28], "Low": [149.39, 141.75], "Close": [149.89, 143.37],
-             "available_at": pd.to_datetime(["2026-03-30T23:59:59Z", "2026-03-31T23:59:59Z"], utc=True)},
+            {
+                "High": [151.87, 151.28],
+                "Low": [149.39, 141.75],
+                "Close": [149.89, 143.37],
+                "available_at": pd.to_datetime(
+                    ["2026-03-30T23:59:59Z", "2026-03-31T23:59:59Z"], utc=True
+                ),
+            },
             index=pd.to_datetime(["2026-03-30T00:00:00Z", "2026-03-31T00:00:00Z"], utc=True),
         )
-        with patch.object(RecommendationPlanEvaluationService, "_download_price_history",
-                          return_value=new_data):
+        with patch.object(
+            RecommendationPlanEvaluationService, "_download_price_history", return_value=new_data
+        ):
             RecommendationPlanEvaluationService(self.session).run_evaluation(
                 recommendation_plan_ids=[plan.id or 0],
                 as_of=datetime(2026, 3, 31, 21, 0, tzinfo=timezone.utc),
@@ -1702,8 +1949,11 @@ class OutcomeUpsertTests(EvalTestBase):
         self.assertEqual(out.confidence_bucket, "80_plus")
 
     def test_outcome_stores_setup_family_from_signal_breakdown(self) -> None:
-        self._create(ticker="CRM", action="long",
-                     signal_breakdown={"setup_family": "catalyst_follow_through"})
+        self._create(
+            ticker="CRM",
+            action="long",
+            signal_breakdown={"setup_family": "catalyst_follow_through"},
+        )
         frame = _daily_frame([("2026-01-06T00:00:00Z", 111.0, 99.0, 110.5)])
         self._eval(frame)
         out = self._get("CRM")
@@ -1712,8 +1962,9 @@ class OutcomeUpsertTests(EvalTestBase):
     def test_outcome_stores_run_id_when_provided(self) -> None:
         plan = self._create(ticker="BIDU", action="long")
         frame = _daily_frame([("2026-01-06T00:00:00Z", 101.0, 99.0, 100.5)])
-        with patch.object(RecommendationPlanEvaluationService, "_download_price_history",
-                          return_value=frame):
+        with patch.object(
+            RecommendationPlanEvaluationService, "_download_price_history", return_value=frame
+        ):
             RecommendationPlanEvaluationService(self.session).run_evaluation(run_id=42)
         out = self._get("BIDU")
         self.assertEqual(out.run_id, 42)
@@ -1723,12 +1974,16 @@ class OutcomeUpsertTests(EvalTestBase):
 # 10. EvaluationRunResult COUNTS
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class RunResultCountTests(EvalTestBase):
     """EvaluationRunResult aggregates processed/synced/win/loss correctly."""
 
     def test_empty_db_returns_empty_result(self) -> None:
-        with patch.object(RecommendationPlanEvaluationService, "_download_price_history",
-                          return_value=pd.DataFrame()):
+        with patch.object(
+            RecommendationPlanEvaluationService,
+            "_download_price_history",
+            return_value=pd.DataFrame(),
+        ):
             result = RecommendationPlanEvaluationService(self.session).run_evaluation()
         self.assertEqual(result.evaluated_recommendation_plans, 0)
         self.assertEqual(result.synced_recommendation_plan_outcomes, 0)
@@ -1737,15 +1992,19 @@ class RunResultCountTests(EvalTestBase):
         self._create(ticker="A", action="long")
         frame = _daily_frame([("2026-01-06T00:00:00Z", 111.0, 99.0, 110.5)])
         self._eval(frame)
-        with patch.object(RecommendationPlanEvaluationService, "_download_price_history",
-                          return_value=frame):
+        with patch.object(
+            RecommendationPlanEvaluationService, "_download_price_history", return_value=frame
+        ):
             result = RecommendationPlanEvaluationService(self.session).run_evaluation()
         # Already resolved → skipped in batch
         self.assertEqual(result.win_recommendation_plan_outcomes, 0)
 
     def test_fresh_win_counted_correctly(self) -> None:
-        self._create(ticker="WINR", action="long",
-                     computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc))
+        self._create(
+            ticker="WINR",
+            action="long",
+            computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
+        )
         frame = _daily_frame([("2026-01-06T00:00:00Z", 111.0, 99.0, 110.5)])
         self._eval(frame)
         out = self._get("WINR")
@@ -1753,11 +2012,15 @@ class RunResultCountTests(EvalTestBase):
 
     def test_multiple_plans_all_counted(self) -> None:
         for ticker in ["A", "B", "C"]:
-            self._create(ticker=ticker, action="long",
-                         computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc))
+            self._create(
+                ticker=ticker,
+                action="long",
+                computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
+            )
         frame = _daily_frame([("2026-01-06T00:00:00Z", 111.0, 99.0, 110.5)])
-        with patch.object(RecommendationPlanEvaluationService, "_download_price_history",
-                          return_value=frame):
+        with patch.object(
+            RecommendationPlanEvaluationService, "_download_price_history", return_value=frame
+        ):
             result = RecommendationPlanEvaluationService(self.session).run_evaluation()
         self.assertEqual(result.evaluated_recommendation_plans, 3)
         self.assertEqual(result.synced_recommendation_plan_outcomes, 3)
@@ -1769,21 +2032,26 @@ class TickerNormalizationTests(EvalTestBase):
 
     def test_normalizes_lowercase_and_whitespace_ticker(self) -> None:
         dirty_ticker = "  aapl  "
-        self._create(ticker=dirty_ticker, action="long",
-                     computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc))
+        self._create(
+            ticker=dirty_ticker,
+            action="long",
+            computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
+        )
         # Provide cache with clean uppercase name
         frame = _daily_frame([("2026-01-06T00:00:00Z", 110.0, 100.0, 105.0)])
-        
-        with patch.object(RecommendationPlanEvaluationService, "_download_price_history",
-                          return_value=frame):
+
+        with patch.object(
+            RecommendationPlanEvaluationService, "_download_price_history", return_value=frame
+        ):
             RecommendationPlanEvaluationService(self.session).run_evaluation()
-            
+
         # We must look up by the EXACT dirty name because the repository does not normalize on save.
         # But we verify evaluation succeeded.
-        outcomes = self.outcomes.list_outcomes() # List all
+        outcomes = self.outcomes.list_outcomes()  # List all
         match = next(o for o in outcomes if dirty_ticker in o.ticker)
         self.assertEqual(match.ticker, dirty_ticker)
         self.assertEqual(match.outcome, "win")
+
 
 class SlicingEdgeCaseTests(EvalTestBase):
     """Boundary condition tests for the slicing logic."""
@@ -1791,16 +2059,17 @@ class SlicingEdgeCaseTests(EvalTestBase):
     def test_includes_bar_when_computed_at_equals_available_at_exactly(self) -> None:
         compute_time = datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc)
         self._create(ticker="EXACT", action="long", computed_at=compute_time)
-        
+
         # Bar available EXACTLY at plan compute time
         frame = pd.DataFrame(
             {"High": [110.0], "Low": [100.0], "Close": [105.0], "available_at": [compute_time]},
-            index=[compute_time]
+            index=[compute_time],
         )
-        
+
         self._eval(frame)
         out = self._get("EXACT")
-        self.assertEqual(out.outcome, "win") # Included bar was used
+        self.assertEqual(out.outcome, "win")  # Included bar was used
+
 
 class MultiIndexVariationsTests(EvalTestBase):
     """Verification of different MultiIndex level names from yfinance."""
@@ -1810,21 +2079,24 @@ class MultiIndexVariationsTests(EvalTestBase):
         df = pd.DataFrame(
             {
                 ("Close", "TSLA"): [105.0],
-                ("High", "TSLA"):  [110.0],
-                ("Low", "TSLA"):   [100.0],
+                ("High", "TSLA"): [110.0],
+                ("Low", "TSLA"): [100.0],
             },
-            index=pd.to_datetime(["2026-01-06"], utc=True)
+            index=pd.to_datetime(["2026-01-06"], utc=True),
         )
         # Note the level name is 'ticker' (lowercase)
         df.columns = pd.MultiIndex.from_tuples(df.columns, names=["Price", "ticker"])
-        
+
         # Patch yf.download directly to see the service's flattening logic
-        with patch("trade_proposer_app.services.recommendation_plan_evaluations.yf.download",
-                   return_value=df):
+        with patch(
+            "trade_proposer_app.services.recommendation_plan_evaluations.yf.download",
+            return_value=df,
+        ):
             RecommendationPlanEvaluationService(self.session).run_evaluation()
-            
+
         out = self._get("TSLA")
         self.assertEqual(out.outcome, "win")
+
 
 class HorizonReturnPrecisionTests(EvalTestBase):
     """Edge cases for return calculations with missing data."""
@@ -1834,14 +2106,19 @@ class HorizonReturnPrecisionTests(EvalTestBase):
         # 5th bar has NaN close
         dates = pd.date_range("2026-01-06", periods=5, freq="D", tz="UTC")
         frame = pd.DataFrame(
-            {"High": [100.0]*5, "Low": [100.0]*5, "Close": [101, 102, 103, 104, float('nan')], 
-             "available_at": dates + pd.Timedelta(hours=1)},
-            index=dates
+            {
+                "High": [100.0] * 5,
+                "Low": [100.0] * 5,
+                "Close": [101, 102, 103, 104, float("nan")],
+                "available_at": dates + pd.Timedelta(hours=1),
+            },
+            index=dates,
         )
         self._eval(frame)
         out = self._get("NAN")
         self.assertIsNone(out.horizon_return_5d)
         self.assertAlmostEqual(out.horizon_return_3d, 3.0)
+
 
 class DynamicRealismSettingsTests(EvalTestBase):
     """Verifies that the evaluator respects dynamic realism settings."""
@@ -1851,33 +2128,33 @@ class DynamicRealismSettingsTests(EvalTestBase):
         self.settings.set_evaluation_realism_config(
             stop_buffer_pct=0.1,  # 0.1% buffer
             take_profit_buffer_pct=0.1,
-            friction_pct=0.5      # 0.5% friction
+            friction_pct=0.5,  # 0.5% friction
         )
-        
+
         # entry=100, stop=99, take=101.
         # With 0.1% buffer:
         #   stop triggers at 99 + (99*0.001) = 99.099
         #   take triggers at 101 + (101*0.001) = 101.101
-        
+
         plan = self._create(
-            ticker="REAL", action="long", 
-            entry_price_low=100.0, stop_loss=99.0, take_profit=101.0
+            ticker="REAL", action="long", entry_price_low=100.0, stop_loss=99.0, take_profit=101.0
         )
-        
-        # Bar 1: Low hits 99.05. 
+
+        # Bar 1: Low hits 99.05.
         # Without buffer, this is NOT a stop (99.05 > 99).
         # With 0.1% buffer, it IS a stop (99.05 <= 99.099).
         frame = _daily_frame([("2026-01-06T00:00:00Z", 100.5, 99.05, 100.2)])
-        
+
         self._eval(frame)
         out = self._get("REAL")
-        
+
         self.assertEqual(out.outcome, "loss")
         self.assertTrue(out.stop_loss_hit)
-        
+
         # Return check: Close=100.2, Entry=100.0. Gross=+0.2%.
         # Friction=0.5%. Net = 0.2 - 0.5 = -0.3%.
         self.assertAlmostEqual(out.horizon_return_1d, -0.3)
+
 
 if __name__ == "__main__":
     unittest.main()

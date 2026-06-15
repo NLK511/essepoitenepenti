@@ -73,7 +73,23 @@ Still needed:
 - safer production defaults and guidance
 - optional external secret-backend support if needed
 
-### 4. Measured recommendation quality
+### 4. Production readiness and live broker safety
+Real-money execution must not be enabled until deployment, security, observability, and external broker evidence are production-ready.
+
+Already in place:
+- Alpaca paper execution records and broker-position lifecycle records
+- broker-account adapter abstraction with account-scoped credentials
+- per-broker execution settings, exposure limits, drawdown limits, kill switches, and circuit breakers
+- broker workbench visibility for submissions, positions, drawdown, circuit breakers, and operator actions
+- eToro read-only/demo plumbing, live gates, live-shadow audit rows, and fail-closed live adapter behavior
+- release-readiness script requiring eToro read-only/demo/live-shadow artifact ids
+
+Still needed:
+- production configuration hardening, backup/restore validation, incident runbooks, and staging soak following `production-readiness-plan.md`
+- real eToro external validation artifacts before any live-money implementation path
+- continued proof of measured trading edge before capital is increased
+
+### 5. Measured recommendation quality
 The next question is evidence quality, not raw feature count.
 
 Already in place:
@@ -89,7 +105,7 @@ Still needed:
 - continued comparison against simple baselines
 - validation of which setup families, horizons, transmission conditions, and regimes actually work in live data
 
-### 5. Redesign maturation
+### 6. Redesign maturation
 The redesign is already the active path.
 
 Already in place:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 SteeringDecisionName = Literal[
@@ -39,6 +39,7 @@ class BrokerSteeringConfig:
     deterioration_stop_cushion_percent: float = 0.35
     weakened_thesis_tp_cushion_percent: float = 0.50
     min_tp_distance_percent: float = 0.10
+    max_reconciliation_age_minutes: int = 30
     min_reviewed_dry_run_decisions_before_enable: int = 30
     min_reviewed_dry_run_amendments_before_enable: int = 10
     min_reviewed_dry_run_close_now_before_enable: int = 10
@@ -72,7 +73,9 @@ class BrokerSteeringState:
     broker_position_id: int | None = None
     broker_ownership_known: bool = True
     broker_reconciliation_healthy: bool = True
+    broker_reconciliation_age_minutes: float | None = None
     linked_exit_orders_missing: bool = False
+    position_holding_period_expired: bool = False
     expiration_at: datetime | None = None
     now: datetime | None = None
 
@@ -103,8 +106,10 @@ class BrokerSteeringEngine:
     PENDING_STATUSES = {"queued", "submitted", "accepted", "open", "new", "partially_filled"}
     TERMINAL_STATUSES = {"filled", "canceled", "rejected", "expired", "closed"}
 
-    def evaluate(self, state: BrokerSteeringState, config: BrokerSteeringConfig) -> BrokerSteeringDecision:
-        now = state.now or datetime.now(timezone.utc)
+    def evaluate(
+        self, state: BrokerSteeringState, config: BrokerSteeringConfig
+    ) -> BrokerSteeringDecision:
+        now = state.now or datetime.now(UTC)
         confidence = self._effective_confidence(state)
         if not self._direction_supported(state.direction):
             return self._manual_review(
@@ -145,7 +150,10 @@ class BrokerSteeringEngine:
             )
 
         invalidation_count = self._pending_invalidation_signals(state, config, confidence)
-        if config.cancel_invalidated_pending_orders_enabled and invalidation_count >= config.pending_invalidation_required_signals:
+        if (
+            config.cancel_invalidated_pending_orders_enabled
+            and invalidation_count >= config.pending_invalidation_required_signals
+        ):
             reason_codes.extend(self._pending_invalidation_reasons(state, config, confidence))
             return self._decision(
                 state,
@@ -154,7 +162,9 @@ class BrokerSteeringEngine:
                 reason_codes,
                 "Pending order no longer looks actionable.",
                 execute_allowed=True,
-                confidence="medium" if invalidation_count == config.pending_invalidation_required_signals else "high",
+                confidence="medium"
+                if invalidation_count == config.pending_invalidation_required_signals
+                else "high",
             )
 
         return self._decision(
@@ -181,9 +191,36 @@ class BrokerSteeringEngine:
                 "Broker ownership or reconciliation is uncertain; do not mutate exits.",
                 broker_confidence="low",
             )
+        if state.position_holding_period_expired:
+            return self._manual_review(
+                state,
+                ["position_holding_period_expired"],
+                "Position holding period expired; operator review is required before mutation.",
+                broker_confidence="low",
+            )
+        if self._reconciliation_stale(state, config):
+            return self._manual_review(
+                state,
+                ["broker_reconciliation_stale"],
+                "Broker reconciliation is stale or missing; do not mutate exits.",
+                broker_confidence="low",
+            )
+        if state.linked_exit_orders_missing:
+            return self._manual_review(
+                state,
+                ["position_linked_exit_orders_missing"],
+                (
+                    "Active protective child order evidence is missing or terminal; "
+                    "do not mutate exits."
+                ),
+                broker_confidence="low",
+            )
 
         severe_count = self._severe_invalidation_signals(state, config, confidence)
-        if config.close_on_severe_invalidation_enabled and severe_count >= config.position_close_required_signals:
+        if (
+            config.close_on_severe_invalidation_enabled
+            and severe_count >= config.position_close_required_signals
+        ):
             return self._decision(
                 state,
                 config,
@@ -191,7 +228,9 @@ class BrokerSteeringEngine:
                 self._severe_invalidation_reasons(state, config, confidence),
                 "Filled position thesis appears broken; close it now.",
                 execute_allowed=True,
-                confidence="high" if severe_count > config.position_close_required_signals else "medium",
+                confidence="high"
+                if severe_count > config.position_close_required_signals
+                else "medium",
                 proposed_stop_loss=state.current_stop_loss,
                 proposed_take_profit=state.current_take_profit,
             )
@@ -211,7 +250,10 @@ class BrokerSteeringEngine:
             )
 
         deterioration_count = self._deterioration_signals(state, config, confidence)
-        if config.tighten_on_deterioration_enabled and deterioration_count >= config.position_deterioration_required_signals:
+        if (
+            config.tighten_on_deterioration_enabled
+            and deterioration_count >= config.position_deterioration_required_signals
+        ):
             tightened_stop = self._tightened_stop(state, config, profit_lock)
             if tightened_stop is not None:
                 return self._decision(
@@ -221,12 +263,17 @@ class BrokerSteeringEngine:
                     self._deterioration_reasons(state, config, confidence),
                     "Thesis weakened; tighten the stop-loss.",
                     execute_allowed=True,
-                    confidence="medium" if deterioration_count == config.position_deterioration_required_signals else "high",
+                    confidence="medium"
+                    if deterioration_count == config.position_deterioration_required_signals
+                    else "high",
                     proposed_stop_loss=tightened_stop,
                     proposed_take_profit=state.current_take_profit,
                 )
 
-        if config.lower_tp_on_weakness_enabled and deterioration_count >= config.position_deterioration_required_signals:
+        if (
+            config.lower_tp_on_weakness_enabled
+            and deterioration_count >= config.position_deterioration_required_signals
+        ):
             lowered_tp = self._lowered_take_profit(state, config)
             if lowered_tp is not None:
                 return self._decision(
@@ -253,7 +300,9 @@ class BrokerSteeringEngine:
             proposed_take_profit=state.current_take_profit,
         )
 
-    def _pending_invalidation_signals(self, state: BrokerSteeringState, config: BrokerSteeringConfig, confidence: float | None) -> int:
+    def _pending_invalidation_signals(
+        self, state: BrokerSteeringState, config: BrokerSteeringConfig, confidence: float | None
+    ) -> int:
         signals = 0
         if confidence is not None and confidence < config.pending_min_confidence_percent:
             signals += 1
@@ -269,7 +318,9 @@ class BrokerSteeringEngine:
             signals += 1
         return signals
 
-    def _pending_invalidation_reasons(self, state: BrokerSteeringState, config: BrokerSteeringConfig, confidence: float | None) -> list[str]:
+    def _pending_invalidation_reasons(
+        self, state: BrokerSteeringState, config: BrokerSteeringConfig, confidence: float | None
+    ) -> list[str]:
         reasons: list[str] = []
         if confidence is not None and confidence < config.pending_min_confidence_percent:
             reasons.append("pending_confidence_below_threshold")
@@ -285,7 +336,15 @@ class BrokerSteeringEngine:
             reasons.append("pending_broker_uncertainty")
         return reasons
 
-    def _severe_invalidation_signals(self, state: BrokerSteeringState, config: BrokerSteeringConfig, confidence: float | None) -> int:
+    @staticmethod
+    def _reconciliation_stale(state: BrokerSteeringState, config: BrokerSteeringConfig) -> bool:
+        if state.broker_reconciliation_age_minutes is None:
+            return True
+        return state.broker_reconciliation_age_minutes > config.max_reconciliation_age_minutes
+
+    def _severe_invalidation_signals(
+        self, state: BrokerSteeringState, config: BrokerSteeringConfig, confidence: float | None
+    ) -> int:
         signals = 0
         if confidence is not None and confidence < config.position_close_confidence_percent:
             signals += 1
@@ -301,7 +360,9 @@ class BrokerSteeringEngine:
             signals += 1
         return signals
 
-    def _severe_invalidation_reasons(self, state: BrokerSteeringState, config: BrokerSteeringConfig, confidence: float | None) -> list[str]:
+    def _severe_invalidation_reasons(
+        self, state: BrokerSteeringState, config: BrokerSteeringConfig, confidence: float | None
+    ) -> list[str]:
         reasons: list[str] = []
         if confidence is not None and confidence < config.position_close_confidence_percent:
             reasons.append("position_confidence_below_close_threshold")
@@ -317,7 +378,9 @@ class BrokerSteeringEngine:
             reasons.append("position_linked_exit_orders_missing")
         return reasons
 
-    def _deterioration_signals(self, state: BrokerSteeringState, config: BrokerSteeringConfig, confidence: float | None) -> int:
+    def _deterioration_signals(
+        self, state: BrokerSteeringState, config: BrokerSteeringConfig, confidence: float | None
+    ) -> int:
         signals = 0
         if confidence is not None and confidence < config.position_min_hold_confidence_percent:
             signals += 1
@@ -331,7 +394,9 @@ class BrokerSteeringEngine:
             signals += 1
         return signals
 
-    def _deterioration_reasons(self, state: BrokerSteeringState, config: BrokerSteeringConfig, confidence: float | None) -> list[str]:
+    def _deterioration_reasons(
+        self, state: BrokerSteeringState, config: BrokerSteeringConfig, confidence: float | None
+    ) -> list[str]:
         reasons: list[str] = []
         if confidence is not None and confidence < config.position_min_hold_confidence_percent:
             reasons.append("position_confidence_below_hold_threshold")
@@ -345,7 +410,9 @@ class BrokerSteeringEngine:
             reasons.append("position_volatility_expanded")
         return reasons
 
-    def _profit_lock_stop(self, state: BrokerSteeringState, config: BrokerSteeringConfig) -> float | None:
+    def _profit_lock_stop(
+        self, state: BrokerSteeringState, config: BrokerSteeringConfig
+    ) -> float | None:
         entry = state.entry_price
         current = state.current_price
         if entry is None or current is None:
@@ -368,27 +435,39 @@ class BrokerSteeringEngine:
             return candidate
         return None
 
-    def _tightened_stop(self, state: BrokerSteeringState, config: BrokerSteeringConfig, profit_lock: float | None) -> float | None:
+    def _tightened_stop(
+        self, state: BrokerSteeringState, config: BrokerSteeringConfig, profit_lock: float | None
+    ) -> float | None:
         current = state.current_price
         if current is None:
             return None
         if self._is_long(state.direction):
             candidate = current * (1 - config.deterioration_stop_cushion_percent / 100.0)
-            baseline_candidates = [value for value in [state.current_stop_loss, state.original_stop_loss, profit_lock] if value is not None]
+            baseline_candidates = [
+                value
+                for value in [state.current_stop_loss, state.original_stop_loss, profit_lock]
+                if value is not None
+            ]
             baseline = max(baseline_candidates) if baseline_candidates else None
             if baseline is not None and candidate <= baseline:
                 return None
             return candidate
         if self._is_short(state.direction):
             candidate = current * (1 + config.deterioration_stop_cushion_percent / 100.0)
-            baseline_candidates = [value for value in [state.current_stop_loss, state.original_stop_loss, profit_lock] if value is not None]
+            baseline_candidates = [
+                value
+                for value in [state.current_stop_loss, state.original_stop_loss, profit_lock]
+                if value is not None
+            ]
             baseline = min(baseline_candidates) if baseline_candidates else None
             if baseline is not None and candidate >= baseline:
                 return None
             return candidate
         return None
 
-    def _lowered_take_profit(self, state: BrokerSteeringState, config: BrokerSteeringConfig) -> float | None:
+    def _lowered_take_profit(
+        self, state: BrokerSteeringState, config: BrokerSteeringConfig
+    ) -> float | None:
         current = state.current_price
         target = state.current_take_profit
         entry = state.entry_price
@@ -418,15 +497,23 @@ class BrokerSteeringEngine:
             return candidate
         return None
 
-    def _is_expired(self, state: BrokerSteeringState, now: datetime, config: BrokerSteeringConfig) -> bool:
+    def _is_expired(
+        self, state: BrokerSteeringState, now: datetime, config: BrokerSteeringConfig
+    ) -> bool:
         if state.expiration_at is None:
             return False
-        return now >= state.expiration_at + timedelta(minutes=config.pending_expiration_grace_minutes)
+        return now >= state.expiration_at + timedelta(
+            minutes=config.pending_expiration_grace_minutes
+        )
 
     def _price_chased_away(self, state: BrokerSteeringState, config: BrokerSteeringConfig) -> bool:
         if state.current_price is None or state.entry_price is None:
             return False
-        limit = state.price_chase_percent if state.price_chase_percent is not None else config.pending_price_chase_limit_percent
+        limit = (
+            state.price_chase_percent
+            if state.price_chase_percent is not None
+            else config.pending_price_chase_limit_percent
+        )
         if self._is_long(state.direction):
             return state.current_price >= state.entry_price * (1 + limit / 100.0)
         if self._is_short(state.direction):
@@ -474,11 +561,19 @@ class BrokerSteeringEngine:
         return str(direction or "").strip().lower() == "short"
 
     def _long_baseline_stop(self, state: BrokerSteeringState) -> float | None:
-        values = [value for value in [state.current_stop_loss, state.original_stop_loss] if value is not None]
+        values = [
+            value
+            for value in [state.current_stop_loss, state.original_stop_loss]
+            if value is not None
+        ]
         return max(values) if values else None
 
     def _short_baseline_stop(self, state: BrokerSteeringState) -> float | None:
-        values = [value for value in [state.current_stop_loss, state.original_stop_loss] if value is not None]
+        values = [
+            value
+            for value in [state.current_stop_loss, state.original_stop_loss]
+            if value is not None
+        ]
         return min(values) if values else None
 
     def _effective_confidence(self, state: BrokerSteeringState) -> float | None:
@@ -544,8 +639,10 @@ class BrokerSteeringEngine:
                 "has_open_position": state.has_open_position,
                 "confidence_percent": self._effective_confidence(state),
                 "broker_reconciliation_healthy": state.broker_reconciliation_healthy,
+                "broker_reconciliation_age_minutes": state.broker_reconciliation_age_minutes,
                 "linked_exit_orders_missing": state.linked_exit_orders_missing,
+                "position_holding_period_expired": state.position_holding_period_expired,
                 "expiration_at": state.expiration_at.isoformat() if state.expiration_at else None,
-                "now": (state.now or datetime.now(timezone.utc)).isoformat(),
+                "now": (state.now or datetime.now(UTC)).isoformat(),
             },
         )

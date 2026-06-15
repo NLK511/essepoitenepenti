@@ -15,7 +15,9 @@ export type JobType =
   | "industry_context_refresh"
   | "historical_replay"
   | "bars_data_refresh"
-  | "broker_steering";
+  | "broker_steering"
+  | "fundamental_analysis_refresh"
+  | "gating_severity_check";
 
 export type RecommendationDirection = "LONG" | "SHORT" | "NEUTRAL";
 export type RecommendationState = "PENDING" | "WIN" | "LOSS";
@@ -196,6 +198,7 @@ export interface ProviderCredential {
 
 export interface BrokerOrderExecution {
   id: number | null;
+  broker_account_id: string;
   broker: string;
   account_mode: string;
   recommendation_plan_id: number;
@@ -241,21 +244,71 @@ export interface BrokerSyncState {
   last_error: string | null;
 }
 
+export interface BrokerCircuitBreakerState {
+  broker_account_id: string;
+  active: boolean;
+  reason: string;
+  failure_count: number;
+  activated_at: string | null;
+  cleared_at: string | null;
+  clear_reason: string;
+}
+
+export interface BrokerDrawdownState {
+  broker_account_id: string;
+  current_equity: number | null;
+  daily_high_water_equity: number | null;
+  total_high_water_equity: number | null;
+  broker_timezone: string;
+  daily_boundary: string;
+  trusted: boolean;
+  baseline_source: string;
+}
+
+export interface BrokerAccountSummary {
+  broker_account_id: string;
+  broker: string;
+  account_mode: string;
+  account_label: string;
+  enabled: boolean;
+  autonomous_execution_enabled: boolean;
+  manual_actions_enabled: boolean;
+  validation_status: string;
+  risk_settings: Record<string, unknown>;
+  credential_reference: string;
+  mode_badge: string;
+  has_credentials: boolean;
+  circuit_breaker: BrokerCircuitBreakerState;
+  drawdown: BrokerDrawdownState | null;
+}
+
+export interface GlobalLiveSummary {
+  enabled_live_account_count: number;
+  enabled_live_broker_accounts: string[];
+  active_live_open_notional_usd: number;
+  live_order_count_today: number;
+}
+
 export interface BrokerWorkbench {
   broker_orders: BrokerOrderExecution[];
   broker_positions: BrokerPosition[];
+  broker_accounts?: BrokerAccountSummary[];
+  global_broker_risk_caps?: Record<string, number | null>;
+  global_live_summary?: GlobalLiveSummary;
   risk: AccountRiskState;
   risk_halt_events: RiskHaltEvent[];
   broker_sync_state: BrokerSyncState;
   counts: {
     broker_orders: number;
     broker_positions: number;
+    broker_accounts?: number;
   };
 }
 
 export interface BrokerPosition {
   id: number | null;
   broker_order_execution_id: number;
+  broker_account_id: string;
   broker: string;
   account_mode: string;
   recommendation_plan_id: number;
@@ -454,6 +507,35 @@ export interface RecommendationQualitySummary extends RecommendationQualityWindo
   policy_trust?: Record<string, unknown> | null;
 }
 
+export interface GatingSeverityAlert {
+  id?: number | null;
+  event_type?: string;
+  severity: "info" | "warning" | "critical" | string;
+  source?: string;
+  message?: string;
+  created_at?: string | null;
+  window_start?: string;
+  window_end?: string;
+  window_days?: number;
+  reasons: string[];
+  metrics: {
+    total_samples?: number;
+    shortlisted_count?: number;
+    non_shortlisted_count?: number;
+    shortlist_rate_percent?: number;
+    near_miss_non_shortlisted?: number;
+    high_priority_non_shortlisted?: number;
+    positive_gap_non_shortlisted?: number;
+    positive_gap_non_shortlisted_rate_percent?: number;
+    benchmark_evaluated_non_shortlisted?: number;
+    benchmark_coverage_non_shortlisted_percent?: number;
+    actionable_plans?: number;
+    [key: string]: number | undefined;
+  };
+  interpretation?: string;
+  payload?: Record<string, unknown>;
+}
+
 export interface RecommendationQualityResponse {
   summary: RecommendationQualitySummary;
   windowed_summaries: RecommendationQualityWindowSummary[];
@@ -466,6 +548,7 @@ export interface RecommendationQualityResponse {
   reliability_report: PlanReliabilityReport;
   walk_forward_validation: Record<string, unknown> | null;
   next_actions: string[];
+  gating_severity_alert?: GatingSeverityAlert | null;
 }
 
 export interface DashboardSummary {
@@ -556,6 +639,7 @@ export interface DashboardResponse {
   dashboard_trends?: DashboardTrends;
   major_failures: DashboardFailure[];
   distinct_warnings: DashboardWarningSummary[];
+  gating_severity_alert?: GatingSeverityAlert | null;
 }
 
 export interface KeyLabelDetail {

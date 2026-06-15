@@ -39,6 +39,7 @@ Live behavior includes:
 - family-aware entry offsets, actionable confidence floor, and volatility-normalized stop controls
 - candidate ranking by win rate, win count, then expected value with explicit tie tolerances
 - batched wide/explore evaluation with memory guardrails
+- full dry-run tuning must avoid duplicate eligible-record loads; final walk-forward validation should reuse the already loaded eligible record set rather than querying the same large outcome universe again
 
 Not fully autonomous yet:
 - the complete daily evolution workflow
@@ -275,6 +276,17 @@ Safety requirements:
 - label rankable-but-not-promotable candidates
 - default to eligible candidates, with blocked candidates behind a toggle
 - show guardrail failures and active config provenance
+
+## Tuning job names
+
+Use these operator-facing names to avoid confusing monitors, tuning searches, and promotion:
+
+- **Standard tuning search**: the default bounded plan-generation tuning run (`mode=manual`).
+- **Exploratory tuning search**: a broader plan-generation tuning run (`mode=explore`).
+- **Wide tuning search**: the broadest built-in deterministic plan-generation tuning run (`mode=wide`).
+- **Plan Generation Large Tuning Search**: offline, non-schedulable, research-only coarse/fine parameter search from `large-parameter-search-spec.md`.
+
+The hidden worker-backed system job for normal UI/API tuning runs is named `__system__:plan-generation-tuning-standard-search`. It is not operator-schedulable.
 
 ## Jobs, failures, and observability
 

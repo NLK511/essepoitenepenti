@@ -6,7 +6,7 @@ Concrete implementation plan for `fundamental-analysis-snapshot-spec.md`.
 
 ## Objective
 
-Ship monthly and event-aware point-in-time fundamental snapshots for monitored tickers, then expose those snapshots to ticker analysis and plan generation with a conservative decision role.
+Ship weekly weekend and event-aware point-in-time fundamental snapshots for monitored tickers, then expose those snapshots to ticker analysis and plan generation with a conservative decision role.
 
 Success means:
 - every active watchlist ticker and app-owned broker-exposure ticker can get a stored immutable fundamental snapshot
@@ -142,8 +142,18 @@ Status: implemented for backend scheduled/manual execution. API endpoints exist 
 Add job type: `fundamental_analysis_refresh`.
 
 Default schedule:
-- monthly baseline job, e.g. `15 07 1 * *`
-- optional daily lightweight due-check job later if event-aware refresh needs frequent evaluation
+- weekly weekend baseline jobs spread across Saturday and Sunday:
+  - `15 06 * * SAT`
+  - `15 09 * * SAT`
+  - `15 12 * * SAT`
+  - `15 15 * * SAT`
+  - `15 06 * * SUN`
+  - `15 09 * * SUN`
+  - `15 12 * * SUN`
+  - `15 15 * * SUN`
+- each batch uses the refresh service cap so one run does not request every monitored ticker at once
+- repeated weekend batches rely on due-snapshot logic: earlier batches create fresh snapshots, later batches skip those and continue with still-due tickers
+- optional daily lightweight due-check job later if event-aware refresh needs more frequent evaluation
 
 Job behavior:
 - discover monitored tickers
@@ -158,7 +168,8 @@ Manual/API path:
 
 Tests:
 - job executes due tickers only
-- monthly staleness works
+- monthly staleness works even though weekend batches check weekly
+- multiple weekend batches migrate/create without duplicating the legacy monthly job
 - event window overrides monthly freshness
 - provider failures do not fail entire run unless all fail catastrophically
 - run artifact contains per-ticker statuses

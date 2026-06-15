@@ -488,7 +488,7 @@ class RunRepository:
 
     @staticmethod
     def _serialize_timing(timing: dict[str, object]) -> str:
-        return json.dumps(timing, indent=2, sort_keys=True)
+        return json.dumps(timing, default=str, indent=2, sort_keys=True)
 
     @staticmethod
     def _deserialize_json_object(payload: str | None) -> dict[str, object]:

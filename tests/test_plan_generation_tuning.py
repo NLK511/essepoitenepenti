@@ -15,7 +15,11 @@ from trade_proposer_app.app import app
 from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import JobType, StrategyHorizon
-from trade_proposer_app.domain.models import PlanGenerationWalkForwardSummary, RecommendationPlan, RecommendationPlanOutcome
+from trade_proposer_app.domain.models import (
+    PlanGenerationWalkForwardSummary,
+    RecommendationPlan,
+    RecommendationPlanOutcome,
+)
 from trade_proposer_app.persistence.models import Base, RunRecord, WorkerHeartbeatRecord
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
@@ -23,9 +27,18 @@ from trade_proposer_app.repositories.recommendation_outcomes import Recommendati
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.services.plan_generation_tuning import CandidateEvaluation, PlanGenerationTuningError, PlanGenerationTuningService
+from trade_proposer_app.services.plan_generation_tuning import (
+    CandidateEvaluation,
+    PlanGenerationTuningError,
+    PlanGenerationTuningService,
+)
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
-from trade_proposer_app.services.plan_generation_tuning_parameters import PARAMETER_BY_KEY, exploration_campaigns, normalize_plan_generation_tuning_config, parameter_definitions
+from trade_proposer_app.services.plan_generation_tuning_parameters import (
+    PARAMETER_BY_KEY,
+    exploration_campaigns,
+    normalize_plan_generation_tuning_config,
+    parameter_definitions,
+)
 from trade_proposer_app.services.plan_reliability_features import PlanReliabilityFeatureBuilder
 
 
@@ -147,9 +160,14 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self.assertEqual(payload["parameter_schema_version"], "v1")
         self.assertGreaterEqual(len(payload["parameters"]), 8)
         self.assertIsNotNone(payload["state"].active_config_version_id)
-        self.assertEqual(payload["state"].active_config["setup_family.breakout.take_profit_distance_multiplier"], 1.12)
+        self.assertEqual(
+            payload["state"].active_config["setup_family.breakout.take_profit_distance_multiplier"],
+            1.12,
+        )
         self.assertEqual(payload["state"].active_config["setup_family.entry_band_multiplier"], 1.0)
-        self.assertEqual(payload["state"].active_config["global.actionable_confidence_floor_percent"], 60.0)
+        self.assertEqual(
+            payload["state"].active_config["global.actionable_confidence_floor_percent"], 60.0
+        )
         self.assertEqual(payload["state"].active_config["global.volatility_stop_multiplier"], 0.12)
 
     def test_parameter_schema_exposes_the_first_campaign_exploration_envelope(self) -> None:
@@ -160,16 +178,29 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self.assertEqual(parameters["setup_family.entry_band_multiplier"]["exploration_max"], 1.12)
         self.assertEqual(parameters["global.headwind_stop_multiplier"]["exploration_min"], 0.84)
         self.assertEqual(parameters["global.headwind_stop_multiplier"]["exploration_max"], 1.02)
-        self.assertEqual(parameters["global.actionable_confidence_floor_percent"]["exploration_min"], 40.0)
-        self.assertEqual(parameters["global.actionable_confidence_floor_percent"]["exploration_max"], 70.0)
+        self.assertEqual(
+            parameters["global.actionable_confidence_floor_percent"]["exploration_min"], 40.0
+        )
+        self.assertEqual(
+            parameters["global.actionable_confidence_floor_percent"]["exploration_max"], 70.0
+        )
         self.assertEqual(parameters["global.volatility_stop_multiplier"]["exploration_min"], 0.0)
         self.assertEqual(parameters["global.volatility_stop_multiplier"]["exploration_max"], 0.25)
-        self.assertEqual(parameters["setup_family.breakout.take_profit_distance_multiplier"]["exploration_min"], 0.95)
-        self.assertEqual(parameters["setup_family.breakout.take_profit_distance_multiplier"]["exploration_max"], 1.45)
+        self.assertEqual(
+            parameters["setup_family.breakout.take_profit_distance_multiplier"]["exploration_min"],
+            0.95,
+        )
+        self.assertEqual(
+            parameters["setup_family.breakout.take_profit_distance_multiplier"]["exploration_max"],
+            1.45,
+        )
 
     def test_exploration_campaign_plan_is_ranked_and_bounded(self) -> None:
         campaigns = exploration_campaigns()
-        self.assertEqual([item["name"] for item in campaigns[:4]], ["entry_calibration", "selectivity", "risk_protection", "reward_expansion"])
+        self.assertEqual(
+            [item["name"] for item in campaigns[:4]],
+            ["entry_calibration", "selectivity", "risk_protection", "reward_expansion"],
+        )
         self.assertEqual(campaigns[0]["candidate_budget"], 4)
         self.assertEqual(campaigns[1]["candidate_budget"], 1)
         self.assertEqual(campaigns[2]["candidate_budget"], 4)
@@ -179,7 +210,10 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
     def test_describe_includes_the_ranked_exploration_campaign_plan(self) -> None:
         payload = self.service.describe()
         self.assertIn("exploration_campaigns", payload)
-        self.assertEqual([item["name"] for item in payload["exploration_campaigns"][:4]], ["entry_calibration", "selectivity", "risk_protection", "reward_expansion"])
+        self.assertEqual(
+            [item["name"] for item in payload["exploration_campaigns"][:4]],
+            ["entry_calibration", "selectivity", "risk_protection", "reward_expansion"],
+        )
 
     def test_candidate_ranking_applies_documented_tie_tolerances(self) -> None:
         baseline = CandidateEvaluation(
@@ -228,31 +262,110 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
 
     def test_promotion_eligibility_applies_documented_tie_tolerances(self) -> None:
         baseline = CandidateEvaluation(
-            config={}, changed_keys=[], search_actionable_count=100, search_win_count=60, search_expected_value=1.0, search_ambiguous_count=0,
-            validation_actionable_count=1000, validation_win_count=600, validation_expected_value=1.0, validation_ambiguous_count=0,
+            config={},
+            changed_keys=[],
+            search_actionable_count=100,
+            search_win_count=60,
+            search_expected_value=1.0,
+            search_ambiguous_count=0,
+            validation_actionable_count=1000,
+            validation_win_count=600,
+            validation_expected_value=1.0,
+            validation_ambiguous_count=0,
         )
         within_tie = CandidateEvaluation(
-            config={}, changed_keys=["x"], search_actionable_count=100, search_win_count=60, search_expected_value=1.0, search_ambiguous_count=0,
-            validation_actionable_count=1000, validation_win_count=599, validation_expected_value=0.99, validation_ambiguous_count=0,
+            config={},
+            changed_keys=["x"],
+            search_actionable_count=100,
+            search_win_count=60,
+            search_expected_value=1.0,
+            search_ambiguous_count=0,
+            validation_actionable_count=1000,
+            validation_win_count=599,
+            validation_expected_value=0.99,
+            validation_ambiguous_count=0,
         )
         outside_win_rate = CandidateEvaluation(
-            config={}, changed_keys=["x"], search_actionable_count=100, search_win_count=60, search_expected_value=1.0, search_ambiguous_count=0,
-            validation_actionable_count=1000, validation_win_count=597, validation_expected_value=9.0, validation_ambiguous_count=0,
+            config={},
+            changed_keys=["x"],
+            search_actionable_count=100,
+            search_win_count=60,
+            search_expected_value=1.0,
+            search_ambiguous_count=0,
+            validation_actionable_count=1000,
+            validation_win_count=597,
+            validation_expected_value=9.0,
+            validation_ambiguous_count=0,
         )
 
-        self.assertTrue(PlanGenerationTuningService._promotion_eligible(within_tie, baseline, min_validation_resolved=10))
-        self.assertFalse(PlanGenerationTuningService._promotion_eligible(outside_win_rate, baseline, min_validation_resolved=10))
-        self.assertIn("validation_win_rate_below_baseline", PlanGenerationTuningService._rejection_reasons(outside_win_rate, baseline, min_validation_resolved=10))
+        self.assertTrue(
+            PlanGenerationTuningService._promotion_eligible(
+                within_tie, baseline, min_validation_resolved=10
+            )
+        )
+        self.assertFalse(
+            PlanGenerationTuningService._promotion_eligible(
+                outside_win_rate, baseline, min_validation_resolved=10
+            )
+        )
+        self.assertIn(
+            "validation_win_rate_below_baseline",
+            PlanGenerationTuningService._rejection_reasons(
+                outside_win_rate, baseline, min_validation_resolved=10
+            ),
+        )
 
     def test_run_ranks_candidates_lexicographically_and_persists_candidate_history(self) -> None:
         # Search slice
-        self._seed_record(created_at=datetime(2026, 3, 1, tzinfo=timezone.utc), mfe=15.0, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 2, tzinfo=timezone.utc), mfe=12.5, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 3, tzinfo=timezone.utc), mfe=2.0, mae=11.0, outcome="loss", take_profit_hit=False, stop_loss_hit=True)
-        self._seed_record(created_at=datetime(2026, 3, 4, tzinfo=timezone.utc), mfe=10.9, mae=3.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
+        self._seed_record(
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            mfe=15.0,
+            mae=4.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 2, tzinfo=timezone.utc),
+            mfe=12.5,
+            mae=4.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 3, tzinfo=timezone.utc),
+            mfe=2.0,
+            mae=11.0,
+            outcome="loss",
+            take_profit_hit=False,
+            stop_loss_hit=True,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 4, tzinfo=timezone.utc),
+            mfe=10.9,
+            mae=3.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
         # Validation slice
-        self._seed_record(created_at=datetime(2026, 3, 5, tzinfo=timezone.utc), mfe=10.9, mae=3.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 6, tzinfo=timezone.utc), mfe=2.0, mae=11.0, outcome="loss", take_profit_hit=False, stop_loss_hit=True)
+        self._seed_record(
+            created_at=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            mfe=10.9,
+            mae=3.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 6, tzinfo=timezone.utc),
+            mfe=2.0,
+            mae=11.0,
+            outcome="loss",
+            take_profit_hit=False,
+            stop_loss_hit=True,
+        )
 
         run = self.service.run(limit=50)
 
@@ -293,7 +406,9 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
             run = self.service.run(mode="wide", limit=None)
 
         self.assertEqual(run.status, "completed")
-        logged_messages = " ".join(str(call.args[0]) for call in mock_logger.info.call_args_list if call.args)
+        logged_messages = " ".join(
+            str(call.args[0]) for call in mock_logger.info.call_args_list if call.args
+        )
         self.assertIn("plan generation tuning started", logged_messages)
         self.assertIn("plan generation tuning candidate search prepared", logged_messages)
         self.assertIn("plan generation tuning evaluating batch", logged_messages)
@@ -311,11 +426,34 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
             )
 
         with patch.object(PlanGenerationTuningService, "ELIGIBLE_RECORD_BATCH_SIZE", 2):
-            with patch.object(self.service.plans, "list_plans", wraps=self.service.plans.list_plans) as mock_list_plans:
-                eligible = self.service._eligible_records(ticker=None, setup_family=None, limit=None)
+            with patch.object(
+                self.service.plans, "list_plans", wraps=self.service.plans.list_plans
+            ) as mock_list_plans:
+                eligible = self.service._eligible_records(
+                    ticker=None, setup_family=None, limit=None
+                )
 
         self.assertEqual(len(eligible), 6)
         self.assertGreaterEqual(mock_list_plans.call_count, 3)
+
+    def test_manual_run_reuses_loaded_records_for_final_walk_forward_validation(self) -> None:
+        for index in range(1, 7):
+            self._seed_record(
+                created_at=datetime(2026, 3, index, tzinfo=timezone.utc),
+                mfe=15.0 if index % 2 else 3.0,
+                mae=3.0 if index % 2 else 11.0,
+                outcome="win" if index % 2 else "loss",
+                stop_loss_hit=index % 2 == 0,
+                take_profit_hit=index % 2 == 1,
+            )
+
+        with patch(
+            "trade_proposer_app.services.plan_generation_walk_forward.PlanGenerationWalkForwardService.summarize",
+            side_effect=AssertionError("manual tuning must not reload eligible records"),
+        ):
+            run = self.service.run(mode="manual", limit=None)
+
+        self.assertEqual(run.status, "completed")
 
     def test_explore_mode_uses_broader_candidate_search_and_persists_seed(self) -> None:
         for index in range(1, 9):
@@ -343,14 +481,22 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self.assertIsInstance(explore_run.summary.get("exploration_seed"), int)
         self.assertIsInstance(wide_run.summary.get("exploration_seed"), int)
         self.assertGreaterEqual(explore_run.summary.get("history_span_days", 0), 30)
-        self.assertEqual([item["name"] for item in explore_run.summary.get("exploration_campaign_plan")], ["entry_calibration", "selectivity", "risk_protection", "reward_expansion"])
+        self.assertEqual(
+            [item["name"] for item in explore_run.summary.get("exploration_campaign_plan")],
+            ["entry_calibration", "selectivity", "risk_protection", "reward_expansion"],
+        )
         self.assertEqual(wide_run.summary.get("validation_mode"), "rolling_walk_forward")
-        self.assertGreaterEqual(wide_run.summary.get("validation_slice_count", 0), explore_run.summary.get("validation_slice_count", 0))
+        self.assertGreaterEqual(
+            wide_run.summary.get("validation_slice_count", 0),
+            explore_run.summary.get("validation_slice_count", 0),
+        )
         self.assertGreaterEqual(explore_run.summary.get("evaluation_batch_count", 0), 1)
         self.assertGreater(wide_run.summary.get("evaluation_batch_count", 0), 1)
         self.assertEqual(explore_run.summary.get("candidate_batch_size"), 12)
         self.assertEqual(wide_run.summary.get("candidate_batch_size"), 16)
-        self.assertEqual(explore_run.summary.get("exploration_campaign_plan")[1]["name"], "selectivity")
+        self.assertEqual(
+            explore_run.summary.get("exploration_campaign_plan")[1]["name"], "selectivity"
+        )
         for candidate in explore_run.candidates[1:]:
             self.assertIn("campaign", candidate.metric_breakdown)
             self.assertLessEqual(len(candidate.changed_keys), 1)
@@ -377,8 +523,13 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
                 take_profit_hit=index % 2 == 1,
             )
 
-        with patch.object(PlanGenerationTuningService, "_current_rss_bytes", return_value=2_000_000_000), patch.object(
-            PlanGenerationTuningService, "_memory_limit_bytes", return_value=1_000_000_000
+        with (
+            patch.object(
+                PlanGenerationTuningService, "_current_rss_bytes", return_value=2_000_000_000
+            ),
+            patch.object(
+                PlanGenerationTuningService, "_memory_limit_bytes", return_value=1_000_000_000
+            ),
         ):
             with self.assertRaises(PlanGenerationTuningError):
                 self.service.run(mode="wide", limit=None)
@@ -435,62 +586,229 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
             slices=[],
         )
 
-        def summarize_records_side_effect(self, *, records, candidate_config, baseline_config, candidate_label, baseline_label, lookback_days, validation_days, step_days, min_validation_resolved):
+        def summarize_records_side_effect(
+            self,
+            *,
+            records,
+            candidate_config,
+            baseline_config,
+            candidate_label,
+            baseline_label,
+            lookback_days,
+            validation_days,
+            step_days,
+            min_validation_resolved,
+        ):
             if candidate_config == baseline_config:
                 return walk_forward_baseline
             return walk_forward_improved
 
-        with patch.object(PlanGenerationTuningService, "_candidate_configs", return_value=[active_config, improved_config]), patch("trade_proposer_app.services.plan_generation_walk_forward.PlanGenerationWalkForwardService.summarize_records", autospec=True, side_effect=summarize_records_side_effect):
+        with (
+            patch.object(
+                PlanGenerationTuningService,
+                "_candidate_configs",
+                return_value=[active_config, improved_config],
+            ),
+            patch(
+                "trade_proposer_app.services.plan_generation_walk_forward.PlanGenerationWalkForwardService.summarize_records",
+                autospec=True,
+                side_effect=summarize_records_side_effect,
+            ),
+        ):
             explore_run = self.service.run(mode="explore", limit=None)
 
         self.assertEqual(explore_run.summary.get("validation_mode"), "rolling_walk_forward")
         self.assertEqual(explore_run.summary.get("validation_slice_count"), 4)
-        self.assertEqual(explore_run.candidates[0].changed_keys, ["setup_family.breakout.take_profit_distance_multiplier"])
-        self.assertGreaterEqual(explore_run.candidates[0].metric_breakdown["validation_win_rate_percent"], explore_run.candidates[1].metric_breakdown["validation_win_rate_percent"])
+        self.assertEqual(
+            explore_run.candidates[0].changed_keys,
+            ["setup_family.breakout.take_profit_distance_multiplier"],
+        )
+        self.assertGreaterEqual(
+            explore_run.candidates[0].metric_breakdown["validation_win_rate_percent"],
+            explore_run.candidates[1].metric_breakdown["validation_win_rate_percent"],
+        )
 
     def test_apply_promotes_only_guardrail_eligible_winner_and_updates_active_config(self) -> None:
-        self._seed_record(created_at=datetime(2026, 3, 1, tzinfo=timezone.utc), mfe=15.0, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 2, tzinfo=timezone.utc), mfe=12.5, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 3, tzinfo=timezone.utc), mfe=2.0, mae=11.0, outcome="loss", take_profit_hit=False, stop_loss_hit=True)
-        self._seed_record(created_at=datetime(2026, 3, 4, tzinfo=timezone.utc), mfe=10.9, mae=3.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 5, tzinfo=timezone.utc), mfe=10.9, mae=3.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 6, tzinfo=timezone.utc), mfe=2.0, mae=11.0, outcome="loss", take_profit_hit=False, stop_loss_hit=True)
+        self._seed_record(
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            mfe=15.0,
+            mae=4.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 2, tzinfo=timezone.utc),
+            mfe=12.5,
+            mae=4.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 3, tzinfo=timezone.utc),
+            mfe=2.0,
+            mae=11.0,
+            outcome="loss",
+            take_profit_hit=False,
+            stop_loss_hit=True,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 4, tzinfo=timezone.utc),
+            mfe=10.9,
+            mae=3.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            mfe=10.9,
+            mae=3.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 6, tzinfo=timezone.utc),
+            mfe=2.0,
+            mae=11.0,
+            outcome="loss",
+            take_profit_hit=False,
+            stop_loss_hit=True,
+        )
 
-        with patch.object(PlanGenerationTuningService, "_edge_validation_gate_report", return_value={"label": "eligible_for_cautious_expansion", "reasons": []}):
+        with patch.object(
+            PlanGenerationTuningService,
+            "_edge_validation_gate_report",
+            return_value={"label": "eligible_for_cautious_expansion", "reasons": []},
+        ):
             run = self.service.run(limit=50, apply=True)
 
         self.assertIsNotNone(run.promoted_config_version_id)
         self.assertTrue(run.summary["promotion_applied"])
         self.assertFalse(run.summary["promotion_rejection_reasons"])
-        active_config_version_id = self.settings_repository.get_plan_generation_active_config_version_id()
+        active_config_version_id = (
+            self.settings_repository.get_plan_generation_active_config_version_id()
+        )
         self.assertEqual(active_config_version_id, run.promoted_config_version_id)
         promoted = self.tuning_repository.get_config_version(run.promoted_config_version_id or 0)
         self.assertEqual(promoted.source_run_id, run.id)
         self.assertEqual(promoted.status, "active")
 
     def test_apply_blocks_promotion_when_edge_validation_gate_fails(self) -> None:
-        self._seed_record(created_at=datetime(2026, 3, 1, tzinfo=timezone.utc), mfe=15.0, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 2, tzinfo=timezone.utc), mfe=12.5, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 3, tzinfo=timezone.utc), mfe=2.0, mae=11.0, outcome="loss", take_profit_hit=False, stop_loss_hit=True)
-        self._seed_record(created_at=datetime(2026, 3, 4, tzinfo=timezone.utc), mfe=10.9, mae=3.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 5, tzinfo=timezone.utc), mfe=10.9, mae=3.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 6, tzinfo=timezone.utc), mfe=2.0, mae=11.0, outcome="loss", take_profit_hit=False, stop_loss_hit=True)
+        self._seed_record(
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            mfe=15.0,
+            mae=4.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 2, tzinfo=timezone.utc),
+            mfe=12.5,
+            mae=4.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 3, tzinfo=timezone.utc),
+            mfe=2.0,
+            mae=11.0,
+            outcome="loss",
+            take_profit_hit=False,
+            stop_loss_hit=True,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 4, tzinfo=timezone.utc),
+            mfe=10.9,
+            mae=3.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            mfe=10.9,
+            mae=3.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 6, tzinfo=timezone.utc),
+            mfe=2.0,
+            mae=11.0,
+            outcome="loss",
+            take_profit_hit=False,
+            stop_loss_hit=True,
+        )
 
-        with patch.object(PlanGenerationTuningService, "_edge_validation_gate_report", return_value={"label": "research_only", "reasons": ["thin_broker_sample"]}):
+        with patch.object(
+            PlanGenerationTuningService,
+            "_edge_validation_gate_report",
+            return_value={"label": "research_only", "reasons": ["thin_broker_sample"]},
+        ):
             run = self.service.run(limit=50, apply=True)
 
         self.assertIsNone(run.promoted_config_version_id)
         self.assertFalse(run.summary["promotion_applied"])
-        self.assertIn("edge_validation_gate_research_only", run.summary["promotion_rejection_reasons"])
+        self.assertIn(
+            "edge_validation_gate_research_only", run.summary["promotion_rejection_reasons"]
+        )
         self.assertEqual(run.summary["edge_validation_gate"]["label"], "research_only")
 
     def test_apply_completes_without_promotion_when_winner_is_not_eligible(self) -> None:
-        self._seed_record(created_at=datetime(2026, 3, 1, tzinfo=timezone.utc), mfe=15.0, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 2, tzinfo=timezone.utc), mfe=12.5, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 3, tzinfo=timezone.utc), mfe=2.0, mae=11.0, outcome="loss", take_profit_hit=False, stop_loss_hit=True)
-        self._seed_record(created_at=datetime(2026, 3, 4, tzinfo=timezone.utc), mfe=10.9, mae=3.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 5, tzinfo=timezone.utc), mfe=10.9, mae=3.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 6, tzinfo=timezone.utc), mfe=2.0, mae=11.0, outcome="loss", take_profit_hit=False, stop_loss_hit=True)
+        self._seed_record(
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            mfe=15.0,
+            mae=4.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 2, tzinfo=timezone.utc),
+            mfe=12.5,
+            mae=4.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 3, tzinfo=timezone.utc),
+            mfe=2.0,
+            mae=11.0,
+            outcome="loss",
+            take_profit_hit=False,
+            stop_loss_hit=True,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 4, tzinfo=timezone.utc),
+            mfe=10.9,
+            mae=3.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            mfe=10.9,
+            mae=3.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 6, tzinfo=timezone.utc),
+            mfe=2.0,
+            mae=11.0,
+            outcome="loss",
+            take_profit_hit=False,
+            stop_loss_hit=True,
+        )
 
         with patch.object(PlanGenerationTuningService, "_promotion_eligible", return_value=False):
             run = self.service.run(limit=50, apply=True)
@@ -498,17 +816,62 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self.assertIsNone(run.promoted_config_version_id)
         self.assertFalse(run.summary["promotion_applied"])
         self.assertTrue(run.summary["promotion_rejection_reasons"])
-        self.assertEqual(self.settings_repository.get_plan_generation_active_config_version_id(), run.baseline_config_version_id)
+        self.assertEqual(
+            self.settings_repository.get_plan_generation_active_config_version_id(),
+            run.baseline_config_version_id,
+        )
         events = self.tuning_repository.list_events(run_id=run.id or 0, limit=20)
         self.assertTrue(any(event.event_type == "config_promotion_skipped" for event in events))
 
     def test_manual_promote_allows_a_ranked_eligible_non_winner_candidate(self) -> None:
-        self._seed_record(created_at=datetime(2026, 3, 1, tzinfo=timezone.utc), mfe=15.0, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 2, tzinfo=timezone.utc), mfe=12.5, mae=4.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 3, tzinfo=timezone.utc), mfe=2.0, mae=11.0, outcome="loss", take_profit_hit=False, stop_loss_hit=True)
-        self._seed_record(created_at=datetime(2026, 3, 4, tzinfo=timezone.utc), mfe=10.9, mae=3.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 5, tzinfo=timezone.utc), mfe=10.9, mae=3.0, outcome="win", take_profit_hit=True, stop_loss_hit=False)
-        self._seed_record(created_at=datetime(2026, 3, 6, tzinfo=timezone.utc), mfe=2.0, mae=11.0, outcome="loss", take_profit_hit=False, stop_loss_hit=True)
+        self._seed_record(
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            mfe=15.0,
+            mae=4.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 2, tzinfo=timezone.utc),
+            mfe=12.5,
+            mae=4.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 3, tzinfo=timezone.utc),
+            mfe=2.0,
+            mae=11.0,
+            outcome="loss",
+            take_profit_hit=False,
+            stop_loss_hit=True,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 4, tzinfo=timezone.utc),
+            mfe=10.9,
+            mae=3.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            mfe=10.9,
+            mae=3.0,
+            outcome="win",
+            take_profit_hit=True,
+            stop_loss_hit=False,
+        )
+        self._seed_record(
+            created_at=datetime(2026, 3, 6, tzinfo=timezone.utc),
+            mfe=2.0,
+            mae=11.0,
+            outcome="loss",
+            take_profit_hit=False,
+            stop_loss_hit=True,
+        )
 
         active_config = normalize_plan_generation_tuning_config(None)
         winner_config = dict(active_config)
@@ -562,24 +925,42 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
                 return runner_up_eval
             raise AssertionError("unexpected config")
 
-        with patch.object(PlanGenerationTuningService, "_candidate_configs", return_value=[active_config, winner_config, eligible_runner_up_config]), patch.object(
-            PlanGenerationTuningService, "_refinement_configs", return_value=[]
-        ), patch.object(PlanGenerationTuningService, "_evaluate_candidate", side_effect=evaluate_side_effect):
+        with (
+            patch.object(
+                PlanGenerationTuningService,
+                "_candidate_configs",
+                return_value=[active_config, winner_config, eligible_runner_up_config],
+            ),
+            patch.object(PlanGenerationTuningService, "_refinement_configs", return_value=[]),
+            patch.object(
+                PlanGenerationTuningService, "_evaluate_candidate", side_effect=evaluate_side_effect
+            ),
+        ):
             run = self.service.run(limit=50)
 
         candidate_rank_2 = next(candidate for candidate in run.candidates if candidate.rank == 2)
         self.assertTrue(candidate_rank_2.promotion_eligible)
-        with patch.object(PlanGenerationTuningService, "_edge_validation_gate_report", return_value={"label": "demote_or_halt", "reasons": ["negative_realized_pnl"]}):
+        with patch.object(
+            PlanGenerationTuningService,
+            "_edge_validation_gate_report",
+            return_value={"label": "demote_or_halt", "reasons": ["negative_realized_pnl"]},
+        ):
             promoted = self.service.promote_candidate(run.id or 0, candidate_rank_2.id or 0)
 
         self.assertIsNotNone(promoted.id)
         self.assertEqual(promoted.source, "promoted_candidate")
         self.assertEqual(promoted.source_candidate_id, candidate_rank_2.id)
-        self.assertEqual(self.settings_repository.get_plan_generation_active_config_version_id(), promoted.id)
+        self.assertEqual(
+            self.settings_repository.get_plan_generation_active_config_version_id(), promoted.id
+        )
         events = self.tuning_repository.list_events(config_version_id=promoted.id or 0, limit=10)
-        self.assertTrue(any(event.event_type == "config_promoted_manual_candidate" for event in events))
+        self.assertTrue(
+            any(event.event_type == "config_promoted_manual_candidate" for event in events)
+        )
 
-    def test_live_trade_level_logic_uses_active_plan_generation_config_defaults_and_overrides(self) -> None:
+    def test_live_trade_level_logic_uses_active_plan_generation_config_defaults_and_overrides(
+        self,
+    ) -> None:
         baseline = normalize_plan_generation_tuning_config(None)
         baseline_levels = family_adjusted_trade_levels(
             entry_price=100.0,
@@ -611,7 +992,9 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self.assertEqual(baseline_levels, (100.0, 100.0, 95.75, 111.2))
         self.assertEqual(overridden_levels, (99.45, 100.55, 95.76, 111.7))
 
-    def test_eligible_records_include_scoreable_phantom_wins_and_losses_only_for_no_action_or_watchlist(self) -> None:
+    def test_eligible_records_include_scoreable_phantom_wins_and_losses_only_for_no_action_or_watchlist(
+        self,
+    ) -> None:
         self._seed_record(
             created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
             mfe=15.0,
@@ -654,8 +1037,12 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         eligible = self.service._eligible_records(ticker="EOG", setup_family=None, limit=50)
 
         self.assertEqual(len(eligible), 3)
-        self.assertEqual([record.plan.action for record in eligible], ["long", "no_action", "watchlist"])
-        scored = self.service._score_records(eligible, normalize_plan_generation_tuning_config(None))
+        self.assertEqual(
+            [record.plan.action for record in eligible], ["long", "no_action", "watchlist"]
+        )
+        scored = self.service._score_records(
+            eligible, normalize_plan_generation_tuning_config(None)
+        )
         self.assertEqual(scored[0], 3)
         self.assertEqual(scored[1], 2)
 
@@ -758,7 +1145,10 @@ class PlanGenerationTuningRouteTests(unittest.IsolatedAsyncioTestCase):
             run_payload = run_response.json()
             self.assertEqual(run_payload["status"], "queued")
             self.assertEqual(run_payload["job_type"], "plan_generation_tuning")
-            self.assertEqual(json.loads(run_payload["artifact_json"])["plan_generation_tuning_request"]["apply"], True)
+            self.assertEqual(
+                json.loads(run_payload["artifact_json"])["plan_generation_tuning_request"]["apply"],
+                True,
+            )
 
             runs = await client.get("/api/runs?job_type=plan_generation_tuning&limit=10")
             self.assertEqual(runs.status_code, 200)
@@ -827,9 +1217,19 @@ class PlanGenerationTuningRouteTests(unittest.IsolatedAsyncioTestCase):
         session = Session(bind=self.engine)
         try:
             service = PlanGenerationTuningService(session)
-            with patch.object(PlanGenerationTuningService, "_candidate_configs", return_value=[active_config, winner_config, eligible_runner_up_config]), patch.object(
-                PlanGenerationTuningService, "_refinement_configs", return_value=[]
-            ), patch.object(PlanGenerationTuningService, "_evaluate_candidate", side_effect=evaluate_side_effect):
+            with (
+                patch.object(
+                    PlanGenerationTuningService,
+                    "_candidate_configs",
+                    return_value=[active_config, winner_config, eligible_runner_up_config],
+                ),
+                patch.object(PlanGenerationTuningService, "_refinement_configs", return_value=[]),
+                patch.object(
+                    PlanGenerationTuningService,
+                    "_evaluate_candidate",
+                    side_effect=evaluate_side_effect,
+                ),
+            ):
                 run = service.run(limit=50)
         finally:
             session.close()
@@ -838,22 +1238,34 @@ class PlanGenerationTuningRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(candidate_rank_2.promotion_eligible)
 
         transport = httpx.ASGITransport(app=app)
-        with patch.object(PlanGenerationTuningService, "_edge_validation_gate_report", return_value={"label": "demote_or_halt", "reasons": ["negative_realized_pnl"]}):
-            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-                response = await client.post(f"/api/plan-generation-tuning/runs/{run.id}/candidates/{candidate_rank_2.id}/promote")
+        with patch.object(
+            PlanGenerationTuningService,
+            "_edge_validation_gate_report",
+            return_value={"label": "demote_or_halt", "reasons": ["negative_realized_pnl"]},
+        ):
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://testserver"
+            ) as client:
+                response = await client.post(
+                    f"/api/plan-generation-tuning/runs/{run.id}/candidates/{candidate_rank_2.id}/promote"
+                )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload["promoted"])
         self.assertEqual(payload["config"]["source"], "promoted_candidate")
         self.assertEqual(payload["config"]["source_candidate_id"], candidate_rank_2.id)
 
-    async def test_route_recoveres_stale_running_tuning_run_with_dead_worker_heartbeat(self) -> None:
+    async def test_route_recoveres_stale_running_tuning_run_with_dead_worker_heartbeat(
+        self,
+    ) -> None:
         reference_now = datetime(2026, 5, 16, 6, 40, tzinfo=timezone.utc)
         session = Session(bind=self.engine)
         try:
             jobs = JobRepository(session)
             runs = RunRepository(session)
-            job = jobs.get_or_create_system_job("plan-generation-tuning", JobType.PLAN_GENERATION_TUNING)
+            job = jobs.get_or_create_system_job(
+                "plan-generation-tuning-standard-search", JobType.PLAN_GENERATION_TUNING
+            )
             stale_run = runs.enqueue(job.id or 0, job_type=JobType.PLAN_GENERATION_TUNING)
             worker_id = "worker-stale-test"
             session.add(

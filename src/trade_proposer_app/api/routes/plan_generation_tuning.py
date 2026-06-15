@@ -11,16 +11,28 @@ from trade_proposer_app.domain.models import PlanGenerationWalkForwardSummary
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.job_execution import JobExecutionService
-from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningError, PlanGenerationTuningService
-from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
-from trade_proposer_app.services.plan_generation_walk_forward import PlanGenerationWalkForwardService
+from trade_proposer_app.services.plan_generation_tuning import (
+    PlanGenerationTuningError,
+    PlanGenerationTuningService,
+)
+from trade_proposer_app.services.plan_generation_tuning_parameters import (
+    normalize_plan_generation_tuning_config,
+)
+from trade_proposer_app.services.plan_generation_walk_forward import (
+    PlanGenerationWalkForwardService,
+)
 from trade_proposer_app.services.settings_mutations import SettingsMutationService
 
 router = APIRouter(prefix="/plan-generation-tuning", tags=["plan-generation-tuning"])
 
+STANDARD_TUNING_SYSTEM_JOB_NAME = "plan-generation-tuning-standard-search"
+LARGE_TUNING_SYSTEM_JOB_NAME = "plan-generation-tuning-large-search"
+
 
 @router.get("")
-async def get_plan_generation_tuning_state(session: Session = Depends(get_db_session)) -> dict[str, object]:
+async def get_plan_generation_tuning_state(
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
     return PlanGenerationTuningService(session).describe()
 
 
@@ -59,7 +71,9 @@ async def run_plan_generation_tuning(
         existing_run = runs.get_active_run_for_job_type(JobType.PLAN_GENERATION_TUNING)
         if existing_run is not None:
             return existing_run
-        job = jobs.get_or_create_system_job("plan-generation-tuning", JobType.PLAN_GENERATION_TUNING)
+        job = jobs.get_or_create_system_job(
+            STANDARD_TUNING_SYSTEM_JOB_NAME, JobType.PLAN_GENERATION_TUNING
+        )
         queued_run = JobExecutionService(jobs=jobs, runs=runs).enqueue_job(job.id or 0)
         runs.set_artifact(
             queued_run.id or 0,
@@ -78,6 +92,50 @@ async def run_plan_generation_tuning(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.post("/large-search/run")
+async def run_large_plan_generation_tuning_search(
+    coarse_candidates: int = Query(default=20_000, ge=1, le=1_000_000),
+    fine_candidates: int = Query(default=5_000, ge=0, le=500_000),
+    top_k: int = Query(default=100, ge=1, le=500),
+    fine_seeds: int = Query(default=20, ge=1, le=100),
+    seed: int = Query(default=20260614, ge=1),
+    limit: int | None = Query(default=None, ge=1, le=5000),
+    min_validation_actionable: int = Query(default=50, ge=1, le=500),
+    session: Session = Depends(get_db_session),
+):
+    jobs = JobRepository(session)
+    runs = RunRepository(session)
+    runs.recover_stale_running_runs(stale_after_seconds=settings.run_stale_after_seconds)
+    existing_run = runs.get_active_run_for_job_type(JobType.PLAN_GENERATION_TUNING)
+    if existing_run is not None:
+        return existing_run
+    job = jobs.get_or_create_system_job(
+        LARGE_TUNING_SYSTEM_JOB_NAME, JobType.PLAN_GENERATION_TUNING
+    )
+    queued_run = JobExecutionService(jobs=jobs, runs=runs).enqueue_job(job.id or 0)
+    runs.set_artifact(
+        queued_run.id or 0,
+        {
+            "plan_generation_tuning_request": {
+                "search_kind": "large",
+                "mode": "large_tuning_search",
+                "apply": False,
+                "coarse_candidates": coarse_candidates,
+                "fine_candidates": fine_candidates,
+                "top_k": top_k,
+                "fine_seeds": fine_seeds,
+                "seed": seed,
+                "limit": limit,
+                "min_validation_actionable": min_validation_actionable,
+                "batch_log_interval": 1000,
+                "artifact_path": f"artifacts/large-plan-generation-parameter-search-run-{queued_run.id or 'queued'}.json",
+                "cache_path": f"artifacts/large-plan-generation-parameter-search-run-{queued_run.id or 'queued'}.cache.jsonl",
+            }
+        },
+    )
+    return runs.get_run(queued_run.id or 0)
+
+
 @router.get("/configs")
 async def list_plan_generation_tuning_configs(
     limit: int = Query(default=20, ge=1, le=100),
@@ -86,11 +144,18 @@ async def list_plan_generation_tuning_configs(
 ) -> dict[str, object]:
     repository = PlanGenerationTuningService(session).repository
     configs = repository.list_config_versions(limit=limit, offset=offset)
-    return {"items": configs, "total": repository.count_config_versions(), "limit": limit, "offset": offset}
+    return {
+        "items": configs,
+        "total": repository.count_config_versions(),
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/configs/{config_version_id}")
-async def get_plan_generation_tuning_config(config_version_id: int, session: Session = Depends(get_db_session)):
+async def get_plan_generation_tuning_config(
+    config_version_id: int, session: Session = Depends(get_db_session)
+):
     repository = PlanGenerationTuningService(session).repository
     try:
         version = repository.get_config_version(config_version_id)
@@ -103,7 +168,9 @@ async def get_plan_generation_tuning_config(config_version_id: int, session: Ses
 
 
 @router.post("/configs/{config_version_id}/promote")
-async def promote_plan_generation_tuning_config(config_version_id: int, session: Session = Depends(get_db_session)):
+async def promote_plan_generation_tuning_config(
+    config_version_id: int, session: Session = Depends(get_db_session)
+):
     try:
         version = PlanGenerationTuningService(session).promote_config_version(config_version_id)
     except ValueError as exc:
@@ -114,7 +181,9 @@ async def promote_plan_generation_tuning_config(config_version_id: int, session:
 
 
 @router.post("/runs/{run_id}/candidates/{candidate_id}/promote")
-async def promote_plan_generation_tuning_candidate(run_id: int, candidate_id: int, session: Session = Depends(get_db_session)):
+async def promote_plan_generation_tuning_candidate(
+    run_id: int, candidate_id: int, session: Session = Depends(get_db_session)
+):
     try:
         version = PlanGenerationTuningService(session).promote_candidate(run_id, candidate_id)
     except ValueError as exc:
@@ -140,12 +209,16 @@ async def set_plan_generation_tuning_settings(
             min_validation_resolved=min_validation_resolved,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"invalid plan generation tuning settings: {exc}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"invalid plan generation tuning settings: {exc}"
+        ) from exc
     return {"plan_generation_tuning": settings_payload}
 
 
 @router.get("/parameters")
-async def get_plan_generation_tuning_parameters(session: Session = Depends(get_db_session)) -> dict[str, object]:
+async def get_plan_generation_tuning_parameters(
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
     state = PlanGenerationTuningService(session).describe()
     return {
         "objective_name": state["objective_name"],
@@ -169,9 +242,15 @@ async def validate_plan_generation_tuning(
 ) -> dict[str, object]:
     service = PlanGenerationTuningService(session)
     seed_version = service.ensure_baseline_config_version()
-    current_active_id = service.settings.get_plan_generation_active_config_version_id() or seed_version.id or 0
+    current_active_id = (
+        service.settings.get_plan_generation_active_config_version_id() or seed_version.id or 0
+    )
     current_active_version = service.repository.get_config_version(current_active_id)
-    candidate_version = service.repository.get_config_version(config_version_id) if config_version_id is not None else current_active_version
+    candidate_version = (
+        service.repository.get_config_version(config_version_id)
+        if config_version_id is not None
+        else current_active_version
+    )
     if baseline_config_version_id is not None:
         baseline_version = service.repository.get_config_version(baseline_config_version_id)
     elif config_version_id is None:
@@ -183,19 +262,23 @@ async def validate_plan_generation_tuning(
     candidate_config = normalize_plan_generation_tuning_config(candidate_version.config)
     baseline_config = normalize_plan_generation_tuning_config(baseline_version.config)
     try:
-        summary = PlanGenerationWalkForwardService(service).summarize(
-            candidate_config=candidate_config,
-            baseline_config=baseline_config,
-            candidate_label=candidate_version.version_label,
-            baseline_label=baseline_version.version_label,
-            ticker=ticker,
-            setup_family=setup_family,
-            limit=limit,
-            lookback_days=lookback_days,
-            validation_days=validation_days,
-            step_days=step_days,
-            min_validation_resolved=min_validation_resolved,
-        ).model_dump(mode="json")
+        summary = (
+            PlanGenerationWalkForwardService(service)
+            .summarize(
+                candidate_config=candidate_config,
+                baseline_config=baseline_config,
+                candidate_label=candidate_version.version_label,
+                baseline_label=baseline_version.version_label,
+                ticker=ticker,
+                setup_family=setup_family,
+                limit=limit,
+                lookback_days=lookback_days,
+                validation_days=validation_days,
+                step_days=step_days,
+                min_validation_resolved=min_validation_resolved,
+            )
+            .model_dump(mode="json")
+        )
     except ValueError as exc:
         summary = PlanGenerationWalkForwardSummary(
             total_slices=0,

@@ -2,7 +2,7 @@
 
 **Status:** target behavior
 
-Monthly and event-aware fundamental snapshots for monitored tickers.
+Weekly weekend and event-aware fundamental snapshots for monitored tickers.
 
 ## Goal
 
@@ -28,7 +28,9 @@ The snapshot covers:
 ## Refresh schedule
 
 Baseline cadence:
-- refresh each monitored ticker at least once per month
+- run the default refresh jobs weekly during the weekend, when proposal-generation load is lower and markets are closed
+- spread the weekend refresh across multiple capped batches so provider quotas are not hit by one large burst
+- refresh each monitored ticker at least once per month through due-snapshot logic; weekly batch jobs must safely skip still-fresh snapshots
 
 Event-aware cadence:
 - refresh earlier when a known important corporate event is near or just happened
@@ -39,7 +41,7 @@ Recommended event windows:
 - event week: every trading day from 3 trading days before through 2 trading days after the event
 - post-event: one follow-up refresh 7 calendar days after the event if no newer snapshot exists
 
-If provider data cannot supply event dates, monthly refresh still runs and marks event coverage unavailable.
+If provider data cannot supply event dates, the weekly weekend batch refresh still runs and marks event coverage unavailable.
 
 ## Point-in-time and storage rules
 
@@ -118,7 +120,7 @@ Rules:
 
 3. Job
    - add `fundamental_analysis_refresh` job type or equivalent scheduled path
-   - seed monthly refresh job
+   - seed weekly weekend refresh job
    - add event-aware candidate prioritization
 
 4. Integration

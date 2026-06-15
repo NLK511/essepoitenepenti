@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { getJson, postForm } from "../api";
+import { getJson, postForm, postJson } from "../api";
 import { useToast } from "../components/toast";
 import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
-import type { AccountRiskState, BrokerOrderExecution, BrokerPosition, BrokerSyncState, BrokerWorkbench, RiskHaltEvent } from "../types";
+import type { AccountRiskState, BrokerAccountSummary, BrokerOrderExecution, BrokerPosition, BrokerSyncState, BrokerWorkbench, GlobalLiveSummary, RiskHaltEvent } from "../types";
 import { brokerExecutionStatusTone, formatDate, humanizeKey, isBrokerExecutionCancelable, isBrokerExecutionFailed, isBrokerExecutionResubmittable, isBrokerExecutionSkipped, isBrokerExecutionSubmittedLike } from "../utils";
 
 function metricNumber(value: unknown): string {
@@ -20,6 +20,20 @@ function prettyPayload(payload: Record<string, unknown>): string {
   }
 }
 
+function isEtoroLiveOrder(order: BrokerOrderExecution): boolean {
+  return order.broker === "etoro" && order.account_mode === "live";
+}
+
+function modeBadgeTone(mode: string): "ok" | "warning" | "danger" | "neutral" | "info" {
+  if (mode.toLowerCase() === "live") {
+    return "danger";
+  }
+  if (mode.toLowerCase() === "demo") {
+    return "warning";
+  }
+  return "info";
+}
+
 export function BrokerOrdersPage() {
   const [searchParams, setSearchParams] = useSearchParams({ limit: "50" });
   const [orders, setOrders] = useState<BrokerOrderExecution[] | null>(null);
@@ -30,9 +44,16 @@ export function BrokerOrdersPage() {
   const [risk, setRisk] = useState<AccountRiskState | null>(null);
   const [haltEvents, setHaltEvents] = useState<RiskHaltEvent[]>([]);
   const [syncState, setSyncState] = useState<BrokerSyncState | null>(null);
+  const [brokerAccounts, setBrokerAccounts] = useState<BrokerAccountSummary[]>([]);
+  const [globalLiveSummary, setGlobalLiveSummary] = useState<GlobalLiveSummary | null>(null);
+  const [globalBrokerRiskCaps, setGlobalBrokerRiskCaps] = useState<Record<string, number | null>>({});
   const { showToast } = useToast();
   const limit = Math.max(1, Number(searchParams.get("limit") ?? "50") || 50);
   const runId = searchParams.get("run_id");
+  const brokerAccountFilter = searchParams.get("broker_account_id") ?? "";
+  const brokerFilter = searchParams.get("broker") ?? "";
+  const accountModeFilter = searchParams.get("account_mode") ?? "";
+  const statusFilter = searchParams.get("status") ?? "";
   const selectedOrderId = searchParams.get("order_id");
 
   useEffect(() => {
@@ -44,6 +65,18 @@ export function BrokerOrdersPage() {
         if (runId) {
           params.set("run_id", runId);
         }
+        if (brokerAccountFilter) {
+          params.set("broker_account_id", brokerAccountFilter);
+        }
+        if (brokerFilter) {
+          params.set("broker", brokerFilter);
+        }
+        if (accountModeFilter) {
+          params.set("account_mode", accountModeFilter);
+        }
+        if (statusFilter) {
+          params.set("status", statusFilter);
+        }
         const workbench = await getJson<BrokerWorkbench>(`/api/broker-workbench?${params.toString()}`);
         const loadedOrders = workbench.broker_orders;
         setOrders(loadedOrders);
@@ -51,6 +84,9 @@ export function BrokerOrdersPage() {
         setRisk(workbench.risk);
         setHaltEvents(workbench.risk_halt_events ?? []);
         setSyncState(workbench.broker_sync_state ?? null);
+        setBrokerAccounts(workbench.broker_accounts ?? []);
+        setGlobalLiveSummary(workbench.global_live_summary ?? null);
+        setGlobalBrokerRiskCaps(workbench.global_broker_risk_caps ?? {});
         if (!selectedOrderId && loadedOrders[0]?.id) {
           const next = new URLSearchParams(searchParams);
           next.set("order_id", String(loadedOrders[0].id));
@@ -61,7 +97,7 @@ export function BrokerOrdersPage() {
       }
     }
     void load();
-  }, [limit, runId, setSearchParams]);
+  }, [limit, runId, brokerAccountFilter, brokerFilter, accountModeFilter, statusFilter, setSearchParams]);
 
   const stats = useMemo(() => {
     const items = orders ?? [];
@@ -96,6 +132,18 @@ export function BrokerOrdersPage() {
     if (runId) {
       params.set("run_id", runId);
     }
+    if (brokerAccountFilter) {
+      params.set("broker_account_id", brokerAccountFilter);
+    }
+    if (brokerFilter) {
+      params.set("broker", brokerFilter);
+    }
+    if (accountModeFilter) {
+      params.set("account_mode", accountModeFilter);
+    }
+    if (statusFilter) {
+      params.set("status", statusFilter);
+    }
     const workbench = await getJson<BrokerWorkbench>(`/api/broker-workbench?${params.toString()}`);
     const loadedOrders = workbench.broker_orders;
     setOrders(loadedOrders);
@@ -103,12 +151,35 @@ export function BrokerOrdersPage() {
     setRisk(workbench.risk);
     setHaltEvents(workbench.risk_halt_events ?? []);
     setSyncState(workbench.broker_sync_state ?? null);
+    setBrokerAccounts(workbench.broker_accounts ?? []);
+    setGlobalLiveSummary(workbench.global_live_summary ?? null);
+    setGlobalBrokerRiskCaps(workbench.global_broker_risk_caps ?? {});
     const nextOrderId = nextSelectedOrderId ?? loadedOrders[0]?.id ?? null;
     if (nextOrderId) {
       const next = new URLSearchParams(searchParams);
       next.set("order_id", String(nextOrderId));
       setSearchParams(next, { replace: true });
     }
+  }
+
+  function updateFilter(key: string, value: string) {
+    const next = new URLSearchParams(searchParams);
+    if (value) {
+      next.set(key, value);
+    } else {
+      next.delete(key);
+    }
+    next.delete("order_id");
+    setSearchParams(next);
+  }
+
+  function clearFilters() {
+    const next = new URLSearchParams(searchParams);
+    for (const key of ["broker_account_id", "broker", "account_mode", "status"]) {
+      next.delete(key);
+    }
+    next.delete("order_id");
+    setSearchParams(next);
   }
 
   async function refreshVisibleOrders() {
@@ -150,11 +221,52 @@ export function BrokerOrdersPage() {
     }
   }
 
+  async function recordDemoValidationArtifact(account: BrokerAccountSummary) {
+    const artifactId = window.prompt("Demo validation artifact id", String(account.risk_settings.demo_validation_artifact_id ?? "")) ?? "";
+    if (!artifactId.trim()) {
+      return;
+    }
+    const notes = window.prompt("Demo validation notes", String(account.risk_settings.demo_validation_notes ?? "")) ?? "";
+    setActionError(null);
+    try {
+      await postJson<BrokerAccountSummary>(`/api/broker-accounts/${account.broker_account_id}/demo-validation-artifact`, {
+        artifact_id: artifactId.trim(),
+        notes,
+      });
+      showToast({ message: "Demo validation artifact recorded", tone: "success" });
+      await reloadOrders(selectedOrder?.id ?? undefined);
+    } catch (actionErr) {
+      setActionError(actionErr instanceof Error ? actionErr.message : "Failed to record demo validation artifact");
+    }
+  }
+
+  async function clearAccountCircuitBreaker(account: BrokerAccountSummary) {
+    const reason = window.prompt("Reason for clearing this broker-account circuit breaker", "operator reviewed latest broker evidence") ?? "";
+    if (!reason.trim()) {
+      return;
+    }
+    setActionError(null);
+    try {
+      await postJson(`/api/broker-accounts/${account.broker_account_id}/circuit-breaker/clear`, { reason: reason.trim() });
+      showToast({ message: "Circuit breaker cleared", tone: "success" });
+      await reloadOrders(selectedOrder?.id ?? undefined);
+    } catch (actionErr) {
+      setActionError(actionErr instanceof Error ? actionErr.message : "Failed to clear circuit breaker");
+    }
+  }
+
   async function handleAction(orderId: number, action: "resubmit" | "cancel" | "refresh") {
     setActionError(null);
     setActiveActionId(orderId);
     try {
-      await postForm(`/api/broker-orders/${orderId}/${action}`, {});
+      const order = orders?.find((item) => item.id === orderId) ?? null;
+      if (order && isEtoroLiveOrder(order) && action !== "refresh") {
+        const expected = `CONFIRM LIVE ETORO ${order.broker_account_id} ${action}`;
+        const confirmationText = window.prompt(`Live eToro ${action} requires exact confirmation`, expected) ?? "";
+        await postJson(`/api/broker-orders/${orderId}/${action}`, { confirmation_text: confirmationText });
+      } else {
+        await postForm(`/api/broker-orders/${orderId}/${action}`, {});
+      }
       showToast({ message: `Order #${orderId} ${action === "refresh" ? "refreshed" : `${action}ed`}`, tone: "success" });
       await reloadOrders(orderId);
     } catch (actionErr) {
@@ -193,6 +305,96 @@ export function BrokerOrdersPage() {
           }
         />
       </section>
+
+      <Card className="top-gap">
+        <SectionTitle kicker="Filters" title="Separate live, demo, paper, and account-specific records" subtitle="Filters apply to the workbench order and position lists while keeping global account risk visible." />
+        <div className="data-points top-gap-small">
+          <label className="data-point">
+            <span className="data-point-label">broker account</span>
+            <select className="input" value={brokerAccountFilter} onChange={(event) => updateFilter("broker_account_id", event.target.value)}>
+              <option value="">All accounts</option>
+              {brokerAccounts.map((account) => (
+                <option key={account.broker_account_id} value={account.broker_account_id}>{account.account_label || account.broker_account_id}</option>
+              ))}
+            </select>
+          </label>
+          <label className="data-point">
+            <span className="data-point-label">broker</span>
+            <select className="input" value={brokerFilter} onChange={(event) => updateFilter("broker", event.target.value)}>
+              <option value="">All brokers</option>
+              <option value="etoro">eToro</option>
+              <option value="alpaca">Alpaca</option>
+            </select>
+          </label>
+          <label className="data-point">
+            <span className="data-point-label">mode</span>
+            <select className="input" value={accountModeFilter} onChange={(event) => updateFilter("account_mode", event.target.value)}>
+              <option value="">All modes</option>
+              <option value="live">Live</option>
+              <option value="demo">Demo</option>
+              <option value="paper">Paper</option>
+            </select>
+          </label>
+          <label className="data-point">
+            <span className="data-point-label">status</span>
+            <input className="input" value={statusFilter} placeholder="accepted, skipped…" onChange={(event) => updateFilter("status", event.target.value)} />
+          </label>
+        </div>
+        <div className="cluster top-gap-small">
+          <button type="button" className="button-secondary" onClick={clearFilters}>Clear filters</button>
+          <span className="helper-text">Showing {orders?.length ?? "—"} orders and {positions?.length ?? "—"} positions.</span>
+        </div>
+      </Card>
+
+      {brokerAccounts.length > 0 ? (
+        <DisclosureCard
+          className="top-gap"
+          kicker="Broker accounts"
+          title="Live/demo/paper account safety"
+          subtitle="Account-scoped risk, drawdown, circuit breakers, and live caps are shown before manual actions."
+          defaultOpen
+        >
+          <section className="metrics-grid top-gap-small">
+            <StatCard label="Enabled live accounts" value={globalLiveSummary?.enabled_live_account_count ?? 0} helper={(globalLiveSummary?.enabled_live_broker_accounts ?? []).join(", ") || "No live accounts enabled"} />
+            <StatCard label="Live open notional" value={`$${metricNumber(globalLiveSummary?.active_live_open_notional_usd)}`} helper={`Cap $${metricNumber(globalBrokerRiskCaps.global_max_live_open_notional_usd)}`} />
+            <StatCard label="Live orders today" value={globalLiveSummary?.live_order_count_today ?? 0} helper={`Cap ${globalBrokerRiskCaps.global_max_live_order_count_per_day ?? "—"}`} />
+          </section>
+          <div className="data-stack top-gap-small">
+            {brokerAccounts.map((account) => (
+              <div key={account.broker_account_id} className="data-card compact">
+                <div className="data-card-header">
+                  <div>
+                    <div className="data-card-title">{account.account_label || account.broker_account_id}</div>
+                    <div className="helper-text">{account.broker_account_id} · {account.broker}</div>
+                  </div>
+                  <div className="cluster">
+                    <Badge tone={modeBadgeTone(account.account_mode)}>{account.mode_badge}</Badge>
+                    {account.circuit_breaker.active ? <Badge tone="danger">breaker</Badge> : <Badge tone="ok">clear</Badge>}
+                    {account.enabled ? <Badge tone="ok">enabled</Badge> : <Badge tone="neutral">disabled</Badge>}
+                  </div>
+                </div>
+                <div className="helper-text top-gap-small">
+                  Credentials {account.has_credentials ? "configured" : "missing"} · validation {account.validation_status} · manual actions {account.manual_actions_enabled ? "enabled" : "disabled"}
+                </div>
+                <div className="helper-text">
+                  Drawdown {account.drawdown?.trusted ? "trusted" : "untrusted"} · equity {account.drawdown?.current_equity ?? "—"} · breaker reason {account.circuit_breaker.reason || "—"}
+                </div>
+                <div className="helper-text">
+                  Demo artifact {String(account.risk_settings.demo_validation_artifact_id ?? "—")}
+                </div>
+                <div className="cluster top-gap-small">
+                  {account.broker === "etoro" ? (
+                    <button type="button" className="button-secondary" onClick={() => void recordDemoValidationArtifact(account)}>Record demo artifact</button>
+                  ) : null}
+                  {account.circuit_breaker.active ? (
+                    <button type="button" className="button button-danger" onClick={() => void clearAccountCircuitBreaker(account)}>Clear breaker</button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        </DisclosureCard>
+      ) : null}
 
       <Card className="top-gap">
         <SectionTitle kicker="Action required" title="Orders and positions needing operator attention" subtitle="Failures, resubmittable orders, and cancelable live orders are shown before the raw order history." />
@@ -320,7 +522,7 @@ export function BrokerOrdersPage() {
                     <Badge tone={brokerExecutionStatusTone(order.status)}>{order.status}</Badge>
                   </div>
                   <div className="helper-text top-gap-small">
-                    {order.side.toUpperCase()} · {order.order_type} · {order.account_mode}
+                    {order.side.toUpperCase()} · {order.order_type} · {order.broker_account_id} · <Badge tone={modeBadgeTone(order.account_mode)}>{order.account_mode}</Badge>
                   </div>
                 </button>
               ))}
@@ -333,8 +535,9 @@ export function BrokerOrdersPage() {
           {selectedOrder ? (
             <div className="stack-page top-gap-small">
               <div className="data-points">
+                <div className="data-point"><span className="data-point-label">broker account</span><span className="data-point-value">{selectedOrder.broker_account_id}</span></div>
                 <div className="data-point"><span className="data-point-label">broker</span><span className="data-point-value">{selectedOrder.broker}</span></div>
-                <div className="data-point"><span className="data-point-label">mode</span><span className="data-point-value">{selectedOrder.account_mode}</span></div>
+                <div className="data-point"><span className="data-point-label">mode</span><span className="data-point-value"><Badge tone={modeBadgeTone(selectedOrder.account_mode)}>{selectedOrder.account_mode}</Badge></span></div>
                 <div className="data-point"><span className="data-point-label">side</span><span className="data-point-value"><Badge tone={brokerExecutionStatusTone(selectedOrder.status)}>{selectedOrder.side}</Badge></span></div>
                 <div className="data-point"><span className="data-point-label">qty</span><span className="data-point-value">{selectedOrder.quantity}</span></div>
                 <div className="data-point"><span className="data-point-label">entry</span><span className="data-point-value">{selectedOrder.entry_price ?? "—"}</span></div>

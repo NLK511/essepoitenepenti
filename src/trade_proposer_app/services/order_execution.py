@@ -3,20 +3,48 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
-from zoneinfo import ZoneInfo
+from decimal import ROUND_HALF_UP, Decimal
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
-from trade_proposer_app.domain.models import BrokerOrderExecution, BrokerPosition, BrokerReconciliationSnapshot, RecommendationPlan
-from trade_proposer_app.domain.statuses import BrokerPositionStatus, ExecutionStatus, TERMINAL_EXECUTION_STATUSES, TradeOutcome
+from trade_proposer_app.domain.models import (
+    BrokerOrderExecution,
+    BrokerPosition,
+    BrokerReconciliationSnapshot,
+    RecommendationPlan,
+)
+from trade_proposer_app.domain.statuses import (
+    TERMINAL_EXECUTION_STATUSES,
+    BrokerPositionStatus,
+    ExecutionStatus,
+    TradeOutcome,
+)
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
-from trade_proposer_app.repositories.broker_reconciliation_snapshots import BrokerReconciliationSnapshotRepository
+from trade_proposer_app.repositories.broker_reconciliation_snapshots import (
+    BrokerReconciliationSnapshotRepository,
+)
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
-from trade_proposer_app.services.alpaca_paper_client import AlpacaOrderSubmissionResult, AlpacaPaperClient, AlpacaPaperClientError
+from trade_proposer_app.services.alpaca_paper_client import (
+    AlpacaOrderSubmissionResult,
+    AlpacaPaperClient,
+    AlpacaPaperClientError,
+)
+from trade_proposer_app.services.brokers import (
+    AlpacaPaperBrokerAdapter,
+    BrokerAdapter,
+    BrokerAdapterFactory,
+    BrokerOrderRequest,
+    BrokerOrderResult,
+    BrokerProtectionAmendRequest,
+)
 from trade_proposer_app.services.execution_candidates import ExecutionCandidateBuilder
-from trade_proposer_app.services.risk_management import BrokerRiskManager, LiveBrokerSnapshot, TradeCandidate
+from trade_proposer_app.services.risk_management import (
+    BrokerRiskManager,
+    LiveBrokerSnapshot,
+    TradeCandidate,
+)
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 
 
@@ -45,6 +73,8 @@ class OrderExecutionService:
         settings: SettingsRepository,
         executions: BrokerOrderExecutionRepository,
         client: AlpacaPaperClient | None = None,
+        adapter: BrokerAdapter | None = None,
+        adapter_factory: BrokerAdapterFactory | None = None,
         positions: BrokerPositionRepository | None = None,
         observability: ObservabilityEventRepository | None = None,
         reconciliation_snapshots: BrokerReconciliationSnapshotRepository | None = None,
@@ -52,6 +82,8 @@ class OrderExecutionService:
         self.settings = settings
         self.executions = executions
         self.client = client
+        self.adapter = adapter
+        self.adapter_factory = adapter_factory
         self.positions = positions
         self.observability = observability
         self.reconciliation_snapshots = reconciliation_snapshots
@@ -65,20 +97,30 @@ class OrderExecutionService:
         job_id: int | None = None,
         force_tickers: set[str] | None = None,
     ) -> OrderExecutionOutcome:
-        config = SettingsDomainService(repository=self.settings).execution_settings().broker_order_execution
+        config = (
+            SettingsDomainService(repository=self.settings)
+            .execution_settings()
+            .broker_order_execution
+        )
         warnings: list[str] = []
         summary = self._initial_execution_summary(config, plan_count=len(plans))
 
         if not config["enabled"]:
-            return self._skipped_execution_outcome(summary, reason="order_execution_disabled", count=len(plans))
+            return self._skipped_execution_outcome(
+                summary, reason="order_execution_disabled", count=len(plans)
+            )
 
-        missing_client_outcome = self._ensure_execution_client(summary, warnings, plan_count=len(plans))
+        missing_client_outcome = self._ensure_execution_client(
+            summary, warnings, plan_count=len(plans)
+        )
         if missing_client_outcome is not None:
             return missing_client_outcome
 
         ordered_results: list[BrokerOrderExecution] = []
         skip_reasons: dict[str, int] = {}
-        forced_tickers = {ticker.strip().upper() for ticker in force_tickers or set() if ticker and ticker.strip()}
+        forced_tickers = {
+            ticker.strip().upper() for ticker in force_tickers or set() if ticker and ticker.strip()
+        }
         broker_name = str(config["broker"])
 
         for plan in plans:
@@ -96,7 +138,9 @@ class OrderExecutionService:
             if stored_order is not None:
                 ordered_results.append(stored_order)
 
-        self._finalize_execution_summary(summary, orders=ordered_results, skip_reasons=skip_reasons, warnings=warnings)
+        self._finalize_execution_summary(
+            summary, orders=ordered_results, skip_reasons=skip_reasons, warnings=warnings
+        )
         return OrderExecutionOutcome(summary=summary, orders=ordered_results)
 
     def _execute_single_plan(
@@ -112,11 +156,22 @@ class OrderExecutionService:
         run_id: int | None,
         job_id: int | None,
     ) -> BrokerOrderExecution | None:
-        if plan.ticker.upper() not in forced_tickers and self.executions.has_known_unavailable_ticker(broker_name, plan.ticker):
+        if (
+            plan.ticker.upper() not in forced_tickers
+            and self.executions.has_known_unavailable_ticker(broker_name, plan.ticker)
+        ):
             self._bump(skip_reasons, "broker_symbol_unavailable")
-            return self._store_skip(plan, run_id=run_id, job_id=job_id, reason="broker_symbol_unavailable", config=config)
+            return self._store_skip(
+                plan,
+                run_id=run_id,
+                job_id=job_id,
+                reason="broker_symbol_unavailable",
+                config=config,
+            )
 
-        candidate_result = self.candidate_builder.build(plan, notional_per_plan=float(config["notional_per_plan"]), run_id=run_id)
+        candidate_result = self.candidate_builder.build(
+            plan, notional_per_plan=float(config["notional_per_plan"]), run_id=run_id
+        )
         if candidate_result.skip_reason == "non_actionable":
             self._bump(skip_reasons, "non_actionable")
             return None
@@ -136,7 +191,9 @@ class OrderExecutionService:
 
         summary["actionable_plan_count"] = int(summary["actionable_plan_count"]) + 1
         candidate = candidate_result.candidate
-        existing = self.executions.get_by_client_order_id(config["broker"], candidate.client_order_id)
+        existing = self.executions.get_by_client_order_id(
+            config["broker"], candidate.client_order_id
+        )
         if existing is not None:
             summary["duplicate_order_count"] = int(summary["duplicate_order_count"]) + 1
             return existing
@@ -144,11 +201,15 @@ class OrderExecutionService:
         notional_amount = round(candidate.quantity * candidate.entry_price, 4)
         risk_assessment = self._risk_manager().assess(
             TradeCandidate(ticker=plan.ticker, notional_amount=notional_amount),
-            live_broker_snapshot=self._live_broker_snapshot(run_id=run_id, job_id=job_id, ticker=plan.ticker),
+            live_broker_snapshot=self._live_broker_snapshot(
+                run_id=run_id, job_id=job_id, ticker=plan.ticker
+            ),
         )
         if not risk_assessment.allowed:
             risk_reason = "risk_" + "_".join(risk_assessment.reasons or ["blocked"])
-            warnings.append(f"{plan.ticker} broker execution blocked by risk manager: {', '.join(risk_assessment.reasons)}")
+            warnings.append(
+                f"{plan.ticker} broker execution blocked by risk manager: {', '.join(risk_assessment.reasons)}"
+            )
             self._bump(skip_reasons, risk_reason)
             return self._store_skip(
                 plan,
@@ -192,7 +253,9 @@ class OrderExecutionService:
                 ),
             )
         )
-        self._count_submitted_order_status(submitted_order, summary=summary, skip_reasons=skip_reasons)
+        self._count_submitted_order_status(
+            submitted_order, summary=summary, skip_reasons=skip_reasons
+        )
         return submitted_order
 
     @staticmethod
@@ -202,15 +265,23 @@ class OrderExecutionService:
         summary: dict[str, object],
         skip_reasons: dict[str, int],
     ) -> None:
-        if order.status in {ExecutionStatus.ACCEPTED.value, ExecutionStatus.FILLED.value, ExecutionStatus.SUBMITTED.value}:
+        if order.status in {
+            ExecutionStatus.ACCEPTED.value,
+            ExecutionStatus.FILLED.value,
+            ExecutionStatus.SUBMITTED.value,
+        }:
             summary["submitted_order_count"] = int(summary["submitted_order_count"]) + 1
         elif order.status == ExecutionStatus.SKIPPED.value:
-            OrderExecutionService._bump(skip_reasons, order.error_message or "broker_symbol_unavailable")
+            OrderExecutionService._bump(
+                skip_reasons, order.error_message or "broker_symbol_unavailable"
+            )
         else:
             summary["failed_order_count"] = int(summary["failed_order_count"]) + 1
 
     @staticmethod
-    def _initial_execution_summary(config: dict[str, object], *, plan_count: int) -> dict[str, object]:
+    def _initial_execution_summary(
+        config: dict[str, object], *, plan_count: int
+    ) -> dict[str, object]:
         return {
             "enabled": config["enabled"],
             "broker": config["broker"],
@@ -228,7 +299,9 @@ class OrderExecutionService:
         }
 
     @staticmethod
-    def _skipped_execution_outcome(summary: dict[str, object], *, reason: str, count: int) -> OrderExecutionOutcome:
+    def _skipped_execution_outcome(
+        summary: dict[str, object], *, reason: str, count: int
+    ) -> OrderExecutionOutcome:
         summary["skips"] = [{"reason": reason, "count": count}]
         summary["skipped_order_count"] = count
         return OrderExecutionOutcome(summary=summary, orders=[])
@@ -240,16 +313,20 @@ class OrderExecutionService:
         *,
         plan_count: int,
     ) -> OrderExecutionOutcome | None:
-        if self.client is not None:
+        if self.adapter is not None or self.adapter_factory is not None or self.client is not None:
             return None
         alpaca_credential = self.settings.get_provider_credential_map().get("alpaca")
         if alpaca_credential is None:
             warnings.append("alpaca provider credential is missing")
-            outcome = self._skipped_execution_outcome(summary, reason="missing_alpaca_credential", count=plan_count)
+            outcome = self._skipped_execution_outcome(
+                summary, reason="missing_alpaca_credential", count=plan_count
+            )
             summary["warnings"] = warnings
             summary["warnings_found"] = True
             return outcome
-        self.client = AlpacaPaperClient(api_key=alpaca_credential.api_key, api_secret=alpaca_credential.api_secret)
+        self.client = AlpacaPaperClient(
+            api_key=alpaca_credential.api_key, api_secret=alpaca_credential.api_secret
+        )
         return None
 
     @staticmethod
@@ -261,7 +338,9 @@ class OrderExecutionService:
         warnings: list[str],
     ) -> None:
         summary["skipped_order_count"] = sum(skip_reasons.values())
-        summary["skips"] = [{"reason": reason, "count": count} for reason, count in sorted(skip_reasons.items())]
+        summary["skips"] = [
+            {"reason": reason, "count": count} for reason, count in sorted(skip_reasons.items())
+        ]
         summary["orders"] = [order.model_dump(mode="json") for order in orders]
         summary["warnings"] = warnings
         summary["warnings_found"] = bool(warnings or skip_reasons)
@@ -272,7 +351,11 @@ class OrderExecutionService:
             raise ValueError("only failed or canceled broker orders can be resubmitted")
         if existing.quantity <= 0:
             raise ValueError("only orders with a positive quantity can be resubmitted")
-        if existing.entry_price is None or existing.stop_loss is None or existing.take_profit is None:
+        if (
+            existing.entry_price is None
+            or existing.stop_loss is None
+            or existing.take_profit is None
+        ):
             raise ValueError("stored order is missing execution levels and cannot be resubmitted")
         client_order_id = f"{existing.client_order_id}-retry-{uuid4().hex[:8]}"
         request_payload = self._build_order_payload(
@@ -286,12 +369,20 @@ class OrderExecutionService:
         )
         risk_assessment = self._risk_manager().assess(
             TradeCandidate(ticker=existing.ticker, notional_amount=existing.notional_amount),
-            live_broker_snapshot=self._live_broker_snapshot(run_id=existing.run_id, job_id=existing.job_id, broker_order_execution_id=existing.id, ticker=existing.ticker),
+            live_broker_snapshot=self._live_broker_snapshot(
+                run_id=existing.run_id,
+                job_id=existing.job_id,
+                broker_order_execution_id=existing.id,
+                ticker=existing.ticker,
+            ),
         )
         if not risk_assessment.allowed:
-            raise ValueError(f"broker order resubmit blocked by risk manager: {', '.join(risk_assessment.reasons)}")
+            raise ValueError(
+                f"broker order resubmit blocked by risk manager: {', '.join(risk_assessment.reasons)}"
+            )
 
         candidate = BrokerOrderExecution(
+            broker_account_id=existing.broker_account_id,
             broker=existing.broker,
             account_mode=existing.account_mode,
             recommendation_plan_id=existing.recommendation_plan_id,
@@ -320,19 +411,32 @@ class OrderExecutionService:
             raise ValueError("broker order id is missing, so the order cannot be canceled")
         if existing.status == ExecutionStatus.CANCELED.value:
             raise ValueError("broker order is already canceled")
-        if existing.status in {ExecutionStatus.FILLED.value, TradeOutcome.WIN.value, TradeOutcome.LOSS.value}:
+        if existing.status in {
+            ExecutionStatus.FILLED.value,
+            TradeOutcome.WIN.value,
+            TradeOutcome.LOSS.value,
+        }:
             raise ValueError("filled or closed orders cannot be canceled")
-        client = self._ensure_client()
+        adapter = self._ensure_adapter()
         self._record_observability_event(
             event_type="broker.order_cancel_started",
             message="Broker order cancel started",
             run_id=existing.run_id,
             job_id=existing.job_id,
-            payload={"broker_order_execution_id": existing.id, "broker_order_id": existing.broker_order_id, "ticker": existing.ticker},
+            payload={
+                "broker_order_execution_id": existing.id,
+                "broker_order_id": existing.broker_order_id,
+                "ticker": existing.ticker,
+            },
         )
-        result = client.cancel_order(existing.broker_order_id)
+        result = adapter.cancel_order(existing.broker_order_id)
+        if not result.is_success:
+            raise ValueError(
+                f"broker cancel failed: {result.message or result.broker_status or result.status}"
+            )
         canceled = BrokerOrderExecution(
             id=existing.id,
+            broker_account_id=existing.broker_account_id,
             broker=existing.broker,
             account_mode=existing.account_mode,
             recommendation_plan_id=existing.recommendation_plan_id,
@@ -368,23 +472,38 @@ class OrderExecutionService:
             message="Broker order cancel finished",
             run_id=updated.run_id,
             job_id=updated.job_id,
-            payload={"broker_order_execution_id": updated.id, "broker_order_id": updated.broker_order_id, "ticker": updated.ticker, "status": updated.status},
+            payload={
+                "broker_order_execution_id": updated.id,
+                "broker_order_id": updated.broker_order_id,
+                "ticker": updated.ticker,
+                "status": updated.status,
+            },
         )
         return updated
 
     def close_position(self, ticker: str) -> AlpacaOrderSubmissionResult:
-        client = self._ensure_client()
+        adapter = self._ensure_adapter()
         self._record_observability_event(
             event_type="broker.position_close_started",
             message="Broker position close started",
             payload={"ticker": ticker},
         )
-        result = client.close_position(ticker.upper())
-        updated_position = self._mark_position_close_submitted(ticker=ticker, result=result) if self._close_response_accepted(result) else None
+        adapter_result = adapter.close_position(ticker.upper())
+        result = self._adapter_result_to_alpaca_result(adapter_result)
+        updated_position = (
+            self._mark_position_close_submitted(ticker=ticker, result=result)
+            if self._close_response_accepted(result)
+            else None
+        )
         self._record_observability_event(
             event_type="broker.position_close_finished",
             message="Broker position close finished",
-            payload={"ticker": ticker, "status": result.broker_status, "broker_order_id": result.broker_order_id, "broker_position_id": updated_position.id if updated_position else None},
+            payload={
+                "ticker": ticker,
+                "status": result.broker_status,
+                "broker_order_id": result.broker_order_id,
+                "broker_position_id": updated_position.id if updated_position else None,
+            },
         )
         return result
 
@@ -395,13 +514,30 @@ class OrderExecutionService:
         status = str(result.broker_status or "").strip().lower()
         if not status:
             return True
-        return status in {"accepted", "submitted", "queued", "pending_new", "new", "partially_filled", "filled", "closed", "done_for_day"}
+        return status in {
+            "accepted",
+            "submitted",
+            "queued",
+            "pending_new",
+            "new",
+            "partially_filled",
+            "filled",
+            "closed",
+            "done_for_day",
+        }
 
-    def _mark_position_close_submitted(self, *, ticker: str, result: AlpacaOrderSubmissionResult) -> BrokerPosition | None:
+    def _mark_position_close_submitted(
+        self, *, ticker: str, result: AlpacaOrderSubmissionResult
+    ) -> BrokerPosition | None:
         if self.positions is None:
             return None
         normalized = ticker.strip().upper()
-        candidates = [position for position in self.positions.list_by_ticker(normalized, limit=20) if position.status in {BrokerPositionStatus.SUBMITTED.value, BrokerPositionStatus.OPEN.value}]
+        candidates = [
+            position
+            for position in self.positions.list_by_ticker(normalized, limit=20)
+            if position.status
+            in {BrokerPositionStatus.SUBMITTED.value, BrokerPositionStatus.OPEN.value}
+        ]
         if not candidates:
             return None
         position = candidates[0]
@@ -424,25 +560,56 @@ class OrderExecutionService:
         existing = self.executions.get(execution_id)
         if existing.broker_order_id is None:
             raise ValueError("broker order id is missing, so the order cannot be amended")
-        if existing.status in {ExecutionStatus.CANCELED.value, ExecutionStatus.FAILED.value, ExecutionStatus.REJECTED.value, ExecutionStatus.EXPIRED.value}:
+        if existing.status in {
+            ExecutionStatus.CANCELED.value,
+            ExecutionStatus.FAILED.value,
+            ExecutionStatus.REJECTED.value,
+            ExecutionStatus.EXPIRED.value,
+        }:
             raise ValueError("terminal broker orders cannot be amended")
         if stop_loss is None and take_profit is None:
             raise ValueError("at least one amendment level is required")
-        client = self._ensure_client()
-        current = self._validate_amendable_bracket_order(existing, client=client)
+        adapter = self._ensure_adapter()
+        current = self._validate_amendable_bracket_order(existing, adapter=adapter)
         payload: dict[str, object] = {"client_order_id": existing.client_order_id}
         if stop_loss is not None:
             payload["stop_loss"] = {"stop_price": OrderExecutionService._normalize_price(stop_loss)}
         if take_profit is not None:
-            payload["take_profit"] = {"limit_price": OrderExecutionService._normalize_price(take_profit)}
+            payload["take_profit"] = {
+                "limit_price": OrderExecutionService._normalize_price(take_profit)
+            }
         self._record_observability_event(
             event_type="broker.order_amend_started",
             message="Broker order amend started",
             run_id=existing.run_id,
             job_id=existing.job_id,
-            payload={"broker_order_execution_id": existing.id, "broker_order_id": existing.broker_order_id, "ticker": existing.ticker, "payload": payload, "validated_broker_status": current.broker_status, "validated_broker_order_id": current.broker_order_id},
+            payload={
+                "broker_order_execution_id": existing.id,
+                "broker_order_id": existing.broker_order_id,
+                "ticker": existing.ticker,
+                "payload": payload,
+                "validated_broker_status": current.broker_status,
+                "validated_broker_order_id": current.broker_order_id,
+            },
         )
-        result = client.amend_order(existing.broker_order_id, payload)
+        result = adapter.amend_position_protection(
+            BrokerProtectionAmendRequest(
+                broker_order_id=existing.broker_order_id,
+                client_order_id=existing.client_order_id,
+                symbol=existing.ticker,
+                stop_loss=payload.get("stop_loss", {}).get("stop_price")
+                if isinstance(payload.get("stop_loss"), dict)
+                else None,
+                take_profit=payload.get("take_profit", {}).get("limit_price")
+                if isinstance(payload.get("take_profit"), dict)
+                else None,
+                payload=payload,
+            )
+        )
+        if not result.is_success:
+            raise ValueError(
+                f"broker order amend failed: {result.message or result.broker_status or result.status}"
+            )
         amended = BrokerOrderExecution(
             id=existing.id,
             broker=existing.broker,
@@ -480,7 +647,12 @@ class OrderExecutionService:
             message="Broker order amend finished",
             run_id=updated.run_id,
             job_id=updated.job_id,
-            payload={"broker_order_execution_id": updated.id, "broker_order_id": updated.broker_order_id, "ticker": updated.ticker, "status": updated.status},
+            payload={
+                "broker_order_execution_id": updated.id,
+                "broker_order_id": updated.broker_order_id,
+                "ticker": updated.ticker,
+                "status": updated.status,
+            },
         )
         return updated
 
@@ -493,10 +665,20 @@ class OrderExecutionService:
             message="Broker order refresh started",
             run_id=existing.run_id,
             job_id=existing.job_id,
-            payload={"broker_order_execution_id": existing.id, "broker_order_id": existing.broker_order_id, "ticker": existing.ticker},
+            payload={
+                "broker_order_execution_id": existing.id,
+                "broker_order_id": existing.broker_order_id,
+                "ticker": existing.ticker,
+            },
         )
-        result = self._ensure_client().get_order(existing.broker_order_id)
-        refreshed = self._apply_broker_snapshot(existing, result.payload, broker_status=result.broker_status)
+        result = self._ensure_adapter().lookup_order(existing.broker_order_id)
+        if not result.is_success:
+            raise ValueError(
+                f"broker order lookup failed: {result.message or result.broker_status or result.status}"
+            )
+        refreshed = self._apply_broker_snapshot(
+            existing, result.payload, broker_status=result.broker_status
+        )
         updated = self.executions.update(refreshed)
         self._sync_position_from_order(updated)
         self._record_observability_event(
@@ -504,7 +686,12 @@ class OrderExecutionService:
             message="Broker order refresh finished",
             run_id=updated.run_id,
             job_id=updated.job_id,
-            payload={"broker_order_execution_id": updated.id, "broker_order_id": updated.broker_order_id, "ticker": updated.ticker, "status": updated.status},
+            payload={
+                "broker_order_execution_id": updated.id,
+                "broker_order_id": updated.broker_order_id,
+                "ticker": updated.ticker,
+                "status": updated.status,
+            },
         )
         return updated
 
@@ -520,7 +707,9 @@ class OrderExecutionService:
         failed = 0
         warnings: list[str] = []
         for order in orders:
-            if order.broker_order_id is None or order.status in TERMINAL_EXECUTION_STATUSES - {ExecutionStatus.FAILED.value}:
+            if order.broker_order_id is None or order.status in TERMINAL_EXECUTION_STATUSES - {
+                ExecutionStatus.FAILED.value
+            }:
                 skipped += 1
                 continue
             try:
@@ -543,35 +732,82 @@ class OrderExecutionService:
         self._record_observability_event(
             event_type="broker.order_sync_failed" if failed else "broker.order_sync_finished",
             severity="warning" if failed else "info",
-            message="Broker open-order sync finished with failures" if failed else "Broker open-order sync finished",
+            message="Broker open-order sync finished with failures"
+            if failed
+            else "Broker open-order sync finished",
             payload={key: value for key, value in summary.items() if key != "orders"},
         )
         return BrokerOrderSyncOutcome(summary=summary, orders=synced_orders)
 
     def _submit_candidate(self, candidate: BrokerOrderExecution) -> BrokerOrderExecution:
-        self._ensure_client()
+        adapter = self._ensure_adapter()
         self._record_observability_event(
             event_type="broker.order_submit_started",
             message="Broker order submit started",
             run_id=candidate.run_id,
             job_id=candidate.job_id,
-            payload={"recommendation_plan_id": candidate.recommendation_plan_id, "ticker": candidate.ticker, "action": candidate.action, "notional_amount": candidate.notional_amount},
+            payload={
+                "recommendation_plan_id": candidate.recommendation_plan_id,
+                "ticker": candidate.ticker,
+                "action": candidate.action,
+                "notional_amount": candidate.notional_amount,
+            },
         )
         try:
-            result = self.client.submit_order(candidate.request_payload)  # type: ignore[union-attr]
-            candidate.broker_order_id = result.broker_order_id
-            candidate.status = result.broker_status or ExecutionStatus.SUBMITTED.value
+            result = adapter.submit_order(self._broker_order_request(candidate))
+            if result.is_success:
+                candidate.broker_order_id = result.broker_order_id
+                candidate.status = result.broker_status or ExecutionStatus.SUBMITTED.value
+                candidate.submitted_at = datetime.now(timezone.utc)
+                candidate.response_payload = result.payload
+                candidate.error_message = ""
+                created = self.executions.create(candidate)
+                self._sync_position_from_order(created)
+                self._record_observability_event(
+                    event_type="broker.order_submit_finished",
+                    message="Broker order submit finished",
+                    run_id=created.run_id,
+                    job_id=created.job_id,
+                    payload={
+                        "broker_order_execution_id": created.id,
+                        "broker_order_id": created.broker_order_id,
+                        "ticker": created.ticker,
+                        "status": created.status,
+                    },
+                )
+                return created
+            if self._is_unavailable_broker_result(result):
+                candidate.status = ExecutionStatus.SKIPPED.value
+                candidate.error_message = self._broker_unavailable_reason_from_result(result)
+                candidate.response_payload = {
+                    "availability": {
+                        "known_unavailable": True,
+                        "reason": candidate.error_message,
+                        "broker_payload": result.payload,
+                    }
+                }
+            else:
+                candidate.status = result.broker_status or ExecutionStatus.FAILED.value
+                candidate.error_message = result.message or str(result.status)
+                candidate.response_payload = result.payload
             candidate.submitted_at = datetime.now(timezone.utc)
-            candidate.response_payload = result.payload
-            candidate.error_message = ""
             created = self.executions.create(candidate)
             self._sync_position_from_order(created)
             self._record_observability_event(
-                event_type="broker.order_submit_finished",
-                message="Broker order submit finished",
+                event_type="broker.order_submit_failed"
+                if created.status != ExecutionStatus.SKIPPED.value
+                else "broker.order_submit_skipped",
+                message="Broker order submit failed"
+                if created.status != ExecutionStatus.SKIPPED.value
+                else "Broker order skipped because ticker is unavailable on broker",
+                severity="warning",
                 run_id=created.run_id,
                 job_id=created.job_id,
-                payload={"broker_order_execution_id": created.id, "broker_order_id": created.broker_order_id, "ticker": created.ticker, "status": created.status},
+                payload={
+                    "broker_order_execution_id": created.id,
+                    "ticker": created.ticker,
+                    "error_message": created.error_message,
+                },
             )
             return created
         except AlpacaPaperClientError as exc:
@@ -593,12 +829,20 @@ class OrderExecutionService:
             created = self.executions.create(candidate)
             self._sync_position_from_order(created)
             self._record_observability_event(
-                event_type="broker.order_submit_failed" if created.status != ExecutionStatus.SKIPPED.value else "broker.order_submit_skipped",
-                message="Broker order submit failed" if created.status != ExecutionStatus.SKIPPED.value else "Broker order skipped because ticker is unavailable on broker",
+                event_type="broker.order_submit_failed"
+                if created.status != ExecutionStatus.SKIPPED.value
+                else "broker.order_submit_skipped",
+                message="Broker order submit failed"
+                if created.status != ExecutionStatus.SKIPPED.value
+                else "Broker order skipped because ticker is unavailable on broker",
                 severity="warning",
                 run_id=created.run_id,
                 job_id=created.job_id,
-                payload={"broker_order_execution_id": created.id, "ticker": created.ticker, "error_message": created.error_message},
+                payload={
+                    "broker_order_execution_id": created.id,
+                    "ticker": created.ticker,
+                    "error_message": created.error_message,
+                },
             )
             return created
         except Exception as exc:  # pragma: no cover - defensive catch for broker/client integration
@@ -613,9 +857,66 @@ class OrderExecutionService:
                 severity="warning",
                 run_id=created.run_id,
                 job_id=created.job_id,
-                payload={"broker_order_execution_id": created.id, "ticker": created.ticker, "error_message": created.error_message},
+                payload={
+                    "broker_order_execution_id": created.id,
+                    "ticker": created.ticker,
+                    "error_message": created.error_message,
+                },
             )
             return created
+
+    def _broker_order_request(self, candidate: BrokerOrderExecution) -> BrokerOrderRequest:
+        return BrokerOrderRequest(
+            client_order_id=candidate.client_order_id,
+            symbol=candidate.ticker,
+            side=candidate.side,
+            order_type=candidate.order_type,
+            quantity=candidate.quantity or None,
+            notional_amount=candidate.notional_amount or None,
+            time_in_force=candidate.time_in_force,
+            stop_loss=candidate.stop_loss,
+            take_profit=candidate.take_profit,
+            payload=candidate.request_payload,
+        )
+
+    @staticmethod
+    def _adapter_result_to_alpaca_result(result: BrokerOrderResult) -> AlpacaOrderSubmissionResult:
+        status_code = 200 if result.is_success else 500
+        return AlpacaOrderSubmissionResult(status_code=status_code, payload=result.payload)
+
+    @staticmethod
+    def _is_unavailable_broker_result(result: BrokerOrderResult) -> bool:
+        payload_text = json.dumps(result.payload).lower()
+        message = f"{result.message} {payload_text}".lower()
+        return any(
+            fragment in message
+            for fragment in ("not tradable", "not supported", "symbol not found")
+        )
+
+    @staticmethod
+    def _broker_unavailable_reason_from_result(result: BrokerOrderResult) -> str:
+        message = f"{result.message} {json.dumps(result.payload)}".lower()
+        if "not tradable" in message:
+            return "broker_symbol_unavailable:not_tradable"
+        if "not supported" in message:
+            return "broker_symbol_unavailable:not_supported"
+        if "symbol not found" in message:
+            return "broker_symbol_unavailable:not_found"
+        return "broker_symbol_unavailable"
+
+    def _ensure_adapter(self) -> BrokerAdapter:
+        if self.adapter is not None:
+            return self.adapter
+        if self.adapter_factory is not None:
+            config = (
+                SettingsDomainService(repository=self.settings)
+                .execution_settings()
+                .broker_order_execution
+            )
+            self.adapter = self.adapter_factory.for_legacy_config(config)
+            return self.adapter
+        self.adapter = AlpacaPaperBrokerAdapter(client=self._ensure_client())
+        return self.adapter
 
     def _ensure_client(self) -> AlpacaPaperClient:
         if self.client is not None:
@@ -623,7 +924,9 @@ class OrderExecutionService:
         alpaca_credential = self.settings.get_provider_credential_map().get("alpaca")
         if alpaca_credential is None:
             raise ValueError("alpaca provider credential is missing")
-        self.client = AlpacaPaperClient(api_key=alpaca_credential.api_key, api_secret=alpaca_credential.api_secret)
+        self.client = AlpacaPaperClient(
+            api_key=alpaca_credential.api_key, api_secret=alpaca_credential.api_secret
+        )
         return self.client
 
     def _record_observability_event(
@@ -676,16 +979,31 @@ class OrderExecutionService:
     @staticmethod
     def _broker_unavailable_reason(exc: AlpacaPaperClientError) -> str:
         payload = exc.payload if isinstance(exc.payload, dict) else {}
-        message = str(payload.get("message") or payload.get("error") or exc or "broker symbol unavailable").strip()
+        message = str(
+            payload.get("message") or payload.get("error") or exc or "broker symbol unavailable"
+        ).strip()
         return f"broker_symbol_unavailable:{message}" if message else "broker_symbol_unavailable"
 
-    def _validate_amendable_bracket_order(self, existing: BrokerOrderExecution, *, client: AlpacaPaperClient) -> AlpacaOrderSubmissionResult:
-        current = client.get_order(existing.broker_order_id or "")
+    def _validate_amendable_bracket_order(
+        self, existing: BrokerOrderExecution, *, adapter: BrokerAdapter
+    ) -> BrokerOrderResult:
+        current = adapter.lookup_order(existing.broker_order_id or "")
+        if not current.is_success:
+            raise ValueError(
+                f"broker order lookup failed: {current.message or current.broker_status or current.status}"
+            )
         payload = current.payload if isinstance(current.payload, dict) else {}
-        order_class = str(payload.get("order_class") or existing.request_payload.get("order_class") or "").strip().lower()
+        order_class = (
+            str(payload.get("order_class") or existing.request_payload.get("order_class") or "")
+            .strip()
+            .lower()
+        )
         legs = payload.get("legs")
         if order_class != "bracket" and not (isinstance(legs, list) and legs):
             raise ValueError("broker order is not a bracket order and cannot be amended safely")
+        capabilities = adapter.get_capabilities()
+        if not capabilities.supports_amend_protection:
+            raise ValueError("broker adapter does not support protection amendment")
         return current
 
     @staticmethod
@@ -745,7 +1063,9 @@ class OrderExecutionService:
 
     @staticmethod
     def _is_market_open(now: datetime | None = None) -> bool:
-        current = (now or OrderExecutionService._now()).astimezone(OrderExecutionService.MARKET_TIMEZONE)
+        current = (now or OrderExecutionService._now()).astimezone(
+            OrderExecutionService.MARKET_TIMEZONE
+        )
         if current.weekday() >= 5:
             return False
         market_open = current.replace(hour=9, minute=30, second=0, microsecond=0)
@@ -763,7 +1083,11 @@ class OrderExecutionService:
     @staticmethod
     def _derive_bracket_status(payload: dict[str, object], *, fallback_status: str) -> str:
         legs_value = payload.get("legs")
-        legs = [leg for leg in legs_value if isinstance(leg, dict)] if isinstance(legs_value, list) else []
+        legs = (
+            [leg for leg in legs_value if isinstance(leg, dict)]
+            if isinstance(legs_value, list)
+            else []
+        )
         for leg in legs:
             leg_status = str(leg.get("status") or "").strip().lower()
             leg_filled_at = OrderExecutionService._broker_timestamp(leg, "filled_at", "filledAt")
@@ -785,12 +1109,22 @@ class OrderExecutionService:
         *,
         broker_status: str | None = None,
     ) -> BrokerOrderExecution:
-        broker_parent_status = (broker_status or str(payload.get("status") or existing.status) or existing.status).strip().lower()
+        broker_parent_status = (
+            (broker_status or str(payload.get("status") or existing.status) or existing.status)
+            .strip()
+            .lower()
+        )
         status = self._derive_bracket_status(payload, fallback_status=broker_parent_status)
         now = self._now()
         filled_at = self._broker_timestamp(payload, "filled_at", "filledAt") or existing.filled_at
-        canceled_at = self._broker_timestamp(payload, "canceled_at", "canceledAt") or existing.canceled_at
-        if status in {BrokerPositionStatus.OPEN.value, TradeOutcome.WIN.value, TradeOutcome.LOSS.value} and filled_at is None:
+        canceled_at = (
+            self._broker_timestamp(payload, "canceled_at", "canceledAt") or existing.canceled_at
+        )
+        if (
+            status
+            in {BrokerPositionStatus.OPEN.value, TradeOutcome.WIN.value, TradeOutcome.LOSS.value}
+            and filled_at is None
+        ):
             filled_at = now
         if status == BrokerPositionStatus.CANCELED.value and canceled_at is None:
             canceled_at = now
@@ -813,9 +1147,12 @@ class OrderExecutionService:
             stop_loss=existing.stop_loss,
             take_profit=existing.take_profit,
             status=status,
-            broker_order_id=existing.broker_order_id or result_broker_order_id(payload) or existing.broker_order_id,
+            broker_order_id=existing.broker_order_id
+            or result_broker_order_id(payload)
+            or existing.broker_order_id,
             client_order_id=existing.client_order_id,
-            submitted_at=self._broker_timestamp(payload, "submitted_at", "submittedAt") or existing.submitted_at,
+            submitted_at=self._broker_timestamp(payload, "submitted_at", "submittedAt")
+            or existing.submitted_at,
             filled_at=filled_at,
             canceled_at=canceled_at,
             request_payload=existing.request_payload,
@@ -840,35 +1177,56 @@ class OrderExecutionService:
         ticker: str = "",
         snapshot_type: str = "pre_submit",
     ) -> LiveBrokerSnapshot | None:
-        if self.client is None:
-            return None
         warnings: list[str] = []
         account: dict[str, object] | None = None
         open_orders: list[dict[str, object]] = []
         open_positions: list[dict[str, object]] = []
+        if self.client is not None and not all(
+            callable(getattr(self.client, method_name, None))
+            for method_name in ("get_account", "list_open_orders", "list_open_positions")
+        ):
+            return None
         try:
-            account_method = getattr(self.client, "get_account", None)
-            if callable(account_method):
-                account = account_method().payload
+            adapter = self._ensure_adapter()
         except Exception as exc:  # pragma: no cover - defensive broker integration guard
-            warnings.append(f"alpaca account snapshot failed: {exc}")
+            warnings.append(f"broker adapter unavailable for snapshot: {exc}")
+            return None
         try:
-            open_orders_method = getattr(self.client, "list_open_orders", None)
-            if callable(open_orders_method):
-                payload = open_orders_method().payload
-                items = payload.get("items") if isinstance(payload, dict) else None
-                open_orders = [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+            account_result = adapter.get_account_snapshot()
+            if account_result.account is not None:
+                account = account_result.account.payload or {
+                    "equity": account_result.account.equity,
+                    "cash": account_result.account.cash,
+                    "currency": account_result.account.currency,
+                }
+            if not account_result.is_success:
+                warnings.append(f"broker account snapshot failed: {account_result.message}")
         except Exception as exc:  # pragma: no cover - defensive broker integration guard
-            warnings.append(f"alpaca open-order snapshot failed: {exc}")
+            warnings.append(f"broker account snapshot failed: {exc}")
         try:
-            open_positions_method = getattr(self.client, "list_open_positions", None)
-            if callable(open_positions_method):
-                payload = open_positions_method().payload
-                items = payload.get("items") if isinstance(payload, dict) else None
-                open_positions = [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+            open_orders_result = adapter.get_open_orders()
+            open_orders = [item for item in open_orders_result.items if isinstance(item, dict)]
+            if not open_orders_result.is_success:
+                warnings.append(f"broker open-order snapshot failed: {open_orders_result.message}")
         except Exception as exc:  # pragma: no cover - defensive broker integration guard
-            warnings.append(f"alpaca open-position snapshot failed: {exc}")
-        snapshot = LiveBrokerSnapshot(account=account, open_orders=open_orders, open_positions=open_positions, warnings=warnings)
+            warnings.append(f"broker open-order snapshot failed: {exc}")
+        try:
+            open_positions_result = adapter.get_open_positions()
+            open_positions = [
+                item for item in open_positions_result.items if isinstance(item, dict)
+            ]
+            if not open_positions_result.is_success:
+                warnings.append(
+                    f"broker open-position snapshot failed: {open_positions_result.message}"
+                )
+        except Exception as exc:  # pragma: no cover - defensive broker integration guard
+            warnings.append(f"broker open-position snapshot failed: {exc}")
+        snapshot = LiveBrokerSnapshot(
+            account=account,
+            open_orders=open_orders,
+            open_positions=open_positions,
+            warnings=warnings,
+        )
         self._persist_live_broker_snapshot(
             snapshot,
             run_id=run_id,
@@ -900,8 +1258,14 @@ class OrderExecutionService:
                     continue
                 normalized = position.ticker.upper()
                 app_open_ticker_counts[normalized] = app_open_ticker_counts.get(normalized, 0) + 1
-        drift = BrokerRiskManager._broker_drift(snapshot=snapshot, app_open_ticker_counts=app_open_ticker_counts)
-        config = SettingsDomainService(repository=self.settings).execution_settings().broker_order_execution
+        drift = BrokerRiskManager._broker_drift(
+            snapshot=snapshot, app_open_ticker_counts=app_open_ticker_counts
+        )
+        config = (
+            SettingsDomainService(repository=self.settings)
+            .execution_settings()
+            .broker_order_execution
+        )
         try:
             created = repository.create(
                 BrokerReconciliationSnapshot(
@@ -917,7 +1281,9 @@ class OrderExecutionService:
                     open_positions_payload=snapshot.open_positions,
                     warnings=snapshot.warnings,
                     drift_severity=str(drift.get("severity") or "not_evaluated"),
-                    drift_reasons=[str(reason) for reason in drift.get("reasons", [])] if isinstance(drift.get("reasons"), list) else [],
+                    drift_reasons=[str(reason) for reason in drift.get("reasons", [])]
+                    if isinstance(drift.get("reasons"), list)
+                    else [],
                 )
             )
             self.reconciliation_snapshots = repository
@@ -926,7 +1292,9 @@ class OrderExecutionService:
                 message="Broker reconciliation snapshot recorded",
                 run_id=run_id,
                 job_id=job_id,
-                severity="warning" if created.drift_severity in {"uncertain", "material"} else "info",
+                severity="warning"
+                if created.drift_severity in {"uncertain", "material"}
+                else "info",
                 payload={
                     "broker_reconciliation_snapshot_id": created.id,
                     "ticker": created.ticker,
@@ -960,7 +1328,11 @@ class OrderExecutionService:
         return self.reconciliation_snapshots
 
     def _sync_position_from_order(self, order: BrokerOrderExecution) -> BrokerPosition | None:
-        if order.id is None or order.broker_order_id is None or order.status == ExecutionStatus.SKIPPED.value:
+        if (
+            order.id is None
+            or order.broker_order_id is None
+            or order.status == ExecutionStatus.SKIPPED.value
+        ):
             return None
         repository = self._position_repository()
         if repository is None:
@@ -971,7 +1343,9 @@ class OrderExecutionService:
     def _derive_position(self, order: BrokerOrderExecution) -> BrokerPosition:
         payload = order.response_payload if isinstance(order.response_payload, dict) else {}
         entry_avg_price = self._payload_float(payload, "filled_avg_price")
-        entry_filled_at = self._broker_timestamp(payload, "filled_at", "filledAt") or order.filled_at
+        entry_filled_at = (
+            self._broker_timestamp(payload, "filled_at", "filledAt") or order.filled_at
+        )
         entry_filled_qty = self._payload_float(payload, "filled_qty") or 0.0
         quantity = int(order.quantity or entry_filled_qty or 0)
         status = BrokerPositionStatus.SUBMITTED.value
@@ -980,43 +1354,84 @@ class OrderExecutionService:
         exit_reason: str | None = None
         exit_avg_price: float | None = None
         exit_filled_at: datetime | None = None
+        stop_loss_order_id: str | None = None
+        stop_loss_order_status: str | None = None
+        stop_loss_order_price: float | None = None
+        take_profit_order_id: str | None = None
+        take_profit_order_status: str | None = None
+        take_profit_order_price: float | None = None
+        protective_orders_verified_at: datetime | None = None
+        protective_orders_source = ""
         error_message = ""
 
         broker_status = str(payload.get("status") or order.status or "").strip().lower()
         legs_value = payload.get("legs")
-        legs = [leg for leg in legs_value if isinstance(leg, dict)] if isinstance(legs_value, list) else []
+        legs = (
+            [leg for leg in legs_value if isinstance(leg, dict)]
+            if isinstance(legs_value, list)
+            else []
+        )
         filled_exit_legs: list[tuple[str, dict[str, object]]] = []
         for leg in legs:
             leg_status = str(leg.get("status") or "").strip().lower()
-            leg_filled_at = self._broker_timestamp(leg, "filled_at", "filledAt")
-            if leg_status != "filled" and leg_filled_at is None:
-                continue
             leg_type = str(leg.get("type") or leg.get("order_type") or "").strip().lower()
             if leg_type in {"limit", "limit_order"}:
-                filled_exit_legs.append(("take_profit", leg))
+                take_profit_order_id = str(leg.get("id")) if leg.get("id") is not None else None
+                take_profit_order_status = leg_status or None
+                take_profit_order_price = self._payload_float(leg, "limit_price")
+                protective_orders_verified_at = self._now()
+                protective_orders_source = "broker_order_legs"
+                filled_exit_legs.append(("take_profit", leg)) if self._leg_is_filled(leg) else None
             elif leg_type in {"stop", "stop_limit", "stop_order"}:
-                filled_exit_legs.append(("stop_loss", leg))
+                stop_loss_order_id = str(leg.get("id")) if leg.get("id") is not None else None
+                stop_loss_order_status = leg_status or None
+                stop_loss_order_price = self._payload_float(leg, "stop_price")
+                protective_orders_verified_at = self._now()
+                protective_orders_source = "broker_order_legs"
+                filled_exit_legs.append(("stop_loss", leg)) if self._leg_is_filled(leg) else None
 
         if len(filled_exit_legs) > 1:
             status = BrokerPositionStatus.NEEDS_REVIEW.value
             error_message = "multiple filled exit legs found"
         elif filled_exit_legs:
             exit_reason, exit_leg = filled_exit_legs[0]
-            status = TradeOutcome.WIN.value if exit_reason == "take_profit" else TradeOutcome.LOSS.value
+            status = (
+                TradeOutcome.WIN.value if exit_reason == "take_profit" else TradeOutcome.LOSS.value
+            )
             exit_order_id = str(exit_leg.get("id")) if exit_leg.get("id") is not None else None
             exit_avg_price = self._payload_float(exit_leg, "filled_avg_price")
             exit_filled_at = self._broker_timestamp(exit_leg, "filled_at", "filledAt")
             current_quantity = 0
-        elif entry_filled_at is not None or broker_status == ExecutionStatus.FILLED.value or entry_filled_qty > 0:
+        elif (
+            entry_filled_at is not None
+            or broker_status == ExecutionStatus.FILLED.value
+            or entry_filled_qty > 0
+        ):
             status = BrokerPositionStatus.OPEN.value
             current_quantity = quantity
-        elif broker_status == ExecutionStatus.CANCELED.value or order.status == ExecutionStatus.CANCELED.value:
+        elif (
+            broker_status == ExecutionStatus.CANCELED.value
+            or order.status == ExecutionStatus.CANCELED.value
+        ):
             status = BrokerPositionStatus.CANCELED.value
-        elif broker_status in {ExecutionStatus.FAILED.value, ExecutionStatus.REJECTED.value, ExecutionStatus.EXPIRED.value} or order.status in {ExecutionStatus.FAILED.value, ExecutionStatus.REJECTED.value, ExecutionStatus.EXPIRED.value}:
+        elif broker_status in {
+            ExecutionStatus.FAILED.value,
+            ExecutionStatus.REJECTED.value,
+            ExecutionStatus.EXPIRED.value,
+        } or order.status in {
+            ExecutionStatus.FAILED.value,
+            ExecutionStatus.REJECTED.value,
+            ExecutionStatus.EXPIRED.value,
+        }:
             status = BrokerPositionStatus.ERROR.value
             error_message = order.error_message or f"broker order {broker_status or order.status}"
 
-        realized_pnl = self._realized_pnl(order=order, quantity=quantity, entry_avg_price=entry_avg_price, exit_avg_price=exit_avg_price)
+        realized_pnl = self._realized_pnl(
+            order=order,
+            quantity=quantity,
+            entry_avg_price=entry_avg_price,
+            exit_avg_price=exit_avg_price,
+        )
         realized_return_pct = None
         realized_r_multiple = None
         if realized_pnl is not None and entry_avg_price and quantity > 0:
@@ -1049,11 +1464,27 @@ class OrderExecutionService:
             exit_reason=exit_reason,
             exit_avg_price=exit_avg_price,
             exit_filled_at=exit_filled_at,
+            stop_loss_order_id=stop_loss_order_id,
+            stop_loss_order_status=stop_loss_order_status,
+            stop_loss_order_price=stop_loss_order_price,
+            take_profit_order_id=take_profit_order_id,
+            take_profit_order_status=take_profit_order_status,
+            take_profit_order_price=take_profit_order_price,
+            protective_orders_verified_at=protective_orders_verified_at,
+            protective_orders_source=protective_orders_source,
             realized_pnl=realized_pnl,
             realized_return_pct=realized_return_pct,
             realized_r_multiple=realized_r_multiple,
             raw_broker_payload=payload,
             error_message=error_message,
+        )
+
+    @staticmethod
+    def _leg_is_filled(leg: dict[str, object]) -> bool:
+        leg_status = str(leg.get("status") or "").strip().lower()
+        return (
+            leg_status == "filled"
+            or OrderExecutionService._broker_timestamp(leg, "filled_at", "filledAt") is not None
         )
 
     @staticmethod
@@ -1067,7 +1498,13 @@ class OrderExecutionService:
             return None
 
     @staticmethod
-    def _realized_pnl(*, order: BrokerOrderExecution, quantity: int, entry_avg_price: float | None, exit_avg_price: float | None) -> float | None:
+    def _realized_pnl(
+        *,
+        order: BrokerOrderExecution,
+        quantity: int,
+        entry_avg_price: float | None,
+        exit_avg_price: float | None,
+    ) -> float | None:
         if entry_avg_price is None or exit_avg_price is None or quantity <= 0:
             return None
         if order.action == "short" or order.side == "sell":

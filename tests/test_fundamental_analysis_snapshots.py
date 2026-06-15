@@ -52,12 +52,16 @@ def _full_provider_payload() -> dict[str, object]:
             "exDividendDate": 1_775_836_800,
         },
         "calendar": [{"Event": "Annual Meeting", "Date": "2026-05-15"}],
-        "recommendations": [{"period": "0m", "strongBuy": 10, "buy": 20, "hold": 8, "sell": 1, "strongSell": 0}],
+        "recommendations": [
+            {"period": "0m", "strongBuy": 10, "buy": 20, "hold": 8, "sell": 1, "strongSell": 0}
+        ],
     }
 
 
 def test_fundamental_snapshot_repository_round_trips_immutable_point_in_time_records() -> None:
-    from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
+    from trade_proposer_app.repositories.fundamental_analysis_snapshots import (
+        FundamentalAnalysisSnapshotRepository,
+    )
 
     session = create_session()
     repo = FundamentalAnalysisSnapshotRepository(session)
@@ -102,7 +106,9 @@ def test_monitored_ticker_discovery_merges_watchlists_and_active_broker_exposure
     session = create_session()
     watchlists = WatchlistRepository(session)
     positions = BrokerPositionRepository(session)
-    watchlists.create("Core", ["aapl", "MSFT", ""], default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)
+    watchlists.create(
+        "Core", ["aapl", "MSFT", ""], default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True
+    )
     positions.create(
         BrokerPosition(
             ticker="AAPL",
@@ -139,7 +145,9 @@ def test_monitored_ticker_discovery_merges_watchlists_and_active_broker_exposure
     assert provenance["NVDA"] == {"broker_position"}
 
 
-def test_fundamental_analysis_service_normalizes_provider_payload_without_positive_confidence() -> None:
+def test_fundamental_analysis_service_normalizes_provider_payload_without_positive_confidence() -> (
+    None
+):
     from trade_proposer_app.services.fundamental_analysis import FundamentalAnalysisService
 
     provider = SimpleNamespace(fetch=lambda ticker, as_of=None: _full_provider_payload())
@@ -157,14 +165,23 @@ def test_fundamental_analysis_service_normalizes_provider_payload_without_positi
     assert snapshot.payload["growth"]["revenue_growth"] == 0.06
     assert snapshot.payload["analyst_context"]["recommendation_key"] == "buy"
     assert snapshot.payload["feature_buckets"]["valuation"] in {"low", "medium", "high", "unknown"}
-    assert snapshot.payload["feature_buckets"]["event_regime"] in {"none_known", "pre_event", "event_week", "post_event", "stale_event", "unknown"}
+    assert snapshot.payload["feature_buckets"]["event_regime"] in {
+        "none_known",
+        "pre_event",
+        "event_week",
+        "post_event",
+        "stale_event",
+        "unknown",
+    }
     assert snapshot.payload.get("confidence_contribution", {}).get("positive_boost", 0.0) == 0.0
 
 
 def test_fundamental_analysis_service_classifies_event_windows() -> None:
     from trade_proposer_app.services.fundamental_analysis import FundamentalAnalysisService
 
-    service = FundamentalAnalysisService(provider=SimpleNamespace(fetch=lambda ticker, as_of=None: _full_provider_payload()))
+    service = FundamentalAnalysisService(
+        provider=SimpleNamespace(fetch=lambda ticker, as_of=None: _full_provider_payload())
+    )
     earnings_at = datetime(2026, 5, 15, tzinfo=timezone.utc)
     payload = {"event_calendar": {"next_earnings_at": earnings_at.isoformat()}}
 
@@ -175,20 +192,56 @@ def test_fundamental_analysis_service_classifies_event_windows() -> None:
 
 
 def test_fundamental_refresh_job_refreshes_due_and_event_window_tickers_only() -> None:
-    from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
-    from trade_proposer_app.services.fundamental_analysis_refresh import FundamentalAnalysisRefreshService
+    from trade_proposer_app.repositories.fundamental_analysis_snapshots import (
+        FundamentalAnalysisSnapshotRepository,
+    )
+    from trade_proposer_app.services.fundamental_analysis_refresh import (
+        FundamentalAnalysisRefreshService,
+    )
 
     session = create_session()
     watchlists = WatchlistRepository(session)
-    watchlists.create("Core", ["AAPL", "MSFT", "NVDA"], default_horizon=StrategyHorizon.ONE_WEEK, allow_shorts=True)
+    watchlists.create(
+        "Core",
+        ["AAPL", "MSFT", "NVDA"],
+        default_horizon=StrategyHorizon.ONE_WEEK,
+        allow_shorts=True,
+    )
     repo = FundamentalAnalysisSnapshotRepository(session)
     now = datetime(2026, 6, 1, tzinfo=timezone.utc)
-    repo.create_snapshot(ticker="MSFT", as_of=now - timedelta(days=5), source_set=["fake"], coverage_status="ok", freshness_status="fresh", payload={"feature_buckets": {"event_regime": "none_known"}}, warnings=[], missing_inputs=[])
-    repo.create_snapshot(ticker="NVDA", as_of=now - timedelta(days=5), source_set=["fake"], coverage_status="ok", freshness_status="fresh", payload={"event_calendar": {"next_earnings_at": (now + timedelta(days=2)).isoformat()}, "feature_buckets": {"event_regime": "event_week"}}, warnings=[], missing_inputs=[])
+    repo.create_snapshot(
+        ticker="MSFT",
+        as_of=now - timedelta(days=5),
+        source_set=["fake"],
+        coverage_status="ok",
+        freshness_status="fresh",
+        payload={"feature_buckets": {"event_regime": "none_known"}},
+        warnings=[],
+        missing_inputs=[],
+    )
+    repo.create_snapshot(
+        ticker="NVDA",
+        as_of=now - timedelta(days=5),
+        source_set=["fake"],
+        coverage_status="ok",
+        freshness_status="fresh",
+        payload={
+            "event_calendar": {"next_earnings_at": (now + timedelta(days=2)).isoformat()},
+            "feature_buckets": {"event_regime": "event_week"},
+        },
+        warnings=[],
+        missing_inputs=[],
+    )
 
     refreshed: list[str] = []
-    analysis_service = SimpleNamespace(refresh_ticker=lambda ticker, **kwargs: refreshed.append(ticker) or {"ticker": ticker, "coverage_status": "ok"})
-    summary = FundamentalAnalysisRefreshService(session, analysis_service=analysis_service).refresh_due_monitored_tickers(as_of=now, max_tickers=10)
+    analysis_service = SimpleNamespace(
+        refresh_ticker=lambda ticker, **kwargs: (
+            refreshed.append(ticker) or {"ticker": ticker, "coverage_status": "ok"}
+        )
+    )
+    summary = FundamentalAnalysisRefreshService(
+        session, analysis_service=analysis_service
+    ).refresh_due_monitored_tickers(as_of=now, max_tickers=10)
 
     assert refreshed == ["AAPL", "NVDA"]
     assert summary["monitored_count"] == 3
@@ -196,18 +249,42 @@ def test_fundamental_refresh_job_refreshes_due_and_event_window_tickers_only() -
     assert summary["skipped_fresh_count"] == 1
 
 
-def test_plan_generation_uses_latest_fundamental_snapshot_at_or_before_plan_time_without_boosting_confidence() -> None:
-    from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
+def test_plan_generation_uses_latest_fundamental_snapshot_at_or_before_plan_time_without_boosting_confidence() -> (
+    None
+):
+    from trade_proposer_app.repositories.fundamental_analysis_snapshots import (
+        FundamentalAnalysisSnapshotRepository,
+    )
     from trade_proposer_app.services.ticker_deep_analysis import TickerDeepAnalysisService
 
     session = create_session()
     repo = FundamentalAnalysisSnapshotRepository(session)
     plan_time = datetime(2026, 3, 10, tzinfo=timezone.utc)
-    prior = repo.create_snapshot(ticker="AAPL", as_of=plan_time - timedelta(days=1), source_set=["fake"], coverage_status="ok", freshness_status="fresh", payload={"feature_buckets": {"event_regime": "pre_event", "valuation": "high"}}, warnings=["earnings inside holding window"], missing_inputs=[])
-    future = repo.create_snapshot(ticker="AAPL", as_of=plan_time + timedelta(days=1), source_set=["fake"], coverage_status="ok", freshness_status="fresh", payload={"feature_buckets": {"event_regime": "post_event", "valuation": "medium"}}, warnings=[], missing_inputs=[])
+    prior = repo.create_snapshot(
+        ticker="AAPL",
+        as_of=plan_time - timedelta(days=1),
+        source_set=["fake"],
+        coverage_status="ok",
+        freshness_status="fresh",
+        payload={"feature_buckets": {"event_regime": "pre_event", "valuation": "high"}},
+        warnings=["earnings inside holding window"],
+        missing_inputs=[],
+    )
+    future = repo.create_snapshot(
+        ticker="AAPL",
+        as_of=plan_time + timedelta(days=1),
+        source_set=["fake"],
+        coverage_status="ok",
+        freshness_status="fresh",
+        payload={"feature_buckets": {"event_regime": "post_event", "valuation": "medium"}},
+        warnings=[],
+        missing_inputs=[],
+    )
 
     service = TickerDeepAnalysisService(SimpleNamespace(), fundamental_snapshots=repo)
-    context = service._apply_fundamental_snapshot({"confidence": 70.0}, "AAPL", as_of=plan_time, horizon=StrategyHorizon.ONE_WEEK)
+    context = service._apply_fundamental_snapshot(
+        {"confidence": 70.0}, "AAPL", as_of=plan_time, horizon=StrategyHorizon.ONE_WEEK
+    )
 
     assert context["fundamental_snapshot"]["id"] == prior["id"]
     assert context["fundamental_snapshot"]["id"] != future["id"]
@@ -217,7 +294,9 @@ def test_plan_generation_uses_latest_fundamental_snapshot_at_or_before_plan_time
 
 
 def test_fundamental_validation_slices_report_sparse_counts_and_effective_outcomes() -> None:
-    from trade_proposer_app.services.fundamental_validation_slices import FundamentalValidationSliceService
+    from trade_proposer_app.services.fundamental_validation_slices import (
+        FundamentalValidationSliceService,
+    )
 
     session = create_session()
     service = FundamentalValidationSliceService(session)
@@ -247,8 +326,67 @@ def test_fundamental_refresh_job_type_is_schedulable() -> None:
     jobs = JobRepository(session)
     runs = RunRepository(session)
 
-    job = jobs.create("Auto: Fundamental Analysis Monthly", [], "15 07 1 * *", job_type=JobType.FUNDAMENTAL_ANALYSIS_REFRESH, enabled=True)
+    job = jobs.create(
+        "Auto: Fundamental Analysis Weekend Batch 1",
+        [],
+        "15 06 * * SAT",
+        job_type=JobType.FUNDAMENTAL_ANALYSIS_REFRESH,
+        enabled=True,
+    )
     run = runs.enqueue(job.id or 0)
 
     assert job.job_type == JobType.FUNDAMENTAL_ANALYSIS_REFRESH
     assert run.job_id == job.id
+
+
+def test_default_fundamental_refresh_jobs_are_spread_across_weekend() -> None:
+    from trade_proposer_app.services.default_jobs import ensure_default_fundamental_analysis_job
+
+    session = create_session()
+
+    spec = ensure_default_fundamental_analysis_job(session)
+    jobs = JobRepository(session).list_all()
+    fundamental_jobs = [job for job in jobs if job.job_type == JobType.FUNDAMENTAL_ANALYSIS_REFRESH]
+
+    assert len(spec["jobs"]) == 8
+    assert len(fundamental_jobs) == 8
+    assert [job.name for job in fundamental_jobs] == [
+        f"Auto: Fundamental Analysis Weekend Batch {index}" for index in range(1, 9)
+    ]
+    assert [job.cron for job in fundamental_jobs] == [
+        "15 06 * * SAT",
+        "15 09 * * SAT",
+        "15 12 * * SAT",
+        "15 15 * * SAT",
+        "15 06 * * SUN",
+        "15 09 * * SUN",
+        "15 12 * * SUN",
+        "15 15 * * SUN",
+    ]
+    assert all(
+        "weekend" in str(item["schedule_rationale"]).lower()
+        or "batch" in str(item["schedule_rationale"]).lower()
+        for item in spec["jobs"]
+    )
+
+
+def test_default_fundamental_refresh_jobs_migrate_legacy_monthly_job() -> None:
+    from trade_proposer_app.services.default_jobs import ensure_default_fundamental_analysis_job
+
+    session = create_session()
+    legacy = JobRepository(session).create(
+        "Auto: Fundamental Analysis Monthly",
+        [],
+        "15 07 1 * *",
+        job_type=JobType.FUNDAMENTAL_ANALYSIS_REFRESH,
+        enabled=True,
+    )
+
+    ensure_default_fundamental_analysis_job(session)
+    jobs = JobRepository(session).list_all()
+    fundamental_jobs = [job for job in jobs if job.job_type == JobType.FUNDAMENTAL_ANALYSIS_REFRESH]
+
+    assert len(fundamental_jobs) == 8
+    assert fundamental_jobs[0].id == legacy.id
+    assert fundamental_jobs[0].name == "Auto: Fundamental Analysis Weekend Batch 1"
+    assert fundamental_jobs[0].cron == "15 06 * * SAT"

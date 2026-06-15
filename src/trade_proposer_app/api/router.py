@@ -1,30 +1,41 @@
 from fastapi import APIRouter
 
 from trade_proposer_app.api.routes.auth import router as auth_router
+from trade_proposer_app.api.routes.broker_accounts import router as broker_accounts_router
+from trade_proposer_app.api.routes.broker_orders import router as broker_orders_router
+from trade_proposer_app.api.routes.broker_positions import router as broker_positions_router
+from trade_proposer_app.api.routes.broker_workbench import router as broker_workbench_router
 from trade_proposer_app.api.routes.context import router as context_router
 from trade_proposer_app.api.routes.dashboard import router as dashboard_router
 from trade_proposer_app.api.routes.data_quality import router as data_quality_router
 from trade_proposer_app.api.routes.docs import router as docs_router
-from trade_proposer_app.api.routes.effective_plan_outcomes import router as effective_plan_outcomes_router
+from trade_proposer_app.api.routes.effective_plan_outcomes import (
+    router as effective_plan_outcomes_router,
+)
 from trade_proposer_app.api.routes.fundamentals import router as fundamentals_router
 from trade_proposer_app.api.routes.health import router as health_router
 from trade_proposer_app.api.routes.historical_replay import router as historical_replay_router
 from trade_proposer_app.api.routes.jobs import router as jobs_router
 from trade_proposer_app.api.routes.observability import router as observability_router
-from trade_proposer_app.api.routes.signal_gating_tuning import router as signal_gating_tuning_router
-from trade_proposer_app.api.routes.steering import router as steering_router
-from trade_proposer_app.api.routes.plan_generation_tuning import router as plan_generation_tuning_router
-from trade_proposer_app.api.routes.recommendation_decision_samples import router as recommendation_decision_samples_router
-from trade_proposer_app.api.routes.research import router as research_router
-from trade_proposer_app.api.routes.recommendation_outcomes import router as recommendation_outcomes_router
+from trade_proposer_app.api.routes.plan_generation_tuning import (
+    router as plan_generation_tuning_router,
+)
+from trade_proposer_app.api.routes.recommendation_decision_samples import (
+    router as recommendation_decision_samples_router,
+)
+from trade_proposer_app.api.routes.recommendation_outcomes import (
+    router as recommendation_outcomes_router,
+)
 from trade_proposer_app.api.routes.recommendation_plans import router as recommendation_plans_router
-from trade_proposer_app.api.routes.recommendation_quality import router as recommendation_quality_router
+from trade_proposer_app.api.routes.recommendation_quality import (
+    router as recommendation_quality_router,
+)
+from trade_proposer_app.api.routes.research import router as research_router
 from trade_proposer_app.api.routes.risk import router as risk_router
-from trade_proposer_app.api.routes.broker_orders import router as broker_orders_router
-from trade_proposer_app.api.routes.broker_positions import router as broker_positions_router
-from trade_proposer_app.api.routes.broker_workbench import router as broker_workbench_router
 from trade_proposer_app.api.routes.runs import router as runs_router
 from trade_proposer_app.api.routes.settings import router as settings_router
+from trade_proposer_app.api.routes.signal_gating_tuning import router as signal_gating_tuning_router
+from trade_proposer_app.api.routes.steering import router as steering_router
 from trade_proposer_app.api.routes.tickers import router as tickers_router
 from trade_proposer_app.api.routes.watchlists import router as watchlists_router
 from trade_proposer_app.api.routes.workers import router as workers_router
@@ -48,6 +59,7 @@ router.include_router(research_router)
 router.include_router(recommendation_outcomes_router)
 router.include_router(recommendation_plans_router)
 router.include_router(recommendation_quality_router)
+router.include_router(broker_accounts_router)
 router.include_router(broker_orders_router)
 router.include_router(broker_positions_router)
 router.include_router(broker_workbench_router)

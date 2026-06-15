@@ -10,7 +10,18 @@ router = APIRouter(prefix="/broker-workbench", tags=["broker-workbench"])
 @router.get("")
 async def get_broker_workbench(
     run_id: int | None = Query(default=None),
+    broker_account_id: str | None = Query(default=None),
+    broker: str | None = Query(default=None),
+    account_mode: str | None = Query(default=None),
+    status: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     session: Session = Depends(get_db_session),
 ) -> dict[str, object]:
-    return BrokerReconciliationService(session).build_workbench(run_id=run_id, limit=limit)
+    return BrokerReconciliationService(session).build_workbench(
+        run_id=run_id,
+        broker_account_id=broker_account_id,
+        broker=broker,
+        account_mode=account_mode,
+        status=status,
+        limit=limit,
+    )

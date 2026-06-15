@@ -8,7 +8,9 @@ from trade_proposer_app.services.settings_domains import SettingsDomainService
 
 
 class SettingsMutationService:
-    def __init__(self, session: Session | None = None, repository: SettingsRepository | None = None) -> None:
+    def __init__(
+        self, session: Session | None = None, repository: SettingsRepository | None = None
+    ) -> None:
         if repository is None:
             if session is None:
                 raise ValueError("session or repository is required")
@@ -54,7 +56,8 @@ class SettingsMutationService:
             {
                 "summary_backend": backend.strip() or settings_map["summary_backend"],
                 "summary_model": model.strip(),
-                "summary_timeout_seconds": timeout_seconds.strip() or settings_map["summary_timeout_seconds"],
+                "summary_timeout_seconds": timeout_seconds.strip()
+                or settings_map["summary_timeout_seconds"],
                 "summary_max_tokens": max_tokens.strip() or settings_map["summary_max_tokens"],
                 "summary_pi_command": pi_command.strip() or settings_map["summary_pi_command"],
                 "summary_pi_agent_dir": pi_agent_dir.strip(),
@@ -62,7 +65,11 @@ class SettingsMutationService:
                 "summary_prompt": prompt.strip() or settings_map["summary_prompt"],
             }
         )
-        return {"settings": SettingsDomainService(repository=self.repository).operator_settings().summary}
+        return {
+            "settings": SettingsDomainService(repository=self.repository)
+            .operator_settings()
+            .summary
+        }
 
     def set_news_settings(
         self,
@@ -74,9 +81,12 @@ class SettingsMutationService:
         settings_map = self.repository.get_setting_map()
         self.repository.set_settings(
             {
-                "news_macro_article_limit": macro_article_limit.strip() or settings_map.get("news_macro_article_limit", "12"),
-                "news_industry_article_limit": industry_article_limit.strip() or settings_map.get("news_industry_article_limit", "12"),
-                "news_ticker_article_limit": ticker_article_limit.strip() or settings_map.get("news_ticker_article_limit", "12"),
+                "news_macro_article_limit": macro_article_limit.strip()
+                or settings_map.get("news_macro_article_limit", "12"),
+                "news_industry_article_limit": industry_article_limit.strip()
+                or settings_map.get("news_industry_article_limit", "12"),
+                "news_ticker_article_limit": ticker_article_limit.strip()
+                or settings_map.get("news_ticker_article_limit", "12"),
             }
         )
         return {"status": "success"}
@@ -121,7 +131,9 @@ class SettingsMutationService:
                 "social_enable_duplicate_suppression": enable_duplicate_suppression.strip().lower(),
             }
         )
-        return {"settings": SettingsDomainService(repository=self.repository).operator_settings().social}
+        return {
+            "settings": SettingsDomainService(repository=self.repository).operator_settings().social
+        }
 
     def set_signal_gating_tuning_settings(
         self,
@@ -163,7 +175,9 @@ class SettingsMutationService:
             raise ValueError(f"invalid plan generation tuning settings: {exc}") from exc
         return {"plan_generation_tuning": config}
 
-    def set_plan_generation_active_config_version_id(self, config_version_id: int | None) -> AppSetting:
+    def set_plan_generation_active_config_version_id(
+        self, config_version_id: int | None
+    ) -> AppSetting:
         return self.repository.set_plan_generation_active_config_version_id(config_version_id)
 
     def set_risk_management_settings(
@@ -234,6 +248,7 @@ class SettingsMutationService:
         deterioration_stop_cushion_percent: str = "0.35",
         weakened_thesis_tp_cushion_percent: str = "0.50",
         min_tp_distance_percent: str = "0.10",
+        max_reconciliation_age_minutes: str = "30",
         min_reviewed_dry_run_decisions_before_enable: str = "30",
         min_reviewed_dry_run_amendments_before_enable: str = "10",
         min_reviewed_dry_run_close_now_before_enable: str = "10",
@@ -242,34 +257,63 @@ class SettingsMutationService:
             config = self.repository.set_steering_config(
                 enabled=self._bool(enabled),
                 dry_run=self._bool(dry_run),
-                cancel_expired_pending_orders_enabled=self._bool(cancel_expired_pending_orders_enabled),
-                cancel_invalidated_pending_orders_enabled=self._bool(cancel_invalidated_pending_orders_enabled),
+                cancel_expired_pending_orders_enabled=self._bool(
+                    cancel_expired_pending_orders_enabled
+                ),
+                cancel_invalidated_pending_orders_enabled=self._bool(
+                    cancel_invalidated_pending_orders_enabled
+                ),
                 move_to_profit_enabled=self._bool(move_to_profit_enabled),
-                close_on_severe_invalidation_enabled=self._bool(close_on_severe_invalidation_enabled),
+                close_on_severe_invalidation_enabled=self._bool(
+                    close_on_severe_invalidation_enabled
+                ),
                 tighten_on_deterioration_enabled=self._bool(tighten_on_deterioration_enabled),
                 lower_tp_on_weakness_enabled=self._bool(lower_tp_on_weakness_enabled),
                 pending_expiration_grace_minutes=self._int(pending_expiration_grace_minutes, 5),
                 pending_min_confidence_percent=self._float(pending_min_confidence_percent, 55.0),
-                pending_invalidation_required_signals=self._int(pending_invalidation_required_signals, 2),
-                pending_price_chase_limit_percent=self._float(pending_price_chase_limit_percent, 1.0),
+                pending_invalidation_required_signals=self._int(
+                    pending_invalidation_required_signals, 2
+                ),
+                pending_price_chase_limit_percent=self._float(
+                    pending_price_chase_limit_percent, 1.0
+                ),
                 breakeven_trigger_percent=self._float(breakeven_trigger_percent, 0.75),
                 min_profit_lock_percent=self._float(min_profit_lock_percent, 0.10),
-                position_close_confidence_percent=self._float(position_close_confidence_percent, 40.0),
+                position_close_confidence_percent=self._float(
+                    position_close_confidence_percent, 40.0
+                ),
                 position_close_required_signals=self._int(position_close_required_signals, 3),
-                position_min_hold_confidence_percent=self._float(position_min_hold_confidence_percent, 50.0),
-                position_deterioration_required_signals=self._int(position_deterioration_required_signals, 2),
-                deterioration_stop_cushion_percent=self._float(deterioration_stop_cushion_percent, 0.35),
-                weakened_thesis_tp_cushion_percent=self._float(weakened_thesis_tp_cushion_percent, 0.50),
+                position_min_hold_confidence_percent=self._float(
+                    position_min_hold_confidence_percent, 50.0
+                ),
+                position_deterioration_required_signals=self._int(
+                    position_deterioration_required_signals, 2
+                ),
+                deterioration_stop_cushion_percent=self._float(
+                    deterioration_stop_cushion_percent, 0.35
+                ),
+                weakened_thesis_tp_cushion_percent=self._float(
+                    weakened_thesis_tp_cushion_percent, 0.50
+                ),
                 min_tp_distance_percent=self._float(min_tp_distance_percent, 0.10),
-                min_reviewed_dry_run_decisions_before_enable=self._int(min_reviewed_dry_run_decisions_before_enable, 30),
-                min_reviewed_dry_run_amendments_before_enable=self._int(min_reviewed_dry_run_amendments_before_enable, 10),
-                min_reviewed_dry_run_close_now_before_enable=self._int(min_reviewed_dry_run_close_now_before_enable, 10),
+                max_reconciliation_age_minutes=self._int(max_reconciliation_age_minutes, 30),
+                min_reviewed_dry_run_decisions_before_enable=self._int(
+                    min_reviewed_dry_run_decisions_before_enable, 30
+                ),
+                min_reviewed_dry_run_amendments_before_enable=self._int(
+                    min_reviewed_dry_run_amendments_before_enable, 10
+                ),
+                min_reviewed_dry_run_close_now_before_enable=self._int(
+                    min_reviewed_dry_run_close_now_before_enable, 10
+                ),
             )
         except ValueError as exc:
             raise ValueError(f"invalid steering settings: {exc}") from exc
         return {"steering": config}
 
-    def set_provider_credential(self, *, provider: str, api_key: str = "", api_secret: str = "") -> dict[str, str]:
+    def set_provider_credential(
+        self, *, provider: str, api_key: str = "", api_secret: str = ""
+    ) -> dict[str, str]:
         try:
             credential = self.repository.upsert_provider_credential(
                 provider=provider.strip(),

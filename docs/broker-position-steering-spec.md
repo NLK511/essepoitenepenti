@@ -65,9 +65,9 @@ For short positions, invert the direction:
 - stop-loss may only move down
 - take-profit may only move up or stay unchanged by default
 
-Immediate close is allowed only by the severe-invalidation rule. If direction, ownership, side, quantity, or broker state is ambiguous, emit `manual_review_required` and do not mutate the broker.
+Immediate close is allowed only by the severe-invalidation rule. If direction, ownership, side, quantity, broker state, reconciliation freshness, or plan freshness is ambiguous, emit `manual_review_required` and do not mutate the broker.
 
-`closing` broker positions remain active exposure until broker fill/reconciliation confirms closure. Do not submit duplicate close mutations for already-closing positions.
+`closing` broker positions remain active exposure until broker fill/reconciliation confirms closure. Do not submit duplicate close mutations for already-closing positions. `submitted` broker-position rows with `current_quantity=0` are not filled/open positions and must not be treated as amendable; pending-order steering comes from broker-order records.
 
 ## Inputs and evidence
 
@@ -152,6 +152,17 @@ Default: `keep_pending_order` with `insufficient_invalidation_evidence`.
 
 Filled means broker shows an app-owned open position or filled lifecycle tied to a position.
 
+### F0 — freshness gates before filled-position mutation
+
+Protective-order evidence is necessary but not sufficient. Before any filled-position amendment or close mutation, steering requires:
+- the position's recommendation holding period is not expired (`expiration_at >= now` when available)
+- a recent broker reconciliation snapshot for the ticker/account with no warnings and `drift_severity=ok`
+- active broker-neutral protective child order evidence when amending exits
+
+If the holding period is expired, emit `manual_review_required` with `position_holding_period_expired`. Missing/stale reconciliation emits `manual_review_required` with `broker_reconciliation_stale`. Missing/terminal protective child evidence emits `manual_review_required` with `position_linked_exit_orders_missing`. Missing final `exit_order_id` on an open position is normal and must not block by itself.
+
+Default max reconciliation age: `steering.max_reconciliation_age_minutes=30`.
+
 ### F1 — never increase downside risk
 
 For long positions proposed SL must be `>= max(current_stop_loss, original_stop_loss)`. For shorts proposed SL must be `<= min(current_stop_loss, original_stop_loss)`. If this cannot be verified, do not amend.
@@ -234,22 +245,26 @@ Default: `lower_take_profit`; if amendment cannot be proven safe, `manual_review
 
 ### F6/F7 — stable or uncertain
 
-Stable evidence with no profit trigger keeps exits. Broker drift, missing linked orders, ambiguous quantity, or unknown order ids block live amendments.
+Stable evidence with no profit trigger keeps exits. Broker drift, missing linked protective orders, ambiguous quantity, or unknown order ids block live amendments.
+
+Linked protective orders are not the same as the final filled exit order. For every app-owned open bracket/protected position, steering must reason from broker-neutral protective-order evidence: stop-loss child id/status/price and take-profit child id/status/price when the broker exposes them. The final `exit_order_id` remains reserved for the order that actually closed the position. Missing `exit_order_id` on an open position is normal and must not by itself block steering; missing or terminal protective-order evidence must block live amendments. Broker-specific adapters/reconciliation may derive this evidence from raw payloads, but steering consumes the normalized position fields so the method can apply to Alpaca, eToro, or future brokers.
 
 Defaults: `keep_position_exits` or `manual_review_required`.
 
 ## Decision priority
 
 Evaluate in order:
-1. broker/reconciliation safety
+1. broker/reconciliation safety and freshness
 2. pending expiration
 3. pending invalidation
-4. filled non-risk-increase guard
-5. severe close-now
-6. profit-lock stop move
-7. deterioration stop tightening
-8. weakened-thesis TP lowering
-9. keep/no-op
+4. filled holding-period freshness
+5. filled protective-order evidence
+6. filled non-risk-increase guard
+7. severe close-now
+8. profit-lock stop move
+9. deterioration stop tightening
+10. weakened-thesis TP lowering
+11. keep/no-op
 
 If both SL and TP amendments are valid, submit together only if broker support is validated; otherwise prioritize stop tightening.
 
@@ -260,7 +275,7 @@ All knobs use `steering.*`:
 - `dry_run`: `true`
 - action toggles: `cancel_expired_pending_orders_enabled`, `cancel_invalidated_pending_orders_enabled`, `move_to_profit_enabled`, `close_on_severe_invalidation_enabled`, `tighten_on_deterioration_enabled`, `lower_tp_on_weakness_enabled` all default `true`
 - pending defaults: grace `5`, min confidence `55`, required signals `2`, chase limit `1.0`
-- filled defaults: breakeven trigger `0.75`, min profit lock `0.10`, close confidence `40`, close required signals `3`, hold confidence `50`, deterioration required signals `2`, deterioration cushion `0.35`, weakened TP cushion `0.50`, min TP distance `0.10`
+- filled defaults: max reconciliation age `30` minutes, breakeven trigger `0.75`, min profit lock `0.10`, close confidence `40`, close required signals `3`, hold confidence `50`, deterioration required signals `2`, deterioration cushion `0.35`, weakened TP cushion `0.50`, min TP distance `0.10`
 - dry-run thresholds: `min_reviewed_dry_run_decisions_before_enable=30`, `min_reviewed_dry_run_amendments_before_enable=10`, `min_reviewed_dry_run_close_now_before_enable=10`
 
 `enabled=false` prevents autonomous broker mutation. `dry_run=true` persists decisions without broker calls. Threshold names use historical `reviewed` wording but currently count persisted dry-run decisions.
@@ -287,7 +302,7 @@ Before any live mutation:
 - verify market/broker accepts the action
 - persist attempt/result
 
-Broker amendment method must be validated for Alpaca. If direct replace vs cancel/replace semantics are uncertain, stay in dry-run.
+Broker amendment method must be validated for each broker. If direct replace vs cancel/replace semantics are uncertain, stay in dry-run. Alpaca bracket payloads expose protective child legs in `legs`; these must be normalized into broker-neutral protective-order fields before steering treats the position as amendable.
 
 ## Operator UI and observability
 
@@ -309,7 +324,9 @@ Cover before live mutation:
 - pending expiration, invalidation, and uncertain keep
 - long/short non-risk-increase math
 - profit-lock, deterioration SL, TP lowering, severe close-now for long/short
-- broker uncertainty and ambiguous direction manual review
+- broker uncertainty, stale reconciliation, expired holding periods, and ambiguous direction manual review
+- submitted/current_quantity=0 position rows are not open amendable positions
+- fresh protected non-expired position can still amend
 - stable no-op
 - decision persistence and diagnostics
 - dry-run no broker calls

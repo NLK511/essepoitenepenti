@@ -16,6 +16,7 @@ class BrokerOrderExecutionRepository:
 
     def create(self, order: BrokerOrderExecution) -> BrokerOrderExecution:
         record = BrokerOrderExecutionRecord(
+            broker_account_id=order.broker_account_id,
             broker=order.broker,
             account_mode=order.account_mode,
             recommendation_plan_id=order.recommendation_plan_id,
@@ -53,12 +54,21 @@ class BrokerOrderExecutionRepository:
             return existing
         return self.create(order)
 
+    def create_candidate_once(self, order: BrokerOrderExecution) -> BrokerOrderExecution:
+        existing = self.get_by_run_plan_and_account(
+            order.run_id, order.recommendation_plan_id, order.broker_account_id
+        )
+        if existing is not None:
+            return existing
+        return self.create(order)
+
     def update(self, order: BrokerOrderExecution) -> BrokerOrderExecution:
         if order.id is None:
             raise ValueError("Broker order execution id is required for update")
         record = self.session.get(BrokerOrderExecutionRecord, order.id)
         if record is None:
             raise ValueError(f"Broker order execution {order.id} not found")
+        record.broker_account_id = order.broker_account_id
         record.broker = order.broker
         record.account_mode = order.account_mode
         record.recommendation_plan_id = order.recommendation_plan_id
@@ -94,7 +104,9 @@ class BrokerOrderExecutionRepository:
             raise ValueError(f"Broker order execution {execution_id} not found")
         return self._to_model(record)
 
-    def get_by_client_order_id(self, broker: str, client_order_id: str) -> BrokerOrderExecution | None:
+    def get_by_client_order_id(
+        self, broker: str, client_order_id: str
+    ) -> BrokerOrderExecution | None:
         record = self.session.scalar(
             select(BrokerOrderExecutionRecord).where(
                 BrokerOrderExecutionRecord.broker == broker,
@@ -103,17 +115,44 @@ class BrokerOrderExecutionRepository:
         )
         return self._to_model(record) if record is not None else None
 
+    def get_by_run_plan_and_account(
+        self,
+        run_id: int | None,
+        recommendation_plan_id: int,
+        broker_account_id: str,
+    ) -> BrokerOrderExecution | None:
+        if run_id is None:
+            return None
+        record = self.session.scalar(
+            select(BrokerOrderExecutionRecord)
+            .where(BrokerOrderExecutionRecord.run_id == run_id)
+            .where(BrokerOrderExecutionRecord.recommendation_plan_id == recommendation_plan_id)
+            .where(BrokerOrderExecutionRecord.broker_account_id == broker_account_id)
+            .order_by(
+                BrokerOrderExecutionRecord.created_at.asc(), BrokerOrderExecutionRecord.id.asc()
+            )
+        )
+        return self._to_model(record) if record is not None else None
+
     def list_all(self, limit: int = 200) -> list[BrokerOrderExecution]:
         rows = self.session.scalars(
-            select(BrokerOrderExecutionRecord).order_by(BrokerOrderExecutionRecord.created_at.desc()).limit(max(1, limit))
+            select(BrokerOrderExecutionRecord)
+            .order_by(BrokerOrderExecutionRecord.created_at.desc())
+            .limit(max(1, limit))
         ).all()
         return [self._to_model(row) for row in rows]
 
     def list_active(self, limit: int = 200) -> list[BrokerOrderExecution]:
         rows = self.session.scalars(
             select(BrokerOrderExecutionRecord)
-            .where(BrokerOrderExecutionRecord.status.in_(sorted({"queued", "submitted", "accepted", "open", "new", "partially_filled"})))
-            .order_by(BrokerOrderExecutionRecord.created_at.desc(), BrokerOrderExecutionRecord.id.desc())
+            .where(
+                BrokerOrderExecutionRecord.status.in_(
+                    sorted({"queued", "submitted", "accepted", "open", "new", "partially_filled"})
+                )
+            )
+            .order_by(
+                BrokerOrderExecutionRecord.created_at.desc(), BrokerOrderExecutionRecord.id.desc()
+            )
             .limit(max(1, limit))
         ).all()
         return [self._to_model(row) for row in rows]
@@ -127,6 +166,34 @@ class BrokerOrderExecutionRepository:
         ).all()
         return [self._to_model(row) for row in rows]
 
+    def list_filtered(
+        self,
+        *,
+        run_id: int | None = None,
+        broker_account_id: str | None = None,
+        broker: str | None = None,
+        account_mode: str | None = None,
+        status: str | None = None,
+        limit: int = 200,
+    ) -> list[BrokerOrderExecution]:
+        query = select(BrokerOrderExecutionRecord)
+        if run_id is not None:
+            query = query.where(BrokerOrderExecutionRecord.run_id == run_id)
+        if broker_account_id:
+            query = query.where(BrokerOrderExecutionRecord.broker_account_id == broker_account_id)
+        if broker:
+            query = query.where(BrokerOrderExecutionRecord.broker == broker.strip().lower())
+        if account_mode:
+            query = query.where(
+                BrokerOrderExecutionRecord.account_mode == account_mode.strip().lower()
+            )
+        if status:
+            query = query.where(BrokerOrderExecutionRecord.status == status.strip())
+        rows = self.session.scalars(
+            query.order_by(BrokerOrderExecutionRecord.created_at.desc()).limit(max(1, limit))
+        ).all()
+        return [self._to_model(row) for row in rows]
+
     def list_by_ticker(
         self,
         ticker: str,
@@ -135,20 +202,40 @@ class BrokerOrderExecutionRepository:
         created_after: datetime | None = None,
         created_before: datetime | None = None,
     ) -> list[BrokerOrderExecution]:
-        query = select(BrokerOrderExecutionRecord).where(BrokerOrderExecutionRecord.ticker == ticker.upper())
+        query = select(BrokerOrderExecutionRecord).where(
+            BrokerOrderExecutionRecord.ticker == ticker.upper()
+        )
         if created_after is not None:
-            query = query.where(BrokerOrderExecutionRecord.created_at >= self._normalize_datetime(created_after))
+            query = query.where(
+                BrokerOrderExecutionRecord.created_at >= self._normalize_datetime(created_after)
+            )
         if created_before is not None:
-            query = query.where(BrokerOrderExecutionRecord.created_at <= self._normalize_datetime(created_before))
-        rows = self.session.scalars(query.order_by(BrokerOrderExecutionRecord.created_at.desc()).limit(max(1, limit))).all()
+            query = query.where(
+                BrokerOrderExecutionRecord.created_at <= self._normalize_datetime(created_before)
+            )
+        rows = self.session.scalars(
+            query.order_by(BrokerOrderExecutionRecord.created_at.desc()).limit(max(1, limit))
+        ).all()
         return [self._to_model(row) for row in rows]
 
-    def count_by_ticker(self, ticker: str, *, created_after: datetime | None = None, created_before: datetime | None = None) -> int:
-        query = select(BrokerOrderExecutionRecord).where(BrokerOrderExecutionRecord.ticker == ticker.upper())
+    def count_by_ticker(
+        self,
+        ticker: str,
+        *,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+    ) -> int:
+        query = select(BrokerOrderExecutionRecord).where(
+            BrokerOrderExecutionRecord.ticker == ticker.upper()
+        )
         if created_after is not None:
-            query = query.where(BrokerOrderExecutionRecord.created_at >= self._normalize_datetime(created_after))
+            query = query.where(
+                BrokerOrderExecutionRecord.created_at >= self._normalize_datetime(created_after)
+            )
         if created_before is not None:
-            query = query.where(BrokerOrderExecutionRecord.created_at <= self._normalize_datetime(created_before))
+            query = query.where(
+                BrokerOrderExecutionRecord.created_at <= self._normalize_datetime(created_before)
+            )
         return int(self.session.scalar(select(func.count()).select_from(query.subquery())) or 0)
 
     def has_known_unavailable_ticker(self, broker: str, ticker: str) -> bool:
@@ -157,7 +244,9 @@ class BrokerOrderExecutionRepository:
             .where(BrokerOrderExecutionRecord.broker == broker)
             .where(BrokerOrderExecutionRecord.ticker == ticker.upper())
             .where(BrokerOrderExecutionRecord.status == "skipped")
-            .order_by(BrokerOrderExecutionRecord.created_at.desc(), BrokerOrderExecutionRecord.id.desc())
+            .order_by(
+                BrokerOrderExecutionRecord.created_at.desc(), BrokerOrderExecutionRecord.id.desc()
+            )
             .limit(1)
         ).first()
         if record is None:
@@ -192,6 +281,7 @@ class BrokerOrderExecutionRepository:
     def _to_model(self, record: BrokerOrderExecutionRecord) -> BrokerOrderExecution:
         return BrokerOrderExecution(
             id=record.id,
+            broker_account_id=record.broker_account_id,
             broker=record.broker,
             account_mode=record.account_mode,
             recommendation_plan_id=record.recommendation_plan_id,

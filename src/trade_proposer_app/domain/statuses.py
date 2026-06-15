@@ -44,6 +44,7 @@ class ExecutionStatus(StrEnum):
     REJECTED = "rejected"
     FAILED = "failed"
     SKIPPED = "skipped"
+    NEEDS_REVIEW = "needs_review"
 
 
 class PlanStatus(StrEnum):
@@ -52,7 +53,10 @@ class PlanStatus(StrEnum):
     DEGRADED = "degraded"
 
 
-BROKER_RESOLVED_POSITION_STATUSES = {BrokerPositionStatus.WIN.value, BrokerPositionStatus.LOSS.value}
+BROKER_RESOLVED_POSITION_STATUSES = {
+    BrokerPositionStatus.WIN.value,
+    BrokerPositionStatus.LOSS.value,
+}
 RESOLVED_TRADE_OUTCOMES = {TradeOutcome.WIN.value, TradeOutcome.LOSS.value}
 TERMINAL_EXECUTION_STATUSES = {
     ExecutionStatus.WIN.value,
@@ -62,6 +66,7 @@ TERMINAL_EXECUTION_STATUSES = {
     ExecutionStatus.EXPIRED.value,
     ExecutionStatus.FAILED.value,
     ExecutionStatus.SKIPPED.value,
+    ExecutionStatus.NEEDS_REVIEW.value,
 }
 NONTERMINAL_EXECUTION_STATUSES = {
     ExecutionStatus.NEW.value,

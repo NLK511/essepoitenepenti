@@ -17,7 +17,120 @@ Hydrates the local database with historical Daily OHLCV bars from Yahoo! Finance
   ```
   *(Note: The current script uses a fixed `as_of` date and hydrates tickers from watchlists with 100 tickers or fewer; edit the script to change scope.)*
 
-## Regression Testing and Debugging
+## Regression Testing and Release Validation
+
+### `scripts/check_broker_migration_backfill.py`
+Runs a broker-account migration/backfill smoke test against a fresh SQLite database.
+
+- **Use case:** Verifies Alembic can upgrade to head and that broker-account tables, account-scoped columns, safety tables, and the default Alpaca paper account exist.
+- **Usage:**
+  ```bash
+  .venv/bin/python scripts/check_broker_migration_backfill.py
+  ```
+- **Optional persistent database path:**
+  ```bash
+  .venv/bin/python scripts/check_broker_migration_backfill.py \
+    --database-path /tmp/broker-migration-smoke.db
+  ```
+
+### `scripts/start_test_postgres.py`
+Starts a local Docker Postgres container for migration/backfill validation and prints the required `POSTGRES_TEST_DATABASE_URL` export.
+
+- **Use case:** Provides the environment needed by `scripts/check_postgres_validation.py` when a shared Postgres test database is not already available.
+- **Defaults:** container `aurelio-postgres-test`, image `postgres:16-alpine`, port `55432`, database/user `aurelio_test`/`aurelio`.
+- **Requirement:** the current user must have access to `/var/run/docker.sock`.
+- **Usage:**
+  ```bash
+  eval "$(.venv/bin/python scripts/start_test_postgres.py --print-export)"
+  .venv/bin/python scripts/check_postgres_validation.py
+  ```
+
+### `scripts/backfill_broker_position_protective_orders.py`
+Backfills broker-neutral protective order evidence from stored broker bracket payload legs.
+
+- **Use case:** After adding protective-order fields or importing older broker-position records, populate stop-loss/take-profit child order ids, statuses, prices, verification timestamp, and source from raw broker payloads where the broker exposes bracket legs.
+- **Usage:**
+  ```bash
+  .venv/bin/python scripts/backfill_broker_position_protective_orders.py \
+    --report-output artifacts/protective-order-backfill.json
+  ```
+- **Dry run:**
+  ```bash
+  .venv/bin/python scripts/backfill_broker_position_protective_orders.py --dry-run
+  ```
+
+### `scripts/report_stale_broker_positions.py`
+Reports app broker-position ledger rows that are unsafe for steering mutation because they are expired, quantity-zero submitted rows, missing active protective evidence, or have stale protective-order verification.
+
+- **Use case:** Run before enabling broker-position steering mutation and after reconciliation/backfill work.
+- **Usage:**
+  ```bash
+  .venv/bin/python scripts/report_stale_broker_positions.py \
+    --json-output artifacts/stale-broker-positions.json \
+    --csv-output artifacts/stale-broker-positions-review.csv
+  ```
+
+### `scripts/mark_stale_broker_positions_needs_review.py`
+Marks expired app broker-position ledger rows as `needs_review` after operator review. It is dry-run by default and never marks positions closed/win/loss without broker fill evidence.
+
+- **Dry run:**
+  ```bash
+  .venv/bin/python scripts/mark_stale_broker_positions_needs_review.py \
+    --reason "stale app ledger; broker confirmation unavailable"
+  ```
+- **Apply after review:**
+  ```bash
+  .venv/bin/python scripts/mark_stale_broker_positions_needs_review.py \
+    --reason "stale app ledger; broker confirmation unavailable" \
+    --apply
+  ```
+
+### `scripts/report_steering_dry_run_quality.py`
+Builds a JSON summary and optional CSV review queue for broker-position steering dry-run decisions.
+
+- **Use case:** Review steering quality before enabling any broker mutation path. It reports threshold status, decision counts, ticker concentration, reason-code frequencies, suspicious samples, recent close-now samples, recent amendment samples, and random review samples.
+- **Usage:**
+  ```bash
+  .venv/bin/python scripts/report_steering_dry_run_quality.py \
+    --json-output artifacts/steering-dry-run-quality.json \
+    --csv-review-output artifacts/steering-dry-run-review-queue.csv
+  ```
+- **Review labels:** `correct`, `too_aggressive`, `too_conservative`, `bad_data`, `unclear`.
+- **Rule:** Passing dry-run count thresholds is not enough; close-now and amendment samples must be reviewed before setting `steering_dry_run=false`.
+
+### `scripts/check_etoro_release_readiness.py`
+Runs the multi-broker/eToro release readiness checklist before any eToro live micro-size rollout.
+
+- **Use case:** Fail closed unless required external evidence exists and the local broker/risk validation suite passes.
+- **Required artifact environment variables for a real release:**
+  - `ETORO_READONLY_VALIDATION_ARTIFACT_ID`
+  - `ETORO_DEMO_VALIDATION_ARTIFACT_ID`
+  - `ETORO_LIVE_SHADOW_EVIDENCE_ID`
+- **Behavior:** Runs the default pytest suite, focused broker/eToro risk tests, migration tests, broker migration/backfill smoke validation, optional Postgres validation via `scripts/check_postgres_validation.py`, and frontend type checks when `frontend/package.json` exists. Postgres validation now checks upgrade-to-head on a clean schema, broker-account tables, account-scoped columns, safety tables, and the default Alpaca paper account after upgrade. Data-dependent Postgres recomputation tests are opt-in with `POSTGRES_VALIDATION_INCLUDE_DATA_TESTS=1` because they require a restored database containing historical recommendation plan ids 315 and 635.
+- **Usage:**
+  ```bash
+  ETORO_READONLY_VALIDATION_ARTIFACT_ID=<id> \
+  ETORO_DEMO_VALIDATION_ARTIFACT_ID=<id> \
+  ETORO_LIVE_SHADOW_EVIDENCE_ID=<id> \
+    .venv/bin/python scripts/check_etoro_release_readiness.py
+  ```
+- **Write release-readiness report:**
+  ```bash
+  ETORO_READONLY_VALIDATION_ARTIFACT_ID=<id> \
+  ETORO_DEMO_VALIDATION_ARTIFACT_ID=<id> \
+  ETORO_LIVE_SHADOW_EVIDENCE_ID=<id> \
+    .venv/bin/python scripts/check_etoro_release_readiness.py \
+      --report-output artifacts/etoro-release-readiness.json
+  ```
+  The JSON report records artifact ids, validation commands/results, missing artifacts, and live micro-size defaults.
+- **Local dry-run only:**
+  ```bash
+  .venv/bin/python scripts/check_etoro_release_readiness.py \
+    --dry-run \
+    --allow-missing-external-artifacts \
+    --report-output artifacts/local-etoro-readiness-dry-run.json
+  ```
+  Do not use `--allow-missing-external-artifacts` for a real release.
 
 ### `scripts/compare_replay_confidence_regression.py`
 Performs a side-by-side comparison of a replay run between the current "fixed" code and a simulated "buggy" version.

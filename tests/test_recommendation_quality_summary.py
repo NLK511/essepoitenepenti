@@ -28,12 +28,17 @@ from trade_proposer_app.domain.models import (
     RecommendationEvidenceConcentrationSummary,
 )
 from trade_proposer_app.persistence.models import Base
-from trade_proposer_app.services.recommendation_quality_summary import RecommendationQualitySummaryService
+from trade_proposer_app.services.recommendation_quality_summary import (
+    RecommendationQualitySummaryService,
+)
 
 
 # ─── Pure Unit Tests (Gates and Helpers) ──────────────────────────────────────
 
-def _make_calibration(resolved: int, brier: float | None, ece: float | None) -> RecommendationCalibrationSummary:
+
+def _make_calibration(
+    resolved: int, brier: float | None, ece: float | None
+) -> RecommendationCalibrationSummary:
     report = None
     if brier is not None or ece is not None:
         report = RecommendationCalibrationReport(
@@ -59,19 +64,35 @@ def _make_evidence(ready: bool) -> RecommendationEvidenceConcentrationSummary:
 class RecommendationQualityStatusGateTests(unittest.TestCase):
     """Unit tests for the static promotion-gate logic in RecommendationQualitySummaryService."""
 
-    def _status(self, resolved: int, brier: float | None, ece: float | None,
-                ready: bool = True, wf_recommended: bool = True) -> str:
+    def _status(
+        self,
+        resolved: int,
+        brier: float | None,
+        ece: float | None,
+        ready: bool = True,
+        wf_recommended: bool = True,
+    ) -> str:
         calibration = _make_calibration(resolved, brier, ece)
         evidence = _make_evidence(ready)
         walk_forward = {"promotion_recommended": wf_recommended}
-        return RecommendationQualitySummaryService._quality_status(calibration, evidence, walk_forward)
+        return RecommendationQualitySummaryService._quality_status(
+            calibration, evidence, walk_forward
+        )
 
-    def _reason(self, resolved: int, brier: float | None, ece: float | None,
-                ready: bool = True, wf_recommended: bool = True) -> str:
+    def _reason(
+        self,
+        resolved: int,
+        brier: float | None,
+        ece: float | None,
+        ready: bool = True,
+        wf_recommended: bool = True,
+    ) -> str:
         calibration = _make_calibration(resolved, brier, ece)
         evidence = _make_evidence(ready)
         walk_forward = {"promotion_recommended": wf_recommended}
-        return RecommendationQualitySummaryService._quality_status_reason(calibration, evidence, walk_forward)
+        return RecommendationQualitySummaryService._quality_status_reason(
+            calibration, evidence, walk_forward
+        )
 
     # ── thin gate ──
 
@@ -94,10 +115,14 @@ class RecommendationQualityStatusGateTests(unittest.TestCase):
         self.assertNotEqual(self._status(resolved=100, brier=0.10, ece=0.16), "healthy")
 
     def test_status_is_not_healthy_when_evidence_not_ready(self) -> None:
-        self.assertNotEqual(self._status(resolved=100, brier=0.10, ece=0.05, ready=False), "healthy")
+        self.assertNotEqual(
+            self._status(resolved=100, brier=0.10, ece=0.05, ready=False), "healthy"
+        )
 
     def test_status_is_not_healthy_when_walk_forward_not_recommended(self) -> None:
-        self.assertNotEqual(self._status(resolved=100, brier=0.10, ece=0.05, wf_recommended=False), "healthy")
+        self.assertNotEqual(
+            self._status(resolved=100, brier=0.10, ece=0.05, wf_recommended=False), "healthy"
+        )
 
     # ── needs_attention gate ──
 
@@ -141,22 +166,38 @@ class RecommendationQualityNextActionsTests(unittest.TestCase):
         self.assertIn("Stay selective", actions[0])
 
     def test_advises_tightening_calibration_when_brier_is_high(self) -> None:
-        summary = {"calibration_report": {"brier_score": 0.36}, "resolved_outcomes": 100, "ready_for_expansion": True, "walk_forward_promotion_recommended": True}
+        summary = {
+            "calibration_report": {"brier_score": 0.36},
+            "resolved_outcomes": 100,
+            "ready_for_expansion": True,
+            "walk_forward_promotion_recommended": True,
+        }
         actions = self.svc._next_actions(summary)
         self.assertIn("Tighten calibration", actions[0])
 
     def test_advises_tightening_calibration_when_ece_is_high(self) -> None:
-        summary = {"calibration_report": {"expected_calibration_error": 0.21}, "resolved_outcomes": 100, "ready_for_expansion": True, "walk_forward_promotion_recommended": True}
+        summary = {
+            "calibration_report": {"expected_calibration_error": 0.21},
+            "resolved_outcomes": 100,
+            "ready_for_expansion": True,
+            "walk_forward_promotion_recommended": True,
+        }
         actions = self.svc._next_actions(summary)
         self.assertIn("Tighten calibration", actions[0])
 
     def test_advises_maintenance_when_all_good(self) -> None:
-        summary = {"resolved_outcomes": 100, "ready_for_expansion": True, "walk_forward_promotion_recommended": True, "calibration_report": {"brier_score": 0.15}}
+        summary = {
+            "resolved_outcomes": 100,
+            "ready_for_expansion": True,
+            "walk_forward_promotion_recommended": True,
+            "calibration_report": {"brier_score": 0.15},
+        }
         actions = self.svc._next_actions(summary)
         self.assertIn("Maintain the current settings", actions[0])
 
 
 # ─── Integration Tests ────────────────────────────────────────────────────────
+
 
 class RecommendationQualitySummaryIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -201,12 +242,17 @@ class RecommendationQualitySummaryIntegrationTests(unittest.TestCase):
             self.assertIn("simulated_entry_miss_diagnostics", payload["summary"])
             self.assertIn("policy_trust", payload["summary"])
             self.assertIn("active_policy_evaluation", payload["summary"])
-            self.assertIn("resolved_selected_outcomes", payload["summary"]["active_policy_evaluation"])
+            self.assertIn(
+                "resolved_selected_outcomes", payload["summary"]["active_policy_evaluation"]
+            )
             self.assertIn("by_confidence_bucket", payload["reliability_report"])
-            
+
             # Verify windowed summary count matches definitions
-            self.assertEqual(len(payload["windowed_summaries"]), len(RecommendationQualitySummaryService.WINDOW_DEFINITIONS))
-            
+            self.assertEqual(
+                len(payload["windowed_summaries"]),
+                len(RecommendationQualitySummaryService.WINDOW_DEFINITIONS),
+            )
+
             # Default window should be 1D
             self.assertEqual(payload["summary"]["window_label"], "1D")
         finally:
@@ -214,8 +260,11 @@ class RecommendationQualitySummaryIntegrationTests(unittest.TestCase):
 
     def test_api_exposes_consolidated_summary(self) -> None:
         transport = httpx.ASGITransport(app=app)
+
         async def _run() -> None:
-            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://testserver"
+            ) as client:
                 response = await client.get("/api/recommendation-quality/summary")
                 self.assertEqual(response.status_code, 200)
                 payload = response.json()
@@ -228,6 +277,7 @@ class RecommendationQualitySummaryIntegrationTests(unittest.TestCase):
                 self.assertIn("active_policy_evaluation", payload["summary"])
 
         import asyncio
+
         asyncio.run(_run())
 
 
@@ -242,12 +292,13 @@ class QualitySummaryWindowIntegrityTests(unittest.TestCase):
         session = Session(bind=self.engine)
         service = RecommendationQualitySummaryService(session)
         payload = service.summarize()
-        
+
         windows = {w["window_label"]: w for w in payload["windowed_summaries"]}
-        
-        # 7D window should have later start than 1Y window
-        self.assertGreater(windows["7D"]["computed_after"], windows["1Y"]["computed_after"])
-        self.assertGreater(windows["1M"]["computed_after"], windows["6M"]["computed_after"])
+
+        # Bounded UI windows still preserve chronological ordering.
+        self.assertGreater(windows["7D"]["computed_after"], windows["1M"]["computed_after"])
+        self.assertGreater(windows["1D"]["computed_after"], windows["7D"]["computed_after"])
+
 
 class QualitySummaryErrorHandlingTests(unittest.TestCase):
     """Verifies robustness when sub-services fail."""
@@ -256,17 +307,20 @@ class QualitySummaryErrorHandlingTests(unittest.TestCase):
         self.engine = create_engine("sqlite:///:memory:", future=True, poolclass=StaticPool)
         Base.metadata.create_all(bind=self.engine)
 
-    @patch("trade_proposer_app.services.recommendation_quality_summary.PlanGenerationWalkForwardService")
+    @patch(
+        "trade_proposer_app.services.recommendation_quality_summary.PlanGenerationWalkForwardService"
+    )
     def test_handles_walk_forward_service_exception_gracefully(self, mock_wf) -> None:
         mock_instance = mock_wf.return_value
         mock_instance.summarize.side_effect = Exception("Walk-forward engine failure")
-        
+
         session = Session(bind=self.engine)
         service = RecommendationQualitySummaryService(session)
-        
+
         payload = service.summarize()
         # Should not crash, and should report the error in the summary
         self.assertEqual(payload["summary"]["walk_forward_error"], "Walk-forward engine failure")
+
 
 class QualitySummaryAssessmentIntegrationTests(unittest.TestCase):
     """Verifies that performance assessment data is correctly included."""
@@ -275,14 +329,16 @@ class QualitySummaryAssessmentIntegrationTests(unittest.TestCase):
         self.engine = create_engine("sqlite:///:memory:", future=True, poolclass=StaticPool)
         Base.metadata.create_all(bind=self.engine)
 
-    @patch("trade_proposer_app.services.recommendation_quality_summary.PerformanceAssessmentService")
+    @patch(
+        "trade_proposer_app.services.recommendation_quality_summary.PerformanceAssessmentService"
+    )
     def test_includes_latest_summary_from_performance_assessment(self, mock_perf) -> None:
         mock_perf.return_value.latest_assessment.return_value = {
             "latest_summary": {"sharpe_ratio": 2.5}
         }
-        
+
         session = Session(bind=self.engine)
         service = RecommendationQualitySummaryService(session)
         payload = service.summarize()
-        
+
         self.assertEqual(payload["summary"]["latest_assessment"]["sharpe_ratio"], 2.5)

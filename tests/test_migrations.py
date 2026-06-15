@@ -6,7 +6,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from trade_proposer_app.migrations import HEAD_REVISION, LEGACY_REVISION_MAP, normalize_alembic_revision_ids, try_repair_partial_sqlite_schema
+from trade_proposer_app.migrations import (
+    HEAD_REVISION,
+    LEGACY_REVISION_MAP,
+    normalize_alembic_revision_ids,
+    try_repair_partial_sqlite_schema,
+)
 
 
 class MigrationRepairTests(unittest.TestCase):
@@ -21,6 +26,25 @@ class MigrationRepairTests(unittest.TestCase):
         self.assertEqual(too_long, [])
         self.assertLessEqual(len(HEAD_REVISION), 32)
 
+    def test_broker_account_seed_migration_uses_boolean_literals(self) -> None:
+        migration = (
+            Path(__file__).resolve().parents[1] / "alembic" / "versions" / "0044_broker_accounts.py"
+        ).read_text()
+
+        self.assertIn("false, false, true", migration)
+        self.assertNotIn(":id, 'alpaca', 'paper', :id, 0, 0, 1", migration)
+
+    def test_historical_news_link_migration_uses_sqlite_safe_batch_alter(self) -> None:
+        migration = (
+            Path(__file__).resolve().parents[1]
+            / "alembic"
+            / "versions"
+            / "0035_news_link_to_text.py"
+        ).read_text()
+
+        self.assertIn("batch_alter_table('historical_news_items')", migration)
+        self.assertNotIn("op.alter_column(\n        'historical_news_items'", migration)
+
     def test_normalize_alembic_revision_ids_updates_legacy_revision_value(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = os.path.join(tmpdir, "normalize.db")
@@ -28,12 +52,16 @@ class MigrationRepairTests(unittest.TestCase):
             try:
                 cursor = connection.cursor()
                 cursor.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
-                cursor.execute("INSERT INTO alembic_version (version_num) VALUES ('0015_drop_legacy_recommendations_table')")
+                cursor.execute(
+                    "INSERT INTO alembic_version (version_num) VALUES ('0015_drop_legacy_recommendations_table')"
+                )
                 connection.commit()
             finally:
                 connection.close()
 
-            with patch("trade_proposer_app.migrations.settings.database_url", f"sqlite:///{db_path}"):
+            with patch(
+                "trade_proposer_app.migrations.settings.database_url", f"sqlite:///{db_path}"
+            ):
                 normalized = normalize_alembic_revision_ids()
 
             self.assertTrue(normalized)
@@ -56,7 +84,9 @@ class MigrationRepairTests(unittest.TestCase):
             try:
                 cursor = connection.cursor()
                 cursor.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
-                cursor.execute("INSERT INTO alembic_version (version_num) VALUES ('0003_recommendation_diagnostics_fields')")
+                cursor.execute(
+                    "INSERT INTO alembic_version (version_num) VALUES ('0003_recommendation_diagnostics_fields')"
+                )
                 cursor.execute(
                     "CREATE TABLE jobs ("
                     "id INTEGER PRIMARY KEY, "
@@ -83,7 +113,9 @@ class MigrationRepairTests(unittest.TestCase):
             finally:
                 connection.close()
 
-            with patch("trade_proposer_app.migrations.settings.database_url", f"sqlite:///{db_path}"):
+            with patch(
+                "trade_proposer_app.migrations.settings.database_url", f"sqlite:///{db_path}"
+            ):
                 repaired = try_repair_partial_sqlite_schema()
 
             self.assertTrue(repaired)

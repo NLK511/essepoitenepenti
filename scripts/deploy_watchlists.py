@@ -6,6 +6,7 @@ Design goals for these defaults:
 - scheduled in region-appropriate opening windows that are interesting for analysis
 - fully staggered in 10-minute increments to avoid overlapping runs and reduce API quota spikes
 - include a small set of daily macro and industry refresh jobs in the quiet windows between regional equity batches
+- include a second staggered U.S. midday proposal-generation pass for freshness experiments
 """
 from __future__ import annotations
 
@@ -249,6 +250,39 @@ WATCHLIST_SPECS = [
     },
 ]
 
+US_MIDDAY_PROPOSAL_JOB_SPECS = [
+    {
+        "source_watchlist": "US-Tech",
+        "name": "US-Tech-Midday",
+        "cron": "00 16 * * MON-FRI",
+        "schedule_rationale": "Second U.S. pass near midday to test whether fresh intraday evidence improves tech and platform plans without overlapping the open-pass jobs.",
+    },
+    {
+        "source_watchlist": "US-Fin",
+        "name": "US-Fin-Midday",
+        "cron": "10 16 * * MON-FRI",
+        "schedule_rationale": "Second U.S. pass near midday for rate- and credit-sensitive financials after the opening tape has settled.",
+    },
+    {
+        "source_watchlist": "US-Health",
+        "name": "US-Health-Midday",
+        "cron": "20 16 * * MON-FRI",
+        "schedule_rationale": "Second U.S. pass near midday for healthcare after defensive/growth rotation is clearer.",
+    },
+    {
+        "source_watchlist": "US-Cons",
+        "name": "US-Cons-Midday",
+        "cron": "30 16 * * MON-FRI",
+        "schedule_rationale": "Second U.S. pass near midday for consumer and communications names after morning demand signals settle.",
+    },
+    {
+        "source_watchlist": "US-Cyc",
+        "name": "US-Cyc-Midday",
+        "cron": "40 16 * * MON-FRI",
+        "schedule_rationale": "Second U.S. pass near midday for cyclicals after crude, rates, and sector leadership are clearer.",
+    },
+]
+
 SUPPORT_REFRESH_JOB_SPECS = [
     {
         "name": "Macro-Refresh-AM",
@@ -329,6 +363,19 @@ def main() -> None:
                 job_repo,
                 watchlist_record,
                 job_name,
+                spec["cron"],
+                job_type=JobType.PROPOSAL_GENERATION,
+            )
+
+        for spec in US_MIDDAY_PROPOSAL_JOB_SPECS:
+            target_watchlist = _find_watchlist_record(session, spec["source_watchlist"])
+            if target_watchlist is None:
+                raise RuntimeError(f"source watchlist '{spec['source_watchlist']}' not found for midday job")
+            _ensure_job(
+                session,
+                job_repo,
+                target_watchlist,
+                spec["name"],
                 spec["cron"],
                 job_type=JobType.PROPOSAL_GENERATION,
             )

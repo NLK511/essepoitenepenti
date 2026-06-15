@@ -125,7 +125,7 @@ To enable recall optimization, the system tracks "phantom trades" for plans wher
 
 ### Expected behavior
 
-If a `no_action` plan carries an `intended_action` (long or short) and valid entry/stop/target levels, the evaluator must simulate it through the market exactly as if it were a real trade.
+If a `no_action` plan carries an `intended_action` (long or short) and valid entry/stop/target levels, the evaluator must load market history for that plan and simulate it through the market exactly as if it were a real trade.
 
 - If it hits the target, it resolves as `phantom_win`.
 - If it hits the stop-loss, it resolves as `phantom_loss`.

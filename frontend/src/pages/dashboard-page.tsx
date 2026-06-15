@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { getJson, postForm } from "../api";
 import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, SegmentedTabs, StatCard } from "../components/ui";
-import type { AccountRiskState, DashboardResponse, DashboardTrends, DashboardTrendSeries, DashboardTrendWindow, EdgeValidationGateReport, PolicyHealthReport } from "../types";
+import type { AccountRiskState, DashboardResponse, DashboardTrends, DashboardTrendSeries, DashboardTrendWindow, EdgeValidationGateReport, GatingSeverityAlert, PolicyHealthReport } from "../types";
 import { dashboardBoardTone, dashboardFailureTone, formatDate, normalizeReviewWindow, REVIEW_WINDOW_OPTIONS, reviewWindowLabel } from "../utils";
 
 type DataQualityAuditResponse = {
@@ -18,6 +18,7 @@ type OperatorStatusStrip = {
   edgeGate: EdgeValidationGateReport | null;
   risk: AccountRiskState | null;
   dataQuality: DataQualityAuditResponse | null;
+  gatingSeverityAlert: GatingSeverityAlert | null;
 };
 
 type DashboardOperatorStatusResponse = {
@@ -25,6 +26,7 @@ type DashboardOperatorStatusResponse = {
   edge_validation_gate: EdgeValidationGateReport | null;
   risk: AccountRiskState | null;
   data_quality: DataQualityAuditResponse | null;
+  gating_severity_alert?: GatingSeverityAlert | null;
 };
 
 type DashboardWindow = (typeof REVIEW_WINDOW_OPTIONS)[number]["value"];
@@ -74,6 +76,14 @@ function riskTone(risk: AccountRiskState | null): "ok" | "warning" | "danger" | 
   if (!risk.enabled) return "warning";
   if (!risk.allowed || risk.halt_enabled) return "danger";
   return "ok";
+}
+
+function gatingSeverityTone(alert: GatingSeverityAlert | null | undefined): "ok" | "warning" | "danger" | "neutral" | "info" {
+  const severity = (alert?.severity ?? "").trim().toLowerCase();
+  if (severity === "critical") return "danger";
+  if (severity === "warning") return "warning";
+  if (severity === "info") return "ok";
+  return "neutral";
 }
 
 function dataQualityTone(payload: DataQualityAuditResponse | null): "ok" | "warning" | "danger" | "neutral" {
@@ -199,9 +209,10 @@ export function DashboardPage() {
         edgeGate: payload.edge_validation_gate ?? null,
         risk: payload.risk ?? null,
         dataQuality: payload.data_quality ?? null,
+        gatingSeverityAlert: payload.gating_severity_alert ?? null,
       });
     } catch (loadError) {
-      setOperatorStatus({ policyHealth: null, edgeGate: null, risk: null, dataQuality: null });
+      setOperatorStatus({ policyHealth: null, edgeGate: null, risk: null, dataQuality: null, gatingSeverityAlert: null });
       setOperatorStatusError(loadError instanceof Error ? loadError.message : "Operator status unavailable");
     }
   }
@@ -230,6 +241,7 @@ export function DashboardPage() {
   const trendSeriesMap = useMemo(() => new Map((dashboardTrends?.series ?? []).map((series) => [series.key, series])), [dashboardTrends]);
   const trendWindows = dashboardTrends?.windows ?? [];
   const windowLabel = useMemo(() => reviewWindowLabel(selectedWindow), [selectedWindow]);
+  const gatingAlert = operatorStatus?.gatingSeverityAlert ?? data?.gating_severity_alert ?? null;
 
   async function refreshBrokerState() {
     try {
@@ -264,6 +276,24 @@ export function DashboardPage() {
 
       {data ? (
         <div className="stack-page">
+          {gatingAlert && gatingAlert.severity !== "info" ? (
+            <Card>
+              <SectionTitle
+                kicker="Gating severity alert"
+                title={gatingAlert.severity === "critical" ? "Shortlist gating may be too severe" : "Shortlist gating needs review"}
+                subtitle={gatingAlert.interpretation ?? "Diagnostic only: review near misses and benchmark outcomes before changing gates."}
+                actions={<Link to="/recommendation-quality" className="button-subtle">◈ Full breakdown</Link>}
+              />
+              <div className="cluster top-gap-small">
+                <Badge tone={gatingSeverityTone(gatingAlert)}>{gatingAlert.severity}</Badge>
+                <Badge tone="neutral">{gatingAlert.metrics?.near_miss_non_shortlisted ?? "—"} near misses</Badge>
+                <Badge tone="neutral">{gatingAlert.metrics?.high_priority_non_shortlisted ?? "—"} high priority rejected</Badge>
+                <Badge tone="neutral">{formatPercent(gatingAlert.metrics?.positive_gap_non_shortlisted_rate_percent)} positive-gap rejected</Badge>
+                <Badge tone={gatingAlert.metrics?.actionable_plans === 0 ? "danger" : "neutral"}>{gatingAlert.metrics?.actionable_plans ?? "—"} actionable</Badge>
+              </div>
+              <div className="helper-text top-gap-small">{formatReasons(gatingAlert.reasons, "No gating-alert reasons reported")} · latest check {gatingAlert.created_at ? formatDate(gatingAlert.created_at) : "—"}</div>
+            </Card>
+          ) : null}
           <Card>
             <SectionTitle
               kicker="Time window"
@@ -334,6 +364,7 @@ export function DashboardPage() {
               <div className="data-stack top-gap-small">
                 <div className="cluster">
                   <Badge tone={dashboardBoardTone(quality?.status)}>{quality?.status ?? "unknown"}</Badge>
+                  <Badge tone={gatingSeverityTone(gatingAlert)}>gating {gatingAlert?.severity ?? "unknown"}</Badge>
                   <span className="helper-text">{windowLabel} · resolved outcomes {quality?.resolved_outcomes ?? "—"} · updated {lastLoadedAt ? formatDate(lastLoadedAt.toISOString()) : quality?.generated_at ? formatDate(quality.generated_at) : "—"}</span>
                 </div>
                 <StatCard

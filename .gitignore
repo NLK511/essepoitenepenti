@@ -53,6 +53,7 @@ coverage.xml
 # Misc
 .terraform/
 .envrc
+artifacts/
 
 # Pi agent local config
 .pi_agent/

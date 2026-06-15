@@ -41,12 +41,17 @@ These define implemented product truth.
 - `getting-started.md` — local setup, scripts, auth, validation, first-run checks
 - `operational-scripts-reference.md` — reference for maintenance, hydration, and compare tools
 - `observability-spec.md` — run correlation ids, structured observability events, health/debugger diagnostics, and cross-process log requirements
+- `dashboard-aggregate-performance-spec.md` — dashboard weekly/monthly aggregate read model used to avoid slow raw scans and 504s
 - `lean-architecture-and-docs-reconciliation-plan.md` — remaining active plan to reduce over-engineering and reconcile the docs surface
 - `codebase-simplification-plan.md` — active behavior-preserving code refactor and dead-code audit plan
 - `ui-attention-audit-2026-05-30.md` — active plan to reduce UI attention waste while preserving performance, safety, and research capabilities
 - `ui-page-content-refactor-spec-2026-05-30.md` — Phase 0 per-page clutter audit and content refactor spec for UI remediation
 - `dead-code-audit-2026-05-29.md` — latest compatibility/dead-code audit decisions
 - `audit-remediation-and-autonomy-readiness-plan.md` — umbrella active plan for audit findings, safety gates, migration confidence, and autonomy readiness
+- `production-readiness-plan.md` — active plan for hardening, validation, staging soak, eToro external gates, and rollout to production
+- `multi-broker-etoro-implementation-plan.md` — completed test-first implementation record for multi-broker execution and eToro integration
+- `audits/broker-steering-safety-audit-2026-06-08.md` — concise steering safety lessons, cleanup record, and future enablement checklist
+- `audits/multi-broker-etoro-spec-audit-2026-06-01.md` — latest targeted audit of eToro live and multi-broker safety specs
 - `audits/full-project-spec-code-audit-2026-05-29-post-remediation.md` — latest post-remediation full audit of spec/code/test coherence and autonomy readiness
 - `audits/full-project-spec-code-audit-2026-05-29-post-remediation-plan.md` — completed implementation record for the latest post-remediation audit findings
 - `audits/full-project-spec-code-audit-2026-05-29.md` — previous full audit of spec/code/test coherence and autonomy readiness
@@ -79,12 +84,16 @@ These are useful, but they are not the main current-state entry point. They must
 - `edge-validation-standard.md` — current + target autonomy gate standard for broker-backed evidence, baselines, drawdown, concentration, and demotion/halt rules
 - `signal-gating-tuning-guide.md` — current shipped signal-gating tuning workflow
 - `plan-generation-tuning-spec.md` — current phase-1 behavior plus target autonomous plan-generation tuning conformance rules
+- `gating-severity-alert-spec.md` — observability monitor for detecting when shortlist/signal gating may be too severe
+- `large-parameter-search-spec.md` — offline memory-safe coarse/fine parameter search for plan-generation tuning
 - `market-intelligence-analysis-spec.md` — current + target behavior for event calendar, options, and analyst-data integration into ticker analysis
-- `fundamental-analysis-snapshot-spec.md` — target monthly and event-aware point-in-time fundamental snapshots for monitored tickers
+- `fundamental-analysis-snapshot-spec.md` — target weekly weekend and event-aware point-in-time fundamental snapshots for monitored tickers
 - `fundamental-analysis-snapshot-implementation-plan.md` — active implementation plan for persistence, refresh jobs, plan integration, UI, and validation
 - `alpaca-paper-order-execution-spec.md` — first automated broker-execution spec for Alpaca paper trading, including audit UI and manual resubmit/cancel controls
 - `broker-position-lifecycle-spec.md` — broker-backed position state and realized P&L ledger for app-submitted bracket orders
 - `broker-risk-management-spec.md` — broker-backed pre-trade risk limits and manual kill switch
+- `multi-broker-execution-risk-spec.md` — target broker-account model for any combination of brokers with per-broker exposure and drawdown controls
+- `etoro-live-trading-integration-spec.md` — target eToro broker integration and live-trading safety contract
 - `broker-position-steering-spec.md` — current + target broker steering contract for post-submit pending-order cancellation and conservative SL/TP steering
 - `effective-plan-outcome-spec.md` — canonical broker-first outcome view for reconciling broker positions with simulated recommendation outcomes
 - `plan-reliability-report-spec.md` — canonical broker/effective reliability report for confidence, setup-family, and action cohorts

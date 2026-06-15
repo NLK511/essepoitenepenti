@@ -2,7 +2,13 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from trade_proposer_app.domain.enums import JobType, RecommendationDirection, RecommendationState, RunStatus, StrategyHorizon
+from trade_proposer_app.domain.enums import (
+    JobType,
+    RecommendationDirection,
+    RecommendationState,
+    RunStatus,
+    StrategyHorizon,
+)
 
 
 class DictLikeModel(BaseModel):
@@ -297,8 +303,62 @@ class Run(BaseModel):
     timing_json: str | None = None
 
 
+class BrokerAccount(BaseModel):
+    broker_account_id: str
+    broker: str
+    account_mode: str
+    account_label: str
+    enabled: bool = False
+    autonomous_execution_enabled: bool = False
+    manual_actions_enabled: bool = True
+    credential_reference: str = ""
+    symbol_allowlist: list[str] = Field(default_factory=list)
+    symbol_denylist: list[str] = Field(default_factory=list)
+    supported_actions: list[str] = Field(default_factory=list)
+    supported_instruments: list[str] = Field(default_factory=list)
+    supported_order_types: list[str] = Field(default_factory=list)
+    notional_cap_usd: float | None = None
+    max_open_positions: int | None = None
+    max_open_notional_usd: float | None = None
+    max_position_notional_usd: float | None = None
+    max_same_ticker_open_positions: int | None = None
+    halt_enabled: bool = False
+    halt_reason: str = ""
+    validation_status: str = "not_validated"
+    validation_evidence: dict[str, object] = Field(default_factory=dict)
+    risk_settings: dict[str, object] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class BrokerCircuitBreaker(BaseModel):
+    broker_account_id: str
+    active: bool = False
+    reason: str = ""
+    failure_count: int = 0
+    activated_at: datetime | None = None
+    cleared_at: datetime | None = None
+    clear_reason: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class BrokerDrawdownState(BaseModel):
+    broker_account_id: str
+    current_equity: float | None = None
+    daily_high_water_equity: float | None = None
+    total_high_water_equity: float | None = None
+    broker_timezone: str = "UTC"
+    daily_boundary: str = ""
+    trusted: bool = False
+    baseline_source: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class BrokerOrderExecution(BaseModel):
     id: int | None = None
+    broker_account_id: str = "alpaca-paper-default"
     broker: str = "alpaca"
     account_mode: str = "paper"
     recommendation_plan_id: int
@@ -340,6 +400,7 @@ class RiskHaltEvent(BaseModel):
 
 class BrokerReconciliationSnapshot(BaseModel):
     id: int | None = None
+    broker_account_id: str = "alpaca-paper-default"
     broker: str = "alpaca"
     account_mode: str = "paper"
     snapshot_type: str = "pre_submit"
@@ -372,6 +433,7 @@ BrokerRiskAssessment = AccountRiskState
 class BrokerPosition(BaseModel):
     id: int | None = None
     broker_order_execution_id: int
+    broker_account_id: str = "alpaca-paper-default"
     broker: str = "alpaca"
     account_mode: str = "paper"
     recommendation_plan_id: int
@@ -391,6 +453,14 @@ class BrokerPosition(BaseModel):
     exit_reason: str | None = None
     exit_avg_price: float | None = None
     exit_filled_at: datetime | None = None
+    stop_loss_order_id: str | None = None
+    stop_loss_order_status: str | None = None
+    stop_loss_order_price: float | None = None
+    take_profit_order_id: str | None = None
+    take_profit_order_status: str | None = None
+    take_profit_order_price: float | None = None
+    protective_orders_verified_at: datetime | None = None
+    protective_orders_source: str = ""
     realized_pnl: float | None = None
     realized_return_pct: float | None = None
     realized_r_multiple: float | None = None
@@ -638,7 +708,9 @@ class TickerSignalSnapshot(BaseModel):
     execution_quality_score: float = 0.0
     warnings: list[str] = Field(default_factory=list)
     missing_inputs: list[str] = Field(default_factory=list)
-    source_breakdown: TickerSignalSourceBreakdown = Field(default_factory=TickerSignalSourceBreakdown)
+    source_breakdown: TickerSignalSourceBreakdown = Field(
+        default_factory=TickerSignalSourceBreakdown
+    )
     diagnostics: TickerSignalDiagnostics = Field(default_factory=TickerSignalDiagnostics)
     run_id: int | None = None
     job_id: int | None = None
@@ -742,8 +814,12 @@ class RecommendationPlan(BaseModel):
     risks: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     missing_inputs: list[str] = Field(default_factory=list)
-    evidence_summary: RecommendationPlanEvidenceSummary = Field(default_factory=RecommendationPlanEvidenceSummary)
-    signal_breakdown: RecommendationPlanSignalBreakdown = Field(default_factory=RecommendationPlanSignalBreakdown)
+    evidence_summary: RecommendationPlanEvidenceSummary = Field(
+        default_factory=RecommendationPlanEvidenceSummary
+    )
+    signal_breakdown: RecommendationPlanSignalBreakdown = Field(
+        default_factory=RecommendationPlanSignalBreakdown
+    )
     trade_policy_id: str | None = None
     trade_policy_snapshot: dict[str, object] = Field(default_factory=dict)
     computed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -864,7 +940,9 @@ class RecommendationEvidenceConcentrationSummary(BaseModel):
     overall_average_return_5d: float | None = None
     ready_for_expansion: bool = False
     focus_message: str = ""
-    strongest_positive_cohorts: list[RecommendationEvidenceConcentrationCohort] = Field(default_factory=list)
+    strongest_positive_cohorts: list[RecommendationEvidenceConcentrationCohort] = Field(
+        default_factory=list
+    )
     weakest_cohorts: list[RecommendationEvidenceConcentrationCohort] = Field(default_factory=list)
 
 

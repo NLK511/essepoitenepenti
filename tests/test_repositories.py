@@ -496,7 +496,14 @@ class RepositoryTests(unittest.TestCase):
 
         run = runs.enqueue(job.id or 0)
         runs.set_summary(run.id or 0, {"synced_recommendation_plan_outcomes": 3, "pending_recommendation_plan_outcomes": 7})
-        runs.set_artifact(run.id or 0, {"weights_path": "/tmp/weights.json", "changed": False})
+        runs.set_artifact(
+            run.id or 0,
+            {
+                "weights_path": "/tmp/weights.json",
+                "changed": False,
+                "snapshot": {"as_of": datetime(2026, 6, 14, 6, 15, tzinfo=timezone.utc)},
+            },
+        )
 
         stored_run = runs.get_run(run.id or 0)
         self.assertEqual(stored_run.job_type, JobType.RECOMMENDATION_EVALUATION)

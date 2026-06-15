@@ -48,21 +48,57 @@ class BrokerPositionRepository:
         return self._to_model(record)
 
     def get_by_order_execution_id(self, execution_id: int) -> BrokerPosition | None:
-        record = self.session.scalar(select(BrokerPositionRecord).where(BrokerPositionRecord.broker_order_execution_id == execution_id))
+        record = self.session.scalar(
+            select(BrokerPositionRecord).where(
+                BrokerPositionRecord.broker_order_execution_id == execution_id
+            )
+        )
         return self._to_model(record) if record is not None else None
 
     def list_all(self, *, run_id: int | None = None, limit: int = 200) -> list[BrokerPosition]:
         query = select(BrokerPositionRecord)
         if run_id is not None:
             query = query.where(BrokerPositionRecord.run_id == run_id)
-        rows = self.session.scalars(query.order_by(BrokerPositionRecord.created_at.desc()).limit(max(1, limit))).all()
+        rows = self.session.scalars(
+            query.order_by(BrokerPositionRecord.created_at.desc()).limit(max(1, limit))
+        ).all()
         return [self._to_model(row) for row in rows]
 
     def list_active(self, *, run_id: int | None = None, limit: int = 200) -> list[BrokerPosition]:
-        query = select(BrokerPositionRecord).where(BrokerPositionRecord.status.in_(["submitted", "open"]))
+        query = select(BrokerPositionRecord).where(
+            BrokerPositionRecord.status.in_(["submitted", "open"])
+        )
         if run_id is not None:
             query = query.where(BrokerPositionRecord.run_id == run_id)
-        rows = self.session.scalars(query.order_by(BrokerPositionRecord.created_at.desc()).limit(max(1, limit))).all()
+        rows = self.session.scalars(
+            query.order_by(BrokerPositionRecord.created_at.desc()).limit(max(1, limit))
+        ).all()
+        return [self._to_model(row) for row in rows]
+
+    def list_filtered(
+        self,
+        *,
+        run_id: int | None = None,
+        broker_account_id: str | None = None,
+        broker: str | None = None,
+        account_mode: str | None = None,
+        status: str | None = None,
+        limit: int = 200,
+    ) -> list[BrokerPosition]:
+        query = select(BrokerPositionRecord)
+        if run_id is not None:
+            query = query.where(BrokerPositionRecord.run_id == run_id)
+        if broker_account_id:
+            query = query.where(BrokerPositionRecord.broker_account_id == broker_account_id)
+        if broker:
+            query = query.where(BrokerPositionRecord.broker == broker.strip().lower())
+        if account_mode:
+            query = query.where(BrokerPositionRecord.account_mode == account_mode.strip().lower())
+        if status:
+            query = query.where(BrokerPositionRecord.status == status.strip())
+        rows = self.session.scalars(
+            query.order_by(BrokerPositionRecord.created_at.desc()).limit(max(1, limit))
+        ).all()
         return [self._to_model(row) for row in rows]
 
     def list_by_ticker(
@@ -75,14 +111,21 @@ class BrokerPositionRepository:
     ) -> list[BrokerPosition]:
         query = select(BrokerPositionRecord).where(BrokerPositionRecord.ticker == ticker.upper())
         if exit_after is not None:
-            query = query.where(BrokerPositionRecord.exit_filled_at >= self._normalize_datetime(exit_after))
+            query = query.where(
+                BrokerPositionRecord.exit_filled_at >= self._normalize_datetime(exit_after)
+            )
         if exit_before is not None:
-            query = query.where(BrokerPositionRecord.exit_filled_at <= self._normalize_datetime(exit_before))
-        rows = self.session.scalars(query.order_by(BrokerPositionRecord.created_at.desc()).limit(max(1, limit))).all()
+            query = query.where(
+                BrokerPositionRecord.exit_filled_at <= self._normalize_datetime(exit_before)
+            )
+        rows = self.session.scalars(
+            query.order_by(BrokerPositionRecord.created_at.desc()).limit(max(1, limit))
+        ).all()
         return [self._to_model(row) for row in rows]
 
     def _apply(self, record: BrokerPositionRecord, position: BrokerPosition) -> None:
         record.broker_order_execution_id = position.broker_order_execution_id
+        record.broker_account_id = position.broker_account_id
         record.broker = position.broker
         record.account_mode = position.account_mode
         record.recommendation_plan_id = position.recommendation_plan_id
@@ -102,6 +145,16 @@ class BrokerPositionRepository:
         record.exit_reason = position.exit_reason
         record.exit_avg_price = position.exit_avg_price
         record.exit_filled_at = self._normalize_datetime(position.exit_filled_at)
+        record.stop_loss_order_id = position.stop_loss_order_id
+        record.stop_loss_order_status = position.stop_loss_order_status
+        record.stop_loss_order_price = position.stop_loss_order_price
+        record.take_profit_order_id = position.take_profit_order_id
+        record.take_profit_order_status = position.take_profit_order_status
+        record.take_profit_order_price = position.take_profit_order_price
+        record.protective_orders_verified_at = self._normalize_datetime(
+            position.protective_orders_verified_at
+        )
+        record.protective_orders_source = position.protective_orders_source
         record.realized_pnl = position.realized_pnl
         record.realized_return_pct = position.realized_return_pct
         record.realized_r_multiple = position.realized_r_multiple
@@ -112,6 +165,7 @@ class BrokerPositionRepository:
         return BrokerPosition(
             id=record.id,
             broker_order_execution_id=record.broker_order_execution_id,
+            broker_account_id=record.broker_account_id,
             broker=record.broker,
             account_mode=record.account_mode,
             recommendation_plan_id=record.recommendation_plan_id,
@@ -131,6 +185,16 @@ class BrokerPositionRepository:
             exit_reason=record.exit_reason,
             exit_avg_price=record.exit_avg_price,
             exit_filled_at=self._normalize_datetime(record.exit_filled_at),
+            stop_loss_order_id=record.stop_loss_order_id,
+            stop_loss_order_status=record.stop_loss_order_status,
+            stop_loss_order_price=record.stop_loss_order_price,
+            take_profit_order_id=record.take_profit_order_id,
+            take_profit_order_status=record.take_profit_order_status,
+            take_profit_order_price=record.take_profit_order_price,
+            protective_orders_verified_at=self._normalize_datetime(
+                record.protective_orders_verified_at
+            ),
+            protective_orders_source=record.protective_orders_source,
             realized_pnl=record.realized_pnl,
             realized_return_pct=record.realized_return_pct,
             realized_r_multiple=record.realized_r_multiple,
