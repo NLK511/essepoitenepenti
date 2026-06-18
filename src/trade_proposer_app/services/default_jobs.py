@@ -43,6 +43,12 @@ DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC = {
     "schedule_rationale": "Runs once per week on Saturday at 06:30 UTC to refresh the persisted execution-only confidence calibration snapshot used by live plan framing.",
 }
 
+DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC = {
+    "name": "Auto: Performance Assessment",
+    "cron": "0 0 * * *",
+    "schedule_rationale": "Runs daily at midnight UTC to summarize recommendation quality, calibration, evidence concentration, and performance trends.",
+}
+
 DEFAULT_FUNDAMENTAL_ANALYSIS_JOB_SPECS: list[dict[str, str | list[str]]] = [
     {
         "name": "Auto: Fundamental Analysis Weekend Batch 1",
@@ -145,6 +151,18 @@ def ensure_default_recommendation_calibration_refresh_job(session) -> dict[str, 
         JobType.RECOMMENDATION_CALIBRATION_REFRESH,
     )
     return DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC
+
+
+def ensure_default_performance_assessment_job(session) -> dict[str, str]:
+    job_repo = JobRepository(session)
+    _ensure_job(
+        job_repo,
+        session,
+        DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC["name"],
+        DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC["cron"],
+        JobType.PERFORMANCE_ASSESSMENT,
+    )
+    return DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC
 
 
 def ensure_default_broker_accounts(session) -> dict[str, str]:

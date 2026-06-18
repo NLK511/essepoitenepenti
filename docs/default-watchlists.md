@@ -66,13 +66,16 @@ Schedules are staggered by region and group so they do not overlap.
 
 Proposal-generation jobs stay near local opening windows and are spaced by **10 minutes**.
 The U.S. default deployment also adds a second midday proposal-generation pass for the same five U.S. watchlists. This midday pass is an evidence-gathering freshness experiment: it should remain subject to broker duplicate-position/order controls and dry-run review before any extra autonomous execution is trusted.
-The default deployment also adds three shared-context refresh jobs:
-- two macro refreshes per day
+The default deployment also adds shared operational jobs:
+- two macro refreshes per weekday
 - one industry refresh in the midday gap
-
-It also adds three regional bars refresh jobs (`Bars-APAC`, `Bars-EU`, `Bars-US`) that resolve their tickers from the current regional watchlists at runtime, so bars recovery stays aligned with the seeded universe.
-
-It additionally adds three recommendation-evaluation jobs that run a few minutes after each regional market close so plan outcomes get refreshed on a predictable post-close cadence.
+- three regional bars refresh jobs (`Bars-APAC`, `Bars-EU`, `Bars-US`) that resolve their tickers from the current regional watchlists at runtime, so bars recovery stays aligned with the seeded universe
+- three recommendation-evaluation jobs that run a few minutes after each regional market close so plan outcomes get refreshed on a predictable post-close cadence
+- broker steering dry-run every 30 minutes
+- daily performance assessment
+- weekly gating severity check
+- weekly confidence calibration snapshot refresh
+- eight weekend fundamental-analysis refresh batches
 
 Regional schedule blocks:
 - **Asia/Pacific:** `00:00` to `00:40` UTC
@@ -111,31 +114,57 @@ Why this matters:
 | `US-Cons-Midday` | United States | Cons | `16:30` |
 | `US-Cyc-Midday` | United States | Cyc | `16:40` |
 
-Shared-context refresh jobs:
+Shared refresh jobs:
 
 | Job | Scope | UTC schedule |
 |---|---|---:|
-| `Auto: Macro Context Refresh AM` | Macro | `06:00` |
-| `Auto: Macro Context Refresh PM` | Macro | `18:00` |
-| `Auto: Industry Context Refresh` | Industry | `10:30` |
+| `Macro-Refresh-AM` | Macro | `06:00` weekdays |
+| `Macro-Refresh-PM` | Macro | `18:00` weekdays |
+| `Industry-Refresh` | Industry | `10:30` weekdays |
+| `Bars-APAC` | APAC bars | `08:30` weekdays |
+| `Bars-EU` | Europe bars | `17:00` weekdays |
+| `Bars-US` | U.S. bars | `20:30` weekdays |
 
 Post-close recommendation evaluation jobs:
 
 | Job | Scope | UTC schedule |
 |---|---|---:|
-| `Auto: Recommendation Evaluation APAC Close` | APAC plans | `08:35` |
-| `Auto: Recommendation Evaluation Europe Close` | Europe plans | `17:05` |
-| `Auto: Recommendation Evaluation US Close` | U.S. plans | `20:35` |
+| `Auto: Recommendation Evaluation APAC Close` | APAC plans | `08:35` weekdays |
+| `Auto: Recommendation Evaluation Europe Close` | Europe plans | `17:05` weekdays |
+| `Auto: Recommendation Evaluation US Close` | U.S. plans | `20:35` weekdays |
+
+Safety, quality, and research jobs:
+
+| Job | Scope | UTC schedule |
+|---|---|---:|
+| `Auto: Broker Steering Dry Run` | broker steering audit | every 30 minutes |
+| `Auto: Performance Assessment` | quality/performance summary | `00:00` daily |
+| `Auto: Gating Severity Check Weekly` | shortlist severity monitor | `05:00` Saturday |
+| `Auto: Recommendation Calibration Refresh Weekly` | live confidence calibration snapshot | `06:30` Saturday |
+| `Auto: Fundamental Analysis Weekend Batch 1` | fundamentals refresh | `06:15` Saturday |
+| `Auto: Fundamental Analysis Weekend Batch 2` | fundamentals refresh | `09:15` Saturday |
+| `Auto: Fundamental Analysis Weekend Batch 3` | fundamentals refresh | `12:15` Saturday |
+| `Auto: Fundamental Analysis Weekend Batch 4` | fundamentals refresh | `15:15` Saturday |
+| `Auto: Fundamental Analysis Weekend Batch 5` | fundamentals refresh | `06:15` Sunday |
+| `Auto: Fundamental Analysis Weekend Batch 6` | fundamentals refresh | `09:15` Sunday |
+| `Auto: Fundamental Analysis Weekend Batch 7` | fundamentals refresh | `12:15` Sunday |
+| `Auto: Fundamental Analysis Weekend Batch 8` | fundamentals refresh | `15:15` Sunday |
 
 ## Coverage summary
 
 The default script seeds:
 - **15 watchlists**
-- **26 scheduled jobs**
+- **41 scheduled jobs**
   - 20 proposal jobs: 15 regional open-pass jobs plus 5 U.S. midday-pass jobs
   - 2 macro refresh jobs
   - 1 industry refresh job
+  - 3 regional bars refresh jobs
   - 3 recommendation evaluation jobs
+  - 1 broker steering dry-run job
+  - 1 daily performance assessment job
+  - 1 weekly gating severity check job
+  - 1 weekly confidence calibration refresh job
+  - 8 weekend fundamental-analysis refresh jobs
 - **750 unique equities total**
 
 Regional split:
@@ -154,7 +183,7 @@ Run the seed script with:
 The script:
 - creates missing watchlists
 - updates existing seeded watchlists by name
-- creates or updates matching `Auto: ...` jobs
+- creates or updates matching proposal, refresh, evaluation, safety, quality, calibration, and fundamentals jobs
 - rejects duplicate ticker assignment across watchlists
 - validates that the seeded default set still contains exactly **750** tickers
 

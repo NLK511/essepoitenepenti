@@ -216,7 +216,7 @@ To load the curated default watchlist pack:
 
 This seeds:
 - 15 watchlists
-- 18 scheduled `Auto: ...` jobs
+- 41 scheduled jobs across proposal generation, context/bars refresh, evaluation, safety, calibration, fundamentals, and quality assessment
 - 750 equities across U.S., Europe, and Asia/Pacific groups
 
 See `default-watchlists.md` for rationale.

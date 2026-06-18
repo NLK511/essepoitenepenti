@@ -20,12 +20,26 @@ sys.path.insert(0, str(ROOT / "src"))
 
 try:
     from sqlalchemy import select
+
     from trade_proposer_app.db import SessionLocal
     from trade_proposer_app.domain.enums import JobType
     from trade_proposer_app.persistence.models import JobRecord, RunRecord, WatchlistRecord
-    from trade_proposer_app.repositories.watchlists import WatchlistRepository
     from trade_proposer_app.repositories.jobs import JobRepository
-    from trade_proposer_app.services.default_jobs import ensure_default_recommendation_evaluation_jobs
+    from trade_proposer_app.repositories.watchlists import WatchlistRepository
+    from trade_proposer_app.services.default_jobs import (
+        DEFAULT_BROKER_STEERING_JOB_SPEC,
+        DEFAULT_FUNDAMENTAL_ANALYSIS_JOB_SPECS,
+        DEFAULT_GATING_SEVERITY_CHECK_JOB_SPEC,
+        DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC,
+        DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC,
+        DEFAULT_RECOMMENDATION_EVALUATION_JOB_SPECS,
+        ensure_default_broker_steering_job,
+        ensure_default_fundamental_analysis_job,
+        ensure_default_gating_severity_check_job,
+        ensure_default_performance_assessment_job,
+        ensure_default_recommendation_calibration_refresh_job,
+        ensure_default_recommendation_evaluation_jobs,
+    )
 except ModuleNotFoundError:  # pragma: no cover - allows importing WATCHLIST_SPECS without optional runtime deps
     select = None
     SessionLocal = None
@@ -396,20 +410,28 @@ def main() -> None:
             )
 
         ensure_default_recommendation_evaluation_jobs(session)
+        ensure_default_broker_steering_job(session)
+        ensure_default_fundamental_analysis_job(session)
+        ensure_default_gating_severity_check_job(session)
+        ensure_default_recommendation_calibration_refresh_job(session)
+        ensure_default_performance_assessment_job(session)
 
     logging.info("Deployment complete")
 
 
 def _delete_old_jobs(session) -> None:
-    # Delete runs first so job cleanup does not violate the non-null job_id constraint.
+    current_default_names = _current_default_job_names()
     old_jobs = session.scalars(select(JobRecord).where(JobRecord.name.like("Auto: %"))).all()
-    old_job_ids = [job.id for job in old_jobs]
-    if old_job_ids:
-        old_runs = session.scalars(select(RunRecord).where(RunRecord.job_id.in_(old_job_ids))).all()
-        for run in old_runs:
-            session.delete(run)
     for job in old_jobs:
-        logging.info("Deleting old job: %s", job.name)
+        if job.name in current_default_names:
+            continue
+        has_runs = session.scalars(select(RunRecord.id).where(RunRecord.job_id == job.id).limit(1)).first() is not None
+        if has_runs:
+            if job.enabled:
+                logging.info("Disabling legacy auto job with run history: %s", job.name)
+                job.enabled = False
+            continue
+        logging.info("Deleting legacy auto job without run history: %s", job.name)
         session.delete(job)
 
     # Also delete old "System: " watchlists
@@ -419,6 +441,19 @@ def _delete_old_jobs(session) -> None:
         session.delete(ws)
 
     session.commit()
+
+
+def _current_default_job_names() -> set[str]:
+    names = {str(spec["name"]) for spec in WATCHLIST_SPECS}
+    names.update(str(spec["name"]) for spec in US_MIDDAY_PROPOSAL_JOB_SPECS)
+    names.update(str(spec["name"]) for spec in SUPPORT_REFRESH_JOB_SPECS)
+    names.update(str(spec["name"]) for spec in DEFAULT_RECOMMENDATION_EVALUATION_JOB_SPECS)
+    names.update(str(spec["name"]) for spec in DEFAULT_FUNDAMENTAL_ANALYSIS_JOB_SPECS)
+    names.add(str(DEFAULT_BROKER_STEERING_JOB_SPEC["name"]))
+    names.add(str(DEFAULT_GATING_SEVERITY_CHECK_JOB_SPEC["name"]))
+    names.add(str(DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC["name"]))
+    names.add(str(DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC["name"]))
+    return names
 
 
 def _validate_watchlist_specs(specs: list[dict[str, object]]) -> None:

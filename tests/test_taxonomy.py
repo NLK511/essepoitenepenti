@@ -5,35 +5,47 @@ import sys
 import unittest
 from pathlib import Path
 
-from scripts.deploy_watchlists import US_MIDDAY_PROPOSAL_JOB_SPECS, WATCHLIST_SPECS
-from trade_proposer_app.services.default_jobs import DEFAULT_RECOMMENDATION_EVALUATION_JOB_SPECS
+from scripts.deploy_watchlists import (
+    SUPPORT_REFRESH_JOB_SPECS,
+    US_MIDDAY_PROPOSAL_JOB_SPECS,
+    WATCHLIST_SPECS,
+    _current_default_job_names,
+)
+from trade_proposer_app.services.default_jobs import (
+    DEFAULT_BROKER_STEERING_JOB_SPEC,
+    DEFAULT_FUNDAMENTAL_ANALYSIS_JOB_SPECS,
+    DEFAULT_GATING_SEVERITY_CHECK_JOB_SPEC,
+    DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC,
+    DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC,
+    DEFAULT_RECOMMENDATION_EVALUATION_JOB_SPECS,
+)
 from trade_proposer_app.services.taxonomy import (
+    ACTION_REASON_CODES_PATH,
+    CALIBRATION_REASON_CODES_PATH,
+    CALIBRATION_REVIEW_STATUSES_PATH,
+    CONTRADICTION_REASON_CODES_PATH,
+    EVENT_PERSISTENCE_STATES_PATH,
+    EVENT_RECENCY_BUCKETS_PATH,
+    EVENT_SOURCE_PRIORITIES_PATH,
     EVENT_VOCAB_PATH,
+    EVENT_WINDOW_HINTS_PATH,
     INDUSTRIES_PATH,
-    RELATIONSHIPS_PATH,
-    SECTORS_PATH,
-    TICKERS_PATH,
-    THEMES_PATH,
     MACRO_CHANNELS_PATH,
     RELATIONSHIP_TARGET_KINDS_PATH,
     RELATIONSHIP_TYPES_PATH,
-    TRANSMISSION_CHANNELS_PATH,
-    TRANSMISSION_CONFLICT_FLAGS_PATH,
-    TRANSMISSION_BIASES_PATH,
-    TRANSMISSION_CONTEXT_REGIMES_PATH,
-    TRANSMISSION_WINDOWS_PATH,
+    RELATIONSHIPS_PATH,
+    SECTORS_PATH,
     SHORTLIST_REASON_CODES_PATH,
     SHORTLIST_SELECTION_LANES_PATH,
-    CALIBRATION_REVIEW_STATUSES_PATH,
-    CALIBRATION_REASON_CODES_PATH,
-    ACTION_REASON_CODES_PATH,
-    CONTRADICTION_REASON_CODES_PATH,
-    EVENT_SOURCE_PRIORITIES_PATH,
-    EVENT_PERSISTENCE_STATES_PATH,
-    EVENT_WINDOW_HINTS_PATH,
-    EVENT_RECENCY_BUCKETS_PATH,
+    THEMES_PATH,
+    TICKERS_PATH,
+    TRANSMISSION_BIASES_PATH,
+    TRANSMISSION_CHANNELS_PATH,
+    TRANSMISSION_CONFLICT_FLAGS_PATH,
+    TRANSMISSION_CONTEXT_REGIMES_PATH,
     TRANSMISSION_PRIMARY_DRIVERS_PATH,
     TRANSMISSION_TAGS_PATH,
+    TRANSMISSION_WINDOWS_PATH,
     TickerTaxonomyService,
 )
 
@@ -79,6 +91,25 @@ class TickerTaxonomyServiceTests(unittest.TestCase):
             "Auto: Recommendation Evaluation US Close",
         ])
         self.assertEqual([spec["cron"] for spec in DEFAULT_RECOMMENDATION_EVALUATION_JOB_SPECS], ["35 08 * * MON-FRI", "05 17 * * MON-FRI", "35 20 * * MON-FRI"])
+
+    def test_deploy_watchlists_covers_all_current_default_scheduled_jobs(self) -> None:
+        proposal_job_count = len(WATCHLIST_SPECS) + len(US_MIDDAY_PROPOSAL_JOB_SPECS)
+        support_job_count = len(SUPPORT_REFRESH_JOB_SPECS)
+        app_default_job_count = (
+            len(DEFAULT_RECOMMENDATION_EVALUATION_JOB_SPECS)
+            + len(DEFAULT_FUNDAMENTAL_ANALYSIS_JOB_SPECS)
+            + 4
+        )
+
+        self.assertEqual(proposal_job_count, 20)
+        self.assertEqual(support_job_count, 6)
+        self.assertEqual(app_default_job_count, 15)
+        self.assertEqual(proposal_job_count + support_job_count + app_default_job_count, 41)
+        self.assertEqual(len(_current_default_job_names()), 41)
+        self.assertEqual(DEFAULT_BROKER_STEERING_JOB_SPEC["cron"], "*/30 * * * *")
+        self.assertEqual(DEFAULT_GATING_SEVERITY_CHECK_JOB_SPEC["cron"], "00 05 * * SAT")
+        self.assertEqual(DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC["cron"], "30 06 * * SAT")
+        self.assertEqual(DEFAULT_PERFORMANCE_ASSESSMENT_JOB_SPEC["cron"], "0 0 * * *")
 
     def test_split_taxonomy_files_exist_and_are_loaded(self) -> None:
         self.assertTrue(TICKERS_PATH.exists())
