@@ -49,8 +49,6 @@ from trade_proposer_app.services.watchlist_transmission import WatchlistTransmis
 logger = logging.getLogger(__name__)
 
 class WatchlistOrchestrationService:
-    LIVE_CALIBRATION_LIMIT = 50_000
-
     def __init__(
         self,
         *,
@@ -905,7 +903,7 @@ class WatchlistOrchestrationService:
         if self.calibration_service is None:
             return None
         try:
-            return self.calibration_service.summarize(limit=self.LIVE_CALIBRATION_LIMIT)
+            return self.calibration_service.summarize()
         except Exception:
             return None
 

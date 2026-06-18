@@ -1,8 +1,8 @@
 # Confidence calibration spec
 
-**Status:** implemented for read-time API/service controls; snapshot job remains target behavior
+**Status:** implemented for read-time API/service controls and weekly execution-only live snapshot refresh
 
-This spec defines how Aurelio computes and inspects confidence calibration across time windows, including operator-controlled inclusion or exclusion of phantom trades. Persisted calibration snapshots remain future work.
+This spec defines how Aurelio computes and inspects confidence calibration across time windows, including operator-controlled inclusion or exclusion of phantom trades. Live plan generation uses the latest persisted execution-only calibration snapshot rather than recomputing calibration on every plan-generation run.
 
 ## Purpose
 
@@ -45,7 +45,7 @@ Current boundaries:
 - Operators can explicitly request phantom-only, mixed execution + phantom, or side-by-side read-time reports.
 - Phantom inclusion is never silent: report mode, label policy, source counts, and warnings disclose it.
 - Computed-window parameters are accepted and disclosed, but effective-outcome retrieval is still evaluation-time anchored until a plan-computed-time calibration index exists.
-- There is no dedicated scheduled calibration job and no persisted calibration snapshot table yet.
+- A weekly scheduled calibration refresh job persists its snapshot in the run artifact. A dedicated calibration snapshot table remains future work.
 
 ## Definitions
 
@@ -364,9 +364,9 @@ Operator-facing copy must clearly distinguish:
 
 ## Calibration snapshot job target
 
-There is currently no dedicated calibration job. Target behavior adds one.
+A dedicated calibration refresh job runs weekly during the weekend.
 
-Recommended job type:
+Job type:
 
 ```text
 recommendation_calibration_refresh
@@ -381,14 +381,15 @@ Purpose:
 
 Default schedule:
 
-- daily after outcome-resolution jobs complete
-- optional weekly full-history snapshot
+- weekly on Saturday at 06:30 UTC, after the Saturday gating severity check and before the heavier weekend fundamental-analysis batches
+- optional future weekly/full-history variants may be added if snapshot volume grows
 
-Each job should produce and persist:
+Each job produces and persists:
 
-- execution-only report for `30d`, `90d`, `180d`, and `all`
-- phantom-only report for `30d`, `90d`, `180d`, and `all`
-- side-by-side summary
+- live execution-only calibration summary for all available execution outcomes
+- execution-only confidence report for `all`
+- phantom-only confidence report for `all`
+- execution + phantom confidence report for `all`
 - sample sufficiency status
 - warnings and recommended operator actions
 
@@ -406,7 +407,7 @@ Persisted snapshot fields:
 - warnings
 - code/schema version
 
-Live watchlist calibration may continue computing read-time reports until snapshots exist. While using read-time reports, live plan framing must default to execution-only calibration over a broad enough all-history limit to avoid empty recent windows. Phantom-inclusive modes are research/operator views only and must not become the live calibration source without a later validated spec change. Once snapshots exist, live/autonomy logic should prefer the latest fresh execution-only snapshot and fall back to read-time computation only with a warning.
+Live watchlist calibration must use the latest completed weekly execution-only calibration snapshot. It must not recompute calibration during every plan-generation run. Phantom-inclusive modes remain research/operator views only and must not become the live calibration source without a later validated spec change. If no completed snapshot exists, live calibration should be unavailable/disabled rather than silently recomputed during proposal generation.
 
 ## Gating relationship
 

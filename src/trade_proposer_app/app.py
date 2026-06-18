@@ -1,5 +1,4 @@
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +12,7 @@ from trade_proposer_app.services.default_jobs import (
     ensure_default_broker_steering_job,
     ensure_default_fundamental_analysis_job,
     ensure_default_gating_severity_check_job,
+    ensure_default_recommendation_calibration_refresh_job,
     ensure_default_recommendation_evaluation_jobs,
 )
 from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
@@ -30,6 +30,7 @@ async def lifespan(_: FastAPI):
         ensure_default_broker_steering_job(session)
         ensure_default_fundamental_analysis_job(session)
         ensure_default_gating_severity_check_job(session)
+        ensure_default_recommendation_calibration_refresh_job(session)
     finally:
         session.close()
     yield

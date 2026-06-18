@@ -6,6 +6,7 @@ import traceback
 from datetime import datetime, timezone
 from time import perf_counter
 
+from scripts.large_plan_generation_parameter_search import run_large_parameter_search
 from trade_proposer_app.config import settings
 from trade_proposer_app.domain.enums import JobType, RunStatus, StrategyHorizon
 from trade_proposer_app.domain.models import (
@@ -15,24 +16,29 @@ from trade_proposer_app.domain.models import (
     Watchlist,
     WorkerHeartbeat,
 )
+from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.bars_refresh import BarsRefreshService
 from trade_proposer_app.services.broker_position_steering_workflow import BrokerSteeringService
+from trade_proposer_app.services.confidence_calibration_snapshots import (
+    ConfidenceCalibrationSnapshotService,
+)
 from trade_proposer_app.services.evaluation_execution import EvaluationExecutionService
 from trade_proposer_app.services.fundamental_analysis_refresh import (
     FundamentalAnalysisRefreshService,
 )
 from trade_proposer_app.services.gating_severity_alerts import GatingSeverityAlertService
-from scripts.large_plan_generation_parameter_search import run_large_parameter_search
 from trade_proposer_app.services.historical_replay import HistoricalReplayService
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
 from trade_proposer_app.services.macro_context_refresh import MacroContextRefreshService
 from trade_proposer_app.services.order_execution import OrderExecutionService
 from trade_proposer_app.services.performance_assessment import PerformanceAssessmentService
 from trade_proposer_app.services.plan_generation_tuning import PlanGenerationTuningService
-
+from trade_proposer_app.services.recommendation_plan_calibration import (
+    RecommendationPlanCalibrationService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +177,8 @@ class JobExecutionService:
             return self._execute_fundamental_analysis_refresh_run(run)
         if run.job_type == JobType.GATING_SEVERITY_CHECK:
             return self._execute_gating_severity_check_run(run)
+        if run.job_type == JobType.RECOMMENDATION_CALIBRATION_REFRESH:
+            return self._execute_recommendation_calibration_refresh_run(run)
         raise RuntimeError(f"unsupported job_type execution: {run.job_type.value}")
 
     def _execute_proposal_run(self, run: Run) -> tuple[list[Recommendation], dict[str, object]]:
@@ -916,6 +924,44 @@ class JobExecutionService:
             if int(summary.get("failed_count", 0) or 0)
             else RunStatus.COMPLETED.value
         )
+        self._finalize_success(run.id or 0, status, timing, execution_started)
+        return [], timing
+
+    def _execute_recommendation_calibration_refresh_run(
+        self, run: Run
+    ) -> tuple[list[Recommendation], dict[str, object]]:
+        execution_started = perf_counter()
+        timing: dict[str, object] = {
+            "queue_wait_seconds": self._calculate_queue_wait_seconds(run),
+            "calibration_refresh_seconds": 0.0,
+            "persistence_seconds": 0.0,
+            "finalize_seconds": 0.0,
+            "total_execution_seconds": 0.0,
+        }
+        refresh_started = perf_counter()
+        service = ConfidenceCalibrationSnapshotService(
+            self.runs,
+            RecommendationPlanCalibrationService(EffectivePlanOutcomeRepository(self.runs.session)),
+        )
+        snapshot = service.refresh()
+        timing["calibration_refresh_seconds"] = round(perf_counter() - refresh_started, 6)
+
+        persistence_started = perf_counter()
+        execution_report = snapshot.get("reports", {}).get("execution_only", {}) if isinstance(snapshot.get("reports"), dict) else {}
+        execution_summary = execution_report.get("summary", {}) if isinstance(execution_report, dict) else {}
+        run_summary = {
+            "mode": "recommendation_calibration_refresh",
+            "live_mode": snapshot.get("live_mode", "execution_only"),
+            "limit": snapshot.get("limit"),
+            "sample_status": execution_summary.get("sample_status"),
+            "included_outcomes": execution_summary.get("included_outcomes"),
+            "success_rate_percent": execution_summary.get("success_rate_percent"),
+            "warnings": snapshot.get("warnings", []),
+        }
+        self.runs.set_summary(run.id or 0, run_summary)
+        self.runs.set_artifact(run.id or 0, {ConfidenceCalibrationSnapshotService.ARTIFACT_KEY: snapshot})
+        timing["persistence_seconds"] = round(perf_counter() - persistence_started, 6)
+        status = RunStatus.COMPLETED_WITH_WARNINGS.value if snapshot.get("warnings") else RunStatus.COMPLETED.value
         self._finalize_success(run.id or 0, status, timing, execution_started)
         return [], timing
 

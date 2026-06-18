@@ -50,7 +50,7 @@ class WatchlistOrchestrationPolicyTests(unittest.TestCase):
 
     # ─── Shortlist Ranking & Lane Logic ───────────────────────────────────────
 
-    def test_live_calibration_summary_uses_broad_execution_history(self) -> None:
+    def test_live_calibration_summary_uses_persisted_snapshot_provider(self) -> None:
         calibration_service = Mock()
         calibration_service.summarize.return_value = SimpleNamespace(total_outcomes=1)
         service = WatchlistOrchestrationService(
@@ -66,8 +66,7 @@ class WatchlistOrchestrationPolicyTests(unittest.TestCase):
         summary = service._load_calibration_summary()
 
         self.assertEqual(summary.total_outcomes, 1)
-        calibration_service.summarize.assert_called_once_with(limit=service.LIVE_CALIBRATION_LIMIT)
-        self.assertGreaterEqual(service.LIVE_CALIBRATION_LIMIT, 10000)
+        calibration_service.summarize.assert_called_once_with()
 
     def test_shortlist_ranks_by_attention_then_confidence(self) -> None:
         """ranking = (attention, confidence) descending."""

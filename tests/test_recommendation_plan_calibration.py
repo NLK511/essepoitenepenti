@@ -10,12 +10,17 @@ Design principles:
 
 from __future__ import annotations
 
+import json
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
-from trade_proposer_app.domain.models import RecommendationPlanOutcome
+from trade_proposer_app.domain.enums import JobType, RunStatus
+from trade_proposer_app.domain.models import RecommendationPlanOutcome, Run
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
+from trade_proposer_app.services.confidence_calibration_snapshots import (
+    ConfidenceCalibrationSnapshotService,
+)
 from trade_proposer_app.services.recommendation_plan_calibration import (
     RecommendationPlanCalibrationService,
 )
@@ -293,6 +298,60 @@ class RecommendationPlanCalibrationServiceTests(unittest.TestCase):
         self.assertEqual(report["reports"]["execution_only"]["summary"]["included_outcomes"], 1)
         self.assertEqual(report["reports"]["phantom_only"]["summary"]["included_outcomes"], 2)
         self.assertEqual(report["reports"]["execution_plus_phantom"]["summary"]["included_outcomes"], 3)
+
+
+class ConfidenceCalibrationSnapshotServiceTests(unittest.TestCase):
+    def test_refresh_persists_execution_only_live_summary_and_research_reports(self) -> None:
+        runs = Mock()
+        calibration = Mock()
+        calibration.summarize.return_value = Mock(model_dump=Mock(return_value={"total_outcomes": 10}))
+        calibration.confidence_report.side_effect = [
+            {"summary": {"sample_status": "usable"}},
+            {"summary": {"sample_status": "usable"}},
+            {"summary": {"sample_status": "usable"}},
+        ]
+        service = ConfidenceCalibrationSnapshotService(runs, calibration)
+
+        snapshot = service.refresh(limit=123)
+
+        self.assertEqual(snapshot["live_mode"], "execution_only")
+        self.assertEqual(snapshot["limit"], 123)
+        self.assertEqual(snapshot["live_calibration_summary"], {"total_outcomes": 10})
+        self.assertEqual(set(snapshot["reports"].keys()), {"execution_only", "phantom_only", "execution_plus_phantom"})
+        calibration.summarize.assert_called_once_with(limit=123)
+        self.assertEqual(
+            [call.kwargs["mode"] for call in calibration.confidence_report.call_args_list],
+            ["execution_only", "phantom_only", "execution_plus_phantom"],
+        )
+
+    def test_latest_summary_loads_latest_completed_snapshot_artifact(self) -> None:
+        runs = Mock()
+        run = Run(
+            id=1,
+            job_id=1,
+            job_type=JobType.RECOMMENDATION_CALIBRATION_REFRESH,
+            status=RunStatus.COMPLETED,
+            artifact_json=json.dumps(
+                {
+                    ConfidenceCalibrationSnapshotService.ARTIFACT_KEY: {
+                        "live_calibration_summary": {"total_outcomes": 7, "resolved_outcomes": 3}
+                    }
+                }
+            ),
+        )
+        runs.list_runs_for_job_type.return_value = [run]
+        service = ConfidenceCalibrationSnapshotService(runs)
+
+        summary = service.summarize()
+
+        self.assertIsNotNone(summary)
+        assert summary is not None
+        self.assertEqual(summary.total_outcomes, 7)
+        runs.list_runs_for_job_type.assert_called_once_with(
+            JobType.RECOMMENDATION_CALIBRATION_REFRESH,
+            statuses=[RunStatus.COMPLETED.value, RunStatus.COMPLETED_WITH_WARNINGS.value],
+            limit=10,
+        )
 
 
 class CalibrationDimensionThresholdTests(unittest.TestCase):

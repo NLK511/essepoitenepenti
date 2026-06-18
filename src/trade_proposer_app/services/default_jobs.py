@@ -37,6 +37,12 @@ DEFAULT_GATING_SEVERITY_CHECK_JOB_SPEC = {
     "schedule_rationale": "Runs once per week on Saturday at 05:00 UTC over the previous 7 days to detect whether shortlist/signal gating may be too severe.",
 }
 
+DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC = {
+    "name": "Auto: Recommendation Calibration Refresh Weekly",
+    "cron": "30 06 * * SAT",
+    "schedule_rationale": "Runs once per week on Saturday at 06:30 UTC to refresh the persisted execution-only confidence calibration snapshot used by live plan framing.",
+}
+
 DEFAULT_FUNDAMENTAL_ANALYSIS_JOB_SPECS: list[dict[str, str | list[str]]] = [
     {
         "name": "Auto: Fundamental Analysis Weekend Batch 1",
@@ -127,6 +133,18 @@ def ensure_default_gating_severity_check_job(session) -> dict[str, str]:
         JobType.GATING_SEVERITY_CHECK,
     )
     return DEFAULT_GATING_SEVERITY_CHECK_JOB_SPEC
+
+
+def ensure_default_recommendation_calibration_refresh_job(session) -> dict[str, str]:
+    job_repo = JobRepository(session)
+    _ensure_job(
+        job_repo,
+        session,
+        DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC["name"],
+        DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC["cron"],
+        JobType.RECOMMENDATION_CALIBRATION_REFRESH,
+    )
+    return DEFAULT_RECOMMENDATION_CALIBRATION_REFRESH_JOB_SPEC
 
 
 def ensure_default_broker_accounts(session) -> dict[str, str]:

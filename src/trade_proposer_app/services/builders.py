@@ -2,17 +2,26 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
-from trade_proposer_app.repositories.broker_reconciliation_snapshots import BrokerReconciliationSnapshotRepository
+from trade_proposer_app.repositories.broker_reconciliation_snapshots import (
+    BrokerReconciliationSnapshotRepository,
+)
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
-from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
-from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
+from trade_proposer_app.repositories.fundamental_analysis_snapshots import (
+    FundamentalAnalysisSnapshotRepository,
+)
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.historical_news import HistoricalNewsRepository
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
-from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
+from trade_proposer_app.repositories.recommendation_decision_samples import (
+    RecommendationDecisionSampleRepository,
+)
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
+from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClient
+from trade_proposer_app.services.confidence_calibration_snapshots import (
+    ConfidenceCalibrationSnapshotService,
+)
 from trade_proposer_app.services.context_snapshot_resolver import ContextSnapshotResolver
 from trade_proposer_app.services.industry_context import IndustryContextService
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
@@ -21,7 +30,6 @@ from trade_proposer_app.services.macro_context_refresh import MacroContextRefres
 from trade_proposer_app.services.news import NewsIngestionService
 from trade_proposer_app.services.order_execution import OrderExecutionService
 from trade_proposer_app.services.proposals import ProposalService
-from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.signals import SignalIngestionService
 from trade_proposer_app.services.social import SocialIngestionService
@@ -109,7 +117,7 @@ def create_watchlist_orchestration_service(
         cheap_scan_service=CheapScanSignalService(repository=HistoricalMarketDataRepository(session)),
         deep_analysis_service=create_ticker_deep_analysis_service(session, proposal_service=proposal_service),
         trade_decision_policy=trade_decision_policy,
-        calibration_service=RecommendationPlanCalibrationService(EffectivePlanOutcomeRepository(session)),
+        calibration_service=ConfidenceCalibrationSnapshotService(RunRepository(session)),
     )
 
 

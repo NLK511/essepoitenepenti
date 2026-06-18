@@ -134,3 +134,21 @@ def test_default_weekly_gating_severity_job_is_scheduled_for_saturday_0500() -> 
     assert job.job_type == JobType.GATING_SEVERITY_CHECK.value
     assert job.schedule == "00 05 * * SAT"
     assert job.enabled is True
+
+
+def test_default_weekly_confidence_calibration_job_is_scheduled_for_weekend() -> None:
+    from trade_proposer_app.services.default_jobs import (
+        ensure_default_recommendation_calibration_refresh_job,
+    )
+
+    session = create_session()
+
+    spec = ensure_default_recommendation_calibration_refresh_job(session)
+
+    assert spec["cron"] == "30 06 * * SAT"
+    job = session.scalars(
+        select(JobRecord).where(JobRecord.name == "Auto: Recommendation Calibration Refresh Weekly")
+    ).one()
+    assert job.job_type == JobType.RECOMMENDATION_CALIBRATION_REFRESH.value
+    assert job.schedule == "30 06 * * SAT"
+    assert job.enabled is True
