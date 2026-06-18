@@ -12,6 +12,7 @@ WORKER_PID_FILE="${STATE_DIR}/worker.pid"
 SCHEDULER_PID_FILE="${STATE_DIR}/scheduler.pid"
 SCHEDULER_LOG_FILE="${STATE_DIR}/scheduler.log"
 META_FILE="${STATE_DIR}/meta.env"
+AUDIT_LOG_FILE="${STATE_DIR}/lifecycle-audit.log"
 
 SKIP_FRONTEND_BUILD="false"
 ALLOW_DEGRADED_PREFLIGHT="false"
@@ -20,6 +21,27 @@ START_PORT=""
 
 log() {
   printf '[start-prod] %s\n' "$1"
+}
+
+log_audit() {
+  mkdir -p "$STATE_DIR"
+  local timestamp
+  timestamp="$(date -Is)"
+  printf '[%s] [start-prod pid=%s ppid=%s] %s\n' "$timestamp" "$$" "${PPID:-unknown}" "$1" >> "$AUDIT_LOG_FILE"
+}
+
+process_snapshot() {
+  local label="$1"
+  shift || true
+  log_audit "process snapshot: ${label}"
+  for pid in "$@"; do
+    [[ -z "${pid:-}" ]] && continue
+    if kill -0 "$pid" 2>/dev/null; then
+      ps -o pid,ppid,pgid,sid,stat,rss,etime,cmd -p "$pid" >> "$AUDIT_LOG_FILE" 2>&1 || true
+    else
+      log_audit "pid ${pid} is not running"
+    fi
+  done
 }
 
 fail() {
@@ -154,6 +176,8 @@ VENV_PYTHON="${VENV_DIR}/bin/python"
 DATABASE_URL_VALUE="${DATABASE_URL:-postgresql+psycopg://postgres:postgres@localhost:5432/trade_proposer}"
 
 mkdir -p "$STATE_DIR"
+log_audit "startup requested args=$* cwd=$(pwd) user=$(id -un 2>/dev/null || true) host=${START_HOST} port=${START_PORT} skip_frontend_build=${SKIP_FRONTEND_BUILD}"
+ps -o pid,ppid,pgid,sid,stat,rss,etime,cmd -p "$$" >> "$AUDIT_LOG_FILE" 2>&1 || true
 existing_api_pid="$(read_pid_file "$API_PID_FILE")"
 existing_worker_pid="$(read_pid_file "$WORKER_PID_FILE")"
 existing_scheduler_pid="$(read_pid_file "$SCHEDULER_PID_FILE")"
@@ -219,31 +243,50 @@ rm -f "$API_PID_FILE" "$WORKER_PID_FILE" "$SCHEDULER_PID_FILE" "$META_FILE"
 API_PID=""
 WORKER_PID=""
 SCHEDULER_PID=""
+SHUTDOWN_REASON="normal_exit"
+
+mark_signal_shutdown() {
+  SHUTDOWN_REASON="signal_${1}"
+  log_audit "supervisor received ${1}; command=${0} ${*}; cwd=$(pwd); user=$(id -un 2>/dev/null || true)"
+  process_snapshot "before signal cleanup ${1}" "$API_PID" "$WORKER_PID" "$SCHEDULER_PID"
+  exit 128
+}
 
 cleanup() {
   local exit_code=$?
   set +e
+  if [[ "$SHUTDOWN_REASON" == "normal_exit" && "$exit_code" -ne 0 ]]; then
+    SHUTDOWN_REASON="error_exit_${exit_code}"
+  fi
+  log_audit "cleanup started reason=${SHUTDOWN_REASON} exit_code=${exit_code}"
+  process_snapshot "cleanup start" "$API_PID" "$WORKER_PID" "$SCHEDULER_PID"
   if [[ -n "$WORKER_PID" ]] && kill -0 "$WORKER_PID" 2>/dev/null; then
     log "stopping worker (pid ${WORKER_PID})"
+    log_audit "sending SIGTERM to worker pid=${WORKER_PID} reason=${SHUTDOWN_REASON}"
     kill "$WORKER_PID" 2>/dev/null || true
     wait "$WORKER_PID" 2>/dev/null || true
   fi
   if [[ -n "$SCHEDULER_PID" ]] && kill -0 "$SCHEDULER_PID" 2>/dev/null; then
     log "stopping scheduler (pid ${SCHEDULER_PID})"
+    log_audit "sending SIGTERM to scheduler pid=${SCHEDULER_PID} reason=${SHUTDOWN_REASON}"
     kill "$SCHEDULER_PID" 2>/dev/null || true
     wait "$SCHEDULER_PID" 2>/dev/null || true
   fi
   if [[ -n "$API_PID" ]] && kill -0 "$API_PID" 2>/dev/null; then
     log "stopping api (pid ${API_PID})"
+    log_audit "sending SIGTERM to api pid=${API_PID} reason=${SHUTDOWN_REASON}"
     kill "$API_PID" 2>/dev/null || true
     wait "$API_PID" 2>/dev/null || true
   fi
+  log_audit "cleanup finished reason=${SHUTDOWN_REASON} exit_code=${exit_code}"
   rm -f "$API_PID_FILE" "$WORKER_PID_FILE" "$SCHEDULER_PID_FILE" "$META_FILE"
   rmdir "$STATE_DIR" 2>/dev/null || true
   exit "$exit_code"
 }
 
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'mark_signal_shutdown INT' INT
+trap 'mark_signal_shutdown TERM' TERM
 
 log "starting api on ${START_HOST}:${START_PORT}"
 (
@@ -252,6 +295,7 @@ log "starting api on ${START_HOST}:${START_PORT}"
 ) &
 API_PID=$!
 echo "$API_PID" > "$API_PID_FILE"
+log_audit "started api pid=${API_PID}"
 
 WORKER_ID="$($VENV_PYTHON - <<'PY'
 import uuid
@@ -270,6 +314,7 @@ log "starting worker (${WORKER_ID})"
 ) &
 WORKER_PID=$!
 echo "$WORKER_PID" > "$WORKER_PID_FILE"
+log_audit "started worker pid=${WORKER_PID} worker_id=${WORKER_ID} log=${WORKER_LOG_FILE}"
 
 log "starting scheduler"
 (
@@ -278,6 +323,7 @@ log "starting scheduler"
 ) &
 SCHEDULER_PID=$!
 echo "$SCHEDULER_PID" > "$SCHEDULER_PID_FILE"
+log_audit "started scheduler pid=${SCHEDULER_PID}"
 
 cat > "$META_FILE" <<EOF
 HOST=${START_HOST}
@@ -305,14 +351,23 @@ printf 'Press Ctrl+C to stop all started processes here as well.\n'
 
 while true; do
   if ! kill -0 "$API_PID" 2>/dev/null; then
+    SHUTDOWN_REASON="api_exited"
+    log_audit "api process exited unexpectedly pid=${API_PID}; check ${API_LOG_FILE}"
+    process_snapshot "api exited" "$WORKER_PID" "$SCHEDULER_PID"
     log "error: api process (pid ${API_PID}) exited. check ${API_LOG_FILE} for details."
     exit 1
   fi
   if ! kill -0 "$WORKER_PID" 2>/dev/null; then
+    SHUTDOWN_REASON="worker_exited"
+    log_audit "worker process exited unexpectedly pid=${WORKER_PID}; check ${WORKER_LOG_FILE}"
+    process_snapshot "worker exited" "$API_PID" "$SCHEDULER_PID"
     log "error: worker process (pid ${WORKER_PID}) exited. check ${WORKER_LOG_FILE} for details."
     exit 1
   fi
   if ! kill -0 "$SCHEDULER_PID" 2>/dev/null; then
+    SHUTDOWN_REASON="scheduler_exited"
+    log_audit "scheduler process exited unexpectedly pid=${SCHEDULER_PID}; check ${SCHEDULER_LOG_FILE}"
+    process_snapshot "scheduler exited" "$API_PID" "$WORKER_PID"
     log "error: scheduler process (pid ${SCHEDULER_PID}) exited. check ${SCHEDULER_LOG_FILE} for details."
     exit 1
   fi
