@@ -134,7 +134,7 @@ export function RecommendationPlansPage() {
       try {
         setError(null);
         setExpandedPlanRows({});
-        const summaryParams = new URLSearchParams({ limit: "2000" });
+        const summaryParams = new URLSearchParams({ limit: "500" });
         const runId = searchParams.get("run_id");
         const ticker = searchParams.get("ticker");
         const setupFamily = searchParams.get("setup_family");
