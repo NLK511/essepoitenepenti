@@ -16,7 +16,9 @@ from unittest.mock import Mock, patch
 
 from trade_proposer_app.domain.models import RecommendationPlanOutcome
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
-from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
+from trade_proposer_app.services.recommendation_plan_calibration import (
+    RecommendationPlanCalibrationService,
+)
 
 
 class RecommendationPlanCalibrationServiceTests(unittest.TestCase):
@@ -235,6 +237,62 @@ class RecommendationPlanCalibrationServiceTests(unittest.TestCase):
 
     def test_average_returns_none_when_no_numeric_values(self) -> None:
         self.assertIsNone(self.service._average([None, "not_a_number"]))
+
+    def test_confidence_report_defaults_to_execution_only_and_excludes_phantoms(self) -> None:
+        self.outcomes_repo.list_outcomes.return_value = [
+            RecommendationPlanOutcome(recommendation_plan_id=1, outcome="win", confidence_percent=80.0),
+            RecommendationPlanOutcome(recommendation_plan_id=2, outcome="loss", confidence_percent=80.0),
+            RecommendationPlanOutcome(recommendation_plan_id=3, outcome="phantom_win", confidence_percent=80.0),
+            RecommendationPlanOutcome(recommendation_plan_id=4, outcome="phantom_loss", confidence_percent=80.0),
+        ]
+
+        report = self.service.confidence_report()
+
+        self.assertEqual(report["mode"], "execution_only")
+        self.assertEqual(report["summary"]["included_outcomes"], 2)
+        self.assertEqual(report["summary"]["successes"], 1)
+        self.assertEqual(report["label_policy"]["excluded_outcomes"], ["phantom_loss", "phantom_win"])
+        self.assertEqual(report["source_outcome_counts"]["phantom_win"], 1)
+
+    def test_confidence_report_can_calibrate_phantom_only(self) -> None:
+        self.outcomes_repo.list_outcomes.return_value = [
+            RecommendationPlanOutcome(recommendation_plan_id=1, outcome="win", confidence_percent=80.0),
+            RecommendationPlanOutcome(recommendation_plan_id=2, outcome="phantom_win", confidence_percent=70.0),
+            RecommendationPlanOutcome(recommendation_plan_id=3, outcome="phantom_loss", confidence_percent=70.0),
+        ]
+
+        report = self.service.confidence_report(mode="phantom_only")
+
+        self.assertEqual(report["mode"], "phantom_only")
+        self.assertEqual(report["summary"]["included_outcomes"], 2)
+        self.assertEqual(report["summary"]["success_rate_percent"], 50.0)
+        self.assertIn("phantom_only_research_view", report["warnings"])
+        self.assertEqual(report["calibration_report"].sample_count, 2)
+
+    def test_confidence_report_resolves_named_time_window(self) -> None:
+        anchor = datetime(2026, 6, 18, tzinfo=timezone.utc)
+        self.outcomes_repo.list_outcomes.return_value = []
+
+        report = self.service.confidence_report(window="30d", now=anchor)
+
+        _, kwargs = self.outcomes_repo.list_outcomes.call_args
+        self.assertEqual(kwargs["evaluated_after"], datetime(2026, 5, 19, tzinfo=timezone.utc))
+        self.assertEqual(kwargs["evaluated_before"], anchor)
+        self.assertEqual(report["window"]["label"], "30d")
+
+    def test_confidence_report_side_by_side_returns_separate_modes(self) -> None:
+        self.outcomes_repo.list_outcomes.return_value = [
+            RecommendationPlanOutcome(recommendation_plan_id=1, outcome="win", confidence_percent=80.0),
+            RecommendationPlanOutcome(recommendation_plan_id=2, outcome="phantom_win", confidence_percent=70.0),
+            RecommendationPlanOutcome(recommendation_plan_id=3, outcome="phantom_loss", confidence_percent=70.0),
+        ]
+
+        report = self.service.confidence_report(mode="side_by_side")
+
+        self.assertEqual(report["mode"], "side_by_side")
+        self.assertEqual(report["reports"]["execution_only"]["summary"]["included_outcomes"], 1)
+        self.assertEqual(report["reports"]["phantom_only"]["summary"]["included_outcomes"], 2)
+        self.assertEqual(report["reports"]["execution_plus_phantom"]["summary"]["included_outcomes"], 3)
 
 
 class CalibrationDimensionThresholdTests(unittest.TestCase):

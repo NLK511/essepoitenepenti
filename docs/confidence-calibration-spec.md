@@ -1,8 +1,8 @@
 # Confidence calibration spec
 
-**Status:** current + target behavior
+**Status:** implemented for read-time API/service controls; snapshot job remains target behavior
 
-This spec defines how Aurelio should compute, inspect, and eventually persist confidence calibration across time windows, including operator-controlled inclusion or exclusion of phantom trades.
+This spec defines how Aurelio computes and inspects confidence calibration across time windows, including operator-controlled inclusion or exclusion of phantom trades. Persisted calibration snapshots remain future work.
 
 ## Purpose
 
@@ -39,10 +39,12 @@ Implemented today:
 - Calibration review considers cohorts such as setup family, confidence bucket, horizon, transmission bias, context regime, and horizon + setup family.
 - Research/API surfaces can compute calibration reports on demand.
 
-Important current limitation:
+Current boundaries:
 
-- Main calibration treats only `win` and `loss` as resolved calibration labels.
-- `phantom_win` and `phantom_loss` may be present in effective outcome data, but they are not counted in the main calibration curve because the calibration service filters resolved items to `win`/`loss`.
+- Default calibration treats only `win` and `loss` as resolved execution labels.
+- Operators can explicitly request phantom-only, mixed execution + phantom, or side-by-side read-time reports.
+- Phantom inclusion is never silent: report mode, label policy, source counts, and warnings disclose it.
+- Computed-window parameters are accepted and disclosed, but effective-outcome retrieval is still evaluation-time anchored until a plan-computed-time calibration index exists.
 - There is no dedicated scheduled calibration job and no persisted calibration snapshot table yet.
 
 ## Definitions

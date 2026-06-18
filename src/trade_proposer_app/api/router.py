@@ -5,6 +5,7 @@ from trade_proposer_app.api.routes.broker_accounts import router as broker_accou
 from trade_proposer_app.api.routes.broker_orders import router as broker_orders_router
 from trade_proposer_app.api.routes.broker_positions import router as broker_positions_router
 from trade_proposer_app.api.routes.broker_workbench import router as broker_workbench_router
+from trade_proposer_app.api.routes.calibration import router as calibration_router
 from trade_proposer_app.api.routes.context import router as context_router
 from trade_proposer_app.api.routes.dashboard import router as dashboard_router
 from trade_proposer_app.api.routes.data_quality import router as data_quality_router
@@ -63,6 +64,7 @@ router.include_router(broker_accounts_router)
 router.include_router(broker_orders_router)
 router.include_router(broker_positions_router)
 router.include_router(broker_workbench_router)
+router.include_router(calibration_router)
 router.include_router(risk_router)
 router.include_router(watchlists_router)
 router.include_router(jobs_router)

@@ -215,6 +215,68 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["events"][0]["correlation_id"], run.correlation_id)
         self.assertEqual(payload["events"][0]["payload"]["final_status"], "completed")
 
+    async def test_confidence_calibration_route_supports_phantom_mode(self) -> None:
+        session = Session(bind=self.engine)
+        try:
+            plans = RecommendationPlanRepository(session)
+            outcomes = RecommendationOutcomeRepository(session)
+            win_plan = plans.create_plan(
+                RecommendationPlan(
+                    ticker="AAPL",
+                    horizon="1w",
+                    action="long",
+                    confidence_percent=80.0,
+                    thesis_summary="Execution winner.",
+                    signal_breakdown={"setup_family": "breakout"},
+                )
+            )
+            phantom_plan = plans.create_plan(
+                RecommendationPlan(
+                    ticker="MSFT",
+                    horizon="1w",
+                    action="watchlist",
+                    confidence_percent=70.0,
+                    thesis_summary="Missed opportunity.",
+                    signal_breakdown={"setup_family": "breakout"},
+                )
+            )
+            outcomes.upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=win_plan.id or 0,
+                    ticker="AAPL",
+                    action="long",
+                    outcome="win",
+                    status="resolved",
+                    confidence_percent=80.0,
+                    setup_family="breakout",
+                )
+            )
+            outcomes.upsert_outcome(
+                RecommendationPlanOutcome(
+                    recommendation_plan_id=phantom_plan.id or 0,
+                    ticker="MSFT",
+                    action="watchlist",
+                    outcome="phantom_win",
+                    status="resolved",
+                    confidence_percent=70.0,
+                    setup_family="breakout",
+                )
+            )
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/api/calibration/confidence", params={"mode": "phantom_only", "limit": 20})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["mode"], "phantom_only")
+        self.assertEqual(payload["summary"]["included_outcomes"], 1)
+        self.assertEqual(payload["summary"]["successes"], 1)
+        self.assertEqual(payload["label_policy"]["success_outcomes"], ["phantom_win"])
+        self.assertIn("phantom_only_research_view", payload["warnings"])
+
     async def asyncTearDown(self) -> None:
         self.health_preflight_patcher.stop()
         app.dependency_overrides.clear()
