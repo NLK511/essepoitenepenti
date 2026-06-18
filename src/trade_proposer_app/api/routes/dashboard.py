@@ -1,12 +1,13 @@
+import json
 from collections import Counter
 from datetime import datetime, timedelta, timezone
-import json
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
+from trade_proposer_app.domain.enums import RunStatus
 from trade_proposer_app.persistence.models import (
     BrokerOrderExecutionRecord,
     HistoricalMarketBarRecord,
@@ -15,9 +16,8 @@ from trade_proposer_app.persistence.models import (
     RecommendationPlanRecord,
     TickerSignalSnapshotRecord,
 )
-from trade_proposer_app.domain.enums import RunStatus
-from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
+from trade_proposer_app.repositories.effective_plan_outcomes import EffectivePlanOutcomeRepository
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
@@ -380,7 +380,71 @@ async def get_dashboard_operator_status(
         "provider_failures": _provider_failure_summary(
             session, computed_after=computed_after, computed_before=now
         ),
+        "broker_submission_health": _broker_submission_health(session, now=now),
         "gating_severity_alert": GatingSeverityAlertService(session).latest_alert(),
+    }
+
+
+def _broker_submission_health(
+    session: Session, *, now: datetime, lookback_days: int = 21
+) -> dict[str, object]:
+    computed_after = now - timedelta(days=lookback_days)
+    rows = session.scalars(
+        select(BrokerOrderExecutionRecord)
+        .where(BrokerOrderExecutionRecord.created_at >= computed_after.replace(tzinfo=None))
+        .where(BrokerOrderExecutionRecord.created_at <= now.replace(tzinfo=None))
+        .order_by(BrokerOrderExecutionRecord.created_at.desc())
+        .limit(1000)
+    ).all()
+    attempted = [row for row in rows if row.status not in {"skipped"}]
+    failed = [row for row in attempted if row.status in {"failed", "rejected"}]
+    broker_422 = [
+        row
+        for row in failed
+        if "422" in (row.error_message or "") or "422" in (row.response_payload_json or "")
+    ]
+    sub_penny = [
+        row
+        for row in broker_422
+        if "sub-penny" in (row.response_payload_json or "").lower()
+        or "sub-penny" in (row.error_message or "").lower()
+    ]
+    failure_rate = round((len(failed) / len(attempted)) * 100.0, 2) if attempted else 0.0
+    broker_422_rate = round((len(broker_422) / len(attempted)) * 100.0, 2) if attempted else 0.0
+    status = "ok"
+    reasons: list[str] = []
+    if broker_422:
+        status = "danger"
+        reasons.append("broker_422_submission_failures")
+    if len(sub_penny) >= 2:
+        status = "danger"
+        reasons.append("systematic_sub_penny_pricing_rejections")
+    if failure_rate >= 20.0 and failed:
+        status = "danger"
+        reasons.append("high_broker_submission_failure_rate")
+    elif failed and status == "ok":
+        status = "warning"
+        reasons.append("broker_submission_failures_present")
+
+    recent_messages: list[str] = []
+    for row in broker_422[:5]:
+        payload = _json_object(row.response_payload_json)
+        message = str(payload.get("message") or row.error_message or "broker submission failed")
+        if message not in recent_messages:
+            recent_messages.append(message)
+    return {
+        "status": status,
+        "lookback_days": lookback_days,
+        "attempted_count": len(attempted),
+        "failed_count": len(failed),
+        "broker_422_count": len(broker_422),
+        "sub_penny_rejection_count": len(sub_penny),
+        "failure_rate_percent": failure_rate,
+        "broker_422_rate_percent": broker_422_rate,
+        "affected_tickers": sorted({row.ticker for row in broker_422 if row.ticker})[:12],
+        "latest_failure_at": broker_422[0].created_at if broker_422 else None,
+        "recent_error_messages": recent_messages,
+        "reasons": reasons,
     }
 
 

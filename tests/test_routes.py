@@ -1508,7 +1508,43 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("summary", quality.json()["recommendation_quality"])
 
     async def test_dashboard_operator_status_returns_compact_gate_payload(self) -> None:
-        self.seed_run_with_diagnostics()
+        run_id = self.seed_run_with_diagnostics()
+        session = Session(bind=self.engine)
+        try:
+            job = JobRepository(session).list_all()[0]
+            plan = RecommendationPlanRepository(session).list_plans(run_id=run_id, limit=10)[0]
+            BrokerOrderExecutionRepository(session).create(
+                BrokerOrderExecution(
+                    broker="alpaca",
+                    account_mode="paper",
+                    recommendation_plan_id=plan.id or 0,
+                    recommendation_plan_ticker=plan.ticker,
+                    run_id=run_id,
+                    job_id=job.id,
+                    ticker="AMAT",
+                    action="long",
+                    side="buy",
+                    order_type="limit",
+                    time_in_force="day",
+                    quantity=1,
+                    notional_amount=100.0,
+                    entry_price=100.0,
+                    stop_loss=95.0,
+                    take_profit=101.1234,
+                    status="failed",
+                    client_order_id="dashboard-422-test",
+                    response_payload={
+                        "code": 42210000,
+                        "message": (
+                            "invalid take_profit.limit_price 101.1234. sub-penny increment "
+                            "does not fulfill minimum pricing criteria"
+                        ),
+                    },
+                    error_message="alpaca request failed with status 422",
+                )
+            )
+        finally:
+            session.close()
 
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
@@ -1522,6 +1558,10 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("risk", payload)
         self.assertIn("data_quality", payload)
         self.assertIn("provider_failures", payload)
+        self.assertIn("broker_submission_health", payload)
+        self.assertEqual(payload["broker_submission_health"]["status"], "danger")
+        self.assertEqual(payload["broker_submission_health"]["broker_422_count"], 1)
+        self.assertIn("sub-penny", payload["broker_submission_health"]["recent_error_messages"][0])
         self.assertIn("missing_inputs", payload["policy_trust"])
         self.assertIn("policy_evaluation", payload["policy_trust"])
         self.assertIn("broker_reconciliation_summary", payload["policy_trust"])

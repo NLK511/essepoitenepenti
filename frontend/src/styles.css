@@ -3201,6 +3201,21 @@ td {
   background: var(--bg-soft);
 }
 
+.operator-status-item-danger {
+  border-color: rgba(214, 143, 124, 0.72);
+  background: rgba(214, 143, 124, 0.18);
+  box-shadow: 0 0 0 1px rgba(214, 143, 124, 0.16), 0 14px 32px rgba(214, 143, 124, 0.12);
+}
+
+.operator-status-item-warning {
+  border-color: rgba(226, 187, 107, 0.58);
+  background: rgba(226, 187, 107, 0.16);
+}
+
+.danger-text {
+  color: var(--danger);
+}
+
 .operator-status-head {
   display: flex;
   align-items: flex-start;

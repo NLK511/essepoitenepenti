@@ -13,11 +13,27 @@ type DataQualityAuditResponse = {
   issue_counts: Record<string, number>;
 };
 
+type BrokerSubmissionHealth = {
+  status: "ok" | "warning" | "danger" | string;
+  lookback_days: number;
+  attempted_count: number;
+  failed_count: number;
+  broker_422_count: number;
+  sub_penny_rejection_count: number;
+  failure_rate_percent: number;
+  broker_422_rate_percent: number;
+  affected_tickers: string[];
+  latest_failure_at: string | null;
+  recent_error_messages: string[];
+  reasons: string[];
+};
+
 type OperatorStatusStrip = {
   policyHealth: PolicyHealthReport | null;
   edgeGate: EdgeValidationGateReport | null;
   risk: AccountRiskState | null;
   dataQuality: DataQualityAuditResponse | null;
+  brokerSubmissionHealth: BrokerSubmissionHealth | null;
   gatingSeverityAlert: GatingSeverityAlert | null;
 };
 
@@ -26,6 +42,7 @@ type DashboardOperatorStatusResponse = {
   edge_validation_gate: EdgeValidationGateReport | null;
   risk: AccountRiskState | null;
   data_quality: DataQualityAuditResponse | null;
+  broker_submission_health?: BrokerSubmissionHealth | null;
   gating_severity_alert?: GatingSeverityAlert | null;
 };
 
@@ -91,6 +108,14 @@ function dataQualityTone(payload: DataQualityAuditResponse | null): "ok" | "warn
   if ((payload.issue_counts.broker_rejected ?? 0) > 0 || (payload.issue_counts.no_bars ?? 0) > 0) return "danger";
   if (payload.issue_ticker_count > 0) return "warning";
   return "ok";
+}
+
+function brokerSubmissionTone(payload: BrokerSubmissionHealth | null | undefined): "ok" | "warning" | "danger" | "neutral" | "info" {
+  const status = (payload?.status ?? "").trim().toLowerCase();
+  if (status === "danger") return "danger";
+  if (status === "warning") return "warning";
+  if (status === "ok") return "ok";
+  return "neutral";
 }
 
 function formatReasons(reasons: string[] | null | undefined, fallback: string): string {
@@ -209,10 +234,11 @@ export function DashboardPage() {
         edgeGate: payload.edge_validation_gate ?? null,
         risk: payload.risk ?? null,
         dataQuality: payload.data_quality ?? null,
+        brokerSubmissionHealth: payload.broker_submission_health ?? null,
         gatingSeverityAlert: payload.gating_severity_alert ?? null,
       });
     } catch (loadError) {
-      setOperatorStatus({ policyHealth: null, edgeGate: null, risk: null, dataQuality: null, gatingSeverityAlert: null });
+      setOperatorStatus({ policyHealth: null, edgeGate: null, risk: null, dataQuality: null, brokerSubmissionHealth: null, gatingSeverityAlert: null });
       setOperatorStatusError(loadError instanceof Error ? loadError.message : "Operator status unavailable");
     }
   }
@@ -346,6 +372,16 @@ export function DashboardPage() {
                   <div className="operator-status-head"><span className="summary-label">broker risk</span><Badge tone={riskTone(operatorStatus?.risk ?? null)}>{operatorStatus?.risk ? operatorStatus.risk.allowed ? "allowed" : "blocked" : "unknown"}</Badge></div>
                   <div className="operator-status-value">{operatorStatus?.risk?.halt_enabled ? "halt active" : operatorStatus?.risk?.enabled ? "risk enabled" : "risk disabled"}</div>
                   <div className="helper-text">{operatorStatus?.risk?.halt_reason || formatReasons(operatorStatus?.risk?.reasons, "No broker-risk reasons reported")}</div>
+                </div>
+                <div className={`operator-status-item operator-status-item-${brokerSubmissionTone(operatorStatus?.brokerSubmissionHealth)}`}>
+                  <div className="operator-status-head"><span className="summary-label">broker submissions</span><Badge tone={brokerSubmissionTone(operatorStatus?.brokerSubmissionHealth)}>{operatorStatus?.brokerSubmissionHealth?.status ?? "unknown"}</Badge></div>
+                  <div className="operator-status-value">{operatorStatus?.brokerSubmissionHealth ? `${operatorStatus.brokerSubmissionHealth.broker_422_count} broker 422 failures` : "submission health unknown"}</div>
+                  <div className="helper-text">
+                    {operatorStatus?.brokerSubmissionHealth
+                      ? `${operatorStatus.brokerSubmissionHealth.failed_count}/${operatorStatus.brokerSubmissionHealth.attempted_count} failed in ${operatorStatus.brokerSubmissionHealth.lookback_days}d · ${operatorStatus.brokerSubmissionHealth.sub_penny_rejection_count} sub-penny rejections${operatorStatus.brokerSubmissionHealth.affected_tickers.length ? ` · ${operatorStatus.brokerSubmissionHealth.affected_tickers.slice(0, 5).join(", ")}` : ""}`
+                      : "Broker submission diagnostics unavailable"}
+                  </div>
+                  {operatorStatus?.brokerSubmissionHealth?.recent_error_messages?.[0] ? <div className="helper-text danger-text">{operatorStatus.brokerSubmissionHealth.recent_error_messages[0]}</div> : null}
                 </div>
                 <div className="cluster">
                   <Badge tone="neutral">Open exposure {formatCurrency(metricNumber(operatorStatus?.risk?.metrics, "open_notional_usd"))}</Badge>
