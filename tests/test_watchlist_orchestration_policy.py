@@ -16,9 +16,19 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from trade_proposer_app.domain.enums import RecommendationDirection, StrategyHorizon
-from trade_proposer_app.domain.models import Recommendation, RecommendationPlan, RunDiagnostics, RunOutput, TickerSignalSnapshot, Watchlist
+from trade_proposer_app.domain.models import (
+    Recommendation,
+    RecommendationPlan,
+    RunDiagnostics,
+    RunOutput,
+    TickerSignalSnapshot,
+    Watchlist,
+)
 from trade_proposer_app.services.watchlist_execution import WatchlistExecutionService
-from trade_proposer_app.services.watchlist_orchestration import WatchlistOrchestrationService, _CheapScanCandidate
+from trade_proposer_app.services.watchlist_orchestration import (
+    WatchlistOrchestrationService,
+    _CheapScanCandidate,
+)
 
 
 class WatchlistOrchestrationPolicyTests(unittest.TestCase):
@@ -39,6 +49,25 @@ class WatchlistOrchestrationPolicyTests(unittest.TestCase):
         )
 
     # ─── Shortlist Ranking & Lane Logic ───────────────────────────────────────
+
+    def test_live_calibration_summary_uses_broad_execution_history(self) -> None:
+        calibration_service = Mock()
+        calibration_service.summarize.return_value = SimpleNamespace(total_outcomes=1)
+        service = WatchlistOrchestrationService(
+            context_snapshots=self.context_snapshots,
+            recommendation_plans=self.recommendation_plans,
+            cheap_scan_service=self.cheap_scan_service,
+            decision_samples=self.decision_samples,
+            deep_analysis_service=self.deep_analysis_service,
+            calibration_service=calibration_service,
+            confidence_threshold=60.0,
+        )
+
+        summary = service._load_calibration_summary()
+
+        self.assertEqual(summary.total_outcomes, 1)
+        calibration_service.summarize.assert_called_once_with(limit=service.LIVE_CALIBRATION_LIMIT)
+        self.assertGreaterEqual(service.LIVE_CALIBRATION_LIMIT, 10000)
 
     def test_shortlist_ranks_by_attention_then_confidence(self) -> None:
         """ranking = (attention, confidence) descending."""

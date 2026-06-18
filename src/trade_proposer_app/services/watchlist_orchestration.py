@@ -1,36 +1,56 @@
 from __future__ import annotations
 
 import json
-import math
 import logging
+from datetime import datetime
 from typing import Any
-from datetime import datetime, timezone
 
 from trade_proposer_app.domain.enums import RecommendationDirection, StrategyHorizon
-from trade_proposer_app.domain.models import RecommendationPlan, RunOutput, TickerSignalSnapshot, Watchlist
+from trade_proposer_app.domain.models import (
+    Recommendation,
+    RecommendationPlan,
+    RunOutput,
+    TickerSignalSnapshot,
+    Watchlist,
+)
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
-from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
+from trade_proposer_app.repositories.recommendation_decision_samples import (
+    RecommendationDecisionSampleRepository,
+)
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
-from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
-from trade_proposer_app.services.shortlist_selection import ShortlistSelectionConfig, ShortlistSelectionService
-from trade_proposer_app.services.taxonomy import TickerTaxonomyService
-from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignalService
 from trade_proposer_app.services.plan_generation_tuning_logic import family_adjusted_trade_levels
-from trade_proposer_app.services.plan_generation_tuning_parameters import normalize_plan_generation_tuning_config
+from trade_proposer_app.services.plan_generation_tuning_parameters import (
+    normalize_plan_generation_tuning_config,
+)
+from trade_proposer_app.services.recommendation_plan_calibration import (
+    RecommendationPlanCalibrationService,
+)
+from trade_proposer_app.services.shortlist_selection import (
+    ShortlistSelectionConfig,
+    ShortlistSelectionService,
+)
+from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicy
-from trade_proposer_app.services.watchlist_plan_framing import WatchlistPlanFramingService
+from trade_proposer_app.services.watchlist_calibration_review import (
+    WatchlistCalibrationReviewService,
+)
+from trade_proposer_app.services.watchlist_candidates import (
+    CheapScanCandidate as _CheapScanCandidate,
+)
+from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignalService
 from trade_proposer_app.services.watchlist_decision_samples import WatchlistDecisionSampleService
-from trade_proposer_app.services.watchlist_signal_builder import WatchlistSignalBuilder
-from trade_proposer_app.services.watchlist_calibration_review import WatchlistCalibrationReviewService
-from trade_proposer_app.services.watchlist_transmission import WatchlistTransmissionService
-from trade_proposer_app.services.watchlist_plan_narrative import WatchlistPlanNarrativeService
-from trade_proposer_app.services.watchlist_candidates import CheapScanCandidate as _CheapScanCandidate
-from trade_proposer_app.services.watchlist_scan_runner import WatchlistScanRunnerService
 from trade_proposer_app.services.watchlist_execution import WatchlistExecutionService
+from trade_proposer_app.services.watchlist_plan_framing import WatchlistPlanFramingService
+from trade_proposer_app.services.watchlist_plan_narrative import WatchlistPlanNarrativeService
+from trade_proposer_app.services.watchlist_scan_runner import WatchlistScanRunnerService
+from trade_proposer_app.services.watchlist_signal_builder import WatchlistSignalBuilder
+from trade_proposer_app.services.watchlist_transmission import WatchlistTransmissionService
 
 logger = logging.getLogger(__name__)
 
 class WatchlistOrchestrationService:
+    LIVE_CALIBRATION_LIMIT = 50_000
+
     def __init__(
         self,
         *,
@@ -885,7 +905,7 @@ class WatchlistOrchestrationService:
         if self.calibration_service is None:
             return None
         try:
-            return self.calibration_service.summarize(limit=500)
+            return self.calibration_service.summarize(limit=self.LIVE_CALIBRATION_LIMIT)
         except Exception:
             return None
 

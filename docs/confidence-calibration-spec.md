@@ -406,7 +406,7 @@ Persisted snapshot fields:
 - warnings
 - code/schema version
 
-Live watchlist calibration may continue computing read-time reports until snapshots exist. Once snapshots exist, live/autonomy logic should prefer the latest fresh execution-only snapshot and fall back to read-time computation only with a warning.
+Live watchlist calibration may continue computing read-time reports until snapshots exist. While using read-time reports, live plan framing must default to execution-only calibration over a broad enough all-history limit to avoid empty recent windows. Phantom-inclusive modes are research/operator views only and must not become the live calibration source without a later validated spec change. Once snapshots exist, live/autonomy logic should prefer the latest fresh execution-only snapshot and fall back to read-time computation only with a warning.
 
 ## Gating relationship
 
