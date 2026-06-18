@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from trade_proposer_app.domain.models import RecommendationDecisionSample, RecommendationPlan, RecommendationPlanOutcome
+from trade_proposer_app.domain.models import (
+    RecommendationDecisionSample,
+    RecommendationPlan,
+    RecommendationPlanOutcome,
+)
 from trade_proposer_app.services.execution_candidates import ExecutionCandidateBuilder
 
 
@@ -24,6 +28,18 @@ class PlanReliabilityFeatures:
     take_profit_hit: bool
     max_favorable_excursion: float
     max_adverse_excursion: float
+    fundamental_snapshot_id: int | None = None
+    fundamental_snapshot_as_of: str | None = None
+    fundamental_coverage_status: str | None = None
+    valuation_bucket: str = "unknown"
+    mispricing_signal: str = "unknown"
+    mispricing_score: float = 0.0
+    quality_bucket: str = "unknown"
+    growth_bucket: str = "unknown"
+    balance_sheet_risk_bucket: str = "unknown"
+    analyst_upside_bucket: str = "unknown"
+    event_regime: str = "unknown"
+    fundamental_directional_support: str = "unknown"
 
 
 class PlanReliabilityFeatureBuilder:
@@ -82,6 +98,7 @@ class PlanReliabilityFeatureBuilder:
             return None
         transmission_summary = self._as_dict(signal_breakdown.get("transmission_summary"))
         setup_family = self._setup_family(plan=plan, outcome=outcome, sample=sample, signal_breakdown=signal_breakdown)
+        fundamental_features = self._fundamental_features(signal_breakdown, action=plan.action)
         return PlanReliabilityFeatures(
             plan_id=plan.id,
             ticker=plan.ticker,
@@ -99,6 +116,7 @@ class PlanReliabilityFeatureBuilder:
             take_profit_hit=bool(take_hit),
             max_favorable_excursion=float(max_favorable_excursion or 0.0),
             max_adverse_excursion=float(max_adverse_excursion or 0.0),
+            **fundamental_features,
         )
 
     @staticmethod
@@ -109,6 +127,58 @@ class PlanReliabilityFeatureBuilder:
             dumped = value.model_dump()
             return dumped if isinstance(dumped, dict) else {}
         return {}
+
+    @classmethod
+    def _fundamental_features(cls, signal_breakdown: dict[str, object], *, action: str) -> dict[str, object]:
+        snapshot = cls._as_dict(signal_breakdown.get("fundamental_snapshot"))
+        buckets = cls._as_dict(signal_breakdown.get("fundamental_feature_buckets"))
+        valuation_context = cls._as_dict(signal_breakdown.get("fundamental_valuation_context"))
+        support = cls._as_dict(valuation_context.get("directional_support"))
+        snapshot_id = snapshot.get("id") or signal_breakdown.get("fundamental_snapshot_id")
+        try:
+            parsed_snapshot_id = int(snapshot_id) if snapshot_id is not None else None
+        except (TypeError, ValueError):
+            parsed_snapshot_id = None
+        return {
+            "fundamental_snapshot_id": parsed_snapshot_id,
+            "fundamental_snapshot_as_of": str(snapshot.get("as_of") or signal_breakdown.get("fundamental_snapshot_as_of") or "") or None,
+            "fundamental_coverage_status": str(
+                signal_breakdown.get("fundamental_coverage_status")
+                or snapshot.get("coverage_status")
+                or valuation_context.get("coverage_status")
+                or ""
+            ) or None,
+            "valuation_bucket": str(
+                valuation_context.get("valuation_bucket") or buckets.get("valuation") or "unknown"
+            ),
+            "mispricing_signal": str(valuation_context.get("mispricing_signal") or "unknown"),
+            "mispricing_score": cls._float_or_zero(valuation_context.get("mispricing_score")),
+            "quality_bucket": str(
+                valuation_context.get("quality_bucket")
+                or buckets.get("profitability_quality")
+                or "unknown"
+            ),
+            "growth_bucket": str(valuation_context.get("growth_bucket") or buckets.get("growth") or "unknown"),
+            "balance_sheet_risk_bucket": str(
+                valuation_context.get("balance_sheet_risk_bucket")
+                or buckets.get("balance_sheet_risk")
+                or "unknown"
+            ),
+            "analyst_upside_bucket": str(
+                valuation_context.get("analyst_upside_bucket")
+                or buckets.get("analyst_upside")
+                or "unknown"
+            ),
+            "event_regime": str(valuation_context.get("event_regime") or buckets.get("event_regime") or "unknown"),
+            "fundamental_directional_support": str(support.get(action) or "unknown"),
+        }
+
+    @staticmethod
+    def _float_or_zero(value: object) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
 
     @staticmethod
     def _setup_family(

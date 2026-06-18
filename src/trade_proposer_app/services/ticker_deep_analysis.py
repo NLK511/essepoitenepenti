@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timezone
 from typing import Any
 
-import math
-
 import pandas as pd
 
-from trade_proposer_app.domain.enums import RecommendationDirection, RecommendationState, StrategyHorizon
+from trade_proposer_app.domain.enums import (
+    RecommendationDirection,
+    RecommendationState,
+    StrategyHorizon,
+)
 from trade_proposer_app.domain.models import Recommendation, RunDiagnostics, RunOutput
-from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
+from trade_proposer_app.repositories.fundamental_analysis_snapshots import (
+    FundamentalAnalysisSnapshotRepository,
+)
 from trade_proposer_app.services.market_intelligence import MarketIntelligenceService
 from trade_proposer_app.services.payload_utils import sanitize_for_json
 from trade_proposer_app.services.proposals import ProposalExecutionError, ProposalService
@@ -172,6 +177,9 @@ class TickerDeepAnalysisService:
             return enriched
         payload = snapshot.get("payload") if isinstance(snapshot.get("payload"), dict) else {}
         feature_buckets = payload.get("feature_buckets") if isinstance(payload.get("feature_buckets"), dict) else {}
+        valuation_context = (
+            payload.get("valuation_context") if isinstance(payload.get("valuation_context"), dict) else {}
+        )
         enriched["fundamental_snapshot"] = {
             "id": snapshot.get("id"),
             "ticker": snapshot.get("ticker"),
@@ -184,11 +192,14 @@ class TickerDeepAnalysisService:
         enriched["fundamental_snapshot_as_of"] = enriched["fundamental_snapshot"]["as_of"]
         enriched["fundamental_coverage_status"] = snapshot.get("coverage_status")
         enriched["fundamental_feature_buckets"] = feature_buckets
+        enriched["fundamental_valuation_context"] = valuation_context
         warnings = snapshot.get("warnings") if isinstance(snapshot.get("warnings"), list) else []
         for warning in warnings:
             problems.append(f"fundamental: {warning}")
         if snapshot.get("coverage_status") in {"degraded", "blocked"}:
             problems.append(f"fundamental snapshot coverage is {snapshot.get('coverage_status')}")
+        for warning in valuation_context.get("warnings", []) if isinstance(valuation_context.get("warnings"), list) else []:
+            problems.append(f"fundamental valuation: {warning}")
         enriched["problems"] = list(dict.fromkeys([str(item) for item in problems if item]))
         return enriched
 

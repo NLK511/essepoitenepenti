@@ -95,6 +95,9 @@ class WatchlistTransmissionService:
             "transmission_summary": transmission_summary or {},
             "fundamental_snapshot": signal.diagnostics.get("fundamental_snapshot", {}),
             "fundamental_feature_buckets": signal.diagnostics.get("fundamental_feature_buckets", {}),
+            "fundamental_valuation_context": signal.diagnostics.get(
+                "fundamental_valuation_context", {}
+            ),
             "fundamental_coverage_status": signal.diagnostics.get("fundamental_coverage_status"),
             "mode": signal.diagnostics.get("mode"),
             "shortlisted": shortlisted,

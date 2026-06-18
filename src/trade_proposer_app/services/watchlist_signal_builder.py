@@ -192,11 +192,17 @@ class WatchlistSignalBuilder:
         snapshot = o._pluck(analysis, "ticker_deep_analysis", "fundamental_snapshot") or o._pluck(analysis, "fundamental_snapshot") or {}
         buckets = o._pluck(analysis, "ticker_deep_analysis", "fundamental_feature_buckets") or o._pluck(analysis, "fundamental_feature_buckets") or {}
         coverage = o._pluck(analysis, "ticker_deep_analysis", "fundamental_coverage_status")
+        valuation_context = (
+            o._pluck(analysis, "ticker_deep_analysis", "fundamental_valuation_context")
+            or o._pluck(analysis, "fundamental_valuation_context")
+            or {}
+        )
         if coverage is None and isinstance(snapshot, dict):
             coverage = snapshot.get("coverage_status")
         return {
             "fundamental_snapshot": snapshot if isinstance(snapshot, dict) else {},
             "fundamental_feature_buckets": buckets if isinstance(buckets, dict) else {},
+            "fundamental_valuation_context": valuation_context if isinstance(valuation_context, dict) else {},
             "fundamental_coverage_status": coverage,
         }
 

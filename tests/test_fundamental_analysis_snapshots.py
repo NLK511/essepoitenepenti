@@ -7,12 +7,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.enums import JobType, StrategyHorizon
-from trade_proposer_app.domain.models import BrokerPosition, RecommendationPlan, Watchlist
+from trade_proposer_app.domain.models import BrokerPosition
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.broker_positions import BrokerPositionRepository
-from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository
 from trade_proposer_app.repositories.jobs import JobRepository
-from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 
@@ -164,7 +162,31 @@ def test_fundamental_analysis_service_normalizes_provider_payload_without_positi
     assert snapshot.payload["profitability_quality"]["operating_margin"] == 0.31
     assert snapshot.payload["growth"]["revenue_growth"] == 0.06
     assert snapshot.payload["analyst_context"]["recommendation_key"] == "buy"
-    assert snapshot.payload["feature_buckets"]["valuation"] in {"low", "medium", "high", "unknown"}
+    assert snapshot.payload["feature_buckets"]["valuation"] in {
+        "cheap",
+        "medium",
+        "expensive",
+        "extreme_expensive",
+        "unknown",
+    }
+    valuation_context = snapshot.payload["valuation_context"]
+    assert valuation_context["schema_version"] == "fundamental-valuation-v1"
+    assert valuation_context["mispricing_signal"] in {
+        "undervalued",
+        "fairly_valued",
+        "overvalued",
+        "extreme_overvalued",
+        "unclear",
+        "unknown",
+    }
+    assert valuation_context["directional_support"]["long"] in {
+        "supportive",
+        "neutral",
+        "caution",
+        "contradictory",
+        "unknown",
+    }
+    assert valuation_context["confidence_contribution"]["positive_boost"] == 0.0
     assert snapshot.payload["feature_buckets"]["event_regime"] in {
         "none_known",
         "pre_event",
@@ -174,6 +196,56 @@ def test_fundamental_analysis_service_normalizes_provider_payload_without_positi
         "unknown",
     }
     assert snapshot.payload.get("confidence_contribution", {}).get("positive_boost", 0.0) == 0.0
+
+
+def test_fundamental_analysis_service_marks_sparse_payloads_degraded_and_unknown() -> None:
+    from trade_proposer_app.services.fundamental_analysis import FundamentalAnalysisService
+
+    provider = SimpleNamespace(fetch=lambda ticker, as_of=None: {"info": {"marketCap": None}})
+    snapshot = FundamentalAnalysisService(provider=provider).analyze(
+        "BAE.L", as_of=datetime(2026, 4, 1, tzinfo=timezone.utc)
+    )
+
+    assert snapshot.coverage_status != "ok"
+    assert snapshot.payload["valuation_context"]["mispricing_signal"] == "unknown"
+    assert snapshot.payload["feature_buckets"]["valuation"] == "unknown"
+    assert "fundamental provider returned sparse data" in snapshot.warnings
+
+
+def test_fundamental_analysis_service_classifies_under_and_over_valuation() -> None:
+    from trade_proposer_app.services.fundamental_analysis import FundamentalAnalysisService
+
+    cheap_payload = _full_provider_payload()
+    cheap_info = cheap_payload["info"]
+    cheap_info["forwardPE"] = 12.0
+    cheap_info["revenueGrowth"] = 0.22
+    cheap_info["operatingMargins"] = 0.32
+    cheap_info["debtToEquity"] = 25.0
+    cheap_info["targetMeanPrice"] = 130.0
+    cheap_info["currentPrice"] = 100.0
+
+    expensive_payload = _full_provider_payload()
+    expensive_info = expensive_payload["info"]
+    expensive_info["forwardPE"] = 70.0
+    expensive_info["revenueGrowth"] = -0.03
+    expensive_info["operatingMargins"] = 0.04
+    expensive_info["debtToEquity"] = 250.0
+    expensive_info["targetMeanPrice"] = 80.0
+    expensive_info["currentPrice"] = 100.0
+
+    cheap_snapshot = FundamentalAnalysisService(
+        provider=SimpleNamespace(fetch=lambda ticker, as_of=None: cheap_payload)
+    ).analyze("VALUE", as_of=datetime(2026, 4, 1, tzinfo=timezone.utc))
+    expensive_snapshot = FundamentalAnalysisService(
+        provider=SimpleNamespace(fetch=lambda ticker, as_of=None: expensive_payload)
+    ).analyze("HYPE", as_of=datetime(2026, 4, 1, tzinfo=timezone.utc))
+
+    cheap_context = cheap_snapshot.payload["valuation_context"]
+    expensive_context = expensive_snapshot.payload["valuation_context"]
+    assert cheap_context["mispricing_signal"] == "undervalued"
+    assert cheap_context["directional_support"]["long"] == "supportive"
+    assert expensive_context["mispricing_signal"] == "extreme_overvalued"
+    assert expensive_context["directional_support"]["long"] == "contradictory"
 
 
 def test_fundamental_analysis_service_classifies_event_windows() -> None:
@@ -249,9 +321,7 @@ def test_fundamental_refresh_job_refreshes_due_and_event_window_tickers_only() -
     assert summary["skipped_fresh_count"] == 1
 
 
-def test_plan_generation_uses_latest_fundamental_snapshot_at_or_before_plan_time_without_boosting_confidence() -> (
-    None
-):
+def test_plan_generation_uses_point_in_time_fundamental_snapshot_without_boosting() -> None:
     from trade_proposer_app.repositories.fundamental_analysis_snapshots import (
         FundamentalAnalysisSnapshotRepository,
     )
@@ -266,7 +336,15 @@ def test_plan_generation_uses_latest_fundamental_snapshot_at_or_before_plan_time
         source_set=["fake"],
         coverage_status="ok",
         freshness_status="fresh",
-        payload={"feature_buckets": {"event_regime": "pre_event", "valuation": "high"}},
+        payload={
+            "feature_buckets": {"event_regime": "pre_event", "valuation": "expensive"},
+            "valuation_context": {
+                "schema_version": "fundamental-valuation-v1",
+                "mispricing_signal": "overvalued",
+                "directional_support": {"long": "caution", "short": "supportive"},
+                "reasons": ["valuation is rich"],
+            },
+        },
         warnings=["earnings inside holding window"],
         missing_inputs=[],
     )
@@ -289,6 +367,8 @@ def test_plan_generation_uses_latest_fundamental_snapshot_at_or_before_plan_time
     assert context["fundamental_snapshot"]["id"] == prior["id"]
     assert context["fundamental_snapshot"]["id"] != future["id"]
     assert context["fundamental_feature_buckets"]["event_regime"] == "pre_event"
+    assert context["fundamental_valuation_context"]["mispricing_signal"] == "overvalued"
+    assert context["fundamental_valuation_context"]["directional_support"]["long"] == "caution"
     assert "fundamental: earnings inside holding window" in context["problems"]
     assert context["confidence"] == 70.0
 
@@ -312,6 +392,9 @@ def test_fundamental_validation_slices_report_sparse_counts_and_effective_outcom
         "growth_bucket",
         "balance_sheet_risk_bucket",
         "setup_family_event_regime",
+        "mispricing_signal",
+        "directional_support",
+        "setup_family_mispricing_signal",
     }
     assert expected_slice_names.issubset(set(report["slices"].keys()))
     for slice_payload in report["slices"].values():

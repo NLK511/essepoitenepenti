@@ -6,7 +6,9 @@ from typing import Any
 
 import yfinance as yf
 
-from trade_proposer_app.repositories.fundamental_analysis_snapshots import FundamentalAnalysisSnapshotRepository
+from trade_proposer_app.repositories.fundamental_analysis_snapshots import (
+    FundamentalAnalysisSnapshotRepository,
+)
 
 
 @dataclass(frozen=True)
@@ -130,11 +132,16 @@ class FundamentalAnalysisService:
             "confidence_contribution": {"positive_boost": 0.0},
         }
         payload["feature_buckets"] = self._feature_buckets(payload, as_of=effective_as_of)
+        payload["valuation_context"] = self._valuation_context(payload, as_of=effective_as_of)
         missing_inputs = sorted({item for item in missing_inputs if item})
         payload["provider_diagnostics"]["missing_input_count"] = len(missing_inputs)
-        if missing_inputs:
+        usable_core_fields = self._usable_core_field_count(payload)
+        if usable_core_fields < 3:
+            warnings.append("fundamental provider returned sparse data")
+        elif missing_inputs:
             warnings.append("fundamental provider returned partial data")
-        coverage = "ok" if info and len(missing_inputs) < 8 else "degraded" if info else "blocked"
+        coverage = self._coverage_status(info, missing_inputs=missing_inputs, usable_core_fields=usable_core_fields)
+        payload["valuation_context"]["coverage_status"] = coverage
         return FundamentalAnalysisSnapshot(normalized, effective_as_of, [self._source_name()], coverage, "fresh", payload, warnings, missing_inputs)
 
     def refresh_ticker(self, ticker: str, *, job_id: int | None = None, run_id: int | None = None, as_of: datetime | None = None) -> dict[str, Any]:
@@ -193,42 +200,224 @@ class FundamentalAnalysisService:
         prof = payload.get("profitability_quality", {})
         growth = payload.get("growth", {})
         risk = payload.get("balance_sheet_risk", {})
+        analyst = payload.get("analyst_context", {})
         return {
             "valuation": self._valuation_bucket(val.get("forward_pe") or val.get("trailing_pe")),
             "profitability_quality": self._quality_bucket(prof.get("operating_margin") or prof.get("net_margin")),
             "growth": self._growth_bucket(growth.get("revenue_growth") or growth.get("earnings_growth")),
             "balance_sheet_risk": self._balance_risk_bucket(risk.get("debt_to_equity")),
+            "analyst_upside": self._analyst_upside_bucket(analyst.get("target_price_upside_percent")),
             "event_regime": self.event_regime(payload, as_of=as_of),
+        }
+
+    def _valuation_context(self, payload: dict[str, Any], *, as_of: datetime) -> dict[str, Any]:
+        buckets = payload.get("feature_buckets") if isinstance(payload.get("feature_buckets"), dict) else {}
+        valuation = str(buckets.get("valuation") or "unknown")
+        quality = str(buckets.get("profitability_quality") or "unknown")
+        growth = str(buckets.get("growth") or "unknown")
+        risk = str(buckets.get("balance_sheet_risk") or "unknown")
+        upside = str(buckets.get("analyst_upside") or "unknown")
+        event_regime = str(buckets.get("event_regime") or self.event_regime(payload, as_of=as_of))
+        known_supports = sum(
+            1 for value in (quality, growth, risk, upside) if value not in {"", "unknown"}
+        )
+        has_valuation = valuation != "unknown"
+        if not has_valuation or known_supports < 2:
+            signal = "unknown" if not has_valuation else "unclear"
+        elif valuation == "cheap" and quality == "strong" and growth in {"moderate", "high"} and risk != "high":
+            signal = "undervalued"
+        elif valuation == "cheap" and upside in {"positive", "strong_positive"} and risk != "high":
+            signal = "undervalued"
+        elif valuation == "extreme_expensive" and (growth in {"negative", "low"} or quality == "weak"):
+            signal = "extreme_overvalued"
+        elif valuation in {"expensive", "extreme_expensive"} and (growth in {"negative", "low"} or quality == "weak" or upside in {"negative", "strong_negative"}):
+            signal = "overvalued" if valuation == "expensive" else "extreme_overvalued"
+        elif valuation == "medium" and quality == "strong" and growth in {"moderate", "high"}:
+            signal = "fairly_valued"
+        elif valuation == "medium":
+            signal = "fairly_valued"
+        else:
+            signal = "unclear"
+        score_map = {
+            "undervalued": 0.7,
+            "fairly_valued": 0.0,
+            "unclear": 0.0,
+            "unknown": 0.0,
+            "overvalued": -0.55,
+            "extreme_overvalued": -0.85,
+        }
+        long_support, short_support = self._directional_support(signal)
+        reasons = self._valuation_reasons(
+            valuation=valuation,
+            quality=quality,
+            growth=growth,
+            risk=risk,
+            upside=upside,
+            signal=signal,
+        )
+        warnings = []
+        if event_regime in {"pre_event", "event_week"}:
+            warnings.append("corporate event is near the intended holding window")
+        if signal == "unknown":
+            warnings.append("insufficient fundamental valuation data")
+        return {
+            "schema_version": "fundamental-valuation-v1",
+            "coverage_status": "unknown",
+            "mispricing_signal": signal,
+            "mispricing_score": score_map.get(signal, 0.0),
+            "valuation_bucket": valuation,
+            "valuation_relative_to_quality": self._relative_label(valuation, quality),
+            "valuation_relative_to_growth": self._relative_label(valuation, growth),
+            "analyst_upside_bucket": upside,
+            "quality_bucket": quality,
+            "growth_bucket": growth,
+            "balance_sheet_risk_bucket": risk,
+            "event_regime": event_regime,
+            "directional_support": {"long": long_support, "short": short_support},
+            "confidence_contribution": {
+                "positive_boost": 0.0,
+                "risk_penalty": 0.0,
+                "cap_multiplier": 1.0,
+            },
+            "reasons": reasons,
+            "warnings": warnings,
         }
 
     @staticmethod
     def _valuation_bucket(value: Any) -> str:
-        try: v = float(value)
-        except (TypeError, ValueError): return "unknown"
-        return "low" if v < 15 else "medium" if v <= 35 else "high"
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return "unknown"
+        if v < 15:
+            return "cheap"
+        if v <= 35:
+            return "medium"
+        if v <= 60:
+            return "expensive"
+        return "extreme_expensive"
 
     @staticmethod
     def _quality_bucket(value: Any) -> str:
-        try: v = float(value)
-        except (TypeError, ValueError): return "unknown"
-        return "weak" if v < 0.08 else "average" if v < 0.22 else "strong"
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return "unknown"
+        return "weak" if v < 0.08 else "mixed" if v < 0.22 else "strong"
 
     @staticmethod
     def _growth_bucket(value: Any) -> str:
-        try: v = float(value)
-        except (TypeError, ValueError): return "unknown"
-        return "negative" if v < -0.02 else "flat" if v < 0.03 else "positive" if v < 0.15 else "high"
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return "unknown"
+        return "negative" if v < -0.02 else "low" if v < 0.03 else "moderate" if v < 0.15 else "high"
 
     @staticmethod
     def _balance_risk_bucket(value: Any) -> str:
-        try: v = float(value)
-        except (TypeError, ValueError): return "unknown"
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return "unknown"
         return "low" if v < 80 else "medium" if v < 200 else "high"
+
+    @staticmethod
+    def _analyst_upside_bucket(value: Any) -> str:
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return "unknown"
+        if v >= 25:
+            return "strong_positive"
+        if v >= 5:
+            return "positive"
+        if v <= -20:
+            return "strong_negative"
+        if v <= -5:
+            return "negative"
+        return "neutral"
+
+    @staticmethod
+    def _directional_support(signal: str) -> tuple[str, str]:
+        if signal == "undervalued":
+            return "supportive", "contradictory"
+        if signal == "fairly_valued":
+            return "neutral", "neutral"
+        if signal == "overvalued":
+            return "caution", "supportive"
+        if signal == "extreme_overvalued":
+            return "contradictory", "supportive"
+        if signal == "unclear":
+            return "neutral", "neutral"
+        return "unknown", "unknown"
+
+    @staticmethod
+    def _relative_label(valuation: str, comparator: str) -> str:
+        if valuation == "unknown" or comparator == "unknown":
+            return "unknown"
+        if valuation == "cheap" and comparator in {"strong", "high", "moderate"}:
+            return "attractive"
+        if valuation in {"expensive", "extreme_expensive"} and comparator in {"weak", "negative", "low"}:
+            return "unattractive"
+        return "mixed"
+
+    @staticmethod
+    def _valuation_reasons(
+        *,
+        valuation: str,
+        quality: str,
+        growth: str,
+        risk: str,
+        upside: str,
+        signal: str,
+    ) -> list[str]:
+        reasons = [f"valuation bucket is {valuation}"] if valuation != "unknown" else []
+        if quality != "unknown":
+            reasons.append(f"profitability quality is {quality}")
+        if growth != "unknown":
+            reasons.append(f"growth is {growth}")
+        if risk != "unknown":
+            reasons.append(f"balance-sheet risk is {risk}")
+        if upside != "unknown":
+            reasons.append(f"analyst upside is {upside}")
+        if signal == "unknown" and not reasons:
+            reasons.append("insufficient usable valuation inputs")
+        return reasons[:6]
+
+    @staticmethod
+    def _usable_core_field_count(payload: dict[str, Any]) -> int:
+        sections = (
+            payload.get("valuation", {}),
+            payload.get("profitability_quality", {}),
+            payload.get("growth", {}),
+            payload.get("balance_sheet_risk", {}),
+            payload.get("cash_flow", {}),
+            payload.get("analyst_context", {}),
+        )
+        count = 0
+        for section in sections:
+            if not isinstance(section, dict):
+                continue
+            count += sum(1 for value in section.values() if value not in (None, "", [], {}))
+        return count
+
+    @staticmethod
+    def _coverage_status(
+        info: dict[str, Any], *, missing_inputs: list[str], usable_core_fields: int
+    ) -> str:
+        if not info:
+            return "blocked"
+        if usable_core_fields < 3:
+            return "degraded"
+        if usable_core_fields < 8 or len(missing_inputs) >= 8:
+            return "degraded"
+        return "ok"
 
     @staticmethod
     def _percent_delta(target: Any, price: Any) -> float | None:
         try:
-            t = float(target); p = float(price)
+            t = float(target)
+            p = float(price)
         except (TypeError, ValueError):
             return None
         return round(((t - p) / p) * 100.0, 2) if p else None
@@ -257,4 +446,35 @@ class FundamentalAnalysisService:
 
     @staticmethod
     def _empty_payload() -> dict[str, Any]:
-        return {key: {} for key in ("business_profile", "valuation", "profitability_quality", "growth", "balance_sheet_risk", "cash_flow", "analyst_context", "event_calendar", "feature_buckets", "provider_diagnostics", "raw_payload_refs")}
+        payload = {
+            key: {}
+            for key in (
+                "business_profile",
+                "valuation",
+                "profitability_quality",
+                "growth",
+                "balance_sheet_risk",
+                "cash_flow",
+                "analyst_context",
+                "event_calendar",
+                "feature_buckets",
+                "provider_diagnostics",
+                "raw_payload_refs",
+            )
+        }
+        payload["valuation_context"] = {
+            "schema_version": "fundamental-valuation-v1",
+            "coverage_status": "blocked",
+            "mispricing_signal": "unknown",
+            "mispricing_score": 0.0,
+            "valuation_bucket": "unknown",
+            "directional_support": {"long": "unknown", "short": "unknown"},
+            "confidence_contribution": {
+                "positive_boost": 0.0,
+                "risk_penalty": 0.0,
+                "cap_multiplier": 1.0,
+            },
+            "reasons": ["insufficient usable valuation inputs"],
+            "warnings": ["fundamental provider unavailable"],
+        }
+        return payload

@@ -21,6 +21,9 @@ class FundamentalValidationSliceService:
         "growth_bucket",
         "balance_sheet_risk_bucket",
         "setup_family_event_regime",
+        "mispricing_signal",
+        "directional_support",
+        "setup_family_mispricing_signal",
     )
 
     def __init__(self, session: Session) -> None:
@@ -47,6 +50,9 @@ class FundamentalValidationSliceService:
                 "growth_bucket": features.get("growth", "unknown"),
                 "balance_sheet_risk_bucket": features.get("balance_sheet_risk", "unknown"),
                 "setup_family_event_regime": f"{setup_family}:{features.get('event_regime', 'unknown')}",
+                "mispricing_signal": features.get("mispricing_signal", "unknown"),
+                "directional_support": features.get("directional_support", "unknown"),
+                "setup_family_mispricing_signal": f"{setup_family}:{features.get('mispricing_signal', 'unknown')}",
             }
             for slice_name, bucket_name in values.items():
                 rec = buckets[slice_name][str(bucket_name or "unknown")]
@@ -105,9 +111,22 @@ class FundamentalValidationSliceService:
         snapshot = signal.get("fundamental_snapshot") if isinstance(signal.get("fundamental_snapshot"), dict) else {}
         payload = snapshot.get("payload") if isinstance(snapshot.get("payload"), dict) else {}
         analyst = payload.get("analyst_context") if isinstance(payload.get("analyst_context"), dict) else {}
+        valuation_context = (
+            signal.get("fundamental_valuation_context")
+            if isinstance(signal.get("fundamental_valuation_context"), dict)
+            else payload.get("valuation_context") if isinstance(payload.get("valuation_context"), dict) else {}
+        )
         normalized = dict(buckets)
         recommendation = str(analyst.get("recommendation_key") or "unknown").strip().lower() or "unknown"
         normalized["analyst_action_bucket"] = recommendation
+        normalized["mispricing_signal"] = str(
+            valuation_context.get("mispricing_signal") or "unknown"
+        )
+        support = valuation_context.get("directional_support")
+        action = str(getattr(plan, "action", "") or "").strip().lower()
+        normalized["directional_support"] = (
+            str(support.get(action) or "unknown") if isinstance(support, dict) else "unknown"
+        )
         return normalized
 
     @classmethod

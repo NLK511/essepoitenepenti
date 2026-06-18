@@ -6,7 +6,11 @@ from typing import Any
 
 from trade_proposer_app.domain.enums import StrategyHorizon
 from trade_proposer_app.domain.models import RunDiagnostics
-from trade_proposer_app.services.payload_utils import DEFAULT_SUMMARY_METHOD, DEFAULT_SUMMARY_TEXT, sanitize_for_json
+from trade_proposer_app.services.payload_utils import (
+    DEFAULT_SUMMARY_METHOD,
+    DEFAULT_SUMMARY_TEXT,
+    sanitize_for_json,
+)
 
 
 class TickerAnalysisPayloadService:
@@ -54,6 +58,7 @@ class TickerAnalysisPayloadService:
             "market_intelligence": context.get("market_intelligence", {}),
             "fundamental_snapshot": context.get("fundamental_snapshot", {}),
             "fundamental_feature_buckets": context.get("fundamental_feature_buckets", {}),
+            "fundamental_valuation_context": context.get("fundamental_valuation_context", {}),
             "sentiment": self._sentiment_section(context),
             "proposal": self._proposal_section(
                 ticker=ticker,
@@ -199,6 +204,7 @@ class TickerAnalysisPayloadService:
             "market_intelligence_summary": context.get("market_intelligence_summary"),
             "fundamental_snapshot": context.get("fundamental_snapshot", {}),
             "fundamental_feature_buckets": context.get("fundamental_feature_buckets", {}),
+            "fundamental_valuation_context": context.get("fundamental_valuation_context", {}),
             "fundamental_coverage_status": context.get("fundamental_coverage_status"),
             "context_quality": {
                 "status": self._context_quality_status(context),
