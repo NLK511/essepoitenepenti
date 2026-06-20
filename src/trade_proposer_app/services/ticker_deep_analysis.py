@@ -21,6 +21,7 @@ from trade_proposer_app.services.payload_utils import sanitize_for_json
 from trade_proposer_app.services.proposals import ProposalExecutionError, ProposalService
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 from trade_proposer_app.services.ticker_analysis_payloads import TickerAnalysisPayloadService
+from trade_proposer_app.services.ticker_exposure_ontology import TickerExposureOntologyService
 from trade_proposer_app.services.ticker_technical_features import TickerTechnicalFeatureService
 
 
@@ -44,6 +45,7 @@ class TickerDeepAnalysisService:
         self.technical_features = TickerTechnicalFeatureService()
         self.market_intelligence_service = market_intelligence_service or MarketIntelligenceService()
         self.fundamental_snapshots = fundamental_snapshots
+        self.exposure_ontology = TickerExposureOntologyService()
         self.analysis_payloads = TickerAnalysisPayloadService(
             macro_context_score=self._macro_context_score,
             macro_context_label=self._macro_context_label,
@@ -603,7 +605,7 @@ class TickerDeepAnalysisService:
         contradiction_count = TickerDeepAnalysisService._context_contradiction_count(context, macro_events, industry_events)
         matched_ticker_relationships = TickerDeepAnalysisService._matched_ticker_relationships(context, profile, macro_events, industry_events)
         market_intelligence_support = TickerDeepAnalysisService._market_intelligence_support(context, direction)
-        base_alignment_percent, alignment_percent = self._alignment_percents(
+        base_alignment_percent, pre_ontology_alignment_percent = self._alignment_percents(
             direction,
             macro_score=macro_score,
             industry_score=industry_score,
@@ -614,6 +616,20 @@ class TickerDeepAnalysisService:
             contradiction_count=contradiction_count,
             macro_events=macro_events,
             industry_events=industry_events,
+        )
+        ontology_context = self.exposure_ontology.assess_context(
+            str(profile.get("ticker") or context.get("ticker") or ""),
+            context,
+            direction=direction,
+            taxonomy_profile=profile,
+        )
+        alignment_percent = max(
+            0.0,
+            min(
+                100.0,
+                pre_ontology_alignment_percent
+                + float(ontology_context.get("alignment_adjustment_percent", 0.0) or 0.0),
+            ),
         )
         bias = self._context_bias(alignment_percent)
         transmission_tags = self._transmission_tags(
@@ -649,7 +665,9 @@ class TickerDeepAnalysisService:
             "industry_score": round(industry_score, 3),
             "ticker_score": round(ticker_score, 3),
             "base_alignment_percent": round(base_alignment_percent, 1),
+            "pre_ontology_alignment_percent": round(pre_ontology_alignment_percent, 1),
             "alignment_percent": round(alignment_percent, 1),
+            "ontology_context": ontology_context,
             "context_bias": bias,
             "catalyst_intensity_percent": round(catalyst_intensity, 1),
             "context_strength_percent": round(max(0.0, min(100.0, (macro_event_strength * 45.0) + (industry_event_strength * 55.0))), 1),

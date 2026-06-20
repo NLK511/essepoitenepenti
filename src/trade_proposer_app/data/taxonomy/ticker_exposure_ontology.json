@@ -1,0 +1,109 @@
+{
+  "_meta": {
+    "version": "2026-06-ontology-v1",
+    "description": "Curated ticker exposure ontology seed for macro/industry transmission scoring. Conservative seed focused on active US large-cap and broker-failure tickers."
+  },
+  "AMAT": {
+    "business_summary": "Semiconductor capital equipment supplier exposed to wafer-fab spending, memory/foundry capex, and export controls.",
+    "revenue_drivers": ["wafer fab equipment demand", "foundry capex", "memory capex", "advanced packaging"],
+    "cost_drivers": ["component supply", "freight", "labor"],
+    "customer_segments": ["semiconductor manufacturers", "foundries", "memory producers"],
+    "macro_sensitivities": [
+      {"factor": "semiconductor_capex_cycle", "aliases": ["semiconductor capex", "wafer fab equipment", "foundry spending", "memory capex"], "direction_if_factor_rises": "positive", "strength": "high", "rationale": "higher fab spending directly supports equipment orders"},
+      {"factor": "export_controls", "aliases": ["export controls", "china restrictions", "semiconductor restrictions"], "direction_if_factor_rises": "negative", "strength": "high", "rationale": "export restrictions can reduce accessible equipment demand"}
+    ],
+    "event_sensitivities": [
+      {"event": "semiconductor_order_recovery", "aliases": ["chip equipment orders", "fab expansion", "capex recovery"], "direction_for_long": "positive", "strength": "high", "rationale": "order recovery supports revenue visibility"},
+      {"event": "memory_downcycle", "aliases": ["memory downcycle", "capex cuts", "wafer starts decline"], "direction_for_long": "negative", "strength": "medium", "rationale": "customers may delay equipment purchases"}
+    ],
+    "peers": ["LRCX", "KLAC", "ASML"],
+    "customers": ["TSM", "INTC", "MU", "SSNLF"],
+    "related_etfs": ["SMH", "SOXX"],
+    "confidence_score": 0.86,
+    "source": "curated",
+    "version": "2026-06-ontology-v1",
+    "updated_at": "2026-06-20"
+  },
+  "ARM": {
+    "business_summary": "CPU/IP licensing company exposed to smartphone units, AI/edge compute design wins, royalties, and semiconductor sentiment.",
+    "revenue_drivers": ["royalty revenue", "licensing demand", "AI edge compute", "smartphone units"],
+    "cost_drivers": ["R&D investment", "talent costs"],
+    "customer_segments": ["chip designers", "smartphone vendors", "cloud silicon teams"],
+    "macro_sensitivities": [
+      {"factor": "semiconductor_design_cycle", "aliases": ["chip design wins", "AI chips", "edge AI", "smartphone chips"], "direction_if_factor_rises": "positive", "strength": "high", "rationale": "more chip design activity increases licensing and future royalty opportunities"},
+      {"factor": "interest_rates", "aliases": ["rates", "treasury yields", "discount rate"], "direction_if_factor_rises": "negative", "strength": "medium", "rationale": "high-multiple royalty streams are sensitive to discount rates"}
+    ],
+    "event_sensitivities": [
+      {"event": "smartphone_recovery", "aliases": ["smartphone demand", "handset recovery"], "direction_for_long": "positive", "strength": "medium", "rationale": "handset unit recovery supports royalties"},
+      {"event": "valuation_compression", "aliases": ["multiple compression", "growth stocks selloff", "rates rise"], "direction_for_long": "negative", "strength": "medium", "rationale": "valuation-sensitive growth stocks can de-rate"}
+    ],
+    "peers": ["NVDA", "AMD", "QCOM"],
+    "customers": ["AAPL", "QCOM", "NVDA"],
+    "related_etfs": ["SMH", "SOXX"],
+    "confidence_score": 0.82,
+    "source": "curated",
+    "version": "2026-06-ontology-v1",
+    "updated_at": "2026-06-20"
+  },
+  "BAC": {
+    "business_summary": "Large US bank exposed to net interest income, deposit costs, credit quality, loan growth, and capital markets activity.",
+    "revenue_drivers": ["net interest income", "loan growth", "fees", "wealth management", "capital markets"],
+    "cost_drivers": ["deposit beta", "credit losses", "regulatory costs"],
+    "customer_segments": ["consumer banking", "commercial banking", "wealth clients"],
+    "macro_sensitivities": [
+      {"factor": "yield_curve", "aliases": ["yield curve", "steepening", "net interest margin", "NIM"], "direction_if_factor_rises": "positive", "strength": "high", "rationale": "curve steepening usually supports bank net interest margins"},
+      {"factor": "credit_stress", "aliases": ["credit losses", "delinquencies", "charge-offs", "recession risk"], "direction_if_factor_rises": "negative", "strength": "high", "rationale": "credit deterioration pressures bank earnings and capital"}
+    ],
+    "event_sensitivities": [
+      {"event": "curve_steepening", "aliases": ["curve steepening", "higher long yields", "NIM expansion"], "direction_for_long": "positive", "strength": "high", "rationale": "steeper curve can improve lending spreads"},
+      {"event": "credit_deterioration", "aliases": ["credit deterioration", "charge-offs rise", "loan losses"], "direction_for_long": "negative", "strength": "high", "rationale": "loss provisioning and credit concerns hurt bank equities"}
+    ],
+    "peers": ["JPM", "C", "WFC"],
+    "related_etfs": ["XLF", "KBE"],
+    "confidence_score": 0.88,
+    "source": "curated",
+    "version": "2026-06-ontology-v1",
+    "updated_at": "2026-06-20"
+  },
+  "NVDA": {
+    "business_summary": "AI accelerator and GPU leader exposed to data-center capex, AI infrastructure demand, advanced packaging, and export controls.",
+    "revenue_drivers": ["AI data center capex", "GPU demand", "networking", "gaming GPUs"],
+    "cost_drivers": ["wafer supply", "advanced packaging", "HBM memory"],
+    "customer_segments": ["hyperscalers", "cloud providers", "enterprises", "gaming consumers"],
+    "macro_sensitivities": [
+      {"factor": "AI_capex", "aliases": ["AI capex", "data center spending", "GPU demand", "hyperscaler capex"], "direction_if_factor_rises": "positive", "strength": "high", "rationale": "AI infrastructure spending directly drives accelerator demand"},
+      {"factor": "export_controls", "aliases": ["export controls", "china restrictions", "AI chip restrictions"], "direction_if_factor_rises": "negative", "strength": "high", "rationale": "export controls can constrain international demand"}
+    ],
+    "event_sensitivities": [
+      {"event": "hyperscaler_capex_increase", "aliases": ["hyperscaler capex", "cloud capex", "AI infrastructure buildout"], "direction_for_long": "positive", "strength": "high", "rationale": "large cloud capex supports GPU demand"},
+      {"event": "AI_chip_export_restriction", "aliases": ["AI chip restriction", "China export ban"], "direction_for_long": "negative", "strength": "high", "rationale": "restrictions can reduce shipments"}
+    ],
+    "peers": ["AMD", "AVGO", "ARM"],
+    "suppliers": ["TSM", "ASML"],
+    "customers": ["MSFT", "AMZN", "GOOGL", "META"],
+    "related_etfs": ["SMH", "SOXX", "QQQ"],
+    "confidence_score": 0.9,
+    "source": "curated",
+    "version": "2026-06-ontology-v1",
+    "updated_at": "2026-06-20"
+  },
+  "DAL": {
+    "business_summary": "Airline exposed to passenger demand, fuel costs, labor costs, aircraft availability, and business travel.",
+    "revenue_drivers": ["passenger demand", "business travel", "pricing", "load factor"],
+    "cost_drivers": ["jet fuel", "labor", "aircraft maintenance"],
+    "macro_sensitivities": [
+      {"factor": "oil_prices", "aliases": ["oil prices", "jet fuel", "fuel costs"], "direction_if_factor_rises": "negative", "strength": "high", "rationale": "higher fuel is a major cost headwind"},
+      {"factor": "consumer_travel_demand", "aliases": ["travel demand", "consumer spending", "business travel"], "direction_if_factor_rises": "positive", "strength": "high", "rationale": "strong travel demand supports fares and load factors"}
+    ],
+    "event_sensitivities": [
+      {"event": "fuel_price_spike", "aliases": ["fuel price spike", "oil rally", "jet fuel costs"], "direction_for_long": "negative", "strength": "high", "rationale": "fuel inflation pressures margins"},
+      {"event": "travel_demand_recovery", "aliases": ["travel recovery", "strong bookings", "load factors"], "direction_for_long": "positive", "strength": "high", "rationale": "better demand supports airline revenues"}
+    ],
+    "peers": ["UAL", "AAL"],
+    "related_etfs": ["JETS"],
+    "confidence_score": 0.86,
+    "source": "curated",
+    "version": "2026-06-ontology-v1",
+    "updated_at": "2026-06-20"
+  }
+}

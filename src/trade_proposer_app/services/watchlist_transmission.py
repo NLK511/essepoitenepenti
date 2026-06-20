@@ -187,8 +187,11 @@ class WatchlistTransmissionService:
             ticker_exposure_channels = explicit.get("ticker_exposure_channels", []) if isinstance(explicit.get("ticker_exposure_channels"), list) else []
             ticker_exposure_channel_details = explicit.get("ticker_exposure_channel_details", []) if isinstance(explicit.get("ticker_exposure_channel_details"), list) else []
             matched_ticker_relationships = explicit.get("matched_ticker_relationships", []) if isinstance(explicit.get("matched_ticker_relationships"), list) else []
+            ontology_context = explicit.get("ontology_context", {}) if isinstance(explicit.get("ontology_context"), dict) else {}
             return {
                 "alignment_percent": alignment_percent,
+                "pre_ontology_alignment_percent": round(float(explicit.get("pre_ontology_alignment_percent", alignment_percent)), 2) if self._is_number(explicit.get("pre_ontology_alignment_percent")) else alignment_percent,
+                "ontology_context": ontology_context,
                 "context_bias": bias,
                 "transmission_bias": bias,
                 "transmission_bias_detail": self._transmission_bias_detail(bias),
