@@ -78,7 +78,7 @@ Cheap-scan liquidity uses simple `close * volume` over 20 bars, so the warning i
 
 Macro/industry context snapshots are canonical shared artifacts. Missing/stale artifacts fall back to neutral values and explicit warnings. Industry missing-snapshot handling is blocked rather than neutrally informative, and thin snapshots expose evidence/coverage states.
 
-The taxonomy layer provides ticker profiles, industries/sectors, relationship edges, and governed labels so the app can expose readable transmission/read-through fields.
+The taxonomy layer provides ticker profiles, industries/sectors, relationship edges, and governed labels so the app can expose readable transmission/read-through fields. The ticker exposure ontology adds explicit business-driver, macro-sensitivity, event-sensitivity, peer/customer/supplier, source, confidence, and version metadata for every taxonomy ticker.
 
 Context scores:
 - **saliency:** prominence of active events/drivers
@@ -148,13 +148,13 @@ Family-specific `no_action` is valid when structure exists but confidence, execu
 
 Transmission tracks how macro/industry context carries into a ticker. It should answer: active context, concrete catalyst/change, exposed industries/tickers, channels, supportive/hostile/mixed/negligible direction, and expected window.
 
-Transmission is a governed edge graph, not a flat label match. Edges can carry direction, mechanism, confidence/provenance, validity window, and relationship score.
+Transmission is a governed edge graph, not a flat label match. Edges can carry direction, mechanism, confidence/provenance, validity window, and relationship score. New deep-analysis runs also evaluate active context against the ticker exposure ontology and emit `ontology_context` with coverage status, coverage reasons, matched exposures, transmission paths, directional support, and bounded alignment adjustment.
 
 Ticker-facing summaries should preserve context bias, alignment, drivers, industry/ticker channels, expected window, catalyst intensity, conflicts, and decay state.
 
 Scoring considers alignment, relevance, freshness, source quality, horizon fit, contradiction penalties, and edge strength. Severe direct conflicts can hard-block; timing/context-quality/mixed-context conflicts usually degrade and warn. Social-only polarity noise must not by itself raise contradiction flags.
 
-Current behavior: transmission may penalize confidence materially, but positive confidence boosts are conservative. Positive boost is capped at +2 points and only allowed for usable, non-contradictory tailwind context. Degraded, blocked, mixed, headwind, or contradictory context cannot raise confidence.
+Current behavior: transmission may penalize confidence materially, but positive confidence boosts are conservative. Positive boost is capped at +2 points and only allowed for usable, non-contradictory tailwind context. Degraded, blocked, mixed, headwind, or contradictory context cannot raise confidence. Ontology alignment adjustments are bounded context adjustments and do not bypass calibration, actionability, broker, or risk gates.
 
 Context quality gating is tiered: one weak layer usually degrades; broad broken backdrop or missing dominant evidence can block.
 
@@ -169,9 +169,9 @@ Plan-generation tuning may adjust this framing through its registered active con
 
 ## Fundamental snapshots
 
-Target behavior: monitored tickers should have monthly and event-aware point-in-time fundamental snapshots. Ticker analysis and plan generation should use the latest snapshot available at or before plan creation time, especially around earnings, shareholder meetings, investor days, dividends, and other material corporate events.
+Current behavior: monitored tickers can have weekly/weekend and event-aware point-in-time fundamental snapshots. Ticker analysis and plan generation use the latest snapshot available at or before plan creation time and expose compact coverage, event, valuation, quality, growth, and risk context in signal/plan payloads.
 
-Initial role is conservative: fundamentals may add warnings, setup labels, event-window context, or risk-filter/threshold pressure. They must not become positive confidence boosters until passive snapshots prove usefulness through broker-preferred outcome slices and walk-forward validation. See `fundamental-analysis-snapshot-spec.md`.
+Initial role remains conservative: fundamentals may add warnings, setup labels, event-window context, or risk-filter/threshold pressure. They must not become positive confidence boosters until passive snapshots prove usefulness through broker-preferred outcome slices and walk-forward validation. See `fundamental-analysis-snapshot-spec.md`.
 
 ## Outcome evaluation
 

@@ -32,14 +32,15 @@ It is not yet a proven short-horizon prediction engine.
 - Review signals, plans, and outcomes through the main review pages.
 - Evaluate recommendation plans through the app-native price-history path, including terminal `expired` handling once a plan passes its intended horizon without a win/loss resolution.
 - Track **phantom trades** for `no_action` or `watchlist` plans that retain an intended direction and valid trade levels, evaluating them against real market data to produce outcomes such as `phantom_win`, `phantom_loss`, or `phantom_no_entry` for recall optimization in tuning engines.
-- Automatically submit actionable `long`/`short` plans to Alpaca paper trading using the Settings-configured notional cap per plan (default $1,000), limit bracket orders, and persisted broker-order records.
+- Automatically submit actionable `long`/`short` plans to Alpaca paper trading using the Settings-configured notional cap per plan (default $1,000), limit bracket orders, broker-agnostic price precision normalization, and persisted broker-order records.
 - Periodically reconcile open broker orders against Alpaca during market hours so fulfilled or canceled orders show up in the app without waiting for a manual action.
 - Maintain a broker-position lifecycle ledger for app-submitted Alpaca bracket orders, including submitted/open/win/loss states, entry/exit fills, realized P&L, return percentage, and R multiple when the latest broker snapshot contains enough data.
-- Block new broker submissions through a broker-backed risk manager when the manual kill switch is active or daily loss, open exposure, same-ticker, single-position, or loss-streak limits are breached.
+- Block new broker submissions through a broker-backed risk manager when the manual kill switch is active or daily loss, drawdown, open exposure, same-ticker, single-position, order-count, broker snapshot, or loss-streak limits are breached.
 - Show broker-backed dashboard performance statistics, including closed broker positions, broker win rate, realized P&L, and manual/periodic dashboard refresh, so live paper-trading performance is visible even when simulated outcome calibration is thin.
 - When a plan has live Alpaca execution data, operator-facing plan views treat broker evaluation as the primary status and keep the simulated plan outcome as secondary context.
 - Use a canonical effective outcome layer so confidence calibration, recommendation quality summaries, performance assessment, walk-forward validation, and plan-generation tuning prefer closed broker positions before falling back to simulated outcomes; `/api/effective-plan-outcomes` exposes that canonical view explicitly.
-- Inspect broker-order submissions, payloads, statuses, linked position lifecycle state, realized P&L, steering decisions, and re-submit/cancel/refresh controls through the Broker Orders page and the broker-orders panel on run detail.
+- Inspect broker-order submissions, payloads, statuses, linked position lifecycle state, realized P&L, steering decisions, and re-submit/cancel/refresh controls through the Execution & Risk page and the broker-orders panel on run detail.
+- Configure multiple broker accounts behind a shared adapter/risk model. Alpaca paper is the active automated submission path; eToro read-only/demo/live-shadow plumbing exists, while real eToro live mutation remains fail-closed until external validation and production gates pass.
 - Review live or dry-run broker steering settings, latest decisions, and action results from the steering section in Settings.
 - Run detail now includes the broker-order history for that run so operators can audit execution without switching pages.
 - Use decision samples to review near-misses, shortlist behavior, triage priority, and richer filters such as shortlist state, setup family, transmission bias, context regime, and benchmark result.
@@ -57,7 +58,7 @@ It is not yet a proven short-horizon prediction engine.
 - Use the taxonomy layer for industry definitions, sector definitions, ticker profiles, relationship edges, and governed parent/child lineage for macro and theme vocabularies.
 - Transmission edges are now treated as typed graph entries with direction, mechanism, confidence, provenance, and optional point-in-time validity semantics.
 - Provider-backed taxonomy enrichment now promotes specific industry labels from market metadata where available and fills missing domiciles from the same source instead of guessing.
-- The seeded 750-ticker default watchlist universe is now explicitly represented in the ontology, so default-region coverage no longer depends on sector fallback alone.
+- The seeded default watchlist/taxonomy universe is explicitly represented in the ticker exposure ontology, so default-region coverage no longer depends on implicit sector fallback alone.
 - Expand industry refresh queries from ontology context such as industry queries, themes, event vocabulary, risk flags, sector, known company names, and governed ancestor labels when they improve recall.
 - Surface ticker relationship read-throughs such as peer, supplier, and customer links in review pages and stored diagnostics.
 - Use governed labels for transmission, calibration, outcome, and event metadata so UI pages do not depend on raw internal keys.
@@ -105,7 +106,6 @@ The main limits are still practical:
 - auth, RBAC, tenancy, and credential lifecycle are still incomplete; the app remains single-user and the frontend stores the bearer token locally
 - context extraction is stronger than before at capturing short-horizon state changes, but it is still heuristic rather than a mature event model
 - ticker deep analysis still reuses some older proposal-engine internals
-- context refresh and proposal-time context reuse are now context-native, but the deeper event model is still heuristic rather than fully mature
 - strict historical macro/topic news is still limited on the free-provider stack because Finnhub free access is company-news oriented rather than broad topic search; in those cases the app now prefers missing evidence over unsafe future leakage
 - calibration exists, but evidence remains limited
 

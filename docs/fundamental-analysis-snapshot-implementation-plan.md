@@ -2,18 +2,23 @@
 
 **Status:** active plan
 
-Concrete implementation plan for `fundamental-analysis-snapshot-spec.md`.
+Remaining implementation plan for `fundamental-analysis-snapshot-spec.md`. Core persistence, refresh, point-in-time lookup, analysis/plan integration, compact UI context, and initial validation slices are implemented; this plan now tracks remaining stale-coverage UI, observability, richer validation metrics, and any future action-affecting use.
 
 ## Objective
 
-Ship weekly weekend and event-aware point-in-time fundamental snapshots for monitored tickers, then expose those snapshots to ticker analysis and plan generation with a conservative decision role.
+Keep fundamental snapshots conservative and auditable while finishing the remaining production-quality surfaces.
 
-Success means:
-- every active watchlist ticker and app-owned broker-exposure ticker can get a stored immutable fundamental snapshot
-- snapshots can be refreshed by job/manual path
+Already shipped:
+- active watchlist and app-owned broker-exposure tickers can get stored immutable snapshots
+- snapshots can be refreshed by scheduled job, manual route, and due monitored ticker path
 - ticker analysis/plan payloads include the latest snapshot known at plan time
-- fundamentals do not positively boost confidence until validation proves value
-- validation slices can measure whether snapshot features improve outcomes
+- fundamentals do not positively boost confidence
+- initial validation slices can measure whether snapshot features improve outcomes
+
+Remaining success criteria:
+- stale/sparse fundamental coverage is visible in operator-facing health surfaces
+- refresh failures produce structured observability evidence
+- validation slices include expected-value/drawdown extensions before any action-affecting promotion
 
 ## Phase 0 — design and fixtures
 

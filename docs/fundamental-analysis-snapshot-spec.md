@@ -1,8 +1,8 @@
 # Fundamental analysis snapshots
 
-**Status:** target behavior
+**Status:** current + target behavior
 
-Weekly weekend and event-aware fundamental snapshots for monitored tickers.
+Weekly weekend and event-aware fundamental snapshots for monitored tickers. Persistence, refresh jobs/routes, point-in-time lookup, ticker/plan integration, compact payloads, and initial validation-slice plumbing are implemented. Dedicated stale-coverage UI/observability polish and action-affecting positive contribution remain target behavior pending validation.
 
 ## Goal
 
@@ -108,32 +108,36 @@ Rules:
 - start with risk filters and threshold increases, not positive boosts
 - preserve raw feature snapshots so future validation can recompute cohorts
 
-## Implementation phases
+## Implementation status
+
+Implemented current behavior:
 
 1. Schema and repository
-   - add immutable `fundamental_analysis_snapshots`
-   - repository methods for latest ticker snapshot at/before timestamp and stale-monitored-ticker discovery
+   - immutable `fundamental_analysis_snapshots`
+   - latest ticker snapshot, point-in-time lookup, latest-by-ticker, and stale monitored ticker helpers
 
 2. Service
    - `FundamentalAnalysisService` normalizes provider data into the snapshot schema
-   - default provider can reuse yfinance-derived fields, but payloads must mark coverage limitations
+   - sparse and provider-limited payloads are marked degraded/blocked with warnings rather than healthy
 
-3. Job
-   - add `fundamental_analysis_refresh` job type or equivalent scheduled path
-   - seed weekly weekend refresh job
-   - add event-aware candidate prioritization
+3. Job and API
+   - `fundamental_analysis_refresh` job type and default weekend refresh cadence
+   - manual/API refresh, due monitored ticker refresh, monitored ticker listing, and validation-slice summary
 
 4. Integration
-   - inject latest snapshot into ticker deep analysis and watchlist plan framing
-   - persist compact fundamental payload in plan signal/evidence payloads
-   - keep confidence role conservative by default
+   - latest point-in-time snapshot is injected into ticker deep analysis and watchlist plan framing
+   - compact fundamental context is persisted in plan signal/evidence payloads
+   - confidence role is conservative by default and does not positively boost confidence
 
-5. Observability and UI
-   - show latest snapshot timestamp, event calendar status, warnings, and compact feature buckets
-   - record provider failures and stale coverage
+5. UI and validation
+   - ticker/plan views expose compact fundamental coverage/event/valuation context
+   - initial validation slices use broker-preferred effective outcomes and persisted plan signal-breakdown buckets
 
-6. Validation
-   - add cohort/slice reports before enabling any positive confidence contribution
+Still target / gated:
+
+- dedicated stale-coverage UI and richer observability events
+- expected-value/drawdown extensions for fundamental validation slices
+- action-affecting positive contribution or valuation-based caps, pending point-in-time walk-forward evidence
 
 ## Current non-goals
 

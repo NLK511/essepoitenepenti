@@ -69,8 +69,8 @@ A simulated trade tracked by the system when it explicitly decides not to take a
 ### Broker order
 A submitted order sent to an external trading platform, such as Alpaca.
 
-### Broker Orders page
-The dedicated UI page that lists broker-order executions, their statuses, and their raw payloads.
+### Execution & Risk page
+The broker safety and execution UI page. It lists broker accounts, risk state, broker-order executions, broker positions, steering/reconciliation evidence, statuses, and raw payloads. Older docs or payload labels may refer to this as the Broker Orders page.
 
 ### Broker order execution
 The persisted audit record for one submitted, skipped, failed, canceled, or resubmitted broker-order attempt.

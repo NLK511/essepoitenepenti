@@ -1,6 +1,8 @@
 # Gating severity alert spec
 
-**Status:** implemented weekly observability monitor, scheduled job, dashboard banner, and Quality & Edge breakdown
+**Status:** current behavior
+
+Implemented as a weekly observability monitor, scheduled job, dashboard banner, and Quality & Edge breakdown.
 
 ## Goal
 

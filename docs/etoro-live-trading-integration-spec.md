@@ -1,8 +1,8 @@
 # eToro live trading integration spec
 
-**Status:** target behavior, not implemented
+**Status:** current + target behavior
 
-This document defines the required behavior for adding eToro as a broker integration for Aurelio. Because this is expected to be the first real-money venue, safety requirements in this spec are mandatory and take priority over convenience, speed, or broader instrument coverage.
+This document defines the required behavior for eToro as a broker integration for Aurelio. Read-only plumbing, demo/mock lifecycle plumbing, live-shadow audit rows, broker-account gates, and a fail-closed live adapter are implemented. Real-money eToro mutation is not enabled; safety requirements in this spec remain mandatory before any live mutation path can be activated.
 
 ## External API basis
 
@@ -76,7 +76,7 @@ The first eToro implementation must include:
 - market close for open app-owned eToro positions
 - reconciliation from order lookup, portfolio, P&L, and trade-history endpoints
 - broker-order and broker-position persistence using the existing audit/lifecycle tables where possible
-- UI/API visibility in the existing Broker Orders / Execution & Risk workflow
+- UI/API visibility in the existing Execution & Risk workflow
 - risk manager integration using eToro live snapshots before every live submit/resubmit
 - eToro permission/scope validation, including detecting read-only, demo-only, expired, revoked, or real-trading-disabled keys
 - eToro broker capability validation for each allowlisted instrument before any live order is accepted
@@ -97,9 +97,7 @@ The first eToro implementation must include:
 
 ## Broker abstraction requirements
 
-Before eToro live submission is wired into proposal generation, the current Alpaca-specific execution path must be separated behind the broker-account adapter defined in `multi-broker-execution-risk-spec.md`.
-
-Alpaca paper behavior must remain unchanged after this abstraction. Existing Alpaca tests are the regression suite for the abstraction. eToro-specific tests must cover every eToro API call used for opening, closing, canceling, lookup, portfolio snapshots, trade history, and drawdown/equity evidence.
+The Alpaca-specific execution path has been separated behind the broker-account adapter defined in `multi-broker-execution-risk-spec.md` while preserving Alpaca paper behavior. Existing Alpaca tests remain the regression suite for the abstraction. eToro-specific tests must cover every eToro API call used for opening, closing, canceling, lookup, portfolio snapshots, trade history, and drawdown/equity evidence before any external demo/live mutation path is enabled.
 
 ## eToro order construction rules
 
@@ -243,7 +241,7 @@ The existing broker workbench must make real-money state impossible to miss:
 - show whether eToro live trading is disabled, enabled, halted, or blocked by validation
 - show eToro credential validation status without exposing secrets
 - show live notional cap, order-count limit, drawdown limits, current drawdown, demo-validation artifact evidence, and symbol allowlist
-- show untracked eToro exposure warnings at the top of Broker Orders
+- show untracked eToro exposure warnings at the top of Execution & Risk
 - allow operators to record demo-validation artifact ids and clear broker-account circuit breakers from the Execution & Risk broker-account cards, while server-side APIs enforce validation and reason requirements
 - require an explicit confirmation dialog for manual resubmit/cancel/close on eToro live records; server-side broker-order resubmit/cancel and broker-position close must require exact text `CONFIRM LIVE ETORO {broker_account_id} {operation}` and must respect `manual_actions_enabled`. Real eToro live close remains fail-closed with `etoro_live_mutation_disabled` until live mutation enablement is separately reviewed
 - separate demo and live records with filters by broker account, broker, account mode, status, and run id in both API and Execution & Risk frontend
@@ -308,7 +306,7 @@ Specs must be translated into tests before or alongside implementation. Required
 ### API/UI tests
 
 - settings expose eToro fields and never expose keys.
-- Broker Orders page shows eToro live badges and blocked-state reasons.
+- Execution & Risk page shows eToro live badges and blocked-state reasons.
 - live resubmit/cancel/close actions require explicit confirmation.
 - risk dashboard includes eToro snapshot, drawdown, per-broker risk limits, and untracked exposure details.
 - run detail shows eToro broker-order and broker-position records.
@@ -341,17 +339,25 @@ Before any real-money enablement in production:
 
 ## Implementation status
 
+Implemented current behavior:
+
 - [x] eToro integration spec
-- [ ] broker-account adapter abstraction specified by tests
-- [ ] per-broker eToro risk and drawdown settings
-- [ ] eToro credential settings, permission validation, and redaction tests
-- [ ] eToro instrument capability/metadata validation
-- [ ] eToro read-only client
-- [ ] eToro demo execution client
-- [ ] eToro real execution client
-- [ ] eToro risk snapshot and drawdown integration
-- [ ] eToro circuit-breaker handling for ambiguous API outcomes
-- [ ] eToro order submission safety gates
-- [ ] eToro reconciliation and lifecycle mapping
-- [ ] UI/API eToro live safety indicators
-- [ ] production rollout checklist artifact
+- [x] broker-account adapter abstraction specified by tests
+- [x] per-broker eToro risk and drawdown settings/gates in the shared broker-account model
+- [x] account-scoped credential storage, validation evidence, and redaction tests/API behavior
+- [x] eToro read-only client and adapter wiring
+- [x] eToro demo adapter lifecycle plumbing covered with test doubles
+- [x] eToro live adapter object exists but is explicitly fail-closed for submit/cancel/close
+- [x] live-shadow would-submit audit rows that skip mutation calls
+- [x] eToro risk snapshot/drawdown integration through broker-account risk state
+- [x] broker-account circuit-breaker handling for ambiguous/stale/contradictory broker state
+- [x] order-submission safety gates, allowlist/default-off behavior, and price/slippage gates before mutation paths
+- [x] broker-account-aware UI/API eToro live safety indicators and confirmation prompts
+- [x] release-readiness script/report artifact support
+
+Still target / gated:
+
+- [ ] re-read current eToro docs and confirm official demo endpoint paths before external demo mutation
+- [ ] validate read-only credentials, instrument metadata, demo lifecycle, and live-shadow against external eToro evidence
+- [ ] implement/enable real eToro live mutation; current live adapter returns `etoro_live_mutation_disabled`
+- [ ] production rollout artifact showing release-readiness script pass with required external evidence

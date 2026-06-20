@@ -25,7 +25,7 @@ The first version must:
 - round quantity down to whole shares
 - record every broker submission in the database
 - keep the run inspectable in the UI and API
-- expose a dedicated Broker Orders page and a run-detail broker-orders panel for operator audit/review
+- expose broker-order audit detail through the Execution & Risk page and a run-detail broker-orders panel
 - allow manual resubmit/cancel actions for submitted broker orders when the broker and order state permit it
 
 ## Order construction rules
@@ -124,7 +124,7 @@ When broker execution records exist for a plan, the operator UI should prefer th
 - [x] broker order persistence table
 - [x] execution service hooked into proposal generation
 - [x] API visibility for submitted orders
-- [x] dedicated Broker Orders page
+- [x] broker-order audit detail on the Execution & Risk page
 - [x] run-detail broker-orders panel
 - [x] manual resubmit/cancel/refresh controls for valid paper orders
 - [x] automatic broker-order reconciliation during market hours

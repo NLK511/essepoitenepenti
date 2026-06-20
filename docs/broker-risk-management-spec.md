@@ -82,7 +82,7 @@ No Alpaca submission may be attempted for a risk-blocked candidate.
 
 ## Operator UI
 
-The Broker Orders page must include the risk dashboard directly because risk state is part of broker execution, not a separate operator workflow. The merged Broker Orders view shows current risk state and manual controls:
+The Execution & Risk page must include the risk dashboard directly because risk state is part of broker execution, not a separate operator workflow. The merged execution view shows current risk state and manual controls:
 
 - Halt trading
 - Resume trading

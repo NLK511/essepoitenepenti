@@ -38,7 +38,7 @@ Already in place:
 - stale-run recovery when leases expire, with older timeout fallback still present in some paths
 
 Still needed:
-- clearer recovery semantics when a run fails after partial persistence
+- continued soak/testing of partial-persistence recovery behavior under real worker crashes
 - stronger coordination guarantees if concurrency grows
 
 ### 2. Observability
@@ -56,9 +56,8 @@ Already in place:
 - structured `observability_events` for run dispatch, completion, and failure, exposed through `/api/observability/events`
 
 Still needed:
-- broader structured events for provider and broker lifecycle details beyond the current run execution events
-- easier diagnosis of provider failures across processes
-- continued polish of health signal presentation and operator-facing diagnostics
+- continued polish of provider/broker lifecycle event presentation and operator-facing diagnostics
+- easier diagnosis of provider failures across processes when failures span worker, scheduler, and API processes
 
 ### 3. Security and credential lifecycle
 The app should not expand provider surface area faster than it improves secret handling.
@@ -82,6 +81,7 @@ Already in place:
 - per-broker execution settings, exposure limits, drawdown limits, kill switches, and circuit breakers
 - broker workbench visibility for submissions, positions, drawdown, circuit breakers, and operator actions
 - eToro read-only/demo plumbing, live gates, live-shadow audit rows, and fail-closed live adapter behavior
+- broker-agnostic order price normalization and broker-account-scoped risk/reconciliation state
 - release-readiness script requiring eToro read-only/demo/live-shadow artifact ids
 
 Still needed:
@@ -103,7 +103,7 @@ Still needed:
 - more resolved live broker positions and simulated outcomes over time
 - continued use of calibration without overstating thin buckets
 - continued comparison against simple baselines
-- validation of which setup families, horizons, transmission conditions, and regimes actually work in live data
+- validation of which setup families, horizons, ontology/transmission conditions, fundamental contexts, and regimes actually work in live data
 
 ### 6. Redesign maturation
 The redesign is already the active path.

@@ -1,6 +1,8 @@
 # Plan generation large tuning search spec
 
-**Status:** implemented offline/non-schedulable research tuning search script and UI queue action
+**Status:** current behavior
+
+Implemented as an offline/non-schedulable research tuning search script and UI queue action.
 
 ## Goal
 

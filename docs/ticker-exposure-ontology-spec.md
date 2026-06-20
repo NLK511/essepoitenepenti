@@ -1,6 +1,6 @@
 # Ticker exposure ontology spec
 
-**Status:** active implementation
+**Status:** current + target behavior
 
 ## Goal
 
@@ -119,6 +119,23 @@ The generator must:
 - generate conservative profiles for every missing ticker
 - stamp source/version/update metadata
 - keep generated low-confidence mixed mappings when directionality is unknown
+
+## Current implementation status
+
+Implemented current behavior:
+
+- every taxonomy ticker has an explicit exposure ontology profile
+- curated profiles are preserved and generated profiles are stamped with source/version metadata
+- conservative sector/industry templates provide directional macro/event sensitivities when the relationship is broadly accepted for that industry class
+- ticker deep analysis emits `ontology_context` inside `ticker_deep_analysis.transmission_analysis`
+- plan `transmission_summary` and `signal_breakdown` carry `ontology_context`, pre-ontology alignment, coverage status, coverage reasons, matched exposures, and transmission paths
+- alignment adjustment is bounded and auditable; it does not bypass calibration, actionability, broker, or risk gates
+
+Still target / gated:
+
+- realized outcome validation proving ontology-enhanced context is better than the prior taxonomy-only transmission path
+- cleanup of obsolete taxonomy-only transmission plumbing after validation
+- more curated company-level profiles where generated templates are too broad
 
 ## Validation and effectiveness
 

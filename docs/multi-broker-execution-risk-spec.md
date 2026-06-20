@@ -1,8 +1,8 @@
 # Multi-broker execution and risk spec
 
-**Status:** target behavior, not implemented
+**Status:** current + target behavior
 
-This document defines the broker execution model that must exist before Aurelio can safely trade real money on eToro while still supporting Alpaca paper trading and any future broker.
+This document defines the broker execution model used for account-scoped broker execution and the remaining target constraints before any real-money expansion. The broker-account abstraction, adapter path, multi-broker fan-out, account-scoped risk controls, drawdown/circuit-breaker state, reconciliation evidence, and broker-aware UI/API surfaces are implemented. Real-money eToro mutation remains disabled/fail-closed until external validation and production gates pass.
 
 ## Goal
 
@@ -295,7 +295,7 @@ Every broker adapter must have fake-client tests for all main API calls before a
 
 ## UI/API requirements
 
-The Broker Orders / Execution & Risk workbench must become broker-account aware:
+The Execution & Risk workbench must be broker-account aware:
 
 - list configured broker accounts and their enabled/halted/validated state
 - show per-broker risk metrics and limits
@@ -319,13 +319,23 @@ Risk API must return:
 
 ## Implementation status
 
-- [x] multi-broker execution/risk target spec
-- [ ] broker-account settings model
-- [ ] per-broker risk settings and drawdown state
-- [ ] aggregate live exposure/drawdown settings
-- [ ] broker-account circuit breaker state
-- [ ] broker adapter contract tests
-- [ ] Alpaca paper migrated behind broker-account adapter without behavior change
-- [ ] eToro read-only/demo/live adapter tests
-- [ ] multi-broker fan-out execution service
-- [ ] broker-account-aware UI/API risk workbench
+Implemented current behavior:
+
+- [x] broker-account settings model and default Alpaca paper account bootstrap
+- [x] account-scoped credentials and redacted broker-account APIs
+- [x] per-broker risk settings, drawdown state, and aggregate live caps
+- [x] broker-account circuit-breaker state and clear controls
+- [x] broker adapter protocol and fake-client contract tests
+- [x] Alpaca paper migrated behind broker adapter without behavior change
+- [x] broker-agnostic executable price normalization before persistence/submission
+- [x] multi-broker fan-out execution service with per-account skips/submissions
+- [x] broker-account-aware order/position/workbench APIs and Execution & Risk UI
+- [x] reconciliation evidence, stale/contradictory broker-state handling, and per-account circuit-breaker activation
+- [x] eToro read-only, demo/mock lifecycle, live-shadow audit, and fail-closed live adapter tests
+
+Still target / gated:
+
+- [ ] real eToro demo lifecycle against current external demo endpoints, not only test doubles
+- [ ] real eToro live mutation enablement; live adapter currently fails closed with `etoro_live_mutation_disabled`
+- [ ] production-grade external validation artifacts and release-readiness evidence before live micro-size rollout
+- [ ] measured broker-backed trading edge before increasing live scope or notional caps
