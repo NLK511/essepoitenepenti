@@ -136,3 +136,19 @@ Promotion criteria for stronger live use:
 - mixed-bias rate decreases without increasing contradiction failures
 - ontology-supported tailwinds/headwinds show outcome separation in walk-forward or realized outcomes
 - operator-facing paths are sufficiently clear to audit
+
+## Deprecation and cleanup trigger
+
+If validation shows the exposure ontology is better than the prior taxonomy-only transmission path, create a cleanup ticket/work item before enabling stronger ontology-based decision influence. The cleanup should remove or downgrade obsolete taxonomy-only plumbing rather than leaving two competing context systems.
+
+Cleanup checklist after successful validation:
+
+- identify all taxonomy-only transmission fallback paths still used in plan generation
+- remove duplicate bias/alignment derivation that ignores `ontology_context`
+- retire stale fields that only supported old context scoring, or mark them as backward-compatible audit fields
+- update docs and operator field guides to describe ontology-first transmission
+- keep old persisted plan rows readable without recomputing them
+- add regression tests proving new plans contain `ontology_context` and no longer depend on old-only fallbacks when ontology coverage is usable
+- re-run outcome/effectiveness evaluation after cleanup to confirm no regression
+
+Until those criteria pass, the old taxonomy remains a base metadata layer and backward-compatible fallback, not an independently promoted decision layer.
