@@ -18,6 +18,10 @@ Improve context transmission by representing each ticker as a point-in-time expo
 - Do not replace market, technical, risk, or calibration gates.
 - Do not make broker execution decisions from ontology output.
 
+## Coverage requirement
+
+The ontology file must contain one explicit profile for every ticker in the active taxonomy universe (`src/trade_proposer_app/data/taxonomy/tickers.json`). Curated profiles should be preserved; all remaining tickers may be generated from sector/industry taxonomy templates but must still be explicit, versioned, sourced, and auditable. Generated profiles must use conservative confidence and mixed/low directional defaults where the taxonomy does not support a specific directional claim.
+
 ## Data model
 
 A ticker exposure profile is versioned and may contain:
@@ -99,6 +103,22 @@ During ticker deep analysis:
 - Positive adjustment must require at least one medium/high confidence directional match.
 - Negative adjustment may use medium/high headwind matches as a guardrail.
 - All adjustments must be bounded and auditable.
+
+## Generation
+
+The repository must include a deterministic generator:
+
+```text
+scripts/generate_ticker_exposure_ontology.py
+```
+
+The generator must:
+
+- read all taxonomy tickers
+- preserve curated/provider-backed profiles
+- generate conservative profiles for every missing ticker
+- stamp source/version/update metadata
+- keep generated low-confidence mixed mappings when directionality is unknown
 
 ## Validation and effectiveness
 

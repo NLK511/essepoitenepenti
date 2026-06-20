@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from trade_proposer_app.domain.enums import RecommendationDirection
+from trade_proposer_app.services.taxonomy import TickerTaxonomyService
 from trade_proposer_app.services.ticker_exposure_ontology import TickerExposureOntologyService
 from trade_proposer_app.services.watchlist_transmission import WatchlistTransmissionService
 
@@ -68,6 +69,19 @@ class _Signal:
     macro_exposure_score = 0.0
     industry_alignment_score = 0.0
     diagnostics = {}
+
+
+def test_exposure_ontology_has_profile_for_every_taxonomy_ticker() -> None:
+    taxonomy = TickerTaxonomyService()
+    service = TickerExposureOntologyService()
+    overview = taxonomy.taxonomy_overview()
+
+    assert len(service._profiles) == overview["ticker_count"]
+    assert service.get_profile("ECL", taxonomy_profile=taxonomy.get_ticker_profile("ECL"))["source"] in {
+        "template_generated",
+        "taxonomy_generated",
+        "curated",
+    }
 
 
 def test_exposure_ontology_scores_semiconductor_capex_tailwind() -> None:
