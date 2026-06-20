@@ -172,6 +172,14 @@ A retired transitional shared artifact.
 
 Context snapshots are now the active shared-context path.
 
+### Canonical job type keys
+
+Active code and docs should use canonical job type keys. Deprecated compatibility keys are accepted only for old stored rows or migration windows and should not be used in new docs/scripts/tests.
+
+Current shared-context examples:
+- `macro_context_refresh`
+- `industry_context_refresh`
+
 ### Freshness
 Whether shared context is still recent enough to trust normally.
 

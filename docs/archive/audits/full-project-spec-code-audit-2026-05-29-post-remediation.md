@@ -170,7 +170,7 @@ The remaining risk is now more specific: several specs describe production-grade
 ### A10 — Post-remediation plan doc is marked current behavior but still contains unchecked task boxes
 
 **Specs/docs involved:**
-- `docs/audits/full-project-spec-code-audit-2026-05-29-remediation-plan.md`
+- `docs/archive/audits/full-project-spec-code-audit-2026-05-29-remediation-plan.md`
 - `docs/docs-index.md`
 
 **Finding:** The remediation plan has an implementation-status header saying completed, but its phase checklists remain unchecked. `docs/docs-index.md` still describes it as an active task plan.

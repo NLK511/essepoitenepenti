@@ -35,8 +35,15 @@ For those, start with:
 - `../architecture.md`
 - `../roadmap.md`
 
-## Recently archived implementation records
+## Recently archived implementation records and audits
 
+- `implementation-plans/multi-broker-etoro-implementation-plan.md`
+- `implementation-plans/audit-remediation-and-autonomy-readiness-plan.md`
+- `implementation-plans/lean-architecture-and-docs-reconciliation-plan.md`
+- `implementation-plans/ui-attention-audit-2026-05-30.md`
+- `implementation-plans/ui-page-content-refactor-spec-2026-05-30.md`
 - `implementation-plans/p0-p4-remediation-plan-2026-05.md`
 - `implementation-plans/p3-p4-audit-remediation-plan-2026-05.md`
 - `implementation-plans/architecture-simplification-refactor-plan-2026-05.md`
+- `audits/` — dated project, spec/code, broker steering, dead-code, and multi-broker audit records
+- `terminology.md` — retired standalone terminology note; active terms live in `../glossary.md`

@@ -346,14 +346,14 @@ Make simulation-only entry/actionability diagnostics unmistakable in operator-fa
 Remove stale active-plan ambiguity from docs and make completed records obvious.
 
 ### Spec/doc tasks
-- [ ] Convert `docs/audits/full-project-spec-code-audit-2026-05-29-remediation-plan.md` from task checklist to completed implementation record, or mark every completed task as done.
+- [ ] Convert `docs/archive/audits/full-project-spec-code-audit-2026-05-29-remediation-plan.md` from task checklist to completed implementation record, or mark every completed task as done.
 - [ ] Update `docs/docs-index.md` so completed remediation records are not described as active plans.
 - [ ] Review audit docs with missing/non-standard status labels:
-  - `docs/audits/abstraction-inventory-2026-05.md`
-  - `docs/audits/full-project-spec-code-audit-2026-05-09.md`
-  - `docs/audits/full-project-spec-code-audit-2026-05-10-post-watchlist-refactor.md`
-  - `docs/audits/full-project-spec-code-audit-2026-05-10.md`
-  - `docs/audits/project-spec-code-coherence-audit-2026-05-09.md`
+  - `docs/archive/audits/abstraction-inventory-2026-05.md`
+  - `docs/archive/audits/full-project-spec-code-audit-2026-05-09.md`
+  - `docs/archive/audits/full-project-spec-code-audit-2026-05-10-post-watchlist-refactor.md`
+  - `docs/archive/audits/full-project-spec-code-audit-2026-05-10.md`
+  - `docs/archive/audits/project-spec-code-coherence-audit-2026-05-09.md`
 - [ ] Either mark old audit docs as `reference` or move/archive them if they are historical only.
 - [ ] Ensure every active doc uses one allowed status label:
   - `current behavior`
@@ -372,7 +372,7 @@ Remove stale active-plan ambiguity from docs and make completed records obvious.
 - [ ] Update index pointers after any moves.
 
 ### Validation
-- [ ] `for f in docs/*.md docs/audits/*.md; do ... status scan ...; done`
+- [ ] `for f in docs/*.md docs/archive/audits/*.md; do ... status scan ...; done`
 - [ ] `git diff --check`
 - [ ] Optional: `.venv/bin/pytest -q tests/test_routes.py::RouteTests::test_docs_page...` if docs browser route tests are affected.
 

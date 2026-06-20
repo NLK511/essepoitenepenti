@@ -327,7 +327,7 @@ Reduce risk that SQLite-only local validation misses production-like database re
 
 ### Spec tasks
 - [ ] Update `docs/getting-started.md` or `docs/operational-scripts-reference.md` with a Postgres validation command.
-- [ ] Update `docs/audit-remediation-and-autonomy-readiness-plan.md` with Postgres validation as a release checklist item.
+- [ ] Update `docs/archive/implementation-plans/audit-remediation-and-autonomy-readiness-plan.md` with Postgres validation as a release checklist item.
 
 ### Test/tasks
 - [ ] Add or update a script, e.g. `scripts/check_postgres_validation.py`, that:

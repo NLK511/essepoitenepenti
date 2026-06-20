@@ -38,7 +38,7 @@ cd frontend && npm run check
 Exit criteria:
 - All tests pass locally.
 - No temporary files under `/tmp` are part of the commit.
-- `docs/multi-broker-etoro-implementation-plan.md` has no unchecked implementation items.
+- Completed multi-broker/eToro implementation history is archived at `archive/implementation-plans/multi-broker-etoro-implementation-plan.md`; current release gates live in `multi-broker-execution-risk-spec.md`, `etoro-live-trading-integration-spec.md`, and this plan.
 
 ## Phase 1 — Production configuration hardening
 
