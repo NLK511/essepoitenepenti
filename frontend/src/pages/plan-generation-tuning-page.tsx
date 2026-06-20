@@ -15,7 +15,7 @@ import type {
 } from "../types";
 
 const glossaryDoc = (section: string) => `/docs?doc=glossary&section=${section}`;
-const tuningSpecDoc = "/docs?doc=plan-generation-tuning-spec";
+const tuningSpecDoc = "/docs?doc=specs-plan-generation-tuning-spec";
 
 function numberOrNull(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;

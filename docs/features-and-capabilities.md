@@ -116,7 +116,7 @@ And one analytical caution still matters:
 
 - `operator-page-field-guide.md` — where these workflows show up in the UI
 - `recommendation-methodology.md` — how the pipeline works
-- `bars-refresh-spec.md` — canonical bars-data-refresh run behavior
-- `news-provider-reliability-spec.md` — canonical ticker-news retry and fallback diagnostics behavior
+- `specs/bars-refresh-spec.md` — canonical bars-data-refresh run behavior
+- `specs/news-provider-reliability-spec.md` — canonical ticker-news retry and fallback diagnostics behavior
 - `raw-details-reference.md` — stored fields and payloads
 - `roadmap.md` — current priorities

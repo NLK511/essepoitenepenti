@@ -1723,6 +1723,7 @@ export interface DocSection {
 
 export interface DocDocument {
   slug: string;
+  aliases?: string[];
   title: string;
   path: string;
   content: string;

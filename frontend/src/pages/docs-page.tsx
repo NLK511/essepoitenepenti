@@ -591,7 +591,8 @@ export function DocsPage() {
     }
     return documents.filter((document) => {
       const sectionTitles = document.sections.map((section) => section.title).join("\n");
-      const haystack = `${document.title}\n${document.path}\n${sectionTitles}\n${document.content}`.toLowerCase();
+      const aliases = (document.aliases ?? []).join("\n");
+      const haystack = `${document.title}\n${document.path}\n${document.slug}\n${aliases}\n${sectionTitles}\n${document.content}`.toLowerCase();
       return haystack.includes(normalizedQuery);
     });
   }, [documents, query]);
@@ -603,7 +604,7 @@ export function DocsPage() {
     if (filteredDocuments.length === 0) {
       return null;
     }
-    const explicit = filteredDocuments.find((document) => document.slug === selectedSlug);
+    const explicit = filteredDocuments.find((document) => document.slug === selectedSlug || (document.aliases ?? []).includes(selectedSlug));
     return explicit ?? filteredDocuments[0];
   }, [filteredDocuments, selectedSlug]);
 
@@ -709,7 +710,7 @@ export function DocsPage() {
                 <strong>Understand recommendations</strong>
                 <span className="helper-text">How signals, plans, evidence, and evaluation should be interpreted.</span>
               </Link>
-              <Link to="/docs?doc=edge-validation-standard" className="data-card data-card-clickable">
+              <Link to="/docs?doc=specs-edge-validation-standard" className="data-card data-card-clickable">
                 <strong>Validate edge</strong>
                 <span className="helper-text">Why the edge gate is authoritative and what evidence is still missing.</span>
               </Link>

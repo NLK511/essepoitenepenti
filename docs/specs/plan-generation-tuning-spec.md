@@ -324,9 +324,9 @@ Update this spec before changing objective order, promotion policy, eligibility 
 
 ## Related docs
 
-- `recommendation-methodology.md`
+- `../recommendation-methodology.md`
 - `recommendation-plan-resolution-spec.md`
-- `decision-sample-tuning-guide.md`
-- `signal-gating-tuning-guide.md`
-- `raw-details-reference.md`
-- `operator-page-field-guide.md`
+- `../decision-sample-tuning-guide.md`
+- `../signal-gating-tuning-guide.md`
+- `../raw-details-reference.md`
+- `../operator-page-field-guide.md`

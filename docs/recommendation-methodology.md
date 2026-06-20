@@ -95,7 +95,7 @@ Current extraction is heuristic but preserves more short-horizon state than broa
 
 Ticker sentiment comes from the available article set. Neutral sentiment can mean neutral coverage or weak coverage; transparency fields include keyword hits, coverage insights, feed errors, source counts, and item counts.
 
-Market intelligence is disabled by default unless explicitly configured. Disabled snapshots are absence markers only: zero confidence contribution and no active supporting/conflicting narrative. See `market-intelligence-analysis-spec.md`.
+Market intelligence is disabled by default unless explicitly configured. Disabled snapshots are absence markers only: zero confidence contribution and no active supporting/conflicting narrative. See `specs/market-intelligence-analysis-spec.md`.
 
 Optional digest summaries may use `openai_api`, `pi_agent`, or built-in `news_digest`; failures keep the fallback digest and record the error.
 
@@ -171,7 +171,7 @@ Plan-generation tuning may adjust this framing through its registered active con
 
 Current behavior: monitored tickers can have weekly/weekend and event-aware point-in-time fundamental snapshots. Ticker analysis and plan generation use the latest snapshot available at or before plan creation time and expose compact coverage, event, valuation, quality, growth, and risk context in signal/plan payloads.
 
-Initial role remains conservative: fundamentals may add warnings, setup labels, event-window context, or risk-filter/threshold pressure. They must not become positive confidence boosters until passive snapshots prove usefulness through broker-preferred outcome slices and walk-forward validation. See `fundamental-analysis-snapshot-spec.md`.
+Initial role remains conservative: fundamentals may add warnings, setup labels, event-window context, or risk-filter/threshold pressure. They must not become positive confidence boosters until passive snapshots prove usefulness through broker-preferred outcome slices and walk-forward validation. See `specs/fundamental-analysis-snapshot-spec.md`.
 
 ## Outcome evaluation
 
@@ -227,7 +227,7 @@ Current limits:
 
 - `features-and-capabilities.md`
 - `raw-details-reference.md`
-- `recommendation-plan-resolution-spec.md`
+- `specs/recommendation-plan-resolution-spec.md`
 - `decision-sample-tuning-guide.md`
 - `signal-gating-tuning-guide.md`
-- `market-intelligence-analysis-spec.md`
+- `specs/market-intelligence-analysis-spec.md`

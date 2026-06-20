@@ -133,7 +133,7 @@ export function RecommendationDecisionSamplesPage() {
             <SectionTitle
               kicker="Filters"
               title="Benchmark follow-through"
-              actions={<HelpHint tooltip="Use benchmark filters to focus on missed opportunities, clean rejects, or rows that still need follow-through evaluation." to="/docs?doc=signal-gating-benchmark-spec" />}
+              actions={<HelpHint tooltip="Use benchmark filters to focus on missed opportunities, clean rejects, or rows that still need follow-through evaluation." to="/docs?doc=specs-signal-gating-benchmark-spec" />}
             />
             <div className="form-grid">
               <label className="form-field">
@@ -154,8 +154,8 @@ export function RecommendationDecisionSamplesPage() {
               <StatCard label="Samples on page" value={summary.total} helper={`Showing ${summary.total} of ${totalSamples} filtered samples`} tooltip="The number of decision samples shown on the current page after filters are applied." tooltipTo="/docs?doc=glossary&section=recommendation-decision-sample" />
               <StatCard label="Near misses on page" value={summary.nearMiss} helper="High-signal no-action plans" tooltip="Borderline no-action cases that looked close to passing the gate and are often the most useful samples for tuning review." tooltipTo="/docs?doc=decision-sample-tuning-guide" />
               <StatCard label="High priority on page" value={summary.highPriority} helper="Review these first" tooltip="Samples marked as most informative for operator review because they are borderline, degraded, contradictory, or otherwise tuning-relevant." tooltipTo="/docs?doc=decision-sample-tuning-guide" />
-              <StatCard label="Benchmark hits" value={summary.benchmarkHits} helper="Likely missed opportunities" tooltip="Benchmarked samples whose later price movement satisfied the follow-through target in the signal direction." tooltipTo="/docs?doc=signal-gating-benchmark-spec" />
-              <StatCard label="Benchmark misses" value={summary.benchmarkMisses} helper="Likely good rejects" tooltip="Benchmarked samples whose later price movement did not satisfy the follow-through target." tooltipTo="/docs?doc=signal-gating-benchmark-spec" />
+              <StatCard label="Benchmark hits" value={summary.benchmarkHits} helper="Likely missed opportunities" tooltip="Benchmarked samples whose later price movement satisfied the follow-through target in the signal direction." tooltipTo="/docs?doc=specs-signal-gating-benchmark-spec" />
+              <StatCard label="Benchmark misses" value={summary.benchmarkMisses} helper="Likely good rejects" tooltip="Benchmarked samples whose later price movement did not satisfy the follow-through target." tooltipTo="/docs?doc=specs-signal-gating-benchmark-spec" />
             </section>
           </Card>
 

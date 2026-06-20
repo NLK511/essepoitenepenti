@@ -127,5 +127,5 @@ A gating change that looks locally better still needs to be checked against cali
 - `decision-sample-tuning-guide.md`
 - `operator-page-field-guide.md`
 - `recommendation-methodology.md`
-- `plan-generation-tuning-spec.md`
+- `specs/plan-generation-tuning-spec.md`
 - `docs-index.md`

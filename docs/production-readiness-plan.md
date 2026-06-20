@@ -38,7 +38,7 @@ cd frontend && npm run check
 Exit criteria:
 - All tests pass locally.
 - No temporary files under `/tmp` are part of the commit.
-- Completed multi-broker/eToro implementation history is archived at `archive/implementation-plans/multi-broker-etoro-implementation-plan.md`; current release gates live in `multi-broker-execution-risk-spec.md`, `etoro-live-trading-integration-spec.md`, and this plan.
+- Completed multi-broker/eToro implementation history is archived at `archive/implementation-plans/multi-broker-etoro-implementation-plan.md`; current release gates live in `specs/multi-broker-execution-risk-spec.md`, `specs/etoro-live-trading-integration-spec.md`, and this plan.
 
 ## Phase 1 — Production configuration hardening
 
@@ -166,7 +166,7 @@ Exit criteria:
 **Goal:** collect evidence required before any real-money path is considered.
 
 Tasks:
-1. Re-read current eToro docs and update `docs/etoro-live-trading-integration-spec.md` with exact current demo/live mutation endpoint mappings.
+1. Re-read current eToro docs and update `specs/etoro-live-trading-integration-spec.md` with exact current demo/live mutation endpoint mappings.
 2. Run read-only validation with real credentials and record:
    - `ETORO_READONLY_VALIDATION_ARTIFACT_ID`
 3. Run controlled demo lifecycle validation and record:

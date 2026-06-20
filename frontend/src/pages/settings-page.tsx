@@ -313,7 +313,7 @@ export function SettingsPage() {
           </section>
 
           <section className="card-grid">
-            <DisclosureCard kicker="Execution" title="Alpaca paper order execution" subtitle="Toggle automated paper trading and control the fixed per-plan notional cap." defaultOpen actions={<HelpHint tooltip="When enabled, actionable plans are converted into Alpaca paper bracket orders with the plan entry, stop loss, and take profit levels." to="/docs?doc=alpaca-paper-order-execution-spec" />}>
+            <DisclosureCard kicker="Execution" title="Alpaca paper order execution" subtitle="Toggle automated paper trading and control the fixed per-plan notional cap." defaultOpen actions={<HelpHint tooltip="When enabled, actionable plans are converted into Alpaca paper bracket orders with the plan entry, stop loss, and take profit levels." to="/docs?doc=specs-alpaca-paper-order-execution-spec" />}>
               <form className="stack-form" onSubmit={(event) => void saveOrderExecutionSettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span><input type="checkbox" name="enabled" defaultChecked={data.orderExecution.enabled} /> Order execution enabled</span></label>
@@ -326,7 +326,7 @@ export function SettingsPage() {
               </form>
             </DisclosureCard>
 
-            <DisclosureCard kicker="Steering" title="Broker dry-run steering" subtitle="Conservative post-submit controls for app-owned orders and positions." actions={<HelpHint tooltip="Broker steering audits pending orders and open positions before live mutation is enabled." to="/docs?doc=broker-position-steering-spec" />}>
+            <DisclosureCard kicker="Steering" title="Broker dry-run steering" subtitle="Conservative post-submit controls for app-owned orders and positions." actions={<HelpHint tooltip="Broker steering audits pending orders and open positions before live mutation is enabled." to="/docs?doc=specs-broker-position-steering-spec" />}>
               <div className="stack-form">
                 <div className="form-grid">
                   <StatCard label="Enabled" value={data.steering.enabled ? "on" : "off"} helper="Autonomous steering gate" />
@@ -365,7 +365,7 @@ export function SettingsPage() {
               </div>
             </DisclosureCard>
 
-            <DisclosureCard kicker="Risk management" title="Broker kill switch limits" subtitle="Pre-trade guardrails used before automated Alpaca paper submissions and manual resubmits." actions={<HelpHint tooltip="The risk manager blocks new broker submissions when halt, loss, exposure, or concentration limits are breached." to="/docs?doc=broker-risk-management-spec" />}>
+            <DisclosureCard kicker="Risk management" title="Broker kill switch limits" subtitle="Pre-trade guardrails used before automated Alpaca paper submissions and manual resubmits." actions={<HelpHint tooltip="The risk manager blocks new broker submissions when halt, loss, exposure, or concentration limits are breached." to="/docs?doc=specs-broker-risk-management-spec" />}>
               <form className="stack-form" onSubmit={(event) => void saveRiskManagementSettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span><input type="checkbox" name="enabled" defaultChecked={data.riskManagement.enabled} /> Risk management enabled</span></label>
@@ -381,7 +381,7 @@ export function SettingsPage() {
               </form>
             </DisclosureCard>
 
-            <DisclosureCard kicker="Execution audit" title="Recent broker orders" subtitle="Reference only. Use Execution & Risk for the authoritative broker audit and action-required queue." actions={<HelpHint tooltip="Execution & Risk owns broker exposure, order action queues, and full broker audit details." to="/docs?doc=alpaca-paper-order-execution-spec" />}>
+            <DisclosureCard kicker="Execution audit" title="Recent broker orders" subtitle="Reference only. Use Execution & Risk for the authoritative broker audit and action-required queue." actions={<HelpHint tooltip="Execution & Risk owns broker exposure, order action queues, and full broker audit details." to="/docs?doc=specs-alpaca-paper-order-execution-spec" />}>
               {data.brokerOrders.length === 0 ? (
                 <div className="helper-text top-gap-small">No broker orders recorded yet.</div>
               ) : (
@@ -454,7 +454,7 @@ export function SettingsPage() {
               </form>
             </DisclosureCard>
 
-            <DisclosureCard kicker="Advanced research controls" title="Plan generation tuning" subtitle="These controls are for research and tuning workflows, not daily operator review." actions={<HelpHint tooltip="These settings store automation readiness and minimum evidence thresholds for plan-generation tuning." to="/docs?doc=plan-generation-tuning-spec" />}>
+            <DisclosureCard kicker="Advanced research controls" title="Plan generation tuning" subtitle="These controls are for research and tuning workflows, not daily operator review." actions={<HelpHint tooltip="These settings store automation readiness and minimum evidence thresholds for plan-generation tuning." to="/docs?doc=specs-plan-generation-tuning-spec" />}>
               <form className="stack-form" onSubmit={(event) => void savePlanGenerationTuningSettings(event)}>
                 <div className="form-grid">
                   <label className="form-field"><span><input type="checkbox" name="auto_enabled" defaultChecked={data.planGenerationTuning.settings.auto_enabled} /> Advanced tuning automation enabled</span></label>

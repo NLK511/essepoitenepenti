@@ -48,7 +48,7 @@ This spec covers:
 - validation requirements before positive boosts
 - UI/reporting expectations
 
-It extends, but does not replace, `docs/fundamental-analysis-snapshot-spec.md`.
+It extends, but does not replace, `fundamental-analysis-snapshot-spec.md`.
 
 ## Non-goals
 

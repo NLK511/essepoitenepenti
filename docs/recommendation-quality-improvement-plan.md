@@ -310,6 +310,6 @@ Use this section to record tests and tuning runs.
 - `recommendation-methodology.md`
 - `decision-sample-tuning-guide.md`
 - `signal-gating-tuning-guide.md`
-- `plan-generation-tuning-spec.md`
+- `specs/plan-generation-tuning-spec.md`
 - `archive/implementation-plans/historical-replay-backtesting-plan.md`
-- `recommendation-plan-resolution-spec.md`
+- `specs/recommendation-plan-resolution-spec.md`

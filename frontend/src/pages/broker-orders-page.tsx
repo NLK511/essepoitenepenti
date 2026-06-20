@@ -284,7 +284,7 @@ export function BrokerOrdersPage() {
         actions={
           <div className="cluster">
             <button type="button" className="button-secondary" onClick={() => void refreshVisibleOrders()}>⟳ Statuses</button>
-            <HelpHint tooltip="This page shows the latest broker submissions, their status, and the exact bracket order payloads sent to Alpaca paper trading." to="/docs?doc=alpaca-paper-order-execution-spec" />
+            <HelpHint tooltip="This page shows the latest broker submissions, their status, and the exact bracket order payloads sent to Alpaca paper trading." to="/docs?doc=specs-alpaca-paper-order-execution-spec" />
           </div>
         }
       />
@@ -444,7 +444,7 @@ export function BrokerOrdersPage() {
               ) : (
                 <button type="button" className="button button-danger" onClick={() => void haltTrading()}>⛔ Halt</button>
               )}
-              <HelpHint tooltip="The risk manager blocks new broker submissions when halt, loss, exposure, or concentration limits are breached." to="/docs?doc=broker-risk-management-spec" />
+              <HelpHint tooltip="The risk manager blocks new broker submissions when halt, loss, exposure, or concentration limits are breached." to="/docs?doc=specs-broker-risk-management-spec" />
             </div>
           }
         >
@@ -494,7 +494,7 @@ export function BrokerOrdersPage() {
       </DisclosureCard>
 
       <section className="two-column top-gap">
-        <DisclosureCard className="sticky-toolbar" kicker="Order list" title="Recent submissions" subtitle="If execution is enabled, actionable plans produce a row here after proposal generation finishes." defaultOpen actions={<HelpHint tooltip="If execution is enabled, actionable plans produce a row here after proposal generation finishes." to="/docs?doc=alpaca-paper-order-execution-spec" />}>
+        <DisclosureCard className="sticky-toolbar" kicker="Order list" title="Recent submissions" subtitle="If execution is enabled, actionable plans produce a row here after proposal generation finishes." defaultOpen actions={<HelpHint tooltip="If execution is enabled, actionable plans produce a row here after proposal generation finishes." to="/docs?doc=specs-alpaca-paper-order-execution-spec" />}>
           {!orders && !error ? <LoadingState message="Loading broker orders…" /> : null}
           {orders && orders.length === 0 ? <EmptyState message="No broker orders recorded yet." /> : null}
           {orders ? (

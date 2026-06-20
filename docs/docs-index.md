@@ -2,7 +2,7 @@
 
 **Status:** reference
 
-This index keeps the main documentation surface complete but lean.
+This index keeps the main documentation surface complete but lean. Detailed contracts live in `specs/`; completed plans and dated audits live in `archive/`.
 
 ## Start here
 
@@ -16,7 +16,7 @@ Read these first:
 
 ## Main current-state docs
 
-These are the primary source of truth for the product today:
+These are the primary narrative source of truth for the product today:
 
 - `product-thesis.md` — product goal and decision priorities
 - `features-and-capabilities.md` — current implemented capabilities and limits
@@ -25,59 +25,65 @@ These are the primary source of truth for the product today:
 - `recommendation-methodology.md` — scoring, shortlist, deep analysis, calibration, and plan framing
 - `operator-page-field-guide.md` — current UI/operator flow
 - `user-journeys.md` — intended operator journeys
+- `glossary.md` — shared terms
 - `er-model.md` — schema overview
 - `raw-details-reference.md` — persisted payload and diagnostics reference
 - `operational-scripts-reference.md` — maintenance, hydration, validation, and report scripts
-- `observability-spec.md` — logs, health, observability events, and correlation ids
 
-## Core domain specs
+## Active plans and operating trackers
+
+- `production-readiness-plan.md` — production hardening, staging soak, external broker gates, and rollout ladder
+- `codebase-simplification-plan.md` — behavior-preserving code simplification backlog
+- `recommendation-quality-improvement-plan.md` — active quality/calibration review backlog pending consolidation decision
+- `fundamental-analysis-snapshot-implementation-plan.md` — remaining stale-coverage UI, observability, and validation follow-ups
+- `industry-context-improvement-plan.md` — remaining industry-context evidence-quality and decision-role review
+
+## Specs directory
+
+Detailed behavior contracts live in `specs/`. They are current product truth or explicit current+target contracts, but they are not the first reading path.
 
 ### Recommendation quality and outcomes
 
-- `recommendation-plan-resolution-spec.md`
-- `effective-plan-outcome-spec.md`
-- `plan-reliability-report-spec.md`
-- `plan-policy-evaluator-spec.md`
-- `confidence-calibration-spec.md`
-- `edge-validation-standard.md`
+- `specs/recommendation-plan-resolution-spec.md`
+- `specs/effective-plan-outcome-spec.md`
+- `specs/plan-reliability-report-spec.md`
+- `specs/plan-policy-evaluator-spec.md`
+- `specs/confidence-calibration-spec.md`
+- `specs/edge-validation-standard.md`
 - `decision-sample-tuning-guide.md`
-- `signal-gating-benchmark-spec.md`
+- `specs/signal-gating-benchmark-spec.md`
 - `signal-gating-tuning-guide.md`
-- `plan-generation-tuning-spec.md`
-- `large-parameter-search-spec.md`
-- `gating-severity-alert-spec.md`
+- `specs/plan-generation-tuning-spec.md`
+- `specs/large-parameter-search-spec.md`
+- `specs/gating-severity-alert-spec.md`
 
 ### Context, data, and analysis
 
-- `ticker-exposure-ontology-spec.md`
-- `market-intelligence-analysis-spec.md`
-- `fundamental-analysis-snapshot-spec.md`
-- `fundamental-valuation-integration-spec.md`
-- `industry-context-improvement-plan.md`
-- `news-provider-eligibility-spec.md`
-- `news-provider-reliability-spec.md`
-- `nitter-social-relevance-scoring.md`
-- `data-quality-audit-spec.md`
-- `bars-refresh-spec.md`
+- `specs/ticker-exposure-ontology-spec.md`
+- `specs/market-intelligence-analysis-spec.md`
+- `specs/fundamental-analysis-snapshot-spec.md`
+- `specs/fundamental-valuation-integration-spec.md`
+- `specs/news-provider-eligibility-spec.md`
+- `specs/news-provider-reliability-spec.md`
+- `specs/nitter-social-relevance-scoring.md`
+- `specs/data-quality-audit-spec.md`
+- `specs/bars-refresh-spec.md`
 - `default-watchlists.md`
 
 ### Broker execution and safety
 
-- `alpaca-paper-order-execution-spec.md`
-- `broker-risk-management-spec.md`
-- `broker-position-lifecycle-spec.md`
-- `broker-position-steering-spec.md`
-- `multi-broker-execution-risk-spec.md`
-- `etoro-live-trading-integration-spec.md`
-- `account-risk-state-spec.md`
+- `specs/alpaca-paper-order-execution-spec.md`
+- `specs/broker-risk-management-spec.md`
+- `specs/broker-position-lifecycle-spec.md`
+- `specs/broker-position-steering-spec.md`
+- `specs/multi-broker-execution-risk-spec.md`
+- `specs/etoro-live-trading-integration-spec.md`
+- `specs/account-risk-state-spec.md`
 
-### UI/read models and operations
+### UI/read models and observability
 
-- `dashboard-aggregate-performance-spec.md`
-- `production-readiness-plan.md`
-- `codebase-simplification-plan.md`
-- `recommendation-quality-improvement-plan.md`
-- `fundamental-analysis-snapshot-implementation-plan.md`
+- `specs/dashboard-aggregate-performance-spec.md`
+- `specs/observability-spec.md`
 
 ## Archive
 
@@ -91,33 +97,23 @@ Start with:
 - `archive/audits/` — dated audit and remediation records
 - `archive/redesign/` — historical redesign source docs whose stable content has been merged into current docs
 
-Recently archived from the main docs surface:
-
-- `archive/implementation-plans/multi-broker-etoro-implementation-plan.md`
-- `archive/implementation-plans/audit-remediation-and-autonomy-readiness-plan.md`
-- `archive/implementation-plans/lean-architecture-and-docs-reconciliation-plan.md`
-- `archive/implementation-plans/ui-attention-audit-2026-05-30.md`
-- `archive/implementation-plans/ui-page-content-refactor-spec-2026-05-30.md`
-- `archive/audits/dead-code-audit-2026-05-29.md`
-- `archive/terminology.md` — standalone terminology note merged into `glossary.md`
-
 ## Maintenance rule
 
 When a feature ships:
 
-- update the canonical current-state/spec doc for that topic
+- update the canonical narrative doc and the relevant detailed spec
 - archive completed implementation plans and dated audits
 - keep `roadmap.md` short and current
+- keep `specs/` as detailed contracts, not transient project plans
 - do not leave completed work described as future work
 - keep old persisted rows readable even when docs/plumbing move forward
 
 Before adding a new doc, decide whether it is:
 
-- current behavior
-- target behavior
-- current + target behavior
-- active plan
+- narrative/current-state docs root
+- detailed spec under `specs/`
+- active plan/tracker
 - reference
 - archive
 
-If it is a completed checklist, audit, or transient roadmap, place it under `docs/archive/` instead of the main docs root.
+If it is a completed checklist, audit, or transient roadmap, place it under `docs/archive/` instead of the main docs root or `specs/`.

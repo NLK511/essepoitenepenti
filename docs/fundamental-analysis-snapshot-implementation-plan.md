@@ -2,7 +2,7 @@
 
 **Status:** active plan
 
-Remaining implementation plan for `fundamental-analysis-snapshot-spec.md`. Core persistence, refresh, point-in-time lookup, analysis/plan integration, compact UI context, and initial validation slices are implemented; this plan now tracks remaining stale-coverage UI, observability, richer validation metrics, and any future action-affecting use.
+Remaining implementation plan for `specs/fundamental-analysis-snapshot-spec.md`. Core persistence, refresh, point-in-time lookup, analysis/plan integration, compact UI context, and initial validation slices are implemented; this plan now tracks remaining stale-coverage UI, observability, richer validation metrics, and any future action-affecting use.
 
 ## Objective
 

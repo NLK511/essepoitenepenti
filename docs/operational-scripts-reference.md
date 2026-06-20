@@ -172,7 +172,7 @@ Initializes the local environment, virtual environment, and dependency stack.
 Seeds or updates the canonical default watchlist pack and scheduled job set in the database.
 - Proposal-generation jobs stay linked to the seeded watchlists by name.
 - Regional bars refresh jobs (`Bars-APAC`, `Bars-EU`, `Bars-US`) derive their ticker list from the current regional watchlists at runtime, so rerunning the seed script keeps bars coverage aligned with watchlist changes.
-- Also deploys the default evaluation, broker steering dry-run, performance assessment, gating severity, confidence calibration, and weekend fundamentals jobs so fresh deployments get the same 41-job default schedule described in `docs/default-watchlists.md`.
+- Also deploys the default evaluation, broker steering dry-run, performance assessment, gating severity, confidence calibration, and weekend fundamentals jobs so fresh deployments get the same 41-job default schedule described in `default-watchlists.md`.
 
 ### `scripts/reconstruct_context.py`
 Rebuilds historical macro and industry context snapshots from NewsAPI-backed historical news windows.

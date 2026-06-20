@@ -34,6 +34,7 @@ For those, start with:
 - `../recommendation-methodology.md`
 - `../architecture.md`
 - `../roadmap.md`
+- `../specs/` for detailed current behavior contracts
 
 ## Recently archived implementation records and audits
 
