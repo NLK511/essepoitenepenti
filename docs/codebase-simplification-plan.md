@@ -1,8 +1,10 @@
-# Codebase simplification plan
+# Codebase simplification backlog
 
 **Status:** active plan
 
-Goal: reduce code complexity without changing product behavior, safety rules, data contracts, or operator-visible semantics.
+Goal: keep code complexity from growing while preserving product behavior, safety rules, data contracts, and operator-visible semantics.
+
+This document is now a lightweight maintenance backlog. The broad simplification push has largely completed; completed refactor history belongs in git and archived audits, not in the main reading path.
 
 ## Rules
 
@@ -12,134 +14,94 @@ Goal: reduce code complexity without changing product behavior, safety rules, da
 - Keep compatibility wrappers until references are traced and removed intentionally.
 - Run focused tests for touched code plus broader validation before commit.
 
-## Current high-value targets
+## Current live targets
 
-1. **Plan-generation tuning orchestration**
-   - Problem: `PlanGenerationTuningService.run()` mixed orchestration, candidate evaluation batches, candidate persistence, promotion checks, and run finalization.
-   - Done now: extracted candidate search, batch evaluation, candidate persistence, and winner-promotion helpers while preserving logs and payloads.
-   - Remaining possible work: move candidate generation/evaluation/promotion policy to dedicated classes if future changes require it.
+### 1. Compatibility-path audit before deletion
 
-2. **Legacy proposal compatibility surface**
-   - Problem: `ProposalService` is still large and acts as a dependency magnet for price history, payload building, news/context enrichment, and compatibility helpers.
-   - Done now: moved shared summary defaults and JSON sanitization to `payload_utils` while keeping `ProposalService` compatibility exports.
-   - Done now: extracted price-history fetch orchestration into `PriceHistoryFetcher` while preserving `ProposalService` wrapper methods for compatibility.
-   - Done now: split `ProposalService._apply_news_context` into focused signal, social, summary, hierarchical-context, sentiment-payload, and no-news helper methods.
-   - Done now: split `ProposalService._build_analysis_payload` into focused section builders.
-   - Safe next step: audit remaining compatibility-only proposal paths before any deletion.
+Do not delete compatibility paths until references and tests prove safe.
 
-3. **Macro/industry context duplication**
-   - Problem: refresh payload parsing, prompt construction, diagnostics, and quality/warning normalization are similar across macro and industry services.
-   - Done now: extracted proposal-time macro/industry snapshot payload mapping into `context_payload_utils`.
-   - Safe next step: extract common refresh/prompt diagnostics only after a focused spec pass.
+Current candidates:
 
-4. **Broker steering execution handlers**
-   - Problem: workflow execution had multiple broker mutation branches in one method.
-   - Done now: split cancel, close, and exit-amendment handlers while preserving safety gates and execution statuses.
-
-5. **Order execution orchestration**
-   - Problem: `OrderExecutionService.execute_plans` mixed summary setup, client bootstrapping, per-plan execution, and summary finalization.
-   - Done now: extracted summary initialization, missing-client handling, skipped-outcome creation, and final summary assembly.
-   - Done now: extracted per-plan candidate/risk/submission handling and submitted-order status counting.
-   - Safe next step: split `_execute_single_plan` only if more broker execution branches are added.
-
-6. **Large test modules**
-   - Problem: repository and route tests are hard to navigate.
-   - Safe next step: split by domain with no assertion changes.
-
-## Dead-code audit candidates
-
-Latest archived audit: `archive/audits/dead-code-audit-2026-05-29.md`.
-
-Do not delete until references and tests prove safe:
 - `TickerDeepAnalysisService._analyze_with_compatibility_fallback`
 - deprecated job-type aliases
 - legacy provider observability compatibility events
 - legacy proposal helper paths still imported by tests/compatibility callers
 
-7. **Signal-gating tuning orchestration**
-   - Problem: `RecommendationSignalGatingTuningService.run` mixed sample-window loading, scoreability checks, candidate ranking, apply behavior, and run construction.
-   - Done now: extracted scored sample-window loading, candidate ranking, and winning-config application helpers.
+Acceptance:
 
-8. **Recommendation-quality summary orchestration**
-   - Problem: `RecommendationQualitySummaryService.summarize` mixed active config loading, walk-forward validation, rolling-window metric assembly, policy trust, and response construction.
-   - Done now: extracted walk-forward summary and rolling-window/default-window assembly helpers.
+- reference search shows no runtime callers, or callers are intentionally migrated
+- persisted rows and old payloads remain readable
+- tests cover old payload compatibility where required
 
-9. **Plan resolution engine**
-   - Problem: `PlanResolutionEngine.evaluate_plan` mixed setup classification, missing-data handling, no-entry diagnostics, entered-position resolution, and outcome construction.
-   - Done now: extracted non-trade, pending, no-entry, entered, and entered-state outcome builders while preserving canonical resolution semantics.
+### 2. Large test modules
 
-10. **Watchlist signal snapshot builder**
-   - Problem: `WatchlistSignalBuilder.build_signal_snapshot` mixed warning collection, transmission field normalization/fallbacks, and snapshot construction.
-   - Done now: extracted warning collection and transmission field normalization helpers.
+Problem: repository and route tests are hard to navigate.
 
-11. **Watchlist plan framing**
-   - Problem: `WatchlistPlanFramingService.build_plan_from_signal` mixed framing context assembly, calibration thresholds, trade-level calculation, action gating, and plan construction.
-   - Done now: extracted framing context, effective-threshold, trade-level, and action-resolution helpers while preserving parity-tested plan payloads.
+Safe next step:
 
-12. **Summary pi-agent execution path**
-   - Problem: `SummaryService._summarize_with_pi_prompt` mixed command construction, process lifecycle management, stream reading, timeout handling, output parsing, and fallback construction.
-   - Done now: extracted pi command/metadata construction plus CLI process, stream, wait, and stop helpers while preserving fallback semantics and summary payload metadata.
+- split large test modules by domain with no assertion changes
+- keep fixtures shared only when reuse is clear
+- avoid mixing behavior changes with test-file moves
 
-13. **Ticker news fetch orchestration**
-   - Problem: `NewsIngestionService.fetch` mixed database prefill/skip logic, provider-selection fallback, provider fetch/save/merge loops, diagnostics, observability, and cache writes.
-   - Done now: extracted database prefill, no-provider finalization, provider fetch loop, ticker finalization, database article counting, and cache-write helpers while preserving query diagnostics and provider observability payloads.
+Acceptance:
 
-14. **Plan-generation walk-forward slicing**
-   - Problem: `PlanGenerationWalkForwardService.summarize_records` mixed window normalization, record ordering, slice construction, candidate/baseline comparison, aggregate deltas, promotion, and summary construction.
-   - Done now: extracted window input normalization, window preparation, slice construction, per-slice comparison, win-rate delta, and average-delta helpers while preserving walk-forward math and promotion gates.
+- same assertions pass after split
+- no broad fixture behavior changes
 
-15. **Topic news fetch orchestration**
-   - Problem: `NewsIngestionService.fetch_topic` mirrored ticker-fetch complexity with database prefill, provider-selection fallback, provider fetch/save/merge loops, diagnostics, observability, and cache writes inline.
-   - Done now: extracted topic database prefill, no-provider finalization, provider fetch loop, and topic finalization helpers while preserving query diagnostics, cache behavior, and provider observability payloads.
+### 3. Macro/industry refresh commonality
 
-16. **Ticker analysis payload assembly**
-   - Problem: `TickerAnalysisPayloadService.build_analysis_payload` assembled every payload section inline, making summary/news/sentiment/proposal/technical/deep-analysis contracts hard to scan.
-   - Done now: extracted section builders while preserving all analysis payload keys and values.
+Problem: macro and industry refresh paths still share concepts around prompt construction, diagnostics, quality normalization, and warning payloads.
 
-17. **Watchlist shortlist selection**
-   - Problem: `ShortlistSelectionService.evaluate` mixed candidate ranking, eligibility rules, core selection, catalyst-lane relaxation, decision payloads, and rejection counting.
-   - Done now: extracted ranking, eligibility, shortlist selection, catalyst-lane eligibility, and decision/rejection payload helpers while preserving shortlist rules and diagnostics.
+Safe next step:
 
-18. **Watchlist calibration review**
-   - Problem: `WatchlistCalibrationReviewService.calibration_review` mixed disabled fallback, bucket lookup, calibration curve handling, per-bucket adjustment, review scaling, and payload construction.
-   - Done now: extracted disabled review payload, bucket lookup, bucket adjustment accumulation, and reviewed-bucket specs while preserving calibration thresholds and reason payloads.
+- extract common refresh/prompt diagnostics only after a focused spec pass
+- preserve existing payload keys and quality semantics
+- do not make industry context look more decision-grade without validation
 
-19. **Proposal job execution orchestration**
-   - Problem: `JobExecutionService._execute_proposal_run` mixed watchlist orchestration, payload persistence, order submission, warning finalization, and timing handling.
-   - Done now: extracted watchlist orchestration execution, orchestration payload persistence, and proposal order-submission helpers while preserving timing/status behavior.
+Acceptance:
 
-20. **Watchlist cheap-scan scoring**
-   - Problem: `CheapScanSignalService.score` mixed local/remote price-history loading, validation, indicator math, warning logic, diagnostics, and signal construction.
-   - Done now: extracted price-history loading/remote persistence, history validation, and cheap-scan metric calculation while preserving scoring formulas and diagnostics.
+- context snapshot payloads remain backward compatible
+- warnings and degraded states remain explicit
+- context service tests pass
 
-21. **Ticker technical context assembly**
-   - Problem: `TickerTechnicalFeatureService.build_context` mixed latest-row extraction, bias-count scoring, data-quality problems, and large context construction.
-   - Done now: extracted latest technical value normalization, short/medium bias counting, and technical problem detection while preserving context payload keys.
+### 4. Future broker/execution seams only when needed
 
-22. **Ticker transmission analysis**
-   - Problem: `TickerDeepAnalysisService._build_transmission_analysis` mixed context extraction, catalyst intensity, event relevance, alignment math, bias classification, driver/tag/channel selection, and payload construction.
-   - Done now: extracted transmission inputs, catalyst intensity, event strengths, alignment-percent math, and bias classification while preserving payload fields and scoring formulas.
+Order execution and broker steering have already been split into smaller helpers. Do not split further just for aesthetics.
 
-23. **Ticker relationship taxonomy assembly**
-   - Problem: `TickerTaxonomyService.get_ticker_relationships` mixed dedupe/effectivity handling, peer/supplier/customer edges, classification edges, and macro-channel edges inline.
-   - Done now: extracted relationship insertion/dedupe plus peer, classification, and macro relationship builders while preserving relationship payloads and scores.
+Reopen this target only if:
 
-24. **Watchlist signal payload sections**
-   - Problem: `WatchlistSignalBuilder.build_signal_snapshot` still embedded source-breakdown and diagnostics payload construction after the transmission-field extraction.
-   - Done now: extracted source-breakdown, diagnostics, and cheap-scan component score helpers while preserving signal snapshot payload keys.
+- new broker branches make `_execute_single_plan` hard to reason about
+- steering gains live mutation paths after dry-run validation
+- reconciliation adds materially different broker-specific workflows
 
-25. **Signal-gating tuning run payloads**
-   - Problem: `RecommendationSignalGatingTuningService.run` still assembled filters, summary, artifact, and persistence model inline after earlier orchestration extraction.
-   - Done now: extracted summary payload, artifact payload, and tuning-run model construction helpers while preserving persisted fields.
+Acceptance:
 
-26. **Derived taxonomy relationship assembly**
-   - Problem: `TickerTaxonomyService._derived_relationships` mixed all-subject recursion, industry-derived edges, sector-derived edges, theme edges, and deduplication inline.
-   - Done now: extracted industry, sector, theme, and deduplication helpers while preserving derived relationship payloads.
+- safety gates remain unchanged
+- broker mutation behavior remains fail-closed where specified
+- broker regression tests pass
 
-## Acceptance criteria for each refactor
+## Completed simplification themes
 
-- Same API payload keys unless spec says otherwise.
+The previous active plan completed many extractions across:
+
+- plan-generation tuning and walk-forward slicing
+- broker steering handlers
+- order execution orchestration
+- signal-gating tuning
+- recommendation-quality summary assembly
+- plan resolution
+- watchlist signal building, framing, calibration review, shortlist selection, and cheap-scan scoring
+- proposal job execution
+- ticker analysis, technical context, transmission analysis, and taxonomy relationship assembly
+- news fetch orchestration
+- summary pi-agent execution
+
+Do not re-document all completed refactors here. Use git history for exact diffs.
+
+## Acceptance criteria for each future refactor
+
+- Same API payload keys unless a spec says otherwise.
 - Same repository persistence semantics.
 - Same safety gates for broker/risk/promotion code.
 - Focused tests pass for touched area.
-- Full backend tests and frontend typecheck pass before pushing code changes.
+- Full backend tests and frontend typecheck pass before larger pushes.

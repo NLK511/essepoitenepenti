@@ -33,10 +33,10 @@ These are the primary narrative source of truth for the product today:
 ## Active plans and operating trackers
 
 - `production-readiness-plan.md` — production hardening, staging soak, external broker gates, and rollout ladder
-- `codebase-simplification-plan.md` — behavior-preserving code simplification backlog
-- `recommendation-quality-improvement-plan.md` — active quality/calibration review backlog pending consolidation decision
-- `fundamental-analysis-snapshot-implementation-plan.md` — remaining stale-coverage UI, observability, and validation follow-ups
-- `industry-context-improvement-plan.md` — remaining industry-context evidence-quality and decision-role review
+- `codebase-simplification-plan.md` — lightweight behavior-preserving refactor maintenance backlog
+- `recommendation-quality-improvement-plan.md` — active quality and edge-validation backlog for unresolved evidence questions
+- `fundamental-analysis-snapshot-implementation-plan.md` — remaining stale-coverage UI, observability, validation, and action-policy follow-ups
+- `industry-context-improvement-plan.md` — industry-context evidence-quality and post-ontology role review
 
 ## Specs directory
 

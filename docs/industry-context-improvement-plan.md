@@ -1,51 +1,48 @@
-# Industry context improvement plan
+# Industry context quality and role plan
 
 **Status:** active plan
 
-This is the working plan for making industry context materially useful instead of mostly neutral.
+This is the working plan for keeping industry context honest after the ticker exposure ontology work.
 
-## Why this exists
+## Current role
 
-Current industry context does two jobs:
-- give operators a readable backdrop summary
-- supply bounded evidence to downstream analysis
+Industry context now has a narrower role than when this plan was first written.
 
-Today it does the first job better than the second. The main failure mode is not empty prose; it is empty or thin evidence that still resolves to a neutral-looking output.
+It should provide:
 
-## Current baseline
+- a readable operator backdrop
+- fresh industry-specific evidence when available
+- explicit degraded/blocked diagnostics when evidence is thin
+- optional corroborating context for downstream analysis
 
-Current repo snapshot audit:
-- `industry_context_snapshots`: 2529
-- `ok`: 1282
-- `warning`: 1247
-- `confidence_percent = 0`: 727
-- `saliency_score = 0`: 727
-- `active_drivers` empty: 1237
-- `summary_text` empty: 0
+It should not be treated as the primary ticker-exposure ontology. The ticker exposure ontology now carries the structured ticker/sector/macro transmission profile for fresh plan generation, while old taxonomy data remains base metadata/fallback.
 
-Interpretation:
-- about half the snapshots are effectively fallback/low-signal rows
-- the system can summarize, but it does not reliably find enough industry-native evidence
-- neutral payloads are too easy to misread as informative
+## Why this still exists
 
-## Goal
+The original failure mode is still valid:
 
-Make industry context a **bounded evidence input** that only influences decisions when it has real evidence.
+- industry summaries can be readable even when evidence is thin
+- fallback/empty-driver rows can look neutral instead of degraded
+- decision logic should not receive positive confidence from weak industry evidence
+
+The goal is now to make industry context safe and measurable, then decide whether any decision-affecting role remains useful after ontology validation.
 
 ## Non-goals
 
-- not a replacement for ticker analysis
+- not a replacement for ticker exposure ontology
 - not a standalone score engine
-- not a requirement to add expensive data vendors first
-- not a reason to keep neutral-looking fallback prose when evidence is missing
+- not a reason to add expensive data vendors before measuring usefulness
+- not a source of positive confidence when evidence is missing or degraded
 
 ## Target behavior
 
 Industry context should clearly answer:
-1. is there a real industry driver?
-2. is the driver fresh or stale?
-3. is the evidence strong enough to matter?
-4. does it reinforce or weaken the current recommendation idea?
+
+1. is there real industry-native evidence?
+2. is the evidence fresh or stale?
+3. are active drivers present?
+4. does the evidence corroborate or contradict the recommendation idea?
+5. is the layer useful beyond ontology/taxonomy transmission?
 
 If the answer is no, the system should say so plainly.
 
@@ -54,120 +51,101 @@ If the answer is no, the system should say so plainly.
 ### 1. Make fallback semantics explicit
 
 Deliverables:
-- replace neutral-looking fallback wording with explicit no-evidence wording
-- separate `usable`, `degraded`, and `blocked` industry context states clearly
-- keep empty-driver rows from looking like meaningful context
-- preserve operator readability while removing false confidence cues
 
-Files:
-- `src/trade_proposer_app/services/industry_context.py`
-- `src/trade_proposer_app/services/context_snapshot_resolver.py`
-- `src/trade_proposer_app/services/context_quality.py` if the status rules need tightening
+- add or normalize an explicit `evidence_state` / `coverage_state` field in stored snapshot payloads
+- make empty-driver summaries say “no salient industry evidence found” or equivalent
+- keep resolver fallback payloads blocked/degraded, not neutral-looking
+- ensure UI-facing notes distinguish missing snapshot, stale snapshot, and thin snapshot
 
-Checklist:
-- [ ] add an explicit `evidence_state` / `coverage_state` field to the stored snapshot payload
-- [ ] make empty-driver summaries say “no salient industry evidence found” or equivalent
-- [ ] keep resolver fallback payloads blocked, not neutral-looking
-- [ ] ensure UI-facing notes distinguish “missing snapshot” from “thin snapshot”
+Acceptance:
 
-### 2. Improve evidence coverage
+- empty-driver rows cannot look like meaningful neutral evidence
+- degraded/blocked status is visible in payloads and UI surfaces
+
+### 2. Improve evidence coverage conservatively
 
 Deliverables:
-- widen the evidence window for slower-moving industries
-- keep the shorter window for event-heavy industries
-- fetch from more relevant industry-shaped queries before falling back to generic industry text
 
-Files:
-- `src/trade_proposer_app/services/industry_context.py`
-- `src/trade_proposer_app/services/news.py` if the windowing/routing belongs in shared news fetch logic
-- `scripts/reconstruct_context.py` for replay/backfill parity if the same rules need to apply historically
+- support longer fetch windows for slower-moving industries
+- keep shorter windows for event-heavy industries
+- expand query generation from tracked tickers, peers, ontology themes, and company names
+- make replay/backfill use the same window rules as live refresh
 
-Checklist:
-- [ ] support a longer fetch window for slow-moving industries
-- [ ] keep short windows for event-driven industries
-- [ ] expand query generation from tracked tickers, sector peers, ontology themes, and company names
-- [ ] make replay/backfill use the same window rules as live refresh
+Acceptance:
 
-### 3. Improve subject resolution
+- coverage improves without inventing relationships
+- provider/query diagnostics show why evidence was or was not found
+
+### 3. Align subject resolution with ontology
 
 Deliverables:
-- better industry ↔ ticker ↔ peer mapping
-- better ontology relationship matching
-- better reuse of existing tracked-ticker coverage when direct industry coverage is thin
 
-Files:
-- `src/trade_proposer_app/services/taxonomy.py`
-- `src/trade_proposer_app/services/industry_context.py`
-- `src/trade_proposer_app/services/context_snapshot_resolver.py` if resolver output needs richer taxonomy detail
+- use ontology/taxonomy relationships to route industry evidence where appropriate
+- prefer concrete company/peer read-through over generic sector language
+- avoid duplicating ontology logic inside industry context
 
-Checklist:
-- [ ] expand peer and relationship lookup when industry coverage is weak
-- [ ] prefer concrete company/peer read-through over generic sector language
-- [ ] avoid inventing relationships when evidence is missing
+Acceptance:
 
-### 4. Tighten confidence gating
+- industry context references ontology/taxonomy as routing metadata, not as fabricated evidence
+- old persisted rows remain readable
+
+### 4. Tighten decision contribution rules
 
 Deliverables:
-- only grant positive confidence lift when evidence is actually present
-- reduce or remove confidence contribution from empty-driver rows
-- keep contradictory or degraded coverage from looking stronger than it is
 
-Files:
-- `src/trade_proposer_app/services/industry_context.py`
-- `src/trade_proposer_app/services/ticker_analysis_payloads.py`
-- `src/trade_proposer_app/services/watchlist_transmission.py` if any transmission summaries need to reflect the new quality semantics
+- require non-empty active drivers before any positive industry contribution
+- require usable quality before any confidence influence reaches plan framing
+- keep degraded/blocked snapshots as explicit caution context
+- trace every contribution to concrete evidence
 
-Checklist:
-- [ ] require non-empty drivers before any confidence lift
-- [ ] require usable quality before a positive contribution reaches plan framing
-- [ ] keep degraded/blocked snapshots as explicit negative context
-- [ ] ensure confidence changes are traceable to actual evidence
+Acceptance:
 
-### 5. Measure usefulness and decide whether to keep it
+- industry context cannot boost confidence from fallback prose
+- contradictory/degraded evidence is visible and conservative
+
+### 5. Measure whether to keep a decision role
 
 Deliverables:
-- track usable rate, active-driver rate, and zero-confidence rate
-- compare plan outcomes for usable vs degraded/blocked industry context
-- retire the decision role if the layer remains mostly neutral after the improvements
 
-Files:
-- `src/trade_proposer_app/api/routes/context.py` if we need a simple summary endpoint
-- `src/trade_proposer_app/services/industry_context.py`
-- `src/trade_proposer_app/services/recommendation_quality_summary.py` or a new report helper if outcome comparison needs its own view
-- `tests/test_context_services.py`
-- `tests/test_context_snapshot_resolver.py`
-- `tests/test_proposals.py`
-- `tests/test_repositories.py` if persisted payload shape changes
+- report usable vs degraded/blocked snapshot counts
+- track active-driver rate, zero-confidence rate, and fallback reasons
+- compare outcomes for usable vs non-usable industry context
+- compare industry context slices against ontology/transmission slices
 
-Checklist:
-- [ ] add a simple report for usable vs blocked/degraded snapshot counts
-- [ ] compare plan outcomes for usable vs non-usable industry context
-- [ ] record the top fallback reasons
-- [ ] make a retire/shrink decision after enough data
+Acceptance:
+
+- keep a decision role only if industry context adds measured value beyond ontology/taxonomy context
+- otherwise shrink it to readable backdrop plus diagnostics
 
 ## Execution order
 
 1. fallback semantics cleanup
 2. evidence coverage expansion
-3. subject-resolution improvements
-4. confidence gating tightening
-5. measurement and decision
+3. ontology-aligned subject resolution
+4. decision contribution tightening
+5. usefulness measurement and keep/shrink decision
 
 ## Success criteria
 
-Keep industry context if:
-- usable snapshots materially outnumber fallback-only snapshots
-- usable snapshots improve plan quality or calibration
-- operators can see why a snapshot is usable or not
+Keep industry context decision-affecting only if:
 
-Shrink it if:
-- it remains useful only as a short backdrop note
+- usable snapshots materially outnumber fallback-only snapshots
+- usable snapshots improve plan quality, calibration, or false-positive reduction
+- operators can see exactly why a snapshot is usable
+- the layer adds information beyond ticker exposure ontology
+
+Shrink to backdrop if:
+
+- it remains mostly readable prose without measurable outcome separation
+- ontology/transmission context explains the relevant exposure more reliably
 
 Retire its decision role if:
-- it still resolves mostly to neutral/thin output after the coverage and gating changes
+
+- it still resolves mostly to neutral/thin output after cleanup
 - it does not improve measured outcomes
 
-## Notes
+## See also
 
-This plan is intentionally conservative.
-If the layer cannot become meaningfully informative, it should stay as a readable backdrop and stop pretending to be decision-grade evidence.
+- `specs/ticker-exposure-ontology-spec.md`
+- `recommendation-methodology.md`
+- `recommendation-quality-improvement-plan.md`

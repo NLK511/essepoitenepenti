@@ -1,157 +1,144 @@
-# Recommendation quality improvement plan
+# Recommendation quality and edge-validation backlog
 
 **Status:** active plan
 
-This document is the working plan for improving recommendation quality, calibration, and reviewability in Trade Proposer App.
+This is the remaining active backlog for improving recommendation quality, calibration, and reviewability.
 
-It is intentionally practical:
-- track what we want to improve
-- define how we will measure it
-- record what changes we make
-- keep the scope small enough to execute
+The broad quality platform is already in place. This document now focuses on unresolved evidence questions and promotion discipline rather than re-listing shipped infrastructure.
 
-## What success looks like
+## Current shipped baseline
 
-We want recommendations that are:
-- more accurate than simple baselines
-- better calibrated
-- more stable across setup families and regimes
-- honest about degraded inputs
-- explainable to operators
+Implemented quality infrastructure includes:
+
+- broker-preferred effective outcomes for execution-aware truth
+- outcome summaries, setup-family reviews, evidence-concentration reviews, and baseline comparisons
+- decision samples for actionable, near-miss, degraded, and rejected cases
+- walk-forward validation for plan-generation tuning
+- guarded promotion checks for plan-generation thresholds
+- large-search evaluation artifacts and rejection of unsafe candidates
+- EV-expansion lane separated from precision/win-rate promotion
+- configurable calibration reports for execution-only, phantom-only, combined, and side-by-side modes
+- weekly persisted execution-only calibration snapshots for live plan generation
+- calibration-aware confidence/actionability in the orchestration path when a snapshot exists
+- dashboard/research surfaces for recommendation quality review
+
+## Current stance
+
+Confidence remains a ranking and selection signal unless calibrated evidence supports stronger interpretation.
+
+Live/autonomous confidence calibration uses execution-only outcomes by default. Phantom outcomes are research/operator context and must not silently affect live execution confidence.
+
+Do not reuse plan-outcome calibration for cheap-scan confidence. Cheap scan is an upstream recall mechanism and needs its own calibration design if it becomes calibrated later.
+
+Do not promote large-search winners or new context features solely because they improve pooled expected value. Promotion needs walk-forward, slice stability, drawdown/loss-streak review, and baseline comparison.
 
 ## North-star metrics
 
-Track these before and after each change:
+Track before and after each quality change:
 
-1. **Actionable win rate**
-   - long/short plans only
-   - compare against simple baselines
+1. **Actionable win rate** — long/short plans only, compared with simple baselines.
+2. **Expected value** — per resolved actionable plan with consistent cost/friction assumptions where available.
+3. **Calibration quality** — Brier score, expected calibration error, and reliability by confidence bucket.
+4. **Coverage/selectivity** — candidate, shortlist, deep-analysis, actionable, and no-action rates.
+5. **Degradation discipline** — degraded vs healthy row performance and degraded rows that still pass gates.
+6. **Slice stability** — setup family, horizon, transmission/ontology condition, context regime, market regime, and confidence bucket.
 
-2. **Expected value**
-   - per resolved actionable plan
-   - include a consistent cost assumption when available
+## Remaining active backlog
 
-3. **Calibration quality**
-   - Brier score
-   - expected calibration error
-   - reliability by confidence bucket
+### 1. Validate current calibration behavior over time
 
-4. **Coverage / selectivity**
-   - how many candidates become actionable
-   - how many are rejected or become `no_action`
-   - shortlist rate and deep-analysis rate
+Tasks:
 
-5. **Degradation discipline**
-   - how often degraded inputs still pass gates
-   - performance of degraded vs healthy rows
+- review weekly execution-only calibration snapshots after enough new outcomes accumulate
+- compare raw vs calibrated confidence by bucket and horizon
+- keep thin buckets visibly thin
+- detect whether calibration improves Brier/ECE without hurting selection quality
+- preserve side-by-side phantom reporting for research only
 
-6. **Slice stability**
-   - setup family
-   - horizon
-   - transmission bias
-   - context regime
-   - shortlisted vs not shortlisted
+Promotion rule:
 
-## Implemented so far
+- calibration remains live only through persisted scheduled snapshots; no silent per-run recalculation fallback
 
-- [x] added time-windowed outcome and plan filters for slice-based evaluation
-- [x] added a smoothed calibration report alongside the current bucket-based report
-- [x] upgraded the smoothed report to use a Bayesian-style empirical calibration curve and feed that curve into gated confidence review when the slice is large enough
-- [x] added windowed performance-assessment snapshots for 1D / 7D / 1M / 3M / 6M / 1Y / ALL views
-- [x] added a walk-forward validation report and research-page validation tab
-- [x] added plan-generation walk-forward promotion validation and a guarded promotion gate
-- [x] added a consolidated recommendation-quality summary API and dashboard card
-- [x] added a dedicated recommendation-quality research page and research-hub entry for the consolidated summary
-- [x] added expected-value-style 5d return comparisons for actionable and high-confidence cohorts
-- [x] added a calibration-strength scale to reduce over-correction in thin calibration reviews
+### 2. Validate ontology and transmission usefulness
 
-## Workstreams
+Tasks:
 
-### A. Measurement and evaluation
-Make sure we can trust the numbers.
+- run fresh ontology-enabled plan generation
+- measure ontology context presence and matched exposure rate
+- compare outcomes for tailwind/headwind/mixed/neutral transmission states
+- compare curated vs template-generated ontology profiles
+- measure whether ontology reduces mixed-bias or false-positive rates
 
-Deliverables:
-- a repeatable evaluation report
-- baseline comparison tables
-- time-sliced / walk-forward summaries
-- slice-level breakdowns by family and regime
+Promotion rule:
 
-### B. Calibration
-Make confidence more honest.
+- ontology may become stronger in gating/confidence only after walk-forward evidence shows benefit over taxonomy-only/transmission baseline
 
-Deliverables:
-- confidence-to-outcome reliability review
-- per-family calibration analysis
-- better bucket handling for thin data
-- a clearer rule for how confidence is adjusted
+### 3. Validate fundamental valuation context passively
 
-### C. Scoring and gating
-Improve the recommendation decision itself.
+Tasks:
 
-Deliverables:
-- better shortlist thresholds
-- better plan-generation thresholds
-- clearer penalties for weak or degraded evidence
-- fewer false positives without crushing recall
+- backfill/evaluate enough point-in-time fundamental valuation contexts
+- compare valuation, quality, growth, balance-sheet, and event-regime slices
+- measure false-positive reduction, EV, drawdown/loss-streak behavior, and no-entry behavior
+- keep sparse provider payloads visibly degraded
 
-### D. Data quality and context quality
-Improve the inputs before changing the gate too much.
+Promotion rule:
 
-Deliverables:
-- better degraded-input detection
-- better context freshness handling
-- better evidence concentration checks
-- better transmission/context regime labeling
-- a machine-readable context quality score and status
-- a clearer missing-input taxonomy that only flags truly required evidence
+- no positive fundamental confidence boost until point-in-time walk-forward evidence beats baseline without worsening drawdown/loss streaks
+- conservative caps or threshold raises require a separate explicit policy decision
 
-### E. Validation and backtesting
-Protect against tuning to noise.
+### 4. Continue tuning with promotion discipline
 
-Deliverables:
-- walk-forward validation
-- held-out recent period checks
-- setup-family-specific comparison
-- regression checks against simple baselines
+Tasks:
 
-### F. Operator surfaces
-Make the work inspectable.
+- use walk-forward comparisons rather than pooled-only winners
+- compare candidates against baseline and current production settings
+- review actionability expansion, not just EV
+- inspect false positives, skipped wins, and selectivity before accepting a change
+- keep EV-expansion candidates separate from precision promotion
 
-Deliverables:
-- summary dashboards
-- calibration report review
-- baseline comparison view
-- decision-sample filtering and triage support
+Promotion rule:
 
-## Current focus
+- reject candidates that improve EV only by greatly expanding actionability or materially worsening win rate unless explicitly treated as experimental and capped
 
-The baseline snapshot, time-window filters, walk-forward validation, consolidated summary API, and operator summary pages are already shipped.
+### 5. Keep degraded-input penalties honest
 
-What remains is refinement rather than broad platform work:
+Tasks:
 
-- [ ] compare the current bucket-based calibration against a more statistical mapping
-- [ ] test calibration separately for setup family and horizon when sample size is sufficient
-- [ ] keep thin buckets visibly thin instead of smoothing them into strong-looking results
-- [ ] document the confidence-to-outcome reliability curve before and after changes
-- [ ] tune shortlist thresholds in `src/trade_proposer_app/services/watchlist_orchestration.py`
-- [ ] tune plan-generation thresholds and penalty logic in the same orchestration path
-- [ ] review whether degraded-input penalties should be stronger for specific conditions
-- [ ] verify the impact on false positives, skipped wins, and overall selectivity
-- [ ] run walk-forward comparisons over time slices instead of a single pooled split
-- [ ] compare each candidate against simple baselines from `RecommendationPlanBaselineService`
-- [ ] measure family/regime stability before promotion
-- [ ] keep the latest-recent slice as a holdout check before accepting a change
+- review degraded plans that pass gates
+- identify specific degraded conditions that deserve stronger penalties
+- distinguish missing required evidence from missing optional evidence
+- ensure warnings are visible in operator surfaces and persisted payloads
 
-## Metrics and data sources
+Promotion rule:
 
-### Primary sources
+- degraded-input changes should be measured by false-positive reduction and lost true-positive cost, not just fewer actions
 
-- `RecommendationPlanOutcome` for resolved results and horizon returns
-- `RecommendationDecisionSample` for gating decisions and review priority
-- `RecommendationPlan` for action, confidence, and plan-level context
-- calibration and baseline services for the slice summaries
+### 6. Decide cheap-scan calibration separately
 
-### Primary APIs to use
+Tasks:
+
+- define a cheap-scan outcome dataset that includes non-shortlisted decision samples
+- include missed-opportunity benchmarks and clean rejects
+- avoid training only on shortlisted or plan-generated rows
+
+Promotion rule:
+
+- do not apply recommendation-plan calibration directly to cheap-scan scores
+
+## Data sources and APIs
+
+Primary data:
+
+- `RecommendationPlanOutcome`
+- broker-preferred effective outcomes
+- `RecommendationDecisionSample`
+- `RecommendationPlan`
+- calibration snapshots and reports
+- baseline services
+- plan-generation tuning runs and artifacts
+
+Primary APIs:
 
 - `GET /api/recommendation-outcomes`
 - `GET /api/recommendation-outcomes/summary`
@@ -160,156 +147,27 @@ What remains is refinement rather than broad platform work:
 - `GET /api/recommendation-outcomes/evidence-concentration`
 - `GET /api/recommendation-plans/baselines`
 - `GET /api/recommendation-decision-samples`
+- `GET /api/calibration/confidence`
 - `GET /api/signal-gating-tuning`
-- `GET /api/signal-gating-tuning/runs`
 - `GET /api/plan-generation-tuning`
-- `GET /api/plan-generation-tuning/runs`
 
-## First experiment batch
+## Success criteria
 
-Start with a small, repeatable experiment set:
+Quality work is successful when:
 
-1. **Current baseline snapshot**
-   - use the latest resolved outcomes window
-   - record actionable win rate, Brier score, ECE, and baseline comparison tables
-
-2. **Family slice check**
-   - compare breakout, continuation, mean reversion, catalyst follow-through, and macro beneficiary/loser
-   - identify the weakest family and the least stable family
-
-3. **Calibration probe**
-   - compare the current confidence curve with a held-out recent slice
-   - record whether a family-specific calibration would likely help
-
-4. **Gating probe**
-   - review near-miss and degraded samples with high review priority
-   - test whether a small threshold adjustment improves precision without collapsing recall
-
-5. **Holdout sanity check**
-   - rerun the best candidate setting on a later slice
-   - accept the change only if the later slice still looks directionally better
-
-## Success criteria for the backlog
-
-We should consider the effort successful when:
-- the baseline snapshot is reproducible
-- calibration improves or becomes more honest without hidden regressions
-- one or more setup families improve without a major downgrade elsewhere
+- calibration is more honest without hidden regressions
+- one or more cohorts improve without major degradation elsewhere
 - walk-forward checks support the change
-- operators can explain why a setting changed
+- simple baselines are not ignored
+- degraded inputs are visible and penalized appropriately
+- operators can explain why a threshold, cap, calibration curve, or context policy changed
 
-## Execution phases
-
-### Phase 1 — Baseline the current system
-Goal: know where we stand now.
-
-Tasks:
-- [ ] capture current actionable win rate
-- [ ] capture current Brier score / calibration error
-- [ ] capture family-level and regime-level win rates
-- [ ] capture degraded-row performance
-- [ ] record the current baseline thresholds and tuning settings
-- [ ] split required evidence from optional evidence in context missing-input tracking
-- [ ] add a machine-readable context-quality score/status for macro and industry snapshots
-
-Exit criteria:
-- we can reproduce the same metrics on demand
-- we have a baseline snapshot to compare future changes against
-- optional social evidence no longer inflates missing-input counts
-
-### Phase 2 — Improve measurement quality
-Goal: trust the evaluation pipeline.
-
-Tasks:
-- [ ] verify outcome filters and slice filters
-- [ ] confirm baseline comparisons are correct
-- [ ] add time-based evaluation slices if missing
-- [ ] make thin buckets visibly thin instead of overstated
-
-Exit criteria:
-- evaluation output is stable and interpretable
-- operators can tell when a slice is underpowered
-
-### Phase 3 — Tighten calibration
-Goal: confidence numbers mean more.
-
-Tasks:
-- [ ] compare current bucket calibration with a more statistical calibration method
-- [ ] evaluate family-specific calibration behavior
-- [ ] decide whether to keep, merge, or change bucket rules for thin buckets
-- [ ] record calibration before/after on the same sample set
-
-Exit criteria:
-- lower calibration error without hurting actionable quality too much
-- better alignment between confidence and realized win rate
-
-### Phase 4 — Improve gating and scoring
-Goal: better recommendations, not just prettier scores.
-
-Tasks:
-- [ ] tune shortlist thresholds against held-out data
-- [ ] tune plan-generation thresholds against held-out data
-- [ ] review penalties for degraded and contradictory evidence
-- [ ] check whether any setup family deserves a separate gate
-
-Exit criteria:
-- actionable win rate improves or stays stable while false positives fall
-- no major family/regime regression is introduced
-
-### Phase 5 — Validate and lock in gains
-Goal: avoid regressions.
-
-Tasks:
-- [ ] run walk-forward checks on the best candidate settings
-- [ ] compare against simple baselines again
-- [ ] verify degraded cases still stay visible and penalized
-- [ ] document the final recommended settings and rationale
-
-Exit criteria:
-- improvements hold on later data slices
-- the resulting settings are explainable and repeatable
-
-## Decision log
-
-Use this section to record important choices.
-
-| Date | Decision | Why | Impact |
-| --- | --- | --- | --- |
-| 2026-04-11 | Added a dedicated recommendation-quality page and surfaced it from research navigation. | Make the consolidated calibration / baseline / walk-forward snapshot easier to inspect during tuning review. | Operators can reach the summary from dashboard, nav, and research hub. |
-
-## Experiment log
-
-Use this section to record tests and tuning runs.
-
-| Date | Area | Change | Result | Keep / Revert |
-| --- | --- | --- | --- | --- |
-| 2026-04-11 | Operator surfaces | Added `/recommendation-quality` and linked it from the research hub. | Consolidated quality snapshot is easier to find without leaving the app workflow. | Keep |
-
-## Risks to watch
-
-- overfitting to the last sample set
-- making confidence look better without improving outcomes
-- improving one setup family while hurting another
-- hiding degraded inputs behind smoother scores
-- changing gates without a time-based validation check
-
-## Recommended review cadence
-
-- **weekly:** review metrics and tuning experiments
-- **per change:** record the decision and the result
-- **monthly:** compare against baselines and check drift by family/regime
-
-## Suggested first three tasks
-
-1. capture the current baseline metrics
-2. identify the worst-performing setup families/regimes
-3. choose one calibration improvement and one gating improvement to test next
-
-## Related docs
+## See also
 
 - `recommendation-methodology.md`
-- `decision-sample-tuning-guide.md`
-- `signal-gating-tuning-guide.md`
+- `specs/confidence-calibration-spec.md`
+- `specs/edge-validation-standard.md`
 - `specs/plan-generation-tuning-spec.md`
-- `archive/implementation-plans/historical-replay-backtesting-plan.md`
-- `specs/recommendation-plan-resolution-spec.md`
+- `specs/large-parameter-search-spec.md`
+- `specs/ticker-exposure-ontology-spec.md`
+- `specs/fundamental-valuation-integration-spec.md`

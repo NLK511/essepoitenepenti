@@ -1,289 +1,144 @@
-# Fundamental analysis snapshot implementation plan
+# Fundamental analysis follow-up plan
 
 **Status:** active plan
 
-Remaining implementation plan for `specs/fundamental-analysis-snapshot-spec.md`. Core persistence, refresh, point-in-time lookup, analysis/plan integration, compact UI context, and initial validation slices are implemented; this plan now tracks remaining stale-coverage UI, observability, richer validation metrics, and any future action-affecting use.
+This plan tracks the remaining work after the core fundamental snapshot implementation.
 
-## Objective
+The original implementation is mostly shipped. Fundamental data is now point-in-time context for analysis and plan generation, not a positive confidence booster.
 
-Keep fundamental snapshots conservative and auditable while finishing the remaining production-quality surfaces.
+## Current shipped baseline
 
-Already shipped:
-- active watchlist and app-owned broker-exposure tickers can get stored immutable snapshots
-- snapshots can be refreshed by scheduled job, manual route, and due monitored ticker path
-- ticker analysis/plan payloads include the latest snapshot known at plan time
-- fundamentals do not positively boost confidence
-- initial validation slices can measure whether snapshot features improve outcomes
+Already implemented:
 
-Remaining success criteria:
+- immutable `fundamental_analysis_snapshots` persistence
+- latest and point-in-time snapshot lookup
+- monitored ticker discovery from watchlists and app-owned broker exposure
+- scheduled and manual refresh paths
+- due monitored ticker refresh behavior
+- normalized snapshot payloads with coverage/freshness/warning fields
+- ticker analysis and plan payload integration
+- compact fundamental context in recommendation-plan signal breakdowns
+- initial validation-slice API using broker-preferred effective outcomes
+- sparse payloads are degraded rather than marked healthy `ok`
+- no positive confidence boost from fundamentals
+
+## Current stance
+
+Fundamentals are passive, conservative valuation and event-risk context.
+
+They may diagnose risk, sparse evidence, event timing, valuation mismatch, or quality concerns. They must not raise live confidence until point-in-time walk-forward evidence supports that use.
+
+Conservative threshold raises, caps, or warnings based on fundamentals require an explicit policy decision and validation. Positive boosts remain disabled.
+
+## Remaining success criteria
+
 - stale/sparse fundamental coverage is visible in operator-facing health surfaces
 - refresh failures produce structured observability evidence
-- validation slices include expected-value/drawdown extensions before any action-affecting promotion
+- validation slices include expected value, drawdown/loss-streak, false-positive, and no-entry behavior
+- any action-affecting use is explicit, conservative, auditable, and validated
 
-## Phase 0 — design and fixtures
+## Remaining workstreams
 
-Status: implemented for the initial backend slice. Contract tests live in `tests/test_fundamental_analysis_snapshots.py` and now pass for persistence, monitored ticker discovery, service normalization, event windows, refresh behavior, plan-context integration, validation-slice skeletons, and schedulable job type.
+### 1. Stale and sparse coverage visibility
 
 Deliverables:
-- finalize normalized snapshot payload keys
-- add compact provider fixture payloads for tests
-- identify monitored ticker source query
 
-Normalized payload shape:
-```json
-{
-  "business_profile": {},
-  "valuation": {},
-  "profitability_quality": {},
-  "growth": {},
-  "balance_sheet_risk": {},
-  "cash_flow": {},
-  "analyst_context": {},
-  "event_calendar": {},
-  "feature_buckets": {},
-  "provider_diagnostics": {},
-  "raw_payload_refs": {}
-}
-```
+- dashboard/operator health summary for stale monitored tickers
+- ticker-level display of coverage, freshness, valuation bucket, event regime, and sparse-input warnings
+- data-quality/debug surface for provider failures and stale monitored ticker queues
 
 Acceptance:
-- fixtures include full, partial, and failed-provider examples
-- payload schema is documented in tests and raw-details reference when implemented
 
-## Phase 1 — persistence
+- operators can see whether fundamental context is missing, stale, sparse, degraded, or usable
+- sparse provider payloads cannot look healthy
 
-Add table `fundamental_analysis_snapshots`.
+### 2. Refresh observability
 
-Columns:
-- `id`
-- `ticker` indexed
-- `as_of` indexed
-- `source_set_json`
-- `coverage_status`
-- `freshness_status`
-- `payload_json`
-- `warnings_json`
-- `missing_inputs_json`
-- `job_id`, `run_id`
-- timestamps
+Observability events to emit or verify:
 
-Repository methods:
-- `create_snapshot(snapshot)`
-- `get_latest_for_ticker(ticker)`
-- `get_latest_at_or_before(ticker, as_of)`
-- `list_latest_by_tickers(tickers, as_of=None)`
-- `list_stale_monitored_tickers(monitored_tickers, stale_before)`
-
-Tests:
-- immutable create and round-trip
-- latest by ticker
-- point-in-time lookup excludes future snapshots
-- stale ticker discovery
-- JSON decoding survives malformed/empty values
-
-Validation:
-- migration tests
-- repository tests
-
-## Phase 2 — monitored ticker discovery
-
-Create `MonitoredTickerService` or small repository helper.
-
-Ticker sources:
-- active watchlist tickers
-- broker positions with active exposure, including `submitted`, `open`, `closing`
-- active broker orders with submitted/pending statuses
-
-Rules:
-- uppercase/deduplicate
-- ignore blank/malformed tickers
-- return provenance: `watchlist`, `broker_order`, `broker_position`
-
-Tests:
-- watchlist-only discovery
-- broker-only discovery
-- dedupe and provenance merge
-- closing positions count as monitored exposure
-
-## Phase 3 — fundamental analysis service
-
-Add `src/trade_proposer_app/services/fundamental_analysis.py`.
-
-Responsibilities:
-- fetch provider data for one ticker
-- normalize into snapshot payload
-- classify feature buckets
-- compute event-aware refresh hints
-- degrade safely on provider errors/missing fields
-
-Initial provider:
-- yfinance-derived data is acceptable for v1, but diagnostics must mark provider limitations
-- no network calls in unit tests; use fake provider/client fixtures
-
-Core methods:
-- `analyze(ticker, as_of=None) -> FundamentalAnalysisSnapshot`
-- `refresh_ticker(ticker, job_id=None, run_id=None, as_of=None)`
-- `snapshot_due_reason(latest_snapshot, as_of)`
-- `important_event_window(snapshot, as_of)`
-
-Feature buckets:
-- valuation: `low`, `medium`, `high`, `unknown` relative to sector when possible, otherwise absolute fallback with warning
-- profitability_quality: `weak`, `average`, `strong`, `unknown`
-- growth: `negative`, `flat`, `positive`, `high`, `unknown`
-- balance_sheet_risk: `low`, `medium`, `high`, `unknown`
-- event_regime: `none_known`, `pre_event`, `event_week`, `post_event`, `stale_event`, `unknown`
-
-Tests:
-- complete provider data maps to normalized payload
-- partial data marks missing inputs but still creates degraded snapshot
-- provider failure creates blocked/degraded snapshot without crashing job
-- event windows are classified correctly around earnings/shareholder dates
-- no positive confidence contribution is emitted
-
-## Phase 4 — refresh job
-
-Status: implemented for backend scheduled/manual execution. API endpoints exist for latest snapshot lookup, specific ticker refresh, due monitored ticker refresh, monitored ticker listing, and validation-slice summary.
-
-Add job type: `fundamental_analysis_refresh`.
-
-Default schedule:
-- weekly weekend baseline jobs spread across Saturday and Sunday:
-  - `15 06 * * SAT`
-  - `15 09 * * SAT`
-  - `15 12 * * SAT`
-  - `15 15 * * SAT`
-  - `15 06 * * SUN`
-  - `15 09 * * SUN`
-  - `15 12 * * SUN`
-  - `15 15 * * SUN`
-- each batch uses the refresh service cap so one run does not request every monitored ticker at once
-- repeated weekend batches rely on due-snapshot logic: earlier batches create fresh snapshots, later batches skip those and continue with still-due tickers
-- optional daily lightweight due-check job later if event-aware refresh needs more frequent evaluation
-
-Job behavior:
-- discover monitored tickers
-- refresh if latest snapshot older than 30 days
-- refresh if important event window requires it
-- cap per-run ticker count to avoid provider abuse
-- persist run summary with counts: refreshed, skipped_fresh, failed, monitored_count
-
-Manual/API path:
-- run all due monitored tickers
-- run specific ticker refresh
-
-Tests:
-- job executes due tickers only
-- monthly staleness works even though weekend batches check weekly
-- multiple weekend batches migrate/create without duplicating the legacy monthly job
-- event window overrides monthly freshness
-- provider failures do not fail entire run unless all fail catastrophically
-- run artifact contains per-ticker statuses
-
-## Phase 5 — analysis and plan integration
-
-Status: implemented for ticker deep-analysis context, analysis payloads, watchlist signal diagnostics/source breakdown, and recommendation-plan signal breakdown. Fundamentals remain non-boosting.
-
-Inject latest point-in-time snapshot into:
-- `TickerDeepAnalysisService` context
-- watchlist signal snapshot source breakdown/diagnostics
-- recommendation plan `signal_breakdown`
-- recommendation plan `evidence_summary`
-- raw details reference
-
-Rules:
-- use `get_latest_at_or_before(ticker, plan_as_of)`
-- missing snapshot adds `fundamental_snapshot_missing` warning only; it does not block plans in v1
-- stale snapshot adds caution warning
-- upcoming earnings/shareholder event inside holding window adds event-window warning and may raise action threshold only in a fixed conservative way if specified by policy
-- no positive confidence boost
-
-Suggested compact payload keys:
-- `fundamental_snapshot_id`
-- `fundamental_snapshot_as_of`
-- `fundamental_coverage_status`
-- `fundamental_event_regime`
-- `fundamental_warnings`
-- `fundamental_feature_buckets`
-- `next_known_event`
-
-Tests:
-- plan uses prior snapshot, not future snapshot
-- missing snapshot remains non-blocking
-- stale/degraded snapshot warning is surfaced
-- event inside holding period is included in evidence/diagnostics
-- confidence does not increase because of fundamentals
-
-## Phase 6 — UI and observability
-
-Status: partially implemented. Ticker page plan cards show compact fundamental coverage/event/valuation labels. Dedicated stale-coverage UI and observability events remain follow-up work.
-
-UI surfaces:
-- ticker page: latest snapshot card
-- recommendation plan raw/details: compact fundamental context
-- settings/debugger/data quality: stale monitored tickers and provider errors
-
-Observability events:
 - `fundamental_refresh_started`
 - `fundamental_snapshot_created`
 - `fundamental_refresh_failed`
 - `fundamental_refresh_completed`
 
-Tests:
-- route returns latest snapshot
-- route triggers manual refresh with fake service
-- UI typecheck updated types
+Deliverables:
 
-## Phase 7 — validation and research slices
+- structured event payloads with ticker, provider diagnostics, coverage state, freshness state, and failure reason
+- run artifacts summarizing refreshed, skipped, stale, sparse, failed, and blocked counts
 
-Status: initial API summary implemented using broker-preferred effective outcomes and persisted plan signal-breakdown fundamental buckets. Expected value/drawdown extensions remain follow-up work.
+Acceptance:
 
-Add fundamental slices to reliability/research summaries after snapshots exist in plan payloads.
+- a failed or sparse refresh is diagnosable without shell access
+- provider limitations are visible but redacted where needed
+
+### 3. Richer validation slices
 
 Slices:
+
 - event regime
 - earnings within 3/7/14 days
-- analyst action/recommendation bucket
+- analyst action/recommendation bucket when available
 - valuation bucket
 - profitability/quality bucket
 - growth bucket
 - balance-sheet-risk bucket
 - setup family + event regime
+- valuation bucket + setup family
 
 Metrics:
+
 - broker-preferred effective win rate
-- expected value when available
+- expected value where available
 - false-positive reduction
-- loss streak/drawdown behavior
-- entry-touch/no-entry behavior
+- loss streak and drawdown behavior
+- entry-touch and no-entry behavior
+- sparse-data warnings and minimum sample counts
 
 Acceptance:
+
 - slices show resolved counts and sparse-data warnings
-- no promotion of fundamental positive boosts without walk-forward evidence
-- docs explain which slices are exploratory vs action-affecting
+- exploratory vs action-affecting conclusions are clearly separated
+- no promotion of positive fundamental boosts without walk-forward evidence
 
-## Rollout order
+### 4. Explicit action-affecting policy decision
 
-Recommended commits:
-1. spec/docs + fixtures
-2. migration/domain/repository
-3. monitored ticker discovery
-4. fundamental service with fake-provider tests
-5. job/manual route
-6. analysis/plan integration with no confidence boost
-7. UI/raw details
-8. validation slices
+Potential future uses, in increasing risk order:
 
-## Safety gates
+1. operator-only warning labels
+2. conservative threshold raises for specific event/valuation risk states
+3. notional caps or concentration caps for degraded/sparse fundamental evidence
+4. positive confidence boosts for validated valuation/quality tailwinds
 
-Before enabling any action-affecting use:
-- at least 30 days of passive snapshots
+Current allowed mode:
+
+- operator warnings and passive context only
+
+Blocked until separately validated:
+
+- positive confidence boosts
+- automatic confidence increases from valuation or quality
+- broad actionability expansion based on fundamentals
+
+Acceptance before any action-affecting use:
+
+- at least 30 days of passive snapshots or a justified larger historical point-in-time sample
 - enough resolved broker-preferred outcomes per slice
 - walk-forward validation beats baseline
 - no increase in drawdown/loss streak
 - operator-visible sparse evidence warnings
+- docs/spec update before behavior change
 
-Initial shipped mode must be passive/conservative:
+## Safety gates
+
+Initial and current shipped mode remains:
+
 - collect snapshots
 - display and persist context
-- warn/raise caution around event risk
+- warn around sparse, stale, degraded, or event-risk states
 - do not boost confidence
+
+## See also
+
+- `specs/fundamental-analysis-snapshot-spec.md`
+- `specs/fundamental-valuation-integration-spec.md`
+- `recommendation-quality-improvement-plan.md`
