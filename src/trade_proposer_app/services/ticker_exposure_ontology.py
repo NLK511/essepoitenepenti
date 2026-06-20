@@ -153,6 +153,49 @@ class TickerExposureOntologyService:
                 {"factor": "technology_capex", "aliases": ["technology capex", "AI capex", "cloud spending", "semiconductor demand"], "direction_if_factor_rises": "positive", "strength": "medium", "rationale": "technology capex supports demand"},
                 {"factor": "interest_rates", "aliases": ["rates", "treasury yields", "discount rate"], "direction_if_factor_rises": "negative", "strength": "medium", "rationale": "higher rates can pressure growth multiples"},
             ]
+        elif "consumer discretionary" in sector or any(term in industry for term in ("restaurant", "travel", "lodging", "casino", "retail", "apparel", "automobile", "auto", "leisure")):
+            profile["macro_sensitivities"] = [
+                {"factor": "consumer_discretionary_spending", "aliases": ["consumer spending", "discretionary demand", "retail sales", "travel demand", "same-store sales"], "direction_if_factor_rises": "positive", "strength": "medium", "rationale": "consumer discretionary industries generally benefit from stronger household spending and demand"},
+                {"factor": "input_cost_inflation", "aliases": ["wage inflation", "food costs", "fuel costs", "input costs", "markdown pressure"], "direction_if_factor_rises": "negative", "strength": "medium", "rationale": "labor, merchandise, fuel, or food inflation can pressure margins"},
+            ]
+            profile["event_sensitivities"] = [
+                {"event": "demand_reacceleration", "aliases": ["traffic improves", "bookings improve", "retail sales improve", "same-store sales beat"], "direction_for_long": "positive", "strength": "medium", "rationale": "stronger demand supports revenue and operating leverage"},
+                {"event": "consumer_slowdown", "aliases": ["consumer slowdown", "weak bookings", "weak traffic", "markdowns"], "direction_for_long": "negative", "strength": "medium", "rationale": "weaker discretionary demand pressures sales and margins"},
+            ]
+        elif "consumer staples" in sector or any(term in industry for term in ("grocery", "beverage", "food", "confection", "household", "tobacco")):
+            profile["macro_sensitivities"] = [
+                {"factor": "staples_volume_pricing", "aliases": ["pricing", "volume", "grocery demand", "staples demand"], "direction_if_factor_rises": "positive", "strength": "medium", "rationale": "staples companies benefit when pricing and volumes are resilient"},
+                {"factor": "commodity_input_costs", "aliases": ["commodity costs", "input costs", "packaging costs", "food inflation"], "direction_if_factor_rises": "negative", "strength": "medium", "rationale": "input-cost inflation can pressure gross margins when not offset by pricing"},
+            ]
+        elif "health care" in sector or any(term in industry for term in ("pharma", "biotech", "medical", "healthcare", "diagnostic")):
+            profile["macro_sensitivities"] = [
+                {"factor": "healthcare_demand", "aliases": ["healthcare demand", "procedure volumes", "prescription demand", "utilization"], "direction_if_factor_rises": "positive", "strength": "medium", "rationale": "higher utilization and product demand generally support healthcare revenue"},
+                {"factor": "pricing_regulatory_pressure", "aliases": ["drug pricing", "reimbursement pressure", "regulatory pressure", "pricing pressure"], "direction_if_factor_rises": "negative", "strength": "medium", "rationale": "pricing, reimbursement, and regulatory pressure can reduce expected profitability"},
+            ]
+            profile["event_sensitivities"] = [
+                {"event": "clinical_regulatory_progress", "aliases": ["approval", "trial data", "pipeline progress", "FDA"], "direction_for_long": "positive", "strength": "medium", "rationale": "positive clinical or regulatory events can improve expected cash flows"},
+                {"event": "clinical_regulatory_setback", "aliases": ["trial failure", "complete response letter", "safety concern", "regulatory setback"], "direction_for_long": "negative", "strength": "medium", "rationale": "setbacks can reduce expected product or pipeline value"},
+            ]
+        elif "communication" in sector or any(term in industry for term in ("telecom", "media", "entertainment", "advertising", "internet content")):
+            profile["macro_sensitivities"] = [
+                {"factor": "subscriber_advertising_demand", "aliases": ["subscriber growth", "advertising demand", "broadband adds", "wireless adds"], "direction_if_factor_rises": "positive", "strength": "medium", "rationale": "subscriber, advertising, and engagement growth generally support communication-services revenue"},
+                {"factor": "capex_competition_pressure", "aliases": ["capex", "spectrum costs", "competition", "churn"], "direction_if_factor_rises": "negative", "strength": "medium", "rationale": "capital intensity and competition can pressure free cash flow and margins"},
+            ]
+        elif "real estate" in sector or "reit" in industry:
+            profile["macro_sensitivities"] = [
+                {"factor": "interest_rates", "aliases": ["rates", "treasury yields", "financing costs", "cap rates"], "direction_if_factor_rises": "negative", "strength": "high", "rationale": "REIT and real-estate valuations are generally sensitive to financing costs and capitalization rates"},
+                {"factor": "occupancy_rent_growth", "aliases": ["occupancy", "rent growth", "leasing demand", "same-store NOI"], "direction_if_factor_rises": "positive", "strength": "medium", "rationale": "occupancy and rent growth support real-estate cash flows"},
+            ]
+        elif "utilities" in sector or "utility" in industry:
+            profile["macro_sensitivities"] = [
+                {"factor": "interest_rates", "aliases": ["rates", "treasury yields", "financing costs"], "direction_if_factor_rises": "negative", "strength": "high", "rationale": "utilities are capital-intensive and often trade as rate-sensitive income equities"},
+                {"factor": "regulated_returns_load_growth", "aliases": ["regulated returns", "rate base", "load growth", "electricity demand"], "direction_if_factor_rises": "positive", "strength": "medium", "rationale": "regulated returns and load growth can support utility earnings"},
+            ]
+        elif "index" in sector or "etf" in sector or "etf" in industry:
+            profile["macro_sensitivities"] = [
+                {"factor": "underlying_market_trend", "aliases": ["market trend", "risk appetite", "index performance", "ETF flows"], "direction_if_factor_rises": "positive", "strength": "medium", "rationale": "index and ETF instruments generally follow their underlying market or factor exposure"},
+                {"factor": "market_risk_aversion", "aliases": ["risk aversion", "volatility", "market selloff"], "direction_if_factor_rises": "negative", "strength": "medium", "rationale": "broad risk aversion can pressure risk-asset indexes and ETFs"},
+            ]
         else:
             return {}
         return profile

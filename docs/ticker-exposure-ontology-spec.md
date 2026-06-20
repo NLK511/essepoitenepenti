@@ -20,7 +20,7 @@ Improve context transmission by representing each ticker as a point-in-time expo
 
 ## Coverage requirement
 
-The ontology file must contain one explicit profile for every ticker in the active taxonomy universe (`src/trade_proposer_app/data/taxonomy/tickers.json`). Curated profiles should be preserved; all remaining tickers may be generated from sector/industry taxonomy templates but must still be explicit, versioned, sourced, and auditable. Generated profiles must use conservative confidence and mixed/low directional defaults where the taxonomy does not support a specific directional claim.
+The ontology file must contain one explicit profile for every ticker in the active taxonomy universe (`src/trade_proposer_app/data/taxonomy/tickers.json`). Curated profiles should be preserved; all remaining tickers may be generated from sector/industry taxonomy templates but must still be explicit, versioned, sourced, and auditable. Generated profiles must use conservative confidence and mixed/low directional defaults where the taxonomy does not support a specific directional claim. Sector/industry templates may mark a profile usable only when the exposure is a broadly accepted economic relationship for that industry class (for example, rate sensitivity for REITs/utilities or consumer-spending sensitivity for restaurants/travel/retail). Templates must not add ticker-specific facts, customers, suppliers, or catalysts unless those are already present in taxonomy data or curated profiles.
 
 ## Data model
 
