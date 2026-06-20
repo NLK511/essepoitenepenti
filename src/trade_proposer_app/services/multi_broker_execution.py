@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Protocol
 
 from trade_proposer_app.domain.models import BrokerAccount, BrokerOrderExecution, RecommendationPlan
@@ -160,6 +161,9 @@ class MultiBrokerExecutionService:
                 take_profit=candidate_result.take_profit,
             )
         candidate = candidate_result.candidate
+        entry_price = self._normalize_price(candidate.entry_price)
+        stop_loss = self._normalize_price(candidate.stop_loss)
+        take_profit = self._normalize_price(candidate.take_profit)
         order = BrokerOrderExecution(
             broker_account_id=account.broker_account_id,
             broker=account.broker,
@@ -174,13 +178,19 @@ class MultiBrokerExecutionService:
             order_type="limit",
             time_in_force="gtc",
             quantity=candidate.quantity,
-            notional_amount=round(candidate.quantity * candidate.entry_price, 4),
-            entry_price=candidate.entry_price,
-            stop_loss=candidate.stop_loss,
-            take_profit=candidate.take_profit,
+            notional_amount=round(candidate.quantity * entry_price, 4),
+            entry_price=entry_price,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
             status=ExecutionStatus.SKIPPED.value if skip_reason else "queued",
             client_order_id=f"{candidate.client_order_id}-{account.broker_account_id}",
-            request_payload=self._order_payload(candidate, skip_reason=skip_reason),
+            request_payload=self._order_payload(
+                candidate,
+                entry_price=entry_price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+                skip_reason=skip_reason,
+            ),
             error_message=skip_reason or "",
         )
         if skip_reason:
@@ -512,23 +522,36 @@ class MultiBrokerExecutionService:
         return self.executions.create_candidate_once(order)
 
     @staticmethod
-    def _order_payload(candidate: object, *, skip_reason: str | None = None) -> dict[str, object]:
+    def _order_payload(
+        candidate: object,
+        *,
+        entry_price: float,
+        stop_loss: float,
+        take_profit: float,
+        skip_reason: str | None = None,
+    ) -> dict[str, object]:
         payload = {
             "symbol": candidate.plan.ticker.upper(),
             "qty": candidate.quantity,
             "side": candidate.side,
             "type": "limit",
             "time_in_force": "gtc",
-            "limit_price": candidate.entry_price,
+            "limit_price": entry_price,
             "order_class": "bracket",
-            "take_profit": {"limit_price": candidate.take_profit},
-            "stop_loss": {"stop_price": candidate.stop_loss},
+            "take_profit": {"limit_price": take_profit},
+            "stop_loss": {"stop_price": stop_loss},
             "client_order_id": candidate.client_order_id,
         }
         if skip_reason == "etoro_live_shadow_would_submit":
             payload["would_submit"] = True
             payload["reason"] = skip_reason
         return payload
+
+    @staticmethod
+    def _normalize_price(price: float) -> float:
+        value = Decimal(str(price))
+        quantum = Decimal("0.01") if abs(value) >= 1 else Decimal("0.0001")
+        return float(value.quantize(quantum, rounding=ROUND_HALF_UP))
 
     @staticmethod
     def _broker_order_request(order: BrokerOrderExecution) -> BrokerOrderRequest:

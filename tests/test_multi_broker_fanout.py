@@ -93,6 +93,30 @@ class MultiBrokerFanoutTests(unittest.TestCase):
         )
         self.assertEqual(self.session.query(BrokerOrderExecutionRecord).count(), 2)
 
+    def test_multi_broker_candidates_use_normalized_broker_agnostic_price_levels(self) -> None:
+        self._account("alpaca-paper-a")
+        service = MultiBrokerExecutionService(
+            settings=self.settings,
+            accounts=self.accounts,
+            executions=self.executions,
+            adapter_factory=self.factory,
+        )
+        plan = self._plan()
+        plan.entry_price_low = 597.292
+        plan.entry_price_high = 597.292
+        plan.stop_loss = 578.1666
+        plan.take_profit = 630.1101
+
+        outcome = service.execute_plans([plan], run_id=1, job_id=2)
+
+        order = outcome.orders[0]
+        self.assertEqual(order.entry_price, 597.29)
+        self.assertEqual(order.stop_loss, 578.17)
+        self.assertEqual(order.take_profit, 630.11)
+        self.assertEqual(order.request_payload["limit_price"], 597.29)
+        self.assertEqual(order.request_payload["stop_loss"], {"stop_price": 578.17})
+        self.assertEqual(order.request_payload["take_profit"], {"limit_price": 630.11})
+
     def test_account_halt_or_disabled_autonomy_skips_only_that_account(self) -> None:
         self._account("alpaca-paper-a")
         self._account("alpaca-paper-b", halt=True)

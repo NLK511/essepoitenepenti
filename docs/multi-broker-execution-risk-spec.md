@@ -50,8 +50,9 @@ When proposal generation produces actionable plans:
 5. A failure or halt for one broker account must not block another broker account unless the global halt is active.
 6. Duplicate submission protection is scoped by `(run_id, plan_id, broker_account_id)`.
 7. Protective order amendments must use the broker adapter `amend_position_protection` contract, not broker-specific raw clients. The contract accepts the broker order id, client order id, symbol, and optional non-risk-increasing stop-loss/take-profit levels, validates the broker snapshot first, and must fail closed when the adapter does not advertise `supports_amend_protection`.
-7. The run summary must report broker execution counts grouped by broker account.
-8. Candidate creation and duplicate detection must be transactionally safe under concurrent workers. If the app cannot acquire a durable uniqueness lock for a candidate, it must persist/return a skip or warning rather than risk duplicate live orders.
+8. Price precision normalization must happen in broker-agnostic order construction before adapter submission. Parent limit prices, stop-loss prices, take-profit prices, resubmitted levels, and amendment levels must be normalized once, persisted in the broker-order audit row, and passed to the adapter through `BrokerOrderRequest` / `BrokerProtectionAmendRequest`. The request model and raw payload must agree exactly so adapters cannot accidentally send unnormalized protective-order prices.
+9. The run summary must report broker execution counts grouped by broker account.
+10. Candidate creation and duplicate detection must be transactionally safe under concurrent workers. If the app cannot acquire a durable uniqueness lock for a candidate, it must persist/return a skip or warning rather than risk duplicate live orders.
 
 Example: if Alpaca paper and eToro live are both enabled, a long AAPL plan may create two broker-order rows: one Alpaca paper submission and one eToro live submission or safety skip.
 

@@ -191,13 +191,33 @@ class AlpacaPaperBrokerAdapter:
             payload["notional"] = request.notional_amount
         if "limit_price" in request.payload:
             payload["limit_price"] = request.payload["limit_price"]
-        if request.stop_loss is not None or request.take_profit is not None:
+        take_profit = self._payload_take_profit(request.payload, fallback=request.take_profit)
+        stop_loss = self._payload_stop_loss(request.payload, fallback=request.stop_loss)
+        if stop_loss is not None or take_profit is not None:
             payload["order_class"] = "bracket"
-            if request.take_profit is not None:
-                payload["take_profit"] = {"limit_price": request.take_profit}
-            if request.stop_loss is not None:
-                payload["stop_loss"] = {"stop_price": request.stop_loss}
+            if take_profit is not None:
+                payload["take_profit"] = {"limit_price": take_profit}
+            if stop_loss is not None:
+                payload["stop_loss"] = {"stop_price": stop_loss}
         return payload
+
+    @staticmethod
+    def _payload_take_profit(payload: dict[str, object], *, fallback: float | None) -> float | None:
+        take_profit = payload.get("take_profit")
+        if isinstance(take_profit, dict):
+            value = take_profit.get("limit_price")
+            if isinstance(value, (int, float)):
+                return float(value)
+        return fallback
+
+    @staticmethod
+    def _payload_stop_loss(payload: dict[str, object], *, fallback: float | None) -> float | None:
+        stop_loss = payload.get("stop_loss")
+        if isinstance(stop_loss, dict):
+            value = stop_loss.get("stop_price")
+            if isinstance(value, (int, float)):
+                return float(value)
+        return fallback
 
     def _order_success(
         self,

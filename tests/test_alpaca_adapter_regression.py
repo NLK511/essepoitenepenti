@@ -78,6 +78,34 @@ class AlpacaAdapterRegressionTests(unittest.TestCase):
             ),
         )
 
+    def test_alpaca_submit_prefers_normalized_payload_protective_levels(self) -> None:
+        client = StubAlpacaClient()
+        adapter = AlpacaPaperBrokerAdapter(client=client)  # type: ignore[arg-type]
+
+        adapter.submit_order(
+            BrokerOrderRequest(
+                client_order_id="client-1",
+                symbol="AMAT",
+                side="buy",
+                order_type="limit",
+                quantity=1,
+                time_in_force="gtc",
+                stop_loss=578.1666,
+                take_profit=630.1101,
+                payload={
+                    "limit_price": 597.29,
+                    "stop_loss": {"stop_price": 578.17},
+                    "take_profit": {"limit_price": 630.11},
+                },
+            )
+        )
+
+        submitted = client.calls[0][1]
+        assert isinstance(submitted, dict)
+        self.assertEqual(submitted["limit_price"], 597.29)
+        self.assertEqual(submitted["stop_loss"], {"stop_price": 578.17})
+        self.assertEqual(submitted["take_profit"], {"limit_price": 630.11})
+
     def test_alpaca_lookup_cancel_close_and_snapshots_normalize(self) -> None:
         client = StubAlpacaClient()
         adapter = AlpacaPaperBrokerAdapter(client=client)  # type: ignore[arg-type]

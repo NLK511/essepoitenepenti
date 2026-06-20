@@ -40,10 +40,18 @@ For each actionable `RecommendationPlan`:
    - `quantity = floor(notional_cap / entry_reference)`
 4. Skip the plan if the computed quantity is less than 1.
 5. Submit a **limit bracket order** to Alpaca paper trading.
-6. Normalize prices to Alpaca-valid tick sizes before submission:
+6. Normalize all executable price fields before persistence and before broker-adapter submission:
+   - parent limit/entry price
+   - stop-loss stop price
+   - take-profit limit price
+   - resubmitted order levels
+   - protective-order amendment levels
+7. The normalized execution record, normalized request payload, and `BrokerOrderRequest` sent to an adapter must agree exactly. Adapters must not rebuild protective-order prices from unnormalized plan values when normalized payload levels are present.
+8. The default equity price precision policy is broker-agnostic and safe for Alpaca-compatible US equities:
    - prices at or above $1.00 use 2 decimal places
    - prices below $1.00 use 4 decimal places
-7. Attach the stop-loss and take-profit levels to the parent order.
+   A broker adapter may apply stricter broker/instrument precision only if that policy is explicit in adapter capabilities and tested.
+9. Attach the stop-loss and take-profit levels to the parent order.
 
 ### Side mapping
 

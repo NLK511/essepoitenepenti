@@ -198,7 +198,12 @@ class OrderExecutionService:
             summary["duplicate_order_count"] = int(summary["duplicate_order_count"]) + 1
             return existing
 
-        notional_amount = round(candidate.quantity * candidate.entry_price, 4)
+        entry_price, stop_loss, take_profit = self._normalized_trade_levels(
+            candidate.entry_price,
+            candidate.stop_loss,
+            candidate.take_profit,
+        )
+        notional_amount = round(candidate.quantity * entry_price, 4)
         risk_assessment = self._risk_manager().assess(
             TradeCandidate(ticker=plan.ticker, notional_amount=notional_amount),
             live_broker_snapshot=self._live_broker_snapshot(
@@ -217,9 +222,9 @@ class OrderExecutionService:
                 job_id=job_id,
                 reason=risk_reason,
                 config=config,
-                entry_price=candidate.entry_price,
-                stop_loss=candidate.stop_loss,
-                take_profit=candidate.take_profit,
+                entry_price=entry_price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
             )
 
         submitted_order = self._submit_candidate(
@@ -237,17 +242,17 @@ class OrderExecutionService:
                 time_in_force="gtc",
                 quantity=candidate.quantity,
                 notional_amount=notional_amount,
-                entry_price=candidate.entry_price,
-                stop_loss=candidate.stop_loss,
-                take_profit=candidate.take_profit,
+                entry_price=entry_price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
                 status="queued",
                 client_order_id=candidate.client_order_id,
                 request_payload=self._build_order_payload(
                     ticker=plan.ticker,
                     action=plan.action,
-                    entry_price=candidate.entry_price,
-                    stop_loss=candidate.stop_loss,
-                    take_profit=candidate.take_profit,
+                    entry_price=entry_price,
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
                     quantity=candidate.quantity,
                     client_order_id=candidate.client_order_id,
                 ),
@@ -358,12 +363,17 @@ class OrderExecutionService:
         ):
             raise ValueError("stored order is missing execution levels and cannot be resubmitted")
         client_order_id = f"{existing.client_order_id}-retry-{uuid4().hex[:8]}"
+        entry_price, stop_loss, take_profit = self._normalized_trade_levels(
+            existing.entry_price,
+            existing.stop_loss,
+            existing.take_profit,
+        )
         request_payload = self._build_order_payload(
             ticker=existing.ticker,
             action=existing.action,
-            entry_price=existing.entry_price,
-            stop_loss=existing.stop_loss,
-            take_profit=existing.take_profit,
+            entry_price=entry_price,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
             quantity=existing.quantity,
             client_order_id=client_order_id,
         )
@@ -396,9 +406,9 @@ class OrderExecutionService:
             time_in_force=existing.time_in_force,
             quantity=existing.quantity,
             notional_amount=existing.notional_amount,
-            entry_price=existing.entry_price,
-            stop_loss=existing.stop_loss,
-            take_profit=existing.take_profit,
+            entry_price=entry_price,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
             status="queued",
             client_order_id=client_order_id,
             request_payload=request_payload,
@@ -572,12 +582,16 @@ class OrderExecutionService:
         adapter = self._ensure_adapter()
         current = self._validate_amendable_bracket_order(existing, adapter=adapter)
         payload: dict[str, object] = {"client_order_id": existing.client_order_id}
-        if stop_loss is not None:
-            payload["stop_loss"] = {"stop_price": OrderExecutionService._normalize_price(stop_loss)}
-        if take_profit is not None:
-            payload["take_profit"] = {
-                "limit_price": OrderExecutionService._normalize_price(take_profit)
-            }
+        normalized_stop_loss = (
+            OrderExecutionService._normalize_price(stop_loss) if stop_loss is not None else None
+        )
+        normalized_take_profit = (
+            OrderExecutionService._normalize_price(take_profit) if take_profit is not None else None
+        )
+        if normalized_stop_loss is not None:
+            payload["stop_loss"] = {"stop_price": normalized_stop_loss}
+        if normalized_take_profit is not None:
+            payload["take_profit"] = {"limit_price": normalized_take_profit}
         self._record_observability_event(
             event_type="broker.order_amend_started",
             message="Broker order amend started",
@@ -626,8 +640,8 @@ class OrderExecutionService:
             quantity=existing.quantity,
             notional_amount=existing.notional_amount,
             entry_price=existing.entry_price,
-            stop_loss=stop_loss if stop_loss is not None else existing.stop_loss,
-            take_profit=take_profit if take_profit is not None else existing.take_profit,
+            stop_loss=normalized_stop_loss if normalized_stop_loss is not None else existing.stop_loss,
+            take_profit=normalized_take_profit if normalized_take_profit is not None else existing.take_profit,
             status=existing.status,
             broker_order_id=existing.broker_order_id,
             client_order_id=existing.client_order_id,
@@ -866,6 +880,7 @@ class OrderExecutionService:
             return created
 
     def _broker_order_request(self, candidate: BrokerOrderExecution) -> BrokerOrderRequest:
+        payload = candidate.request_payload
         return BrokerOrderRequest(
             client_order_id=candidate.client_order_id,
             symbol=candidate.ticker,
@@ -874,9 +889,9 @@ class OrderExecutionService:
             quantity=candidate.quantity or None,
             notional_amount=candidate.notional_amount or None,
             time_in_force=candidate.time_in_force,
-            stop_loss=candidate.stop_loss,
-            take_profit=candidate.take_profit,
-            payload=candidate.request_payload,
+            stop_loss=self._payload_stop_loss(payload) or candidate.stop_loss,
+            take_profit=self._payload_take_profit(payload) or candidate.take_profit,
+            payload=payload,
         )
 
     @staticmethod
@@ -1031,6 +1046,18 @@ class OrderExecutionService:
         }
 
     @staticmethod
+    def _normalized_trade_levels(
+        entry_price: float,
+        stop_loss: float,
+        take_profit: float,
+    ) -> tuple[float, float, float]:
+        return (
+            OrderExecutionService._normalize_price(entry_price),
+            OrderExecutionService._normalize_price(stop_loss),
+            OrderExecutionService._normalize_price(take_profit),
+        )
+
+    @staticmethod
     def _normalize_price(price: float) -> float:
         value = Decimal(str(price))
         if abs(value) >= 1:
@@ -1038,6 +1065,22 @@ class OrderExecutionService:
         else:
             quantum = Decimal("0.0001")
         return float(value.quantize(quantum, rounding=ROUND_HALF_UP))
+
+    @staticmethod
+    def _payload_take_profit(payload: dict[str, object]) -> float | None:
+        take_profit = payload.get("take_profit")
+        if not isinstance(take_profit, dict):
+            return None
+        value = take_profit.get("limit_price")
+        return float(value) if isinstance(value, (int, float)) else None
+
+    @staticmethod
+    def _payload_stop_loss(payload: dict[str, object]) -> float | None:
+        stop_loss = payload.get("stop_loss")
+        if not isinstance(stop_loss, dict):
+            return None
+        value = stop_loss.get("stop_price")
+        return float(value) if isinstance(value, (int, float)) else None
 
     @staticmethod
     def _parse_datetime(value: object | None) -> datetime | None:

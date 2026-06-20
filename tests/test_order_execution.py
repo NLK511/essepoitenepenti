@@ -226,6 +226,49 @@ class OrderExecutionTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_order_execution_normalizes_all_price_levels_before_adapter_submission(self) -> None:
+        session = create_session()
+        try:
+            settings = SettingsRepository(session)
+            settings.set_order_execution_config(enabled=True, notional_per_plan=1000.0)
+            client = StubAlpacaClient()
+            order_service = OrderExecutionService(
+                settings=settings,
+                executions=BrokerOrderExecutionRepository(session),
+                client=client,
+                observability=ObservabilityEventRepository(session),
+            )
+            plan = RecommendationPlan(
+                id=1,
+                ticker="AMAT",
+                horizon=StrategyHorizon.ONE_WEEK,
+                action="long",
+                confidence_percent=82.0,
+                entry_price_low=597.292,
+                entry_price_high=597.292,
+                stop_loss=578.1666,
+                take_profit=630.1101,
+                computed_at=datetime.now(timezone.utc),
+                run_id=10,
+                job_id=11,
+            )
+
+            outcome = order_service.execute_plans([plan], run_id=10, job_id=11)
+
+            self.assertEqual(outcome.summary["submitted_order_count"], 1)
+            self.assertEqual(client.requests[0]["limit_price"], 597.29)
+            self.assertEqual(client.requests[0]["stop_loss"], {"stop_price": 578.17})
+            self.assertEqual(client.requests[0]["take_profit"], {"limit_price": 630.11})
+            stored = BrokerOrderExecutionRepository(session).list_all()[0]
+            self.assertEqual(stored.entry_price, 597.29)
+            self.assertEqual(stored.stop_loss, 578.17)
+            self.assertEqual(stored.take_profit, 630.11)
+            self.assertEqual(stored.request_payload["limit_price"], 597.29)
+            self.assertEqual(stored.request_payload["stop_loss"], {"stop_price": 578.17})
+            self.assertEqual(stored.request_payload["take_profit"], {"limit_price": 630.11})
+        finally:
+            session.close()
+
     def test_order_execution_service_resubmits_failed_order_with_fresh_client_order_id(
         self,
     ) -> None:
