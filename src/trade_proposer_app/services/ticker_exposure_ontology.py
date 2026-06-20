@@ -82,8 +82,9 @@ class TickerExposureOntologyService:
             source = str(profile.get("source") or "taxonomy_derived")
             warnings.append(f"explicit exposure ontology profile missing; using {source} profile")
         coverage_status = self._coverage_status(profile)
+        coverage_reasons = self._coverage_reasons(profile)
         if coverage_status != "usable":
-            warnings.append(f"exposure ontology coverage is {coverage_status}")
+            warnings.append(f"exposure ontology coverage is {coverage_status}: {', '.join(coverage_reasons)}")
 
         evidence = self._context_evidence(context)
         matches = self._matched_exposures(profile, evidence)
@@ -103,6 +104,7 @@ class TickerExposureOntologyService:
             "source": profile.get("source"),
             "confidence_score": round(float(profile.get("confidence_score", 0.0) or 0.0), 3),
             "matched_exposure_count": len(matches),
+            "coverage_reasons": coverage_reasons,
             "directional_support": support,
             "alignment_adjustment_percent": round(adjustment, 1),
             "transmission_paths": [str(item.get("transmission_path")) for item in matches[:5]],
@@ -157,14 +159,31 @@ class TickerExposureOntologyService:
 
     @staticmethod
     def _coverage_status(profile: dict[str, Any]) -> str:
+        reasons = TickerExposureOntologyService._coverage_reasons(profile)
+        if not reasons:
+            return "usable"
         has_directional = bool(profile.get("macro_sensitivities") or profile.get("event_sensitivities"))
         driver_count = len(profile.get("revenue_drivers", [])) + len(profile.get("cost_drivers", []))
-        confidence = float(profile.get("confidence_score", 0.0) or 0.0)
-        if has_directional and driver_count >= 2 and confidence >= 0.55:
-            return "usable"
         if has_directional or driver_count > 0:
             return "degraded"
         return "missing"
+
+    @staticmethod
+    def _coverage_reasons(profile: dict[str, Any]) -> list[str]:
+        reasons: list[str] = []
+        has_directional = bool(profile.get("macro_sensitivities") or profile.get("event_sensitivities"))
+        driver_count = len(profile.get("revenue_drivers", [])) + len(profile.get("cost_drivers", []))
+        confidence = float(profile.get("confidence_score", 0.0) or 0.0)
+        if not has_directional:
+            reasons.append("missing directional macro/event sensitivities")
+        if driver_count < 2:
+            reasons.append("fewer than two business drivers")
+        if confidence < 0.55:
+            reasons.append(f"confidence score {confidence:.2f} below usable threshold 0.55")
+        source = str(profile.get("source") or "").strip()
+        if source == "taxonomy_generated":
+            reasons.append("taxonomy-generated sparse profile has no sector template directional mapping")
+        return reasons
 
     def _matched_exposures(self, profile: dict[str, Any], evidence: dict[str, str]) -> list[dict[str, Any]]:
         matches: list[dict[str, Any]] = []

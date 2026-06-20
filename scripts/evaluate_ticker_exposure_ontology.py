@@ -48,6 +48,7 @@ def evaluate(limit: int) -> dict[str, Any]:
     support = Counter()
     prospective_coverage = Counter()
     prospective_source = Counter()
+    prospective_degraded_reasons = Counter()
     taxonomy = TickerTaxonomyService()
     ontology_service = TickerExposureOntologyService()
     matched = 0
@@ -61,8 +62,11 @@ def evaluate(limit: int) -> dict[str, Any]:
         if ticker and ticker not in seen_tickers:
             seen_tickers.add(ticker)
             prospective_profile = ontology_service.get_profile(ticker, taxonomy_profile=taxonomy.get_ticker_profile(ticker))
-            prospective_coverage[ontology_service._coverage_status(prospective_profile)] += 1
+            prospective_status = ontology_service._coverage_status(prospective_profile)
+            prospective_coverage[prospective_status] += 1
             prospective_source[str(prospective_profile.get("source") or "unknown")] += 1
+            if prospective_status != "usable":
+                prospective_degraded_reasons.update(ontology_service._coverage_reasons(prospective_profile))
         breakdown = _json_dict(row.signal_breakdown_json)
         transmission = breakdown.get("transmission_summary") if isinstance(breakdown.get("transmission_summary"), dict) else {}
         if not transmission:
@@ -112,6 +116,7 @@ def evaluate(limit: int) -> dict[str, Any]:
         "prospective_unique_ticker_count": len(seen_tickers),
         "prospective_unique_ticker_coverage_counts": dict(prospective_coverage),
         "prospective_unique_ticker_source_counts": dict(prospective_source),
+        "prospective_degraded_reason_counts": dict(prospective_degraded_reasons),
         "matched_exposure_plan_count": matched,
         "adjusted_plan_count": adjusted,
         "average_alignment_adjustment": round(mean(adjustments), 4) if adjustments else None,

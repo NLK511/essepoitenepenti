@@ -132,6 +132,7 @@ def test_missing_explicit_ontology_is_degraded_and_neutral() -> None:
     )
 
     assert result["coverage_status"] == "degraded"
+    assert any("confidence score" in reason for reason in result["coverage_reasons"])
     assert result["source"] == "taxonomy_derived"
     assert result["directional_support"] in {"mixed", "unknown"}
     assert result["alignment_adjustment_percent"] == 0.0
