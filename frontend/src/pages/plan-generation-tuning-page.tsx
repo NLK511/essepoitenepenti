@@ -1,24 +1,67 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 
-import { getJson, postForm } from "../api";
+import { deleteJson, getJson, postForm, postJson } from "../api";
 import { Badge, Card, DisclosureCard, EmptyState, ErrorState, HelpHint, LoadingState, PageHeader, SectionTitle, StatCard } from "../components/ui";
 import { planGenerationTuningConfigTone, runTone } from "../utils";
 import type {
+  PlanGenerationTuningCandidate,
   PlanGenerationTuningConfigVersion,
-  PlanGenerationTuningConfigsResponse,
-  PlanGenerationTuningExplorationCampaign,
   PlanGenerationTuningResponse,
   PlanGenerationTuningRun,
-  PlanGenerationTuningRunsResponse,
-  PlanGenerationTuningValidationResponse,
+  PlanGenerationWalkForwardSummary,
 } from "../types";
 
-const glossaryDoc = (section: string) => `/docs?doc=glossary&section=${section}`;
 const tuningSpecDoc = "/docs?doc=specs-plan-generation-tuning-spec";
 
-function numberOrNull(value: unknown): number | null {
+type ConfigPortfolioItem = {
+  config: PlanGenerationTuningConfigVersion;
+  is_current: boolean;
+  nominal_performance: Record<string, unknown> | null;
+  historical_performance: PerformanceSummary;
+  active_period_performance: PerformanceSummary | null;
+  active_periods: Array<Record<string, unknown>>;
+};
+
+type PerformanceSummary = {
+  actionable_count: number;
+  win_count: number;
+  win_rate_percent: number | null;
+  expected_value: number;
+  ambiguous_count: number;
+  record_count: number;
+};
+
+type JobRun = {
+  id: number;
+  job_id: number | null;
+  status: string;
+  mode: string;
+  search_kind: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  error_message: string | null;
+  summary: Record<string, unknown>;
+  timing: Record<string, unknown>;
+  request: Record<string, unknown>;
+  artifact_path: string | null;
+  best_candidate: Record<string, unknown> | null;
+  artifact: Record<string, unknown>;
+};
+
+type JobRunsResponse = { items: JobRun[]; total: number; limit: number; offset: number };
+type PortfolioResponse = { items: ConfigPortfolioItem[]; total: number; limit: number; offset: number };
+type TuningRunsResponse = { items: PlanGenerationTuningRun[]; total: number; limit: number; offset: number };
+type WalkForwardResponse = { summary: PlanGenerationWalkForwardSummary; candidate_config: Record<string, unknown>; baseline_config: Record<string, unknown>; baseline_version: PlanGenerationTuningConfigVersion; candidate_label: string };
+type LargeSearchCandidate = Record<string, unknown> & { config?: Record<string, number> };
+
+function n(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function s(value: unknown): string {
+  return typeof value === "string" ? value : value === null || value === undefined ? "" : String(value);
 }
 
 function formatPercent(value: number | null, digits = 2): string {
@@ -29,115 +72,119 @@ function formatNumber(value: number | null, digits = 4): string {
   return value === null ? "—" : value.toFixed(digits);
 }
 
-function humanizeCampaignName(name: string): string {
-  return name.split("_").join(" ");
+function formatDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
-function candidateCampaign(candidate: PlanGenerationTuningRun["candidates"][number]): string {
-  const breakdown = candidate.metric_breakdown as Record<string, unknown>;
-  const campaign = breakdown.campaign;
-  if (typeof campaign === "string" && campaign.trim()) {
-    return campaign;
-  }
-  if (candidate.is_baseline) {
-    return "baseline";
-  }
-  return "unknown";
+function candidateMetric(candidate: PlanGenerationTuningCandidate | null, key: string): number | null {
+  return candidate ? n(candidate.metric_breakdown[key]) : null;
 }
 
-function candidateMetric(candidate: PlanGenerationTuningRun["candidates"][number], key: string): number | null {
-  return numberOrNull((candidate.metric_breakdown as Record<string, unknown>)[key]);
+function bestMetric(run: JobRun, key: string): number | null {
+  return n(run.best_candidate?.[key]);
 }
 
-function candidateConfigValue(candidate: PlanGenerationTuningRun["candidates"][number], key: string): string {
-  const value = candidate.config[key];
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value.toFixed(4);
-  }
-  return value === null || value === undefined ? "—" : String(value);
+function largeSearchCandidates(run: JobRun | null): LargeSearchCandidate[] {
+  const large = run?.artifact.large_plan_generation_tuning_search;
+  if (!large || typeof large !== "object" || Array.isArray(large)) return [];
+  const candidates = (large as Record<string, unknown>).top_candidates;
+  return Array.isArray(candidates) ? candidates.filter((candidate): candidate is LargeSearchCandidate => Boolean(candidate && typeof candidate === "object" && !Array.isArray(candidate))) : [];
+}
+
+function largeCandidateLabel(candidate: LargeSearchCandidate, index: number): string {
+  return `${s(candidate.phase) || "large"} #${index + 1} · WR ${formatPercent(n(candidate.validation_win_rate_percent))} · EV ${formatNumber(n(candidate.validation_expected_value))}`;
+}
+
+function performanceLine(performance: PerformanceSummary | null): string {
+  if (!performance) return "No records in active period";
+  return `${performance.actionable_count} actionable · WR ${formatPercent(performance.win_rate_percent)} · EV ${formatNumber(performance.expected_value)} · ${performance.record_count} records`;
+}
+
+function candidateLabel(candidate: PlanGenerationTuningCandidate): string {
+  const campaign = candidate.metric_breakdown.campaign;
+  return `${candidate.is_baseline ? "baseline" : s(campaign) || "candidate"} #${candidate.rank ?? candidate.id ?? "?"}`;
 }
 
 export function PlanGenerationTuningPage() {
   const [state, setState] = useState<PlanGenerationTuningResponse | null>(null);
-  const [runs, setRuns] = useState<PlanGenerationTuningRun[] | null>(null);
-  const [configs, setConfigs] = useState<PlanGenerationTuningConfigVersion[] | null>(null);
-  const [validation, setValidation] = useState<PlanGenerationTuningValidationResponse | null>(null);
+  const [portfolio, setPortfolio] = useState<ConfigPortfolioItem[] | null>(null);
+  const [jobRuns, setJobRuns] = useState<JobRun[] | null>(null);
+  const [tuningRuns, setTuningRuns] = useState<PlanGenerationTuningRun[] | null>(null);
+  const [jobOffset, setJobOffset] = useState(0);
+  const [jobTotal, setJobTotal] = useState(0);
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
+  const [selectedTuningRunId, setSelectedTuningRunId] = useState<number | null>(null);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<number | null>(null);
+  const [selectedLargeCandidateIndex, setSelectedLargeCandidateIndex] = useState(0);
+  const [selectedConfigId, setSelectedConfigId] = useState<number | null>(null);
+  const [walkForward, setWalkForward] = useState<WalkForwardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
-  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
-  const [runMode, setRunMode] = useState<"manual" | "explore" | "wide">("manual");
+  const [standardMode, setStandardMode] = useState<"manual" | "wide" | "explore">("manual");
   const [largeCoarseCandidates, setLargeCoarseCandidates] = useState(20000);
   const [largeFineCandidates, setLargeFineCandidates] = useState(5000);
-  const [showAllCandidates, setShowAllCandidates] = useState(false);
+  const [lookbackDays, setLookbackDays] = useState(365);
+  const [validationDays, setValidationDays] = useState(90);
+  const [stepDays, setStepDays] = useState(30);
+  const [minValidationResolved, setMinValidationResolved] = useState(8);
 
-  async function loadData() {
+  const pageSize = 20;
+
+  async function loadPortfolio(activeConfigId: number | null = state?.state.active_config_version_id ?? null) {
+    const loadedPortfolio = await getJson<PortfolioResponse>("/api/plan-generation-tuning/configs/portfolio?limit=100");
+    setPortfolio(loadedPortfolio.items);
+    setSelectedConfigId((current) => current ?? activeConfigId ?? loadedPortfolio.items[0]?.config.id ?? null);
+  }
+
+  async function loadData(nextOffset = jobOffset) {
     try {
       setError(null);
-      const [loadedState, loadedRuns, loadedConfigs, loadedValidation] = await Promise.all([
+      const [loadedState, loadedJobs, loadedTuningRuns] = await Promise.all([
         getJson<PlanGenerationTuningResponse>("/api/plan-generation-tuning"),
-        getJson<PlanGenerationTuningRunsResponse>("/api/plan-generation-tuning/runs?limit=20"),
-        getJson<PlanGenerationTuningConfigsResponse>("/api/plan-generation-tuning/configs?limit=20"),
-        getJson<PlanGenerationTuningValidationResponse>("/api/plan-generation-tuning/validation"),
+        getJson<JobRunsResponse>(`/api/plan-generation-tuning/job-runs?limit=${pageSize}&offset=${nextOffset}`),
+        getJson<TuningRunsResponse>("/api/plan-generation-tuning/runs?limit=50"),
       ]);
       setState(loadedState);
-      setRuns(loadedRuns.items);
-      setConfigs(loadedConfigs.items);
-      setValidation(loadedValidation);
-      setSelectedRunId((current) => current ?? loadedRuns.items[0]?.id ?? null);
+      setJobRuns(loadedJobs.items);
+      setJobTotal(loadedJobs.total);
+      setJobOffset(loadedJobs.offset);
+      setTuningRuns(loadedTuningRuns.items);
+      setSelectedJobId((current) => current ?? loadedJobs.items[0]?.id ?? null);
+      setSelectedTuningRunId((current) => current ?? loadedTuningRuns.items[0]?.id ?? null);
+      void loadPortfolio(loadedState.state.active_config_version_id ?? null).catch((portfolioError: unknown) => {
+        setError(portfolioError instanceof Error ? portfolioError.message : "Failed to load config portfolio");
+      });
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Failed to load plan generation tuning state");
+      setError(loadError instanceof Error ? loadError.message : "Failed to load tuning research state");
     }
   }
 
   useEffect(() => {
-    void loadData();
+    void loadData(0);
   }, []);
 
-  const selectedRun = useMemo(() => {
-    if (!runs || runs.length === 0) return null;
-    return runs.find((run) => run.id === selectedRunId) ?? runs[0];
-  }, [runs, selectedRunId]);
+  useEffect(() => {
+    setSelectedLargeCandidateIndex(0);
+  }, [selectedJobId]);
 
-  const selectedRunCandidates = useMemo(() => {
-    if (!selectedRun) return [];
-    return [...selectedRun.candidates].sort((left, right) => (left.rank ?? Number.POSITIVE_INFINITY) - (right.rank ?? Number.POSITIVE_INFINITY));
-  }, [selectedRun]);
-  const selectedRunVisibleCandidates = useMemo(() => {
-    if (showAllCandidates) return selectedRunCandidates;
-    return selectedRunCandidates.filter((candidate) => candidate.promotion_eligible || candidate.is_baseline);
-  }, [selectedRunCandidates, showAllCandidates]);
-  const selectedRunMetricSpread = useMemo(() => {
-    if (!selectedRun) return null;
-    const searchRates = new Set<string>();
-    const validationRates = new Set<string>();
-    const validationExpectedValues = new Set<string>();
-    for (const candidate of selectedRunCandidates) {
-      const searchRate = candidateMetric(candidate, "search_win_rate_percent");
-      const validationRate = candidateMetric(candidate, "validation_win_rate_percent");
-      const validationExpectedValue = candidateMetric(candidate, "validation_expected_value");
-      if (searchRate !== null) searchRates.add(searchRate.toFixed(2));
-      if (validationRate !== null) validationRates.add(validationRate.toFixed(2));
-      if (validationExpectedValue !== null) validationExpectedValues.add(validationExpectedValue.toFixed(4));
-    }
-    return {
-      searchWinRateCount: searchRates.size,
-      validationWinRateCount: validationRates.size,
-      validationExpectedValueCount: validationExpectedValues.size,
-    };
-  }, [selectedRun, selectedRunCandidates]);
+  const selectedJob = useMemo(() => jobRuns?.find((run) => run.id === selectedJobId) ?? jobRuns?.[0] ?? null, [jobRuns, selectedJobId]);
+  const selectedTuningRun = useMemo(() => tuningRuns?.find((run) => run.id === selectedTuningRunId) ?? tuningRuns?.[0] ?? null, [tuningRuns, selectedTuningRunId]);
+  const selectedCandidate = useMemo(() => selectedTuningRun?.candidates.find((candidate) => candidate.id === selectedCandidateId) ?? selectedTuningRun?.candidates.find((candidate) => !candidate.is_baseline) ?? null, [selectedTuningRun, selectedCandidateId]);
+  const selectedConfig = useMemo(() => portfolio?.find((item) => item.config.id === selectedConfigId) ?? portfolio?.find((item) => item.is_current) ?? null, [portfolio, selectedConfigId]);
+  const activeConfig = useMemo(() => portfolio?.find((item) => item.is_current) ?? null, [portfolio]);
+  const selectedJobLargeCandidates = useMemo(() => largeSearchCandidates(selectedJob), [selectedJob]);
+  const selectedLargeCandidate = selectedJobLargeCandidates[selectedLargeCandidateIndex] ?? selectedJobLargeCandidates[0] ?? null;
 
-
-  const selectedRunWinner = selectedRunCandidates[0] ?? null;
-  const selectedRunBaseline = useMemo(() => selectedRunCandidates.find((candidate) => candidate.is_baseline) ?? null, [selectedRunCandidates]);
-
-  async function runTuning(mode: string, apply: boolean) {
+  async function runTuning(mode: "manual" | "wide" | "explore") {
     try {
-      setSaving(apply ? `apply-${mode}` : `run-${mode}`);
+      setSaving(`run-${mode}`);
       setError(null);
-      await postForm<unknown>(`/api/plan-generation-tuning/run?mode=${encodeURIComponent(mode)}&apply=${apply ? "true" : "false"}`, {});
-      await loadData();
+      await postForm<unknown>(`/api/plan-generation-tuning/run?mode=${encodeURIComponent(mode)}&apply=false`, {});
+      await loadData(0);
     } catch (runError) {
-      setError(runError instanceof Error ? runError.message : "Failed to run plan generation tuning");
+      setError(runError instanceof Error ? runError.message : "Failed to queue tuning job");
     } finally {
       setSaving(null);
     }
@@ -154,21 +201,20 @@ export function PlanGenerationTuningPage() {
         fine_seeds: "20",
       });
       await postForm<unknown>(`/api/plan-generation-tuning/large-search/run?${query.toString()}`, {});
-      await loadData();
+      await loadData(0);
     } catch (runError) {
-      setError(runError instanceof Error ? runError.message : "Failed to queue large tuning search");
+      setError(runError instanceof Error ? runError.message : "Failed to queue large search");
     } finally {
       setSaving(null);
     }
   }
 
-  async function promote(configVersionId: number | null) {
-    if (!configVersionId) return;
+  async function promoteConfig(configId: number | null) {
+    if (!configId) return;
     try {
-      setSaving(`promote-config-${configVersionId}`);
-      setError(null);
-      await postForm(`/api/plan-generation-tuning/configs/${configVersionId}/promote`, {});
-      await loadData();
+      setSaving(`promote-${configId}`);
+      await postForm(`/api/plan-generation-tuning/configs/${configId}/promote`, {});
+      await loadData(jobOffset);
     } catch (promoteError) {
       setError(promoteError instanceof Error ? promoteError.message : "Failed to promote config");
     } finally {
@@ -176,302 +222,203 @@ export function PlanGenerationTuningPage() {
     }
   }
 
-  async function promoteCandidate(runId: number | null, candidateId: number | null) {
-    if (!runId || !candidateId) return;
+  async function deleteConfig(configId: number | null) {
+    if (!configId) return;
     try {
-      setSaving(`promote-candidate-${candidateId}`);
-      setError(null);
-      await postForm(`/api/plan-generation-tuning/runs/${runId}/candidates/${candidateId}/promote`, {});
-      await loadData();
-    } catch (promoteError) {
-      setError(promoteError instanceof Error ? promoteError.message : "Failed to promote candidate");
+      setSaving(`delete-${configId}`);
+      await deleteJson(`/api/plan-generation-tuning/configs/${configId}`);
+      await loadData(jobOffset);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Failed to delete config");
     } finally {
       setSaving(null);
     }
   }
 
+  async function runWalkForward(target: "candidate" | "large-candidate" | "config") {
+    try {
+      setSaving(`walk-${target}`);
+      setError(null);
+      const payload: Record<string, unknown> = {
+        baseline_config_version_id: activeConfig?.config.id ?? state?.state.active_config_version_id ?? null,
+        lookback_days: lookbackDays,
+        validation_days: validationDays,
+        step_days: stepDays,
+        min_validation_resolved: minValidationResolved,
+      };
+      if (target === "candidate") {
+        if (!selectedCandidate?.id) throw new Error("Select a candidate first");
+        payload.candidate_id = selectedCandidate.id;
+      } else if (target === "large-candidate") {
+        if (!selectedLargeCandidate?.config) throw new Error("Select a large-search candidate first");
+        payload.candidate_config = selectedLargeCandidate.config;
+        payload.candidate_label = `large-run-${selectedJob?.id ?? "unknown"}-candidate-${selectedLargeCandidateIndex + 1}`;
+      } else {
+        if (!selectedConfig?.config.id) throw new Error("Select a config first");
+        payload.candidate_config_version_id = selectedConfig.config.id;
+      }
+      const response = await postJson<WalkForwardResponse>("/api/plan-generation-tuning/walk-forward", payload);
+      setWalkForward(response);
+    } catch (walkError) {
+      setError(walkError instanceof Error ? walkError.message : "Failed to run walk-forward validation");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  if (error) return <ErrorState message={error} />;
+  if (!state || !jobRuns || !tuningRuns) return <LoadingState message="Loading tuning research…" />;
+
   return (
     <>
       <PageHeader
-        kicker="Research Lab"
-        title="Plan generation tuning"
-        subtitle="Change downstream plan construction only when Quality & Edge points to entry, risk, reward, or precision problems."
-        actions={<HelpHint tooltip="This page shows the dedicated plan-generation tuning workflow: live config, ranked candidates, and guarded promotions." to={tuningSpecDoc} />}
+        kicker="Research"
+        title="Plan-generation tuning"
+        subtitle="Manage promoted configs, launch tuning jobs, inspect job history, and run focused baseline comparisons."
+        actions={<HelpHint tooltip="Large searches are research-only. Revalidate selected configs/candidates with walk-forward before promotion." to={tuningSpecDoc} />}
       />
-      {error ? <ErrorState message={error} /> : null}
-      {!state || !runs || !configs ? <LoadingState message="Loading plan generation tuning…" /> : null}
-      {state && runs && configs ? (
-        <div className="stack-page">
-          <Card>
-            <SectionTitle
-              kicker="Downstream construction"
-              title="Should plan framing parameters change?"
-              subtitle="Start with validation and promotion safety. Process details and raw configs stay below as supporting evidence."
-              actions={<Link to="/recommendation-quality" className="button-subtle">◈ Quality & Edge</Link>}
-            />
-            <section className="metrics-grid top-gap-small">
-              <StatCard label="Active config" value={String(state.state.active_config_version_id ?? "baseline")} helper="Current live config version" tooltip="The parameter set that is currently live for plan generation. New tuning runs compare candidates against this active baseline." tooltipTo={tuningSpecDoc} />
-              <StatCard label="Auto promote" value={state.state.auto_promote_enabled ? "on" : "off"} helper="Whether winners can be promoted automatically" tooltip="Whether a winning candidate can become the live configuration automatically after it passes the promotion gate." tooltipTo={glossaryDoc("promotion-gate")} />
-              <StatCard label="Latest run" value={String(state.state.latest_run?.id ?? "—")} helper="Most recent tuning execution" tooltip="The most recent stored tuning run, including its ranked candidates and any promotion outcome." tooltipTo={tuningSpecDoc} />
-              <StatCard label="Auto mode" value={state.state.auto_enabled ? "on" : "off"} helper="Scheduled autonomous tuning" tooltip="Whether this tuning workflow can run on its own schedule instead of only when an operator starts it manually." tooltipTo={tuningSpecDoc} />
-            </section>
-          </Card>
 
-          <section className="card-grid">
-            <DisclosureCard kicker="Process" title="How it works" subtitle="Reference explanation of the tuning flow; collapse it once the workflow is familiar." actions={<HelpHint tooltip="This explains the order of operations so the results below are easier to interpret." to={tuningSpecDoc} />}>
-              <div className="data-stack top-gap-small">
-                <article className="data-card">
-                  <div className="data-card-header">
-                    <div className="cluster"><Badge tone="info">1</Badge><Badge>Split the data</Badge></div>
-                  </div>
-                  <div className="helper-text top-gap-small">Eligible historical records are split into a search slice and a holdout validation slice. Search helps discover candidates; validation checks whether they still hold up.</div>
-                </article>
-                <article className="data-card">
-                  <div className="data-card-header">
-                    <div className="cluster"><Badge tone="info">2</Badge><Badge>Try four phases</Badge></div>
-                  </div>
-                  <div className="helper-text top-gap-small">The tuner spends candidate budget on four bounded phases: entry calibration, selectivity, risk protection, and reward expansion.</div>
-                </article>
-                <article className="data-card">
-                  <div className="data-card-header">
-                    <div className="cluster"><Badge tone="info">3</Badge><Badge>Rank by validation</Badge></div>
-                  </div>
-                  <div className="helper-text top-gap-small">Candidates are ranked lexicographically by validation win rate, then validation win count, then validation expected value. Search metrics are shown to help explain why a candidate looked promising.</div>
-                </article>
+      <section className="card-grid">
+        <Card>
+          <SectionTitle kicker="Live baseline" title={activeConfig?.config.version_label ?? "No active config"} subtitle="Currently promoted plan-generation config used as the default comparison baseline." />
+          <div className="metrics-grid top-gap-small">
+            <StatCard label="Config id" value={activeConfig?.config.id ?? "—"} helper="Active version" />
+            <StatCard label="Historical WR" value={formatPercent(activeConfig?.historical_performance.win_rate_percent ?? null)} helper={performanceLine(activeConfig?.historical_performance ?? null)} />
+            <StatCard label="Active-period WR" value={formatPercent(activeConfig?.active_period_performance?.win_rate_percent ?? null)} helper={performanceLine(activeConfig?.active_period_performance ?? null)} />
+            <StatCard label="Active periods" value={activeConfig?.active_periods.length ?? 0} helper="Inferred from promotion events" />
+          </div>
+        </Card>
+        <Card>
+          <SectionTitle kicker="Launch" title="Run tuning jobs" subtitle="Standard, wide, exploratory, and large-search jobs are queued as background runs." />
+          <div className="cluster top-gap-small">
+            <select className="input" value={standardMode} onChange={(event) => setStandardMode(event.target.value as "manual" | "wide" | "explore")}>
+              <option value="manual">Standard</option>
+              <option value="wide">Wide</option>
+              <option value="explore">Exploratory</option>
+            </select>
+            <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(standardMode)}>{saving === `run-${standardMode}` ? "… Queueing" : "Queue tuning job"}</button>
+          </div>
+          <div className="cluster top-gap-medium">
+            <label className="form-field compact-field"><span>Coarse</span><input type="number" min="1" max="1000000" value={largeCoarseCandidates} onChange={(event) => setLargeCoarseCandidates(Number(event.target.value || 1))} /></label>
+            <label className="form-field compact-field"><span>Fine</span><input type="number" min="0" max="500000" value={largeFineCandidates} onChange={(event) => setLargeFineCandidates(Number(event.target.value || 0))} /></label>
+            <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runLargeSearch()}>{saving === "run-large" ? "… Queueing" : "Queue large search"}</button>
+          </div>
+        </Card>
+      </section>
+
+      <DisclosureCard kicker="Configurations" title="Promoted configuration management" subtitle="Nominal performance comes from the source tuning candidate when available; historical performance rescoring uses all current eligible records.">
+        <div className="data-stack top-gap-small">
+          {!portfolio ? <LoadingState message="Loading config portfolio…" /> : portfolio.map((item) => (
+            <article key={item.config.id ?? item.config.version_label} className={`data-card ${selectedConfig?.config.id === item.config.id ? "data-card-selected" : ""}`}>
+              <div className="data-card-header">
+                <button className="button-link" type="button" onClick={() => setSelectedConfigId(item.config.id)}>{item.config.version_label}</button>
+                <div className="cluster"><Badge tone={item.is_current ? "ok" : planGenerationTuningConfigTone(item.config.status)}>{item.is_current ? "live" : item.config.status}</Badge><Badge>{item.config.source}</Badge><Badge>#{item.config.id ?? "?"}</Badge></div>
               </div>
-            </DisclosureCard>
-
-            <Card>
-              <SectionTitle kicker="Controls" title="Queue plan generation tuning" subtitle="Queue a worker-backed dry run, guarded promotion, or research-only large search so the run appears in the debugger and worker logs." actions={<HelpHint tooltip="The run is queued to a worker. Dry runs rank candidates without changing the live config. Apply mode promotes only if the winner passes backend guardrails. Large tuning search is research-only and cannot promote." to={tuningSpecDoc} />} />
-              <div className="data-stack top-gap-small">
-                <label className="form-field">
-                  <span>Run mode</span>
-                  <select value={runMode} onChange={(event) => setRunMode(event.target.value as "manual" | "explore" | "wide") }>
-                    <option value="manual">Standard tuning search</option>
-                    <option value="explore">Exploratory tuning search</option>
-                    <option value="wide">Wide tuning search</option>
-                  </select>
-                </label>
-                <div className="helper-text">
-                  {runMode === "manual"
-                    ? "Standard tuning search uses the narrower default candidate pool."
-                    : runMode === "explore"
-                      ? "Exploratory tuning search widens the step size and validation view a bit."
-                      : "Wide tuning search uses the broadest built-in deterministic sweep and rolling walk-forward validation. The large parameter search is a separate non-schedulable research tuning search."}
-                </div>
-                <div className="cluster">
-                  <button className="button" type="button" disabled={saving !== null} onClick={() => void runTuning(runMode, false)}>{saving === `run-${runMode}` ? "… Queueing" : `▶ ${runMode === "manual" ? "Standard dry run" : `${runMode} dry run`}`}</button>
-                  <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runTuning(runMode, true)}>{saving === `apply-${runMode}` ? "… Applying" : `↑ ${runMode === "manual" ? "Promote standard winner if eligible" : `${runMode} promote if eligible`}`}</button>
-                </div>
+              <div className="metrics-grid top-gap-small">
+                <StatCard label="Historical" value={formatPercent(item.historical_performance.win_rate_percent)} helper={performanceLine(item.historical_performance)} />
+                <StatCard label="Active period" value={formatPercent(item.active_period_performance?.win_rate_percent ?? null)} helper={performanceLine(item.active_period_performance)} />
+                <StatCard label="Nominal source" value={item.nominal_performance ? `rank ${s((item.nominal_performance.metrics as Record<string, unknown> | undefined)?.rank) || s(item.nominal_performance.rank) || "—"}` : "—"} helper={item.nominal_performance ? "Source candidate data available" : "Baseline/manual config"} />
+                <StatCard label="Periods" value={item.active_periods.length} helper={item.active_periods.map((period) => `${formatDate(s(period.started_at))} → ${period.ended_at ? formatDate(s(period.ended_at)) : "now"}`).join("; ") || "Never active"} />
               </div>
-              <div className="data-card top-gap-medium">
-                <div className="data-card-header">
-                  <div>
-                    <div className="data-card-title">Plan Generation Large Tuning Search</div>
-                    <div className="helper-text">Research-only, non-schedulable coarse/fine search. It writes a resumable cache and never promotes config. Increase counts manually for multi-hour searches.</div>
-                  </div>
-                  <Badge tone="warning">large</Badge>
-                </div>
-                <div className="cluster top-gap-small">
-                  <label className="form-field compact-field">
-                    <span>Coarse candidates</span>
-                    <input type="number" min="1" max="1000000" value={largeCoarseCandidates} onChange={(event) => setLargeCoarseCandidates(Number(event.target.value || 1))} />
-                  </label>
-                  <label className="form-field compact-field">
-                    <span>Fine candidates</span>
-                    <input type="number" min="0" max="500000" value={largeFineCandidates} onChange={(event) => setLargeFineCandidates(Number(event.target.value || 0))} />
-                  </label>
-                </div>
-                <div className="cluster top-gap-small">
-                  <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runLargeSearch()}>{saving === "run-large" ? "… Queueing" : "▶ Queue large tuning search"}</button>
-                  <span className="helper-text">Use the run/debugger page for progress. This can take hours.</span>
-                </div>
+              <div className="cluster top-gap-small">
+                <button className="button-secondary" type="button" disabled={saving !== null || item.is_current || item.config.status === "deleted"} onClick={() => void promoteConfig(item.config.id)}>{saving === `promote-${item.config.id}` ? "… Promoting" : "Promote live"}</button>
+                <button className="button-danger" type="button" disabled={saving !== null || item.is_current || item.config.status === "deleted"} onClick={() => void deleteConfig(item.config.id)}>{saving === `delete-${item.config.id}` ? "… Deleting" : "Delete"}</button>
+                <button className="button-secondary" type="button" disabled={saving !== null} onClick={() => void runWalkForward("config")}>Compare selected config</button>
               </div>
-              <details className="top-gap-small">
-                <summary className="helper-text">Show active config JSON</summary>
-                <pre className="code-block top-gap-small">{JSON.stringify(state.state.active_config, null, 2)}</pre>
-              </details>
-            </Card>
-          </section>
-
-          <DisclosureCard kicker="Exploration" title="Search shape" subtitle="Supporting detail: deterministic phases and budgets used by the backend." actions={<HelpHint tooltip="This plan keeps exploration ordered: entry first, then risk, then reward." to={tuningSpecDoc} />}>
-            <div className="table-wrapper top-gap-small">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>priority</th>
-                    <th>campaign</th>
-                    <th>budget</th>
-                    <th>primary knobs</th>
-                    <th>description</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {state.exploration_campaigns.map((campaign: PlanGenerationTuningExplorationCampaign) => (
-                    <tr key={campaign.name}>
-                      <td><Badge tone={campaign.priority <= 3 ? "ok" : "info"}>#{campaign.priority}</Badge></td>
-                      <td>{humanizeCampaignName(campaign.name)}</td>
-                      <td>{campaign.candidate_budget}</td>
-                      <td>{campaign.parameter_keys.join(", ")}</td>
-                      <td className="helper-text">{campaign.description}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="helper-text top-gap-small">Base sweep starts with the live baseline plus bounded local perturbations; a small refinement pass may add a few more around the top seeds.</div>
-          </DisclosureCard>
-
-          {validation ? (
-            <Card>
-              <SectionTitle kicker="Validation" title="Walk-forward promotion gate" subtitle={validation.summary.promotion_rationale} actions={<HelpHint tooltip="This gate decides whether a candidate tuning change can become live. It relies on walk-forward validation so later slices, not just one pooled sample, influence the decision." to={glossaryDoc("walk-forward-validation")} />} />
-              <section className="metrics-grid top-gap-small">
-                <StatCard label="Promotion" value={validation.summary.promotion_recommended ? "recommended" : "not yet"} helper="Walk-forward gate outcome" tooltip="Whether the current candidate passed the backend promotion gate strongly enough to be recommended for promotion." tooltipTo={glossaryDoc("promotion-gate")} />
-                <StatCard label="Qualified slices" value={validation.summary.qualified_slices} helper="Slices with enough resolved records" tooltip="How many walk-forward slices had enough resolved records to count as meaningful evidence. Thin slices are intentionally not treated as strong proof." tooltipTo={glossaryDoc("slice")} />
-                <StatCard label="Avg win-rate delta" value={validation.summary.average_win_rate_delta !== null ? validation.summary.average_win_rate_delta.toFixed(2) : "—"} helper="Candidate minus baseline" tooltip="Average change in win rate for the candidate versus the current baseline across qualified validation slices." tooltipTo={tuningSpecDoc} />
-                <StatCard label="Avg EV delta" value={validation.summary.average_expected_value_delta !== null ? validation.summary.average_expected_value_delta.toFixed(4) : "—"} helper="Candidate minus baseline" tooltip="Average change in expected-value-style return for the candidate versus the current baseline across qualified validation slices." tooltipTo={tuningSpecDoc} />
-              </section>
-              <div className="helper-text top-gap-small">Candidate: {validation.candidate_version.version_label} · Baseline: {validation.baseline_version.version_label}</div>
-            </Card>
-          ) : null}
-
-
-          <Card>
-            <SectionTitle kicker="Runs" title="Recent tuning runs" subtitle="Select a run to inspect ranked candidates and promotion outcomes." actions={<HelpHint tooltip="Each run stores the candidate ranking, winner, validation counts, and whether promotion happened or was blocked." to={tuningSpecDoc} />} />
-            {runs.length === 0 ? (
-              <EmptyState message="No plan generation tuning runs recorded yet." />
-            ) : (
-              <div className="data-stack top-gap-small">
-                {runs.map((run) => (
-                  <button key={run.id ?? run.created_at} type="button" className={`data-card data-card-button ${selectedRunId === run.id ? "data-card-selected" : ""}`} onClick={() => setSelectedRunId(run.id ?? null)}>
-                    <div className="data-card-header">
-                      <div className="cluster">
-                        <Badge tone={runTone(run.status)}>{run.status}</Badge>
-                        <Badge>{run.mode}</Badge>
-                        <Badge>#{run.id ?? "?"}</Badge>
-                      </div>
-                      <div className="helper-text">eligible {run.eligible_record_count} · validation {run.validation_record_count}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </Card>
-
-          <Card>
-            <SectionTitle kicker="Selected run" title="Ranked comparison" subtitle="Start with the winner, baseline, and top few candidates. Expand to the full ranked table only when you need it." actions={<HelpHint tooltip="This view is designed to answer three questions quickly: what won, why it won, and whether promotion is safe." to={tuningSpecDoc} />} />
-            {selectedRun ? (
-              <div className="stack-page">
-                <section className="card-grid top-gap-small">
-                  <Card>
-                    <SectionTitle kicker="Winner" title={`#${selectedRunWinner?.rank ?? "?"} ${selectedRunWinner ? humanizeCampaignName(candidateCampaign(selectedRunWinner)) : "candidate"}`} subtitle="Best candidate versus baseline." />
-                    <div className="data-stack top-gap-small">
-                      <div className="helper-text">Validation WR {formatPercent(candidateMetric(selectedRunWinner, "validation_win_rate_percent"))} · validation EV {formatNumber(candidateMetric(selectedRunWinner, "validation_expected_value"))} · promo {selectedRunWinner ? (selectedRunWinner.promotion_eligible ? "eligible" : "blocked") : "—"}</div>
-                      <div className="helper-text">Changed keys: {selectedRunWinner?.changed_keys.join(", ") || "baseline"}</div>
-                      <div className="helper-text">Baseline comparison: {selectedRunBaseline ? `${formatPercent(candidateMetric(selectedRunBaseline, "validation_win_rate_percent"))} WR / ${formatNumber(candidateMetric(selectedRunBaseline, "validation_expected_value"))} EV` : "—"}</div>
-                    </div>
-                  </Card>
-                  <Card>
-                    <SectionTitle kicker="Run" title={`#${selectedRun.id ?? "?"} · ${selectedRun.mode}`} subtitle={`Promotion mode: ${selectedRun.promotion_mode}`} />
-                    <div className="metrics-grid top-gap-small">
-                      <StatCard label="Candidates" value={selectedRun.candidate_count} helper="Stored ranked rows" />
-                      <StatCard label="Eligible records" value={selectedRun.eligible_record_count} helper="Evidence pool" />
-                      <StatCard label="Validation records" value={selectedRun.validation_record_count} helper="Holdout slice" />
-                      <StatCard label="Promotion" value={selectedRun.promoted_config_version_id ? "applied" : selectedRun.winning_candidate_id ? "blocked" : "—"} helper="Backend guardrail outcome" />
-                    </div>
-                    <div className="helper-text top-gap-small">Winner candidate: {selectedRun.winning_candidate_id ?? "—"} · Promoted config: {selectedRun.promoted_config_version_id ?? "—"}</div>
-                  </Card>
-                </section>
-
-                <DisclosureCard kicker="Candidates" title="Ranked table" subtitle="Read rows from top to bottom. Baseline stays pinned for comparison." actions={<button className="button-secondary" type="button" onClick={() => setShowAllCandidates((current) => !current)}>{showAllCandidates ? "Show eligible only" : "Show all candidates"}</button>}>
-                  {selectedRunMetricSpread && selectedRunMetricSpread.searchWinRateCount === 1 && selectedRunMetricSpread.validationWinRateCount === 1 ? (
-                    <div className="alert alert-warning top-gap-small">
-                      This run is tie-heavy: most rows share the same search and validation win rates, so expected value and changed keys matter more here.
-                    </div>
-                  ) : null}
-                  {!showAllCandidates && selectedRunCandidates.length !== selectedRunVisibleCandidates.length ? (
-                    <div className="helper-text top-gap-small">Showing {selectedRunVisibleCandidates.length} eligible candidate{selectedRunVisibleCandidates.length === 1 ? "" : "s"} out of {selectedRunCandidates.length}. Blocked rows are hidden by default.</div>
-                  ) : null}
-                  {selectedRunVisibleCandidates.length > 0 ? (
-                    <div className="table-wrapper top-gap-small">
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>rank</th>
-                            <th>campaign</th>
-                            <th>changes</th>
-                            <th>search WR</th>
-                            <th>validation WR</th>
-                            <th>validation EV</th>
-                            <th>promo</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedRunVisibleCandidates.map((candidate) => (
-                            <tr key={candidate.id ?? `${selectedRun.id}-${candidate.rank}`}>
-                              <td><Badge tone={candidate.rank === 1 ? "ok" : candidate.is_baseline ? "info" : "neutral"}>#{candidate.rank ?? "?"}</Badge></td>
-                              <td>{candidate.is_baseline ? "baseline" : humanizeCampaignName(candidateCampaign(candidate))}</td>
-                              <td className="helper-text">{candidate.changed_keys.length > 0 ? candidate.changed_keys.join(", ") : "baseline"}</td>
-                              <td>{formatPercent(candidateMetric(candidate, "search_win_rate_percent"))}</td>
-                              <td>{formatPercent(candidateMetric(candidate, "validation_win_rate_percent"))}</td>
-                              <td>{formatNumber(candidateMetric(candidate, "validation_expected_value"))}</td>
-                              <td>
-                                <div className="cluster">
-                                  <Badge tone={candidate.promotion_eligible ? "ok" : "warning"}>{candidate.promotion_eligible ? "eligible" : "blocked"}</Badge>
-                                  {candidate.promotion_eligible && candidate.id && selectedRun.id ? (
-                                    <button className="button-secondary" type="button" disabled={saving === `promote-candidate-${candidate.id}`} onClick={() => void promoteCandidate(selectedRun.id, candidate.id)}>
-                                      {saving === `promote-candidate-${candidate.id}` ? "… Promoting" : "Promote"}
-                                    </button>
-                                  ) : null}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <EmptyState message={showAllCandidates ? "No candidates available." : "No eligible candidates available in this run."} />
-                  )}
-                </DisclosureCard>
-
-                <details className="top-gap-small">
-                  <summary className="helper-text">Show raw candidate breakdown JSON</summary>
-                  <pre className="code-block top-gap-small">{JSON.stringify(selectedRun.candidates, null, 2)}</pre>
-                </details>
-              </div>
-            ) : (
-              <EmptyState message="No run selected." />
-            )}
-          </Card>
-
-          <DisclosureCard kicker="Configs" title="Config versions" subtitle="Promote a stored version to become the live plan-generation configuration only after validation supports it." actions={<HelpHint tooltip="Config versions capture baseline and promoted parameter sets so live plan construction stays auditable." to={tuningSpecDoc} />}>
-            {configs.length === 0 ? (
-              <EmptyState message="No config versions available yet." />
-            ) : (
-              <div className="data-stack top-gap-small">
-                {configs.map((config) => (
-                  <article key={config.id ?? config.version_label} className="data-card">
-                    <div className="data-card-header">
-                      <div className="cluster">
-                        <Badge tone={planGenerationTuningConfigTone(config.status)}>{config.status}</Badge>
-                        <Badge>{config.version_label}</Badge>
-                        <Badge>{config.source}</Badge>
-                      </div>
-                      <div className="helper-text">#{config.id ?? "?"}</div>
-                    </div>
-                    <div className="cluster top-gap-small">
-                      <button className="button-secondary" type="button" disabled={saving === `promote-${config.id ?? 0}` || config.id === state.state.active_config_version_id} onClick={() => void promote(config.id)}>
-                        {saving === `promote-${config.id ?? 0}` ? "… Promoting" : config.id === state.state.active_config_version_id ? "✓ Active" : "↑ Promote"}
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </DisclosureCard>
+            </article>
+          ))}
         </div>
-      ) : null}
+      </DisclosureCard>
+
+      <section className="card-grid">
+        <Card>
+          <SectionTitle kicker="Job history" title="Tuning job runs" subtitle="Paged history includes standard/wide/exploratory tuning and large-search artifact jobs." />
+          <div className="data-stack top-gap-small">
+            {jobRuns.length === 0 ? <EmptyState message="No tuning job runs yet." /> : jobRuns.map((run) => (
+              <button key={run.id} type="button" className={`data-card data-card-button ${selectedJob?.id === run.id ? "data-card-selected" : ""}`} onClick={() => setSelectedJobId(run.id)}>
+                <div className="data-card-header">
+                  <div className="cluster"><Badge tone={runTone(run.status)}>{run.status}</Badge><Badge>{run.mode}</Badge><Badge>#{run.id}</Badge></div>
+                  <div className="helper-text">{formatDate(run.started_at ?? run.created_at)} · {run.duration_seconds !== null ? `${run.duration_seconds.toFixed(1)}s` : "queued"}</div>
+                </div>
+                <div className="helper-text top-gap-small">Best: WR {formatPercent(bestMetric(run, "validation_win_rate_percent"))} · EV {formatNumber(bestMetric(run, "validation_expected_value"))} · actionable {bestMetric(run, "validation_actionable_count") ?? "—"}</div>
+              </button>
+            ))}
+          </div>
+          <div className="cluster top-gap-small">
+            <button className="button-secondary" disabled={jobOffset <= 0} onClick={() => void loadData(Math.max(0, jobOffset - pageSize))}>Previous</button>
+            <span className="helper-text">{jobOffset + 1}-{Math.min(jobOffset + pageSize, jobTotal)} of {jobTotal}</span>
+            <button className="button-secondary" disabled={jobOffset + pageSize >= jobTotal} onClick={() => void loadData(jobOffset + pageSize)}>Next</button>
+          </div>
+        </Card>
+        <Card>
+          <SectionTitle kicker="Selected job" title={selectedJob ? `Run #${selectedJob.id}` : "No run selected"} subtitle="Expand raw payloads only when investigating details." />
+          {selectedJob ? (
+            <div className="stack-page">
+              <section className="metrics-grid top-gap-small">
+                <StatCard label="Status" value={selectedJob.status} helper={selectedJob.mode} />
+                <StatCard label="Started" value={formatDate(selectedJob.started_at)} helper={`Completed ${formatDate(selectedJob.completed_at)}`} />
+                <StatCard label="Best validation WR" value={formatPercent(bestMetric(selectedJob, "validation_win_rate_percent"))} helper={`EV ${formatNumber(bestMetric(selectedJob, "validation_expected_value"))}`} />
+                <StatCard label="Artifact" value={selectedJob.artifact_path ? "yes" : "—"} helper={selectedJob.artifact_path ?? "No artifact path"} />
+              </section>
+              <details><summary className="helper-text">Best candidate JSON</summary><pre className="code-block top-gap-small">{JSON.stringify(selectedJob.best_candidate, null, 2)}</pre></details>
+              <details><summary className="helper-text">Run summary/artifact JSON</summary><pre className="code-block top-gap-small">{JSON.stringify({ summary: selectedJob.summary, request: selectedJob.request, artifact: selectedJob.artifact }, null, 2)}</pre></details>
+            </div>
+          ) : <EmptyState message="Select a job run." />}
+        </Card>
+      </section>
+
+      <DisclosureCard kicker="Candidates" title="Custom walk-forward validation" subtitle="Select a persisted tuning candidate or a research-only large-search candidate, then compare it against the promoted baseline.">
+        <div className="data-stack top-gap-small">
+          <div className="data-card">
+            <div className="data-card-header"><div className="data-card-title">Standard/wide/exploratory candidates</div><Badge>promotable source</Badge></div>
+            <div className="cluster top-gap-small">
+              <select className="input" value={selectedTuningRunId ?? ""} onChange={(event) => { setSelectedTuningRunId(Number(event.target.value)); setSelectedCandidateId(null); }}>
+                {tuningRuns.map((run) => <option key={run.id ?? run.created_at} value={run.id ?? ""}>Run #{run.id} · {run.mode} · {formatDate(run.started_at ?? run.created_at)}</option>)}
+              </select>
+              <select className="input" value={selectedCandidate?.id ?? ""} onChange={(event) => setSelectedCandidateId(Number(event.target.value))}>
+                {selectedTuningRun?.candidates.map((candidate) => <option key={candidate.id ?? `${candidate.rank}`} value={candidate.id ?? ""}>{candidateLabel(candidate)} · WR {formatPercent(candidateMetric(candidate, "validation_win_rate_percent"))} · EV {formatNumber(candidateMetric(candidate, "validation_expected_value"))}</option>)}
+              </select>
+              <button className="button" type="button" disabled={saving !== null || !selectedCandidate} onClick={() => void runWalkForward("candidate")}>{saving === "walk-candidate" ? "… Validating" : "Walk-forward candidate"}</button>
+            </div>
+          </div>
+          <div className="data-card">
+            <div className="data-card-header"><div className="data-card-title">Large-search candidates</div><Badge tone="warning">research only</Badge></div>
+            {selectedJobLargeCandidates.length > 0 ? (
+              <div className="cluster top-gap-small">
+                <select className="input" value={selectedLargeCandidateIndex} onChange={(event) => setSelectedLargeCandidateIndex(Number(event.target.value || 0))}>
+                  {selectedJobLargeCandidates.map((candidate, index) => <option key={`${selectedJob?.id ?? "large"}-${index}`} value={index}>{largeCandidateLabel(candidate, index)}</option>)}
+                </select>
+                <button className="button-secondary" type="button" disabled={saving !== null || !selectedLargeCandidate?.config} onClick={() => void runWalkForward("large-candidate")}>{saving === "walk-large-candidate" ? "… Validating" : "Walk-forward large candidate"}</button>
+              </div>
+            ) : <div className="helper-text top-gap-small">Select a completed large-search job in Job history to validate one of its top candidates. Large-search candidates are raw research configs and are not promotion-capable by themselves.</div>}
+          </div>
+        </div>
+        <div className="cluster top-gap-small">
+          <label className="form-field compact-field"><span>Lookback days</span><input type="number" min="30" max="3650" value={lookbackDays} onChange={(event) => setLookbackDays(Number(event.target.value || 365))} /></label>
+          <label className="form-field compact-field"><span>Validation days</span><input type="number" min="5" max="730" value={validationDays} onChange={(event) => setValidationDays(Number(event.target.value || 90))} /></label>
+          <label className="form-field compact-field"><span>Step days</span><input type="number" min="1" max="365" value={stepDays} onChange={(event) => setStepDays(Number(event.target.value || 30))} /></label>
+          <label className="form-field compact-field"><span>Min resolved</span><input type="number" min="1" max="500" value={minValidationResolved} onChange={(event) => setMinValidationResolved(Number(event.target.value || 8))} /></label>
+        </div>
+      </DisclosureCard>
+
+      <Card>
+        <SectionTitle kicker="Comparison" title="Baseline delta" subtitle="Latest selected walk-forward comparison against the currently promoted baseline." />
+        {walkForward ? (
+          <div className="stack-page">
+            <section className="metrics-grid top-gap-small">
+              <StatCard label="Promotion" value={walkForward.summary.promotion_recommended ? "recommended" : "blocked"} helper={walkForward.summary.promotion_rationale} />
+              <StatCard label="Qualified slices" value={walkForward.summary.qualified_slices} helper={`${walkForward.summary.total_slices} total`} />
+              <StatCard label="Avg WR delta" value={formatPercent(walkForward.summary.average_win_rate_delta)} helper="Candidate minus baseline" />
+              <StatCard label="Avg EV delta" value={formatNumber(walkForward.summary.average_expected_value_delta)} helper="Candidate minus baseline" />
+            </section>
+            <div className="table-wrapper top-gap-small">
+              <table className="data-table"><thead><tr><th>slice</th><th>baseline act/WR/EV</th><th>candidate act/WR/EV</th><th>delta</th><th>status</th></tr></thead><tbody>
+                {walkForward.summary.slices.map((slice) => <tr key={slice.slice_index}><td>{slice.window_label}</td><td>{slice.baseline_actionable_count} · {formatPercent(slice.baseline_win_rate_percent)} · {formatNumber(slice.baseline_expected_value)}</td><td>{slice.candidate_actionable_count} · {formatPercent(slice.candidate_win_rate_percent)} · {formatNumber(slice.candidate_expected_value)}</td><td>{formatPercent(slice.win_rate_delta)} · {formatNumber(slice.expected_value_delta)}</td><td><Badge tone={slice.sample_status === "qualified" ? "ok" : "warning"}>{slice.sample_status}</Badge></td></tr>)}
+              </tbody></table>
+            </div>
+          </div>
+        ) : <EmptyState message="Select a config or candidate, set validation windows, then run walk-forward validation." />}
+      </Card>
     </>
   );
 }

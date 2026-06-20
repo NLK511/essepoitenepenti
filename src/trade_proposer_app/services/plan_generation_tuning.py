@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from functools import cmp_to_key
 from itertools import islice
 import gc
+import json
 import hashlib
 import logging
 import math
@@ -12,6 +13,7 @@ import os
 import resource
 import sys
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.statuses import TradeOutcome
@@ -24,6 +26,12 @@ from trade_proposer_app.domain.models import (
     RecommendationDecisionSample,
     RecommendationPlan,
     RecommendationPlanOutcome,
+)
+from trade_proposer_app.persistence.models import (
+    BrokerPositionRecord,
+    PlanGenerationTuningEligibleRecordRecord,
+    RecommendationOutcomeRecord,
+    RecommendationPlanRecord,
 )
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.repositories.recommendation_decision_samples import (
@@ -67,6 +75,7 @@ class TuningPlanSnapshot:
     stop_loss: float | None
     take_profit: float | None
     signal_breakdown: dict[str, object]
+    ticker: str = ""
 
 
 @dataclass(slots=True)
@@ -793,9 +802,119 @@ class PlanGenerationTuningService:
     def _eligible_records(
         self, *, ticker: str | None, setup_family: str | None, limit: int | None
     ) -> list[EligibleTuningRecord]:
+        self._refresh_eligible_record_cache_if_needed(ticker=ticker, limit=limit)
+        return self._cached_eligible_records(ticker=ticker, setup_family=setup_family, limit=limit)
+
+    def _refresh_eligible_record_cache_if_needed(
+        self, *, ticker: str | None, limit: int | None
+    ) -> None:
+        cached_count = int(
+            self.session.scalar(select(func.count()).select_from(PlanGenerationTuningEligibleRecordRecord))
+            or 0
+        )
+        latest_cache_update = self.session.scalar(
+            select(func.max(PlanGenerationTuningEligibleRecordRecord.source_updated_at))
+        )
+        latest_source_update = self._latest_eligible_source_update()
+        if cached_count > 0 and latest_cache_update is not None:
+            cache_updated_at = self._normalize_datetime(latest_cache_update)
+            source_updated_at = self._normalize_datetime(latest_source_update)
+            if source_updated_at is None or cache_updated_at >= source_updated_at:
+                return
+        logger.info("refreshing persisted plan-generation tuning eligible records")
+        records = self._build_eligible_records_from_sources(ticker=None, limit=None)
+        for record in records:
+            self._upsert_cached_eligible_record(record)
+        self.session.commit()
+
+    def _latest_eligible_source_update(self) -> datetime | None:
+        values = [
+            self.session.scalar(select(func.max(RecommendationPlanRecord.updated_at))),
+            self.session.scalar(select(func.max(RecommendationOutcomeRecord.updated_at))),
+            self.session.scalar(select(func.max(BrokerPositionRecord.updated_at))),
+        ]
+        normalized = [self._normalize_datetime(value) for value in values if value is not None]
+        return max(normalized) if normalized else None
+
+    def _cached_eligible_records(
+        self, *, ticker: str | None, setup_family: str | None, limit: int | None
+    ) -> list[EligibleTuningRecord]:
+        query = select(PlanGenerationTuningEligibleRecordRecord)
+        if ticker:
+            query = query.where(PlanGenerationTuningEligibleRecordRecord.ticker == ticker.upper())
+        normalized_setup_family = str(setup_family or "").strip().lower() or None
+        if normalized_setup_family:
+            query = query.where(
+                PlanGenerationTuningEligibleRecordRecord.setup_family == normalized_setup_family
+            )
+        query = query.order_by(PlanGenerationTuningEligibleRecordRecord.computed_at.asc())
+        if limit is not None:
+            query = query.limit(max(1, int(limit)))
+        rows = self.session.scalars(query).all()
+        return [self._cached_eligible_record_to_model(row) for row in rows]
+
+    def _cached_eligible_record_to_model(
+        self, row: PlanGenerationTuningEligibleRecordRecord
+    ) -> EligibleTuningRecord:
+        signal_breakdown = self._loads_json_object(row.signal_breakdown_json)
+        return EligibleTuningRecord(
+            plan=TuningPlanSnapshot(
+                id=int(row.plan_id),
+                computed_at=self._normalize_datetime(row.computed_at),
+                action=row.action,
+                confidence_percent=float(row.confidence_percent),
+                entry_price_low=row.entry_price_low,
+                entry_price_high=row.entry_price_high,
+                stop_loss=row.stop_loss,
+                take_profit=row.take_profit,
+                signal_breakdown=signal_breakdown,
+                ticker=row.ticker,
+            ),
+            outcome=TuningOutcomeSnapshot(
+                max_favorable_excursion=row.max_favorable_excursion,
+                max_adverse_excursion=row.max_adverse_excursion,
+                horizon_return_5d=row.horizon_return_5d,
+            ),
+            sample=None,
+            setup_family=row.setup_family,
+            context_bias=row.context_bias,
+        )
+
+    def _upsert_cached_eligible_record(self, record: EligibleTuningRecord) -> None:
+        plan = record.plan
+        outcome = record.outcome
+        plan_id = int(plan.id or 0)
+        if plan_id <= 0:
+            return
+        row = self.session.scalar(
+            select(PlanGenerationTuningEligibleRecordRecord).where(
+                PlanGenerationTuningEligibleRecordRecord.plan_id == plan_id
+            )
+        )
+        if row is None:
+            row = PlanGenerationTuningEligibleRecordRecord(plan_id=plan_id)
+            self.session.add(row)
+        row.ticker = str(getattr(plan, "ticker", "") or "")
+        row.action = str(plan.action or "")
+        row.computed_at = self._normalize_datetime(plan.computed_at) or datetime.now(timezone.utc)
+        row.setup_family = record.setup_family
+        row.context_bias = record.context_bias
+        row.confidence_percent = float(plan.confidence_percent)
+        row.entry_price_low = plan.entry_price_low
+        row.entry_price_high = plan.entry_price_high
+        row.stop_loss = plan.stop_loss
+        row.take_profit = plan.take_profit
+        row.signal_breakdown_json = json.dumps(plan.signal_breakdown or {}, sort_keys=True)
+        row.max_favorable_excursion = outcome.max_favorable_excursion
+        row.max_adverse_excursion = outcome.max_adverse_excursion
+        row.horizon_return_5d = outcome.horizon_return_5d
+        row.source_updated_at = datetime.now(timezone.utc)
+
+    def _build_eligible_records_from_sources(
+        self, *, ticker: str | None, limit: int | None
+    ) -> list[EligibleTuningRecord]:
         normalized_limit = None if limit is None else max(1, int(limit))
         eligible: list[EligibleTuningRecord] = []
-        normalized_setup_family = str(setup_family or "").strip().lower() or None
         offset = 0
         while True:
             batch_limit = self.ELIGIBLE_RECORD_BATCH_SIZE
@@ -822,8 +941,6 @@ class PlanGenerationTuningService:
                 features = self.reliability_features.build(plan, outcome, sample)
                 if features is None:
                     continue
-                if normalized_setup_family and features.setup_family != normalized_setup_family:
-                    continue
                 eligible.append(
                     self._compact_eligible_record(
                         plan=plan,
@@ -840,6 +957,24 @@ class PlanGenerationTuningService:
                 break
         eligible.sort(key=lambda item: item.plan.computed_at)
         return eligible
+
+    @staticmethod
+    def _normalize_datetime(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    @staticmethod
+    def _loads_json_object(raw: str | None) -> dict[str, object]:
+        if not raw:
+            return {}
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
 
     @staticmethod
     def _compact_eligible_record(
@@ -871,6 +1006,7 @@ class PlanGenerationTuningService:
                 stop_loss=float(plan.stop_loss) if plan.stop_loss is not None else None,
                 take_profit=float(plan.take_profit) if plan.take_profit is not None else None,
                 signal_breakdown=compact_signal_breakdown,
+                ticker=plan.ticker,
             ),
             outcome=TuningOutcomeSnapshot(
                 max_favorable_excursion=float(outcome.max_favorable_excursion)

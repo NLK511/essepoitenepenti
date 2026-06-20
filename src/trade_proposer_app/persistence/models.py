@@ -780,6 +780,30 @@ class PlanGenerationTuningCandidateRecord(Base, TimestampMixin):
     rejection_reasons_json: Mapped[str] = mapped_column(Text, default="[]")
 
 
+class PlanGenerationTuningEligibleRecordRecord(Base, TimestampMixin):
+    __tablename__ = "plan_generation_tuning_eligible_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plan_id: Mapped[int] = mapped_column(
+        ForeignKey("recommendation_plans.id"), unique=True, index=True
+    )
+    ticker: Mapped[str] = mapped_column(String(32), index=True)
+    action: Mapped[str] = mapped_column(String(32), index=True)
+    computed_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    setup_family: Mapped[str] = mapped_column(String(64), default="", index=True)
+    context_bias: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    confidence_percent: Mapped[float] = mapped_column(Float, default=0.0)
+    entry_price_low: Mapped[float | None] = mapped_column(Float, nullable=True)
+    entry_price_high: Mapped[float | None] = mapped_column(Float, nullable=True)
+    stop_loss: Mapped[float | None] = mapped_column(Float, nullable=True)
+    take_profit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    signal_breakdown_json: Mapped[str] = mapped_column(Text, default="{}")
+    max_favorable_excursion: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_adverse_excursion: Mapped[float | None] = mapped_column(Float, nullable=True)
+    horizon_return_5d: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_updated_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
 class PlanGenerationTuningConfigVersionRecord(Base, TimestampMixin):
     __tablename__ = "plan_generation_tuning_config_versions"
 

@@ -286,6 +286,19 @@ Use these operator-facing names to avoid confusing monitors, tuning searches, an
 - **Wide tuning search**: the broadest built-in deterministic plan-generation tuning run (`mode=wide`).
 - **Plan Generation Large Tuning Search**: offline, non-schedulable, research-only coarse/fine parameter search from `large-parameter-search-spec.md`.
 
+## Operator research workflow
+
+The tuning page must support a research workflow, not just a raw candidate table:
+
+- promoted configuration management: list config versions, active status, nominal source-candidate performance, scored historical performance, and inferred active periods; non-active configurations may be retired/deleted from the active management view. The UI may load this portfolio after the main page shell for responsiveness, but historical rescoring must use the full eligible evidence set; eligible record snapshots should be persisted instead of rebuilt from scratch on every page load.
+- job launch controls for standard, wide, exploratory, and large-search runs
+- paged job-run history across standard/wide/exploratory and large-search jobs, with run datetime, status, duration, mode/search kind, and inline best-result summary
+- expandable run details with candidates, summaries, artifacts, rejection reasons, and raw payloads where useful
+- baseline-vs-candidate/config comparison using the currently promoted config or a selected baseline version
+- walk-forward validation for selected candidates/configs/raw configs with operator-specified lookback days, validation-window days, step days, and minimum resolved validation rows
+
+Large-search artifacts remain research-only and are not promotion-capable by themselves. A large-search candidate must be revalidated with walk-forward and operator review before any equivalent configuration is promoted through normal config-version controls.
+
 The hidden worker-backed system job for normal UI/API tuning runs is named `__system__:plan-generation-tuning-standard-search`. It is not operator-schedulable.
 
 ## Jobs, failures, and observability

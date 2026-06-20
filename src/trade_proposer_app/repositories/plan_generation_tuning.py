@@ -103,6 +103,15 @@ class PlanGenerationTuningRepository:
             raise ValueError(f"plan generation tuning config version {config_version_id} not found")
         return self._to_config_version_model(record)
 
+    def update_config_status(self, config_version_id: int, status: str) -> PlanGenerationTuningConfigVersion:
+        record = self.session.get(PlanGenerationTuningConfigVersionRecord, config_version_id)
+        if record is None:
+            raise ValueError(f"plan generation tuning config version {config_version_id} not found")
+        record.status = status
+        self.session.commit()
+        self.session.refresh(record)
+        return self._to_config_version_model(record)
+
     def list_config_versions(self, *, limit: int = 20, offset: int = 0) -> list[PlanGenerationTuningConfigVersion]:
         rows = self.session.scalars(
             select(PlanGenerationTuningConfigVersionRecord)

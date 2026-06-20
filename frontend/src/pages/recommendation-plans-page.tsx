@@ -167,22 +167,32 @@ export function RecommendationPlansPage() {
           statsParams.set("computed_after", computedAfter);
         }
         const summaryQuery = summaryParams.toString();
-        const [planResults, stats, calibrationResult, baselinesResult, familyReviewResult, evidenceResult, actionabilityResult] = await Promise.all([
-          getJson<RecommendationPlanListResponse>(buildQuery(searchParams, computedAfter)),
+        setPlanStats(null);
+        setCalibration(null);
+        setBaselines(null);
+        setFamilyReview(null);
+        setEvidenceConcentration(null);
+        setActionability(null);
+        const planResults = await getJson<RecommendationPlanListResponse>(buildQuery(searchParams, computedAfter));
+        setPlansResponse(planResults);
+
+        void Promise.all([
           getJson<RecommendationPlanStats>(`/api/recommendation-plans/stats?${statsParams.toString()}`),
           getJson<RecommendationCalibrationSummary>(`/api/recommendation-outcomes/summary?${summaryQuery}`),
           getJson<RecommendationBaselineSummary>(`/api/recommendation-plans/baselines?${summaryQuery}`),
           getJson<RecommendationSetupFamilyReviewSummary>(`/api/recommendation-outcomes/setup-family-review?${summaryQuery}`),
           getJson<RecommendationEvidenceConcentrationSummary>(`/api/recommendation-outcomes/evidence-concentration?${summaryQuery}`),
           getJson<RecommendationActionabilityDiagnostics>(`/api/recommendation-outcomes/actionability-diagnostics?${summaryQuery}`),
-        ]);
-        setPlansResponse(planResults);
-        setPlanStats(stats);
-        setCalibration(calibrationResult);
-        setBaselines(baselinesResult);
-        setFamilyReview(familyReviewResult);
-        setEvidenceConcentration(evidenceResult);
-        setActionability(actionabilityResult);
+        ]).then(([stats, calibrationResult, baselinesResult, familyReviewResult, evidenceResult, actionabilityResult]) => {
+          setPlanStats(stats);
+          setCalibration(calibrationResult);
+          setBaselines(baselinesResult);
+          setFamilyReview(familyReviewResult);
+          setEvidenceConcentration(evidenceResult);
+          setActionability(actionabilityResult);
+        }).catch((secondaryError: unknown) => {
+          setError(secondaryError instanceof Error ? secondaryError.message : "Failed to load recommendation-plan analytics");
+        });
 
         const runIds = Array.from(new Set(planResults.items.map((item) => item.run_id).filter((value): value is number => typeof value === "number"))).slice(0, 20);
         if (planId) {

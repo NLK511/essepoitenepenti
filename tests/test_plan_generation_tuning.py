@@ -16,6 +16,7 @@ from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import JobType, StrategyHorizon
 from trade_proposer_app.domain.models import (
+    PlanGenerationTuningConfigVersion,
     PlanGenerationWalkForwardSummary,
     RecommendationPlan,
     RecommendationPlanOutcome,
@@ -413,6 +414,27 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
         self.assertIn("plan generation tuning candidate search prepared", logged_messages)
         self.assertIn("plan generation tuning evaluating batch", logged_messages)
         self.assertIn("plan generation tuning finished", logged_messages)
+
+    def test_eligible_records_are_persisted_after_first_build(self) -> None:
+        self._seed_record(
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            mfe=15.0,
+            mae=4.0,
+            outcome="win",
+            stop_loss_hit=False,
+            take_profit_hit=True,
+        )
+
+        first = self.service._eligible_records(ticker=None, setup_family=None, limit=None)
+        self.assertEqual(len(first), 1)
+        with patch.object(
+            PlanGenerationTuningService,
+            "_build_eligible_records_from_sources",
+            side_effect=AssertionError("cache was not used"),
+        ):
+            second = self.service._eligible_records(ticker=None, setup_family=None, limit=None)
+        self.assertEqual(len(second), 1)
+        self.assertEqual(second[0].plan.id, first[0].plan.id)
 
     def test_eligible_records_stream_all_batches_without_truncation(self) -> None:
         for index in range(1, 7):
@@ -1160,6 +1182,88 @@ class PlanGenerationTuningRouteTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(configs.status_code, 200)
             configs_payload = configs.json()
             self.assertGreaterEqual(configs_payload["total"], 1)
+
+    async def test_research_routes_expose_research_workflow_endpoints(self) -> None:
+        session = Session(bind=self.engine)
+        try:
+            service = PlanGenerationTuningService(session)
+            baseline = service.ensure_baseline_config_version()
+            candidate_config = normalize_plan_generation_tuning_config(baseline.config)
+            candidate_config["global.actionable_confidence_floor_percent"] = 65.0
+            extra_version = service.repository.create_config_version(
+                PlanGenerationTuningConfigVersion(
+                    version_label="manual-test-candidate",
+                    status="candidate",
+                    source="manual",
+                    parent_config_version_id=baseline.id,
+                    config=candidate_config,
+                )
+            )
+        finally:
+            session.close()
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            queued = await client.post("/api/plan-generation-tuning/run?mode=wide&apply=false")
+            self.assertEqual(queued.status_code, 200)
+
+            job_runs = await client.get("/api/plan-generation-tuning/job-runs?limit=10")
+            self.assertEqual(job_runs.status_code, 200)
+            job_payload = job_runs.json()
+            self.assertGreaterEqual(job_payload["total"], 1)
+            self.assertEqual(job_payload["items"][0]["job_type"], "plan_generation_tuning")
+            self.assertEqual(job_payload["items"][0]["request"]["mode"], "wide")
+
+            portfolio = await client.get("/api/plan-generation-tuning/configs/portfolio?limit=10")
+            self.assertEqual(portfolio.status_code, 200)
+            portfolio_payload = portfolio.json()
+            labels = [item["config"]["version_label"] for item in portfolio_payload["items"]]
+            self.assertIn("manual-test-candidate", labels)
+            first_item = portfolio_payload["items"][0]
+            self.assertIn("historical_performance", first_item)
+            self.assertIn("active_periods", first_item)
+
+            walk_forward = await client.post(
+                "/api/plan-generation-tuning/walk-forward",
+                json={
+                    "candidate_config_version_id": extra_version.id,
+                    "baseline_config_version_id": baseline.id,
+                    "lookback_days": 30,
+                    "validation_days": 5,
+                    "step_days": 5,
+                    "min_validation_resolved": 1,
+                },
+            )
+            self.assertEqual(walk_forward.status_code, 200)
+            walk_payload = walk_forward.json()
+            self.assertEqual(walk_payload["candidate_label"], "manual-test-candidate")
+            self.assertIn("summary", walk_payload)
+
+            raw_walk_forward = await client.post(
+                "/api/plan-generation-tuning/walk-forward",
+                json={
+                    "candidate_config": candidate_config,
+                    "candidate_label": "large-run-test-candidate-1",
+                    "baseline_config_version_id": baseline.id,
+                    "lookback_days": 30,
+                    "validation_days": 5,
+                    "step_days": 5,
+                    "min_validation_resolved": 1,
+                },
+            )
+            self.assertEqual(raw_walk_forward.status_code, 200)
+            self.assertEqual(
+                raw_walk_forward.json()["candidate_label"], "large-run-test-candidate-1"
+            )
+
+            delete_active = await client.delete(
+                f"/api/plan-generation-tuning/configs/{baseline.id}"
+            )
+            self.assertEqual(delete_active.status_code, 400)
+
+            deleted = await client.delete(f"/api/plan-generation-tuning/configs/{extra_version.id}")
+            self.assertEqual(deleted.status_code, 200)
+            self.assertEqual(deleted.json()["status"], "deleted")
 
     async def test_route_promotes_a_ranked_eligible_non_winner_candidate(self) -> None:
         active_config = normalize_plan_generation_tuning_config(None)

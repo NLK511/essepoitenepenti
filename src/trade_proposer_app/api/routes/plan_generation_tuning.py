@@ -1,13 +1,20 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query
+from datetime import UTC, datetime
 
-from trade_proposer_app.config import settings
+from fastapi import APIRouter, Depends, Form, HTTPException, Query
+from pydantic import BaseModel, Field
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
+from trade_proposer_app.config import settings
 from trade_proposer_app.db import get_db_session
 from trade_proposer_app.domain.enums import JobType
-from trade_proposer_app.domain.models import PlanGenerationWalkForwardSummary
+from trade_proposer_app.domain.models import (
+    PlanGenerationTuningEvent,
+    PlanGenerationWalkForwardSummary,
+)
+from trade_proposer_app.persistence.models import PlanGenerationTuningEventRecord, RunRecord
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.services.job_execution import JobExecutionService
@@ -27,6 +34,88 @@ router = APIRouter(prefix="/plan-generation-tuning", tags=["plan-generation-tuni
 
 STANDARD_TUNING_SYSTEM_JOB_NAME = "plan-generation-tuning-standard-search"
 LARGE_TUNING_SYSTEM_JOB_NAME = "plan-generation-tuning-large-search"
+PROMOTION_EVENT_TYPES = {
+    "baseline_seeded",
+    "baseline_reseeded",
+    "config_promoted",
+    "config_promoted_manual",
+    "config_promoted_manual_candidate",
+}
+
+
+class PlanGenerationWalkForwardRequest(BaseModel):
+    candidate_config: dict[str, float] | None = None
+    candidate_label: str | None = None
+    candidate_config_version_id: int | None = None
+    candidate_id: int | None = None
+    baseline_config_version_id: int | None = None
+    lookback_days: int = Field(default=365, ge=30, le=3650)
+    validation_days: int = Field(default=90, ge=5, le=730)
+    step_days: int = Field(default=30, ge=1, le=365)
+    min_validation_resolved: int = Field(default=8, ge=1, le=500)
+    limit: int | None = Field(default=None, ge=1, le=10000)
+
+
+def _score_payload(
+    service: PlanGenerationTuningService,
+    records: list,
+    config: dict[str, float],
+) -> dict[str, object]:
+    actionable, wins, expected_value, ambiguous = service._score_records(records, config)  # noqa: SLF001
+    return {
+        "actionable_count": actionable,
+        "win_count": wins,
+        "win_rate_percent": round((wins / actionable) * 100.0, 2) if actionable else None,
+        "expected_value": round(expected_value, 4),
+        "ambiguous_count": ambiguous,
+        "record_count": len(records),
+    }
+
+
+def _normalize_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _run_summary_payload(row: RunRecord) -> dict[str, object]:
+    summary = RunRepository._deserialize_json_object(row.summary_json) if row.summary_json else {}  # noqa: SLF001
+    artifact = (
+        RunRepository._deserialize_json_object(row.artifact_json) if row.artifact_json else {}
+    )  # noqa: SLF001
+    timing = RunRepository._deserialize_json_object(row.timing_json) if row.timing_json else {}  # noqa: SLF001
+    request = artifact.get("plan_generation_tuning_request") if isinstance(artifact, dict) else None
+    request = request if isinstance(request, dict) else {}
+    best = summary.get("best_candidate") if isinstance(summary, dict) else None
+    if best is None and isinstance(artifact, dict):
+        large = artifact.get("large_plan_generation_tuning_search")
+        if isinstance(large, dict):
+            candidates = large.get("top_candidates")
+            if isinstance(candidates, list) and candidates:
+                best = candidates[0]
+    return {
+        "id": row.id,
+        "job_id": row.job_id,
+        "job_type": row.job_type,
+        "status": row.status,
+        "mode": (
+            summary.get("mode") or request.get("mode") or request.get("search_kind") or "unknown"
+        ),
+        "search_kind": summary.get("search_kind") or request.get("search_kind"),
+        "created_at": row.created_at,
+        "started_at": row.started_at,
+        "completed_at": row.completed_at,
+        "duration_seconds": row.duration_seconds,
+        "error_message": row.error_message or None,
+        "summary": summary,
+        "timing": timing,
+        "request": request,
+        "artifact_path": summary.get("artifact_path") if isinstance(summary, dict) else None,
+        "best_candidate": best,
+        "artifact": artifact,
+    }
 
 
 @router.get("")
@@ -128,12 +217,207 @@ async def run_large_plan_generation_tuning_search(
                 "limit": limit,
                 "min_validation_actionable": min_validation_actionable,
                 "batch_log_interval": 1000,
-                "artifact_path": f"artifacts/large-plan-generation-parameter-search-run-{queued_run.id or 'queued'}.json",
-                "cache_path": f"artifacts/large-plan-generation-parameter-search-run-{queued_run.id or 'queued'}.cache.jsonl",
+                "artifact_path": (
+                    "artifacts/large-plan-generation-parameter-search-run-"
+                    f"{queued_run.id or 'queued'}.json"
+                ),
+                "cache_path": (
+                    "artifacts/large-plan-generation-parameter-search-run-"
+                    f"{queued_run.id or 'queued'}.cache.jsonl"
+                ),
             }
         },
     )
     return runs.get_run(queued_run.id or 0)
+
+
+@router.get("/job-runs")
+async def list_plan_generation_tuning_job_runs(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    query = select(RunRecord).where(RunRecord.job_type == JobType.PLAN_GENERATION_TUNING.value)
+    total = int(session.scalar(select(func.count()).select_from(query.subquery())) or 0)
+    rows = session.scalars(
+        query.order_by(desc(RunRecord.created_at), desc(RunRecord.id))
+        .offset(max(0, offset))
+        .limit(max(1, limit))
+    ).all()
+    return {
+        "items": [_run_summary_payload(row) for row in rows],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/configs/portfolio")
+async def list_plan_generation_tuning_config_portfolio(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    service = PlanGenerationTuningService(session)
+    repository = service.repository
+    configs = repository.list_config_versions(limit=limit, offset=offset)
+    records = service._eligible_records(ticker=None, setup_family=None, limit=None)  # noqa: SLF001
+    described_state = service.describe()["state"]
+    active_id = described_state.active_config_version_id
+    promotion_rows = session.scalars(
+        select(PlanGenerationTuningEventRecord)
+        .where(PlanGenerationTuningEventRecord.event_type.in_(PROMOTION_EVENT_TYPES))
+        .order_by(
+            PlanGenerationTuningEventRecord.created_at.asc(),
+            PlanGenerationTuningEventRecord.id.asc(),
+        )
+    ).all()
+    active_periods_by_config: dict[int, list[dict[str, object]]] = {}
+    for index, event in enumerate(promotion_rows):
+        if event.config_version_id is None:
+            continue
+        next_event = promotion_rows[index + 1] if index + 1 < len(promotion_rows) else None
+        active_periods_by_config.setdefault(event.config_version_id, []).append(
+            {
+                "started_at": event.created_at,
+                "ended_at": next_event.created_at if next_event is not None else None,
+                "event_type": event.event_type,
+                "is_current": next_event is None,
+            }
+        )
+    items: list[dict[str, object]] = []
+    for config in configs:
+        normalized = normalize_plan_generation_tuning_config(config.config)
+        nominal: dict[str, object] | None = None
+        if config.source_candidate_id is not None:
+            try:
+                candidate = repository.get_candidate(config.source_candidate_id)
+                nominal = {
+                    "candidate_id": candidate.id,
+                    "run_id": candidate.run_id,
+                    "rank": candidate.rank,
+                    "promotion_eligible": candidate.promotion_eligible,
+                    "metrics": candidate.metric_breakdown,
+                    "rejection_reasons": candidate.rejection_reasons,
+                }
+            except ValueError:
+                nominal = {"missing_source_candidate": config.source_candidate_id}
+        periods = active_periods_by_config.get(config.id or 0, [])
+        active_records = []
+        for period in periods:
+            raw_started_at = period.get("started_at")
+            raw_ended_at = period.get("ended_at")
+            started_at = _normalize_datetime(
+                raw_started_at if isinstance(raw_started_at, datetime) else None
+            )
+            ended_at = _normalize_datetime(
+                raw_ended_at if isinstance(raw_ended_at, datetime) else None
+            )
+            if started_at is None:
+                continue
+            for record in records:
+                computed_at = _normalize_datetime(record.plan.computed_at)
+                if (
+                    computed_at is not None
+                    and computed_at >= started_at
+                    and (ended_at is None or computed_at < ended_at)
+                ):
+                    active_records.append(record)
+        items.append(
+            {
+                "config": config,
+                "is_current": config.id == active_id,
+                "nominal_performance": nominal,
+                "historical_performance": _score_payload(service, records, normalized),
+                "active_period_performance": (
+                    _score_payload(service, active_records, normalized) if active_records else None
+                ),
+                "active_periods": periods,
+            }
+        )
+    return {
+        "items": items,
+        "total": repository.count_config_versions(),
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.post("/walk-forward")
+async def compare_plan_generation_tuning_config_walk_forward(
+    request: PlanGenerationWalkForwardRequest,
+    session: Session = Depends(get_db_session),
+) -> dict[str, object]:
+    service = PlanGenerationTuningService(session)
+    repository = service.repository
+    baseline_version = (
+        repository.get_config_version(request.baseline_config_version_id)
+        if request.baseline_config_version_id
+        else service._resolve_active_config_version()  # noqa: SLF001
+    )
+    if request.candidate_config is not None:
+        candidate_config = normalize_plan_generation_tuning_config(request.candidate_config)
+        candidate_label = request.candidate_label or "raw-config"
+    elif request.candidate_config_version_id is not None:
+        version = repository.get_config_version(request.candidate_config_version_id)
+        candidate_config = normalize_plan_generation_tuning_config(version.config)
+        candidate_label = version.version_label
+    elif request.candidate_id is not None:
+        candidate = repository.get_candidate(request.candidate_id)
+        candidate_config = normalize_plan_generation_tuning_config(candidate.config)
+        candidate_label = f"candidate-{candidate.id or candidate.rank or 'unknown'}"
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="candidate_config, candidate_config_version_id, or candidate_id is required",
+        )
+    records = service._eligible_records(  # noqa: SLF001
+        ticker=None,
+        setup_family=None,
+        limit=request.limit,
+    )
+    summary = PlanGenerationWalkForwardService(service).summarize_records(
+        records=records,
+        candidate_config=candidate_config,
+        baseline_config=normalize_plan_generation_tuning_config(baseline_version.config),
+        candidate_label=candidate_label,
+        baseline_label=baseline_version.version_label,
+        lookback_days=request.lookback_days,
+        validation_days=request.validation_days,
+        step_days=request.step_days,
+        min_validation_resolved=request.min_validation_resolved,
+    )
+    return {
+        "summary": summary,
+        "candidate_config": candidate_config,
+        "baseline_config": normalize_plan_generation_tuning_config(baseline_version.config),
+        "baseline_version": baseline_version,
+        "candidate_label": candidate_label,
+    }
+
+
+@router.delete("/configs/{config_version_id}")
+async def retire_plan_generation_tuning_config(
+    config_version_id: int,
+    session: Session = Depends(get_db_session),
+):
+    service = PlanGenerationTuningService(session)
+    described_state = service.describe()["state"]
+    active_id = described_state.active_config_version_id
+    if config_version_id == active_id:
+        raise HTTPException(status_code=400, detail="cannot delete the currently active config")
+    try:
+        version = service.repository.update_config_status(config_version_id, "deleted")
+        service.repository.create_event(
+            PlanGenerationTuningEvent(
+                event_type="config_deleted_manual",
+                config_version_id=version.id,
+                payload={"version_label": version.version_label},
+            )
+        )
+        return version
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/configs")

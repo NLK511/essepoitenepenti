@@ -483,6 +483,20 @@ def _provider_failure_summary(
     }
 
 
+def _compact_run_payload(run) -> dict[str, object]:
+    return {
+        "id": run.id,
+        "job_id": run.job_id,
+        "job_type": run.job_type,
+        "status": run.status,
+        "error_message": run.error_message,
+        "created_at": run.created_at,
+        "started_at": run.started_at,
+        "completed_at": run.completed_at,
+        "duration_seconds": run.duration_seconds,
+    }
+
+
 def _json_object(raw: str | None) -> dict[str, object]:
     if not raw:
         return {}
@@ -608,8 +622,8 @@ async def get_dashboard(
         "dashboard_window": window_key,
         "watchlists": watchlists,
         "jobs": jobs,
-        "latest_runs": latest_runs,
-        "recent_runs": recent_runs,
+        "latest_runs": [_compact_run_payload(run) for run in latest_runs],
+        "recent_runs": [_compact_run_payload(run) for run in recent_runs],
         "recommendation_plans": recommendation_plans,
         "recommendation_quality": {"summary": selected_quality}
         if isinstance(selected_quality, dict)
