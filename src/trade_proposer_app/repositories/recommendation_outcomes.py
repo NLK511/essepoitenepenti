@@ -1,4 +1,3 @@
-import json
 from datetime import datetime, timezone
 
 from sqlalchemy import case, func, select
@@ -9,6 +8,7 @@ from trade_proposer_app.domain.models import KeyLabelDetail, RecommendationPlanO
 from trade_proposer_app.domain.statuses import OutcomeStatus, TradeOutcome
 from trade_proposer_app.persistence.models import RecommendationOutcomeRecord, RecommendationPlanRecord
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
+from trade_proposer_app.utils.json_payloads import loads_json_object
 
 
 class RecommendationOutcomeRepository:
@@ -359,19 +359,9 @@ class RecommendationOutcomeRepository:
         )
         return model
 
-    @staticmethod
-    def _load_json(raw: str | None) -> dict[str, object]:
-        if not raw:
-            return {}
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        return payload if isinstance(payload, dict) else {}
-
     def _transmission_summary(self, plan_record: RecommendationPlanRecord) -> dict[str, object]:
-        signal_breakdown = self._load_json(plan_record.signal_breakdown_json)
-        evidence_summary = self._load_json(plan_record.evidence_summary_json)
+        signal_breakdown = loads_json_object(plan_record.signal_breakdown_json)
+        evidence_summary = loads_json_object(plan_record.evidence_summary_json)
         candidate = signal_breakdown.get("transmission_summary")
         if isinstance(candidate, dict):
             return candidate

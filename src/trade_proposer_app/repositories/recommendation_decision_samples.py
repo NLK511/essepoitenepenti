@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import RecommendationDecisionSample
 from trade_proposer_app.persistence.models import RecommendationDecisionSampleRecord
+from trade_proposer_app.utils.json_payloads import loads_json_object
 
 
 class RecommendationDecisionSampleRepository:
@@ -218,16 +219,6 @@ class RecommendationDecisionSampleRepository:
         return value.astimezone(timezone.utc)
 
     @staticmethod
-    def _load_json(raw: str | None) -> dict[str, object]:
-        if not raw:
-            return {}
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        return payload if isinstance(payload, dict) else {}
-
-    @staticmethod
     def _dump(value: object) -> str:
         return json.dumps(value, default=RecommendationDecisionSampleRepository._json_default)
 
@@ -251,7 +242,7 @@ class RecommendationDecisionSampleRepository:
             decision_reason=record.decision_reason,
             shortlisted=record.shortlisted,
             shortlist_rank=record.shortlist_rank,
-            shortlist_decision=self._load_json(record.shortlist_decision_json),
+            shortlist_decision=loads_json_object(record.shortlist_decision_json),
             confidence_percent=record.confidence_percent,
             calibrated_confidence_percent=record.calibrated_confidence_percent,
             effective_threshold_percent=record.effective_threshold_percent,
@@ -263,9 +254,9 @@ class RecommendationDecisionSampleRepository:
             review_label=record.review_label,
             review_notes=record.review_notes,
             reviewed_at=self._normalize_datetime(record.reviewed_at),
-            decision_context=self._load_json(record.decision_context_json),
-            signal_breakdown=self._load_json(record.signal_breakdown_json),
-            evidence_summary=self._load_json(record.evidence_summary_json),
+            decision_context=loads_json_object(record.decision_context_json),
+            signal_breakdown=loads_json_object(record.signal_breakdown_json),
+            evidence_summary=loads_json_object(record.evidence_summary_json),
             benchmark_direction=record.benchmark_direction,
             benchmark_status=record.benchmark_status or "pending",
             benchmark_target_1d_hit=record.benchmark_target_1d_hit,

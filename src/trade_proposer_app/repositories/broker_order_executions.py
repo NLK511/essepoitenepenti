@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import BrokerOrderExecution
 from trade_proposer_app.persistence.models import BrokerOrderExecutionRecord
+from trade_proposer_app.utils.json_payloads import loads_json_object
 
 
 class BrokerOrderExecutionRepository:
@@ -251,7 +252,7 @@ class BrokerOrderExecutionRepository:
         ).first()
         if record is None:
             return False
-        payload = self._load(record.response_payload_json, {})
+        payload = loads_json_object(record.response_payload_json)
         if isinstance(payload, dict):
             availability = payload.get("availability")
             if isinstance(availability, dict) and availability.get("known_unavailable") is True:
@@ -304,8 +305,8 @@ class BrokerOrderExecutionRepository:
             submitted_at=self._normalize_datetime(record.submitted_at),
             filled_at=self._normalize_datetime(record.filled_at),
             canceled_at=self._normalize_datetime(record.canceled_at),
-            request_payload=self._load(record.request_payload_json, {}),
-            response_payload=self._load(record.response_payload_json, {}),
+            request_payload=loads_json_object(record.request_payload_json),
+            response_payload=loads_json_object(record.response_payload_json),
             error_message=record.error_message,
             created_at=self._normalize_datetime(record.created_at) or datetime.now(timezone.utc),
             updated_at=self._normalize_datetime(record.updated_at) or datetime.now(timezone.utc),
@@ -314,15 +315,6 @@ class BrokerOrderExecutionRepository:
     @staticmethod
     def _dump(value: object) -> str:
         return json.dumps(value, default=str)
-
-    @staticmethod
-    def _load(value: str | None, default: object) -> object:
-        if not value:
-            return default
-        try:
-            return json.loads(value)
-        except json.JSONDecodeError:
-            return default
 
     @staticmethod
     def _normalize_datetime(value: datetime | None) -> datetime | None:

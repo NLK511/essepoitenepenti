@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.persistence.models import BrokerSteeringDecisionRecord
+from trade_proposer_app.utils.json_payloads import loads_json_list, loads_json_object
 
 
 class BrokerSteeringDecisionRepository:
@@ -114,14 +115,14 @@ class BrokerSteeringDecisionRepository:
             "execute_allowed": record.execute_allowed,
             "executed_at": cls._normalize_datetime(record.executed_at).isoformat() if cls._normalize_datetime(record.executed_at) else None,
             "execution_status": record.execution_status,
-            "reason_codes": cls._loads_list(record.reason_codes_json),
+            "reason_codes": loads_json_list(record.reason_codes_json),
             "proposed_stop_loss": record.proposed_stop_loss,
             "proposed_take_profit": record.proposed_take_profit,
             "current_price": record.current_price,
             "current_stop_loss": record.current_stop_loss,
             "current_take_profit": record.current_take_profit,
-            "risk_delta": cls._loads_object(record.risk_delta_json),
-            "diagnostics": cls._loads_object(record.diagnostics_json),
+            "risk_delta": loads_json_object(record.risk_delta_json),
+            "diagnostics": loads_json_object(record.diagnostics_json),
             "error_message": record.error_message,
             "created_at": cls._normalize_datetime(record.created_at).isoformat() if cls._normalize_datetime(record.created_at) else None,
             "updated_at": cls._normalize_datetime(record.updated_at).isoformat() if cls._normalize_datetime(record.updated_at) else None,
@@ -130,26 +131,6 @@ class BrokerSteeringDecisionRepository:
     @staticmethod
     def _dump(value: object) -> str:
         return json.dumps(value, default=str)
-
-    @staticmethod
-    def _loads_list(raw: str | None) -> list[object]:
-        if not raw:
-            return []
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            return []
-        return parsed if isinstance(parsed, list) else []
-
-    @staticmethod
-    def _loads_object(raw: str | None) -> dict[str, object]:
-        if not raw:
-            return {}
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        return parsed if isinstance(parsed, dict) else {}
 
     @staticmethod
     def _normalize_datetime(value: datetime | None) -> datetime | None:

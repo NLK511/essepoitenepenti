@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 
 from sqlalchemy import or_, select
@@ -10,6 +9,7 @@ from trade_proposer_app.domain.models import KeyLabelDetail, RecommendationPlanO
 from trade_proposer_app.domain.statuses import BROKER_RESOLVED_POSITION_STATUSES, OutcomeStatus, TradeOutcome
 from trade_proposer_app.persistence.models import BrokerPositionRecord, RecommendationOutcomeRecord, RecommendationPlanRecord
 from trade_proposer_app.services.taxonomy import TickerTaxonomyService
+from trade_proposer_app.utils.json_payloads import loads_json_object
 
 
 class EffectivePlanOutcomeRepository:
@@ -261,28 +261,18 @@ class EffectivePlanOutcomeRepository:
             return "65_to_79"
         return "80_plus"
 
-    @staticmethod
-    def _load_json(raw: str | None) -> dict[str, object]:
-        if not raw:
-            return {}
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        return payload if isinstance(payload, dict) else {}
-
     def _record_setup_family(self, record: RecommendationPlanRecord) -> str:
-        signal_breakdown = self._load_json(record.signal_breakdown_json)
+        signal_breakdown = loads_json_object(record.signal_breakdown_json)
         value = signal_breakdown.get("setup_family")
         if isinstance(value, str) and value.strip():
             return value.strip().lower()
-        evidence_summary = self._load_json(record.evidence_summary_json)
+        evidence_summary = loads_json_object(record.evidence_summary_json)
         value = evidence_summary.get("setup_family")
         return value.strip().lower() if isinstance(value, str) and value.strip() else "uncategorized"
 
     def _transmission_summary(self, plan_record: RecommendationPlanRecord) -> dict[str, object]:
-        signal_breakdown = self._load_json(plan_record.signal_breakdown_json)
-        evidence_summary = self._load_json(plan_record.evidence_summary_json)
+        signal_breakdown = loads_json_object(plan_record.signal_breakdown_json)
+        evidence_summary = loads_json_object(plan_record.evidence_summary_json)
         candidate = signal_breakdown.get("transmission_summary")
         if isinstance(candidate, dict):
             return candidate
