@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.persistence.models import DashboardTrendSnapshotRecord
+from trade_proposer_app.utils.json_payloads import loads_json_object
 
 
 class DashboardTrendRepository:
@@ -28,7 +29,7 @@ class DashboardTrendRepository:
         )
         if record is None:
             return None
-        return self._load(record.snapshot_json)
+        return loads_json_object(record.snapshot_json)
 
     def upsert_snapshot(self, snapshot_date: date, payload: dict[str, object]) -> dict[str, object]:
         record = self.session.scalar(
@@ -53,13 +54,3 @@ class DashboardTrendRepository:
     @staticmethod
     def _dump(payload: dict[str, object]) -> str:
         return json.dumps(payload, default=str)
-
-    @staticmethod
-    def _load(payload_json: str | None) -> dict[str, object]:
-        if not payload_json:
-            return {}
-        try:
-            parsed = json.loads(payload_json)
-        except json.JSONDecodeError:
-            return {}
-        return parsed if isinstance(parsed, dict) else {}
