@@ -56,6 +56,7 @@ from trade_proposer_app.services.plan_generation_walk_forward import (
 from trade_proposer_app.services.settings_domains import SettingsDomainService
 from trade_proposer_app.services.settings_mutations import SettingsMutationService
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicyService
+from trade_proposer_app.utils.json_payloads import loads_json_object
 
 
 logger = logging.getLogger(__name__)
@@ -877,7 +878,7 @@ class PlanGenerationTuningService:
     def _cached_eligible_record_to_model(
         self, row: PlanGenerationTuningEligibleRecordRecord
     ) -> EligibleTuningRecord:
-        signal_breakdown = self._loads_json_object(row.signal_breakdown_json)
+        signal_breakdown = loads_json_object(row.signal_breakdown_json)
         return EligibleTuningRecord(
             plan=TuningPlanSnapshot(
                 id=int(row.plan_id),
@@ -989,16 +990,6 @@ class PlanGenerationTuningService:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
-
-    @staticmethod
-    def _loads_json_object(raw: str | None) -> dict[str, object]:
-        if not raw:
-            return {}
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        return parsed if isinstance(parsed, dict) else {}
 
     @staticmethod
     def _compact_eligible_record(

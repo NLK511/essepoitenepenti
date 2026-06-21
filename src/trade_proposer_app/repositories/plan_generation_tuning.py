@@ -18,6 +18,7 @@ from trade_proposer_app.persistence.models import (
     PlanGenerationTuningEventRecord,
     PlanGenerationTuningRunRecord,
 )
+from trade_proposer_app.utils.json_payloads import loads_json_list, loads_json_object
 
 
 class PlanGenerationTuningRepository:
@@ -164,26 +165,6 @@ class PlanGenerationTuningRepository:
     def _dump(cls, value: object) -> str:
         return json.dumps(value, default=cls._json_default)
 
-    @staticmethod
-    def _load_object(raw: str | None) -> dict[str, object]:
-        if not raw:
-            return {}
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        return payload if isinstance(payload, dict) else {}
-
-    @staticmethod
-    def _load_list(raw: str | None) -> list[object]:
-        if not raw:
-            return []
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
-            return []
-        return payload if isinstance(payload, list) else []
-
     def _apply_run(self, record: PlanGenerationTuningRunRecord, run: PlanGenerationTuningRun) -> None:
         record.status = run.status
         record.mode = run.mode
@@ -217,8 +198,8 @@ class PlanGenerationTuningRepository:
             eligible_tier_a_count=record.eligible_tier_a_count,
             validation_record_count=record.validation_record_count,
             candidate_count=record.candidate_count,
-            summary=self._load_object(record.summary_json),
-            filters=self._load_object(record.filters_json),
+            summary=loads_json_object(record.summary_json),
+            filters=loads_json_object(record.filters_json),
             candidates=self.list_candidates_for_run(record.id),
             error_message=record.error_message or None,
             code_version=record.code_version,
@@ -250,13 +231,13 @@ class PlanGenerationTuningRepository:
             status=record.status,
             is_baseline=record.is_baseline,
             promotion_eligible=record.promotion_eligible,
-            config=self._load_object(record.config_json),
-            changed_keys=[str(item) for item in self._load_list(record.changed_keys_json)],
-            score_summary=self._load_object(record.score_summary_json),
-            metric_breakdown=self._load_object(record.metric_breakdown_json),
-            sample_breakdown=self._load_object(record.sample_breakdown_json),
-            validation_summary=self._load_object(record.validation_summary_json),
-            rejection_reasons=[str(item) for item in self._load_list(record.rejection_reasons_json)],
+            config=loads_json_object(record.config_json),
+            changed_keys=[str(item) for item in loads_json_list(record.changed_keys_json)],
+            score_summary=loads_json_object(record.score_summary_json),
+            metric_breakdown=loads_json_object(record.metric_breakdown_json),
+            sample_breakdown=loads_json_object(record.sample_breakdown_json),
+            validation_summary=loads_json_object(record.validation_summary_json),
+            rejection_reasons=[str(item) for item in loads_json_list(record.rejection_reasons_json)],
             created_at=self._normalize_datetime(record.created_at) or datetime.now(timezone.utc),
             updated_at=self._normalize_datetime(record.updated_at) or datetime.now(timezone.utc),
         )
@@ -280,7 +261,7 @@ class PlanGenerationTuningRepository:
             parent_config_version_id=record.parent_config_version_id,
             source_run_id=record.source_run_id,
             source_candidate_id=record.source_candidate_id,
-            config=self._load_object(record.config_json),
+            config=loads_json_object(record.config_json),
             parameter_schema_version=record.parameter_schema_version,
             created_at=self._normalize_datetime(record.created_at) or datetime.now(timezone.utc),
             updated_at=self._normalize_datetime(record.updated_at) or datetime.now(timezone.utc),
@@ -304,7 +285,7 @@ class PlanGenerationTuningRepository:
             candidate_id=record.candidate_id,
             actor_type=record.actor_type,
             actor_identifier=record.actor_identifier,
-            payload=self._load_object(record.payload_json),
+            payload=loads_json_object(record.payload_json),
             created_at=self._normalize_datetime(record.created_at) or datetime.now(timezone.utc),
             updated_at=self._normalize_datetime(record.updated_at) or datetime.now(timezone.utc),
         )

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.persistence.models import ObservabilityEventRecord
+from trade_proposer_app.utils.json_payloads import loads_json_object
 
 
 class ObservabilityEventRepository:
@@ -72,19 +73,9 @@ class ObservabilityEventRepository:
             "severity": record.severity,
             "source": record.source,
             "message": record.message,
-            "payload": cls._loads_json_object(record.payload_json),
+            "payload": loads_json_object(record.payload_json),
             "created_at": cls._normalize_datetime(record.created_at).isoformat() if cls._normalize_datetime(record.created_at) else None,
         }
-
-    @staticmethod
-    def _loads_json_object(raw: str | None) -> dict[str, Any]:
-        if not raw:
-            return {}
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        return parsed if isinstance(parsed, dict) else {}
 
     @staticmethod
     def _normalize_datetime(value: datetime | None) -> datetime | None:

@@ -46,6 +46,7 @@ from trade_proposer_app.services.recommendation_setup_family_reviews import (
 )
 from trade_proposer_app.services.risk_management import BrokerRiskManager
 from trade_proposer_app.services.settings_domains import SettingsDomainService
+from trade_proposer_app.utils.json_payloads import loads_json_object as _json_object
 from trade_proposer_app.services.time_windows import normalize_review_window, review_window_start
 from trade_proposer_app.services.trade_decision_policy import TradeDecisionPolicyService
 from trade_proposer_app.services.trading_performance_metrics import TradingPerformanceMetricsService
@@ -495,16 +496,6 @@ def _compact_run_payload(run) -> dict[str, object]:
         "completed_at": run.completed_at,
         "duration_seconds": run.duration_seconds,
     }
-
-
-def _json_object(raw: str | None) -> dict[str, object]:
-    if not raw:
-        return {}
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
 
 
 @router.get("")

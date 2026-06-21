@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from trade_proposer_app.domain.models import RecommendationSignalGatingTuningRun
 from trade_proposer_app.persistence.models import RecommendationSignalGatingTuningRunRecord
+from trade_proposer_app.utils.json_payloads import loads_json_list, loads_json_object
 
 
 class RecommendationSignalGatingTuningRunRepository:
@@ -222,7 +223,7 @@ class RecommendationSignalGatingTuningRunRepository:
             objective_name=self._get_str(record, "objective_name", "signal_gating_tuning_raw_grid"),
             status=self._get_str(record, "status", "completed"),
             applied=self._get_bool(record, "applied", False),
-            filters=self._load_json(self._get_str(record, "filters_json", "{}")),
+            filters=loads_json_object(self._get_str(record, "filters_json", "{}")),
             sample_count=self._get_int(record, "sample_count", 0),
             resolved_sample_count=self._get_int(record, "resolved_sample_count", 0),
             benchmark_sample_count=self._get_int(record, "benchmark_sample_count", 0),
@@ -232,10 +233,10 @@ class RecommendationSignalGatingTuningRunRepository:
             baseline_score=self._get_float(record, "baseline_score"),
             best_threshold=self._get_float(record, "best_threshold"),
             best_score=self._get_float(record, "best_score"),
-            winning_config=self._load_json(self._get_str(record, "winning_config_json", "{}")),
-            candidate_results=self._load_json_list(self._get_str(record, "candidate_results_json", "[]")),
-            summary=self._load_json(self._get_str(record, "summary_json", "{}")),
-            artifact=self._load_json(self._get_str(record, "artifact_json", "{}")),
+            winning_config=loads_json_object(self._get_str(record, "winning_config_json", "{}")),
+            candidate_results=loads_json_list(self._get_str(record, "candidate_results_json", "[]")),
+            summary=loads_json_object(self._get_str(record, "summary_json", "{}")),
+            artifact=loads_json_object(self._get_str(record, "artifact_json", "{}")),
             error_message=self._get_str(record, "error_message", None),
             started_at=self._normalize_datetime(self._get_datetime(record, "started_at")),
             completed_at=self._normalize_datetime(self._get_datetime(record, "completed_at")),
@@ -291,23 +292,3 @@ class RecommendationSignalGatingTuningRunRepository:
                 return None
             return parsed
         return None
-
-    @staticmethod
-    def _load_json(raw: str | None) -> dict[str, object]:
-        if not raw:
-            return {}
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        return payload if isinstance(payload, dict) else {}
-
-    @staticmethod
-    def _load_json_list(raw: str | None) -> list[dict[str, object]]:
-        if not raw:
-            return []
-        try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
-            return []
-        return payload if isinstance(payload, list) else []

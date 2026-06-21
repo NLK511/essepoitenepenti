@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-import json
 from typing import Any
 
 from sqlalchemy import func, select
@@ -14,6 +13,7 @@ from trade_proposer_app.persistence.models import (
     RecommendationPlanRecord,
 )
 from trade_proposer_app.repositories.observability_events import ObservabilityEventRepository
+from trade_proposer_app.utils.json_payloads import loads_json_object
 
 
 @dataclass(frozen=True)
@@ -82,7 +82,7 @@ class GatingSeverityAlertService:
         ).first()
         if record is None:
             return None
-        payload = self._loads_json_object(record.payload_json)
+        payload = loads_json_object(record.payload_json)
         return {
             "id": record.id,
             "event_type": record.event_type,
@@ -198,16 +198,6 @@ class GatingSeverityAlertService:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value.astimezone(timezone.utc)
-
-    @staticmethod
-    def _loads_json_object(raw: str | None) -> dict[str, Any]:
-        if not raw:
-            return {}
-        try:
-            parsed = json.loads(raw)
-        except ValueError:
-            return {}
-        return parsed if isinstance(parsed, dict) else {}
 
     @classmethod
     def _db_dt(cls, value: datetime) -> datetime:
