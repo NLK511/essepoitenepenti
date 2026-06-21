@@ -26,6 +26,7 @@ from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.dashboard_trends import DashboardTrendService
+from trade_proposer_app.services.dashboard_read_models import compact_run_payload
 from trade_proposer_app.services.data_quality_audit import DataQualityAuditService
 from trade_proposer_app.services.gating_severity_alerts import GatingSeverityAlertService
 from trade_proposer_app.services.policy_trust_report import PolicyTrustReportService
@@ -484,20 +485,6 @@ def _provider_failure_summary(
     }
 
 
-def _compact_run_payload(run) -> dict[str, object]:
-    return {
-        "id": run.id,
-        "job_id": run.job_id,
-        "job_type": run.job_type,
-        "status": run.status,
-        "error_message": run.error_message,
-        "created_at": run.created_at,
-        "started_at": run.started_at,
-        "completed_at": run.completed_at,
-        "duration_seconds": run.duration_seconds,
-    }
-
-
 @router.get("")
 async def get_dashboard(
     session: Session = Depends(get_db_session),
@@ -613,8 +600,8 @@ async def get_dashboard(
         "dashboard_window": window_key,
         "watchlists": watchlists,
         "jobs": jobs,
-        "latest_runs": [_compact_run_payload(run) for run in latest_runs],
-        "recent_runs": [_compact_run_payload(run) for run in recent_runs],
+        "latest_runs": [compact_run_payload(run) for run in latest_runs],
+        "recent_runs": [compact_run_payload(run) for run in recent_runs],
         "recommendation_plans": recommendation_plans,
         "recommendation_quality": {"summary": selected_quality}
         if isinstance(selected_quality, dict)
