@@ -10,11 +10,9 @@ Design principles:
 from __future__ import annotations
 
 import unittest
-import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.orm import sessionmaker
 
 from trade_proposer_app.domain.enums import RunStatus
 from trade_proposer_app.persistence.models import Base, JobRecord, RunRecord

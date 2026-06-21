@@ -464,10 +464,6 @@ class TickerDeepAnalysisServiceTests(unittest.TestCase):
 
     def test_reference_history_is_cached_per_symbol_and_as_of(self) -> None:
         dates = pd.date_range("2026-01-01", periods=25, freq="D")
-        ticker_history = pd.DataFrame({
-            "Close": [100.0 + i for i in range(25)],
-            "Volume": [1000.0] * 25,
-        }, index=dates)
         reference_history = pd.DataFrame({
             "Close": [100.0 + (i * 0.2) for i in range(25)],
             "Volume": [1000.0] * 25,

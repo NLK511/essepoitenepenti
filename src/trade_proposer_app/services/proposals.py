@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import json
-import math
 import re
 import time
 from collections import OrderedDict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Any, Dict, Iterable
+from typing import Any
 
 import pandas as pd
 import yfinance as yf

@@ -10,7 +10,7 @@ Design principles:
 from __future__ import annotations
 
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from trade_proposer_app.domain.models import SignalBundle, SignalEngagement, SignalItem
 from trade_proposer_app.services.social import SocialSentimentAnalyzer

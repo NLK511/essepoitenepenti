@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.domain.models import RecommendationDecisionSample
 from trade_proposer_app.repositories.recommendation_decision_samples import RecommendationDecisionSampleRepository
 
 router = APIRouter(prefix="/recommendation-decision-samples", tags=["recommendation-decision-samples"])

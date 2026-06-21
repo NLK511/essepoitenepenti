@@ -11,8 +11,7 @@ Design principles:
 from __future__ import annotations
 
 import unittest
-from datetime import datetime, timezone
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import httpx
 from sqlalchemy import create_engine

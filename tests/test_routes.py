@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -17,7 +18,6 @@ from trade_proposer_app.domain.models import (
     AppPreflightReport,
     BrokerOrderExecution,
     BrokerPosition,
-    EvaluationRunResult,
     HistoricalMarketBar,
     NewsArticle,
     IndustryContextSnapshot,
@@ -46,7 +46,6 @@ from trade_proposer_app.repositories.runs import RunRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.repositories.watchlists import WatchlistRepository
 from trade_proposer_app.services.alpaca_paper_client import AlpacaPaperClientError
-from trade_proposer_app.services.broker_reconciliation import BrokerReconciliationService
 
 
 class StubAppPreflightService:
@@ -952,6 +951,12 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_dashboard_and_run_detail_render_redesign_data_without_legacy_history_api(self) -> None:
         run_id = self.seed_run_with_diagnostics()
+        session = Session(bind=self.engine)
+        try:
+            RunRepository(session).set_artifact(run_id, {"large": "x" * 10000})
+            RunRepository(session).set_summary(run_id, {"large_summary": "y" * 10000})
+        finally:
+            session.close()
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             dashboard = await client.get("/api/dashboard")
@@ -962,6 +967,12 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
         dashboard_payload = dashboard.json()
         self.assertEqual(len(dashboard_payload["latest_runs"]), 1)
         self.assertEqual(len(dashboard_payload["recommendation_plans"]), 1)
+        compact_run = dashboard_payload["latest_runs"][0]
+        self.assertIn("duration_seconds", compact_run)
+        self.assertNotIn("artifact_json", compact_run)
+        self.assertNotIn("summary_json", compact_run)
+        self.assertNotIn("timing_json", compact_run)
+        self.assertLess(len(json.dumps(dashboard_payload["latest_runs"])), 2000)
 
         self.assertEqual(history.status_code, 404)
 
@@ -1019,7 +1030,7 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_dashboard_filters_by_window_and_keeps_only_proper_failures(self) -> None:
         winning_run_id = self.seed_run_with_diagnostics()
-        recent_failed_run_id = self.seed_failed_run()
+        self.seed_failed_run()
         self.seed_context_and_recommendation_plan_data(run_id=winning_run_id)
 
         old_timestamp = datetime.now(timezone.utc) - timedelta(days=45)

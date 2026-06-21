@@ -12,7 +12,7 @@ Design principles:
 from __future__ import annotations
 
 import unittest
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 from unittest.mock import patch
 
@@ -1740,7 +1740,7 @@ class IntradayVsDailyResolutionTests(EvalTestBase):
         horizon return metrics from the daily evaluation.
         """
         # Plan computed at 14:00 UTC
-        plan = self._create(
+        self._create(
             ticker="SKEW",
             action="long",
             entry_price_low=100.0,
@@ -1960,7 +1960,7 @@ class OutcomeUpsertTests(EvalTestBase):
         self.assertEqual(out.setup_family, "catalyst_follow_through")
 
     def test_outcome_stores_run_id_when_provided(self) -> None:
-        plan = self._create(ticker="BIDU", action="long")
+        self._create(ticker="BIDU", action="long")
         frame = _daily_frame([("2026-01-06T00:00:00Z", 101.0, 99.0, 100.5)])
         with patch.object(
             RecommendationPlanEvaluationService, "_download_price_history", return_value=frame
@@ -2136,7 +2136,7 @@ class DynamicRealismSettingsTests(EvalTestBase):
         #   stop triggers at 99 + (99*0.001) = 99.099
         #   take triggers at 101 + (101*0.001) = 101.101
 
-        plan = self._create(
+        self._create(
             ticker="REAL", action="long", entry_price_low=100.0, stop_loss=99.0, take_profit=101.0
         )
 

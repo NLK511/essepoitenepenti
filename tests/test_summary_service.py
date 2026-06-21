@@ -1,6 +1,5 @@
 import io
 import json
-import subprocess
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch

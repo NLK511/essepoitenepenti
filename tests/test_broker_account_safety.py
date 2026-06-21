@@ -12,7 +12,7 @@ from trade_proposer_app.repositories.broker_accounts import BrokerAccountReposit
 from trade_proposer_app.repositories.broker_order_executions import BrokerOrderExecutionRepository
 from trade_proposer_app.repositories.settings import SettingsRepository
 from trade_proposer_app.services.brokers import BrokerCapabilities, FakeBrokerAdapter
-from trade_proposer_app.services.brokers.adapter import BrokerAdapterResultStatus, BrokerOrderResult
+from trade_proposer_app.services.brokers.adapter import BrokerOrderResult
 from trade_proposer_app.services.multi_broker_execution import MultiBrokerExecutionService
 
 

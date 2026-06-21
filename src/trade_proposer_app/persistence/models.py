@@ -801,6 +801,7 @@ class PlanGenerationTuningEligibleRecordRecord(Base, TimestampMixin):
     max_favorable_excursion: Mapped[float | None] = mapped_column(Float, nullable=True)
     max_adverse_excursion: Mapped[float | None] = mapped_column(Float, nullable=True)
     horizon_return_5d: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cache_version: Mapped[str] = mapped_column(String(64), default="", index=True)
     source_updated_at: Mapped[datetime] = mapped_column(DateTime, index=True)
 
 

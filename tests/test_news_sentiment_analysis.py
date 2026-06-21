@@ -12,10 +12,9 @@ Design principles:
 from __future__ import annotations
 
 import unittest
-from datetime import datetime, timezone
 
 from trade_proposer_app.domain.models import NewsArticle, NewsBundle
-from trade_proposer_app.services.news import NaiveSentimentAnalyzer, ARTICLE_SCORE_SMOOTHING
+from trade_proposer_app.services.news import NaiveSentimentAnalyzer
 
 
 class NewsSentimentAnalysisTests(unittest.TestCase):

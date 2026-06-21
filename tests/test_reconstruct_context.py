@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session

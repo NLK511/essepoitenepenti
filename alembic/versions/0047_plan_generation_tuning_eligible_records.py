@@ -44,6 +44,7 @@ def upgrade() -> None:
         sa.Column("max_favorable_excursion", sa.Float(), nullable=True),
         sa.Column("max_adverse_excursion", sa.Float(), nullable=True),
         sa.Column("horizon_return_5d", sa.Float(), nullable=True),
+        sa.Column("cache_version", sa.String(length=64), nullable=False, server_default=""),
         sa.Column("source_updated_at", sa.DateTime(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
@@ -70,6 +71,11 @@ def upgrade() -> None:
         "ix_plan_generation_tuning_eligible_records_setup_family",
         "plan_generation_tuning_eligible_records",
         ["setup_family"],
+    )
+    op.create_index(
+        "ix_plan_generation_tuning_eligible_records_cache_version",
+        "plan_generation_tuning_eligible_records",
+        ["cache_version"],
     )
     op.create_index(
         "ix_plan_generation_tuning_eligible_records_source_updated_at",

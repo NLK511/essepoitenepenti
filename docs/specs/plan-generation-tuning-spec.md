@@ -290,12 +290,19 @@ Use these operator-facing names to avoid confusing monitors, tuning searches, an
 
 The tuning page must support a research workflow, not just a raw candidate table:
 
-- promoted configuration management: list config versions, active status, nominal source-candidate performance, scored historical performance, and inferred active periods; non-active configurations may be retired/deleted from the active management view. The UI may load this portfolio after the main page shell for responsiveness, but historical rescoring must use the full eligible evidence set; eligible record snapshots should be persisted instead of rebuilt from scratch on every page load.
+- promoted configuration management: list config versions, active status, nominal source-candidate performance, scored historical performance, and inferred active periods; non-active configurations may be retired/deleted from the active management view. The UI may load this portfolio after the main page shell for responsiveness, but historical rescoring must use the full eligible evidence set; eligible record snapshots must be persisted instead of rebuilt from scratch on every page load.
 - job launch controls for standard, wide, exploratory, and large-search runs
 - paged job-run history across standard/wide/exploratory and large-search jobs, with run datetime, status, duration, mode/search kind, and inline best-result summary
 - expandable run details with candidates, summaries, artifacts, rejection reasons, and raw payloads where useful
 - baseline-vs-candidate/config comparison using the currently promoted config or a selected baseline version
 - walk-forward validation for selected candidates/configs/raw configs with operator-specified lookback days, validation-window days, step days, and minimum resolved validation rows
+
+Persisted eligible-record cache rules:
+- the cache is a read model for historical tuning evidence, not a separate source of truth
+- freshness is determined by one unified cache version plus the newest source `updated_at` across recommendation plans, effective/simulated outcomes, broker positions, and recommendation decision samples
+- a stale cache is rebuilt as a full replacement from current source data; rows that are no longer eligible must be deleted during refresh
+- uncapped research and validation paths must use the full eligible evidence set; if an explicit limit is supplied, use the newest eligible evidence slice but return it in chronological order so rolling walk-forward validation remains meaningful
+- feature-builder/schema changes must bump the cache version so old persisted evidence is invalidated
 
 Large-search artifacts remain research-only and are not promotion-capable by themselves. A large-search candidate must be revalidated with walk-forward and operator review before any equivalent configuration is promoted through normal config-version controls.
 

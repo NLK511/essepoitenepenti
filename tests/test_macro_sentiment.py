@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.domain.models import SignalBundle
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.services.industry_context_refresh import IndustryContextRefreshService
-from trade_proposer_app.services.macro_context_refresh import MACRO_QUERIES, MACRO_SUBJECT_KEY, MACRO_SUBJECT_LABEL, MacroContextRefreshService
+from trade_proposer_app.services.macro_context_refresh import MACRO_QUERIES, MACRO_SUBJECT_KEY, MacroContextRefreshService
 from trade_proposer_app.services.social import SocialSentimentAnalyzer
 
 

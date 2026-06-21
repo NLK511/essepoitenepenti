@@ -38,6 +38,7 @@ def _state(**overrides) -> BrokerSteeringState:
         "has_open_position": False,
         "broker_ownership_known": True,
         "broker_reconciliation_healthy": True,
+        "broker_reconciliation_age_minutes": 0.0,
         "linked_exit_orders_missing": False,
         "expiration_at": None,
         "now": NOW,
@@ -129,7 +130,7 @@ def test_severe_long_thesis_invalidation_proposes_close_now() -> None:
         actionability="no_action",
         analysis_direction="bearish",
         severe_negative_news=True,
-        linked_exit_orders_missing=True,
+        linked_exit_orders_missing=False,
     )
 
     decision = engine.evaluate(state, _config())
@@ -187,6 +188,28 @@ def test_broker_uncertainty_produces_manual_review() -> None:
     assert decision.decision == "manual_review_required"
     assert decision.requires_manual_review is True
     assert "broker_uncertainty" in decision.reason_codes
+
+
+def test_missing_protective_child_evidence_blocks_mutation() -> None:
+    engine = BrokerSteeringEngine()
+    state = _state(has_open_position=True, linked_exit_orders_missing=True)
+
+    decision = engine.evaluate(state, _config())
+
+    assert decision.decision == "manual_review_required"
+    assert decision.requires_manual_review is True
+    assert "position_linked_exit_orders_missing" in decision.reason_codes
+
+
+def test_missing_reconciliation_age_blocks_mutation() -> None:
+    engine = BrokerSteeringEngine()
+    state = _state(has_open_position=True, broker_reconciliation_age_minutes=None)
+
+    decision = engine.evaluate(state, _config())
+
+    assert decision.decision == "manual_review_required"
+    assert decision.requires_manual_review is True
+    assert "broker_reconciliation_stale" in decision.reason_codes
 
 
 def test_unknown_direction_produces_manual_review() -> None:

@@ -3145,7 +3145,7 @@ class RepositoryTests(unittest.TestCase):
         claimed = runs.claim_next_queued_run()
         assert claimed is not None
         runs.update_status(run.id or 0, "completed")
-        plan = RecommendationPlanRepository(session).create_plan(
+        RecommendationPlanRepository(session).create_plan(
             RecommendationPlan(
                 ticker="AAPL",
                 horizon="1w",
@@ -3195,7 +3195,7 @@ class RepositoryTests(unittest.TestCase):
         claimed = runs.claim_next_queued_run()
         assert claimed is not None
         runs.update_status(run.id or 0, "completed")
-        plan = RecommendationPlanRepository(session).create_plan(
+        RecommendationPlanRepository(session).create_plan(
             RecommendationPlan(
                 ticker="AAPL",
                 horizon="1w",

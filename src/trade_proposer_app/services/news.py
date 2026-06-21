@@ -4,7 +4,7 @@ import re
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from statistics import pstdev
 from typing import ClassVar, Iterable, Literal

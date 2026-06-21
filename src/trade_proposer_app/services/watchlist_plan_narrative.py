@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from trade_proposer_app.domain.models import TickerSignalSnapshot
 

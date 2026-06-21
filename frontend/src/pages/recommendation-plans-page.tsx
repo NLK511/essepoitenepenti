@@ -134,33 +134,29 @@ export function RecommendationPlansPage() {
       try {
         setError(null);
         setExpandedPlanRows({});
-        const summaryParams = new URLSearchParams({ limit: "500" });
-        const runId = searchParams.get("run_id");
-        const ticker = searchParams.get("ticker");
-        const setupFamily = searchParams.get("setup_family");
-        const planId = searchParams.get("plan_id");
-        const resolved = searchParams.get("resolved");
-        const outcome = searchParams.get("outcome");
+        const summaryParams = new URLSearchParams({ limit: "500", shortlisted: "true" });
+        const statsParams = new URLSearchParams({ shortlisted: "true" });
         const computedAfter = reviewWindowStartIso(analyticsWindow);
-        if (runId) {
-          summaryParams.set("run_id", runId);
-        }
-        if (ticker) {
-          summaryParams.set("ticker", ticker);
-        }
-        if (setupFamily) {
-          summaryParams.set("setup_family", setupFamily);
-        }
-        if (planId) {
-          summaryParams.set("plan_id", planId);
-        }
-        if (resolved) {
-          summaryParams.set("resolved", resolved);
-        }
-        if (outcome) {
-          summaryParams.set("outcome", outcome);
-        }
-        const statsParams = new URLSearchParams();
+        const cohortFilterKeys = [
+          "run_id",
+          "ticker",
+          "action",
+          "setup_family",
+          "plan_id",
+          "resolved",
+          "outcome",
+          "entry_touched",
+          "near_entry_miss",
+          "direction_worked_without_entry",
+        ];
+        cohortFilterKeys.forEach((key) => {
+          const value = searchParams.get(key);
+          if (value) {
+            summaryParams.set(key, value);
+            statsParams.set(key, value);
+          }
+        });
+        const planId = searchParams.get("plan_id");
         if (computedAfter) {
           summaryParams.set("computed_after", computedAfter);
           summaryParams.set("evaluated_after", computedAfter);

@@ -47,22 +47,6 @@ class WatchlistSignalBuilder:
             macro_exposure_score=macro_exposure_score,
             industry_alignment_score=industry_alignment_score,
         )
-        transmission_alignment_score = transmission["transmission_alignment_score"]
-        transmission_bias = transmission["transmission_bias"]
-        primary_drivers = transmission["primary_drivers"]
-        primary_driver_details = transmission["primary_driver_details"]
-        expected_transmission_window = transmission["expected_transmission_window"]
-        expected_transmission_window_detail = transmission["expected_transmission_window_detail"]
-        market_intelligence = transmission["market_intelligence"]
-        market_intelligence_summary = transmission["market_intelligence_summary"]
-        conflict_flags = transmission["conflict_flags"]
-        conflict_flag_details = transmission["conflict_flag_details"]
-        transmission_tags = transmission["transmission_tags"]
-        transmission_tag_details = transmission["transmission_tag_details"]
-        industry_exposure_channels = transmission["industry_exposure_channels"]
-        industry_exposure_channel_details = transmission["industry_exposure_channel_details"]
-        ticker_exposure_channels = transmission["ticker_exposure_channels"]
-        ticker_exposure_channel_details = transmission["ticker_exposure_channel_details"]
         transmission_effect = transmission["transmission_effect"]
         base_confidence = round(float(deep_recommendation.confidence if deep_recommendation is not None else candidate.confidence_percent), 2)
         adjusted_confidence = round(max(0.0, min(95.0, base_confidence + transmission_effect)), 2)

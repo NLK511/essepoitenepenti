@@ -6,9 +6,9 @@ import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from trade_proposer_app.domain.enums import JobType, StrategyHorizon, RecommendationDirection
-from trade_proposer_app.domain.models import HistoricalMarketBar, Watchlist, RunOutput, Recommendation, RunDiagnostics, TickerSignalSnapshot
-from trade_proposer_app.persistence.models import Base, HistoricalMarketBarRecord
+from trade_proposer_app.domain.enums import StrategyHorizon
+from trade_proposer_app.domain.models import HistoricalMarketBar, Watchlist
+from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.services.bars_refresh import BarsRefreshService
 from trade_proposer_app.services.watchlist_cheap_scan import CheapScanSignalService, CheapScanSignal

@@ -238,8 +238,8 @@ class RecommendationSignalGatingTuningService:
         plan_scored_samples,
         scored_samples,
         evaluated_candidates,
-        baseline: SignalGatingCandidateResult,
-        winner: SignalGatingCandidateResult,
+        baseline: EvaluatedCandidate,
+        winner: EvaluatedCandidate,
         threshold_before: float,
         benchmark_summary: dict[str, object],
         apply: bool,
@@ -312,8 +312,8 @@ class RecommendationSignalGatingTuningService:
         plan_scored_samples,
         scored_samples,
         evaluated_candidates,
-        baseline: SignalGatingCandidateResult,
-        winner: SignalGatingCandidateResult,
+        baseline: EvaluatedCandidate,
+        winner: EvaluatedCandidate,
         benchmark_summary: dict[str, object],
         apply: bool,
         summary: dict[str, object],
@@ -416,7 +416,7 @@ class RecommendationSignalGatingTuningService:
         )
         return evaluated_candidates, evaluated_candidates[0], self._evaluate_candidate(scored_samples, baseline_config, threshold_before)
 
-    def _apply_winning_signal_gating_config(self, winner: SignalGatingCandidateResult, *, apply: bool):
+    def _apply_winning_signal_gating_config(self, winner: EvaluatedCandidate, *, apply: bool):
         if not apply:
             return None, None
         applied_threshold = round(winner.threshold, 2)

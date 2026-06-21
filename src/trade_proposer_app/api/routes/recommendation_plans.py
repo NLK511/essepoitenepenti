@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.domain.models import RecommendationBaselineSummary, RecommendationPlan, RecommendationPlanStats, Run
+from trade_proposer_app.domain.models import RecommendationBaselineSummary, RecommendationPlanStats, Run
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
 from trade_proposer_app.repositories.runs import RunRepository

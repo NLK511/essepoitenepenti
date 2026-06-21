@@ -55,7 +55,6 @@ class WatchlistPlanFramingService:
             deep_error=deep_error,
             calibration_summary=calibration_summary,
         )
-        analysis = context.analysis
         summary_text = context.summary_text
         setup_family = context.setup_family
         confidence_components = context.confidence_components

@@ -1,5 +1,4 @@
 import unittest
-from datetime import datetime, timezone
 
 import httpx
 from sqlalchemy import create_engine

@@ -27,6 +27,7 @@ The dashboard and quality widgets are operator safety surfaces. Opening a 1-mont
 - Sum absolute values such as P&L, order counts, news counts, and bar counts.
 - Use weighted averages for average-return fields when the sample count is available.
 - Keep raw detailed diagnostics on detail pages; keep dashboard payloads compact.
+- Dashboard `latest_runs` and `recent_runs` are compact run summaries only. They must include identity, type, status, error, timestamps, and duration, and must not include heavy run artifacts, summaries, or timing payloads. Full run artifacts belong on run-detail/research pages.
 
 ## Recommendation-quality page guardrail
 

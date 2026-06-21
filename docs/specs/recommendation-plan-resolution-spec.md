@@ -72,6 +72,10 @@ Once that first crossing or terminal expiration is established, the outcome is f
 
 A recommendation plan must not remain `pending`, `open`, or `no_entry` forever.
 
+## Trade Review filter consistency
+
+The Trade Review page may stage loading so the plan queue renders before heavier analytics. However, every visible analytics widget that claims to describe the reviewed cohort must use the same active filters as the plan list, including ticker, setup family, run id, plan id, resolved state, outcome, shortlist/entry filters, and the selected review window. If a widget intentionally uses a broader baseline, label it as a broader baseline.
+
 If the plan is still unresolved after the full generated horizon has passed, the evaluator must convert it to:
 
 - `outcome = "expired"`

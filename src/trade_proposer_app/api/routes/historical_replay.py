@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException
 from sqlalchemy.orm import Session
 
 from trade_proposer_app.db import get_db_session
-from trade_proposer_app.domain.models import HistoricalReplayBatch, HistoricalReplaySlice, Run
+from trade_proposer_app.domain.models import HistoricalReplayBatch, HistoricalReplaySlice
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.historical_replay import HistoricalReplayRepository
 from trade_proposer_app.repositories.jobs import JobRepository
@@ -83,7 +83,7 @@ async def create_batch(
 async def get_batch(batch_id: int, session: Session = Depends(get_db_session)) -> dict[str, object]:
     repository = HistoricalReplayRepository(session)
     try:
-        batch = repository.get_batch(batch_id)
+        repository.get_batch(batch_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return _create_service(session).get_batch_detail(batch_id)

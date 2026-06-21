@@ -626,12 +626,24 @@ export interface DashboardWarningSummary {
   tickers: string[];
 }
 
+export interface DashboardRunSummary {
+  id: number | null;
+  job_id: number | null;
+  job_type: string;
+  status: string;
+  error_message?: string | null;
+  created_at?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  duration_seconds?: number | null;
+}
+
 export interface DashboardResponse {
   dashboard_window: string;
   watchlists: Watchlist[];
   jobs: Job[];
-  latest_runs: Run[];
-  recent_runs: Run[];
+  latest_runs: DashboardRunSummary[];
+  recent_runs: DashboardRunSummary[];
   recommendation_plans: RecommendationPlan[];
   recommendation_quality?: RecommendationQualityResponse;
   dashboard_summary: DashboardSummary;

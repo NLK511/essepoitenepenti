@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -8,9 +8,7 @@ from sqlalchemy.orm import Session
 from trade_proposer_app.domain.models import (
     MacroContextRefreshPayload,
     MacroContextSnapshot,
-    NewsArticle,
     NewsBundle,
-    SignalBundle,
 )
 from trade_proposer_app.persistence.models import Base
 from trade_proposer_app.repositories.context_snapshots import ContextSnapshotRepository

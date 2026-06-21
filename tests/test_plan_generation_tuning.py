@@ -7,7 +7,7 @@ from functools import cmp_to_key
 from unittest.mock import patch
 
 import httpx
-from sqlalchemy import create_engine, update
+from sqlalchemy import create_engine, func, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -21,7 +21,14 @@ from trade_proposer_app.domain.models import (
     RecommendationPlan,
     RecommendationPlanOutcome,
 )
-from trade_proposer_app.persistence.models import Base, RunRecord, WorkerHeartbeatRecord
+from trade_proposer_app.persistence.models import (
+    Base,
+    PlanGenerationTuningEligibleRecordRecord,
+    RecommendationDecisionSampleRecord,
+    RecommendationOutcomeRecord,
+    RunRecord,
+    WorkerHeartbeatRecord,
+)
 from trade_proposer_app.repositories.jobs import JobRepository
 from trade_proposer_app.repositories.plan_generation_tuning import PlanGenerationTuningRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
@@ -435,6 +442,108 @@ class PlanGenerationTuningServiceTests(unittest.TestCase):
             second = self.service._eligible_records(ticker=None, setup_family=None, limit=None)
         self.assertEqual(len(second), 1)
         self.assertEqual(second[0].plan.id, first[0].plan.id)
+
+    def test_eligible_record_limit_uses_newest_evidence_in_chronological_order(self) -> None:
+        for index in range(1, 4):
+            self._seed_record(
+                created_at=datetime(2026, 3, index, tzinfo=timezone.utc),
+                mfe=15.0,
+                mae=3.0,
+                outcome="win",
+                stop_loss_hit=False,
+                take_profit_hit=True,
+            )
+
+        eligible = self.service._eligible_records(ticker=None, setup_family=None, limit=2)
+
+        self.assertEqual([record.plan.computed_at.day for record in eligible], [2, 3])
+
+    def test_eligible_cache_refresh_deletes_records_that_are_no_longer_eligible(self) -> None:
+        self._seed_record(
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            mfe=15.0,
+            mae=4.0,
+            outcome="win",
+            stop_loss_hit=False,
+            take_profit_hit=True,
+        )
+        self.assertEqual(len(self.service._eligible_records(ticker=None, setup_family=None, limit=None)), 1)
+
+        outcome = self.session.scalar(select(RecommendationOutcomeRecord))
+        assert outcome is not None
+        outcome.stop_loss_hit = True
+        outcome.take_profit_hit = True
+        outcome.updated_at = datetime.now(timezone.utc) + timedelta(minutes=1)
+        self.session.commit()
+
+        refreshed = self.service._eligible_records(ticker=None, setup_family=None, limit=None)
+
+        self.assertEqual(refreshed, [])
+        cached_count = self.session.scalar(select(func.count()).select_from(PlanGenerationTuningEligibleRecordRecord))
+        self.assertEqual(cached_count, 0)
+
+    def test_eligible_cache_invalidates_when_decision_samples_change(self) -> None:
+        self._seed_record(
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            mfe=15.0,
+            mae=4.0,
+            outcome="win",
+            stop_loss_hit=False,
+            take_profit_hit=True,
+        )
+        first = self.service._eligible_records(ticker=None, setup_family=None, limit=None)
+        self.assertEqual(len(first), 1)
+        plan_id = first[0].plan.id
+        self.session.add(
+            RecommendationDecisionSampleRecord(
+                recommendation_plan_id=plan_id,
+                ticker="EOG",
+                horizon="1w",
+                action="long",
+                decision_type="actionable",
+                confidence_percent=72.0,
+                setup_family="sample_family",
+                updated_at=datetime.now(timezone.utc) + timedelta(minutes=1),
+            )
+        )
+        self.session.commit()
+
+        with patch.object(
+            PlanGenerationTuningService,
+            "_build_eligible_records_from_sources",
+            wraps=self.service._build_eligible_records_from_sources,
+        ) as mock_build:
+            refreshed = self.service._eligible_records(ticker=None, setup_family=None, limit=None)
+
+        self.assertEqual(len(refreshed), 1)
+        self.assertGreaterEqual(mock_build.call_count, 1)
+
+    def test_eligible_cache_invalidates_when_cache_version_changes(self) -> None:
+        self._seed_record(
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            mfe=15.0,
+            mae=4.0,
+            outcome="win",
+            stop_loss_hit=False,
+            take_profit_hit=True,
+        )
+        self.assertEqual(len(self.service._eligible_records(ticker=None, setup_family=None, limit=None)), 1)
+        cached = self.session.scalar(select(PlanGenerationTuningEligibleRecordRecord))
+        assert cached is not None
+        cached_plan_id = cached.plan_id
+        cached.cache_version = "old"
+        self.session.commit()
+
+        with patch.object(
+            PlanGenerationTuningService,
+            "_build_eligible_records_from_sources",
+            wraps=self.service._build_eligible_records_from_sources,
+        ) as mock_build:
+            refreshed = self.service._eligible_records(ticker=None, setup_family=None, limit=None)
+
+        self.assertEqual(len(refreshed), 1)
+        self.assertEqual(refreshed[0].plan.id, cached_plan_id)
+        self.assertGreaterEqual(mock_build.call_count, 1)
 
     def test_eligible_records_stream_all_batches_without_truncation(self) -> None:
         for index in range(1, 7):

@@ -8,7 +8,6 @@ from trade_proposer_app.repositories.recommendation_plans import RecommendationP
 from trade_proposer_app.services.recommendation_evidence_concentration import RecommendationEvidenceConcentrationService
 from trade_proposer_app.services.recommendation_plan_baselines import RecommendationPlanBaselineService
 from trade_proposer_app.services.recommendation_plan_calibration import RecommendationPlanCalibrationService
-from trade_proposer_app.services.recommendation_setup_family_reviews import RecommendationSetupFamilyReviewService
 
 
 class RecommendationWalkForwardValidationService:
@@ -53,12 +52,6 @@ class RecommendationWalkForwardValidationService:
                 limit=limit,
             )
             evidence = RecommendationEvidenceConcentrationService(self.outcomes).summarize(
-                setup_family=setup_family,
-                evaluated_after=slice_start,
-                evaluated_before=slice_end,
-                limit=limit,
-            )
-            family_review = RecommendationSetupFamilyReviewService(self.outcomes).summarize(
                 setup_family=setup_family,
                 evaluated_after=slice_start,
                 evaluated_before=slice_end,
