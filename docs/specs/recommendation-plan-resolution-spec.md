@@ -244,8 +244,24 @@ It should not be used as the default batch path.
 ### Current implementation status
 
 - the manual single-plan path exists conceptually through specific evaluation triggers
-- batch open-plan filtering is the intended default and should be enforced wherever the scheduler or worker enumerates plans
+- batch open-plan filtering is enforced for the default scheduler/worker path
+- default unscoped scheduler evaluation is bounded and must not load all unresolved plans at once
 - legacy evaluation flows may still need reconciliation so that closed plans are excluded from routine runs
+
+### Scheduled evaluation resource guardrails
+
+Scheduled or otherwise unscoped recommendation evaluation must be a bounded batch job:
+
+- do not select all unresolved recommendation plans into memory
+- select only actionable/watchlist/no-action open candidates in deterministic order
+- cap the selected candidates with a configurable safe batch size
+- keep explicit `recommendation_plan_ids` exact and uncapped by the scheduled batch limit, because that path is an operator/requested scope
+- prepare price histories only for the selected batch
+- continue evaluating the rest of the selected batch if one ticker has a history/provider error
+- report `partial`/`batch_limited` in the run output when more open candidates remain after the selected batch
+- log memory/resource checkpoints around candidate selection, history preparation, and completion so operator crash forensics can identify the last completed stage
+
+The current implementation uses a conservative in-process batch limit for unscoped evaluation. Future worker orchestration may persist cursors or enqueue continuation runs, but no single worker pass may attempt to drain an unbounded backlog.
 
 ### Practical consequence
 - **batch evaluation** = open plans only

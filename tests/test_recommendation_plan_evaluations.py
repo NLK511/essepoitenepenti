@@ -1557,6 +1557,82 @@ class BatchFilteringTests(EvalTestBase):
         self.assertIn(p1.id, plan_ids)
         self.assertIn(p2.id, plan_ids)
 
+    def test_unscoped_batch_is_bounded_and_deterministic(self) -> None:
+        newest = self._create(
+            ticker="NEW",
+            action="long",
+            computed_at=datetime(2026, 1, 7, 15, 0, tzinfo=timezone.utc),
+        )
+        oldest = self._create(
+            ticker="OLD",
+            action="long",
+            computed_at=datetime(2026, 1, 5, 15, 0, tzinfo=timezone.utc),
+        )
+        middle = self._create(
+            ticker="MID",
+            action="long",
+            computed_at=datetime(2026, 1, 6, 15, 0, tzinfo=timezone.utc),
+        )
+        svc = RecommendationPlanEvaluationService(self.session)
+        with patch.object(RecommendationPlanEvaluationService, "DEFAULT_UNSCOPED_BATCH_SIZE", 2):
+            listed = svc._list_plans(None)
+
+        self.assertEqual([plan.id for plan in listed], [oldest.id, middle.id])
+        self.assertNotIn(newest.id, {plan.id for plan in listed})
+        self.assertTrue(svc.last_unscoped_batch_limited)
+
+    def test_explicit_plan_ids_are_not_capped_by_unscoped_batch_limit(self) -> None:
+        plans = [
+            self._create(
+                ticker=f"EX{index}",
+                action="long",
+                computed_at=datetime(2026, 1, 5 + index, 15, 0, tzinfo=timezone.utc),
+            )
+            for index in range(3)
+        ]
+        svc = RecommendationPlanEvaluationService(self.session)
+        with patch.object(RecommendationPlanEvaluationService, "DEFAULT_UNSCOPED_BATCH_SIZE", 1):
+            listed = svc._list_plans([plan.id or 0 for plan in plans])
+
+        self.assertEqual({plan.id for plan in listed}, {plan.id for plan in plans})
+        self.assertFalse(svc.last_unscoped_batch_limited)
+
+    def test_unscoped_run_reports_partial_when_batch_limit_is_hit(self) -> None:
+        for index in range(3):
+            self._create(
+                ticker=f"PX{index}",
+                action="long",
+                computed_at=datetime(2026, 1, 5 + index, 15, 0, tzinfo=timezone.utc),
+            )
+        with patch.object(RecommendationPlanEvaluationService, "DEFAULT_UNSCOPED_BATCH_SIZE", 2):
+            with patch.object(
+                RecommendationPlanEvaluationService,
+                "_download_price_history",
+                return_value=pd.DataFrame(),
+            ):
+                result = RecommendationPlanEvaluationService(self.session).run_evaluation(
+                    as_of=datetime(2030, 1, 1, tzinfo=timezone.utc)
+                )
+
+        self.assertEqual(result.evaluated_recommendation_plans, 2)
+        self.assertIn("batch_limited", result.output)
+
+    def test_unscoped_run_stops_before_history_load_when_memory_soft_limit_is_reached(self) -> None:
+        self._create(ticker="MEM", action="long")
+        with patch.dict(
+            "os.environ", {RecommendationPlanEvaluationService.MEMORY_SOFT_LIMIT_ENV: "100"}
+        ):
+            with patch.object(RecommendationPlanEvaluationService, "_current_rss_mb", return_value=150.0):
+                with patch.object(
+                    RecommendationPlanEvaluationService,
+                    "_download_price_history",
+                    side_effect=AssertionError("history should not load after memory guard trips"),
+                ):
+                    result = RecommendationPlanEvaluationService(self.session).run_evaluation()
+
+        self.assertEqual(result.evaluated_recommendation_plans, 0)
+        self.assertIn("memory_soft_limit_exceeded", result.output)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 7. PRICE DATA SOURCE RESOLUTION

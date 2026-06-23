@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import resource
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Iterable
@@ -19,7 +21,7 @@ from trade_proposer_app.domain.models import (
     RecommendationPlanOutcome,
 )
 from trade_proposer_app.domain.statuses import OutcomeStatus
-from trade_proposer_app.persistence.models import RecommendationPlanRecord
+from trade_proposer_app.persistence.models import RecommendationOutcomeRecord, RecommendationPlanRecord
 from trade_proposer_app.repositories.historical_market_data import HistoricalMarketDataRepository
 from trade_proposer_app.repositories.recommendation_outcomes import RecommendationOutcomeRepository
 from trade_proposer_app.repositories.recommendation_plans import RecommendationPlanRepository
@@ -42,6 +44,9 @@ class RecommendationPlanEvaluationService:
     _near_entry_miss_threshold_percent = 0.25
     _market_open_time = time(9, 30)
     _market_close_time = time(16, 0)
+    DEFAULT_UNSCOPED_BATCH_SIZE = 250
+    MEMORY_SOFT_LIMIT_ENV = "RECOMMENDATION_EVALUATION_MEMORY_SOFT_LIMIT_MB"
+    BATCH_SIZE_ENV = "RECOMMENDATION_EVALUATION_BATCH_SIZE"
     _market_timezone_by_region = {
         "US": "America/New_York",
         "USA": "America/New_York",
@@ -65,6 +70,11 @@ class RecommendationPlanEvaluationService:
         self.settings_domains = SettingsDomainService(repository=self.settings)
         self.taxonomy = TickerTaxonomyService()
         self.resolution_engine = self._build_resolution_engine()
+        self._last_unscoped_batch_limited = False
+
+    @property
+    def last_unscoped_batch_limited(self) -> bool:
+        return self._last_unscoped_batch_limited
 
     def _build_resolution_engine(self) -> PlanResolutionEngine:
         realism = self.settings_domains.execution_settings().evaluation_realism
@@ -84,14 +94,26 @@ class RecommendationPlanEvaluationService:
         run_id: int | None = None,
         as_of: datetime | None = None,
     ) -> EvaluationRunResult:
+        self._log_memory_checkpoint("start", run_id=run_id)
         plans = self._list_plans(recommendation_plan_ids)
         logger.info(
-            "recommendation evaluation started: run_id=%s requested_plan_ids=%s plan_count=%s as_of=%s",
+            "recommendation evaluation started: run_id=%s requested_plan_ids=%s plan_count=%s as_of=%s batch_limited=%s",
             run_id,
             recommendation_plan_ids,
             len(plans),
             self._format_datetime(as_of),
+            self._last_unscoped_batch_limited,
         )
+        self._log_memory_checkpoint("after_plan_selection", run_id=run_id)
+        soft_limit = self._memory_soft_limit_mb()
+        current_rss = self._current_rss_mb()
+        if soft_limit is not None and current_rss is not None and current_rss >= soft_limit:
+            message = (
+                f"memory_soft_limit_exceeded before price history preparation: "
+                f"rss_mb={current_rss:.1f} limit_mb={soft_limit:.1f}"
+            )
+            logger.warning("recommendation evaluation partial: run_id=%s %s", run_id, message)
+            return EvaluationRunResult(output=f"partial recommendation evaluation; {message}")
         if plans:
             logger.debug(
                 "recommendation evaluation plans: %s",
@@ -102,6 +124,7 @@ class RecommendationPlanEvaluationService:
             return EvaluationRunResult(output="no recommendation plans available for evaluation")
 
         price_history_cache, price_errors = self._prepare_price_histories(plans, as_of=as_of)
+        self._log_memory_checkpoint("after_price_history_preparation", run_id=run_id)
         if price_errors:
             logger.warning("recommendation evaluation history errors: %s", price_errors)
         logger.debug(
@@ -150,7 +173,13 @@ class RecommendationPlanEvaluationService:
                 self._format_datetime(stored.evaluated_at),
             )
 
-        output = self._build_output(processed, detail_lines, price_errors)
+        output = self._build_output(
+            processed,
+            detail_lines,
+            price_errors,
+            batch_limited=self._last_unscoped_batch_limited,
+        )
+        self._log_memory_checkpoint("completed", run_id=run_id)
         return EvaluationRunResult(
             evaluated_recommendation_plans=processed,
             synced_recommendation_plan_outcomes=synced,
@@ -169,23 +198,28 @@ class RecommendationPlanEvaluationService:
         )
 
     def _list_plans(self, recommendation_plan_ids: list[int] | None) -> list[RecommendationPlan]:
+        self._last_unscoped_batch_limited = False
         query = select(RecommendationPlanRecord)
         if recommendation_plan_ids:
             query = query.where(RecommendationPlanRecord.id.in_(recommendation_plan_ids))
-        rows = list(self.session.scalars(query).all())
-        if not recommendation_plan_ids:
-            rows = [
-                row for row in rows if row.action in {"long", "short", "no_action", "watchlist"}
-            ]
-            outcome_map = self.outcomes.get_simulated_outcomes_by_plan_ids(
-                [row.id for row in rows if row.id is not None]
-            )
-            rows = [
-                row
-                for row in rows
-                if outcome_map.get(row.id or 0) is None
-                or outcome_map[row.id or 0].status != OutcomeStatus.RESOLVED.value
-            ]
+            rows = list(self.session.scalars(query).all())
+            return [self.plans._to_model(row) for row in rows]
+
+        resolved_plan_ids = select(RecommendationOutcomeRecord.recommendation_plan_id).where(
+            RecommendationOutcomeRecord.status == OutcomeStatus.RESOLVED.value
+        )
+        limit = self._unscoped_batch_size()
+        rows = list(
+            self.session.scalars(
+                query.where(RecommendationPlanRecord.action.in_({"long", "short", "no_action", "watchlist"}))
+                .where(RecommendationPlanRecord.id.not_in(resolved_plan_ids))
+                .order_by(RecommendationPlanRecord.computed_at.asc(), RecommendationPlanRecord.id.asc())
+                .limit(limit + 1)
+            ).all()
+        )
+        if len(rows) > limit:
+            self._last_unscoped_batch_limited = True
+            rows = rows[:limit]
         return [self.plans._to_model(row) for row in rows]
 
     def _prepare_price_histories(
@@ -1122,13 +1156,67 @@ class RecommendationPlanEvaluationService:
             ]
         return frame
 
+    @classmethod
+    def _unscoped_batch_size(cls) -> int:
+        raw = os.environ.get(cls.BATCH_SIZE_ENV)
+        if raw:
+            try:
+                return max(1, int(raw))
+            except ValueError:
+                logger.warning("invalid %s value: %s", cls.BATCH_SIZE_ENV, raw)
+        return cls.DEFAULT_UNSCOPED_BATCH_SIZE
+
+    @classmethod
+    def _memory_soft_limit_mb(cls) -> float | None:
+        raw = os.environ.get(cls.MEMORY_SOFT_LIMIT_ENV)
+        if not raw:
+            return None
+        try:
+            parsed = float(raw)
+        except ValueError:
+            logger.warning("invalid %s value: %s", cls.MEMORY_SOFT_LIMIT_ENV, raw)
+            return None
+        return parsed if parsed > 0 else None
+
     @staticmethod
-    def _build_output(processed: int, details: list[str], errors: list[str]) -> str:
+    def _current_rss_mb() -> float | None:
+        try:
+            usage = resource.getrusage(resource.RUSAGE_SELF)
+        except (OSError, ValueError):
+            return None
+        # Linux reports ru_maxrss as KiB; macOS reports bytes. This app runs on Linux in prod,
+        # but keep a defensive fallback for local developer environments.
+        value = float(getattr(usage, "ru_maxrss", 0) or 0)
+        if value <= 0:
+            return None
+        if value > 10_000_000:
+            return value / (1024 * 1024)
+        return value / 1024
+
+    def _log_memory_checkpoint(self, stage: str, *, run_id: int | None) -> None:
+        rss_mb = self._current_rss_mb()
+        logger.info(
+            "recommendation evaluation memory checkpoint: run_id=%s stage=%s rss_mb=%s",
+            run_id,
+            stage,
+            None if rss_mb is None else round(rss_mb, 1),
+        )
+
+    @staticmethod
+    def _build_output(
+        processed: int,
+        details: list[str],
+        errors: list[str],
+        *,
+        batch_limited: bool = False,
+    ) -> str:
         parts: list[str] = []
         if processed:
             parts.append(
                 f"Processed {processed} recommendation plan{'s' if processed != 1 else ''}."
             )
+        if batch_limited:
+            parts.append("partial batch_limited: more open recommendation plans remain for a later run.")
         parts.extend(errors)
         parts.extend(details)
         return " ".join(parts) if parts else "no recommendation plans were evaluated"
